@@ -48,9 +48,26 @@ export interface PendingBoomerang {
     content: string;
     timestamp: string;
   }>;
+  /**
+   * Override for the opening lines of the boomerang context injection.
+   * Defaults to the cross-channel "You have just returned from channel X." narrative.
+   */
+  introText?: string;
+  /** Override for the closing instruction line of the boomerang context injection. */
+  outroText?: string;
 }
 
 const pendingBoomerangs = new Map<string, PendingBoomerang>();
+
+/**
+ * Store a pending boomerang for a given source channel.
+ * Exposed so other tools (e.g. create_thread) can register boomerangs
+ * without duplicating the map or the consume/build logic.
+ * @param boomerang - The boomerang payload to store
+ */
+export function storePendingBoomerang(boomerang: PendingBoomerang): void {
+  pendingBoomerangs.set(boomerang.sourceChannelId, boomerang);
+}
 
 function inferTargetChannelFromTask(task: unknown): string | undefined {
   if (typeof task !== "string") {
@@ -107,14 +124,16 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
 
   const resultStr = boomerang.success ? "Success" : `Failed: ${boomerang.error ?? "unknown error"}`;
 
-  let contextText =
-    `[System: You have just returned from channel \`${boomerang.targetChannelName}\`.\n` +
-    `Report back naturally on what happened there.\n` +
-    `Outcome: ${resultStr}.`;
+  const intro =
+    boomerang.introText ??
+    `You have just returned from channel \`${boomerang.targetChannelName}\`.\nReport back naturally on what happened there.`;
+  const outro = boomerang.outroText ?? "Now continue the conversation here with a concise update.";
+
+  let contextText = `[System: ${intro}\nOutcome: ${resultStr}.`;
   if (messagesBlock) {
-    contextText += `\nHere is what was happening in channel \`${boomerang.targetChannelName}\` (last 10 messages, newest first):\n${messagesBlock}`;
+    contextText += `\nHere is what was happening in channel \`${boomerang.targetChannelName}\` (last 10 messages, oldest first):\n${messagesBlock}`;
   }
-  contextText += "\nNow continue the conversation here with a concise update.]";
+  contextText += `\n${outro}]`;
 
   return [
     {
@@ -221,10 +240,7 @@ export class CrossChannelMessageTool extends BaseTool {
     const isPeekOnly = peekOnlyArg === true;
     const inferredChannelFromTask = inferTargetChannelFromTask(taskArg);
     const requestedChannel =
-      targetChannelArg?.trim() ||
-      legacyChannelNameArg?.trim() ||
-      legacyChannelIdArg?.trim() ||
-      inferredChannelFromTask;
+      targetChannelArg?.trim() || legacyChannelNameArg?.trim() || legacyChannelIdArg?.trim() || inferredChannelFromTask;
 
     // Validate: at least one channel identifier must be provided
     if (!requestedChannel) {
@@ -280,7 +296,7 @@ export class CrossChannelMessageTool extends BaseTool {
     if (channelResolution.status === "ambiguous") {
       const shownCount = channelResolution.candidates.length;
       const overflowCount = channelResolution.totalCount - shownCount;
-      const overflowNote = overflowCount > 0 ? ` (and ${overflowCount} more — use a raw channel ID for others)` : "";
+      const overflowNote = overflowCount > 0 ? ` (and ${overflowCount} more; use a raw channel ID for others)` : "";
       const candidateLabels = channelResolution.candidates.map((c) => c.label).join(", ");
       return {
         success: false,
@@ -443,7 +459,7 @@ export class CrossChannelMessageTool extends BaseTool {
         };
       }
 
-      // Newest-first from Discord; truncate at refresh embed boundary
+      // Discord returns newest-first; truncate at refresh embed boundary, then reverse to chronological order
       const messagesArray = [...recentMessages.values()];
       const filteredMessages: Message[] = [];
       for (const m of messagesArray) {
@@ -455,12 +471,12 @@ export class CrossChannelMessageTool extends BaseTool {
         }
         filteredMessages.push(m);
       }
+      filteredMessages.reverse();
 
       const formattedMessages = await Promise.all(
         filteredMessages.map(async (m) => ({
           author: await resolveContextAuthorLabel(m, {
             guildId: context.guildId,
-            tomoriNickname: context.tomoriState.tomori_nickname,
             personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
           }),
           content: m.content
@@ -469,7 +485,7 @@ export class CrossChannelMessageTool extends BaseTool {
                 context.client,
                 context.guildId ?? "",
                 undefined,
-                context.tomoriState.tomori_nickname,
+                context.tomoriState.persona_nickname,
                 context.tomoriState.config.personal_memories_enabled,
               )
             : "(no text content)",
@@ -543,9 +559,9 @@ export class CrossChannelMessageTool extends BaseTool {
     suppressNextSelfReply(targetChannel.id);
 
     // 10. Call tomoriChat in the target channel
-    const tomoriChat = (await import("../../events/messageCreate/tomoriChat")).default;
+    const { tomoriChat } = await import("../../events/messageCreate/tomoriChat");
 
-    const sourcePersonaId = context.activePersonaId ?? context.tomoriState.tomori_id ?? undefined;
+    const sourcePersonaId = context.activePersonaId ?? context.tomoriState.persona_id ?? undefined;
     const isSourceUserImpersonation = context.isUserImpersonation === true;
     const sourceImpersonatedUserId = context.impersonatedUserId;
     const manualTriggerInvoker = context.userId
@@ -558,35 +574,22 @@ export class CrossChannelMessageTool extends BaseTool {
       : undefined;
 
     try {
-      await tomoriChat(
-        context.client,
-        lastMessage,
-        false, // isFromQueue
-        true, // isManuallyTriggered
-        false, // forceReason
-        undefined, // reasoningQuery
-        undefined, // llmOverrideCodename
-        false, // isStopResponse
-        0, // retryCount
-        false, // skipLock
-        undefined, // reminderRecipientID
-        undefined, // reminderData
-        sourcePersonaId, // selectedPersonaId — same persona visits target
-        false, // isPersonaJob
-        isSourceUserImpersonation, // isUserImpersonation
-        sourceImpersonatedUserId, // impersonatedUserId
-        "system", // textQuotaSource — system-triggered
-        undefined, // textQuotaTriggerKey
-        undefined, // textQuotaUserDiscId
-        undefined, // manualSystemPrompt
-        undefined, // manualPrefill
-        undefined, // naiContinuationPrefill
-        undefined, // emptyResponseFinishReason
-        [taskInjection], // injectedContextItems
-        undefined, // forcedMentions
-        manualTriggerInvoker, // manualTriggerInvoker
-        { disableCrossChannelMessage: true }, // manualStreamingContextOverrides
-      );
+      await tomoriChat({
+        client: context.client,
+        message: lastMessage,
+        isFromQueue: false,
+        isManuallyTriggered: true,
+        forceReason: false,
+        isStopResponse: false,
+        selectedPersonaId: sourcePersonaId,
+        isPersonaJob: false,
+        isUserImpersonation: isSourceUserImpersonation,
+        impersonatedUserId: sourceImpersonatedUserId,
+        textQuotaSource: "system",
+        injectedContextItems: [taskInjection],
+        manualTriggerInvoker,
+        manualStreamingContextOverrides: { disableCrossChannelMessage: true },
+      });
 
       log.success(
         `Cross-channel tool: Successfully dispatched to #${targetChannel.name} (task: "${(taskArg as string).trim().substring(0, 80)}...")`,
@@ -605,7 +608,7 @@ export class CrossChannelMessageTool extends BaseTool {
           const recentMessages = await targetChannel.messages.fetch({
             limit: 10,
           });
-          // Discord returns newest-first; truncate at refresh embed boundary
+          // Discord returns newest-first; truncate at refresh embed boundary, then reverse to chronological order
           const messagesArray = [...recentMessages.values()];
           const filteredMessages: Message[] = [];
           for (const m of messagesArray) {
@@ -618,11 +621,11 @@ export class CrossChannelMessageTool extends BaseTool {
             }
             filteredMessages.push(m);
           }
+          filteredMessages.reverse();
           targetMessages = await Promise.all(
             filteredMessages.map(async (m) => ({
               author: await resolveContextAuthorLabel(m, {
                 guildId: context.guildId,
-                tomoriNickname: context.tomoriState.tomori_nickname,
                 personalMemoriesEnabled: context.tomoriState.config.personal_memories_enabled,
               }),
               content: m.content
@@ -631,7 +634,7 @@ export class CrossChannelMessageTool extends BaseTool {
                     context.client,
                     context.guildId ?? "",
                     undefined,
-                    context.tomoriState.tomori_nickname,
+                    context.tomoriState.persona_nickname,
                     context.tomoriState.config.personal_memories_enabled,
                   )
                 : "(no text content)",

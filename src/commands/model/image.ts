@@ -1,18 +1,17 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-// Import sql
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-// Import types for validation
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { loadAvailableDiffusionModelsForProvider } from "@/utils/db/dbRead";
+import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
@@ -52,8 +51,8 @@ function getLocalizedDescription(model: ImageDiffusionModelRow, locale: string):
   const baseDescription = description || model.model_description || `${model.provider} model`;
 
   const flags: string[] = [];
-  if (model.is_free) flags.push("FREE");
-  if (model.is_uncensored) flags.push("UNCENSORED");
+  if (model.is_free && !isCustomProvider(model.provider)) flags.push("FREE");
+  if (model.is_uncensored && !isCustomProvider(model.provider)) flags.push("UNCENSORED");
 
   const flagPrefix = flags.length > 0 ? `(${flags.join("+")}) ` : "";
   return `${flagPrefix}${baseDescription}`;
@@ -150,12 +149,14 @@ export async function execute(
     const nextStandardModelId = clearTarget === "nai" ? tomoriState.config.diffusion_model_id : null;
     const nextNaiModelId = clearTarget === "standard" ? tomoriState.config.nai_diffusion_model_id : null;
 
-    await sql`
-      UPDATE tomori_configs
-      SET diffusion_model_id = ${nextStandardModelId},
-          nai_diffusion_model_id = ${nextNaiModelId}
-      WHERE server_id = ${tomoriState.server_id}
-    `;
+    await Promise.all([
+      configRepository.updateModelConfig(tomoriState.server_id, {
+        diffusion_model_id: nextStandardModelId,
+      }),
+      configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+        nai_diffusion_model_id: nextNaiModelId,
+      }),
+    ]);
 
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
@@ -198,8 +199,17 @@ export async function execute(
 
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
-      const selectedModelId = selectedSavedConfig?.diffusion_model_id ?? null;
-      if (!selectedModelId) {
+      const customAvailableModels = selectedSavedConfig
+        ? ((await llmModelRepo.loadAvailableDiffusionModels(selectedProvider, false, {
+            kind: "server",
+            ownerId: tomoriState.server_id,
+          })) ?? [])
+        : [];
+      const customModelChoices = customAvailableModels.filter(
+        (model): model is typeof model & { diffusion_model_id: number } =>
+          model.diffusion_model_id !== undefined && model.diffusion_model_id !== null,
+      );
+      if (!selectedSavedConfig || customModelChoices.length === 0) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.model.image.no_models_title",
           descriptionKey: "commands.model.image.no_models_description",
@@ -212,18 +222,33 @@ export async function execute(
         return;
       }
 
+      // Single registered model activates directly; multiple show a string-select picker.
+      const selection = await promptCustomModelSelection({
+        interaction: responseInteraction,
+        locale,
+        choices: customModelChoices.map((model) => ({
+          model,
+          value: model.diffusion_model_id.toString(),
+          label: getImageModelDisplayName(model) ?? model.codename,
+          description: getLocalizedDescription(model, userData.language_pref),
+        })),
+        modalCustomId: "config_model_image_custom_modal",
+        modalTitleKey: "commands.model.image.modal_title",
+        selectLabelKey: "commands.model.image.select_label",
+        selectDescriptionKey: "commands.model.image.select_description",
+        selectPlaceholderKey: "commands.model.image.select_placeholder",
+      });
+      if (!selection) return;
+
+      const selectedConfiguredModel = selection.model;
+      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
+      const selectedModelId = selectedConfiguredModel.diffusion_model_id;
       const currentSelectedId = tomoriState.config.diffusion_model_id ?? null;
-      const [selectedConfiguredModel, previousModel] = await Promise.all([
-        getDiffusionModelById(selectedModelId),
-        currentSelectedId ? getDiffusionModelById(currentSelectedId) : Promise.resolve(null),
-      ]);
       const selectedModelName =
-        selectedSavedConfig?.custom_model_name ??
-        getImageModelDisplayName(selectedConfiguredModel) ??
-        getProviderDisplayName(selectedProvider);
+        getImageModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
 
       if (selectedModelId === currentSelectedId) {
-        await replyInfoEmbed(responseInteraction, locale, {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "commands.model.image.already_selected_title",
           descriptionKey: "commands.model.image.already_selected_description",
           descriptionVars: {
@@ -234,16 +259,13 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-        UPDATE tomori_configs
-        SET diffusion_model_id = ${selectedModelId}
-        WHERE server_id = ${tomoriState.server_id}
-        RETURNING *
-      `;
+      const previousModel = currentSelectedId ? await getDiffusionModelById(currentSelectedId) : null;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        diffusion_model_id: selectedModelId,
+      });
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
-        await replyInfoEmbed(responseInteraction, locale, {
+      if (!updated) {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
           color: ColorCode.ERROR,
@@ -252,7 +274,7 @@ export async function execute(
       }
 
       invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-      await replyInfoEmbed(responseInteraction, locale, {
+      await replyInfoEmbed(customReplyTarget, locale, {
         titleKey: "commands.model.image.success_title",
         descriptionKey: "commands.model.image.success_description",
         descriptionVars: {
@@ -267,7 +289,7 @@ export async function execute(
     }
 
     const availableModels =
-      (await loadAvailableDiffusionModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableDiffusionModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];
@@ -340,12 +362,12 @@ export async function execute(
 
     if (!selectedModel?.diffusion_model_id) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "CommandExecutionError",
         metadata: {
-          command: "config model image",
+          command: "model image",
           guildId: interaction.guild?.id ?? interaction.user.id,
           requestedModelId: selectedModelIdStr,
           availableModels: availableModels.map((m) => m.diffusion_model_id),
@@ -377,44 +399,32 @@ export async function execute(
       return;
     }
 
-    // 10. Update the config in the database using direct SQL
-    const [updatedRow] =
+    // 10. Update the config in the database via the repository
+    const updated =
       targetColumn === "nai_diffusion_model_id"
-        ? await sql`
-              UPDATE tomori_configs
-              SET nai_diffusion_model_id = ${selectedModel.diffusion_model_id}
-              WHERE server_id = ${tomoriState.server_id}
-              RETURNING *
-          `
-        : await sql`
-              UPDATE tomori_configs
-              SET diffusion_model_id = ${selectedModel.diffusion_model_id}
-              WHERE server_id = ${tomoriState.server_id}
-              RETURNING *
-          `;
+        ? await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+            nai_diffusion_model_id: selectedModel.diffusion_model_id,
+          })
+        : await configRepository.updateModelConfig(tomoriState.server_id, {
+            diffusion_model_id: selectedModel.diffusion_model_id,
+          });
 
-    // 11. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model image",
+          command: "model image",
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetDiffusionModelId: selectedModel.diffusion_model_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate diffusion model config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        "Failed to update diffusion model config after DB update",
+        new Error("Database update returned no rows"),
         context,
       );
 
@@ -454,26 +464,26 @@ export async function execute(
   } catch (error) {
     // 13. Log error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.tomori_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model image",
+        command: "model image",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
         targetDiffusionModelIdAttempted: selectedModel?.diffusion_model_id,
       },
     };
-    await log.error(`Error executing /config model image for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /model image for user ${userData.user_disc_id}`, error as Error, context);
 
     // 14. Inform user of unknown error
     // Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)

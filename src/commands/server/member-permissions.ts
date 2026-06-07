@@ -3,15 +3,20 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
   type Client,
+  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriConfigSchema, type TomoriConfigRow } from "../../types/db/schema";
-import { sql } from "@/utils/db/client";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { configRepository } from "@/utils/db/repositories";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
+import { log, ColorCode } from "@/utils/misc/logger";
+import { localizer } from "@/utils/text/localizer";
+import {
+  buildServerMemberPermissionsConfigWritePlan,
+  SERVER_MEMBER_PERMISSION_DEFINITIONS,
+} from "@/utils/discord/memberPermissionsConfigMapping";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -24,48 +29,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand
     .setName("member-permissions")
     .setDescription(localizer("en-US", "commands.server.member-permissions.description"));
-
-/**
- * Defines all configurable member teaching permissions for the checkbox modal.
- */
-interface MemberPermissionDefinition {
-  value: string;
-  dbColumn: string;
-  labelKey: string;
-  descKey: string;
-  getState: (config: TomoriConfigRow) => boolean;
-}
-
-const MEMBER_PERMISSION_DEFINITIONS: MemberPermissionDefinition[] = [
-  {
-    value: "servermemories",
-    dbColumn: "server_memteaching_enabled",
-    labelKey: "commands.server.member-permissions.servermemories_option",
-    descKey: "commands.server.member-permissions.servermemories_desc",
-    getState: (c) => c.server_memteaching_enabled,
-  },
-  {
-    value: "attributelist",
-    dbColumn: "attribute_memteaching_enabled",
-    labelKey: "commands.server.member-permissions.attributelist_option",
-    descKey: "commands.server.member-permissions.attributelist_desc",
-    getState: (c) => c.attribute_memteaching_enabled,
-  },
-  {
-    value: "sampledialogues",
-    dbColumn: "sampledialogue_memteaching_enabled",
-    labelKey: "commands.server.member-permissions.sampledialogues_option",
-    descKey: "commands.server.member-permissions.sampledialogues_desc",
-    getState: (c) => c.sampledialogue_memteaching_enabled,
-  },
-  {
-    value: "promptsnapshot",
-    dbColumn: "prompt_snapshot_enabled",
-    labelKey: "commands.server.member-permissions.promptsnapshot_option",
-    descKey: "commands.server.member-permissions.promptsnapshot_desc",
-    getState: (c) => c.prompt_snapshot_enabled,
-  },
-];
 
 /**
  * Configures which Teach permissions members with no Manage Server permissions have,
@@ -98,6 +61,10 @@ export async function execute(
   // NOTE: No deferReply here — promptWithRawModal must be the first
   // acknowledgment. Pre-modal checks are cache-backed and complete within 3 seconds.
 
+  // Declared outside try/catch so the catch block can use the modal interaction
+  // (which is auto-deferred) for error reporting instead of the consumed original interaction.
+  let modalInteraction: ModalSubmitInteraction | null = null;
+
   try {
     // 2. Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
@@ -112,7 +79,7 @@ export async function execute(
     }
 
     // 3. Build checkbox options, pre-checking currently-allowed permissions
-    const checkboxOptions: CheckboxGroupOption[] = MEMBER_PERMISSION_DEFINITIONS.map((def) => ({
+    const checkboxOptions: CheckboxGroupOption[] = SERVER_MEMBER_PERMISSION_DEFINITIONS.map((def) => ({
       label: localizer(locale, def.labelKey),
       value: def.value,
       description: localizer(locale, def.descKey),
@@ -147,27 +114,15 @@ export async function execute(
       log.error("Member permissions modal unexpectedly missing interaction");
       return;
     }
-    const modalInteraction = modalResult.interaction;
+    modalInteraction = modalResult.interaction;
 
     // 5. Determine which permissions changed
     const newlyEnabled = new Set(modalResult.multiValues?.[MEMBERPERMISSIONS_CHECKBOX_ID] ?? []);
-    const changes: Array<{
-      dbColumn: string;
-      isEnabled: boolean;
-      label: string;
-    }> = [];
-
-    for (const def of MEMBER_PERMISSION_DEFINITIONS) {
-      const wasEnabled = def.getState(tomoriState.config);
-      const willBeEnabled = newlyEnabled.has(def.value);
-      if (wasEnabled !== willBeEnabled) {
-        changes.push({
-          dbColumn: def.dbColumn,
-          isEnabled: willBeEnabled,
-          label: localizer(locale, def.labelKey),
-        });
-      }
-    }
+    const writePlan = buildServerMemberPermissionsConfigWritePlan(tomoriState.config, newlyEnabled);
+    const changes = writePlan.changes.map((change) => ({
+      ...change,
+      label: localizer(locale, change.labelKey),
+    }));
 
     // 6. If nothing changed, say so and exit
     if (changes.length === 0) {
@@ -179,46 +134,29 @@ export async function execute(
       return;
     }
 
-    // 7. Apply each changed permission to the database.
-    //    sql.unsafe is safe here: dbColumn values are strictly controlled by MEMBER_PERMISSION_DEFINITIONS.
-    for (const change of changes) {
-      const [updatedRow] = await sql`
-				UPDATE tomori_configs
-				SET ${sql.unsafe(change.dbColumn)} = ${change.isEnabled}
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
-			`;
+    // 7. Apply all changed permissions to the database in a single update
+    const updated = await configRepository[writePlan.method](tomoriState.server_id, writePlan.patch);
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
-        const context: ErrorContext = {
-          tomoriId: tomoriState.tomori_id,
-          serverId: tomoriState.server_id,
-          userId: userData.user_id,
-          errorType: "DatabaseUpdateError",
-          metadata: {
-            command: "server memberpermissions",
-            guildId: interaction.guild.id,
-            dbColumn: change.dbColumn,
-            isEnabled: change.isEnabled,
-            validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
-          },
-        };
-        await log.error(
-          `Failed to update member permission column: ${change.dbColumn}`,
-          validatedConfig.success
-            ? new Error("Database update returned no rows")
-            : new Error("Updated config failed validation"),
-          context,
-        );
+    if (!updated) {
+      const context: ErrorContext = {
+        personaId: tomoriState.persona_id,
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        errorType: "DatabaseUpdateError",
+        metadata: {
+          command: "server memberpermissions",
+          guildId: interaction.guild.id,
+          changesCount: changes.length,
+        },
+      };
+      await log.error("Failed to update member permissions config", new Error("Database update failed"), context);
 
-        await replyInfoEmbed(modalInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
+      await replyInfoEmbed(modalInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
     }
 
     // 8. Invalidate cache so next message picks up the fresh config
@@ -238,29 +176,28 @@ export async function execute(
       resultDescription += `\n🔴 **Disabled:** ${disabledLabels.join(", ")}`;
     }
 
-    await modalInteraction.reply({
+    await modalInteraction.editReply({
       embeds: [
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.server.member-permissions.success_title"))
           .setDescription(resultDescription)
           .setColor(ColorCode.SUCCESS),
       ],
-      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     // 10. Log the error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.tomori_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
         command: "server memberpermissions",
@@ -275,18 +212,13 @@ export async function execute(
     );
 
     // 11. Inform user of unknown error
-    if (!interaction.replied && !interaction.deferred) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.followUp({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    // Use modalInteraction (auto-deferred) if available since the original
+    // interaction is consumed by promptWithRawModal's raw REST acknowledgment.
+    await replyInfoEmbed(modalInteraction ?? interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
   }
 }

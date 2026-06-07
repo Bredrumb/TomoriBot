@@ -3,58 +3,24 @@
  * Provides registration, discovery, and execution of tools
  */
 
-import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
 import type {
   Tool,
-  ToolAvailabilityLlmState,
   ToolContext,
   ToolResult,
   ToolRegistryInterface,
   ToolExecutionEvent,
   MCPCapableToolAdapter,
 } from "../types/tool/interfaces";
-import { configToFeatureFlags, filterToolsByFeatureFlags } from "../utils/tools/featureFlagMapper";
-import { getMCPManager } from "../utils/mcp/mcpManager";
 import { getGuildMcpManager } from "../utils/mcp/guildMcpManager";
-import { getCachedEnabledGuildMcpConfigs } from "../utils/cache/guildMcpConfigCache";
-import { isBraveSearchAvailable } from "../tools/restAPIs/brave/braveSearchService";
-import { hasOptApiKey } from "../utils/security/crypto";
-import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import { sql } from "@/utils/db/client";
-import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
-import { VOICE_TOOL_VARIANTS, type VoiceScriptMarkup } from "@/tools/functionCalls/generateVoiceMessageTool";
-import { shouldUseVoiceDesignForPersona } from "@/providers/custom/styles/ttsVoiceDesignAdapter";
-
-/**
- * Minimal state interface for context building operations
- * Contains only what's needed for feature flag checking without full Discord context
- */
-export interface ToolStateForContext {
-  server_id: string;
-  /** True when the active persona has either a local voice sample or provider-hosted voice assigned. */
-  activePersonaHasElevenlabsVoice: boolean;
-  /** Present when the active persona should use instruct-based VoiceDesign synthesis. */
-  activePersonaVoiceDesignPrompt?: string | null;
-  /** Display/name marker for the active speech voice selection. */
-  activePersonaVoiceName?: string | null;
-  llm: ToolAvailabilityLlmState;
-  diffusion_model_id?: number | null;
-  nai_diffusion_model_id?: number | null;
-  video_model_id?: number | null;
-  config: {
-    sticker_usage_enabled: boolean;
-    web_search_enabled: boolean;
-    self_teaching_enabled: boolean;
-    manage_message_enabled: boolean;
-    imagegen_enabled: boolean;
-    videogen_enabled: boolean;
-    nai_exclusive_imggen: boolean;
-    voice_message_enabled: boolean;
-    thread_creation_enabled: boolean;
-  };
-}
+import {
+  getAvailableToolsForContext as getAvailableToolsForContextFromRegistry,
+  getAvailableToolsForProvider,
+  getAvailableToolsWithMCP as getAvailableToolsWithMCPFromRegistry,
+  type AvailableToolsWithMCP,
+  type ToolStateForContext,
+} from "@/tools/availability";
 
 const BUILTIN_TOOL_ALIASES: Record<string, string> = {
   remember_this_fact: "create_long_term_memory",
@@ -93,6 +59,7 @@ function resolveOpaqueIds(args: Record<string, unknown>, messageIdMap?: MessageI
 
 // Re-export ToolContext for external use
 export type { ToolContext } from "../types/tool/interfaces";
+export type { ToolStateForContext } from "@/tools/availability";
 
 /**
  * Central registry for all tools
@@ -139,52 +106,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
    * @returns Array of available tools
    */
   getAvailableTools(provider: string, context: ToolContext): Tool[] {
-    const availableTools: Tool[] = [];
-
-    for (const tool of this.tools.values()) {
-      try {
-        // Check if tool supports this provider
-        // Use context-aware availability check if available, otherwise fall back to basic check
-        const isToolAvailable =
-          "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-            ? tool.isAvailableForContext(provider, context)
-            : tool.isAvailableFor(provider);
-
-        if (!isToolAvailable) {
-          continue;
-        }
-
-        if (!this.meetsModelCapabilityRequirements(tool, context.tomoriState.llm)) {
-          continue;
-        }
-
-        // Check feature flag requirements
-        if (tool.requiresFeatureFlag) {
-          const isFeatureEnabled = this.checkFeatureFlag(tool.requiresFeatureFlag, context);
-          if (!isFeatureEnabled) {
-            continue;
-          }
-        }
-
-        // Check permission requirements
-        if (tool.requiresPermissions && tool.requiresPermissions.length > 0) {
-          const hasPermissions = this.checkPermissions(tool.requiresPermissions, context);
-          if (!hasPermissions) {
-            continue;
-          }
-        }
-
-        availableTools.push(tool);
-      } catch (error) {
-        log.warn(`Error checking availability for tool ${tool.name}: ${(error as Error).message}`);
-      }
-    }
-
-    log.info(
-      `Found ${availableTools.length} available tools for provider: ${provider} (${availableTools.map((t) => t.name).join(", ")})`,
-    );
-
-    return availableTools;
+    return getAvailableToolsForProvider(this.tools.values(), provider, context);
   }
 
   /**
@@ -195,53 +117,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
    * @returns Array of tools available for this provider and configuration
    */
   getAvailableToolsForContext(provider: string, stateForContext: ToolStateForContext): Tool[] {
-    const availableTools: Tool[] = [];
-
-    for (const tool of this.tools.values()) {
-      try {
-        // Check if tool supports this provider. This contextless pass intentionally
-        // skips streamContext-dependent checks, but still applies declared model
-        // capability requirements such as image/video support.
-        if (!tool.isAvailableFor(provider)) {
-          continue;
-        }
-
-        if (!this.meetsModelCapabilityRequirements(tool, stateForContext.llm)) {
-          continue;
-        }
-
-        // Check feature flag requirements (only feature flags, no Discord permissions)
-        if (tool.requiresFeatureFlag) {
-          const isFeatureEnabled = this.checkFeatureFlagOnly(tool.requiresFeatureFlag, stateForContext);
-          if (!isFeatureEnabled) {
-            continue;
-          }
-        }
-
-        // Skip Discord permission checks for context building
-        // Permissions will be checked during actual tool execution
-
-        availableTools.push(tool);
-      } catch (error) {
-        log.warn(`Error checking availability for tool ${tool.name}: ${(error as Error).message}`);
-      }
-    }
-
-    log.info(
-      `Found ${availableTools.length} available tools for context building with provider: ${provider} (${availableTools.map((t) => t.name).join(", ")})`,
-    );
-
-    return availableTools;
-  }
-
-  private meetsModelCapabilityRequirements(tool: Tool, llm: ToolAvailabilityLlmState): boolean {
-    if (!tool.requiredModelCapabilities) {
-      return true;
-    }
-
-    return Object.entries(tool.requiredModelCapabilities).every(
-      ([capability, expectedValue]) => llm[capability as keyof ToolAvailabilityLlmState] === expectedValue,
-    );
+    return getAvailableToolsForContextFromRegistry(this.tools.values(), provider, stateForContext);
   }
 
   /**
@@ -254,328 +130,8 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   async getAvailableToolsWithMCP(
     provider: string,
     stateForContext: ToolStateForContext,
-  ): Promise<{
-    builtInTools: Tool[];
-    mcpFunctionNames: string[];
-    totalCount: number;
-  }> {
-    try {
-      // Get built-in tools (already filtered by feature flags)
-      let builtInTools = this.getAvailableToolsForContext(provider, stateForContext);
-
-      // Convert config to feature flags for MCP filtering
-      const featureFlags = configToFeatureFlags(stateForContext.config);
-
-      // Get MCP function names and filter by feature flags + provider preferences
-      let mcpFunctionNames: string[] = [];
-      const mcpManager = getMCPManager();
-
-      if (mcpManager.isReady()) {
-        // Get all MCP function names
-        const allMCPFunctionNames: string[] = [];
-        const mcpTools = mcpManager.getMCPTools();
-
-        for (const mcpTool of mcpTools) {
-          try {
-            const geminiTool = await mcpTool.tool();
-            if (geminiTool.functionDeclarations) {
-              for (const declaration of geminiTool.functionDeclarations) {
-                // Type assertion needed due to Gemini tool typing
-                const functionName = (declaration as { name: string }).name;
-                allMCPFunctionNames.push(functionName);
-              }
-            }
-          } catch (error) {
-            log.warn("Failed to extract function names from MCP tool:", error as Error);
-          }
-        }
-
-        // Filter MCP functions by feature flags using centralized logic
-        let filteredByFeatureFlags = filterToolsByFeatureFlags(allMCPFunctionNames, featureFlags);
-
-        // Apply Brave API key preference logic (prefer Brave over DuckDuckGo when Brave is available)
-        const braveServerIdNumber = stateForContext.server_id
-          ? Number.parseInt(stateForContext.server_id, 10)
-          : undefined;
-        const hasBraveApiKey = await isBraveSearchAvailable(braveServerIdNumber);
-        if (hasBraveApiKey) {
-          // DuckDuckGo search function names to exclude when Brave is available
-          const duckduckgoSearchFunctions = [
-            "web-search",
-            "felo-search",
-            "iask-search",
-            "monica-search",
-            "fetch-url",
-            "url-metadata",
-          ];
-
-          const originalCount = filteredByFeatureFlags.length;
-          filteredByFeatureFlags = filteredByFeatureFlags.filter(
-            (functionName) => !duckduckgoSearchFunctions.includes(functionName),
-          );
-          const excludedCount = originalCount - filteredByFeatureFlags.length;
-
-          if (excludedCount > 0) {
-            log.info(
-              `Excluded ${excludedCount} DuckDuckGo search functions (Brave API key available for server ${braveServerIdNumber || "global"})`,
-            );
-          }
-        }
-
-        mcpFunctionNames = filteredByFeatureFlags;
-
-        log.info(
-          `MCP tools: ${allMCPFunctionNames.length} total, ${mcpFunctionNames.length} after centralized filtering (feature flags + provider preferences)`,
-        );
-      }
-
-      // Append guild MCP function names (admin-registered, skip feature flag filtering)
-      const serverIdNum = stateForContext.server_id ? Number.parseInt(stateForContext.server_id, 10) : undefined;
-      if (serverIdNum) {
-        try {
-          const guildMcpManager = getGuildMcpManager();
-          const guildFunctionNames = await guildMcpManager.getGuildMCPFunctionNames(serverIdNum);
-
-          if (guildFunctionNames.length > 0) {
-            // Collision check: skip guild functions that shadow built-in or global MCP names
-            const builtInNames = new Set(builtInTools.map((t) => t.name));
-            const globalMcpNames = new Set(mcpFunctionNames);
-
-            const safeGuildNames = guildFunctionNames.filter((name) => {
-              if (builtInNames.has(name) || globalMcpNames.has(name)) {
-                log.warn(
-                  `[GuildMCP] Skipping guild MCP function "${name}" — collides with built-in or global MCP tool`,
-                );
-                return false;
-              }
-              return true;
-            });
-
-            mcpFunctionNames.push(...safeGuildNames);
-            log.info(
-              `Guild MCP tools: ${guildFunctionNames.length} discovered, ${safeGuildNames.length} after collision check (server: ${serverIdNum})`,
-            );
-          }
-        } catch (error) {
-          log.warn("[GuildMCP] Failed to get guild MCP function names, continuing without", error);
-        }
-      }
-
-      // Deduplicate global MCP tools when guild MCP servers provide equivalent functionality.
-      // A guild server with server_type = 'web_search' replaces built-in Brave + DuckDuckGo search.
-      // A guild server with server_type = 'url_fetcher' replaces the built-in 'fetch' MCP tool.
-      if (serverIdNum) {
-        try {
-          const enabledConfigs = await getCachedEnabledGuildMcpConfigs(serverIdNum);
-          const guildServerTypes = new Set(enabledConfigs.map((c) => c.server_type).filter(Boolean));
-
-          if (guildServerTypes.has("web_search")) {
-            const webSearchFunctions = [
-              // Brave search functions
-              "brave_web_search",
-              "brave_image_search",
-              "brave_video_search",
-              "brave_news_search",
-              "brave_local_search",
-              "brave_summarizer",
-              // DuckDuckGo search functions
-              "web-search",
-              "felo-search",
-              "iask-search",
-              "monica-search",
-              "url-metadata",
-            ];
-            const beforeCount = mcpFunctionNames.length;
-            mcpFunctionNames = mcpFunctionNames.filter((name) => !webSearchFunctions.includes(name));
-            const excludedCount = beforeCount - mcpFunctionNames.length;
-            if (excludedCount > 0) {
-              log.info(`Excluded ${excludedCount} web search MCP functions (guild has web_search server type)`);
-            }
-          }
-
-          if (guildServerTypes.has("url_fetcher")) {
-            const fetchFunctions = ["fetch", "fetch-url"];
-            const beforeCount = mcpFunctionNames.length;
-            mcpFunctionNames = mcpFunctionNames.filter((name) => !fetchFunctions.includes(name));
-            const excludedCount = beforeCount - mcpFunctionNames.length;
-            if (excludedCount > 0) {
-              log.info(`Excluded ${excludedCount} URL fetch MCP functions (guild has url_fetcher server type)`);
-            }
-          }
-        } catch (error) {
-          log.warn("[GuildMCP] Failed to check server types for deduplication, continuing without", error);
-        }
-      }
-
-      // Apply NovelAI opt API key preference logic for image generation tools
-      const serverIdNumber = stateForContext.server_id ? Number.parseInt(stateForContext.server_id, 10) : undefined;
-      if (serverIdNumber) {
-        const activeSpeechEndpoint = await resolveActiveSpeechEndpoint(serverIdNumber);
-        const hasElevenLabsOptKey = await hasOptApiKey(serverIdNumber, ELEVENLABS_SERVICE_NAME);
-        const hasSpeechProvider = Boolean(activeSpeechEndpoint) || hasElevenLabsOptKey;
-        const [toolConfigRow] = await sql<
-          [{ diffusion_model_id: number | null; nai_diffusion_model_id: number | null; video_model_id: number | null }]
-        >`
-            SELECT diffusion_model_id, nai_diffusion_model_id, video_model_id
-            FROM tomori_configs
-            WHERE server_id = ${serverIdNumber}
-            LIMIT 1
-          `;
-        /*
-        const [googleSavedProviderRow] = await sql<[{ api_key: Buffer | null }]>`
-            SELECT api_key
-            FROM saved_provider_configs
-            WHERE server_id = ${serverIdNumber}
-              AND provider = 'google'
-            LIMIT 1
-          `;
-        */
-        const hasStandardImageSlot =
-          stateForContext.diffusion_model_id != null || toolConfigRow?.diffusion_model_id != null;
-        const hasNaiImageSlot =
-          stateForContext.nai_diffusion_model_id != null || toolConfigRow?.nai_diffusion_model_id != null;
-        const hasVideoSlot = stateForContext.video_model_id != null || toolConfigRow?.video_model_id != null;
-        // const hasGeminiAccess = !!googleSavedProviderRow?.api_key;
-
-        if (!hasNaiImageSlot) {
-          const beforeCount = builtInTools.length;
-          builtInTools = builtInTools.filter((tool) => tool.name !== "generate_image_nai");
-          if (builtInTools.length < beforeCount) {
-            log.info("Excluded generate_image_nai (no NovelAI image slot configured)");
-          }
-        }
-
-        if (!hasStandardImageSlot) {
-          const beforeCount = builtInTools.length;
-          builtInTools = builtInTools.filter((tool) => tool.name !== "generate_image");
-          if (builtInTools.length < beforeCount) {
-            log.info("Excluded generate_image (no standard image slot configured)");
-          }
-        }
-
-        if (!hasVideoSlot) {
-          const beforeCount = builtInTools.length;
-          builtInTools = builtInTools.filter((tool) => tool.name !== "generate_video");
-          if (builtInTools.length < beforeCount) {
-            log.info("Excluded generate_video (no video slot configured)");
-          }
-        }
-
-        /* Inpainting parameters temporarily disabled
-        if (!hasGeminiAccess) {
-          builtInTools = builtInTools.map((tool) => {
-            if (tool.name !== "generate_image_nai") return tool;
-
-            // Create a shallow proxy that hides inpainting-only parameters
-            const { media_id: _msgId, edit_target: _editTarget, ...baseProps } = tool.parameters.properties;
-
-            const strippedDescription = tool.description.replace(
-              / For editing\/inpainting:.*?The image will be sent directly to the Discord channel\./,
-              " The image will be sent directly to the Discord channel.",
-            );
-
-            return Object.create(tool, {
-              parameters: {
-                value: {
-                  type: tool.parameters.type,
-                  properties: baseProps,
-                  required: tool.parameters.required,
-                },
-                enumerable: true,
-              },
-              description: {
-                value: strippedDescription,
-                enumerable: true,
-              },
-            });
-          });
-        }
-        */
-
-        if (
-          !hasSpeechProvider ||
-          !stateForContext.activePersonaHasElevenlabsVoice ||
-          !stateForContext.config.voice_message_enabled
-        ) {
-          const beforeCount = builtInTools.length;
-          builtInTools = builtInTools.filter((tool) => tool.name !== "generate_voice_message");
-          if (builtInTools.length < beforeCount) {
-            log.info(
-              `Excluded generate_voice_message (${
-                !hasSpeechProvider
-                  ? "no speech provider"
-                  : !stateForContext.activePersonaHasElevenlabsVoice
-                    ? "active persona has no assigned voice"
-                    : "voice_message_enabled is disabled"
-              })`,
-            );
-          }
-        } else {
-          // Proxy the voice tool with a description that matches the endpoint's speech mode.
-          // activeSpeechEndpoint is already resolved above; no extra DB call needed.
-          const scriptMarkup =
-            (activeSpeechEndpoint?.endpoint.extra_config?.script_markup as string | undefined) ?? "bracket-tags";
-          const voiceDesign = shouldUseVoiceDesignForPersona(
-            activeSpeechEndpoint?.endpoint,
-            stateForContext.activePersonaVoiceDesignPrompt,
-            stateForContext.activePersonaVoiceName,
-          );
-          const variant = voiceDesign
-            ? VOICE_TOOL_VARIANTS["voice-design"]
-            : (VOICE_TOOL_VARIANTS[scriptMarkup as VoiceScriptMarkup] ?? VOICE_TOOL_VARIANTS["bracket-tags"]);
-
-          builtInTools = builtInTools.map((tool) => {
-            if (tool.name !== "generate_voice_message") return tool;
-            return Object.create(tool, {
-              description: { value: variant.toolDescription, enumerable: true },
-              parameters: {
-                value: {
-                  ...tool.parameters,
-                  properties: {
-                    ...tool.parameters.properties,
-                    script: {
-                      ...tool.parameters.properties.script,
-                      description: variant.scriptDescription,
-                    },
-                    ...(voiceDesign
-                      ? {
-                          voice_instructions: {
-                            type: "string" as const,
-                            description: VOICE_TOOL_VARIANTS["voice-design"].voiceInstructionsDescription,
-                          },
-                        }
-                      : {}),
-                  },
-                },
-                enumerable: true,
-              },
-            });
-          });
-        }
-      }
-
-      const totalCount = builtInTools.length + mcpFunctionNames.length;
-
-      log.info(
-        `Centralized tool filtering complete: ${builtInTools.length} built-in + ${mcpFunctionNames.length} MCP = ${totalCount} total tools for provider: ${provider}`,
-      );
-
-      return {
-        builtInTools,
-        mcpFunctionNames,
-        totalCount,
-      };
-    } catch (error) {
-      log.error("Failed to get available tools with MCP:", error as Error);
-
-      // Fallback to just built-in tools
-      const builtInTools = this.getAvailableToolsForContext(provider, stateForContext);
-      return {
-        builtInTools,
-        mcpFunctionNames: [],
-        totalCount: builtInTools.length,
-      };
-    }
+  ): Promise<AvailableToolsWithMCP> {
+    return getAvailableToolsWithMCPFromRegistry(this.tools.values(), provider, stateForContext);
   }
 
   /**
@@ -980,78 +536,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     if (typeof tool.isAvailableFor !== "function") {
       throw new Error(`Tool '${tool.name}' must have an isAvailableFor method`);
     }
-  }
-
-  /**
-   * Check if a feature flag is enabled for the given context
-   * Uses centralized feature flag mapper for consistency with MCP tool filtering
-   * @param featureFlag - Feature flag to check
-   * @param context - Tool context
-   * @returns True if feature is enabled
-   */
-  private checkFeatureFlag(featureFlag: string, context: ToolContext): boolean {
-    // Use centralized mapper to convert config to feature flags
-    const featureFlags = configToFeatureFlags(context.tomoriState.config);
-    return featureFlags[featureFlag] ?? false;
-  }
-
-  /**
-   * Check if a feature flag is enabled (for context building without full ToolContext)
-   * Uses centralized feature flag mapper for consistency with MCP tool filtering
-   * @param featureFlag - Feature flag to check
-   * @param stateForContext - Minimal state with configuration
-   * @returns True if feature is enabled
-   */
-  private checkFeatureFlagOnly(featureFlag: string, stateForContext: ToolStateForContext): boolean {
-    // Use centralized mapper to convert config to feature flags
-    const featureFlags = configToFeatureFlags(stateForContext.config);
-    return featureFlags[featureFlag] ?? false;
-  }
-
-  /**
-   * Check if the context has required permissions
-   * @param requiredPermissions - Array of required permission strings
-   * @param context - Tool context
-   * @returns True if all permissions are available
-   */
-  private checkPermissions(requiredPermissions: string[], context: ToolContext): boolean {
-    // For now, just check basic Discord permissions
-    // This could be expanded to check bot permissions, user roles, etc.
-
-    if (requiredPermissions.includes("SEND_MESSAGES")) {
-      const clientUser = context.client.user;
-      if (!clientUser) {
-        return false;
-      }
-      if ("permissionsFor" in context.channel) {
-        const permissions = context.channel.permissionsFor(clientUser);
-        if (!permissions) {
-          return false;
-        }
-        const isThreadChannel =
-          context.channel.type === ChannelType.PublicThread ||
-          context.channel.type === ChannelType.PrivateThread ||
-          context.channel.type === ChannelType.AnnouncementThread;
-        const canSend = isThreadChannel ? permissions.has("SendMessagesInThreads") : permissions.has("SendMessages");
-        if (!canSend) {
-          return false;
-        }
-      }
-    }
-
-    if (requiredPermissions.includes("USE_EXTERNAL_STICKERS")) {
-      const clientUser = context.client.user;
-      if (
-        !clientUser ||
-        !("permissionsFor" in context.channel
-          ? context.channel.permissionsFor(clientUser)?.has("UseExternalStickers")
-          : true)
-      ) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   /**

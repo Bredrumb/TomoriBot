@@ -35,28 +35,8 @@ export class DeepseekStreamAdapter extends OpenAICompatibleStreamAdapter {
           delete requestBody.presence_penalty;
           delete requestBody.frequency_penalty;
         }
-
-        const outputPrefill = context.outputPrefill?.trim();
-        if (!outputPrefill) {
-          return;
-        }
-
-        const messages = requestBody.messages;
-        if (!Array.isArray(messages) || messages.length === 0) {
-          return;
-        }
-
-        const lastMessage = messages.at(-1);
-        if (
-          !lastMessage ||
-          typeof lastMessage !== "object" ||
-          lastMessage.role !== "assistant" ||
-          lastMessage.content !== outputPrefill
-        ) {
-          return;
-        }
-
-        lastMessage.prefix = true;
+        // Assistant prefix-completion is applied by the shared seam in
+        // OpenAICompatibleStreamAdapter (providerRequiresPrefixCompletion → "deepseek").
       },
     });
   }

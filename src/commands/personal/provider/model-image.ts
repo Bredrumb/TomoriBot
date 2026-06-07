@@ -1,8 +1,9 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { loadAvailableDiffusionModelsForProvider } from "@/utils/db/dbRead";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { llmModelRepo } from "@/utils/db/repositories";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { DiffusionModelRow, ErrorContext, SavedProviderConfigRow, UserRow } from "@/types/db/schema";
@@ -71,7 +72,7 @@ export async function execute(
     if (!providerSelection) return;
 
     const availableModels =
-      (await loadAvailableDiffusionModelsForProvider(providerSelection.provider, false, {
+      (await llmModelRepo.loadAvailableDiffusionModels(providerSelection.provider, false, {
         kind: "personal",
         ownerId: userData.user_id,
       })) ?? [];

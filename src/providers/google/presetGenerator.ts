@@ -784,7 +784,7 @@ ${params.existingPresetContext.trim()}`;
           sample_dialogues_out: sanitizedDialoguesOut,
         };
 
-        log.success(`✨ Preset generation successful with model: ${MODEL_NAME}`);
+        log.success(`Preset generation successful with model: ${MODEL_NAME}`);
         return { preset };
       } catch (apiError: unknown) {
         const errorMessage = getErrorMessage(apiError);

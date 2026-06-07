@@ -2,7 +2,6 @@ import type {
   OpenAICompatibleFunctionDeclaration,
   OpenAICompatibleObjectSchema,
 } from "@/providers/openaiCompatible/openaiCompatibleTypes";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
 import type {
   MCPCapableToolAdapter,
   Tool,
@@ -105,30 +104,10 @@ export class OpenAICompatibleToolAdapter implements MCPCapableToolAdapter {
   ): Promise<Array<Record<string, unknown>>> {
     try {
       const allTools: Record<string, unknown>[] = [];
-      const hasBraveApiKey = await isBraveSearchAvailable(serverId);
-      log.info(
-        `${this.providerName} adapter: Brave Search ${hasBraveApiKey ? "available" : "not available"} for server ${serverId || "global"}`,
-      );
-
-      const braveSearchToolNames = [
-        "brave_web_search",
-        "brave_image_search",
-        "brave_video_search",
-        "brave_news_search",
-      ];
-
-      let filteredBuiltInTools = builtInTools;
-      if (!hasBraveApiKey) {
-        filteredBuiltInTools = builtInTools.filter((tool) => !braveSearchToolNames.includes(tool.name));
-        const excludedCount = builtInTools.length - filteredBuiltInTools.length;
-        if (excludedCount > 0) {
-          log.info(`${this.providerName} adapter: Excluded ${excludedCount} Brave search tools (no API key)`);
-        }
-      }
-
-      if (filteredBuiltInTools.length > 0) {
-        allTools.push(...this.convertToolsArray(filteredBuiltInTools));
-        log.info(`${this.providerName} adapter: Converted ${filteredBuiltInTools.length} built-in tools`);
+      // Brave-key dance removed — unified web_search is gated centrally.
+      if (builtInTools.length > 0) {
+        allTools.push(...this.convertToolsArray(builtInTools));
+        log.info(`${this.providerName} adapter: Converted ${builtInTools.length} built-in tools`);
       }
 
       const mcpManager = getMCPManager();

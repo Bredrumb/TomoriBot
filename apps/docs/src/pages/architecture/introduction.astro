@@ -1,0 +1,18 @@
+---
+// biome-ignore lint/correctness/noUnusedVariables: used in the Astro template below; biome doesn't parse template references
+const target = "/architecture/";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content={`0;url=${target}`} />
+    <meta name="robots" content="noindex" />
+    <link rel="canonical" href={new URL(target, Astro.site)} />
+    <title>Redirecting to TomoriBot docs</title>
+  </head>
+  <body>
+    <a href={target}>Redirecting to TomoriBot docs</a>
+  </body>
+</html>

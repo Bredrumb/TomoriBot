@@ -10,24 +10,20 @@
 
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { loadTomoriState } from "@/utils/db/dbRead";
+import { personaRepository, serverRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { getAllEmotionKeys } from "@/types/misc/emotions";
-import {
-  type ExpressionClassification,
-  type ExpressionBatchResult,
-  ExpressionBatchResultSchema,
-} from "@/providers/utils/structuredOutput";
+import { type ExpressionBatchResult, ExpressionBatchResultSchema } from "@/providers/utils/structuredOutput";
 import type { StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { callExpressionInitializationForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapabilityResolver";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 
@@ -44,24 +40,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setDescription(localizer("en-US", "commands.server.initialize.expressions.overwrite_description"))
         .setRequired(false),
     );
-
-/**
- * Database row type for uninitialized emojis
- */
-interface UninitializedEmoji {
-  emoji_disc_id: string;
-  emoji_name: string;
-  is_animated: boolean;
-}
-
-/**
- * Database row type for uninitialized stickers
- */
-interface UninitializedSticker {
-  sticker_disc_id: string;
-  sticker_name: string;
-  sticker_format: number;
-}
 
 /**
  * Convert ColorCode hex string to Discord number format
@@ -108,7 +86,7 @@ ${getAllEmotionKeys().join(", ")}
 Guidelines:
 - Focus on the PRIMARY emotion conveyed by the visual design
 - "neutral" is for emotionally ambiguous or abstract designs
-- Descriptions should be ONE concise sentence describing what you see
+- Descriptions should be ONE concise sentence (10-200 characters) describing what you see
 - Match emoji/sticker names case-insensitively`;
 }
 
@@ -132,76 +110,6 @@ For each expression, determine:
 2. A concise visual description (one sentence)
 
 Return results in the specified JSON format.`;
-}
-
-/**
- * Update expressions in database with LLM-generated metadata
- *
- * @param serverId - Internal server ID
- * @param results - Array of classification results from LLM
- * @returns Object with counts of updated emojis and stickers
- */
-async function updateExpressionsInDB(
-  serverId: number,
-  results: ExpressionClassification[],
-): Promise<{ emojiCount: number; stickerCount: number }> {
-  let emojiCount = 0;
-  let stickerCount = 0;
-
-  // 1. Use transaction for atomicity
-  await sql.transaction(async (tx) => {
-    // 2. Process each result
-    for (const result of results) {
-      // 3. Try updating emoji first (case-insensitive name match, only if uninitialized)
-      const emojiRows = await tx`
-				UPDATE server_emojis
-				SET
-					emotion_key = ${result.emotion_key},
-					emoji_desc = ${result.description},
-					updated_at = CURRENT_TIMESTAMP
-				WHERE server_id = ${serverId}
-					AND LOWER(emoji_name) = LOWER(${result.name})
-					AND (
-						emotion_key IS NULL
-						OR emotion_key = 'unset'
-						OR emoji_desc IS NULL
-						OR emoji_desc = ''
-					)
-				RETURNING emoji_disc_id
-			`;
-
-      // 4. If emoji was updated, increment count and continue
-      if (emojiRows.length > 0) {
-        emojiCount++;
-        continue;
-      }
-
-      // 5. If no emoji found, try sticker (only if uninitialized)
-      const stickerRows = await tx`
-				UPDATE server_stickers
-				SET
-					emotion_key = ${result.emotion_key},
-					sticker_desc = ${result.description},
-					updated_at = CURRENT_TIMESTAMP
-				WHERE server_id = ${serverId}
-					AND LOWER(sticker_name) = LOWER(${result.name})
-					AND (
-						emotion_key IS NULL
-						OR emotion_key = 'unset'
-						OR sticker_desc IS NULL
-						OR sticker_desc = ''
-					)
-				RETURNING sticker_disc_id
-			`;
-
-      // 6. If sticker was updated, increment count
-      if (stickerRows.length > 0) {
-        stickerCount++;
-      }
-    }
-  });
-
-  return { emojiCount, stickerCount };
 }
 
 /**
@@ -230,8 +138,8 @@ export async function execute(
   }
 
   // 2. Load Tomori state for this server
-  const tomoriState = await loadTomoriState(interaction.guild.id);
-  if (!tomoriState) {
+  const baseTomoriState = await personaRepository.loadState(interaction.guild.id);
+  if (!baseTomoriState) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",
       descriptionKey: "general.errors.tomori_not_setup_description",
@@ -243,6 +151,11 @@ export async function execute(
 
   // 3. Defer reply early (this operation may take time)
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  // 3a. Overlay the invoking user's personal (BYOK) provider so the expression
+  //     generation runs on their personal model/key when configured. Done after
+  //     deferReply since it performs DB reads (keeps the 3s ack window safe).
+  const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
   const overwrite = interaction.options.getBoolean("overwrite") ?? false;
 
@@ -334,119 +247,19 @@ export async function execute(
     // Handle overwrite before querying for uninitialized
     if (overwrite) {
       log.info(`[Initialize Expressions] Overwriting existing expressions for guild ${interaction.guild.name}`);
-      await sql`
-        UPDATE server_emojis
-        SET emotion_key = NULL, emoji_desc = NULL
-        WHERE server_id = ${tomoriState.server_id}
-      `;
-      await sql`
-        UPDATE server_stickers
-        SET emotion_key = NULL, sticker_desc = NULL
-        WHERE server_id = ${tomoriState.server_id}
-      `;
+      await Promise.all([
+        serverRepository.clearEmojiExpressions(tomoriState.server_id),
+        serverRepository.clearStickerExpressions(tomoriState.server_id),
+      ]);
     }
 
-    // 6. Query database for uninitialized emojis
-    const uninitializedEmojis = await sql<UninitializedEmoji[]>`
-			SELECT emoji_disc_id, emoji_name, is_animated
-			FROM server_emojis
-			WHERE server_id = ${tomoriState.server_id}
-				AND (
-					emotion_key IS NULL
-					OR emotion_key = 'unset'
-					OR emoji_desc IS NULL
-					OR emoji_desc = ''
-				)
-		`;
-
-    // 7. Query database for uninitialized stickers
-    const uninitializedStickers = await sql<UninitializedSticker[]>`
-			SELECT sticker_disc_id, sticker_name, sticker_format
-			FROM server_stickers
-			WHERE server_id = ${tomoriState.server_id}
-				AND (
-					emotion_key IS NULL
-					OR emotion_key = 'unset'
-					OR sticker_desc IS NULL
-					OR sticker_desc = ''
-				)
-		`;
-
-    // 8. Check if there's anything to initialize
-    const totalUninitialized = uninitializedEmojis.length + uninitializedStickers.length;
-
-    if (totalUninitialized === 0) {
-      await interaction.editReply({
-        embeds: [
-          {
-            title: localizer(locale, "commands.server.initialize.expressions.already_initialized_title"),
-            description: localizer(locale, "commands.server.initialize.expressions.already_initialized_description"),
-            color: hexToNumber(ColorCode.INFO),
-          },
-        ],
-      });
-      return;
-    }
-
-    // 9. Build images array for LLM
-    const images: Array<{ url: string; name: string }> = [];
-    const items: Array<{ name: string; type: "emoji" | "sticker" }> = [];
-
-    // Add emojis
-    for (const emoji of uninitializedEmojis) {
-      images.push({
-        url: buildEmojiCDNUrl(emoji.emoji_disc_id),
-        name: emoji.emoji_name,
-      });
-      items.push({ name: emoji.emoji_name, type: "emoji" });
-    }
-
-    // Add stickers
-    for (const sticker of uninitializedStickers) {
-      images.push({
-        url: buildStickerCDNUrl(sticker.sticker_disc_id),
-        name: sticker.sticker_name,
-      });
-      items.push({ name: sticker.sticker_name, type: "sticker" });
-    }
-
-    // 10. Apply batch size limit based on provider
-    // Different providers have different token limits and cost constraints
-    // User should re-run the command to process remaining expressions
+    // 6. Resolve the provider and its per-batch image cap once. These are constant
+    //    across every loop iteration, so there is no need to recompute them per batch.
     const provider = effectiveLlm.llm_provider.toLowerCase();
     const structuredOutputCapability = await resolveStructuredOutputCapability(provider);
     const expressionBatchSize = structuredOutputCapability?.getExpressionInitializationBatchSize?.() ?? null;
-    let isBatchLimited = false;
-    let batchSize = images.length;
 
-    if (expressionBatchSize && images.length > expressionBatchSize) {
-      batchSize = expressionBatchSize;
-      images.splice(batchSize);
-      items.splice(batchSize);
-      isBatchLimited = true;
-      log.info(
-        `[Initialize Expressions] Limited batch to ${batchSize} items for ${provider} provider (was ${totalUninitialized})`,
-      );
-    }
-
-    // 11. Update progress: Analyzing with AI
-    await interaction.editReply({
-      embeds: [
-        {
-          description: isBatchLimited
-            ? localizer(locale, "commands.server.initialize.expressions.progress_analyzing_batch", {
-                batch_size: batchSize,
-                total_uninitialized: totalUninitialized,
-              })
-            : localizer(locale, "commands.server.initialize.expressions.progress_analyzing", {
-                total: images.length,
-              }),
-          color: hexToNumber(ColorCode.INFO),
-        },
-      ],
-    });
-
-    // 12. Decrypt API key
+    // 7. Verify an API key exists, then decrypt it once for reuse across all batches
     if (!tomoriState.config.api_key) {
       await interaction.editReply({
         embeds: [
@@ -463,98 +276,208 @@ export async function execute(
     const keyVersion = tomoriState.config.key_version || 1;
     const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
 
-    // 13. Build prompts
+    // 8. Snapshot the starting backlog so the final report can compare against it
+    const [initialEmojis, initialStickers] = await Promise.all([
+      serverRepository.loadUninitializedEmojis(tomoriState.server_id),
+      serverRepository.loadUninitializedStickers(tomoriState.server_id),
+    ]);
+    const grandTotalUninitialized = initialEmojis.length + initialStickers.length;
+
+    // 8a. Nothing to do — every expression has already been classified
+    if (grandTotalUninitialized === 0) {
+      await interaction.editReply({
+        embeds: [
+          {
+            title: localizer(locale, "commands.server.initialize.expressions.already_initialized_title"),
+            description: localizer(locale, "commands.server.initialize.expressions.already_initialized_description"),
+            color: hexToNumber(ColorCode.INFO),
+          },
+        ],
+      });
+      return;
+    }
+
+    // 9. Self-looping batch processor.
+    //    Previously the command processed a single provider-sized batch and asked
+    //    the user to re-run for the rest. It now drains the entire backlog on its
+    //    own, one batch per iteration.
+    //
+    //    Loop-safety guard: the backlog size is compared between iterations. When a
+    //    batch makes no progress (the remaining count is unchanged), it is counted
+    //    as a retry of the same "stuck" chunk. After `maxChunkRetries` consecutive
+    //    no-progress iterations the loop aborts, so a model that consistently errors
+    //    or fails to match items can never loop forever.
+    const maxChunkRetries = Number.parseInt(process.env.EXPRESSION_INIT_MAX_CHUNK_RETRIES || "3", 10);
+    const batchDelayMs = Number.parseInt(process.env.EXPRESSION_INIT_BATCH_DELAY_MS || "1000", 10);
+
+    // 9a. Constants shared by every batch
     const systemPrompt = buildSystemPrompt();
-    const userPrompt = buildUserPrompt(items);
     const temperature = 1.0;
 
-    log.info(
-      `LLM structured output request: ${JSON.stringify(
-        {
-          model: effectiveModelName,
-          temperature,
-          systemPrompt,
-          userPrompt,
-          images,
-        },
-        null,
-        2,
-      )}`,
-    );
+    // 9b. Mutable loop state
+    let totalEmojiProcessed = 0;
+    let totalStickerProcessed = 0;
+    let batchNumber = 0;
+    let chunkRetries = 0; // consecutive no-progress iterations on the current chunk
+    let previousRemaining = -1; // backlog size observed at the start of the previous iteration
 
-    // 14. Call structured output for the current provider
-    let result: StructuredOutputResult<ExpressionBatchResult>;
+    while (true) {
+      // 9c. Re-query the backlog each iteration so prior batches' DB writes shrink it
+      const [pendingEmojis, pendingStickers] = await Promise.all([
+        serverRepository.loadUninitializedEmojis(tomoriState.server_id),
+        serverRepository.loadUninitializedStickers(tomoriState.server_id),
+      ]);
+      const remaining = pendingEmojis.length + pendingStickers.length;
 
-    result = await callExpressionInitializationForProvider({
-      providerName: provider,
-      apiKey: decryptedApiKey,
-      model: effectiveModelName,
-      endpointUrl: tomoriState.config.custom_endpoint_url ?? undefined,
-      systemPrompt,
-      userPrompt,
-      images,
-      temperature,
-    });
+      // 9d. Backlog fully drained — we are done
+      if (remaining === 0) {
+        break;
+      }
 
-    log.info(`LLM structured output response: ${JSON.stringify(result, null, 2)}`);
+      // 9e. Loop-safety: detect a chunk that is not shrinking and cap its retries
+      if (remaining === previousRemaining) {
+        chunkRetries++;
+        log.warn(
+          `[Initialize Expressions] No progress on chunk (${remaining} remaining), retry ${chunkRetries}/${maxChunkRetries}`,
+        );
+        if (chunkRetries >= maxChunkRetries) {
+          log.warn(
+            `[Initialize Expressions] Aborting after ${maxChunkRetries} consecutive no-progress attempts; ${remaining} expressions left unprocessed`,
+          );
+          break;
+        }
+      } else {
+        // Backlog shrank since the last iteration → real progress, reset the guard
+        chunkRetries = 0;
+      }
+      previousRemaining = remaining;
+      batchNumber++;
 
-    // 15. Check if LLM call was successful
-    if (!result.success) {
-      log.error("LLM structured output failed", new Error(result.error), {
-        errorType: "LLMStructuredOutputError",
-        metadata: {
-          model: effectiveModelName,
-          imageCount: images.length,
-        },
-      });
+      // 9f. Build this iteration's image/item batch, capped at the provider batch size
+      const images: Array<{ url: string; name: string }> = [];
+      const items: Array<{ name: string; type: "emoji" | "sticker" }> = [];
 
+      // Add emojis
+      for (const emoji of pendingEmojis) {
+        images.push({
+          url: buildEmojiCDNUrl(emoji.emoji_disc_id),
+          name: emoji.emoji_name,
+        });
+        items.push({ name: emoji.emoji_name, type: "emoji" });
+      }
+
+      // Add stickers
+      for (const sticker of pendingStickers) {
+        images.push({
+          url: buildStickerCDNUrl(sticker.sticker_disc_id),
+          name: sticker.sticker_name,
+        });
+        items.push({ name: sticker.sticker_name, type: "sticker" });
+      }
+
+      // Apply provider batch size limit (different token/cost constraints per provider)
+      if (expressionBatchSize && images.length > expressionBatchSize) {
+        images.splice(expressionBatchSize);
+        items.splice(expressionBatchSize);
+        log.info(
+          `[Initialize Expressions] Batch ${batchNumber}: limited to ${expressionBatchSize} of ${remaining} remaining items for ${provider} provider`,
+        );
+      }
+
+      // 9g. Progress update for this batch
       await interaction.editReply({
         embeds: [
           {
-            title: localizer(locale, "commands.server.initialize.expressions.llm_error_title"),
-            description: localizer(locale, "commands.server.initialize.expressions.llm_error_description"),
-            color: hexToNumber(ColorCode.ERROR),
+            description: localizer(locale, "commands.server.initialize.expressions.progress_analyzing_batch", {
+              batch_number: batchNumber,
+              batch_size: images.length,
+              remaining,
+              processed: totalEmojiProcessed + totalStickerProcessed,
+              grand_total: grandTotalUninitialized,
+            }),
+            color: hexToNumber(ColorCode.INFO),
           },
         ],
       });
-      return;
-    }
 
-    // 16. Validate LLM response with Zod
-    const validationResult = ExpressionBatchResultSchema.safeParse(result.data);
+      // 9h. Build the per-batch prompt and call the provider
+      const userPrompt = buildUserPrompt(items);
 
-    if (!validationResult.success) {
-      log.error("LLM returned invalid structured output", validationResult.error, {
-        errorType: "ValidationError",
-        metadata: {
-          model: llm.llm_codename,
-          rawData: result.data,
-        },
-      });
-
-      await interaction.editReply({
-        embeds: [
+      log.info(
+        `LLM structured output request (batch ${batchNumber}): ${JSON.stringify(
           {
-            title: localizer(locale, "commands.server.initialize.expressions.validation_error_title"),
-            description: localizer(locale, "commands.server.initialize.expressions.validation_error_description"),
-            color: hexToNumber(ColorCode.ERROR),
+            model: effectiveModelName,
+            temperature,
+            systemPrompt,
+            userPrompt,
+            images,
           },
-        ],
+          null,
+          2,
+        )}`,
+      );
+
+      const result: StructuredOutputResult<ExpressionBatchResult> = await callExpressionInitializationForProvider({
+        providerName: provider,
+        apiKey: decryptedApiKey,
+        model: effectiveModelName,
+        endpointUrl: tomoriState.config.custom_endpoint_url ?? undefined,
+        systemPrompt,
+        userPrompt,
+        images,
+        temperature,
       });
-      return;
+
+      log.info(`LLM structured output response (batch ${batchNumber}): ${JSON.stringify(result, null, 2)}`);
+
+      // 9i. On a provider error, log and let the loop retry this chunk (capped by maxChunkRetries)
+      if (!result.success) {
+        log.error("LLM structured output failed", new Error(result.error), {
+          errorType: "LLMStructuredOutputError",
+          metadata: {
+            model: effectiveModelName,
+            batchNumber,
+            imageCount: images.length,
+          },
+        });
+        continue;
+      }
+
+      // 9j. Validate the response; an invalid shape is also a retryable no-progress batch
+      const validationResult = ExpressionBatchResultSchema.safeParse(result.data);
+
+      if (!validationResult.success) {
+        log.error("LLM returned invalid structured output", validationResult.error, {
+          errorType: "ValidationError",
+          metadata: {
+            model: effectiveLlm.llm_codename,
+            batchNumber,
+            rawData: result.data,
+          },
+        });
+        continue;
+      }
+
+      // 9k. Persist this batch's classifications and accumulate running totals
+      const { emojiCount, stickerCount } = await serverRepository.initializeExpressions(
+        tomoriState.server_id,
+        validationResult.data.expressions,
+      );
+      totalEmojiProcessed += emojiCount;
+      totalStickerProcessed += stickerCount;
+
+      // 9l. Brief pause between batches to stay within provider rate limits, skipped
+      //     when this batch drained the remaining backlog (no further iteration needed)
+      if (batchDelayMs > 0 && remaining - (emojiCount + stickerCount) > 0) {
+        await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+      }
     }
 
-    // 17. Update database with results
-    const { emojiCount, stickerCount } = await updateExpressionsInDB(
-      tomoriState.server_id,
-      validationResult.data.expressions,
-    );
+    // 10. Final report based on the accumulated totals across every batch
+    const totalProcessed = totalEmojiProcessed + totalStickerProcessed;
 
-    const totalProcessed = emojiCount + stickerCount;
-
-    // 18. Show result message
     if (totalProcessed === 0) {
-      // No expressions were updated (all failed to match)
+      // No expressions were updated at all (every batch failed to match)
       await interaction.editReply({
         embeds: [
           {
@@ -564,16 +487,16 @@ export async function execute(
           },
         ],
       });
-    } else if (totalProcessed < totalUninitialized) {
-      // Partial success
-      const failed = totalUninitialized - totalProcessed;
+    } else if (totalProcessed < grandTotalUninitialized) {
+      // Partial success — the loop stopped (stuck chunk) with some expressions left over
+      const failed = grandTotalUninitialized - totalProcessed;
       await interaction.editReply({
         embeds: [
           {
             title: localizer(locale, "commands.server.initialize.expressions.partial_success_title"),
             description: localizer(locale, "commands.server.initialize.expressions.partial_success_description", {
               successful: totalProcessed,
-              total: totalUninitialized,
+              total: grandTotalUninitialized,
               failed,
             }),
             color: hexToNumber(ColorCode.WARN),
@@ -581,14 +504,14 @@ export async function execute(
         ],
       });
     } else {
-      // Full success
+      // Full success — entire backlog drained
       await interaction.editReply({
         embeds: [
           {
             title: localizer(locale, "commands.server.initialize.expressions.success_title"),
             description: localizer(locale, "commands.server.initialize.expressions.success_description", {
-              emoji_count: emojiCount,
-              sticker_count: stickerCount,
+              emoji_count: totalEmojiProcessed,
+              sticker_count: totalStickerProcessed,
               total: totalProcessed,
             }),
             color: hexToNumber(ColorCode.SUCCESS),
@@ -601,7 +524,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
-      tomoriId: tomoriState?.tomori_id ?? null,
+      personaId: tomoriState?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "server initialize expressions",

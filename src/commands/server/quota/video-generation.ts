@@ -1,10 +1,15 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import type { UserRow } from "@/types/db/schema";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { getVideoQuotaConfig } from "@/utils/quota/videoQuotaManager";
+import {
+  updateVideoDailyUserQuota,
+  updateVideoServerwideQuota,
+  updateVideoServerwideResetDays,
+} from "@/utils/db/repositories/QuotaRepository";
 import { localizer } from "@/utils/text/localizer";
 
 // Quota limit constants
@@ -76,11 +81,9 @@ export async function execute(
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const [serverRow] = await sql<{ server_id: number }[]>`
-		SELECT server_id FROM servers WHERE server_disc_id = ${interaction.guild.id}
-	`;
+  const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild.id);
 
-  if (!serverRow) {
+  if (!serverId) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.server_not_found_title",
       descriptionKey: "general.errors.server_not_found_description",
@@ -88,8 +91,6 @@ export async function execute(
     });
     return;
   }
-
-  const serverId = serverRow.server_id;
   const dailyUserQuota = interaction.options.getInteger("daily_user_quota");
   const serverwideQuota = interaction.options.getInteger("serverwide_quota");
   const resetDays = interaction.options.getInteger("serverwide_quota_resets_in");
@@ -139,11 +140,7 @@ export async function execute(
 async function updateDailyUserQuota(serverId: number, limit: number, locale: string): Promise<string> {
   await getVideoQuotaConfig(serverId);
 
-  await sql`
-		UPDATE video_quota_configs
-		SET daily_user_quota = ${limit}
-		WHERE server_id = ${serverId}
-	`;
+  await updateVideoDailyUserQuota(serverId, limit);
 
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.videogen.unlimited") : `${limit}`;
 
@@ -153,33 +150,12 @@ async function updateDailyUserQuota(serverId: number, limit: number, locale: str
 async function updateServerwideQuota(serverId: number, limit: number, locale: string): Promise<string> {
   const currentConfig = await getVideoQuotaConfig(serverId);
 
-  await sql`
-		UPDATE video_quota_configs
-		SET serverwide_quota = ${limit}
-		WHERE server_id = ${serverId}
-	`;
-
-  if (currentConfig.serverwide_quota === 0 && limit > 0) {
-    await sql`
-			INSERT INTO video_serverwide_quotas (
-				server_id,
-				usage_count,
-				quota_period_start,
-				quota_period_end
-			)
-			VALUES (
-				${serverId},
-				0,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP + (${currentConfig.serverwide_quota_resets_in} || ' days')::interval
-			)
-			ON CONFLICT (server_id)
-			DO UPDATE SET
-				usage_count = 0,
-				quota_period_start = CURRENT_TIMESTAMP,
-				quota_period_end = CURRENT_TIMESTAMP + (${currentConfig.serverwide_quota_resets_in} || ' days')::interval
-		`;
-  }
+  await updateVideoServerwideQuota(
+    serverId,
+    limit,
+    currentConfig.serverwide_quota_resets_in,
+    currentConfig.serverwide_quota,
+  );
 
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.videogen.unlimited") : `${limit}`;
 
@@ -189,19 +165,7 @@ async function updateServerwideQuota(serverId: number, limit: number, locale: st
 async function updateResetDays(serverId: number, days: number, locale: string): Promise<string> {
   const currentConfig = await getVideoQuotaConfig(serverId);
 
-  await sql`
-		UPDATE video_quota_configs
-		SET serverwide_quota_resets_in = ${days}
-		WHERE server_id = ${serverId}
-	`;
-
-  if (currentConfig.serverwide_quota > 0) {
-    await sql`
-			UPDATE video_serverwide_quotas
-			SET quota_period_end = quota_period_start + (${days} || ' days')::interval
-			WHERE server_id = ${serverId}
-		`;
-  }
+  await updateVideoServerwideResetDays(serverId, days, currentConfig.serverwide_quota > 0);
 
   return localizer(locale, "commands.server.quota.videogen.serverwide_quota_resets_in_success_description", {
     days: `${days}`,

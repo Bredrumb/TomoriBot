@@ -7,7 +7,7 @@ The canonical provider implementation guide now lives in:
 Read these together:
 
 - `docs/guides/adding-new-provider.md`
-- `docs/ai/providers.md`
+- `docs/pipelines/provider/` (architecture overview)
 
 Reason:
 

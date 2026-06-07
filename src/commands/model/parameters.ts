@@ -2,16 +2,16 @@ import type { ButtonInteraction, ChatInputCommandInteraction, Client, SlashComma
 import { MessageFlags } from "discord.js";
 import { THINKING_LEVEL_VALUES, type ThinkingLevelValue, isThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
-import { upsertSavedProviderConfig } from "@/utils/db/dbWrite";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { configRepository, llmProviderRepo } from "@/utils/db/repositories";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { localizer } from "@/utils/text/localizer";
+import { buildModelParametersSamplerPatch } from "@/utils/discord/modelParametersConfigMapping";
 
 /**
  * Formats a list of changed sampler settings into a human-readable string.
@@ -212,17 +212,20 @@ export async function execute(
     }
 
     // 5. Build the updated config by overlaying only the options the user explicitly passed
-    const nextConfig = {
-      ...savedConfig,
-      llm_temperature: interaction.options.getNumber("temperature") ?? savedConfig.llm_temperature,
-      llm_top_p: interaction.options.getNumber("top_p") ?? savedConfig.llm_top_p,
-      llm_top_k: interaction.options.getInteger("top_k") ?? savedConfig.llm_top_k,
-      llm_frequency_penalty: interaction.options.getNumber("frequency_penalty") ?? savedConfig.llm_frequency_penalty,
-      llm_presence_penalty: interaction.options.getNumber("presence_penalty") ?? savedConfig.llm_presence_penalty,
-      llm_min_p: interaction.options.getNumber("min_p") ?? savedConfig.llm_min_p,
-      llm_max_output_tokens: nextMaxOutputTokens ?? savedConfig.llm_max_output_tokens ?? null,
-      thinking_level: (nextThinkingLevel as ThinkingLevelValue | null) ?? savedConfig.thinking_level,
-    };
+    const samplerPatch = buildModelParametersSamplerPatch(
+      {
+        temperature: interaction.options.getNumber("temperature"),
+        top_p: interaction.options.getNumber("top_p"),
+        top_k: interaction.options.getInteger("top_k"),
+        frequency_penalty: interaction.options.getNumber("frequency_penalty"),
+        presence_penalty: interaction.options.getNumber("presence_penalty"),
+        min_p: interaction.options.getNumber("min_p"),
+        max_output_tokens: nextMaxOutputTokens,
+        thinking_level: nextThinkingLevel as ThinkingLevelValue | null,
+      },
+      savedConfig,
+    );
+    const nextConfig = { ...savedConfig, ...samplerPatch };
 
     // 6. Collect display labels for the success message
     const changedSettings: Array<{ label: string; value: string }> = [];
@@ -276,7 +279,9 @@ export async function execute(
     }
 
     // 7. Persist the updated sampler config
-    const upserted = await upsertSavedProviderConfig(tomoriState.server_id, nextConfig);
+    const upserted = await llmProviderRepo.upsertSavedProviderConfig(tomoriState.server_id, nextConfig, {
+      serverDiscId: serverId,
+    });
     if (!upserted) {
       await replyWithResult({
         titleKey: "general.errors.update_failed_title",
@@ -286,24 +291,24 @@ export async function execute(
       return;
     }
 
-    // 8. Mirror sampler values into tomori_configs when this is the currently active provider,
+    // 8. Mirror sampler values into split config tables when this is the currently active provider,
     //    so in-flight requests immediately reflect the new settings without a config switch.
     if (selectedProvider === tomoriState.llm.llm_provider.toLowerCase()) {
-      await sql`
-        UPDATE tomori_configs
-        SET llm_temperature = ${nextConfig.llm_temperature},
-            llm_top_p = ${nextConfig.llm_top_p},
-            llm_top_k = ${nextConfig.llm_top_k},
-            llm_frequency_penalty = ${nextConfig.llm_frequency_penalty},
-            llm_presence_penalty = ${nextConfig.llm_presence_penalty},
-            llm_min_p = ${nextConfig.llm_min_p},
-            llm_max_output_tokens = ${nextConfig.llm_max_output_tokens ?? null},
-            thinking_level = ${nextConfig.thinking_level}
-        WHERE server_id = ${tomoriState.server_id}
-      `;
+      await Promise.all([
+        configRepository.updateModelConfig(tomoriState.server_id, {
+          llm_temperature: nextConfig.llm_temperature ?? 1.0,
+          thinking_level: nextConfig.thinking_level,
+        }),
+        configRepository.updateChatConfig(tomoriState.server_id, {
+          llm_top_p: nextConfig.llm_top_p ?? 0.95,
+          llm_top_k: nextConfig.llm_top_k ?? 0,
+          llm_frequency_penalty: nextConfig.llm_frequency_penalty ?? 0.0,
+          llm_presence_penalty: nextConfig.llm_presence_penalty ?? 0.0,
+          llm_min_p: nextConfig.llm_min_p ?? 0.05,
+          llm_max_output_tokens: nextConfig.llm_max_output_tokens ?? null,
+        }),
+      ]);
     }
-
-    invalidateTomoriStateCache(serverId);
 
     await replyWithResult({
       titleKey: "commands.model.parameters.success_title",
@@ -318,7 +323,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "config parameters",

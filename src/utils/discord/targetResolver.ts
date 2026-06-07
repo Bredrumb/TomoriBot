@@ -1,8 +1,8 @@
 import { ChannelType, type Guild, type GuildMember, type GuildTextBasedChannel } from "discord.js";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { loadUserRowsByNormalizedNickname } from "@/utils/db/dbRead";
-import { isBridgeUserId } from "@/utils/bridge";
+import { userRepository } from "@/utils/db/repositories";
+import { isBridgeUserId } from "@/utils/bridges";
 
 export type ResolvedUserTarget = {
   status: "resolved";
@@ -447,7 +447,7 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
     return guildDisplayMatch;
   }
 
-  const dbNicknameRows = await loadUserRowsByNormalizedNickname(normalizedInput);
+  const dbNicknameRows = await userRepository.findByNormalizedNickname(normalizedInput);
   if (dbNicknameRows.length > 0) {
     const dbNicknameMembers = (
       await Promise.all(dbNicknameRows.map(async (row) => guild.members.fetch(row.user_disc_id).catch(() => null)))

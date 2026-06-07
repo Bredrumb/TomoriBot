@@ -400,6 +400,14 @@ export function getOpenRouterCapabilityCacheSize(): number {
   return capabilityCache.size;
 }
 
+export function getOpenRouterOnDemandCapabilityCacheSize(): number {
+  return onDemandCapabilityCache.size;
+}
+
+export function clearOpenRouterOnDemandCapabilityCache(): void {
+  onDemandCapabilityCache.clear();
+}
+
 /**
  * Gets the cached token limits for a specific OpenRouter model
  *

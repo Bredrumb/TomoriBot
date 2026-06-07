@@ -11,9 +11,11 @@ import getAllFiles from "../../utils/misc/ioHelper";
 import { localizer } from "../../utils/text/localizer";
 import type { SlashCommandSubcommandBuilder } from "discord.js";
 import { ToolRegistry } from "../toolRegistry";
-import { getBraveApiKeyStatus } from "../../utils/db/dbRead";
+import { toolRepository } from "@/utils/db/repositories";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
+import { resolveImageToolCapabilities } from "@/tools/functionCalls/generateImageToolCapabilities";
+import { resolveWebSearchToolCapabilities } from "@/tools/webSearch/capabilities";
 
 /**
  * Tool for reviewing TomoriBot's capabilities and available commands
@@ -124,6 +126,43 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const isUncensored = llm.is_uncensored ?? false;
       const hasStandardImageSlot = config.diffusion_model_id != null;
       const hasVideoSlot = config.video_model_id != null;
+      const toolAssemblyState = {
+        server_id: context.tomoriState.server_id.toString(),
+        activePersonaHasElevenlabsVoice: Boolean(
+          context.tomoriState.speech_voice_sample_id ||
+            context.tomoriState.speech_voice_design_prompt?.trim() ||
+            context.tomoriState.speech_voice_id?.trim(),
+        ),
+        activePersonaVoiceDesignPrompt: context.tomoriState.speech_voice_design_prompt?.trim() || null,
+        activePersonaVoiceName: context.tomoriState.speech_voice_name,
+        diffusion_model_id: config.diffusion_model_id,
+        nai_diffusion_model_id: config.nai_diffusion_model_id,
+        video_model_id: config.video_model_id,
+        llm: {
+          llm_codename: llm.llm_codename,
+          has_tools: llm.has_tools,
+          sees_images: llm.sees_images,
+          sees_videos: llm.sees_videos,
+          sees_youtube: llm.sees_youtube,
+          supports_structoutput: llm.supports_structoutput,
+        },
+        config: {
+          sticker_usage_enabled: config.sticker_usage_enabled,
+          web_search_enabled: config.web_search_enabled,
+          self_teaching_enabled: config.self_teaching_enabled,
+          manage_message_enabled: config.manage_message_enabled,
+          imagegen_enabled: config.imagegen_enabled,
+          videogen_enabled: config.videogen_enabled,
+          voice_message_enabled: config.voice_message_enabled ?? true,
+          thread_creation_enabled: config.thread_creation_enabled,
+        },
+      };
+      const webSearchCapabilities =
+        config.web_search_enabled && hasTools
+          ? await resolveWebSearchToolCapabilities(context.tomoriState.server_id)
+          : null;
+      const imageToolCapabilities =
+        config.imagegen_enabled && hasStandardImageSlot ? await resolveImageToolCapabilities(toolAssemblyState) : null;
 
       // 2. Build dynamic capabilities markdown with model information
       let capabilitiesContent = "# Your Chat Capabilities\n\n";
@@ -173,11 +212,15 @@ export class ReviewCapabilitiesTool extends BaseTool {
       // 4. Search & Information section (only if tools are available)
       if (hasTools) {
         capabilitiesContent += "## Search & Information\n\n";
-        capabilitiesContent += "You CAN search and retrieve information:\n";
-        capabilitiesContent += "- **Web search** (brave_web_search for current information)\n";
-        capabilitiesContent += "- **Image search** (brave_image_search for finding images)\n";
-        capabilitiesContent += "- **Video search** (brave_video_search for finding videos)\n";
-        capabilitiesContent += "- **News search** (brave_news_search for latest news)\n";
+        if (webSearchCapabilities) {
+          capabilitiesContent += "You CAN search and retrieve information:\n";
+          capabilitiesContent += `- **Web search** (web_search categories currently exposed: ${webSearchCapabilities.categories.join(", ")})\n`;
+        } else if (config.web_search_enabled) {
+          capabilitiesContent +=
+            "Web search is enabled, but no configured search backend is currently available for the tool schema.\n";
+        } else {
+          capabilitiesContent += "Web search is disabled by server configuration.\n";
+        }
         capabilitiesContent += "- **URL fetching** (fetch for retrieving webpage content)\n\n";
       }
 
@@ -200,20 +243,30 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       // 5c. Image Generation section (conditional on provider and configuration)
       capabilitiesContent += "## Image Generation\n\n";
-      if (config.imagegen_enabled && hasStandardImageSlot) {
+      if (config.imagegen_enabled && hasStandardImageSlot && imageToolCapabilities) {
+        const imageModes = [
+          imageToolCapabilities.textToImage ? "text-to-image" : null,
+          imageToolCapabilities.imageToImage ? "image-to-image" : null,
+          imageToolCapabilities.inpaint ? "inpainting" : null,
+          imageToolCapabilities.outpaint ? "outpainting" : null,
+        ].filter((mode): mode is string => mode !== null);
         capabilitiesContent += "You CAN generate images:\n";
-        capabilitiesContent += "- **Text-to-Image**: Generate images from detailed text prompts\n";
-        capabilitiesContent += "- **Image-to-Image**: Edit or transform reference images using a prompt\n";
+        capabilitiesContent += `- **Current generate_image modes**: ${imageModes.join(", ")}\n`;
         capabilitiesContent += "- **Aspect Ratios**: 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9\n";
-        capabilitiesContent +=
-          "- **Reference Sources**: Message attachments, embedded images, Discord stickers, custom emojis, or user profile pictures\n";
+        if (imageToolCapabilities.imageToImage || imageToolCapabilities.inpaint || imageToolCapabilities.outpaint) {
+          capabilitiesContent +=
+            "- **Reference Sources**: Message attachments, embedded images, Discord stickers, custom emojis, or user profile pictures\n";
+        }
         capabilitiesContent +=
           "- Users can ask you to generate an image (triggers the generate_image tool), or use `/generate image` directly\n";
         capabilitiesContent +=
           "- When generating, describe in detail: style, composition, colors, mood, and important details\n\n";
+      } else if (config.imagegen_enabled && hasStandardImageSlot && !imageToolCapabilities) {
+        capabilitiesContent +=
+          "Image generation is enabled and a model is configured, but the active image backend could not be resolved for the tool schema.\n\n";
       } else if (config.imagegen_enabled && !hasStandardImageSlot) {
         capabilitiesContent +=
-          "Image generation is enabled but no diffusion model is configured. An admin needs to set one with `/config model image`.\n\n";
+          "Image generation is enabled but no diffusion model is configured. An admin needs to set one with `/model image`.\n\n";
       } else {
         capabilitiesContent += "Image generation is **disabled** by server configuration.\n\n";
       }
@@ -229,7 +282,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "- When generating, describe in detail: scene, motion, camera movement, and mood\n\n";
       } else if (config.videogen_enabled && !hasVideoSlot) {
         capabilitiesContent +=
-          "Video generation is enabled but no video model is configured. An admin needs to set one with `/config model video`.\n\n";
+          "Video generation is enabled but no video model is configured. An admin needs to set one with `/model video`.\n\n";
       } else {
         capabilitiesContent += "Video generation is **disabled** by server configuration.\n\n";
       }
@@ -238,12 +291,10 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const hasVoiceAssignment = Boolean(
         context.tomoriState.speech_voice_sample_id ||
           context.tomoriState.speech_voice_design_prompt?.trim() ||
-          context.tomoriState.speech_voice_id?.trim() ||
-          context.tomoriState.elevenlabs_voice_id?.trim(),
+          context.tomoriState.speech_voice_id?.trim(),
       );
       const voiceName =
         context.tomoriState.speech_voice_name ||
-        context.tomoriState.elevenlabs_voice_name ||
         (context.tomoriState.speech_voice_design_prompt?.trim() ? "VoiceDesign prompt" : null) ||
         (context.tomoriState.speech_voice_sample_id ? "Local voice sample" : "Unknown");
       const voiceSource =
@@ -261,12 +312,12 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent +=
           "- **STT**: Automatically transcribe user audio attachments (voice messages, audio files)\n";
         capabilitiesContent +=
-          "- **Expression tags**: Use tags like [happy], [sad], [whispers], [laughs] in voice scripts for emotional delivery\n";
+          "- **Voice script format**: Follow the active `generate_voice_message` schema; it shows whether bracket tags, emoji, plain text, or `voice_instructions` are supported\n";
         capabilitiesContent +=
           "- Users can also ask you to speak or say something out loud (triggers the voice message tool)\n\n";
       } else if (!voiceEnabled) {
         capabilitiesContent +=
-          "Voice messages are **disabled** by server configuration. An admin can re-enable with `/config tools manage`.\n\n";
+          "Voice messages are **disabled** by server configuration. An admin can re-enable with `/capabilities manage`.\n\n";
       } else {
         capabilitiesContent +=
           "Voice messages are not configured for this persona. An admin can assign a voice with `/config speech voice-assign`.\n\n";
@@ -316,7 +367,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "- Use this knowledge to answer questions about server-specific topics\n\n";
       } else {
         capabilitiesContent += "The document knowledge base is not configured. An embedding model is required.\n";
-        capabilitiesContent += "- Configure with `/config model embedding` to enable document uploads\n\n";
+        capabilitiesContent += "- Configure with `/model embedding` to enable document uploads\n\n";
       }
 
       // 7. Personality & Configuration section (always available)
@@ -332,11 +383,22 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "## Function Calling\n\n";
         capabilitiesContent += "You CAN call functions/tools to perform actions:\n";
         capabilitiesContent += "- **review_capabilities** (check your own capabilities - this function!)\n";
-        capabilitiesContent += "- **brave_web_search/image_search/video_search/news_search** (search the web)\n";
+        capabilitiesContent += webSearchCapabilities
+          ? `- **web_search** (currently exposed categories: ${webSearchCapabilities.categories.join(", ")})\n`
+          : "- **web_search** (not currently exposed because no search backend is available or web search is disabled)\n";
         capabilitiesContent += "- **fetch** (retrieve content from URLs)\n";
         const imageGenNote = config.imagegen_enabled
           ? hasStandardImageSlot
-            ? "create AI images from text prompts"
+            ? imageToolCapabilities
+              ? `current modes: ${[
+                  imageToolCapabilities.textToImage ? "text-to-image" : null,
+                  imageToolCapabilities.imageToImage ? "image-to-image" : null,
+                  imageToolCapabilities.inpaint ? "inpainting" : null,
+                  imageToolCapabilities.outpaint ? "outpainting" : null,
+                ]
+                  .filter((mode): mode is string => mode !== null)
+                  .join(", ")}`
+              : "image backend could not be resolved"
             : "no standard image model configured"
           : "disabled by server configuration";
         capabilitiesContent += `- **generate_image** (${imageGenNote})\n`;
@@ -357,15 +419,15 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent +=
           "- **interact_with_recent_message** (react to or reply to a recent message for fun/backtracking)\n";
         capabilitiesContent += "- **reveal_message_metadata** (annotate recent message refs and sent timestamps)\n";
-        capabilitiesContent += "- **create_reminder** (set reminders for users)\n";
+        capabilitiesContent += "- **create_task** (set reminders or scheduled self-tasks)\n";
+        capabilitiesContent += "- **update_task** (edit or delete requester-scoped reminders/tasks by ID)\n";
         capabilitiesContent +=
           "- **cross_channel_message** (instantly send a message to another channel in the server, with optional boomerang report-back)\n";
         capabilitiesContent += "- **select_sticker_for_response** (choose stickers)\n";
         const toolHasVoiceAssignment = Boolean(
           context.tomoriState.speech_voice_sample_id ||
             context.tomoriState.speech_voice_design_prompt?.trim() ||
-            context.tomoriState.speech_voice_id?.trim() ||
-            context.tomoriState.elevenlabs_voice_id?.trim(),
+            context.tomoriState.speech_voice_id?.trim(),
         );
         const voiceNote =
           toolHasVoiceAssignment && voiceEnabled
@@ -417,7 +479,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += "## Why Some Features May Be Unavailable\n\n";
 
       // Check API key status for detailed explanations
-      const braveApiKeySet = await getBraveApiKeyStatus(context.tomoriState.server_id);
+      const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(context.tomoriState.server_id);
 
       const unavailableReasons: string[] = [];
 
@@ -429,14 +491,14 @@ export class ReviewCapabilitiesTool extends BaseTool {
         if (!seesYouTube) missingVision.push("YouTube videos");
 
         unavailableReasons.push(
-          `**Vision Limitations**: Current model cannot process ${missingVision.join(", ")}. Switch to a vision-capable model using \`/config model\` or \`/config api-key\`.`,
+          `**Vision Limitations**: Current model cannot process ${missingVision.join(", ")}. Switch to a vision-capable model using \`/model\` or \`/config api-key\`.`,
         );
       }
 
       // Check for missing function calling
       if (!hasTools) {
         unavailableReasons.push(
-          "**No Function Calling**: Current model does not support tools/functions. Many features (search, reminders, etc.) require function calling. Switch to a model with tool support using `/config model` or `/config api-key`.",
+          "**No Function Calling**: Current model does not support tools/functions. Many features (search, reminders, etc.) require function calling. Switch to a model with tool support using `/model` or `/config api-key`.",
         );
       }
 
@@ -450,17 +512,17 @@ export class ReviewCapabilitiesTool extends BaseTool {
       if (!config.imagegen_enabled)
         disabledFeatures.push({
           feature: "image generation",
-          command: "/config tools manage (permission: imagegen)",
+          command: "/capabilities manage (permission: imagegen)",
         });
       if (!config.videogen_enabled)
         disabledFeatures.push({
           feature: "video generation",
-          command: "/config tools manage (permission: videogen)",
+          command: "/capabilities manage (permission: videogen)",
         });
       if (!config.thread_creation_enabled)
         disabledFeatures.push({
           feature: "thread creation",
-          command: "/config tools manage (permission: threadcreation)",
+          command: "/capabilities manage (permission: threadcreation)",
         });
       if (!config.sticker_usage_enabled)
         disabledFeatures.push({
@@ -489,7 +551,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       // Check for missing embedding model (needed for document knowledge base)
       if (!config.embedding_model_id) {
         unavailableReasons.push(
-          "**Document Knowledge Base**: No embedding model configured. Enable with `/config model embedding` to upload and search documents.",
+          "**Document Knowledge Base**: No embedding model configured. Enable with `/model embedding` to upload and search documents.",
         );
       }
 
@@ -510,7 +572,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       // 12. Add model switching information
       capabilitiesContent += "**Need different capabilities?** Tell the user they can switch models using:\n";
-      capabilitiesContent += "- `/config model` - Switch to a different model with the current provider\n";
+      capabilitiesContent += "- `/model` - Switch to a different model with the current provider\n";
       capabilitiesContent += "- `/config api-key` - Switch to a different LLM provider entirely\n\n";
       capabilitiesContent += "Different models may support different features (vision, tools, reasoning, etc.).\n";
 
@@ -560,7 +622,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
 
       // 2. Check API key status
-      const braveApiKeySet = await getBraveApiKeyStatus(serverId);
+      const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(serverId);
       const mainApiKeySet = !!config.api_key;
 
       // 3. Build settings report
@@ -649,7 +711,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         {
           name: "Document Knowledge Base (RAG)",
           value: !!config.embedding_model_id,
-          note: !config.embedding_model_id ? " (configure with `/config model embedding`)" : "",
+          note: !config.embedding_model_id ? " (configure with `/model embedding`)" : "",
         },
       ];
 
@@ -667,9 +729,9 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "- Users can ask you to generate images, or use `/generate image` directly\n\n";
       } else if (config.imagegen_enabled && !config.diffusion_model_id) {
         settingsContent += "Image generation is enabled but no diffusion model is set.\n";
-        settingsContent += "- Configure with `/config model image` to activate\n\n";
+        settingsContent += "- Configure with `/model image` to activate\n\n";
       } else {
-        settingsContent += "Image generation is **disabled**. Enable with `/config tools manage`.\n\n";
+        settingsContent += "Image generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
 
       // 6b-1b. Video Generation Configuration
@@ -680,9 +742,9 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "- Users can ask you to generate videos, or use `/generate video` directly\n\n";
       } else if (config.videogen_enabled && !config.video_model_id) {
         settingsContent += "Video generation is enabled but no video model is set.\n";
-        settingsContent += "- Configure with `/config model video` to activate\n\n";
+        settingsContent += "- Configure with `/model video` to activate\n\n";
       } else {
-        settingsContent += "Video generation is **disabled**. Enable with `/config tools manage`.\n\n";
+        settingsContent += "Video generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
 
       // 6b-2. Voice System Configuration
@@ -691,12 +753,10 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const hasPersonaVoice = Boolean(
         context.tomoriState.speech_voice_sample_id ||
           context.tomoriState.speech_voice_design_prompt?.trim() ||
-          context.tomoriState.speech_voice_id?.trim() ||
-          context.tomoriState.elevenlabs_voice_id?.trim(),
+          context.tomoriState.speech_voice_id?.trim(),
       );
       const personaVoiceName =
         context.tomoriState.speech_voice_name ||
-        context.tomoriState.elevenlabs_voice_name ||
         (context.tomoriState.speech_voice_design_prompt?.trim() ? "VoiceDesign prompt" : null) ||
         (context.tomoriState.speech_voice_sample_id ? "Local voice sample" : "Unknown");
       if (voiceEnabledSettings && hasPersonaVoice) {
@@ -709,7 +769,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += `- Assign a voice with \`/config speech voice-assign\`\n\n`;
       } else {
         settingsContent += `Voice messages are **disabled** by server configuration.\n`;
-        settingsContent += `- Re-enable with \`/config tools manage\`\n\n`;
+        settingsContent += `- Re-enable with \`/capabilities manage\`\n\n`;
       }
 
       // 6b-3. SillyTavern Preset Configuration
@@ -774,8 +834,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           activePersonaHasElevenlabsVoice: Boolean(
             context.tomoriState.speech_voice_sample_id ||
               context.tomoriState.speech_voice_design_prompt?.trim() ||
-              context.tomoriState.speech_voice_id?.trim() ||
-              context.tomoriState.elevenlabs_voice_id?.trim(),
+              context.tomoriState.speech_voice_id?.trim(),
           ),
           activePersonaVoiceDesignPrompt: context.tomoriState.speech_voice_design_prompt?.trim() || null,
           activePersonaVoiceName: context.tomoriState.speech_voice_name,
@@ -794,7 +853,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
             manage_message_enabled: config.manage_message_enabled,
             imagegen_enabled: config.imagegen_enabled,
             videogen_enabled: config.videogen_enabled,
-            nai_exclusive_imggen: config.nai_exclusive_imggen ?? false,
             voice_message_enabled: config.voice_message_enabled ?? true,
             thread_creation_enabled: config.thread_creation_enabled,
           },
@@ -946,7 +1004,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       // 10. How to Enable Features Section
       settingsContent += "## How to Enable Disabled Features\n\n";
-      settingsContent += "- **Model Limitations**: Switch models using `/config model` or `/config api-key`\n";
+      settingsContent += "- **Model Limitations**: Switch models using `/model` or `/config api-key`\n";
       settingsContent += "- **Server Configuration**: Server admin can enable features via `/config [feature]`\n";
       settingsContent +=
         "- **API Keys**: Configure via `/config api-key` (LLM) or `/config brave_apikey` (Brave Search)\n";
@@ -1039,7 +1097,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const commandsPath = path.join(process.cwd(), "src", "commands");
 
       // 2. Get all category directories
-      const categoryDirs = getAllFiles(commandsPath, true);
+      const categoryDirs = await getAllFiles(commandsPath, true);
 
       // 3. Build markdown documentation
       let commandsMarkdown = "# Your Slash Commands\n\n";
@@ -1060,7 +1118,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         commandsMarkdown += `${categoryDescription}\n\n`;
 
         // 6. Get direct command files (immediate children - direct subcommands)
-        const directCommandFiles = getAllFiles(categoryDir).filter((file) => file.endsWith(".ts"));
+        const directCommandFiles = (await getAllFiles(categoryDir)).filter((file) => file.endsWith(".ts"));
 
         // 7. Process direct subcommands (no subcommand group)
         for (const commandFile of directCommandFiles) {
@@ -1094,14 +1152,14 @@ export class ReviewCapabilitiesTool extends BaseTool {
         }
 
         // 13. Get subdirectories (potential subcommand groups)
-        const subcommandGroups = getAllFiles(categoryDir, true);
+        const subcommandGroups = await getAllFiles(categoryDir, true);
 
         // 14. Process subcommand groups
         for (const groupDir of subcommandGroups) {
           const groupName = path.basename(groupDir);
 
           // 15. Get command files in this subcommand group
-          const groupCommandFiles = getAllFiles(groupDir).filter((file) => file.endsWith(".ts"));
+          const groupCommandFiles = (await getAllFiles(groupDir)).filter((file) => file.endsWith(".ts"));
 
           // 16. Process each command file in the group
           for (const commandFile of groupCommandFiles) {

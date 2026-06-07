@@ -30,7 +30,7 @@ export async function execute(
   await interaction.deferReply();
 
   // 1. Load tomobanner.png image as attachment
-  const bannerFile = Bun.file("img/tomobanner.png");
+  const bannerFile = Bun.file("assets/img/tomobanner.png");
   const bannerBuffer = await bannerFile.arrayBuffer();
   const attachment = new AttachmentBuilder(Buffer.from(bannerBuffer), {
     name: "tomobanner.png",

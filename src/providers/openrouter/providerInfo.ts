@@ -22,5 +22,10 @@ export const openrouterProviderInfo: ProviderInfo = {
     conversationCompaction: true,
     historyExtraction: true,
   },
+  featureImplementations: {
+    imageGeneration: "openrouter",
+    videoGeneration: "openrouter",
+    liveTokenCounting: "openrouter",
+  },
   supportedParams: ["temperature", "topP", "topK", "frequencyPenalty", "presencePenalty", "minP"] as const,
 };

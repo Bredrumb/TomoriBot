@@ -1,36 +1,30 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { loadAvailableModelsForProvider, loadLlmById, loadNaiPresetsForModel } from "@/utils/db/dbRead";
-import { setChannelLlmOverride, setPersonaLlmOverride, applyNaiPreset } from "@/utils/db/dbWrite";
+import { configRepository, llmModelRepo, llmOverrideRepo } from "@/utils/db/repositories";
+
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { setChannelLlmCache } from "@/utils/cache/channelLlmCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
   promptWithPaginatedModal,
   safeSelectOptionText,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
-} from "@/utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriConfigSchema, type LlmRow } from "@/types/db/schema";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
+import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
 import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 const MODAL_CUSTOM_ID = "config_model_text_modal";
 const MODEL_SELECT_ID = "model_select";
-
-function toPostgresTextArrayLiteral(values: readonly string[] | null | undefined): string {
-  return `{${(values ?? []).map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
-}
 
 /**
  * Returns a localized description with capability flags prepended (e.g. "(FREE+TOOLS+IMG) Description").
@@ -49,7 +43,7 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
   }
 
   const flags: string[] = [];
-  if (model.is_free) flags.push("FREE");
+  if (model.is_free && !isCustomProvider(model.llm_provider)) flags.push("FREE");
   if (model.has_tools) flags.push("TOOLS");
   if (model.sees_images) flags.push("IMG");
   if (model.sees_videos) flags.push("VID");
@@ -118,7 +112,7 @@ export async function execute(
       const selectedProvider = providerSelection.provider;
       const responseInteraction = providerSelection.interaction;
 
-      const availableModels = await loadAvailableModelsForProvider(selectedProvider, false, {
+      const availableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       });
@@ -174,10 +168,11 @@ export async function execute(
         return;
       }
 
-      const channelWriteOk = await setChannelLlmOverride(
+      const channelWriteOk = await llmOverrideRepo.setChannelLlmOverride(
         tomoriState.server_id,
         interaction.channelId,
         selectedChannelModel.llm_id,
+        { serverDiscId: serverId },
       );
       if (!channelWriteOk) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -188,7 +183,6 @@ export async function execute(
         return;
       }
 
-      setChannelLlmCache(tomoriState.server_id, interaction.channelId, selectedChannelModel);
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.model.text.success_title",
         descriptionKey: "commands.model.text.scope_set_channel_success",
@@ -225,14 +219,13 @@ export async function execute(
         });
 
         if (!personaSelection.success) {
-          if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-          continue;
+          return;
         }
         if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
 
         const personaButtonInteraction: ButtonInteraction = personaSelection.interaction;
         const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.tomori_id) {
+        if (!selectedPersona?.persona_id) {
           await replyInfoEmbed(personaButtonInteraction, locale, {
             titleKey: "general.errors.invalid_option_title",
             descriptionKey: "general.errors.invalid_option_description",
@@ -247,7 +240,7 @@ export async function execute(
         const selectedProvider = providerSelection.provider;
         const providerInteraction = providerSelection.interaction;
 
-        const personaAvailableModels = await loadAvailableModelsForProvider(selectedProvider, false, {
+        const personaAvailableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
           kind: "server",
           ownerId: tomoriState.server_id,
         });
@@ -312,7 +305,13 @@ export async function execute(
           return;
         }
 
-        const personaWriteOk = await setPersonaLlmOverride(selectedPersona.tomori_id, selectedPersonaModel.llm_id);
+        const personaWriteOk = await llmOverrideRepo.setPersonaLlmOverride(
+          selectedPersona.persona_id,
+          selectedPersonaModel.llm_id,
+          {
+            serverDiscId: serverId,
+          },
+        );
         if (!personaWriteOk) {
           await replyInfoEmbed(personaModalInteraction, locale, {
             titleKey: "general.errors.update_failed_title",
@@ -322,7 +321,6 @@ export async function execute(
           return;
         }
 
-        invalidateTomoriStateCache(serverId);
         await acknowledgeModalSubmitForRefresh(personaModalInteraction);
         await replyComponentsV2Status(
           interaction,
@@ -331,7 +329,7 @@ export async function execute(
           "commands.model.text.scope_set_persona_success",
           ColorCode.SUCCESS,
           {
-            persona: selectedPersona.tomori_nickname,
+            persona: selectedPersona.persona_nickname,
             model: selectedPersonaModel.llm_codename,
           },
           "general.pagination.reloading_persona_picker",
@@ -347,10 +345,15 @@ export async function execute(
     const responseInteraction = providerSelection.interaction;
     const selectedSavedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
 
-    // 3a. Custom provider: activate the already-registered labeled endpoint directly
+    // 3a. Custom provider: pick among the label's registered text models, then activate the choice.
     if (isCustomProvider(selectedProvider)) {
-      const customModel = selectedSavedConfig?.llm_id ? await loadLlmById(selectedSavedConfig.llm_id) : null;
-      if (!selectedSavedConfig || !customModel?.llm_id) {
+      const customAvailableModels = selectedSavedConfig
+        ? await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
+            kind: "server",
+            ownerId: tomoriState.server_id,
+          })
+        : null;
+      if (!selectedSavedConfig || !customAvailableModels?.length) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.model.text.no_models_title",
           descriptionKey: "commands.model.text.no_models_description",
@@ -358,40 +361,89 @@ export async function execute(
         });
         return;
       }
+
+      // Single registered model activates directly; multiple show a string-select picker.
+      const selection = await promptCustomModelSelection<LlmRow>({
+        interaction: responseInteraction,
+        locale,
+        choices: customAvailableModels.map((m) => ({
+          model: m,
+          value: m.llm_codename,
+          label: m.llm_description?.trim() || m.llm_codename,
+          description: getLocalizedDescription(m, userData.language_pref),
+        })),
+        modalCustomId: "config_model_text_custom_modal",
+        modalTitleKey: "commands.model.text.modal_title",
+        selectLabelKey: "commands.model.text.select_label",
+        selectDescriptionKey: "commands.model.text.select_description",
+        selectPlaceholderKey: "commands.model.text.select_placeholder",
+      });
+      if (!selection) return;
+
+      const customModel = selection.model;
+      if (selection.submitInteraction) {
+        modalSubmitInteraction = selection.submitInteraction;
+      }
+      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
+
+      if (!customModel.llm_id) {
+        await replyInfoEmbed(customReplyTarget, locale, {
+          titleKey: "commands.model.text.invalid_model_title",
+          descriptionKey: "commands.model.text.invalid_model_description",
+          color: ColorCode.ERROR,
+        });
+        return;
+      }
+
+      if (customModel.llm_id === tomoriState.config.llm_id) {
+        await replyInfoEmbed(customReplyTarget, locale, {
+          titleKey: "commands.model.text.already_selected_title",
+          descriptionKey: "commands.model.text.already_selected_description",
+          descriptionVars: { model_name: customModel.llm_description ?? customModel.llm_codename },
+          color: ColorCode.WARN,
+        });
+        return;
+      }
+
       const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
         selectedSavedConfig.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
         customModel,
       );
-      const resolvedLogitBiasesJson = JSON.stringify(resolvedLogitBiases.entries);
-      const disabledParamsLiteral = toPostgresTextArrayLiteral(selectedSavedConfig.llm_disabled_params);
       const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
-      const fallbackLlmIdsJson = clearFallbacks ? "[]" : JSON.stringify(selectedSavedConfig.fallback_llm_ids ?? []);
+      const fallbackLlmIds = clearFallbacks
+        ? []
+        : (selectedSavedConfig.fallback_model_refs ?? []).filter((r) => r.type === "llm").map((r) => r.id);
+      const disabledParams = selectedSavedConfig.llm_disabled_params ?? [];
 
-      const [updatedRow] = await sql`
-        UPDATE tomori_configs
-        SET llm_id = ${customModel.llm_id},
-            api_key = ${selectedSavedConfig.api_key},
-            key_version = ${selectedSavedConfig.key_version ?? 1},
-            thinking_level = ${selectedSavedConfig.thinking_level ?? "auto"},
-            fallback_llm_ids = ${fallbackLlmIdsJson}::jsonb,
-            llm_temperature = ${selectedSavedConfig.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0},
-            llm_top_p = ${selectedSavedConfig.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95},
-            llm_top_k = ${selectedSavedConfig.llm_top_k ?? tomoriState.config.llm_top_k ?? 0},
-            llm_frequency_penalty = ${selectedSavedConfig.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0},
-            llm_presence_penalty = ${selectedSavedConfig.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0},
-            llm_min_p = ${selectedSavedConfig.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05},
-            llm_disabled_params = ${disabledParamsLiteral}::text[],
-            llm_logit_biases = ${resolvedLogitBiasesJson}::jsonb,
-            custom_model_name = ${selectedSavedConfig.custom_model_name ?? customModel.llm_description ?? customModel.llm_codename},
-            custom_endpoint_url = ${selectedSavedConfig.custom_endpoint_url ?? null},
-            custom_num_ctx = ${selectedSavedConfig.custom_num_ctx ?? null}
-        WHERE server_id = ${tomoriState.server_id}
-        RETURNING *
-      `;
+      const [updatedModel] = await Promise.all([
+        configRepository.updateModelConfig(tomoriState.server_id, {
+          llm_id: customModel.llm_id,
+          api_key: selectedSavedConfig.api_key,
+          key_version: selectedSavedConfig.key_version ?? 1,
+          thinking_level: selectedSavedConfig.thinking_level ?? "auto",
+          fallback_llm_ids: fallbackLlmIds,
+          llm_temperature: selectedSavedConfig.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0,
+          llm_disabled_params: disabledParams,
+          // custom_* mirrors are resolved at runtime from the custom_endpoints table; null them here
+          custom_model_name: null,
+          custom_endpoint_url: null,
+          custom_num_ctx: null,
+        }),
+        configRepository.updateChatConfig(tomoriState.server_id, {
+          llm_top_p: selectedSavedConfig.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95,
+          llm_top_k: selectedSavedConfig.llm_top_k ?? tomoriState.config.llm_top_k ?? 0,
+          llm_frequency_penalty:
+            selectedSavedConfig.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0,
+          llm_presence_penalty:
+            selectedSavedConfig.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0,
+          llm_min_p: selectedSavedConfig.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05,
+          llm_logit_biases: resolvedLogitBiases.entries,
+        }),
+      ]);
+      const updatedRow = updatedModel;
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
-        await replyInfoEmbed(responseInteraction, locale, {
+      if (!updatedRow) {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
           color: ColorCode.ERROR,
@@ -400,11 +452,11 @@ export async function execute(
       }
 
       invalidateTomoriStateCache(serverId);
-      await replyInfoEmbed(responseInteraction, locale, {
+      await replyInfoEmbed(customReplyTarget, locale, {
         titleKey: "commands.model.text.success_title",
         descriptionKey: "commands.model.text.success_description",
         descriptionVars: {
-          model_name: selectedSavedConfig.custom_model_name ?? customModel.llm_description ?? customModel.llm_codename,
+          model_name: customModel.llm_description ?? customModel.llm_codename,
           previous_model: tomoriState.llm?.llm_codename ?? localizer(locale, "general.unknown"),
           provider: getProviderDisplayName(selectedProvider),
         },
@@ -414,7 +466,7 @@ export async function execute(
     }
 
     // 3b. Regular provider: model picker
-    const availableModels = await loadAvailableModelsForProvider(selectedProvider, false, {
+    const availableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
     });
@@ -462,12 +514,12 @@ export async function execute(
 
     if (!selectedModel?.llm_id) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "CommandExecutionError",
         metadata: {
-          command: "config model text",
+          command: "model text",
           guildId: interaction.guild?.id ?? interaction.user.id,
           requestedModel: selectedModelCodename,
           availableModels: availableModels.map((m) => m.llm_codename),
@@ -501,59 +553,58 @@ export async function execute(
       return;
     }
 
-    // Phase A mirror write: copy credentials and samplers from saved_provider_configs into tomori_configs
-    // so the existing runtime (which reads tomori_configs) continues to work without modification.
     const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
       selectedSavedConfig?.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
       selectedModel,
     );
-    const resolvedLogitBiasesJson = JSON.stringify(resolvedLogitBiases.entries);
     const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
-    const fallbackLlmIdsJson = clearFallbacks ? "[]" : JSON.stringify(selectedSavedConfig?.fallback_llm_ids ?? []);
-    const disabledParamsLiteral = toPostgresTextArrayLiteral(selectedSavedConfig?.llm_disabled_params);
+    const fallbackLlmIds = clearFallbacks
+      ? []
+      : (selectedSavedConfig?.fallback_model_refs ?? []).filter((r) => r.type === "llm").map((r) => r.id);
+    const disabledParams = selectedSavedConfig?.llm_disabled_params ?? [];
 
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET llm_id = ${selectedModel.llm_id},
-          api_key = ${selectedSavedConfig?.api_key ?? null},
-          key_version = ${selectedSavedConfig?.key_version ?? 1},
-          thinking_level = ${selectedSavedConfig?.thinking_level ?? "auto"},
-          fallback_llm_ids = ${fallbackLlmIdsJson}::jsonb,
-          llm_temperature = ${selectedSavedConfig?.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0},
-          llm_top_p = ${selectedSavedConfig?.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95},
-          llm_top_k = ${selectedSavedConfig?.llm_top_k ?? tomoriState.config.llm_top_k ?? 0},
-          llm_frequency_penalty = ${selectedSavedConfig?.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0},
-          llm_presence_penalty = ${selectedSavedConfig?.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0},
-          llm_min_p = ${selectedSavedConfig?.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05},
-          llm_disabled_params = ${disabledParamsLiteral}::text[],
-          llm_logit_biases = ${resolvedLogitBiasesJson}::jsonb,
-          custom_model_name = NULL,
-          custom_endpoint_url = NULL,
-          custom_num_ctx = NULL
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    const [updatedModel] = await Promise.all([
+      configRepository.updateModelConfig(tomoriState.server_id, {
+        llm_id: selectedModel.llm_id,
+        api_key: selectedSavedConfig?.api_key ?? null,
+        key_version: selectedSavedConfig?.key_version ?? 1,
+        thinking_level: selectedSavedConfig?.thinking_level ?? "auto",
+        fallback_llm_ids: fallbackLlmIds,
+        llm_temperature: selectedSavedConfig?.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0,
+        llm_disabled_params: disabledParams,
+        custom_model_name: null,
+        custom_endpoint_url: null,
+        custom_num_ctx: null,
+      }),
+      configRepository.updateChatConfig(tomoriState.server_id, {
+        llm_top_p: selectedSavedConfig?.llm_top_p ?? tomoriState.config.llm_top_p ?? 0.95,
+        llm_top_k: selectedSavedConfig?.llm_top_k ?? tomoriState.config.llm_top_k ?? 0,
+        llm_frequency_penalty:
+          selectedSavedConfig?.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty ?? 0.0,
+        llm_presence_penalty:
+          selectedSavedConfig?.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0,
+        llm_min_p: selectedSavedConfig?.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05,
+        llm_logit_biases: resolvedLogitBiases.entries,
+      }),
+    ]);
+    const updatedRow = updatedModel;
 
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updatedRow) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model text",
+          command: "model text",
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename,
           targetLlmId: selectedModel.llm_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
       await log.error(
-        "Failed to update or validate LLM config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
+        "Failed to update LLM config after DB update",
+        new Error("Database update returned no rows"),
         context,
       );
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -573,13 +624,13 @@ export async function execute(
     };
     const defaultPresetEntry = naiDefaultPresets[selectedModel.llm_codename];
     if (defaultPresetEntry) {
-      const naiPresets = await loadNaiPresetsForModel(defaultPresetEntry.target);
+      const naiPresets = await configRepository.loadNaiPresets(defaultPresetEntry.target);
       const defaultPreset = naiPresets.find((p) => p.preset_name === defaultPresetEntry.name);
       if (defaultPreset) {
-        await applyNaiPreset(tomoriState.server_id, defaultPreset, selectedModel.llm_codename);
+        await configRepository.applyNaiPreset(tomoriState.server_id, defaultPreset, selectedModel.llm_codename);
       } else {
         log.warn(
-          `Default NAI preset "${defaultPresetEntry.name}" not found in DB. Was seed.sql run? Skipping auto-apply.`,
+          `Default NAI preset "${defaultPresetEntry.name}" not found in DB. Was the seed catalog loaded? Skipping auto-apply.`,
         );
       }
     }
@@ -607,16 +658,16 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model text",
+        command: "model text",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
         targetLlmIdAttempted: selectedModel?.llm_id,
       },
     };
-    await log.error(`Error executing /config model text for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /model text for user ${userData.user_disc_id}`, error as Error, context);
 
     const replyTarget = modalSubmitInteraction ?? interaction;
     await replyInfoEmbed(replyTarget, locale, {

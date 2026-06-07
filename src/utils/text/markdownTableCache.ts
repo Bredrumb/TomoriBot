@@ -31,3 +31,11 @@ export function setCachedRenderedMarkdownTable(messageId: string, markdown: stri
     cachedAt: Date.now(),
   });
 }
+
+export function clearMarkdownTableCache(): void {
+  cache.clear();
+}
+
+export function getMarkdownTableCacheSize(): number {
+  return cache.size;
+}

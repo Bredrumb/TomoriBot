@@ -1,18 +1,18 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { isRagAvailable } from "@/utils/db/ragDetection";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { getMemoryLimits } from "@/utils/db/memoryLimits";
-import { loadEmbeddingModelById, loadAvailableEmbeddingModelsForProvider } from "@/utils/db/dbRead";
-import { reembedServerDocuments } from "@/utils/documents/documentService";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
+import { configRepository, llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
+import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
@@ -92,7 +92,17 @@ export async function execute(
 
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
-      if (!selectedSavedConfig?.embedding_model_id) {
+      const customAvailableModels = selectedSavedConfig
+        ? ((await llmModelRepo.loadAvailableEmbeddingModels(selectedProvider, false, {
+            kind: "server",
+            ownerId: tomoriState.server_id,
+          })) ?? [])
+        : [];
+      const customModelChoices = customAvailableModels.filter(
+        (model): model is typeof model & { embedding_model_id: number } =>
+          model.embedding_model_id !== undefined && model.embedding_model_id !== null,
+      );
+      if (!selectedSavedConfig || customModelChoices.length === 0) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.model.embedding.no_models_title",
           descriptionKey: "commands.model.embedding.no_models_description",
@@ -105,18 +115,32 @@ export async function execute(
         return;
       }
 
-      const currentSelectedId = tomoriState.config.embedding_model_id ?? null;
-      const [selectedConfiguredModel, previousModel] = await Promise.all([
-        loadEmbeddingModelById(selectedSavedConfig.embedding_model_id),
-        currentSelectedId ? loadEmbeddingModelById(currentSelectedId) : Promise.resolve(null),
-      ]);
-      const selectedModelName =
-        selectedSavedConfig.custom_model_name ??
-        getEmbeddingModelDisplayName(selectedConfiguredModel) ??
-        getProviderDisplayName(selectedProvider);
+      // Single registered model activates directly; multiple show a string-select picker.
+      const selection = await promptCustomModelSelection({
+        interaction: responseInteraction,
+        locale,
+        choices: customModelChoices.map((model) => ({
+          model,
+          value: model.embedding_model_id.toString(),
+          label: getEmbeddingModelDisplayName(model) ?? model.codename,
+          description: getLocalizedDescription(model, userData.language_pref),
+        })),
+        modalCustomId: "config_model_embedding_custom_modal",
+        modalTitleKey: "commands.model.embedding.modal_title",
+        selectLabelKey: "commands.model.embedding.select_label",
+        selectDescriptionKey: "commands.model.embedding.select_description",
+        selectPlaceholderKey: "commands.model.embedding.select_placeholder",
+      });
+      if (!selection) return;
 
-      if (selectedSavedConfig.embedding_model_id === currentSelectedId) {
-        await replyInfoEmbed(responseInteraction, locale, {
+      const selectedConfiguredModel = selection.model;
+      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
+      const currentSelectedId = tomoriState.config.embedding_model_id ?? null;
+      const selectedModelName =
+        getEmbeddingModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
+
+      if (selectedConfiguredModel.embedding_model_id === currentSelectedId) {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "commands.model.embedding.already_selected_title",
           descriptionKey: "commands.model.embedding.already_selected_description",
           descriptionVars: {
@@ -127,15 +151,13 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-				UPDATE tomori_configs
-				SET embedding_model_id = ${selectedSavedConfig.embedding_model_id}
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
-			`;
+      const previousModel = currentSelectedId ? await llmModelRepo.loadEmbeddingModelById(currentSelectedId) : null;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        embedding_model_id: selectedConfiguredModel.embedding_model_id,
+      });
 
-      if (!updatedRow) {
-        await replyInfoEmbed(responseInteraction, locale, {
+      if (!updated) {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
           color: ColorCode.ERROR,
@@ -144,7 +166,7 @@ export async function execute(
       }
 
       invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-      await replyInfoEmbed(responseInteraction, locale, {
+      await replyInfoEmbed(customReplyTarget, locale, {
         titleKey: "commands.model.embedding.success_title",
         descriptionKey: "commands.model.embedding.success_description",
         descriptionVars: {
@@ -159,7 +181,7 @@ export async function execute(
     }
 
     const availableModels =
-      (await loadAvailableEmbeddingModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableEmbeddingModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];
@@ -251,12 +273,12 @@ export async function execute(
 
     if (!selectedModel?.embedding_model_id) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "CommandExecutionError",
         metadata: {
-          command: "config model embedding",
+          command: "model embedding",
           guildId: interaction.guild?.id ?? interaction.user.id,
           requestedModelId: selectedModelIdStr,
         },
@@ -288,36 +310,29 @@ export async function execute(
     }
 
     const currentEmbeddingModel = tomoriState.config.embedding_model_id
-      ? await loadEmbeddingModelById(tomoriState.config.embedding_model_id)
+      ? await llmModelRepo.loadEmbeddingModelById(tomoriState.config.embedding_model_id)
       : null;
     const shouldReembed =
       currentEmbeddingModel?.model_family && currentEmbeddingModel.model_family !== selectedModel.model_family;
 
-    const [updatedRow] = await sql`
-			UPDATE tomori_configs
-			SET embedding_model_id = ${selectedModel.embedding_model_id}
-			WHERE server_id = ${tomoriState.server_id}
-			RETURNING *
-		`;
+    const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+      embedding_model_id: selectedModel.embedding_model_id,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model embedding",
+          command: "model embedding",
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetEmbeddingModelId: selectedModel.embedding_model_id,
         },
       };
-      await log.error(
-        "Failed to update embedding model config after DB update",
-        new Error("Database update returned no rows"),
-        context,
-      );
+      await log.error("Failed to update embedding model config", new Error("Database update failed"), context);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -330,12 +345,7 @@ export async function execute(
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
     if (shouldReembed && isRagAvailable()) {
-      const [docCountRow] = await sql`
-				SELECT COUNT(*) as doc_count
-				FROM documents
-				WHERE server_id = ${tomoriState.server_id}
-			`;
-      const docCount = Number(docCountRow?.doc_count || 0);
+      const docCount = await serverMemoryRepository.countDocuments(tomoriState.server_id);
       if (docCount > 0) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "commands.model.embedding.reembed_started_title",
@@ -345,7 +355,7 @@ export async function execute(
 
         const creds = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
         const limits = getMemoryLimits();
-        await reembedServerDocuments({
+        await ragRepository.reembedServerDocuments({
           serverId: tomoriState.server_id,
           embeddingModel: selectedModel,
           apiKey: creds.apiKey,
@@ -381,20 +391,16 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model embedding",
+        command: "model embedding",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
         targetEmbeddingModelIdAttempted: selectedModel?.embedding_model_id,
       },
     };
-    await log.error(
-      `Error executing /config model embedding for user ${userData.user_disc_id}`,
-      error as Error,
-      context,
-    );
+    await log.error(`Error executing /model embedding for user ${userData.user_disc_id}`, error as Error, context);
 
     const replyTarget = modalSubmitInteraction ?? responseInteraction;
     await replyInfoEmbed(replyTarget, locale, {

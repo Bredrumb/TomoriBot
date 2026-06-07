@@ -1,10 +1,15 @@
 import type { FunctionCall, FunctionResponseImageMetadata } from "@/types/provider/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import {
+  relocateAssistantMediaContextItems,
+  relocateAssistantMediaToUserTurns,
+} from "@/providers/utils/strictChatCompat";
 import { log } from "@/utils/misc/logger";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 
 const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
   ContextItemTag.SYSTEM_HUMANIZER_RULES,
+  ContextItemTag.SYSTEM_PERSONA_PROMPT,
   ContextItemTag.SYSTEM_PERSONALITY,
   ContextItemTag.KNOWLEDGE_SERVER_INFO,
   ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
@@ -35,10 +40,11 @@ interface BuildOpenAICompatibleMessagesOptions {
 export async function buildOpenAICompatibleMessages(
   options: BuildOpenAICompatibleMessagesOptions,
 ): Promise<Array<Record<string, unknown>>> {
-  const messages: Array<Record<string, unknown>> = [];
+  let messages: Array<Record<string, unknown>> = [];
+  const contextItems = relocateAssistantMediaContextItems(options.contextItems);
   const systemInstructionParts: string[] = [];
 
-  for (const item of options.contextItems) {
+  for (const item of contextItems) {
     const itemTextContent = item.parts
       .filter((part) => part.type === "text")
       .map((part) => part.text)
@@ -60,7 +66,6 @@ export async function buildOpenAICompatibleMessages(
 
     const role = item.role === "user" ? "user" : "assistant";
     const contentParts: Array<Record<string, unknown>> = [];
-    const pendingAssistantImageParts: Array<Record<string, unknown>> = [];
 
     for (const part of item.parts) {
       if (part.type === "text") {
@@ -71,50 +76,49 @@ export async function buildOpenAICompatibleMessages(
         continue;
       }
 
-      if (part.type !== "image" || !options.seesImages) {
+      if (part.type === "video") {
+        // Generic OpenAI-compatible endpoints don't support video embedding.
+        // Add a text placeholder so the model is aware a video was attached.
+        contentParts.push({
+          type: "text",
+          text: "[System: A video is attached to this message that this model cannot process.]",
+        });
+        continue;
+      }
+
+      if (part.type !== "image") {
+        continue;
+      }
+      if (!options.seesImages) {
+        // Image part present but model cannot process it — add a text placeholder
+        // so the model is still aware an image was attached. This can happen when
+        // context was built with images included for a vision-capable fallback model.
+        contentParts.push({
+          type: "text",
+          text: "[System: An image is attached to this message that this model cannot process.]",
+        });
         continue;
       }
 
       const imagePart = await convertImagePartToOpenAIContentPart(part);
       if (imagePart) {
-        if (role === "assistant" && imagePart.type === "image_url") {
-          pendingAssistantImageParts.push(imagePart);
-        } else {
-          contentParts.push(imagePart);
-        }
+        // Image parts are attached to the message here regardless of role; assistant media is
+        // relocated to a synthetic user turn by relocateAssistantMediaToUserTurns after the loop.
+        contentParts.push(imagePart);
       }
     }
 
     if (role === "assistant") {
-      const assistantText = contentParts
-        .filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string")
-        .map((part) => part.text)
-        .join("\n");
-
-      if (assistantText) {
+      // Emit the assistant turn with its parts intact. relocateAssistantMediaToUserTurns (run after
+      // the dialogue loop) peels any image parts into a synthetic user turn and flattens the
+      // remaining text-only assistant content back to a string — matching the previous output.
+      if (contentParts.length > 0) {
         messages.push({
           role,
-          content: assistantText,
+          content: contentParts,
+          ...(item.sender?.name && { assistantMediaSenderName: item.sender.name }),
         });
       }
-
-      if (pendingAssistantImageParts.length > 0) {
-        messages.push({
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `[System: The previous assistant message included ${pendingAssistantImageParts.length === 1 ? "the following image" : "the following images"}.]`,
-            },
-            ...pendingAssistantImageParts,
-          ],
-        });
-      }
-
-      if (!assistantText && pendingAssistantImageParts.length === 0) {
-        continue;
-      }
-
       continue;
     }
 
@@ -129,6 +133,12 @@ export async function buildOpenAICompatibleMessages(
       content,
     });
   }
+
+  // Relocate media off assistant turns into synthetic user turns (always-on, never gated by a
+  // toggle): the assistant role cannot carry media in input history across OpenAI/Anthropic/Gemini
+  // shaped APIs. Runs only over the dialogue turns assembled above — system, tool/function history,
+  // and prefill turns are appended afterwards and never carry relocatable media.
+  messages = relocateAssistantMediaToUserTurns(messages);
 
   if (systemInstructionParts.length > 0) {
     const systemContent = systemInstructionParts.join("\n\n");
@@ -330,9 +340,25 @@ async function convertImagePartToOpenAIContentPart(
       },
     };
   } catch (error) {
-    log.warn(`Failed to fetch image: ${part.uri}`, {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const fallback = (part as { fallbackUri?: string }).fallbackUri;
+    if (fallback && fallback !== part.uri) {
+      try {
+        const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+        log.info(`OpenAICompatible: Image loaded via fallback CDN URL ${fallback}`);
+        return {
+          type: "image_url",
+          image_url: { url: `data:${optimized.mimeType};base64,${optimized.data}` },
+        };
+      } catch (fallbackErr) {
+        log.warn(`OpenAICompatible: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+          error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+        });
+      }
+    } else {
+      log.warn(`Failed to fetch image: ${part.uri}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return null;
   }
 }

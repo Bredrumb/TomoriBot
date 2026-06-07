@@ -8,7 +8,7 @@
  * validateRemoteMcpUrl() which blocks localhost, private IPs, and non-HTTPS URLs.
  *
  * Key differences from OpenRouter:
- * - Uses custom endpoint URL from tomori_configs.custom_endpoint_url
+ * - Uses the server model config custom endpoint URL
  * - Model capabilities are user-declared (stored in llms table row)
  * - API key field may contain endpoint URL or actual auth token
  * - validateApiKey() performs health check rather than strict key validation
@@ -74,7 +74,6 @@ import {
   type FunctionResponseImageMetadata,
   type ApiKeyValidationResult,
 } from "../../types/provider/interfaces";
-import { loadSavedProviderConfig } from "@/utils/db/dbRead";
 import { getCustomToolAdapter } from "./customToolAdapter";
 import { customProviderInfo } from "./providerInfo";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
@@ -156,7 +155,7 @@ export class CustomProvider
   }
 
   async generateEmbeddings(request: EmbeddingRequest): Promise<number[][]> {
-    const customEndpoint = await resolveCustomEndpointForProvider(request.provider, "embedding");
+    const customEndpoint = await resolveCustomEndpointForProvider(request.provider, "embedding", request.modelId);
     const endpointUrl = customEndpoint?.endpoint_url ?? null;
     const modelName = customEndpoint?.model_name ?? request.model;
 
@@ -221,8 +220,7 @@ export class CustomProvider
         activePersonaHasElevenlabsVoice: Boolean(
           tomoriState.speech_voice_sample_id ||
             tomoriState.speech_voice_design_prompt?.trim() ||
-            tomoriState.speech_voice_id?.trim() ||
-            tomoriState.elevenlabs_voice_id?.trim(),
+            tomoriState.speech_voice_id?.trim(),
         ),
         activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
         activePersonaVoiceName: tomoriState.speech_voice_name,
@@ -244,7 +242,6 @@ export class CustomProvider
           manage_message_enabled: tomoriState.config.manage_message_enabled,
           imagegen_enabled: tomoriState.config.imagegen_enabled,
           videogen_enabled: tomoriState.config.videogen_enabled,
-          nai_exclusive_imggen: tomoriState.config.nai_exclusive_imggen,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
@@ -367,8 +364,7 @@ export class CustomProvider
       activePersonaHasElevenlabsVoice: Boolean(
         request.tomoriState.speech_voice_sample_id ||
           request.tomoriState.speech_voice_design_prompt?.trim() ||
-          request.tomoriState.speech_voice_id?.trim() ||
-          request.tomoriState.elevenlabs_voice_id?.trim(),
+          request.tomoriState.speech_voice_id?.trim(),
       ),
       activePersonaVoiceDesignPrompt: request.tomoriState.speech_voice_design_prompt?.trim() || null,
       activePersonaVoiceName: request.tomoriState.speech_voice_name,
@@ -390,7 +386,6 @@ export class CustomProvider
         manage_message_enabled: false,
         imagegen_enabled: false,
         videogen_enabled: false,
-        nai_exclusive_imggen: false,
         voice_message_enabled: false,
         thread_creation_enabled: false,
       },
@@ -436,13 +431,23 @@ export class CustomProvider
    * @returns Promise<CustomProviderConfig> - Provider-specific configuration object
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<CustomProviderConfig> {
-    // Get endpoint URL — prefer tomori_configs mirror, fall back to saved_provider_configs.
-    // The mirror can be NULL when the global text model was switched to a non-custom provider
-    // (which NULLs out the custom_* columns) while a persona override still points at a custom LLM.
+    // Get endpoint URL — prefer the server model config mirror (populated when the active text model
+    // is a custom one). The mirror can be NULL when a persona override points at a custom LLM while
+    // the global text model is non-custom. In that case fall back to the custom_endpoints table.
     let endpointUrl = tomoriState.config.custom_endpoint_url ?? null;
+    let endpointModelNameHint: string | null = null;
+    let endpointNumCtxHint: number | null = null;
     if (!endpointUrl) {
-      const savedConfig = await loadSavedProviderConfig(tomoriState.server_id, "custom");
-      endpointUrl = savedConfig?.custom_endpoint_url ?? null;
+      // Pass the active model id so the correct endpoint is chosen when the label hosts several
+      // text models; falls back to the label default when unset (legacy rows / single model).
+      const textEndpoint = await resolveCustomEndpointForProvider(
+        tomoriState.llm.llm_provider.toLowerCase(),
+        "text",
+        tomoriState.llm.llm_id,
+      );
+      endpointUrl = textEndpoint?.endpoint_url ?? null;
+      endpointModelNameHint = textEndpoint?.model_name ?? null;
+      endpointNumCtxHint = textEndpoint?.num_ctx ?? null;
     }
 
     if (!endpointUrl) {
@@ -453,8 +458,9 @@ export class CustomProvider
 
     // Determine which model name to use:
     // 1. If custom_model_name is set, use it (for Ollama, etc. that require exact model names)
-    // 2. Otherwise, fall back to llm_codename (for KoboldCpp, etc. that don't care)
-    const modelName = tomoriState.config.custom_model_name || tomoriState.llm.llm_codename;
+    // 2. Fall back to the endpoint's registered model_name hint (set during /config custom-endpoint add)
+    // 3. Last resort: llm_codename (for KoboldCpp, etc. that don't care about model selection)
+    const modelName = tomoriState.config.custom_model_name || endpointModelNameHint || tomoriState.llm.llm_codename;
 
     log.info(`Custom provider: Using endpoint URL: ${endpointUrl}`);
     log.info(
@@ -478,7 +484,7 @@ export class CustomProvider
       seesVideos: tomoriState.llm.sees_videos,
       ...samplingParams,
       repetitionPenalty: 1.1,
-      numCtx: tomoriState.config.custom_num_ctx ?? null,
+      numCtx: tomoriState.config.custom_num_ctx ?? endpointNumCtxHint ?? null,
     };
 
     // Only add tools if the model supports them (user-declared)

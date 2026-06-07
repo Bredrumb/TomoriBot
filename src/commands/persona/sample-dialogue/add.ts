@@ -5,26 +5,17 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
-import {
-  tomoriSchema, // Use tomoriSchema for validation
-  type UserRow,
-  type ErrorContext,
-  type TomoriState,
-} from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { isBlacklisted, loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { SelectOption } from "@/types/discord/modal";
-import { checkSampleDialogueLimit, getMemoryLimits, validateSampleDialogue } from "@/utils/db/memoryLimits";
-import {
-  dedupeSampleDialoguePairs,
-  formatTextArrayLiteral,
-  parseSampleDialogueBatch,
-  readTxtUpload,
-} from "@/utils/teach/batchUploadUtils";
+import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimits";
+
+import { dedupeSampleDialoguePairs, parseSampleDialogueBatch, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
@@ -76,7 +67,7 @@ export async function execute(
     // 3. Check blacklisting only for guild contexts
     // Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -103,12 +94,12 @@ export async function execute(
     }
 
     // 6. Resolve target persona options
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
-      .filter((persona) => persona.tomori_id !== undefined)
+      .filter((persona) => persona.persona_id !== undefined)
       .map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id?.toString() ?? "",
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
           ? localizer(locale, "commands.teach.sampledialogue.alter_persona_description")
           : localizer(locale, "commands.teach.sampledialogue.main_persona_description"),
@@ -191,8 +182,8 @@ export async function execute(
     // Resolve selected persona from modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submit + required=true guarantees value
     const selectedPersonaId = modalResult.values![PERSONA_SELECT_ID];
-    selectedPersona = allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
-    if (!selectedPersona?.tomori_id) {
+    selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
+    if (!selectedPersona?.persona_id) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
@@ -334,7 +325,7 @@ export async function execute(
     }
 
     // 12. Check sample dialogue limit after persona resolution
-    const dialogueLimitCheck = await checkSampleDialogueLimit(selectedPersona.tomori_id);
+    const dialogueLimitCheck = await personaRepository.checkSampleDialogueLimit(selectedPersona.persona_id);
     const currentCount = dialogueLimitCheck.currentCount ?? currentUserDialogues.length;
     const maxAllowed = dialogueLimitCheck.maxAllowed ?? memoryLimits.maxSampleDialogues;
     const availableSlots = Math.max(0, maxAllowed - currentCount);
@@ -365,49 +356,26 @@ export async function execute(
       return;
     }
 
-    // 13. Update target persona row in the database using Bun SQL
-    // Use array append/cat for atomic array operations
-    const [updatedTomoriResult] =
-      dialoguesToAdd.length === 1
-        ? await sql`
-					UPDATE tomoris
-					SET
-						sample_dialogues_in = array_append(sample_dialogues_in, ${dialoguesToAdd[0]?.userInput ?? ""}),
-						sample_dialogues_out = array_append(sample_dialogues_out, ${dialoguesToAdd[0]?.botInput ?? ""})
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-					RETURNING *
-				`
-        : await sql`
-					UPDATE tomoris
-					SET
-						sample_dialogues_in = array_cat(sample_dialogues_in, ${formatTextArrayLiteral(dialoguesToAdd.map((dialogue) => dialogue.userInput))}::text[]),
-						sample_dialogues_out = array_cat(sample_dialogues_out, ${formatTextArrayLiteral(dialoguesToAdd.map((dialogue) => dialogue.botInput))}::text[])
-					WHERE tomori_id = ${selectedPersona.tomori_id}
-					RETURNING *
-				`;
+    // 13. Update target persona row in the database using paired atomic array operations
+    const added = await personaRepository.addSampleDialoguePair(
+      selectedPersona.persona_id,
+      dialoguesToAdd.map((dialogue) => dialogue.userInput),
+      dialoguesToAdd.map((dialogue) => dialogue.botInput),
+    );
 
-    // 13. Validate the result from the database (Rule 3, 5, 6)
-    // Note: tomoriSchema validates a TomoriRow, not the full TomoriState
-    const validationResult = tomoriSchema.safeParse(updatedTomoriResult);
-
-    if (!validationResult.success) {
+    if (!added) {
       // Rule 22: Log error with context (Access IDs directly)
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id, // Direct access
-        tomoriId: selectedPersona.tomori_id,
+        personaId: selectedPersona.persona_id,
         errorType: "DatabaseValidationError",
         metadata: {
           command: "teach sampledialogue",
           userDiscordId: interaction.user.id,
-          validationErrors: validationResult.error.issues,
         },
       };
-      await log.error(
-        "Failed to validate updated tomori data after adding sample dialogue",
-        validationResult.error,
-        context,
-      );
+      await log.error("Failed to add sample dialogue pair(s)", new Error("Database update returned no rows"), context);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -457,7 +425,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach sampledialogue",

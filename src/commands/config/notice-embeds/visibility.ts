@@ -6,11 +6,11 @@ import {
 } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
-import { tomoriConfigSchema } from "@/types/db/schema";
 import { TOOL_NOTICE_DEFINITIONS, type ToolNoticeKey } from "@/constants/toolNotices";
+import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { sql } from "@/utils/db/client";
-import { promptWithRawModal, replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -115,45 +115,21 @@ export async function execute(
       return;
     }
 
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET tool_notice_hidden_keys = ${formatTextArrayLiteral(hiddenKeys)}::text[]
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    const updated = await configRepository.updateNoticeEmbedsConfig(tomoriState.server_id, {
+      tool_notice_hidden_keys: hiddenKeys,
+    });
 
-    if (!updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id,
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "config notice-embeds visibility",
         },
       };
       await log.error("Failed to update notice embed visibility config", new Error("Database update failed"), context);
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-    if (!validatedConfig.success) {
-      const context: ErrorContext = {
-        userId: userData.user_id,
-        serverId: tomoriState.server_id,
-        tomoriId: tomoriState.tomori_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "config notice-embeds visibility",
-          validationErrors: validatedConfig.error.flatten(),
-        },
-      };
-      await log.error("Failed to validate updated notice embed visibility config", validatedConfig.error, context);
       await replyInfoEmbed(modalResult.interaction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
@@ -237,10 +213,6 @@ function collectCheckedKeys(multiValues: Record<string, string[]> | undefined, g
   }
 
   return selectedKeys;
-}
-
-function formatTextArrayLiteral(items: string[]): string {
-  return `{${items.map((item) => `"${item.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }
 
 function formatNoticeList(items: string[], locale: string): string {

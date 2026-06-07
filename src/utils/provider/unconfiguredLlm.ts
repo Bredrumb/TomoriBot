@@ -19,6 +19,8 @@ const UNCONFIGURED_LLM: LlmRow = {
   sees_youtube: false,
   is_uncensored: false,
   supports_structoutput: false,
+  strict_role_alternation: false,
+  supports_prefix_completion: false,
   llm_description: null,
   ja_description: null,
 };

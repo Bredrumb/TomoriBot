@@ -10,19 +10,16 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
-  updateButtonComponentsV2Status,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   promptWithPaginatedModal,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { type UserRow, type ErrorContext, tomoriSchema, type TomoriState } from "@/types/db/schema";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { sql } from "@/utils/db/client";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_attribute_modal";
@@ -38,45 +35,16 @@ const ATTRIBUTE_SELECT_ID = "attribute_select";
  */
 async function performAttributeRemoval(
   tomoriState: TomoriState,
+  selectedIndex: number,
   attributeToRemove: string,
   userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  // Update the attribute_list in the database using array_remove
-  const [updatedRow] = await sql`
-		UPDATE tomoris
-		SET attribute_list = array_remove(attribute_list, ${attributeToRemove})
-		WHERE tomori_id = ${tomoriState.tomori_id}
-		RETURNING *
-	`;
-
-  // Validate the returned data
-  const validatedTomori = tomoriSchema.safeParse(updatedRow);
-
-  if (!validatedTomori.success || !updatedRow) {
-    // Log error specific to this update failure
-    const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
-      serverId: tomoriState.server_id,
-      userId: userData.user_id,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "forget attribute",
-        attributeToRemove,
-        validationErrors: validatedTomori.success ? null : validatedTomori.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate attribute_list in tomoris table",
-      validatedTomori.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated tomori data failed validation"),
-      context,
-    );
-
+  // biome-ignore lint/style/noNonNullAssertion: tomoriState.persona_id is always valid after validation
+  const ok = await personaRepository.removeAttributeAt(tomoriState.persona_id!, selectedIndex + 1);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -92,7 +60,7 @@ async function performAttributeRemoval(
 
   // Log success and show success message
   log.success(
-    `Removed attribute "${attributeToRemove}" for tomori ${tomoriState.tomori_id} by user ${userData.user_disc_id}`,
+    `Removed attribute "${attributeToRemove}" for tomori ${tomoriState.persona_id} by user ${userData.user_disc_id}`,
   );
 
   if (!suppressSuccessReply) {
@@ -157,7 +125,7 @@ export async function execute(
     }
 
     // Select target persona via paginated selector
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -179,8 +147,7 @@ export async function execute(
       });
 
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
         return;
@@ -188,7 +155,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -280,6 +247,7 @@ export async function execute(
       // Perform the database update - let helper functions manage interaction state
       const removalSucceeded = await performAttributeRemoval(
         selectedPersona,
+        selectedIndex,
         attributeToRemove,
         userData,
         modalSubmitInteraction,
@@ -307,7 +275,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget attribute",

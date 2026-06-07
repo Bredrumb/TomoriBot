@@ -10,19 +10,16 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
-  replyInfoEmbed,
-  replyComponentsV2Status,
-  updateButtonComponentsV2Status,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   promptWithPaginatedModal,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { type UserRow, type ErrorContext, tomoriSchema, type TomoriState } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
 
 // Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_sampledialogue_modal";
@@ -32,13 +29,13 @@ const DIALOGUE_SELECT_ID = "dialogue_select";
  * Repairs mismatched sample dialogue arrays by truncating both to the shorter length.
  * This heals corruption caused by the old array_remove() bug which could remove
  * duplicate values from one array but not the other, breaking alignment.
- * @param tomoriId - The tomori ID to repair
+ * @param personaId - The tomori ID to repair
  * @param inLength - Current length of sample_dialogues_in
  * @param outLength - Current length of sample_dialogues_out
  * @returns The repaired [in, out] arrays, or null if repair failed
  */
 async function repairMismatchedDialogues(
-  tomoriId: number,
+  personaId: number,
   inLength: number,
   outLength: number,
 ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
@@ -46,29 +43,17 @@ async function repairMismatchedDialogues(
   const safeLength = Math.min(inLength, outLength);
 
   log.warn(
-    `Self-healing: truncating sample dialogues for tomori ${tomoriId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
+    `Self-healing: truncating sample dialogues for tomori ${personaId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
   );
 
-  const [updatedRow] = await sql`
-		UPDATE tomoris
-		SET
-			sample_dialogues_in = sample_dialogues_in[1:${safeLength}],
-			sample_dialogues_out = sample_dialogues_out[1:${safeLength}]
-		WHERE tomori_id = ${tomoriId}
-		RETURNING sample_dialogues_in, sample_dialogues_out
-	`;
-
-  if (!updatedRow) {
-    log.error(`Self-healing failed: no rows returned for tomori ${tomoriId}`);
+  const repaired = await personaRepository.repairSampleDialogues(personaId, safeLength);
+  if (!repaired) {
+    log.error(`Self-healing failed: no rows returned for tomori ${personaId}`);
     return null;
   }
 
-  log.success(`Self-healing complete: sample dialogues for tomori ${tomoriId} repaired to ${safeLength} pairs`);
-
-  return {
-    repairedIn: (updatedRow.sample_dialogues_in as string[]) ?? [],
-    repairedOut: (updatedRow.sample_dialogues_out as string[]) ?? [],
-  };
+  log.success(`Self-healing complete: sample dialogues for tomori ${personaId} repaired to ${safeLength} pairs`);
+  return repaired;
 }
 
 /**
@@ -91,6 +76,16 @@ async function performSampleDialogueRemoval(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
+  if (tomoriState.persona_id === undefined) {
+    await log.error("Cannot remove sample dialogue for persona without persona_id");
+    await replyInfoEmbed(replyInteraction, locale, {
+      titleKey: "general.errors.update_failed_title",
+      descriptionKey: "general.errors.update_failed_description",
+      color: ColorCode.ERROR,
+    });
+    return false;
+  }
+
   // Get the item being removed (for display purposes)
   const itemToRemoveIn = currentIn[selectedIndex];
   const itemToRemoveOut = currentOut[selectedIndex];
@@ -98,48 +93,24 @@ async function performSampleDialogueRemoval(
   // Convert 0-based JS index to 1-based PostgreSQL ordinality
   const pgIndex = selectedIndex + 1;
 
-  // Update both arrays using index-based removal via unnest + ordinality
-  // NOTE: array_remove() is NOT safe here — it removes ALL matching values,
-  // which corrupts array alignment when duplicate dialogue text exists.
-  const [updatedRow] = await sql`
-		UPDATE tomoris
-		SET
-			sample_dialogues_in = (
-				SELECT COALESCE(array_agg(elem ORDER BY ord), '{}')
-				FROM unnest(sample_dialogues_in) WITH ORDINALITY AS t(elem, ord)
-				WHERE ord != ${pgIndex}
-			),
-			sample_dialogues_out = (
-				SELECT COALESCE(array_agg(elem ORDER BY ord), '{}')
-				FROM unnest(sample_dialogues_out) WITH ORDINALITY AS t(elem, ord)
-				WHERE ord != ${pgIndex}
-			)
-		WHERE tomori_id = ${tomoriState.tomori_id}
-		RETURNING *
-	`;
+  const removed = await personaRepository.removeSampleDialoguePairAt(tomoriState.persona_id, pgIndex);
 
-  // Validate the returned data
-  const validatedTomori = tomoriSchema.safeParse(updatedRow);
-
-  if (!validatedTomori.success || !updatedRow) {
+  if (!removed) {
     // Log error specific to this update failure
     const context: ErrorContext = {
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       serverId: tomoriState.server_id,
       userId: userData.user_id,
       errorType: "DatabaseUpdateError",
       metadata: {
         command: "forget sampledialogue",
         selectedIndex,
-        validationErrors: validatedTomori.success ? null : validatedTomori.error.flatten(),
       },
     };
 
     await log.error(
-      "Failed to update or validate sample_dialogues in tomoris table",
-      validatedTomori.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated tomori data failed validation"),
+      "Failed to update sample_dialogues in personas table",
+      new Error("Database update returned no rows"),
       context,
     );
 
@@ -158,7 +129,7 @@ async function performSampleDialogueRemoval(
 
   // Log success and show success message
   log.success(
-    `Removed sample dialogue pair at index ${selectedIndex} for tomori ${tomoriState.tomori_id} by user ${userData.user_disc_id}`,
+    `Removed sample dialogue pair at index ${selectedIndex} for tomori ${tomoriState.persona_id} by user ${userData.user_disc_id}`,
   );
 
   if (!suppressSuccessReply) {
@@ -226,7 +197,7 @@ export async function execute(
     }
 
     // Select target persona via paginated selector
-    const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -248,8 +219,7 @@ export async function execute(
       });
 
       if (!personaSelection.success) {
-        if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-        continue;
+        return;
       }
       if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
         return;
@@ -257,7 +227,7 @@ export async function execute(
 
       personaSelectionInteraction = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await updateButtonComponentsV2Status(
           personaSelectionInteraction,
           locale,
@@ -292,7 +262,7 @@ export async function execute(
       // This repairs corruption from the old array_remove() bug
       if (currentIn.length !== currentOut.length && currentIn.length > 0 && currentOut.length > 0) {
         const repaired = await repairMismatchedDialogues(
-          selectedPersona.tomori_id,
+          selectedPersona.persona_id,
           currentIn.length,
           currentOut.length,
         );
@@ -414,7 +384,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget sampledialogue",

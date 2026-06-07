@@ -9,12 +9,17 @@
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriConfigSchema, type TomoriConfigRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
+import { configRepository } from "@/utils/db/repositories";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
+import {
+  buildCapabilitiesManageConfigWritePlan,
+  getCapabilitiesManagePermissionDefinitions,
+} from "@/utils/discord/manageConfigMapping";
 
 const PERMISSIONS_MAX_OPTIONS_PER_GROUP = 10;
 
@@ -27,99 +32,6 @@ const PERMISSIONS_CHECKBOX_ID = "config_permissions_checkbox";
 // Rule 21: Configure the subcommand — no options needed, UI is a checkbox modal
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("manage").setDescription(localizer("en-US", "commands.capabilities.manage.description"));
-
-/**
- * Defines all configurable permissions for the checkbox modal.
- * Each entry maps a checkbox value to its DB column and locale keys.
- */
-interface PermissionDefinition {
-  /** Value used as the checkbox option identifier */
-  value: string;
-  /** The tomori_configs column to update */
-  dbColumn: string;
-  /** Locale key for the option label */
-  labelKey: string;
-  /** Locale key for the short option description shown in the checkbox */
-  descKey: string;
-  /** Extracts current state from a config row */
-  getState: (config: TomoriConfigRow) => boolean;
-  /** If true, this option is only shown when an ElevenLabs key is configured */
-  requiresElevenLabs?: boolean;
-}
-
-const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
-  {
-    value: "selfteaching",
-    dbColumn: "self_teaching_enabled",
-    labelKey: "commands.capabilities.manage.selfteaching_option",
-    descKey: "commands.capabilities.manage.selfteaching_desc",
-    getState: (c) => c.self_teaching_enabled,
-  },
-  {
-    value: "personalization",
-    dbColumn: "personal_memories_enabled",
-    labelKey: "commands.capabilities.manage.personalization_option",
-    descKey: "commands.capabilities.manage.personalization_desc",
-    getState: (c) => c.personal_memories_enabled,
-  },
-  {
-    value: "emojiusage",
-    dbColumn: "emoji_usage_enabled",
-    labelKey: "commands.capabilities.manage.emojiusage_option",
-    descKey: "commands.capabilities.manage.emojiusage_desc",
-    getState: (c) => c.emoji_usage_enabled,
-  },
-  {
-    value: "stickerusage",
-    dbColumn: "sticker_usage_enabled",
-    labelKey: "commands.capabilities.manage.stickerusage_option",
-    descKey: "commands.capabilities.manage.stickerusage_desc",
-    getState: (c) => c.sticker_usage_enabled,
-  },
-  {
-    value: "websearch",
-    dbColumn: "web_search_enabled",
-    labelKey: "commands.capabilities.manage.websearch_option",
-    descKey: "commands.capabilities.manage.websearch_desc",
-    getState: (c) => c.web_search_enabled,
-  },
-  {
-    value: "managemessage",
-    dbColumn: "manage_message_enabled",
-    labelKey: "commands.capabilities.manage.managemessage_option",
-    descKey: "commands.capabilities.manage.managemessage_desc",
-    getState: (c) => c.manage_message_enabled,
-  },
-  {
-    value: "threadcreation",
-    dbColumn: "thread_creation_enabled",
-    labelKey: "commands.capabilities.manage.threadcreation_option",
-    descKey: "commands.capabilities.manage.threadcreation_desc",
-    getState: (c) => c.thread_creation_enabled,
-  },
-  {
-    value: "imagegen",
-    dbColumn: "imagegen_enabled",
-    labelKey: "commands.capabilities.manage.imagegen_option",
-    descKey: "commands.capabilities.manage.imagegen_desc",
-    getState: (c) => c.imagegen_enabled,
-  },
-  {
-    value: "videogen",
-    dbColumn: "videogen_enabled",
-    labelKey: "commands.capabilities.manage.videogen_option",
-    descKey: "commands.capabilities.manage.videogen_desc",
-    getState: (c) => c.videogen_enabled,
-  },
-  {
-    value: "voicemessage",
-    dbColumn: "voice_message_enabled",
-    labelKey: "commands.capabilities.manage.voicemessage_option",
-    descKey: "commands.capabilities.manage.voicemessage_desc",
-    getState: (c) => c.voice_message_enabled ?? true,
-    requiresElevenLabs: true,
-  },
-];
 
 /**
  * Configures various permissions for Tomori's behavior on the server using
@@ -171,13 +83,11 @@ export async function execute(
     }
 
     // 3. Determine which permissions to show (voicemessage requires ElevenLabs key)
-    let activeDefinitions = PERMISSION_DEFINITIONS;
+    let includeElevenLabs = true;
     if (tomoriState.server_id) {
-      const hasElevenLabsKey = await hasOptApiKey(tomoriState.server_id, ELEVENLABS_SERVICE_NAME);
-      if (!hasElevenLabsKey) {
-        activeDefinitions = PERMISSION_DEFINITIONS.filter((def) => !def.requiresElevenLabs);
-      }
+      includeElevenLabs = await hasOptApiKey(tomoriState.server_id, ELEVENLABS_SERVICE_NAME);
     }
+    const activeDefinitions = getCapabilitiesManagePermissionDefinitions({ includeElevenLabs });
 
     // 4. Build checkbox options, pre-checking currently-enabled permissions
     const checkboxOptions: CheckboxGroupOption[] = activeDefinitions.map((def) => ({
@@ -235,23 +145,11 @@ export async function execute(
         newlyEnabled.add(selectedValue);
       }
     }
-    const changes: Array<{
-      dbColumn: string;
-      isEnabled: boolean;
-      label: string;
-    }> = [];
-
-    for (const def of activeDefinitions) {
-      const wasEnabled = def.getState(tomoriState.config);
-      const willBeEnabled = newlyEnabled.has(def.value);
-      if (wasEnabled !== willBeEnabled) {
-        changes.push({
-          dbColumn: def.dbColumn,
-          isEnabled: willBeEnabled,
-          label: localizer(locale, def.labelKey),
-        });
-      }
-    }
+    const writePlan = buildCapabilitiesManageConfigWritePlan(tomoriState.config, newlyEnabled, { includeElevenLabs });
+    const changes = writePlan.changes.map((change) => ({
+      ...change,
+      label: localizer(locale, change.labelKey),
+    }));
 
     // 7. If nothing changed, say so and exit
     if (changes.length === 0) {
@@ -263,46 +161,56 @@ export async function execute(
       return;
     }
 
-    // 8. Apply each changed permission to the database.
-    //    sql.unsafe is safe here: dbColumn values are strictly controlled by PERMISSION_DEFINITIONS.
-    for (const change of changes) {
-      const [updatedRow] = await sql`
-				UPDATE tomori_configs
-				SET ${sql.unsafe(change.dbColumn)} = ${change.isEnabled}
-				WHERE server_id = ${tomoriState.server_id}
-				RETURNING *
-			`;
+    // 8. Apply changed permissions to the owning split config tables.
+    const updateTargets: Array<{
+      tableName: "server_member_permissions_configs" | "server_capabilities_configs";
+      columns: string[];
+    }> = [];
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
-        const context: ErrorContext = {
-          tomoriId: tomoriState.tomori_id,
-          serverId: tomoriState.server_id,
-          userId: userData.user_id,
-          errorType: "DatabaseUpdateError",
-          metadata: {
-            command: "config permissions",
-            guildId: interaction.guild?.id ?? interaction.user.id,
-            dbColumn: change.dbColumn,
-            isEnabled: change.isEnabled,
-            validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
-          },
-        };
-        await log.error(
-          `Failed to update permission column: ${change.dbColumn}`,
-          validatedConfig.success
-            ? new Error("Database update returned no rows")
-            : new Error("Updated config failed validation"),
-          context,
-        );
+    const memberPermissionColumns = Object.keys(writePlan.patch.memberPermissions);
+    if (memberPermissionColumns.length > 0) {
+      updateTargets.push({
+        tableName: "server_member_permissions_configs",
+        columns: memberPermissionColumns,
+      });
+    }
 
-        await replyInfoEmbed(modalInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
+    const capabilityColumns = Object.keys(writePlan.patch.capabilities);
+    if (capabilityColumns.length > 0) {
+      updateTargets.push({
+        tableName: "server_capabilities_configs",
+        columns: capabilityColumns,
+      });
+    }
+
+    const updated = await configRepository[writePlan.method](tomoriState.server_id, writePlan.patch);
+
+    if (!updated) {
+      const context: ErrorContext = {
+        personaId: tomoriState.persona_id,
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        errorType: "DatabaseUpdateError",
+        metadata: {
+          command: "capabilities manage",
+          guildId: interaction.guild?.id ?? interaction.user.id,
+          updateTargets,
+        },
+      };
+      await log.error(
+        `Failed to update capability config columns: ${updateTargets
+          .map((target) => `${target.tableName}.${target.columns.join(",")}`)
+          .join("; ")}`,
+        new Error("Database update returned no rows"),
+        context,
+      );
+
+      await replyInfoEmbed(modalInteraction, locale, {
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      });
+      return;
     }
 
     // 9. Invalidate cache so next message picks up the fresh config
@@ -333,25 +241,25 @@ export async function execute(
   } catch (error) {
     // 11. Log the error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.tomori_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config permissions",
+        command: "capabilities manage",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
       },
     };
-    await log.error(`Error executing /config tools manage for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /capabilities manage for user ${userData.user_disc_id}`, error as Error, context);
 
     // 12. Inform user of unknown error
     // Use modalInteraction (auto-deferred) if available since the original

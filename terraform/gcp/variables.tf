@@ -206,3 +206,23 @@ variable "run_env" {
   default     = "production"
 }
 
+# --- SearXNG sidecar (Phase 2) ---
+
+variable "searxng_image" {
+  description = "Pinned SearXNG image (digest recommended, e.g. searxng/searxng@sha256:<DIGEST>)"
+  type        = string
+  default     = "searxng/searxng:latest"
+}
+
+variable "searxng_cpu" {
+  description = "vCPU allocation for the SearXNG sidecar container"
+  type        = string
+  default     = "1"
+}
+
+variable "searxng_memory" {
+  description = "Memory allocation for the SearXNG sidecar container"
+  type        = string
+  default     = "512Mi"
+}
+

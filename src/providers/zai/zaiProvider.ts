@@ -180,8 +180,7 @@ export class ZaiProvider
         activePersonaHasElevenlabsVoice: Boolean(
           tomoriState.speech_voice_sample_id ||
             tomoriState.speech_voice_design_prompt?.trim() ||
-            tomoriState.speech_voice_id?.trim() ||
-            tomoriState.elevenlabs_voice_id?.trim(),
+            tomoriState.speech_voice_id?.trim(),
         ),
         activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
         activePersonaVoiceName: tomoriState.speech_voice_name,
@@ -203,7 +202,6 @@ export class ZaiProvider
           manage_message_enabled: tomoriState.config.manage_message_enabled,
           imagegen_enabled: tomoriState.config.imagegen_enabled,
           videogen_enabled: tomoriState.config.videogen_enabled,
-          nai_exclusive_imggen: tomoriState.config.nai_exclusive_imggen,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
@@ -449,8 +447,7 @@ export class ZaiProvider
       activePersonaHasElevenlabsVoice: Boolean(
         request.tomoriState.speech_voice_sample_id ||
           request.tomoriState.speech_voice_design_prompt?.trim() ||
-          request.tomoriState.speech_voice_id?.trim() ||
-          request.tomoriState.elevenlabs_voice_id?.trim(),
+          request.tomoriState.speech_voice_id?.trim(),
       ),
       activePersonaVoiceDesignPrompt: request.tomoriState.speech_voice_design_prompt?.trim() || null,
       activePersonaVoiceName: request.tomoriState.speech_voice_name,
@@ -472,7 +469,6 @@ export class ZaiProvider
         manage_message_enabled: false,
         imagegen_enabled: false,
         videogen_enabled: false,
-        nai_exclusive_imggen: false,
         voice_message_enabled: false,
         thread_creation_enabled: false,
       },

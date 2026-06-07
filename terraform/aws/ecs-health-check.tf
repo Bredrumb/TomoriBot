@@ -7,33 +7,46 @@ locals {
   # Use family:revision to avoid drift when the service expects a specific revision.
   ecs_task_definition_ref            = "${var.ecs_task_family}:${aws_ecs_task_definition.tomoribot.revision}"
   cloudflare_tunnel_token_secret_arn = "${aws_secretsmanager_secret.tomoribot_production.arn}:${var.cloudflare_tunnel_token_secret_key}::"
+  searxng_secret_arn                 = "${aws_secretsmanager_secret.tomoribot_production.arn}:${var.searxng_secret_key}::"
 
-  container_environment = [
-    {
-      name  = "POSTGRES_USER"
-      value = var.postgres_user
-    },
-    {
-      name  = "POSTGRES_PORT"
-      value = var.postgres_port
-    },
-    {
-      name  = "NODE_ENV"
-      value = var.node_env
-    },
-    {
-      name  = "RUN_ENV"
-      value = var.run_env
-    },
-    {
-      name  = "POSTGRES_DB"
-      value = var.postgres_db
-    },
-    {
-      name  = "POSTGRES_HOST"
-      value = local.postgres_host
-    },
-  ]
+  # Containers share the task's loopback interface in awsvpc mode, so the
+  # app reaches the sidecar via http://localhost:8080/.
+  searxng_base_url = var.enable_searxng_sidecar ? "http://localhost:8080/" : ""
+
+  container_environment = concat(
+    [
+      {
+        name  = "POSTGRES_USER"
+        value = var.postgres_user
+      },
+      {
+        name  = "POSTGRES_PORT"
+        value = var.postgres_port
+      },
+      {
+        name  = "NODE_ENV"
+        value = var.node_env
+      },
+      {
+        name  = "RUN_ENV"
+        value = var.run_env
+      },
+      {
+        name  = "POSTGRES_DB"
+        value = var.postgres_db
+      },
+      {
+        name  = "POSTGRES_HOST"
+        value = local.postgres_host
+      },
+    ],
+    var.enable_searxng_sidecar ? [
+      {
+        name  = "SEARXNG_BASE_URL"
+        value = local.searxng_base_url
+      },
+    ] : [],
+  )
 
   app_container_definition = merge(
     {
@@ -65,15 +78,70 @@ locals {
         startPeriod = var.health_check_start_period
       }
     },
-    var.enable_cloudflare_tunnel_sidecar ? {
-      dependsOn = [
-        {
-          containerName = var.cloudflare_tunnel_container_name
-          condition     = "START"
-        },
-      ]
+    var.enable_cloudflare_tunnel_sidecar || var.enable_searxng_sidecar ? {
+      dependsOn = concat(
+        var.enable_cloudflare_tunnel_sidecar ? [
+          {
+            containerName = var.cloudflare_tunnel_container_name
+            condition     = "START"
+          },
+        ] : [],
+        var.enable_searxng_sidecar ? [
+          {
+            containerName = var.searxng_container_name
+            condition     = "HEALTHY"
+          },
+        ] : [],
+      )
     } : {},
   )
+
+  searxng_container_definitions = var.enable_searxng_sidecar ? [
+    {
+      name      = var.searxng_container_name
+      image     = var.searxng_image
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 8080
+          protocol      = "tcp"
+        },
+      ]
+
+      environment = [
+        {
+          name  = "SEARXNG_BASE_URL"
+          value = "http://localhost:8080/"
+        },
+      ]
+
+      secrets = [
+        {
+          name      = "SEARXNG_SECRET"
+          valueFrom = local.searxng_secret_arn
+        },
+      ]
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "wget -q --spider http://localhost:8080/healthz || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 30
+      }
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = var.log_group_name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "searxng"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    },
+  ] : []
 
   cloudflare_tunnel_container_definitions = var.enable_cloudflare_tunnel_sidecar ? [
     {
@@ -103,6 +171,7 @@ locals {
   container_definitions = concat(
     [local.app_container_definition],
     local.cloudflare_tunnel_container_definitions,
+    local.searxng_container_definitions,
   )
 }
 

@@ -12,18 +12,16 @@
 
 ## Search & Information
 **You have access to real-time web search:**
-- ✅ **Web Search**: Search the internet via Brave Search for current information
-- ✅ **Image Search**: Find and share images from the web
-- ✅ **Video Search**: Search for videos online
-- ✅ **News Search**: Get the latest news articles
+- ✅ **Web Search**: Search the internet through the configured search engine chain
+- ✅ **Search Categories**: Use only the categories shown in the active `web_search` schema for this turn
 - ✅ **Web Fetch**: Retrieve and read content from specific URLs
 
 ## Image Generation
 **You can generate images (when enabled by server settings):**
 - ✅ **Image Generation**: Create AI images from text prompts
-- ✅ **Image-to-Image**: Use reference images for edits or variations
+- ✅ **Image Modes**: Use only the reference, inpaint, or outpaint arguments shown in the active `generate_image` schema
 
-**Note**: Image generation requires server permission and a supported provider (Google or OpenRouter).
+**Note**: Image generation requires server permission and a configured supported image backend.
 
 ## Expression & Reactions
 **You can express emotions and react visually:**
@@ -59,7 +57,7 @@
 - ✅ **Manage Messages**: Pin any recent message, and edit/delete recent messages sent through the bot or its characters when allowed
 - ✅ **Interact With Recent Messages**: React to a recent message or send a short backtracking reply to it when something earlier in chat is worth revisiting
 - ✅ **Reveal Message Metadata**: Annotate recent visible turns with `ref_N` handles and sent timestamps when precise message targeting is needed
-- ✅ **Set up Reminders**: Create reminders for users, which you mention when time's up
+- ✅ **Manage Reminders**: Create reminders for users, and edit/delete requester-scoped reminders by ID
 
 ## What You CANNOT Do
 To avoid confusion, here are things you genuinely cannot do:

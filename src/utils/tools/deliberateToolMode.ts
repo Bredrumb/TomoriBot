@@ -1,3 +1,9 @@
+import type { Message } from "discord.js";
+import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
+import {
+  isSupportedImageAttachmentContentType,
+  isSupportedVideoAttachmentContentType,
+} from "@/utils/chat/contextMedia";
 import { log } from "@/utils/misc/logger";
 
 export const PERSONAL_DELIBERATE_TOOL_MODES = ["off", "follow", "on"] as const;
@@ -42,6 +48,10 @@ const REMINDER_ANAPHORA_PATTERN =
   /\b(?:set|create|make|start|schedule|add|try|do)\b.{0,80}\b(?:one|another|it|that|the\s+same)\b.{0,80}\b(?:from\s+now|for\s+(?:a\s+)?(?:longer\s+)?time|seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?)\b/i;
 const REMINDER_TOOL_CORRECTION_PATTERN =
   /\b(?:didn'?t|did\s+not|forgot|failed|should(?:'ve|\s+have))\b.{0,100}\b(?:reminder|timer|alarm|create_task|scheduling?)\s+(?:tool|protocol)?\b/i;
+const REMINDER_UPDATE_PATTERN =
+  /\b(?:edit|update|change|modify|reschedule|move|delay|postpone|cancel|delete|remove|clear|stop)\b.{0,100}\b(?:reminder|timer|alarm|task|scheduled\s+task|task\s+reminder)\b/i;
+const REMINDER_UPDATE_REVERSE_PATTERN =
+  /\b(?:reminder|timer|alarm|task|scheduled\s+task|task\s+reminder)\b.{0,100}\b(?:edit|update|change|modify|reschedule|move|delay|postpone|cancel|delete|remove|clear|stop)\b/i;
 
 function hasReminderCreationIntent(text: string): boolean {
   return (
@@ -52,6 +62,10 @@ function hasReminderCreationIntent(text: string): boolean {
     (REMINDER_TOOL_CORRECTION_PATTERN.test(text) &&
       (RELATIVE_TIME_PATTERN.test(text) || SCHEDULE_TIME_PATTERN.test(text)))
   );
+}
+
+function hasReminderUpdateIntent(text: string): boolean {
+  return REMINDER_UPDATE_PATTERN.test(text) || REMINDER_UPDATE_REVERSE_PATTERN.test(text);
 }
 
 const TOOL_INTENT_PATTERNS: RegExp[] = [
@@ -124,6 +138,7 @@ const TOOL_FOLLOW_UP_PATTERNS: RegExp[] = [
 ];
 
 const WEB_TOOL_NAMES = [
+  "web_search",
   "web-search",
   "felo-search",
   "iask-search",
@@ -134,9 +149,11 @@ const WEB_TOOL_NAMES = [
   "brave_news_search",
   "brave_local_search",
   "brave_summarizer",
+  "fetch_url",
   "fetch",
   "url-metadata",
 ];
+const REMINDER_TOOL_NAMES = ["create_task", "update_task"];
 const MEMORY_TOOL_NAMES = ["create_long_term_memory", "update_long_term_memory"];
 const IMAGE_GENERATION_TOOL_NAMES = ["generate_image", "generate_image_nai"];
 const VIDEO_GENERATION_TOOL_NAMES = ["generate_video"];
@@ -158,7 +175,7 @@ export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
   { value: "image", label: "Image generation", toolNames: IMAGE_GENERATION_TOOL_NAMES },
   { value: "video", label: "Video generation", toolNames: VIDEO_GENERATION_TOOL_NAMES },
   { value: "voice", label: "Voice message", toolNames: VOICE_GENERATION_TOOL_NAMES },
-  { value: "reminder", label: "Reminder/task", toolNames: ["create_task"] },
+  { value: "reminder", label: "Reminder/task", toolNames: REMINDER_TOOL_NAMES },
   { value: "cross-channel", label: "Cross-channel message", toolNames: ["cross_channel_message"] },
   { value: "search", label: "Web search/fetch", toolNames: WEB_TOOL_NAMES },
   { value: "memory", label: "Memory", toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES] },
@@ -289,6 +306,10 @@ export function hasDeliberateToolIntent(
     return true;
   }
 
+  if (hasReminderUpdateIntent(text)) {
+    return true;
+  }
+
   if (CROSS_CHANNEL_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
     return true;
   }
@@ -378,6 +399,10 @@ export function getDeliberateToolIntentResult(
 
   if (hasReminderCreationIntent(text)) {
     addToolMatches(allowedToolNames, matches, ["create_task"], "reminder/timer request", "built-in");
+  }
+
+  if (hasReminderUpdateIntent(text)) {
+    addToolMatches(allowedToolNames, matches, ["update_task"], "reminder/task update request", "built-in");
   }
 
   if (
@@ -560,7 +585,9 @@ export function applyDeliberateToolAllowlist<T extends { name: string }>(params:
     return { builtInTools, mcpFunctionNames };
   }
 
-  const filteredBuiltInTools = builtInTools.filter((tool) => isToolAllowedByDeliberateMode(tool.name, allowedToolNames));
+  const filteredBuiltInTools = builtInTools.filter((tool) =>
+    isToolAllowedByDeliberateMode(tool.name, allowedToolNames),
+  );
   const filteredMcpFunctionNames = filterDeliberateToolNames(mcpFunctionNames, allowedToolNames);
 
   log.info(
@@ -580,4 +607,93 @@ export function resolveDeliberateToolMode(
   if (personalMode === "on") return true;
   if (personalMode === "off") return false;
   return Boolean(serverDeliberateToolMode);
+}
+
+/**
+ * Inspects the most recent messages in a channel to detect tools the model
+ * recently invoked or was asked to invoke, so the deliberate-tool allowlist
+ * can keep those tools exposed for short follow-up turns ("do it again", etc.).
+ * Stops as soon as one message yields any tool names.
+ */
+export function getRecentToolAffordanceNames(
+  recentMessages: Message[],
+  currentMessageId: string,
+  customTriggers?: DeliberateToolTriggerMap | null,
+  clientUserId?: string | null,
+): string[] {
+  const toolNames: string[] = [];
+
+  const lookbackMessages = recentMessages
+    .filter((recentMessage) => recentMessage.id !== currentMessageId)
+    .slice(-8)
+    .reverse();
+
+  for (const msg of lookbackMessages) {
+    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+
+    if (!isPersonaOutput) {
+      const recentIntentResult = getDeliberateToolIntentResult(msg.content, customTriggers);
+      toolNames.push(...recentIntentResult.allowedToolNames);
+      if (toolNames.length > 0) break;
+      continue;
+    }
+
+    const attachments = [...msg.attachments.values()];
+
+    if (attachments.some(isAudioAttachment)) {
+      toolNames.push("generate_voice_message");
+    }
+
+    if (attachments.some((attachment) => isSupportedImageAttachmentContentType(attachment.contentType))) {
+      toolNames.push("generate_image", "generate_image_nai");
+    }
+
+    if (attachments.some((attachment) => isSupportedVideoAttachmentContentType(attachment.contentType))) {
+      toolNames.push("generate_video");
+    }
+
+    if (toolNames.length > 0) break;
+  }
+
+  return Array.from(new Set(toolNames));
+}
+
+export function getRecentTriggeredToolIntentResult(
+  recentMessages: Message[],
+  currentMessageId: string,
+  customTriggers: DeliberateToolTriggerMap | null | undefined,
+  lookbackMessageCount: number,
+  clientUserId?: string | null,
+): DeliberateToolIntentResult {
+  if (lookbackMessageCount <= 0) {
+    return { allowedToolNames: [], matches: [] };
+  }
+
+  const allowedToolNames: string[] = [];
+  const matches: DeliberateToolIntentMatch[] = [];
+  const lookbackMessages = recentMessages
+    .filter((recentMessage) => recentMessage.id !== currentMessageId)
+    .slice(-lookbackMessageCount);
+
+  for (const msg of lookbackMessages) {
+    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+    if (msg.author.bot || isPersonaOutput) continue;
+
+    const recentIntentResult = getDeliberateToolIntentResult(msg.content, customTriggers);
+    allowedToolNames.push(...recentIntentResult.allowedToolNames);
+    matches.push(
+      ...recentIntentResult.matches.map((match) => ({
+        ...match,
+        trigger: `recent message: ${match.trigger}`,
+        source: "follow-up" as const,
+      })),
+    );
+  }
+
+  return {
+    allowedToolNames: Array.from(new Set(allowedToolNames)),
+    matches: Array.from(
+      new Map(matches.map((match) => [`${match.toolName}\0${match.trigger}\0${match.source}`, match])).values(),
+    ),
+  };
 }

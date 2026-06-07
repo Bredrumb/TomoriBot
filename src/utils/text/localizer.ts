@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readdir } from "node:fs/promises";
 import { Glob } from "bun";
 import type { LocaleObject, Locales, LocaleValue, LocalizerVariables } from "../../types/discord/global";
 import { log } from "../misc/logger";
@@ -42,34 +43,48 @@ function dedent(str: string): string {
  */
 export async function initializeLocalizer(): Promise<void> {
   if (isInitialized) {
-    return; // Already initialized
+    return;
   }
 
   try {
-    // Define the pattern for locale files
-    const glob = new Glob("src/locales/*.ts");
+    const localesDir = path.resolve("src", "locales");
+    const entries = await readdir(localesDir, { withFileTypes: true });
 
-    // Use Bun.glob to find all matching files
-    for await (const file of glob.scan(".")) {
-      // Get the locale name (e.g., 'en-US') from the filename
-      const locale: string = path.basename(file, ".ts");
-      try {
-        // Dynamically import the TypeScript module
-        const module = await import(path.resolve(file));
-        // Process all strings in the locale object to remove indentation
-        const processedLocale = processLocaleStrings(module.default);
-        // Assign the default export to the locales object
-        locales[locale] = processedLocale as LocaleObject;
-        log.info(`Loaded locale module: ${locale} from ${file}`);
-      } catch (importError) {
-        log.error(`Failed to import locale file: ${file}`, importError, {
-          errorType: "LocaleLoadError",
-          metadata: { file },
-        });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const locale = entry.name; // e.g., "en-US", "ja"
+      const localeDir = path.join(localesDir, locale);
+      const merged: Record<string, unknown> = {};
+
+      const glob = new Glob("*.ts");
+      for await (const file of glob.scan(localeDir)) {
+        try {
+          const module = await import(path.join(localeDir, file));
+          const slice = module.default as Record<string, unknown>;
+
+          // Guard against accidental top-level key collisions between category slices.
+          for (const key of Object.keys(slice)) {
+            if (key in merged) {
+              log.warn(`Locale "${locale}": duplicate top-level key "${key}" in ${file} — overwriting`);
+            }
+          }
+
+          Object.assign(merged, slice);
+        } catch (importError) {
+          log.error(`Failed to import locale slice: ${file}`, importError, {
+            errorType: "LocaleLoadError",
+            metadata: { locale, file },
+          });
+        }
+      }
+
+      if (Object.keys(merged).length > 0) {
+        locales[locale] = processLocaleStrings(merged) as LocaleObject;
+        log.info(`Loaded locale: ${locale}`);
       }
     }
 
-    // Log loaded locales for verification during startup
     if (Object.keys(locales).length > 0) {
       log.success(`Successfully loaded locales: [${Object.keys(locales).join(", ")}]`);
       isInitialized = true;
@@ -77,11 +92,11 @@ export async function initializeLocalizer(): Promise<void> {
       log.warn("No locale files were loaded. Check the src/locales directory.");
       throw new Error("No locale files were loaded");
     }
-  } catch (globError) {
-    log.error("Error scanning for locale files", globError, {
+  } catch (error) {
+    log.error("Error scanning for locale files", error, {
       errorType: "LocaleLoadError",
     });
-    throw globError; // Re-throw to indicate initialization failure
+    throw error;
   }
 }
 

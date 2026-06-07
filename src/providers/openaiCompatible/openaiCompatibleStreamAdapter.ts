@@ -15,6 +15,17 @@ import type {
   OpenAICompatibleStreamConfig,
   OpenAICompatibleToolCallDelta,
 } from "@/providers/openaiCompatible/openaiCompatibleTypes";
+import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
+import {
+  applyAssistantPrefixCompletion,
+  CONVERSATION_START_USER_TEXT,
+  ensureLeadingUserTurn,
+  mergeConsecutiveSameRole,
+  type NormalizableMessage,
+  providerRequiresAlternation,
+  providerRequiresPrefixCompletion,
+} from "@/providers/utils/strictChatCompat";
+import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces";
 import type {
   ProcessedChunk,
@@ -22,29 +33,42 @@ import type {
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "@/types/stream/interfaces";
+import { BaseStreamAdapter } from "@/types/stream/interfaces";
 import { log } from "@/utils/misc/logger";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
-import { truncateBeforeGenericSpeakerLine } from "@/utils/text/stringHelper";
+import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 
-export class OpenAICompatibleStreamAdapter implements StreamProvider {
+export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
 
   private readonly toolCallAccumulator = new Map<number, OpenAICompatibleAccumulatedToolCall>();
+  private readonly thinkBlockStripper: ThinkBlockContentStripper;
+  private readonly reasoningContentSpillGuard: ReasoningContentSpillGuard;
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private accumulatedReasoningContent = "";
-  private insideThinkBlock = false;
   private pendingThinkBlockThoughtText = "";
   private speakerGuardEnabled = false;
 
-  constructor(private readonly options: OpenAICompatibleStreamAdapterOptions) {}
+  constructor(private readonly options: OpenAICompatibleStreamAdapterOptions) {
+    super({
+      name: options.providerName,
+      version: options.version ?? "1.0.0",
+      supportsFunctionCalling: true,
+    });
+    this.thinkBlockStripper = new ThinkBlockContentStripper({
+      loggerName: options.adapterName,
+      captureThoughts: options.captureThinkBlocksAsThoughts,
+    });
+    this.reasoningContentSpillGuard = new ReasoningContentSpillGuard(options.adapterName);
+  }
 
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     const openAICompatibleConfig = config as OpenAICompatibleStreamConfig;
@@ -53,8 +77,17 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
     this.toolCallAccumulator.clear();
     this.streamedTextTail = "";
     this.accumulatedReasoningContent = "";
-    this.insideThinkBlock = false;
     this.pendingThinkBlockThoughtText = "";
+    this.reasoningContentSpillGuard.reset();
+    // 1. Build a persona-label matcher used as a fallback `</think>` closer.
+    //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
+    //    (half/full-width colon). Required at a line boundary to keep false positives low —
+    //    mid-sentence mentions like "as Nerine would" won't trigger.
+    const personaName = context.tomoriState.persona_nickname?.trim();
+    const personaSpeakerLabelRegex = personaName
+      ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaName)}\\s*[:：]`, "i")
+      : null;
+    this.thinkBlockStripper.reset(personaSpeakerLabelRegex);
 
     const apiUrl = this.options.resolveApiUrl(openAICompatibleConfig);
     if (!apiUrl) {
@@ -71,7 +104,7 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
     // a per-request basis.  Defaults to true when not provided.
     const supportsSystemRole = this.options.supportsSystemRole?.(apiUrl, config.model ?? "") ?? true;
 
-    const messages = await buildOpenAICompatibleMessages({
+    let messages = await buildOpenAICompatibleMessages({
       adapterName: this.options.adapterName,
       contextItems: context.contextItems,
       currentTurnModelParts: context.currentTurnModelParts,
@@ -79,6 +112,23 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
       seesImages: openAICompatibleConfig.seesImages ?? false,
       supportsSystemRole,
     });
+
+    // Strict role alternation (gated): merge consecutive same-role turns and guarantee a leading
+    // user turn so backends like Claude-behind-a-proxy accept the history. The column on the
+    // active llms row is the source of truth (D4); providerRequiresAlternation is the request-time
+    // safety net so a mis-seeded row can never emit an invalid body. Default OFF → byte-identical
+    // for endpoints that do not need it.
+    const enforceAlternation =
+      providerRequiresAlternation(this.options.providerName) ||
+      (context.tomoriState.llm?.strict_role_alternation ?? false);
+    if (enforceAlternation) {
+      const normalized = ensureLeadingUserTurn(
+        mergeConsecutiveSameRole(messages as unknown as NormalizableMessage[]),
+        () => ({ role: "user", content: CONVERSATION_START_USER_TEXT }),
+      );
+      messages = normalized as unknown as Array<Record<string, unknown>>;
+      log.info(`${this.options.adapterName}: Applied strict role alternation (${messages.length} messages)`);
+    }
 
     if (!config.model) {
       throw new Error("Model must be specified in config");
@@ -111,7 +161,7 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
       const stopStrings = buildProviderStopStrings({
         providerName: this.options.providerName,
         model: config.model,
-        personaName: context.tomoriState.tomori_nickname,
+        personaName: context.tomoriState.persona_nickname,
         configuredStops: context.tomoriState.config.llm_stop_strings,
         includePersonaSpeakerStop,
       });
@@ -155,6 +205,17 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
         config: openAICompatibleConfig,
         context,
       });
+
+      // Assistant prefix-completion (gated): flag the trailing assistant prefill turn with
+      // `prefix: true` so DeepSeek/Z.ai-style "continue this turn" backends extend it. Resolved
+      // from the active llms column (D4) with providerRequiresPrefixCompletion as the safety net
+      // that keeps built-in deepseek/zai/zaicoding ON. Runs last so it targets the final message.
+      const enablePrefixCompletion =
+        providerRequiresPrefixCompletion(this.options.providerName) ||
+        (context.tomoriState.llm?.supports_prefix_completion ?? false);
+      if (enablePrefixCompletion) {
+        applyAssistantPrefixCompletion(requestBody, context.outputPrefill?.trim());
+      }
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -241,7 +302,8 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
 
       for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
         const sanitizedChunk = this.stripThinkBlocksFromChunkContent(chunk);
-        const chunksToEmit = this.splitChunkWithTextAndToolSignals(sanitizedChunk);
+        const spillGuardedChunk = this.applyReasoningContentSpillGuard(sanitizedChunk);
+        const chunksToEmit = this.splitChunkWithTextAndToolSignals(spillGuardedChunk);
 
         for (const chunkToEmit of chunksToEmit) {
           const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(chunkToEmit);
@@ -290,6 +352,16 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
         }
       }
 
+      const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk(config.model);
+      if (flushedSpillChunk) {
+        yield flushedSpillChunk;
+      }
+
+      const flushedThinkChunk = this.flushThinkStripperToChunk(config.model);
+      if (flushedThinkChunk) {
+        yield flushedThinkChunk;
+      }
+
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         yield this.wrapChunk(
           {
@@ -307,6 +379,11 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
         this.speakerGuardPendingTail = "";
       }
     } catch (error) {
+      const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk(config.model);
+      if (flushedSpillChunk) {
+        yield flushedSpillChunk;
+      }
+
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         yield this.wrapChunk(
           {
@@ -324,16 +401,12 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
         this.speakerGuardPendingTail = "";
       }
 
-      yield {
-        data: {
-          error: this.handleProviderError(error),
-        },
-        provider: this.options.providerName,
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      const flushedThinkChunk = this.flushThinkStripperToChunk(config.model);
+      if (flushedThinkChunk) {
+        yield flushedThinkChunk;
+      }
+
+      yield this.createProviderErrorChunk(error);
     }
   }
 
@@ -513,29 +586,8 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
     });
   }
 
-  getProviderInfo(): {
-    name: string;
-    version: string;
-    supportsStreaming: boolean;
-    supportsFunctionCalling: boolean;
-  } {
-    return {
-      name: this.options.providerName,
-      version: this.options.version ?? "1.0.0",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
-  }
-
   private wrapChunk(chunk: OpenAICompatibleStreamChunk, model: string): RawStreamChunk {
-    return {
-      data: chunk,
-      provider: this.options.providerName,
-      metadata: {
-        timestamp: Date.now(),
-        model,
-      },
-    };
+    return this.createRawChunk(chunk, { model });
   }
 
   private stripThinkBlocksFromChunkContent(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {
@@ -549,8 +601,12 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
       return chunk;
     }
 
-    const strippedContent = this.stripThinkBlocks(content);
-    if (strippedContent === content) {
+    const stripped = this.thinkBlockStripper.strip(content);
+    if (stripped.thoughtText.length > 0) {
+      this.pendingThinkBlockThoughtText += stripped.thoughtText;
+    }
+
+    if (!stripped.changed) {
       return chunk;
     }
 
@@ -561,66 +617,12 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
           ...firstChoice,
           delta: {
             ...firstChoice.delta,
-            content: strippedContent,
+            content: stripped.visibleText,
           },
         },
         ...(chunk.choices?.slice(1) ?? []),
       ],
     };
-  }
-
-  private stripThinkBlocks(text: string): string {
-    if (!text) {
-      return "";
-    }
-
-    let output = "";
-    let cursor = 0;
-
-    while (cursor < text.length) {
-      if (!this.insideThinkBlock) {
-        const startIdx = text.indexOf("<think>", cursor);
-        const endIdx = text.indexOf("</think>", cursor);
-
-        if (startIdx === -1 && endIdx === -1) {
-          output += text.slice(cursor);
-          break;
-        }
-
-        if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
-          output += text.slice(cursor, endIdx);
-          cursor = endIdx + "</think>".length;
-          continue;
-        }
-
-        if (startIdx !== -1) {
-          output += text.slice(cursor, startIdx);
-          this.insideThinkBlock = true;
-          cursor = startIdx + "<think>".length;
-        }
-      } else {
-        const endIdx = text.indexOf("</think>", cursor);
-        if (endIdx === -1) {
-          this.captureThinkBlockThoughtText(text.slice(cursor));
-          cursor = text.length;
-          break;
-        }
-
-        this.captureThinkBlockThoughtText(text.slice(cursor, endIdx));
-        this.insideThinkBlock = false;
-        cursor = endIdx + "</think>".length;
-      }
-    }
-
-    return output;
-  }
-
-  private captureThinkBlockThoughtText(text: string): void {
-    if (this.options.captureThinkBlocksAsThoughts === false || !text) {
-      return;
-    }
-
-    this.pendingThinkBlockThoughtText += text;
   }
 
   private consumePendingThinkBlockThoughts(): ThoughtLogEntry[] {
@@ -652,6 +654,98 @@ export class OpenAICompatibleStreamAdapter implements StreamProvider {
       ...chunk,
       thoughts,
     };
+  }
+
+  private applyReasoningContentSpillGuard(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {
+    const firstChoice = chunk.choices?.[0];
+    if (!firstChoice?.delta) {
+      return chunk;
+    }
+
+    this.reasoningContentSpillGuard.observeReasoning(firstChoice.delta.reasoning_content);
+
+    const content = firstChoice.delta.content;
+    if (typeof content !== "string" || content.length === 0) {
+      return chunk;
+    }
+
+    const guardResult = this.reasoningContentSpillGuard.filterContent(content);
+    if (!guardResult.changed) {
+      return chunk;
+    }
+
+    const existingReasoning =
+      typeof firstChoice.delta.reasoning_content === "string" ? firstChoice.delta.reasoning_content : "";
+    const mergedReasoning = guardResult.spilledThought
+      ? existingReasoning
+        ? `${existingReasoning}${guardResult.spilledThought}`
+        : guardResult.spilledThought
+      : (firstChoice.delta.reasoning_content ?? undefined);
+
+    return {
+      ...chunk,
+      choices: [
+        {
+          ...firstChoice,
+          delta: {
+            ...firstChoice.delta,
+            content: guardResult.content,
+            reasoning_content: mergedReasoning,
+          },
+        },
+        ...(chunk.choices?.slice(1) ?? []),
+      ],
+    };
+  }
+
+  private flushReasoningContentSpillGuardToChunk(model: string): RawStreamChunk | null {
+    const guardResult = this.reasoningContentSpillGuard.flush();
+    if (!guardResult.changed || !guardResult.content) {
+      return null;
+    }
+
+    return this.wrapChunk(
+      {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: guardResult.content,
+            },
+          },
+        ],
+      },
+      model,
+    );
+  }
+
+  private flushThinkStripperToChunk(model: string): RawStreamChunk | null {
+    const stripped = this.thinkBlockStripper.flush();
+    if (!stripped.changed) {
+      return null;
+    }
+
+    if (stripped.thoughtText.length > 0) {
+      this.pendingThinkBlockThoughtText += stripped.thoughtText;
+    }
+
+    if (!stripped.visibleText && !stripped.thoughtText) {
+      return null;
+    }
+
+    return this.wrapChunk(
+      {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: stripped.visibleText,
+            },
+          },
+        ],
+      },
+      model,
+    );
   }
 
   private deduplicateChunkTextAgainstRecentStream(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {

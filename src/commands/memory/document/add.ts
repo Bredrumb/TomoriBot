@@ -6,17 +6,22 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import { MessageFlags, EmbedBuilder } from "discord.js";
-import { sql } from "@/utils/db/client";
-import { isRagAvailable } from "@/utils/db/ragDetection";
+import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isBlacklisted, loadAllPersonasForServer, loadEmbeddingModelById } from "@/utils/db/dbRead";
-import { getMemoryLimits } from "@/utils/db/memoryLimits";
+import {
+  llmModelRepo,
+  personaRepository,
+  ragRepository,
+  serverMemoryRepository,
+  userRepository,
+} from "@/utils/db/repositories";
+import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
-import { chunkDocumentText, insertDocumentWithChunks, normalizeDocumentText } from "@/utils/documents/documentService";
 import { extractTextFromBuffer } from "@/utils/documents/textExtractor";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
@@ -118,7 +123,7 @@ export async function execute(
 
   const memoryLimits = getMemoryLimits();
   let tomoriState: TomoriState | null = null;
-  let targetTomoriId: number | null = null;
+  let targetPersonaId: number | null = null;
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
   let responseInteraction: ChatInputCommandInteraction | ModalSubmitInteraction = interaction;
 
@@ -167,7 +172,7 @@ export async function execute(
     // 4. Check blacklist for guild contexts
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (interaction.guild) {
-      const blacklisted = (await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
+      const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
       if (blacklisted && !hasManagePermission) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.user_blacklisted_title",
@@ -246,7 +251,7 @@ export async function execute(
       return;
     }
 
-    const embeddingModel = await loadEmbeddingModelById(embeddingModelId);
+    const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
     if (!embeddingModel) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.document.no_embedding_model_title",
@@ -292,14 +297,14 @@ export async function execute(
     let scopeLabel = localizer(locale, "commands.teach.document.scope_label_serverwide");
 
     // Scope `persona` explicitly uses a string-select modal.
-    // Scope `serverwide` intentionally skips persona selection and stores tomori_id as NULL.
+    // Scope `serverwide` intentionally skips persona selection and stores persona_id as NULL.
     if (scope === "persona") {
-      const allPersonas = await loadAllPersonasForServer(interaction.guild?.id ?? interaction.user.id);
+      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
       const personaSelectOptions: SelectOption[] = allPersonas
-        .filter((persona) => persona.tomori_id !== undefined)
+        .filter((persona) => persona.persona_id !== undefined)
         .map((persona) => ({
-          label: safeSelectOptionText(persona.tomori_nickname),
-          value: persona.tomori_id?.toString() ?? "",
+          label: safeSelectOptionText(persona.persona_nickname),
+          value: persona.persona_id?.toString() ?? "",
           description: persona.is_alter
             ? localizer(locale, "commands.teach.document.alter_persona_description")
             : localizer(locale, "commands.teach.document.main_persona_description"),
@@ -344,9 +349,9 @@ export async function execute(
 
       const selectedPersonaId = personaModalResult.values?.[DOCUMENT_PERSONA_SELECT_ID];
       const selectedPersona =
-        allPersonas.find((persona) => persona.tomori_id?.toString() === selectedPersonaId) ?? null;
+        allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
 
-      if (!selectedPersona?.tomori_id) {
+      if (!selectedPersona?.persona_id) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "general.errors.invalid_option_title",
           descriptionKey: "general.errors.invalid_option_description",
@@ -355,32 +360,19 @@ export async function execute(
         return;
       }
 
-      targetTomoriId = selectedPersona.tomori_id;
+      targetPersonaId = selectedPersona.persona_id;
       scopeLabel = localizer(locale, "commands.teach.document.scope_label_persona", {
-        persona_name: selectedPersona.tomori_nickname,
+        persona_name: selectedPersona.persona_nickname,
       });
     }
 
     // 10. Check duplicate document name in selected scope
-    const existing =
-      targetTomoriId === null
-        ? await sql`
-					SELECT document_id
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					  AND tomori_id IS NULL
-					  AND document_name = ${nameInput}
-					LIMIT 1
-				`
-        : await sql`
-					SELECT document_id
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					  AND tomori_id = ${targetTomoriId}
-					  AND document_name = ${nameInput}
-					LIMIT 1
-				`;
-    if (existing.length > 0) {
+    const duplicateExists = await serverMemoryRepository.documentExistsByName(
+      tomoriState.server_id,
+      targetPersonaId,
+      nameInput,
+    );
+    if (duplicateExists) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.teach.document.duplicate_title",
         descriptionKey: "commands.teach.document.duplicate_description",
@@ -392,21 +384,7 @@ export async function execute(
     }
 
     // 11. Enforce document count limit for selected scope
-    const [docCountRow] =
-      targetTomoriId === null
-        ? await sql`
-					SELECT COUNT(*) as doc_count
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					  AND tomori_id IS NULL
-				`
-        : await sql`
-					SELECT COUNT(*) as doc_count
-					FROM documents
-					WHERE server_id = ${tomoriState.server_id}
-					  AND tomori_id = ${targetTomoriId}
-				`;
-    const docCount = Number(docCountRow?.doc_count || 0);
+    const docCount = await serverMemoryRepository.countDocumentsScoped(tomoriState.server_id, targetPersonaId);
     if (docCount >= memoryLimits.maxDocumentsPerServer) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.teach.document.limit_exceeded_title",
@@ -473,7 +451,7 @@ export async function execute(
       attachment.name ?? "document",
       attachment.contentType,
     );
-    const normalizedText = normalizeDocumentText(rawText);
+    const normalizedText = ragRepository.normalizeText(rawText);
 
     if (!normalizedText) {
       await responseInteraction.editReply({
@@ -503,7 +481,11 @@ export async function execute(
       return;
     }
 
-    const chunks = chunkDocumentText(normalizedText, memoryLimits.documentChunkSize, memoryLimits.documentChunkOverlap);
+    const chunks = ragRepository.chunkText(
+      normalizedText,
+      memoryLimits.documentChunkSize,
+      memoryLimits.documentChunkOverlap,
+    );
 
     if (chunks.length === 0) {
       await responseInteraction.editReply({
@@ -533,23 +515,7 @@ export async function execute(
       return;
     }
 
-    const [chunkCountRow] =
-      targetTomoriId === null
-        ? await sql`
-					SELECT COUNT(*) as chunk_count
-					FROM document_chunks dc
-					JOIN documents d ON d.document_id = dc.document_id
-					WHERE d.server_id = ${tomoriState.server_id}
-					  AND d.tomori_id IS NULL
-				`
-        : await sql`
-					SELECT COUNT(*) as chunk_count
-					FROM document_chunks dc
-					JOIN documents d ON d.document_id = dc.document_id
-					WHERE d.server_id = ${tomoriState.server_id}
-					  AND d.tomori_id = ${targetTomoriId}
-				`;
-    const currentChunkCount = Number(chunkCountRow?.chunk_count || 0);
+    const currentChunkCount = await serverMemoryRepository.countChunksScoped(tomoriState.server_id, targetPersonaId);
     if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
       await responseInteraction.editReply({
         embeds: [
@@ -571,14 +537,15 @@ export async function execute(
       provider: embeddingModel.provider,
       apiKey: embeddingCreds.apiKey,
       model: embeddingModel.codename,
+      modelId: embeddingModel.embedding_model_id,
       inputs: chunks,
       taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_DOCUMENT" : undefined,
       batchSize: 16,
     });
 
-    const documentId = await insertDocumentWithChunks({
+    const documentId = await ragRepository.insertWithChunks({
       serverId: tomoriState.server_id,
-      tomoriId: targetTomoriId,
+      personaId: targetPersonaId,
       uploaderUserId: userData.user_id ?? null,
       documentName: nameInput,
       fileName: attachment.name ?? null,
@@ -613,7 +580,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: targetTomoriId ?? tomoriState?.tomori_id,
+      personaId: targetPersonaId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "teach document",

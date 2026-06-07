@@ -42,13 +42,13 @@ export interface WhitelistCheckResult {
   hasActivePersonaWhitelist: boolean;
 
   /**
-   * The tomori_id values that are restricted somewhere in this server.
+   * The persona_id values that are restricted somewhere in this server.
    * Personas not listed here remain unrestricted and can trigger in any channel.
    */
   restrictedPersonaIds?: number[];
 
   /**
-   * The restricted tomori_id values explicitly allowed in this channel (or its parent, for threads).
+   * The restricted persona_id values explicitly allowed in this channel (or its parent, for threads).
    * Unrestricted personas do not need to appear in this list.
    */
   whitelistedPersonaIds?: number[];

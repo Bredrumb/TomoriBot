@@ -7,8 +7,9 @@ import {
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { loadPresetsForServer, deletePreset, setActivePreset } from "@/utils/db/stPresetDb";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { UserRow, ErrorContext, StPresetRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 
@@ -104,7 +105,7 @@ export async function execute(
 
   try {
     // 2. Load all presets for this server (filter rows where preset_id is defined)
-    const allPresets = (await loadPresetsForServer(tomoriState.server_id)).filter(
+    const allPresets = (await presetRepository.loadPresetsForServer(tomoriState.server_id)).filter(
       (p): p is StPresetRow & { preset_id: number } => p.preset_id !== undefined,
     );
 
@@ -166,7 +167,7 @@ export async function execute(
     let successCount = 0;
     const failedNames: string[] = [];
     for (const preset of presetsToRemove) {
-      const deleted = await deletePreset(preset.preset_id, tomoriState.server_id);
+      const deleted = await presetRepository.deletePreset(preset.preset_id, tomoriState.server_id);
       if (deleted) {
         successCount++;
         log.info(
@@ -196,7 +197,7 @@ export async function execute(
       // loadPresetsForServer orders by created_at ASC — last entry is most recent
       const candidate = remainingPresets[remainingPresets.length - 1] ?? null;
       if (candidate) {
-        const promoted = await setActivePreset(tomoriState.server_id, candidate.preset_id);
+        const promoted = await presetRepository.setActivePreset(tomoriState.server_id, candidate.preset_id);
         if (promoted) {
           promotedPreset = candidate;
           log.success(
@@ -234,7 +235,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: null,
-      tomoriId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: { command: "st-preset remove" },
     };

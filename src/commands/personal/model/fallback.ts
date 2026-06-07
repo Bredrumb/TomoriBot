@@ -1,15 +1,12 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from "discord.js";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { safeReply } from "@/utils/discord/safeReply";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import {
-  loadAvailableModelsForProvider,
-  loadCustomEndpointsForUser,
-  getLlmsByIds,
-  loadCustomEndpointsByIds,
-} from "@/utils/db/dbRead";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import type {
   ErrorContext,
   LlmRow,
@@ -20,11 +17,11 @@ import type {
   CustomEndpointRow,
 } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { upsertUserSavedProviderConfig } from "@/utils/db/dbWrite";
+
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 
 const SLOT_IDS = [
@@ -172,8 +169,8 @@ export async function execute(
     const llmRefIds = existingRefs.filter((r) => r.type === "llm").map((r) => r.id);
     const epRefIds = existingRefs.filter((r) => r.type === "custom_endpoint").map((r) => r.id);
     const [refLlms, refEndpoints] = await Promise.all([
-      llmRefIds.length > 0 ? getLlmsByIds(llmRefIds) : Promise.resolve([]),
-      epRefIds.length > 0 ? loadCustomEndpointsByIds(epRefIds) : Promise.resolve([]),
+      llmRefIds.length > 0 ? llmModelRepo.getLlmsByIds(llmRefIds) : Promise.resolve([]),
+      epRefIds.length > 0 ? llmProviderRepo.loadCustomEndpointsByIds(epRefIds) : Promise.resolve([]),
     ]);
     const llmMap = new Map(refLlms.map((m) => [m.llm_id as number, m]));
     const epMap = new Map(refEndpoints.map((e) => [e.custom_endpoint_id as number, e]));
@@ -196,7 +193,7 @@ export async function execute(
     if (isCustomProvider(selectedProvider)) {
       const parsed = parseCustomProvider(selectedProvider);
       const label = parsed?.label ?? null;
-      const allEndpoints = await loadCustomEndpointsForUser(userData.user_id);
+      const allEndpoints = await llmProviderRepo.loadCustomEndpointsForUser(userData.user_id);
       availableEndpoints = label ? allEndpoints.filter((ep) => ep.label === label && ep.capability === "text") : [];
 
       if (availableEndpoints.length === 0) {
@@ -216,7 +213,7 @@ export async function execute(
       }));
     } else {
       availableModels =
-        (await loadAvailableModelsForProvider(selectedProvider, false, {
+        (await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
           kind: "personal",
           ownerId: userData.user_id,
         })) ?? [];
@@ -297,7 +294,10 @@ export async function execute(
         optionsForModal = [clearOption, ...allModelOptions.slice(startIndex, startIndex + ITEMS_PER_PAGE)];
         modalInteraction = pageButtonInteraction as ButtonInteraction;
       } catch {
-        await interaction.editReply({ embeds: [], components: [] }).catch(() => {});
+        await safeReply(
+          interaction.editReply({ embeds: [], components: [] }),
+          "personal fallback model timeout cleanup",
+        );
         return;
       }
     }
@@ -405,11 +405,9 @@ export async function execute(
     }
 
     // 11. Write — update only fallback refs on the selected provider config
-    const llmOnlyIds = finalRefs.filter((r) => r.type === "llm").map((r) => r.id);
-    const writeOk = await upsertUserSavedProviderConfig(userData.user_id, {
+    const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, {
       ...selectedConfig,
       fallback_model_refs: finalRefs,
-      fallback_llm_ids: llmOnlyIds,
     });
     if (!writeOk) {
       await replyInfoEmbed(modalResult.interaction, locale, {

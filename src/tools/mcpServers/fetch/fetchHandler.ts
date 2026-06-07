@@ -5,6 +5,7 @@
  */
 
 import { log } from "../../../utils/misc/logger";
+import type { ToolContext } from "../../../types/tool/interfaces";
 import type {
   MCPServerBehaviorHandler,
   MCPExecutionContext,
@@ -13,6 +14,7 @@ import type {
   TypedMCPToolResult,
 } from "../../../types/tool/mcpTypes";
 import { MCPTypeGuards } from "../../../types/tool/mcpTypes";
+import { getMCPManager } from "../../../utils/mcp/mcpManager";
 
 /**
  * Fetch MCP Server Behavior Handler
@@ -33,6 +35,58 @@ export class FetchHandler implements MCPServerBehaviorHandler {
    */
   public supportsFunction(functionName: string): boolean {
     return this.SUPPORTED_FUNCTIONS.includes(functionName);
+  }
+
+  /**
+   * Execute the bundled MCP `fetch` function internally and reuse the same
+   * result processing used by normal MCP dispatch.
+   *
+   * This is consumed by `fetchUrl/McpFetchEngine` so the raw global MCP
+   * function can stay hidden from the LLM while preserving formatting,
+   * pagination, error envelopes, and metadata.
+   */
+  public async executeFetchInternal(
+    args: Record<string, unknown>,
+    context: ToolContext,
+  ): Promise<TypedMCPToolResult | null> {
+    const mcpManager = getMCPManager();
+    if (!mcpManager.isReady()) {
+      return null;
+    }
+
+    const functionName = "fetch";
+    const mcpTools = mcpManager.getMCPTools();
+
+    for (const mcpTool of mcpTools) {
+      try {
+        const geminiTool = await mcpTool.tool();
+        const functionNames = geminiTool.functionDeclarations?.map((declaration) => declaration.name) ?? [];
+        if (!functionNames.includes(functionName)) {
+          continue;
+        }
+
+        const callResult = await mcpTool.callTool([{ name: functionName, args }]);
+        if (!callResult || callResult.length === 0) {
+          return null;
+        }
+
+        const mcpContext: MCPExecutionContext = {
+          ...context,
+          serverName: this.serverName,
+          functionName,
+          originalArgs: args,
+          modifiedArgs: args,
+          executionStartTime: Date.now(),
+        };
+
+        return (await this.processResult(functionName, callResult[0], mcpContext, args)) as TypedMCPToolResult;
+      } catch (error) {
+        log.warn("Internal MCP fetch invocation failed:", error as Error);
+        return null;
+      }
+    }
+
+    return null;
   }
 
   /**

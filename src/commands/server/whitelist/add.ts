@@ -5,14 +5,13 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { CooldownType } from "@/types/db/schema";
-import { upsertChannelWhitelist } from "@/utils/db/channelWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
 /**
@@ -82,7 +81,7 @@ export async function execute(
   const errorContext: ErrorContext = {
     userId: user.user_id,
     serverId: null,
-    tomoriId: null,
+    personaId: null,
   };
 
   try {
@@ -111,7 +110,7 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.personaId = tomoriState.persona_id;
 
     // 3. Get command parameters
     const channel = interaction.options.getChannel("channel", true);
@@ -154,17 +153,7 @@ export async function execute(
     }
 
     // 7. Check if channel already has these exact settings
-    const [existingEntry] = await sql<
-      Array<{
-        cooldown_type: CooldownType | null;
-        cooldown_length: number | null;
-      }>
-    >`
-			SELECT cooldown_type, cooldown_length
-			FROM channel_whitelist
-			WHERE server_id = ${tomoriState.server_id}
-			AND channel_disc_id = ${channel.id}
-		`;
+    const existingEntry = await whitelistRepository.getChannelWhitelist(tomoriState.server_id, channel.id);
 
     const currentCooldownType =
       existingEntry?.cooldown_type !== null && existingEntry?.cooldown_length !== null
@@ -198,7 +187,7 @@ export async function execute(
     }
 
     // 8. Upsert channel whitelist
-    await upsertChannelWhitelist(tomoriState.server_id, channel.id, cooldownType, cooldownLength);
+    await whitelistRepository.upsertChannelWhitelist(tomoriState.server_id, channel.id, cooldownType, cooldownLength);
 
     // 9. Invalidate whitelist cache for this server
     invalidateWhitelistCache(interaction.guildId);

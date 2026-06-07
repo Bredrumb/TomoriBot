@@ -1,22 +1,23 @@
 /**
- * Video Model Configuration Command (/config model video)
+ * Video Model Configuration Command (/model video)
  * Allows server admins to select which video generation model Tomori uses.
  * Queries available models filtered by the current LLM provider.
- * Mirrors the /config model image command pattern.
+ * Mirrors the /model image command pattern.
  */
 
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, tomoriConfigSchema } from "@/types/db/schema";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/commands/model/providerPicker";
-import { loadAvailableVideoGenerationModelsForProvider } from "@/utils/db/dbRead";
+import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
+import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
@@ -55,7 +56,7 @@ function getLocalizedDescription(model: VideoGenerationModelRow, locale: string)
   const baseDescription = description || model.model_description || `${model.provider} model`;
 
   const flags: string[] = [];
-  if (model.is_free) flags.push("FREE");
+  if (model.is_free && !isCustomProvider(model.provider)) flags.push("FREE");
 
   const flagPrefix = flags.length > 0 ? `(${flags.join("+")}) ` : "";
   return `${flagPrefix}${baseDescription}`;
@@ -71,19 +72,6 @@ function getVideoModelDisplayName(
 
   const description = model?.model_description?.trim();
   return description && description.length > 0 ? description : null;
-}
-
-async function loadVideoModelById(
-  videoModelId: number,
-): Promise<Pick<VideoGenerationModelRow, "video_model_id" | "codename" | "model_description"> | null> {
-  const [row] = await sql<Array<Pick<VideoGenerationModelRow, "video_model_id" | "codename" | "model_description">>>`
-    SELECT video_model_id, codename, model_description
-    FROM video_generation_models
-    WHERE video_model_id = ${videoModelId}
-    LIMIT 1
-  `;
-
-  return row ?? null;
 }
 
 // Configure the subcommand
@@ -143,7 +131,17 @@ export async function execute(
 
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
-      if (!selectedSavedConfig?.video_model_id) {
+      const customAvailableModels = selectedSavedConfig
+        ? ((await llmModelRepo.loadAvailableVideoGenerationModels(selectedProvider, false, {
+            kind: "server",
+            ownerId: tomoriState.server_id,
+          })) ?? [])
+        : [];
+      const customModelChoices = customAvailableModels.filter(
+        (model): model is typeof model & { video_model_id: number } =>
+          model.video_model_id !== undefined && model.video_model_id !== null,
+      );
+      if (!selectedSavedConfig || customModelChoices.length === 0) {
         await replyInfoEmbed(responseInteraction, locale, {
           titleKey: "commands.model.video.no_models_title",
           descriptionKey: "commands.model.video.no_models_description",
@@ -156,18 +154,32 @@ export async function execute(
         return;
       }
 
-      const currentSelectedId = tomoriState.config.video_model_id ?? null;
-      const [selectedConfiguredModel, previousModel] = await Promise.all([
-        loadVideoModelById(selectedSavedConfig.video_model_id),
-        currentSelectedId ? loadVideoModelById(currentSelectedId) : Promise.resolve(null),
-      ]);
-      const selectedModelName =
-        selectedSavedConfig.custom_model_name ??
-        getVideoModelDisplayName(selectedConfiguredModel) ??
-        getProviderDisplayName(selectedProvider);
+      // Single registered model activates directly; multiple show a string-select picker.
+      const selection = await promptCustomModelSelection({
+        interaction: responseInteraction,
+        locale,
+        choices: customModelChoices.map((model) => ({
+          model,
+          value: model.video_model_id.toString(),
+          label: getVideoModelDisplayName(model) ?? model.codename,
+          description: getLocalizedDescription(model, userData.language_pref),
+        })),
+        modalCustomId: "config_model_video_custom_modal",
+        modalTitleKey: "commands.model.video.modal_title",
+        selectLabelKey: "commands.model.video.select_label",
+        selectDescriptionKey: "commands.model.video.select_description",
+        selectPlaceholderKey: "commands.model.video.select_placeholder",
+      });
+      if (!selection) return;
 
-      if (selectedSavedConfig.video_model_id === currentSelectedId) {
-        await replyInfoEmbed(responseInteraction, locale, {
+      const selectedConfiguredModel = selection.model;
+      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
+      const currentSelectedId = tomoriState.config.video_model_id ?? null;
+      const selectedModelName =
+        getVideoModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
+
+      if (selectedConfiguredModel.video_model_id === currentSelectedId) {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "commands.model.video.already_selected_title",
           descriptionKey: "commands.model.video.already_selected_description",
           descriptionVars: {
@@ -178,16 +190,15 @@ export async function execute(
         return;
       }
 
-      const [updatedRow] = await sql`
-        UPDATE tomori_configs
-        SET video_model_id = ${selectedSavedConfig.video_model_id}
-        WHERE server_id = ${tomoriState.server_id}
-        RETURNING *
-      `;
+      const previousModel = currentSelectedId
+        ? await llmModelRepo.loadVideoGenerationModelById(currentSelectedId)
+        : null;
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+        video_model_id: selectedConfiguredModel.video_model_id,
+      });
 
-      const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-      if (!validatedConfig.success || !updatedRow) {
-        await replyInfoEmbed(responseInteraction, locale, {
+      if (!updated) {
+        await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
           color: ColorCode.ERROR,
@@ -196,7 +207,7 @@ export async function execute(
       }
 
       invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-      await replyInfoEmbed(responseInteraction, locale, {
+      await replyInfoEmbed(customReplyTarget, locale, {
         titleKey: "commands.model.video.success_title",
         descriptionKey: "commands.model.video.success_description",
         descriptionVars: {
@@ -211,7 +222,7 @@ export async function execute(
     }
 
     const availableModels =
-      (await loadAvailableVideoGenerationModelsForProvider(selectedProvider, false, {
+      (await llmModelRepo.loadAvailableVideoGenerationModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       })) ?? [];
@@ -277,12 +288,12 @@ export async function execute(
 
     if (!selectedModel?.video_model_id) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "CommandExecutionError",
         metadata: {
-          command: "config model video",
+          command: "model video",
           guildId: interaction.guild?.id ?? interaction.user.id,
           requestedModelId: selectedModelIdStr,
           availableModels: availableModels.map((m) => m.video_model_id),
@@ -314,37 +325,24 @@ export async function execute(
     }
 
     // 11. Update the config in the database
-    const [updatedRow] = await sql`
-      UPDATE tomori_configs
-      SET video_model_id = ${selectedModel.video_model_id}
-      WHERE server_id = ${tomoriState.server_id}
-      RETURNING *
-    `;
+    const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
+      video_model_id: selectedModel.video_model_id,
+    });
 
-    // 12. Validate the returned data
-    const validatedConfig = tomoriConfigSchema.safeParse(updatedRow);
-
-    if (!validatedConfig.success || !updatedRow) {
+    if (!updated) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config model video",
+          command: "model video",
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename: selectedModel.codename,
           targetVideoModelId: selectedModel.video_model_id,
-          validationErrors: validatedConfig.success ? null : validatedConfig.error.flatten(),
         },
       };
-      await log.error(
-        "Failed to update or validate video model config after DB update",
-        validatedConfig.success
-          ? new Error("Database update returned no rows or unexpected data")
-          : new Error("Updated config data failed validation"),
-        context,
-      );
+      await log.error("Failed to update video model config", new Error("Database update failed"), context);
 
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -354,12 +352,12 @@ export async function execute(
       return;
     }
 
-    // 13. Invalidate cache so next message gets fresh config
+    // 12. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
     // 14. Success message with previous model name
     const previousModel = tomoriState.config.video_model_id
-      ? await loadVideoModelById(tomoriState.config.video_model_id)
+      ? await llmModelRepo.loadVideoGenerationModelById(tomoriState.config.video_model_id)
       : null;
 
     const successOptions = {
@@ -384,26 +382,26 @@ export async function execute(
   } catch (error) {
     // 15. Log error with context
     let serverIdForError: number | null = null;
-    let tomoriIdForError: number | null = null;
+    let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
       const state = await getCachedTomoriState(interaction.guild.id);
       serverIdForError = state?.server_id ?? null;
-      tomoriIdForError = state?.tomori_id ?? null;
+      personaIdForError = state?.persona_id ?? null;
     }
 
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: serverIdForError,
-      tomoriId: tomoriIdForError,
+      personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config model video",
+        command: "model video",
         guildId: interaction.guild?.id ?? interaction.user.id,
         executorDiscordId: interaction.user.id,
         targetVideoModelIdAttempted: selectedModel?.video_model_id,
       },
     };
-    await log.error(`Error executing /config model video for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /model video for user ${userData.user_disc_id}`, error as Error, context);
 
     // 16. Inform user of unknown error
     const replyTarget = modalSubmitInteraction ?? responseInteraction;

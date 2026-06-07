@@ -21,6 +21,11 @@ export interface EmbeddingRequest {
   model: string;
   inputs: string[];
   taskType?: EmbeddingTaskType;
+  /**
+   * Internal embedding model id (DB primary key). Lets custom providers resolve the exact endpoint
+   * when a label hosts several embedding models. Optional; resolution falls back without it.
+   */
+  modelId?: number;
 }
 
 export interface ProviderImageInput {
@@ -122,6 +127,7 @@ export interface ProviderNativeImageReference {
 
 export type ImageGenerationRequest = {
   prompt: string;
+  negativePrompt?: string | null;
   referenceImageDataUrl?: string | null;
   inpaint?: boolean;
   maskPrompt?: string | null;

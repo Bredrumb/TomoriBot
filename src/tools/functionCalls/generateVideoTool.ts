@@ -10,21 +10,21 @@
 import { AttachmentBuilder } from "discord.js";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildReferencedMessageUrl,
   buildVideoToolNoticeDescription,
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { sql } from "../../utils/db/client";
-import { checkVideoQuota, incrementVideoQuota } from "../../utils/quota/videoQuotaManager";
+import { checkVideoQuota, incrementVideoQuota, type VideoQuotaCheckResult } from "../../utils/quota/videoQuotaManager";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { ProviderNativeVideoResolution } from "@/types/provider/featureInterfaces";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -150,22 +150,18 @@ export class GenerateVideoTool extends BaseTool {
   }
 
   /**
-   * Get the video model codename from the database.
+   * Get the video model codename from the database via repository.
    * @param videoModelId - Database ID of the video generation model
    * @returns The model codename string (e.g., "veo-3.1-generate-preview")
    */
   private async getVideoModelCodename(videoModelId: number): Promise<string> {
-    const result = await sql`
-      SELECT codename
-      FROM video_generation_models
-      WHERE video_model_id = ${videoModelId}
-    `.values();
+    const model = await llmModelRepo.loadVideoGenerationModelById(videoModelId);
 
-    if (result.length === 0) {
+    if (!model) {
       throw new Error(`Video model not found in database: ${videoModelId}`);
     }
 
-    return result[0][0] as string;
+    return model.codename;
   }
 
   /**
@@ -347,51 +343,11 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // 3. Check video generation quota
     const userDiscId = context.userId || context.message?.author.id || "";
     if (!userDiscId) {
       return {
         success: false,
         error: "Unable to identify user for quota checking",
-      };
-    }
-
-    const quotaCheck = await checkVideoQuota(context.tomoriState.server_id, userDiscId);
-
-    if (!quotaCheck.allowed) {
-      let errorMessage = "";
-      let resetInfo = "";
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          resetInfo = localizer(context.locale, "tools.generate_video.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          resetInfo = localizer(context.locale, "tools.generate_video.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_video.user_quota_exceeded", { reset_info: resetInfo });
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_video.serverwide_quota_exceeded", {
-          reset_info: resetInfo,
-        });
-      } else {
-        errorMessage = localizer(context.locale, "tools.generate_video.quota_exceeded_generic");
-      }
-
-      return {
-        success: false,
-        error: "Video generation quota exceeded",
-        message: errorMessage,
       };
     }
 
@@ -425,11 +381,59 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
+    // Default to allowed; overwritten below for server-credential users
+    let quotaCheck: VideoQuotaCheckResult = { allowed: true };
+
     try {
-      // 5. Get the video model codename from database
+      // 5. Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "video", {
         userId: context.internalUserId ?? null,
       });
+
+      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      if (creds.source === "server") {
+        quotaCheck = await checkVideoQuota(context.tomoriState.server_id, userDiscId);
+      }
+
+      if (!quotaCheck.allowed) {
+        let errorMessage = "";
+        let resetInfo = "";
+
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+          if (hoursUntilReset < 24) {
+            resetInfo = localizer(context.locale, "tools.generate_video.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+            resetInfo = localizer(context.locale, "tools.generate_video.quota_resets_in_days", {
+              days: daysUntilReset.toString(),
+            });
+          }
+        }
+
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_video.user_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_video.serverwide_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else {
+          errorMessage = localizer(context.locale, "tools.generate_video.quota_exceeded_generic");
+        }
+
+        return {
+          success: false,
+          error: "Video generation quota exceeded",
+          message: errorMessage,
+        };
+      }
+
       const videoModelId = getResolvedCapabilityModelId(creds, "video") ?? context.tomoriState.config.video_model_id;
 
       if (!videoModelId) {
@@ -453,16 +457,16 @@ export class GenerateVideoTool extends BaseTool {
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
-          usesReference ? "genai.video.generating_with_references_description" : "genai.video.generating_description",
+          usesReference ? "tools.video.generating_with_references_description" : "tools.video.generating_description",
         );
         const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
         const extraNoticeLines = usesReference
           ? [
               referencedMessageUrl
-                ? localizer(context.locale, "genai.video.notice_reference_line", {
+                ? localizer(context.locale, "tools.video.notice_reference_line", {
                     message_url: referencedMessageUrl,
                   })
-                : localizer(context.locale, "genai.video.notice_reference_count_line", {
+                : localizer(context.locale, "tools.video.notice_reference_count_line", {
                     count: "1",
                   }),
             ]
@@ -471,13 +475,13 @@ export class GenerateVideoTool extends BaseTool {
           context,
           "video_generation",
           {
-            titleKey: "genai.video.generating_title",
+            titleKey: "tools.video.generating_title",
             description: buildVideoToolNoticeDescription(
               context.locale,
               baseNoticeDescription,
               displayModelName,
               prompt,
-              localizer(context.locale, "genai.video.generating_footer"),
+              localizer(context.locale, "tools.video.generating_footer"),
               extraNoticeLines,
             ),
             color: ColorCode.INFO,
@@ -610,8 +614,10 @@ export class GenerateVideoTool extends BaseTool {
 
       log.success("Successfully generated and sent video to Discord");
 
-      // 13. Increment quota after successful generation
-      await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
+      // 13. Increment quota after successful generation (server providers only)
+      if (creds.source === "server") {
+        await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
+      }
 
       // 14. Build success message
       let successMessage = `Successfully generated and sent video to Discord (message ID: ${sentMessage.id}). The video has been created based on your prompt${

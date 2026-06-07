@@ -10,15 +10,16 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
-import type { ConditioningGroup } from "@/utils/db/conditioningDb";
+import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import type { ConditioningType, TomoriState, UserRow } from "@/types/db/schema";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { deleteConditioningGroupsForPersona, loadConditioningGroupsForPersona } from "@/utils/db/conditioningDb";
+import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { hasManageGuildPermission } from "@/utils/conditioning/conditioningCommandHelper";
-import { loadAllPersonasForServer } from "@/utils/db/dbRead";
+import { personaRepository } from "@/utils/db/repositories";
 
 const CHECKBOX_GROUP_PREFIX = "conditioning_manage_group";
 const PAGE_BUTTON_PREFIX = "conditioning_manage_page_";
@@ -76,7 +77,7 @@ export async function execute(
     return;
   }
 
-  const personas = await loadAllPersonasForServer(interaction.guildId);
+  const personas = await personaRepository.loadAllForServer(interaction.guildId);
   if (personas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",
@@ -125,12 +126,15 @@ export async function execute(
 async function loadManageEntries(personas: TomoriState[]): Promise<ConditioningManageEntry[]> {
   const personaEntries = await Promise.all(
     personas.map(async (persona) => {
-      const groups = await loadConditioningGroupsForPersona(persona.server_id, persona.persona_lineage_id ?? 0);
+      const groups = await conditioningMemoryRepository.loadGroupsForPersona(
+        persona.server_id,
+        persona.persona_lineage_id ?? 0,
+      );
       return groups.map(
         (group): ConditioningManageEntry => ({
           ...group,
           serverId: persona.server_id,
-          personaName: persona.tomori_nickname,
+          personaName: persona.persona_nickname,
           personaLineageId: persona.persona_lineage_id ?? 0,
         }),
       );
@@ -256,7 +260,11 @@ function buildCheckboxGroups(entries: ConditioningManageEntry[], locale: string)
     const options: CheckboxGroupOption[] = chunk.map((entry, index) => {
       const effectiveIndex = i + index;
       const actionLabel = localizer(locale, `commands.${entry.conditioningType}.${entry.actionKey}.history_label`);
-      let description = localizer(locale, "commands.conditioning.manage.option_reason_description", {
+      const descriptionKey =
+        entry.totalCount > 1
+          ? "commands.conditioning.manage.option_reason_description"
+          : "commands.conditioning.manage.option_reason_description_single";
+      let description = localizer(locale, descriptionKey, {
         count: entry.totalCount.toString(),
         reason: entry.reasonText,
       });
@@ -380,7 +388,7 @@ async function persistUpdate(
 
   let deletedRows = 0;
   for (const [personaLineageId, personaGroups] of groupsByPersona) {
-    deletedRows += await deleteConditioningGroupsForPersona(
+    deletedRows += await conditioningMemoryRepository.deleteGroupsForPersona(
       personaGroups[0]?.serverId ?? 0,
       personaLineageId,
       personaGroups.map((group) => ({

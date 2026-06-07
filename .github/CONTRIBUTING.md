@@ -1,6 +1,6 @@
 # Contributing to TomoriBot
 
-Thanks for your interest in contributing! This guide covers what you need to know before opening a PR. For local setup (database, providers, Discord token), see [`docs/core/getting-started.md`](../docs/core/getting-started.md).
+Thanks for your interest in contributing! This guide covers what you need to know before opening a PR. For local setup (database, providers, Discord token), see [`docs/architecture/getting-started.md`](../docs/architecture/getting-started.md).
 
 ## Branching
 
@@ -12,21 +12,9 @@ Thanks for your interest in contributing! This guide covers what you need to kno
 
 ## Quality Gates
 
-The project has no strict coding standards other than what `bun run check` and `bun run lint` enforce. Run these locally before pushing (CI will also enforce them on your PR):
+The project has no strict coding standards other than what the automated tools enforce. Please refer to the [Pull Request Template](./pull_request_template.md) for the exact list of local checks you should run before submitting a PR.
 
-```bash
-bun run check   # TypeScript strict, no unused vars
-bun run lint    # Biome (2-space indent, double quotes)
-```
-
-If you touched the database schema, also run these locally before pushing:
-
-```bash
-bun run check-schema  # schema drift check
-bun run vl-db         # lifecycle validation
-```
-
-Again, CI handles them automatically but running them locally saves time.
+CI handles these automatically, but running them locally and fixing any problems saves time.
 
 ## Scope of Contributions
 

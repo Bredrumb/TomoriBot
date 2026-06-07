@@ -15,7 +15,8 @@ import { AttachmentBuilder } from "discord.js";
 import JSZip from "jszip";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhookManager";
+import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,
@@ -24,7 +25,7 @@ import {
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { sql } from "../../utils/db/client";
 import { decryptApiKey } from "../../utils/security/crypto";
-import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
+import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
 import { extractImagesFromMessage } from "../../utils/image/imageExtractor";
 import { segmentImage } from "../../utils/image/segmentationService";
 import { resolveNaiImageParams, type EffectiveNaiImageParams } from "@/utils/image/naiImageParams";
@@ -40,7 +41,7 @@ import {
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
-import { loadSavedProviderConfig } from "@/utils/db/dbRead";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import {
   CredentialUnavailableError,
   getResolvedCapabilityModelId,
@@ -58,7 +59,7 @@ const NAI_IMAGE_ENABLE_TAG_RESOLUTION =
 const NAI_INPAINT_STRENGTH = Number.parseFloat(process.env.NAI_INPAINT_STRENGTH || "1.0");
 const NAI_ENABLE_CHAR_REFERENCES = (process.env.NAI_ENABLE_CHAR_REFERENCES || "true").toLowerCase() === "true";
 // Intentionally disabled: profile-driven autofill can conflict with inline tags the
-// LLM picks from context.  The LLM reads appearance tags from context and writes them
+// LLM picks from context. The LLM reads Physical Appearance tags from context and writes them
 // directly into `tags` — no DB merge needed.  Re-enable only after conflict resolution
 // strategy is designed and validated.
 const NAI_ENABLE_PROFILE_CHARACTER_AUTOFILL = false;
@@ -106,7 +107,7 @@ function buildCharacterNoticeLines(locale: string, characters: GenerateImageNaiC
         return "";
       }
 
-      return localizer(locale, "genai.image.notice_character_prompt_line", {
+      return localizer(locale, "tools.image.notice_character_prompt_line", {
         index: (index + 1).toString(),
         prompt: `\`${tags}\``,
       });
@@ -132,7 +133,7 @@ interface SuggestTagsResponse {
 export class GenerateImageNaiTool extends BaseTool {
   name = "generate_image_nai";
   description =
-    "Generate an anime-styled AI image with NovelAI diffusion's uncensored models. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Put shared scene, background, composition, camera, lighting, atmosphere, and style tags in 'prompt'. Use 'characters' for visible people in the image, and describe each character fully in that character's 'tags'.";
+    "Generate an anime-styled AI image with NovelAI diffusion's uncensored models. Use this only when the user explicitly asks you to make, draw, generate, create, edit, or continue an image; do not call it for casual visual discussion. If the user asks you to make/draw/generate an image and this tool is available, call this tool instead of only describing the image. Put shared scene, background, composition, camera, lighting, atmosphere, and style tags in 'prompt'. Use 'characters' for visible people in the image, and describe each character fully in that character's 'tags'. When known users or personas have Physical Appearance context, copy the relevant comma-separated tags into the matching character tags.";
   category = "utility" as const;
   requiresFeatureFlag = "image_gen";
   requiresFollowUp = true; // Allow model to generate a text response after image is sent, preventing orphaned self-reply
@@ -163,14 +164,14 @@ export class GenerateImageNaiTool extends BaseTool {
       characters: {
         type: "array",
         description:
-          "Visible characters in the image. Each array item is one character instance. In multi-character scenes, give every intended visible character its own entry and its own role tags. Always describe that character's full appearance plus what they are doing in that same entry's 'tags', especially exact name tag if it exists (eg. hataya misuzu, hatsune miku. If saved appearance tags for a known character are shown in conversation context, copy the relevant ones into 'tags'.",
+          "Visible characters in the image. Each array item is one character instance. In multi-character scenes, give every intended visible character its own entry and its own role tags. Always describe that character's full appearance plus what they are doing in that same entry's 'tags', especially exact name tag if it exists (eg. hataya misuzu, hatsune miku). If Physical Appearance tags for a known character are shown in conversation context, copy the relevant ones into 'tags'.",
         items: {
           type: "object",
           properties: {
             tags: {
               type: "string",
               description:
-                "Required. Imageboard-style tags for this character. Include the full appearance plus that character's role in the scene: hair, eyes, outfit or nude state, body traits, pose, action, expression, gaze, and interaction as needed, and then add [brackets] to strengthen tags to the model, and {braces} to weaken them if needed (eg. '1girl, {{chibi}}, black hair, ponytail, brown eyes, medium breasts, white shirt, black skirt, [[school uniform]], eating, hotdog, sitting'). In multi-character scenes, every visible character needs their own full tags. If saved appearance tags for a known character are shown in conversation context, copy them here to the correct corresponding character before adding scene-specific actions or expressions. For erotic scenes, omit relevant clothing tags and directly use explicit tags saying what's visible and what the act/position is (eg. 'nude, pussy, penis, sex') when that is the intended result.",
+                "Required. Imageboard-style tags for this character. Include the full appearance plus that character's role in the scene: hair, eyes, outfit or nude state, body traits, pose, action, expression, gaze, and interaction as needed, and then add [brackets] to strengthen tags to the model, and {braces} to weaken them if needed (eg. '1girl, {{chibi}}, black hair, ponytail, brown eyes, medium breasts, white shirt, black skirt, [[school uniform]], eating, hotdog, sitting'). In multi-character scenes, every visible character needs their own full tags. If Physical Appearance tags for a known character are shown in conversation context, copy them here to the correct corresponding character before adding scene-specific actions or expressions. For erotic scenes, omit relevant clothing tags and directly use explicit tags saying what's visible and what the act/position is (eg. 'nude, pussy, penis, sex') when that is the intended result.",
             },
             spoken_text: {
               type: "string",
@@ -244,23 +245,38 @@ export class GenerateImageNaiTool extends BaseTool {
   private async sendGeneratedImage(
     context: ToolContext,
     attachment: AttachmentBuilder,
+    attachmentFilename: string,
+    elapsedMs: number,
   ): Promise<import("discord.js").Message> {
-    const recordOutputMessage = (message: import("discord.js").Message): import("discord.js").Message => {
-      context.streamContext?.recordTurnOutputMessage?.(
-        message,
-        context.activePersonaId ?? context.tomoriState.tomori_id,
-      );
-      return message;
-    };
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
+    const componentsPayload = buildGeneratedImageComponentsV2Payload(attachmentFilename, elapsedMs, context.locale);
 
     if (context.webhook && context.personaUsername) {
       try {
-        return recordOutputMessage(
-          await sendWebhookMessageWithIdentity(
+        return await sendWebhookMessageWithIdentity(
+          context.webhook,
+          {
+            files: [attachment],
+            ...componentsPayload,
+            withComponents: true,
+            ...(threadId ? { threadId } : {}),
+          },
+          {
+            username: context.personaUsername,
+            avatarUrl: context.personaAvatarUrl,
+            avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+          },
+        );
+      } catch (error) {
+        log.warn(
+          "Failed to send NAI generated image via webhook with Components V2, retrying without components",
+          error,
+        );
+        try {
+          return await sendWebhookMessageWithIdentity(
             context.webhook,
             {
               files: [attachment],
@@ -271,14 +287,25 @@ export class GenerateImageNaiTool extends BaseTool {
               avatarUrl: context.personaAvatarUrl,
               avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
             },
-          ),
-        );
-      } catch (error) {
-        log.warn("Failed to send NAI generated image via webhook, falling back to bot message", error as Error);
+          );
+        } catch (fallbackError) {
+          log.warn(
+            "Failed to send NAI generated image via webhook, falling back to bot message",
+            fallbackError as Error,
+          );
+        }
       }
     }
 
-    return recordOutputMessage(await context.channel.send({ files: [attachment] }));
+    try {
+      return await context.channel.send({
+        files: [attachment],
+        ...componentsPayload,
+      });
+    } catch (error) {
+      log.warn("Failed to send NAI generated image with Components V2, falling back to attachment-only message", error);
+      return await context.channel.send({ files: [attachment] });
+    }
   }
 
   /**
@@ -365,7 +392,7 @@ export class GenerateImageNaiTool extends BaseTool {
    * @returns Decrypted Google API key, or null if unavailable
    */
   private async resolveGoogleApiKey(context: ToolContext): Promise<string | null> {
-    const savedGoogleConfig = await loadSavedProviderConfig(context.tomoriState.server_id, "google");
+    const savedGoogleConfig = await llmProviderRepo.loadSavedProviderConfig(context.tomoriState.server_id, "google");
     if (savedGoogleConfig?.api_key) {
       return await decryptApiKey(savedGoogleConfig.api_key, savedGoogleConfig.key_version || 1);
     }
@@ -389,14 +416,14 @@ export class GenerateImageNaiTool extends BaseTool {
   private async loadPersonaNaiProfile(serverId: number, personaId: number): Promise<NAIIdentityProfile | null> {
     const rows = await sql<
       Array<{
-        nai_tags: string[] | null;
+        physical_appearance_tags: string[] | null;
         nai_char_ref_url: string | null;
       }>
     >`
-			SELECT nai_tags, nai_char_ref_url
-			FROM tomoris
+			SELECT physical_appearance_tags, nai_char_ref_url
+			FROM personas
 			WHERE server_id = ${serverId}
-			  AND tomori_id = ${personaId}
+			  AND persona_id = ${personaId}
 			LIMIT 1
 		`;
 
@@ -406,7 +433,7 @@ export class GenerateImageNaiTool extends BaseTool {
     }
 
     return {
-      tags: row.nai_tags ?? [],
+      tags: row.physical_appearance_tags ?? [],
       refUrl: row.nai_char_ref_url,
     };
   }
@@ -414,11 +441,11 @@ export class GenerateImageNaiTool extends BaseTool {
   private async loadUserNaiProfileByDiscordId(userDiscId: string): Promise<NAIIdentityProfile | null> {
     const rows = await sql<
       Array<{
-        nai_char_tags: string[] | null;
+        physical_appearance_tags: string[] | null;
         nai_char_ref_url: string | null;
       }>
     >`
-			SELECT nai_char_tags, nai_char_ref_url
+			SELECT physical_appearance_tags, nai_char_ref_url
 			FROM users
 			WHERE user_disc_id = ${userDiscId}
 			LIMIT 1
@@ -430,7 +457,7 @@ export class GenerateImageNaiTool extends BaseTool {
     }
 
     return {
-      tags: row.nai_char_tags ?? [],
+      tags: row.physical_appearance_tags ?? [],
       refUrl: row.nai_char_ref_url,
     };
   }
@@ -471,9 +498,9 @@ export class GenerateImageNaiTool extends BaseTool {
       const rawId = typeof character.id === "string" ? character.id.trim() : undefined;
       const clientUserId = context.client.user?.id;
       const normalizedId = NAI_ENABLE_PROFILE_CHARACTER_AUTOFILL
-        ? (rawId === "self" || (clientUserId && rawId === clientUserId && context.tomoriState.tomori_id != null)) &&
-          context.tomoriState.tomori_id
-          ? `persona:${context.tomoriState.tomori_id}`
+        ? (rawId === "self" || (clientUserId && rawId === clientUserId && context.tomoriState.persona_id != null)) &&
+          context.tomoriState.persona_id
+          ? `persona:${context.tomoriState.persona_id}`
           : rawId
         : undefined;
 
@@ -482,10 +509,10 @@ export class GenerateImageNaiTool extends BaseTool {
         rawId &&
         clientUserId &&
         rawId === clientUserId &&
-        context.tomoriState.tomori_id != null
+        context.tomoriState.persona_id != null
       ) {
         log.info(
-          `[NAI] Remapped bot user ID ${rawId} to active persona persona:${context.tomoriState.tomori_id} for character profile resolution`,
+          `[NAI] Remapped bot user ID ${rawId} to active persona persona:${context.tomoriState.persona_id} for character profile resolution`,
         );
       }
 
@@ -554,7 +581,7 @@ export class GenerateImageNaiTool extends BaseTool {
           );
         } else if (resolvedTags.length === 0) {
           log.warn(
-            `[NAI] Saved character profile for id=${normalizedId} has no NAI appearance tags; inline action tags alone may render as a generic character`,
+            `[NAI] Saved character profile for id=${normalizedId} has no physical appearance tags; inline action tags alone may render as a generic character`,
           );
         }
       }
@@ -870,6 +897,8 @@ export class GenerateImageNaiTool extends BaseTool {
    * @returns Tool result with success/error status
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+    const startedAtMs = Date.now();
+
     // 1. Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
@@ -888,53 +917,11 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
-    // 2. Check image generation quota
     const userDiscId = context.userId || context.message?.author.id || "";
     if (!userDiscId) {
       return {
         success: false,
         error: "Unable to identify user for quota checking",
-      };
-    }
-
-    const quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-
-    if (!quotaCheck.allowed) {
-      // Build user-friendly error message based on quota type
-      let errorMessage = "";
-      let resetInfo = "";
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const resetTime = quotaCheck.resetTime;
-        const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", { reset_info: resetInfo });
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
-          reset_info: resetInfo,
-        });
-      } else {
-        errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
-      }
-
-      return {
-        success: false,
-        error: "Image generation quota exceeded",
-        message: errorMessage,
       };
     }
 
@@ -958,10 +945,61 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
+    // Default to allowed; overwritten below for server-credential users
+    let quotaCheck: QuotaCheckResult = { allowed: true };
+
     try {
+      // Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-nai", {
         userId: context.internalUserId ?? null,
       });
+
+      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      if (creds.source === "server") {
+        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
+      }
+
+      if (!quotaCheck.allowed) {
+        // Build user-friendly error message based on quota type
+        let errorMessage = "";
+        let resetInfo = "";
+
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const resetTime = quotaCheck.resetTime;
+          const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+          if (hoursUntilReset < 24) {
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+            resetInfo = localizer(context.locale, "tools.generate_image.quota_resets_in_days", {
+              days: daysUntilReset.toString(),
+            });
+          }
+        }
+
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.user_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorMessage = localizer(context.locale, "tools.generate_image.serverwide_quota_exceeded", {
+            reset_info: resetInfo,
+          });
+        } else {
+          errorMessage = localizer(context.locale, "tools.generate_image.quota_exceeded_generic");
+        }
+
+        return {
+          success: false,
+          error: "Image generation quota exceeded",
+          message: errorMessage,
+        };
+      }
+
       const resolvedConfig = {
         ...context.tomoriState.config,
         nai_diffusion_model_id:
@@ -994,37 +1032,36 @@ export class GenerateImageNaiTool extends BaseTool {
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
-          isInpaintMode ? "genai.image.editing_description" : "genai.image.generating_description",
+          isInpaintMode ? "tools.image.editing_description" : "tools.image.generating_description",
           isInpaintMode ? { edit_target: editTarget as string } : undefined,
         );
         const extraNoticeLines: string[] = [];
-        if ((context.tomoriState.config.nai_style_tags ?? []).length > 0) {
-          extraNoticeLines.push(localizer(context.locale, "genai.image.notice_nai_tags_help_line"));
-        }
         if (messageId) {
           const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
           extraNoticeLines.push(
             referencedMessageUrl
-              ? localizer(context.locale, "genai.image.notice_reference_line", {
+              ? localizer(context.locale, "tools.image.notice_reference_line", {
                   message_url: referencedMessageUrl,
                 })
-              : localizer(context.locale, "genai.image.notice_reference_count_line", {
+              : localizer(context.locale, "tools.image.notice_reference_count_line", {
                   count: "1",
                 }),
           );
         }
         extraNoticeLines.push(...buildCharacterNoticeLines(context.locale, characters));
+        extraNoticeLines.push("");
+        extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
         await sendToolProgressNotice(
           context,
           isInpaintMode ? "image_editing" : "image_generation",
           {
-            titleKey: isInpaintMode ? "genai.image.editing_title" : "genai.image.generating_title",
+            titleKey: isInpaintMode ? "tools.image.editing_title" : "tools.image.generating_title",
             description: buildImageToolNoticeDescription(
               context.locale,
               baseNoticeDescription,
               baseModelCodename,
               prompt,
-              localizer(context.locale, "genai.image.generating_footer"),
+              localizer(context.locale, "tools.image.generating_footer"),
               extraNoticeLines,
             ),
             color: ColorCode.INFO,
@@ -1037,8 +1074,8 @@ export class GenerateImageNaiTool extends BaseTool {
       //    bypass suggest-tags normalization. Character tags are handled separately
       //    through v4_prompt.caption.char_captions when characters[] is provided.
       const effectiveImageParams = resolveNaiImageParams(context.tomoriState.config);
-      const styleTags = context.tomoriState.config.nai_style_tags ?? [];
-      const configuredNegativeTags = context.tomoriState.config.nai_negative_tags ?? [];
+      const styleTags = context.tomoriState.config.image_default_positive_tags ?? [];
+      const configuredNegativeTags = context.tomoriState.config.image_default_negative_tags ?? [];
       const effectiveNegativePrompt =
         configuredNegativeTags.length > 0 ? configuredNegativeTags.join(", ") : NAI_DEFAULT_NEGATIVE_PROMPT;
 
@@ -1243,21 +1280,30 @@ export class GenerateImageNaiTool extends BaseTool {
           orientation,
           imageParams: effectiveImageParams,
           characterPayload,
+          abortSignal: context.abortSignal,
         });
       }
 
       // 7. Send image to Discord
       const filePrefix = isInpaintMode ? "nai_inpainted" : "nai_generated";
+      const attachmentFilename = `${filePrefix}_${Date.now()}.png`;
       const attachment = new AttachmentBuilder(imageBuffer, {
-        name: `${filePrefix}_${Date.now()}.png`,
+        name: attachmentFilename,
       });
 
-      const sentMessage = await this.sendGeneratedImage(context, attachment);
+      const sentMessage = await this.sendGeneratedImage(
+        context,
+        attachment,
+        attachmentFilename,
+        Date.now() - startedAtMs,
+      );
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);
 
-      // 8. Increment quota after successful generation
-      await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      // 8. Increment quota after successful generation (server providers only)
+      if (creds.source === "server") {
+        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      }
 
       // Build success message with remaining quota info
       let successMessage: string;

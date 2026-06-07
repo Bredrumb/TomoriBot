@@ -15,7 +15,7 @@ type GenerateCustomVideoEndpointParams = Parameters<typeof generateComfyUiVideoV
 export async function generateCustomImageViaEndpoint(
   params: GenerateCustomImageEndpointParams,
 ): Promise<ProviderNativeImageGenerationResult> {
-  const { endpoint, apiKey, prompt, aspectRatio, referenceImages } = params;
+  const { endpoint, apiKey, prompt, negativePrompt, aspectRatio, referenceImages } = params;
 
   if (endpoint.api_style === "comfyui") {
     return generateComfyUiImageViaEndpoint(params);
@@ -27,6 +27,7 @@ export async function generateCustomImageViaEndpoint(
     body: JSON.stringify({
       model: endpoint.model_name,
       prompt,
+      ...(negativePrompt ? { negative_prompt: negativePrompt, negativePrompt } : {}),
       size: aspectRatio,
       ...(referenceImages?.length ? { reference_images: referenceImages } : {}),
     }),

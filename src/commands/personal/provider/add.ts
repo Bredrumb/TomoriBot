@@ -6,9 +6,10 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { loadUserSavedProviderConfig, loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
-import { upsertUserSavedProviderConfig } from "@/utils/db/dbWrite";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { llmProviderRepo } from "@/utils/db/repositories";
+
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
 import { getAllProviderChoices, getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
@@ -18,6 +19,7 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { ModalComponent, SelectOption } from "@/types/discord/modal";
 import { buildUserSavedProviderConfigFromExistingOrDefaults } from "@/utils/provider/savedProviderConfig";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
+import { commandRegistry } from "@/utils/discord/commandRegistry";
 
 const MODAL_CUSTOM_ID = "personal_provider_add_modal";
 const PROVIDER_SELECT_ID = "provider_select";
@@ -63,13 +65,22 @@ export async function execute(
     return;
   }
 
-  const providerChoices = getAllProviderChoices().filter((choice) => !isCustomProvider(choice.value));
-  const existingProviders = new Set((await loadUserSavedProviderConfigs(userData.user_id)).map((row) => row.provider));
+  const providerChoices = getAllProviderChoices().filter(
+    (choice) => !isCustomProvider(choice.value) && choice.value !== "custom",
+  );
+  const existingProviders = new Set(
+    (await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id)).map((row) => row.provider),
+  );
   const existingSuffix = localizer(locale, "commands.personal.provider.add.already_existing_suffix");
   const providerOptions: SelectOption[] = providerChoices.map((choice) => ({
     label: existingProviders.has(choice.value) ? `${choice.name} (${existingSuffix})` : choice.name,
     value: choice.value,
   }));
+  providerOptions.push({
+    label: getProviderDisplayName("custom"),
+    value: "custom",
+    description: localizer(locale, "commands.personal.provider.add.custom_deprecated_description"),
+  });
 
   try {
     const modalComponents: ModalComponent[] = [
@@ -86,7 +97,7 @@ export async function execute(
         labelKey: "commands.personal.provider.add.api_key_label",
         descriptionKey: "commands.personal.provider.add.api_key_description",
         placeholder: "commands.personal.provider.add.api_key_placeholder",
-        required: true,
+        required: false,
         style: TextInputStyle.Short,
         maxLength: 200,
       },
@@ -109,7 +120,25 @@ export async function execute(
 
     const selectedProvider = modalResult.values?.[PROVIDER_SELECT_ID]?.trim().toLowerCase();
     const apiKeyInput = modalResult.values?.[API_KEY_INPUT_ID]?.trim();
-    if (!selectedProvider || !apiKeyInput) {
+    if (!selectedProvider) {
+      return;
+    }
+
+    if (selectedProvider === "custom") {
+      await replyInfoEmbed(modalResult.interaction, locale, {
+        titleKey: "commands.personal.provider.add.custom_moved_title",
+        descriptionKey: "commands.personal.provider.add.custom_moved_description",
+        descriptionVars: {
+          custom_models_add_command: commandRegistry.getCommandMention("personal", "custom-endpoint", "add"),
+          model_text_command: commandRegistry.getCommandMention("personal", "provider", "model-text"),
+          help_custom_models_command: commandRegistry.getCommandMention("help", "custom-endpoint"),
+        },
+        color: ColorCode.WARN,
+      });
+      return;
+    }
+
+    if (!apiKeyInput) {
       return;
     }
 
@@ -137,7 +166,7 @@ export async function execute(
       return;
     }
 
-    const existingConfig = await loadUserSavedProviderConfig(userData.user_id, selectedProvider);
+    const existingConfig = await llmProviderRepo.loadUserSavedProviderConfig(userData.user_id, selectedProvider);
     const encryptionResult = await encryptApiKey(apiKeyInput);
     const savedConfig = await buildUserSavedProviderConfigFromExistingOrDefaults({
       userId: userData.user_id,
@@ -148,7 +177,7 @@ export async function execute(
       existingConfig,
     });
 
-    const upserted = await upsertUserSavedProviderConfig(userData.user_id, savedConfig);
+    const upserted = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, savedConfig);
     if (!upserted) {
       await replyInfoEmbed(modalResult.interaction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -172,7 +201,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "personal provider add",

@@ -18,6 +18,7 @@ import type { Client, Guild, Webhook } from "discord.js";
 import { log } from "@/utils/misc/logger";
 import { buildContext } from "@/utils/text/contextBuilder";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getProviderForTomori } from "@/utils/provider/providerFactory";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -26,7 +27,8 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { FunctionCall } from "@/types/provider/interfaces";
 import { decryptApiKey } from "@/utils/security/crypto";
-import { stripBridgePrefix } from "@/utils/bridge";
+import { stripBridgePrefix } from "@/utils/bridges";
+import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -102,7 +104,7 @@ export interface HiddenImageTurnParams {
     tomoriNickname: string;
     personaPrompt: string | null;
     tomoriAttributes: string[];
-    personaLineageId: number;
+    personaLineageId: number | null;
   };
 }
 
@@ -190,7 +192,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       authorId,
       authorName,
       authorType: isBotMessage ? "persona" : "user",
-      personaName: isBotMessage ? tomoriState.tomori_nickname : null,
+      personaName: isBotMessage ? tomoriState.persona_nickname : null,
       content: msg.cleanContent || msg.content || null,
       createdAt: msg.createdTimestamp,
       imageAttachments: [], // Skip — see comment above
@@ -225,11 +227,16 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     // Use the selected sender persona's identity if an override is provided;
     // otherwise fall back to the active tomoriState values.
     const persona = contextPersonaOverride ?? {
-      tomoriNickname: tomoriState.tomori_nickname,
+      tomoriNickname: tomoriState.persona_nickname,
       personaPrompt: tomoriState.persona_prompt ?? null,
       tomoriAttributes: tomoriState.attribute_list,
       personaLineageId: tomoriState.persona_lineage_id,
     };
+
+    // Reflect any per-channel system prompt override in the hidden planning turn.
+    const channelPromptOverride = tomoriState.server_id
+      ? await getCachedChannelPrompt(tomoriState.server_id, channel.id)
+      : null;
 
     const contextBuild = await buildContext({
       guildId: guild.id,
@@ -245,8 +252,9 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       tomoriNickname: persona.tomoriNickname,
       tomoriAttributes: persona.tomoriAttributes,
       tomoriConfig: tomoriState.config,
+      channelPromptOverride,
       personaPrompt: persona.personaPrompt,
-      personaLineageId: persona.personaLineageId,
+      personaLineageId: persona.personaLineageId ?? undefined,
       isDMChannel: false,
       triggererUserId: internalUserId ?? undefined,
     });
@@ -269,8 +277,8 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   // Build the tool call instruction dynamically based on the selected backend.
   const toolInstruction =
     backend === "current_provider"
-      ? `You MUST call the generate_image tool immediately. Use the conversation context above to construct a detailed prompt describing the scene.`
-      : `You MUST call the generate_image_nai tool immediately. Use the conversation context above to construct danbooru-style tags describing the scene.`;
+      ? `You MUST call the generate_image tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct a detailed prompt describing the scene.`
+      : `You MUST call the generate_image_nai tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct danbooru-style tags describing the scene.`;
 
   const dirLines: string[] = [
     toolInstruction,
@@ -291,6 +299,17 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     metadataTag: ContextItemTag.DIALOGUE_HISTORY,
   };
   contextItems = [...contextItems, agentDirective];
+  // This internal planner is intentionally allowed to inspect image context even when the text model's
+  // public OpenRouter capability metadata would normally say otherwise.
+  const mediaResolutionLlm = {
+    ...tomoriState.llm,
+    sees_images: true,
+    ...(tomoriState.llm.llm_provider === "openrouter" ? { llm_codename: "other-model" } : {}),
+  };
+  contextItems = await resolveMediaForModel(contextItems, {
+    ...tomoriState,
+    llm: mediaResolutionLlm,
+  });
 
   // 6. Set up streaming context flags for the hidden turn.
   const targetToolName = backend === "current_provider" ? "generate_image" : "generate_image_nai";

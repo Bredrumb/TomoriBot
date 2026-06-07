@@ -6,34 +6,24 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
-import { sql } from "@/utils/db/client";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
   promptWithRawModal,
-  promptWithUnacknowledgedConfirmation,
-  replyComponentsV2Status,
-  replyInfoEmbed,
-  type AvatarSessionCache,
-  replyPaginatedPersonaChoicesV2,
   safeSelectOptionText,
-  updateButtonComponentsV2Status,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
+import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import {
-  isBlacklisted,
-  loadAllPersonasForServer,
-  loadPersonalMemoriesForUserLineage,
-  loadTomoriState,
-  getPrivacyLevel,
-} from "@/utils/db/dbRead";
+import { personaRepository, personalMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
-import { getMemoryLimits, validateMemoryContent } from "@/utils/db/memoryLimits";
+import { getMemoryLimits, validateMemoryContent } from "@/utils/misc/memoryLimits";
 import type { SelectOption } from "@/types/discord/modal";
 import {
-  personalMemorySchema,
   PrivacyLevel,
   type ErrorContext,
   type PersonalMemoryRow,
@@ -68,38 +58,14 @@ async function performPersonalMemoryEdit(
   locale: string,
   suppressSuccessReply = false,
 ): Promise<boolean> {
-  const [updatedMemory] = await sql`
-    UPDATE personal_memories
-    SET content = ${newContent}, tags = ${sql.array(newTags)}
-    WHERE personal_memory_id = ${memoryToEdit.personal_memory_id}
-      AND user_id = ${userData.user_id}
-    RETURNING *
-  `;
-
-  const validationResult = personalMemorySchema.safeParse(updatedMemory);
-  if (!validationResult.success || !updatedMemory) {
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      serverId: null,
-      tomoriId: null,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "memory personal edit",
-        table: "personal_memories",
-        operation: "UPDATE",
-        personalMemoryId: memoryToEdit.personal_memory_id,
-        validationErrors: validationResult.success ? null : validationResult.error.flatten(),
-      },
-    };
-
-    await log.error(
-      "Failed to update or validate personal memory",
-      validationResult.success
-        ? new Error("Database update returned no rows or unexpected data")
-        : new Error("Updated personal memory failed validation"),
-      context,
+  if (!memoryToEdit.personal_memory_id) {
+    log.error(
+      `performPersonalMemoryEdit called with memory row missing personal_memory_id for user ${userData.user_disc_id}`,
     );
-
+    return false;
+  }
+  const ok = await personalMemoryRepository.edit(memoryToEdit.personal_memory_id, newContent, newTags ?? []);
+  if (!ok) {
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
       descriptionKey: "general.errors.update_failed_description",
@@ -172,7 +138,7 @@ export async function execute(
 
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-    tomoriState = await loadTomoriState(serverDiscId);
+    tomoriState = await personaRepository.loadState(serverDiscId);
     const memoryScope =
       (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
       PERSONAL_SCOPE_VALUE;
@@ -191,7 +157,7 @@ export async function execute(
       personalizationDisabledWarning = true;
     }
 
-    const userPrivacyLevel = await getPrivacyLevel(interaction.user.id);
+    const userPrivacyLevel = await userRepository.getPrivacyLevel(interaction.user.id);
     if (userPrivacyLevel === PrivacyLevel.FULL) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.memory.personal.opted_out_error_title",
@@ -203,7 +169,7 @@ export async function execute(
     }
 
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
-      const allPersonas = await loadAllPersonasForServer(serverDiscId);
+      const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -225,8 +191,7 @@ export async function execute(
         });
 
         if (!personaSelection.success) {
-          if (personaSelection.reason === "cancelled" || personaSelection.reason === "fatal") return;
-          continue;
+          return;
         }
         if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
           return;
@@ -262,7 +227,7 @@ export async function execute(
         }
 
         const currentMemories = userData.user_id
-          ? (await loadPersonalMemoriesForUserLineage(userData.user_id, targetLineageId, false)).filter(
+          ? (await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)).filter(
               (memory) => memory.persona_lineage_id === targetLineageId,
             )
           : [];
@@ -375,7 +340,7 @@ export async function execute(
               customId: MEMORY_TAGS_INPUT_ID,
               labelKey: "Memory Tags",
               descriptionKey:
-                "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+                "Up to 5 comma-separated case-sensitive keyword or #channel tags, see '/help memory tagging set'",
               placeholder: "mango,drinks,snacks",
               style: TextInputStyle.Short,
               required: false,
@@ -499,11 +464,11 @@ export async function execute(
     }
 
     const userIsBlacklisted = interaction.guild
-      ? ((await isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
+      ? ((await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false)
       : false;
 
     const globalMemories = userData.user_id
-      ? await loadPersonalMemoriesForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
+      ? await personalMemoryRepository.loadForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
       : [];
 
     if (globalMemories.length === 0) {
@@ -594,7 +559,7 @@ export async function execute(
           customId: MEMORY_TAGS_INPUT_ID,
           labelKey: "Memory Tags",
           descriptionKey:
-            "Up to 5 comma-separated case-sensitive tags, use '/memory tagging set' to enable tagged memory",
+            "Up to 5 comma-separated case-sensitive keyword or #channel tags, see '/help memory tagging set'",
           placeholder: "mango,drinks,snacks",
           style: TextInputStyle.Short,
           required: false,
@@ -716,7 +681,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      tomoriId: selectedPersona?.tomori_id ?? tomoriState?.tomori_id,
+      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory personal edit",

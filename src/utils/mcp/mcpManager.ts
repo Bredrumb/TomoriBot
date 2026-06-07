@@ -7,10 +7,10 @@
 
 import { type CallableTool, mcpToTool } from "@google/genai";
 import { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { log } from "../misc/logger";
 import { getMCPConfigManager } from "./mcpConfig";
 import type { EnhancedMCPServerConfig } from "../../types/tool/mcpTypes";
+import { BannerFilteringStdioClientTransport } from "@/utils/mcp/bannerFilteringStdioTransport";
 
 /**
  * MCP server configuration interface
@@ -75,23 +75,6 @@ export class MCPManager {
       return;
     }
 
-    // Intercept stdout globally to filter MCP server advertisements
-    const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-    // biome-ignore lint/suspicious/noExplicitAny: /** biome-ignore-all lint/suspicious/noExplicitAny: Monkey-patch to catch all stdout  */
-    process.stdout.write = ((chunk: any, ...args: any[]): boolean => {
-      const output = chunk.toString();
-      // Filter out advertisement boxes from MCP servers
-      const isAdvertisement = output.includes("╔") || output.includes("║") || output.includes("╚");
-
-      // Pass through non-advertisement output
-      if (!isAdvertisement) {
-        return originalStdoutWrite(chunk, ...args);
-      }
-
-      // Silently discard advertisement lines
-      return true;
-    }) as typeof process.stdout.write;
-
     log.info("Starting MCP server initialization...");
     const startTime = Date.now();
 
@@ -114,9 +97,6 @@ export class MCPManager {
     );
 
     await Promise.all(initPromises);
-
-    // Restore original stdout after all servers initialized
-    process.stdout.write = originalStdoutWrite;
 
     const duration = Date.now() - startTime;
     const successCount = this.mcpClients.size;
@@ -163,7 +143,7 @@ export class MCPManager {
 
       // Create transport with environment variables
       // Set NO_COLOR to suppress ANSI color codes which can interfere with filtering
-      const transport = new StdioClientTransport({
+      const transport = new BannerFilteringStdioClientTransport({
         command,
         args,
         env: Object.fromEntries(

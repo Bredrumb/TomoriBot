@@ -82,14 +82,36 @@ export function getCustomProviderDisplayName(provider: string): string {
   return label ? `Custom Endpoint: ${label}` : "Custom Endpoint";
 }
 
-export function buildSyntheticCustomModelCodename(provider: string, capability: CustomEndpointCapability): string {
-  const slug = provider
+function slugifyCodenamePart(value: string): string {
+  return value
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
 
-  return `${slug}-${capability}`;
+/**
+ * Builds the synthetic model codename for a custom endpoint.
+ *
+ * When a model name is supplied it is appended as a slug so several models can coexist under one
+ * provider+capability with distinct codenames (e.g. `custom-s5-home-text-llama3-1-8b`). When omitted
+ * (single unnamed model, e.g. KoboldCpp), the legacy `{slug}-{capability}` form is preserved so
+ * pre-existing rows keep their codename. The model slug is capped to keep codenames within the
+ * Discord select-option value limit when used as a picker value.
+ *
+ * @param provider   - Internal custom provider name (e.g. "custom:s5:home")
+ * @param capability - Endpoint capability
+ * @param modelName  - Optional model name used as the disambiguating suffix
+ */
+export function buildSyntheticCustomModelCodename(
+  provider: string,
+  capability: CustomEndpointCapability,
+  modelName?: string | null,
+): string {
+  const slug = slugifyCodenamePart(provider);
+  const modelSlug = modelName ? slugifyCodenamePart(modelName).slice(0, 60) : "";
+
+  return modelSlug ? `${slug}-${capability}-${modelSlug}` : `${slug}-${capability}`;
 }
 
 export function formatCustomEndpointModelDisplay(

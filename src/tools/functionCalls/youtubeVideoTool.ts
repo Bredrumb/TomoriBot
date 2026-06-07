@@ -146,10 +146,10 @@ export class YouTubeVideoTool extends BaseTool {
       context,
       "youtube_processing",
       {
-        titleKey: "genai.video.youtube_processing_title",
-        descriptionKey: "genai.video.youtube_processing_description",
+        titleKey: "tools.video.youtube_processing_title",
+        descriptionKey: "tools.video.youtube_processing_description",
         descriptionVars: { video_url: youtubeUrl },
-        footerKey: "genai.video.youtube_processing_footer",
+        footerKey: "tools.video.youtube_processing_footer",
         color: ColorCode.INFO,
       },
       "YouTubeVideoTool",

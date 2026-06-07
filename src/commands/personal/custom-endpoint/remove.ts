@@ -2,13 +2,14 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { CustomEndpointCapability, CustomEndpointRow, ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { loadCustomEndpointsForUser } from "@/utils/db/dbRead";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import {
   buildCustomEndpointCheckboxGroups,
   collectCheckedCustomEndpointValues,
   MAX_CUSTOM_MODEL_GROUPS,
 } from "@/utils/discord/customModelRemovalModal";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { removeCustomEndpointRegistration } from "@/utils/provider/customEndpointService";
 import { localizer } from "@/utils/text/localizer";
@@ -35,7 +36,9 @@ function formatRemovedEndpoints(locale: string, endpoints: CustomEndpointRow[]):
 
   for (const endpoint of endpoints) {
     const existing = grouped.get(endpoint.capability) ?? [];
-    existing.push(`\`${endpoint.label}\``);
+    // Surface the model name when present so removing one model among several reads clearly.
+    const display = endpoint.model_name?.trim() ? `${endpoint.label} (${endpoint.model_name.trim()})` : endpoint.label;
+    existing.push(`\`${display}\``);
     grouped.set(endpoint.capability, existing);
   }
 
@@ -69,7 +72,7 @@ export async function execute(
   }
 
   try {
-    const registeredEndpoints = await loadCustomEndpointsForUser(userData.user_id);
+    const registeredEndpoints = await llmProviderRepo.loadCustomEndpointsForUser(userData.user_id);
     if (registeredEndpoints.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.custom_models.remove.none_title",
@@ -124,17 +127,25 @@ export async function execute(
       return;
     }
 
+    // Remove each selected model by its endpoint id; the service handles synthetic-model deletion
+    // and precise active-selection cleanup, leaving sibling models under the same label intact.
     const removedEndpoints: CustomEndpointRow[] = [];
 
     for (const endpoint of endpointsToRemove) {
+      if (endpoint.custom_endpoint_id == null) {
+        continue;
+      }
+
       const removed = await removeCustomEndpointRegistration({
         scope: {
           kind: "personal",
           ownerId: userData.user_id,
           baseConfig: tomoriState.config,
         },
+        customEndpointId: endpoint.custom_endpoint_id,
         label: endpoint.label,
         capability: endpoint.capability,
+        modelRefId: endpoint.model_ref_id ?? null,
       });
 
       if (removed) {
@@ -163,7 +174,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "personal custom-endpoint remove",

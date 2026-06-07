@@ -1,6 +1,6 @@
 import type { Client } from "discord.js";
 import { log } from "../utils/misc/logger";
-import { getNextRandomTriggerTime, getNextReminderTime } from "../utils/db/dbRead";
+import { serverScheduleRepository } from "@/utils/db/repositories";
 import { RandomTriggerProcessor } from "./randomTriggerProcessor";
 import { ReminderProcessor } from "./reminderProcessor";
 import {
@@ -167,8 +167,8 @@ export class ScheduledWorkCoordinator {
 
     this.clearWakeTimeout();
 
-    const nextReminderTime = await getNextReminderTime();
-    const nextRandomTriggerTime = await getNextRandomTriggerTime();
+    const nextReminderTime = await serverScheduleRepository.getNextReminderTime();
+    const nextRandomTriggerTime = await serverScheduleRepository.getNextTriggerTime();
     const nextDueTime = this.getEarliestDate(nextReminderTime, nextRandomTriggerTime);
 
     if (!nextDueTime) {

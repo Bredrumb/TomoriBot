@@ -6,7 +6,7 @@
  */
 
 import { HumanizerDegree } from "../db/schema";
-import { createSentenceSplitRegex } from "../../utils/text/stringHelper";
+import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
 
 /**
  * Discord streaming constants extracted from the original implementation
@@ -103,6 +103,9 @@ export interface TextProcessingConfig {
   mentionMap?: Map<string, string[]>;
   mentionIdSet?: Set<string>;
   botName: string;
+  /** Extra names the active persona answers to (lore/default name, trigger names) — used to strip
+   *  a leaked multi-name opening label chain like "Tomori: Lilya: ..." */
+  botNameAliases: string[];
   registeredSpeakerNamesLower: Set<string>;
   maxMessageLength: number;
   uncensorUnicodeSpacesEnabled?: boolean;

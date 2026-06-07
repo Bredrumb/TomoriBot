@@ -1,0 +1,34 @@
+{
+  "_doc": "Keys (or prefixes) the locale pruner must never delete, regardless of static analysis. Use this when a key is provably referenced at runtime but the scanner can't see it (joined-string roots, cross-function plumbing, property access in templates, etc.). Add entries with a one-line comment in the trailing _notes block so reviewers can challenge each one.",
+  "preservedPrefixes": [
+    "commands.personal.deliberatetriggermode",
+    "commands.personal.deliberatetoolmode",
+    "commands.personal.custom_models.remove",
+    "commands.config.custom_models.remove",
+    "commands.config.custom_models.capability_modal",
+    "commands.openrouter.models.remove",
+    "commands.help.speech",
+    "commands.help.transcription",
+    "commands.config.thinking-level",
+    "commands.personal.provider",
+    "commands.server.deliberate-tool-trigger",
+    "genai.google",
+    "genai.novelai"
+  ],
+  "preservedKeys": [],
+  "_notes": {
+    "commands.personal.deliberatetriggermode": "Dynamic ${selectedMode}_title|description via getString('mode'); selectedMode flows through getString return value the scanner can't follow.",
+    "commands.personal.deliberatetoolmode": "Same pattern as deliberatetriggermode.",
+    "commands.personal.custom_models.remove": "checkbox_{capability}_label[_continued] built in customModelRemovalModal.ts via joined-string root ['commands','personal','custom_models','remove'].join('.').",
+    "commands.config.custom_models.remove": "Same as personal — different root, same joined-string pattern.",
+    "commands.config.custom_models.capability_modal": "${capability}_title and _edit_title built in custom-endpoint add/edit commands via getString/property access.",
+    "commands.openrouter.models.remove": "Same checkbox_{cap}_label[_continued] pattern in openrouterModelRemovalModal.ts.",
+    "commands.help.speech": "${engine}.description/steps_title/steps_description built in help/speech.ts; engine is a loop variable.",
+    "commands.help.transcription": "Same as help.speech but for transcription.",
+    "commands.config.thinking-level": "choice_${value} built in parameters.ts via array iteration.",
+    "commands.personal.provider": "capability_${capability} built in personal/provider/toggle-models.ts via function parameter.",
+    "commands.server.deliberate-tool-trigger": "action_${action} built via ACTIONS const + setStringOption value: ${action}; safety net since the pattern is fragile.",
+    "genai.google": "${messageKey} for streaming error messages; key flows through provider adapter chains the scanner can't trace.",
+    "genai.novelai": "Same as genai.google."
+  }
+}

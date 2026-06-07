@@ -7,9 +7,9 @@ import type { BaseGuildTextChannel, Message, Webhook } from "discord.js";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
-import { getOrCreateWebhook } from "@/utils/discord/webhookManager";
+import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { log } from "@/utils/misc/logger";
-import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
+import { cleanToolReplyText } from "@/utils/discord/toolReplyText";
 import { getReplyContextAuthorName, sendWebhookReplyWithContext } from "@/utils/discord/webhookReply";
 
 const DISCORD_ID_PATTERN = /^\d{17,20}$/;
@@ -158,7 +158,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
 
     if (!DISCORD_ID_PATTERN.test(resolvedId)) {
       const errorMessage = MessageIdMap.isOpaqueKey(normalizedValue)
-        ? "That message reference could not be resolved from the current recent-message context."
+        ? "That message reference is not present in the current recent-message context. Call `reveal_message_metadata` first to expose `ref_N` handles for recent messages, then retry with a ref from that listing."
         : "The message_id value does not look like a valid message reference or Discord message ID.";
 
       return {
@@ -263,14 +263,6 @@ export class InteractWithRecentMessageTool extends BaseTool {
       webhook: webhookResult.webhook,
       threadId: resolveWebhookThreadId(context.channel),
     };
-  }
-
-  private async sanitizeReplyContent(content: string, context: ToolContext): Promise<string> {
-    const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
-      context.personaUsername,
-      context.tomoriState.tomori_nickname,
-    ]);
-    return stripLeadingKnownSpeakerPrefixes(content, speakerNames);
   }
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
@@ -407,7 +399,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
             author: getReplyContextAuthorName(
               targetMessage,
               context.client.user?.id,
-              context.tomoriState.tomori_nickname,
+              context.tomoriState.persona_nickname,
             ),
             preview: buildMessagePreview(targetMessage),
           },
@@ -471,12 +463,12 @@ export class InteractWithRecentMessageTool extends BaseTool {
     }
 
     try {
-      const sanitizedReplyContent = await this.sanitizeReplyContent(interactionContent, context);
+      const sanitizedReplyContent = await cleanToolReplyText(interactionContent, context);
       if (!sanitizedReplyContent) {
         return {
           success: false,
-          error: "Reply content collapsed after removing a speaker label",
-          message: "That reply started with a character name label, so I didn't send it as-is.",
+          error: "Reply content collapsed after cleaning",
+          message: "That reply collapsed to nothing after stripping character-name labels, so I didn't send it as-is.",
           data: {
             status: "reply_content_rejected_speaker_label",
             message_ref: targetRef,
@@ -528,7 +520,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
           author: getReplyContextAuthorName(
             targetMessage,
             context.client.user?.id,
-            context.tomoriState.tomori_nickname,
+            context.tomoriState.persona_nickname,
           ),
           preview: normalizePreview(sanitizedReplyContent),
           used_webhook_context: Boolean(webhookReplyContext && context.personaUsername),

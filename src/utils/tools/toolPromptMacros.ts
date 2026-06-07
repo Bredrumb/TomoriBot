@@ -1,5 +1,4 @@
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
 
@@ -31,6 +30,7 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{memory_update_tool}": "update_long_term_memory",
   "{short_term_memory_tool}": "update_short_term_memory",
   "{task_tool}": "create_task",
+  "{task_update_tool}": "update_task",
   "{cross_channel_tool}": "cross_channel_message",
   "{sticker_tool}": "select_sticker_for_response",
   "{manage_message_tool}": "manage_message",
@@ -63,9 +63,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildWebSearchToolNames,
         [/image/],
         [/video/, /news/, /local/, /fetch/],
-      ) ||
-      pickFirstAvailable(availability.availableToolNames, ["brave_image_search"]) ||
-      resolveWebSearchToolName(availability),
+      ) || resolveWebSearchToolName(availability),
   },
   "{video_search_tool}": {
     currentTarget: "best available video search tool",
@@ -75,9 +73,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildWebSearchToolNames,
         [/video/],
         [/image/, /news/, /local/, /fetch/],
-      ) ||
-      pickFirstAvailable(availability.availableToolNames, ["brave_video_search"]) ||
-      resolveWebSearchToolName(availability),
+      ) || resolveWebSearchToolName(availability),
   },
   "{news_search_tool}": {
     currentTarget: "best available news search tool",
@@ -87,9 +83,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildWebSearchToolNames,
         [/news/],
         [/image/, /video/, /local/, /fetch/],
-      ) ||
-      pickFirstAvailable(availability.availableToolNames, ["brave_news_search"]) ||
-      resolveWebSearchToolName(availability),
+      ) || resolveWebSearchToolName(availability),
   },
   "{url_fetch_tool}": {
     currentTarget: "best available URL fetch tool",
@@ -99,7 +93,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildUrlFetcherToolNames,
         [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
         [/metadata/, /meta/, /head/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["fetch"]),
+      ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url", "fetch"]),
   },
   "{url_metadata_tool}": {
     currentTarget: "best available URL metadata tool",
@@ -109,7 +103,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildUrlFetcherToolNames,
         [/metadata/, /meta/, /head/, /headers/, /preview/, /info/],
         [/fetch/, /read/, /crawl/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["url-metadata", "fetch"]),
+      ) || pickFirstAvailable(availability.availableToolNames, ["url-metadata", "fetch_url", "fetch"]),
   },
 } as const;
 
@@ -147,6 +141,12 @@ export const TOOL_PROMPT_MACRO_DOCS: ToolPromptMacroDocEntry[] = [
     type: "static",
     currentTarget: "create_task",
     notes: "Create reminders or scheduled self-tasks.",
+  },
+  {
+    macro: "{task_update_tool}",
+    type: "static",
+    currentTarget: "update_task",
+    notes: "Update an existing reminder/task by ID, or delete it by sending blank content.",
   },
   {
     macro: "{cross_channel_tool}",
@@ -352,25 +352,23 @@ async function loadToolPromptMacroAvailability(
   }
 
   try {
-    const serverIdNumber = Number.parseInt(stateForContext.server_id, 10);
-    const [{ builtInTools, mcpFunctionNames }, guildToolNames, hasBraveApiKey] = await Promise.all([
+    const [{ builtInTools, mcpFunctionNames }, guildToolNames] = await Promise.all([
       getAvailableToolsWithMCP(provider, stateForContext),
       loadGuildToolFamilyNames(stateForContext.server_id),
-      Number.isFinite(serverIdNumber) ? isBraveSearchAvailable(serverIdNumber) : Promise.resolve(false),
     ]);
+    // Names that are filtered globally in `availability.ts` but might still
+    // appear in MCP listings — kept here as a defensive trim.
     const providerHiddenGlobalFunctions = new Set([
       "felo-search",
       "iask-search",
       "monica-search",
+      "fetch",
       "fetch-url",
       "url-metadata",
     ]);
     const availableToolNames = new Set<string>();
 
     for (const tool of builtInTools) {
-      if (!hasBraveApiKey && tool.name.startsWith("brave_")) {
-        continue;
-      }
       availableToolNames.add(tool.name);
     }
 
@@ -413,7 +411,7 @@ function resolveWebSearchToolName(availability: ToolPromptMacroAvailability): st
       availability.guildWebSearchToolNames,
       [/web/, /search/],
       [/image/, /video/, /news/, /local/, /fetch/, /metadata/, /summar/, /preview/],
-    ) || pickFirstAvailable(availability.availableToolNames, ["brave_web_search", "web-search"])
+    ) || pickFirstAvailable(availability.availableToolNames, ["web_search"])
   );
 }
 

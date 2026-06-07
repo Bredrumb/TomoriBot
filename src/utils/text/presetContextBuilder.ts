@@ -64,9 +64,11 @@ interface MentionParams {
  * When the preset walker encounters a marker, it pulls items from the corresponding bucket.
  */
 const MARKER_TO_TAGS: Record<string, ContextItemTag[]> = {
-  // Primary character blocks
-  main: [ContextItemTag.SYSTEM_HUMANIZER_RULES],
-  charDescription: [ContextItemTag.SYSTEM_HUMANIZER_RULES], // Same tag as main — persona prompt also uses this
+  // Primary character blocks. The per-channel append-mode prompt rides with `main`
+  // so it stays directly after the system prompt; replace mode already replaces the
+  // SYSTEM_HUMANIZER_RULES content upstream, so no separate channel block exists then.
+  main: [ContextItemTag.SYSTEM_HUMANIZER_RULES, ContextItemTag.SYSTEM_CHANNEL_PROMPT],
+  charDescription: [ContextItemTag.SYSTEM_PERSONA_PROMPT], // Persona prompt tag
   charPersonality: [ContextItemTag.SYSTEM_PERSONALITY],
 
   // Dialogue

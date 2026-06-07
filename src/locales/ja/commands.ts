@@ -1,0 +1,70 @@
+// locales/ja/commands.ts
+// Assembler — edit the individual files in commands/ instead.
+
+import speech from "./commands/speech";
+import choices from "./commands/choices";
+import stPreset from "./commands/st-preset";
+import tool from "./commands/tool";
+import data from "./commands/data";
+import persona from "./commands/persona";
+import help from "./commands/help";
+import legal from "./commands/legal";
+import novelai from "./commands/novelai";
+import bot from "./commands/bot";
+import conditioning from "./commands/conditioning";
+import reward from "./commands/reward";
+import punish from "./commands/punish";
+import support from "./commands/support";
+import contribute from "./commands/contribute";
+import donate from "./commands/donate";
+import nsfw from "./commands/nsfw";
+import openrouter from "./commands/openrouter";
+import config from "./commands/config";
+import optionalKey from "./commands/optional-key";
+import server from "./commands/server";
+import personal from "./commands/personal";
+import scheduledTask from "./commands/scheduled-task";
+import memory from "./commands/memory";
+import teach from "./commands/teach";
+import forget from "./commands/forget";
+import generate from "./commands/generate";
+import model from "./commands/model";
+import mcp from "./commands/mcp";
+import capabilities from "./commands/capabilities";
+import provider from "./commands/provider";
+
+export default {
+  commands: {
+    ...speech,
+    ...choices,
+    ...stPreset,
+    ...tool,
+    ...data,
+    ...persona,
+    ...help,
+    ...legal,
+    ...novelai,
+    ...bot,
+    ...conditioning,
+    ...reward,
+    ...punish,
+    ...support,
+    ...contribute,
+    ...donate,
+    ...nsfw,
+    ...openrouter,
+    ...config,
+    ...optionalKey,
+    ...server,
+    ...personal,
+    ...scheduledTask,
+    ...memory,
+    ...teach,
+    ...forget,
+    ...generate,
+    ...model,
+    ...mcp,
+    ...capabilities,
+    ...provider,
+  },
+};

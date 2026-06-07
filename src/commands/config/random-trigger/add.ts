@@ -15,10 +15,11 @@ import {
 } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { getServerRandomTriggerCount, getRandomTriggerByPersonaAndChannel } from "@/utils/db/dbRead";
-import { insertRandomTrigger, upsertRandomTrigger } from "@/utils/db/dbWrite";
+import { serverScheduleRepository } from "@/utils/db/repositories";
+
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 
@@ -147,7 +148,7 @@ export async function execute(
     }
 
     // 4. Check per-server trigger cap before proceeding
-    const triggerCount = await getServerRandomTriggerCount(tomoriState.server_id);
+    const triggerCount = await serverScheduleRepository.getServerTriggerCount(tomoriState.server_id);
     if (triggerCount >= MAX_TRIGGERS_PER_SERVER) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.random-trigger.add.cap_reached_title",
@@ -169,8 +170,8 @@ export async function execute(
         value: RANDOM_PERSONA_VALUE,
       },
       ...allPersonas.map((p) => ({
-        label: safeSelectOptionText(p.tomori_nickname),
-        value: (p.tomori_id ?? 0).toString(),
+        label: safeSelectOptionText(p.persona_nickname),
+        value: (p.persona_id ?? 0).toString(),
       })),
     ];
 
@@ -238,21 +239,22 @@ export async function execute(
     const customPromptRaw = values[PROMPT_INPUT_ID]?.trim() || null;
 
     // Map "random" sentinel → null (DB stores NULL for random selection)
-    const tomoriId = personaRawValue === RANDOM_PERSONA_VALUE ? null : Number.parseInt(personaRawValue, 10);
+    const personaId = personaRawValue === RANDOM_PERSONA_VALUE ? null : Number.parseInt(personaRawValue, 10);
 
     // Checkbox Group: "yes" present in multiValues = respond to self enabled
     const respondToSelf = (modalResult.multiValues?.[RESPOND_TO_SELF_ID] ?? []).includes("yes");
 
     // Resolve display name for success/override embeds
     const personaDisplayName =
-      tomoriId === null
+      personaId === null
         ? localizer(locale, "commands.config.random-trigger.add.persona_random_label")
-        : (allPersonas.find((p) => p.tomori_id === tomoriId)?.tomori_nickname ?? localizer(locale, "general.unknown"));
+        : (allPersonas.find((p) => p.persona_id === personaId)?.persona_nickname ??
+          localizer(locale, "general.unknown"));
 
     const triggerData = {
       serverId: tomoriState.server_id,
       channelDiscId: channel.id,
-      tomoriId,
+      personaId,
       timerHours,
       randomOffsetRange,
       chancePercent: chance,
@@ -263,20 +265,28 @@ export async function execute(
     };
 
     // 10. Override check: if a named persona already has a trigger for this channel, update it
-    if (tomoriId !== null) {
-      const existing = await getRandomTriggerByPersonaAndChannel(tomoriState.server_id, channel.id, tomoriId);
+    if (personaId !== null) {
+      const existing = await serverScheduleRepository.getTriggerByPersonaAndChannel(
+        tomoriState.server_id,
+        channel.id,
+        personaId,
+      );
 
       if (existing?.trigger_id) {
         // UPSERT the existing trigger with new settings
-        const updated = await upsertRandomTrigger(existing.trigger_id, triggerData);
+        const updated = await serverScheduleRepository.upsertTrigger(existing.trigger_id, triggerData);
 
         if (!updated) {
           const context: ErrorContext = {
             serverId: tomoriState.server_id,
             errorType: "DatabaseUpdateError",
-            metadata: { operation: "upsertRandomTrigger", ...triggerData },
+            metadata: { operation: "serverScheduleRepository.upsertTrigger", ...triggerData },
           };
-          await log.error("Failed to upsert random trigger", new Error("upsertRandomTrigger returned null"), context);
+          await log.error(
+            "Failed to upsert random trigger",
+            new Error("serverScheduleRepository.upsertTrigger returned null"),
+            context,
+          );
           await replyInfoEmbed(modalInteraction, locale, {
             titleKey: "general.errors.update_failed_title",
             descriptionKey: "general.errors.update_failed_description",
@@ -300,15 +310,19 @@ export async function execute(
     }
 
     // 11. INSERT new trigger (includes all Random triggers regardless of duplicates)
-    const inserted = await insertRandomTrigger(triggerData);
+    const inserted = await serverScheduleRepository.insertTrigger(triggerData);
 
     if (!inserted) {
       const context: ErrorContext = {
         serverId: tomoriState.server_id,
         errorType: "DatabaseInsertError",
-        metadata: { operation: "insertRandomTrigger", ...triggerData },
+        metadata: { operation: "serverScheduleRepository.insertTrigger", ...triggerData },
       };
-      await log.error("Failed to insert random trigger", new Error("insertRandomTrigger returned null"), context);
+      await log.error(
+        "Failed to insert random trigger",
+        new Error("serverScheduleRepository.insertTrigger returned null"),
+        context,
+      );
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",

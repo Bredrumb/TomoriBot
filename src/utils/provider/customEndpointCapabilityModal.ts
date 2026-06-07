@@ -19,6 +19,9 @@ import type { CustomEndpointCapability } from "@/types/db/schema";
 import type { ModalComponent } from "@/types/discord/modal";
 import { localizer } from "@/utils/text/localizer";
 
+/** Custom ID for the workflow JSON file upload field (used in ComfyUI image/video edit modals). */
+export const WORKFLOW_UPLOAD_ID = "workflow_json";
+
 /** Custom IDs for each modal field */
 export const ModalFieldId = {
   model_name: "model_name",
@@ -56,6 +59,8 @@ export interface ParsedCapabilityModalFields {
   hasTools: boolean;
   seesImages: boolean;
   supportsStructOutput: boolean;
+  strictRoleAlternation: boolean;
+  supportsPrefixCompletion: boolean;
   scriptMarkup: "plain" | "bracket-tags" | "emoji";
   voiceMode: "clone" | "voice-design" | "auto";
   supportsInstruct: boolean;
@@ -83,6 +88,8 @@ export function parseCapabilityModalFields(
     hasTools: false,
     seesImages: false,
     supportsStructOutput: false,
+    strictRoleAlternation: false,
+    supportsPrefixCompletion: false,
     scriptMarkup: "plain",
     voiceMode: "clone",
     supportsInstruct: false,
@@ -98,6 +105,8 @@ export function parseCapabilityModalFields(
       result.hasTools = selectedCaps.has("tools");
       result.seesImages = selectedCaps.has("vision");
       result.supportsStructOutput = selectedCaps.has("structoutput");
+      result.strictRoleAlternation = selectedCaps.has("rolealt");
+      result.supportsPrefixCompletion = selectedCaps.has("prefixcompletion");
       break;
     }
     case "embedding": {
@@ -191,6 +200,22 @@ export function buildCapabilityAddModalComponents(
               description: localizer(
                 locale,
                 "commands.config.custom_models.capability_modal.text_cap_structoutput_description",
+              ),
+            },
+            {
+              value: "rolealt",
+              label: localizer(locale, "commands.config.custom_models.capability_modal.text_cap_rolealt"),
+              description: localizer(
+                locale,
+                "commands.config.custom_models.capability_modal.text_cap_rolealt_description",
+              ),
+            },
+            {
+              value: "prefixcompletion",
+              label: localizer(locale, "commands.config.custom_models.capability_modal.text_cap_prefixcompletion"),
+              description: localizer(
+                locale,
+                "commands.config.custom_models.capability_modal.text_cap_prefixcompletion_description",
               ),
             },
           ],
@@ -341,6 +366,8 @@ export interface EditModalExistingValues {
   hasTools?: boolean;
   seesImages?: boolean;
   supportsStructOutput?: boolean;
+  strictRoleAlternation?: boolean;
+  supportsPrefixCompletion?: boolean;
   voiceMode?: string | null;
   scriptMarkup?: string | null;
   supportsInstruct?: boolean;
@@ -350,12 +377,15 @@ export interface EditModalExistingValues {
 
 /**
  * Build ModalComponent[] for the capability-specific edit modal, pre-filled with existing values.
- * Includes endpoint_url and auth_token as editable text inputs.
+ * For image/video: ComfyUI endpoints include a workflow_json upload slot instead of auth_token
+ * (auth token changes are rare for self-hosted ComfyUI; workflow iteration is the common edit).
+ * Non-ComfyUI image/video endpoints keep auth_token and omit the workflow upload slot.
  */
 export function buildCapabilityEditModalComponents(
   capability: CustomEndpointCapability,
   locale: string,
   existing: EditModalExistingValues,
+  isComfyUi = false,
 ): ModalComponent[] {
   const urlComponent: ModalComponent = {
     customId: ModalFieldId.endpoint_url,
@@ -425,6 +455,24 @@ export function buildCapabilityEditModalComponents(
                 "commands.config.custom_models.capability_modal.text_cap_structoutput_description",
               ),
               default: existing.supportsStructOutput ?? false,
+            },
+            {
+              value: "rolealt",
+              label: localizer(locale, "commands.config.custom_models.capability_modal.text_cap_rolealt"),
+              description: localizer(
+                locale,
+                "commands.config.custom_models.capability_modal.text_cap_rolealt_description",
+              ),
+              default: existing.strictRoleAlternation ?? false,
+            },
+            {
+              value: "prefixcompletion",
+              label: localizer(locale, "commands.config.custom_models.capability_modal.text_cap_prefixcompletion"),
+              description: localizer(
+                locale,
+                "commands.config.custom_models.capability_modal.text_cap_prefixcompletion_description",
+              ),
+              default: existing.supportsPrefixCompletion ?? false,
             },
           ],
           minValues: 0,
@@ -599,8 +647,8 @@ export function buildCapabilityEditModalComponents(
       ];
 
     case "image":
-    case "video":
-      return [
+    case "video": {
+      const baseComponents: ModalComponent[] = [
         {
           customId: ModalFieldId.model_name,
           labelKey: "commands.config.custom_models.capability_modal.model_name_label",
@@ -618,13 +666,30 @@ export function buildCapabilityEditModalComponents(
           value: existing.displayName ?? undefined,
         },
         urlComponent,
-        {
+      ];
+
+      if (isComfyUi) {
+        // Slot 4: workflow upload (replaces auth_token for ComfyUI — token changes are rare,
+        // workflow iteration is the common edit operation for self-hosted ComfyUI instances).
+        baseComponents.push({
+          customId: WORKFLOW_UPLOAD_ID,
+          labelKey: "commands.config.custom_models.capability_modal.workflow_json_label",
+          descriptionKey: "commands.config.custom_models.capability_modal.workflow_json_description",
+          minValues: 0,
+          maxValues: 1,
+          required: false,
+        });
+      } else {
+        baseComponents.push({
           customId: ModalFieldId.auth_token,
           labelKey: "commands.config.custom_models.capability_modal.auth_token_label",
           placeholder: localizer(locale, "commands.config.custom_models.capability_modal.auth_token_placeholder"),
           required: false,
           maxLength: 500,
-        },
-      ];
+        });
+      }
+
+      return baseComponents;
+    }
   }
 }

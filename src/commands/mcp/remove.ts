@@ -5,13 +5,14 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { getCachedGuildMcpConfigs, invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache";
+import { getCachedGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
-import { deleteGuildMcpServer } from "@/utils/db/guildMcpDb";
+import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -152,7 +153,7 @@ export async function execute(
     const deletionResults = await Promise.all(
       configsToRemove.map(async (config) => ({
         config,
-        deleted: await deleteGuildMcpServer(tomoriState.server_id, config.name),
+        deleted: await toolRepository.deleteMcpServer(tomoriState.server_id, config.name, serverId),
       })),
     );
     const removedConfigs = deletionResults.filter((result) => result.deleted).map((result) => result.config);
@@ -160,7 +161,6 @@ export async function execute(
 
     // 8. Invalidate cache and disconnect only after successful DB writes
     if (removedConfigs.length > 0) {
-      invalidateGuildMcpConfigCache(tomoriState.server_id);
       await Promise.all(
         removedConfigs.map((config) => getGuildMcpManager().disconnectGuildServer(tomoriState.server_id, config.name)),
       );
@@ -170,7 +170,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id,
-        tomoriId: null,
+        personaId: null,
         errorType: "DatabaseDeleteError",
         metadata: {
           command: "config mcp remove",
@@ -207,7 +207,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: null,
-      tomoriId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: { command: "config mcp remove" },
     };

@@ -5,15 +5,15 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { SavedProviderConfigRow, UserRow, ErrorContext } from "@/types/db/schema";
-import { loadUserSavedProviderConfigs } from "@/utils/db/dbRead";
-import { deleteUserSavedProviderConfig } from "@/utils/db/dbWrite";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { llmProviderRepo } from "@/utils/db/repositories";
+
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { cleanupCustomProviderArtifacts } from "@/utils/provider/customEndpointService";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { hasRegisteredCustomProvider } from "@/utils/provider/savedProviderConfig";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -46,7 +46,7 @@ export async function execute(
   }
 
   try {
-    const rawSavedProviders = await loadUserSavedProviderConfigs(userData.user_id);
+    const rawSavedProviders = await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id);
     const savedProviders = (
       await Promise.all(
         rawSavedProviders.map(async (config) => {
@@ -82,7 +82,7 @@ export async function execute(
       return;
     }
 
-    const deleted = await deleteUserSavedProviderConfig(userData.user_id, selection.provider);
+    const deleted = await llmProviderRepo.deleteUserSavedProviderConfig(userData.user_id, selection.provider);
     if (!deleted) {
       await replyInfoEmbed(selection.interaction, locale, {
         titleKey: "general.errors.update_failed_title",

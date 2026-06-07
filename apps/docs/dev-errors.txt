@@ -1,0 +1,31 @@
+[31m[1m23:42:32[22m [ERROR][39m [31m[UnhandledRejection][39m Astro detected an unhandled rejection. Here's the stack trace:
+Error: ENOENT: no such file or directory, stat 'C:\Github\TomoriBot\apps\docs\src\pages\index.astro.tmp.58792.3814dc3f343a'
+    at Object.statSync (node:fs:1739:25)
+    at walk (file:///C:/Github/TomoriBot/node_modules/.bun/astro@5.18.2+bc30de2ced087c7c/node_modules/astro/dist/core/routing/manifest/create.js:79:24)
+    at createFileBasedRoutes (file:///C:/Github/TomoriBot/node_modules/.bun/astro@5.18.2+bc30de2ced087c7c/node_modules/astro/dist/core/routing/manifest/create.js:177:5)
+    at createRoutesList (file:///C:/Github/TomoriBot/node_modules/.bun/astro@5.18.2+bc30de2ced087c7c/node_modules/astro/dist/core/routing/manifest/create.js:311:27)
+    at rebuildManifest (file:///C:/Github/TomoriBot/node_modules/.bun/astro@5.18.2+bc30de2ced087c7c/node_modules/astro/dist/vite-plugin-astro-server/plugin.js:105:30)
+    at FSWatcher.emit (node:events:530:35)
+    at FSWatcher.emitWithAll (file:///C:/Github/TomoriBot/node_modules/.bun/vite@6.4.2+144f69348538ea2c/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:23789:8)
+    at FSWatcher._emit (file:///C:/Github/TomoriBot/node_modules/.bun/vite@6.4.2+144f69348538ea2c/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:23881:8)
+    at NodeFsHandler._handleFile (file:///C:/Github/TomoriBot/node_modules/.bun/vite@6.4.2+144f69348538ea2c/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:22466:14)
+    at NodeFsHandler._addToNodeFs (file:///C:/Github/TomoriBot/node_modules/.bun/vite@6.4.2+144f69348538ea2c/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:22703:21)
+  [1mHint:[22m
+[33m    Make sure your promises all have an `await` or a `.catch()` handler.[39m
+  [1mError reference:[22m
+    [36m[4mhttps://docs.astro.build/en/reference/errors/unhandled-rejection/[24m[39m
+  [1mStack trace:[22m
+[2m    at Object.statSync (node:fs:1739:25)
+    [...] See full stack trace in the browser, or rerun with --verbose.[22m
+[31m[1m23:45:31[22m [ERROR][39m [31m[UnknownFilesystemError][39m 
+  [1mHint:[22m
+[33m    It can be caused by many things, eg. missing permissions or a file not existing we attempt to read. Check the error cause for more details.[39m
+  [1mError reference:[22m
+    [36m[4mhttps://docs.astro.build/en/reference/errors/unknown-filesystem-error/[24m[39m
+  [1mStack trace:[22m
+[2m    at C:\Github\TomoriBot\apps\docs\C:\Github\TomoriBot\node_modules\.bun\astro@5.18.2+bc30de2ced087c7c\node_modules\astro\dist\content\mutable-data-store.js:337:13
+    [...] See full stack trace in the browser, or rerun with --verbose.[22m
+  [1mCaused by:[22m
+[2m  EPERM: operation not permitted, rename 'C:\Github\TomoriBot\apps\docs\.astro\data-store.json.tmp' -> 'C:\Github\TomoriBot\apps\docs\.astro\data-store.json'
+    at async Object.rename (node:internal/fs/promises:784:10)
+    [...] See full stack trace in the browser, or rerun with --verbose.[22m

@@ -82,7 +82,7 @@ export interface StreamingContext {
   disableRecentMessageReplyTool?: boolean; // Allow reactions but block tool-sent replies when the stream is already replying
   forceReason?: boolean; // Flag to indicate reasoning mode for enhanced AI responses
   isManuallyTriggered?: boolean; // Flag to indicate this stream was triggered by a manual command
-  suppressUserErrors?: boolean; // Suppress user-facing error embeds during key-rotation retries
+  suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
   forceModelFallback?: boolean; // Force suppress errors regardless of key availability (model fallback retries)
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
   disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)
@@ -153,6 +153,9 @@ export interface ToolContext {
 
   // Opaque message ID map for resolving media_N/ref_N keys back to Discord snowflake IDs
   messageIdMap?: MessageIdMap;
+
+  /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /bot kill. */
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -189,6 +192,39 @@ export type ToolModelCapabilityRequirements = Partial<Pick<LlmRow, ToolModelCapa
 export type ToolAvailabilityLlmState = Pick<LlmRow, "llm_codename" | ToolModelCapabilityKey>;
 
 /**
+ * Minimal state used while assembling the LLM-visible tool schema before
+ * provider-specific adapters serialize it.
+ */
+export interface ToolAssemblyState {
+  server_id: string;
+  /** True when the active persona has either a local voice sample or provider-hosted voice assigned. */
+  activePersonaHasElevenlabsVoice: boolean;
+  /** Present when the active persona should use instruct-based VoiceDesign synthesis. */
+  activePersonaVoiceDesignPrompt?: string | null;
+  /** Display/name marker for the active speech voice selection. */
+  activePersonaVoiceName?: string | null;
+  llm: ToolAvailabilityLlmState;
+  diffusion_model_id?: number | null;
+  nai_diffusion_model_id?: number | null;
+  video_model_id?: number | null;
+  config: {
+    sticker_usage_enabled: boolean;
+    web_search_enabled: boolean;
+    self_teaching_enabled: boolean;
+    manage_message_enabled: boolean;
+    imagegen_enabled: boolean;
+    videogen_enabled: boolean;
+    voice_message_enabled: boolean;
+    thread_creation_enabled: boolean;
+  };
+}
+
+export interface ToolAssemblyContext {
+  provider: string;
+  state: ToolAssemblyState;
+}
+
+/**
  * Generic tool interface
  * All tools must implement this interface regardless of provider
  */
@@ -206,6 +242,9 @@ export interface Tool {
 
   // Provider compatibility check
   isAvailableFor(provider: string): boolean;
+
+  // Optional LLM-visible schema assembly hook
+  assembleForContext?(context: ToolAssemblyContext): Tool | null | Promise<Tool | null>;
 
   // Optional tool configuration
   requiredModelCapabilities?: ToolModelCapabilityRequirements;

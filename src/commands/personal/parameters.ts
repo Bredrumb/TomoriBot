@@ -3,13 +3,13 @@ import { MessageFlags } from "discord.js";
 import { THINKING_LEVEL_VALUES, type ThinkingLevelValue, isThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { ErrorContext, SavedProviderConfigRow, UserRow } from "@/types/db/schema";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { upsertUserSavedProviderConfig } from "@/utils/db/dbWrite";
-import { promptForSavedProvider } from "@/commands/model/providerPicker";
+import { llmProviderRepo } from "@/utils/db/repositories";
+import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 
 /**
  * Formats a list of changed sampler settings into a human-readable string.
@@ -261,7 +261,7 @@ export async function execute(
     }
 
     // 7. Persist the updated personal sampler config
-    const writeOk = await upsertUserSavedProviderConfig(userData.user_id, nextConfig);
+    const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, nextConfig);
     if (!writeOk) {
       await replyWithResult({
         titleKey: "general.errors.update_failed_title",

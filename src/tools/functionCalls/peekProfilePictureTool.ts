@@ -18,7 +18,7 @@ import {
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { ColorCode } from "@/utils/misc/logger";
-import { loadLlmById } from "@/utils/db/dbRead";
+import { llmModelRepo } from "@/utils/db/repositories";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -219,9 +219,9 @@ export class PeekProfilePictureTool extends BaseTool {
           context,
           "image_analysis",
           {
-            titleKey: "genai.vision.analyzing_title",
-            descriptionKey: "genai.vision.analyzing_description",
-            footerKey: "genai.vision.analyzing_footer",
+            titleKey: "tools.vision.analyzing_title",
+            descriptionKey: "tools.vision.analyzing_description",
+            footerKey: "tools.vision.analyzing_footer",
             color: ColorCode.INFO,
           },
           "PeekProfilePictureTool",
@@ -376,12 +376,12 @@ export class PeekProfilePictureTool extends BaseTool {
       visionLlmId === context.tomoriState.vision_llm?.llm_id
         ? context.tomoriState.vision_llm
         : visionLlmId
-          ? await loadLlmById(visionLlmId)
+          ? await llmModelRepo.loadById(visionLlmId)
           : null;
     if (!visionLlm) {
       return {
         success: false,
-        error: "No vision model configured. Use /config model vision to set one.",
+        error: "No vision model configured. Use /model vision to set one.",
       };
     }
 
@@ -407,11 +407,7 @@ export class PeekProfilePictureTool extends BaseTool {
     if (provider === "google") {
       analysisResult = await this.callGoogleVisionWithBase64(apiKey, apiModelName, images, prompt);
     } else {
-      const endpointUrl = this.getVisionEndpointUrl(
-        provider,
-        context,
-        creds.customEndpoint?.endpoint_url ?? creds.savedConfig.custom_endpoint_url,
-      );
+      const endpointUrl = this.getVisionEndpointUrl(provider, context, creds.customEndpoint?.endpoint_url ?? null);
       analysisResult = await this.callOpenAICompatibleVisionWithBase64(
         apiKey,
         apiModelName,
@@ -577,6 +573,15 @@ export class PeekProfilePictureTool extends BaseTool {
    */
   private async fetchAndConvertImageToBase64(avatarUrl: string): Promise<string> {
     try {
+      // Data URIs (e.g. local preset avatars) are already base64-encoded — decode directly.
+      if (avatarUrl.startsWith("data:")) {
+        const markerIndex = avatarUrl.indexOf("base64,");
+        if (markerIndex === -1) {
+          throw new Error("Avatar image processing failed: unsupported data URI format (no base64 payload)");
+        }
+        return avatarUrl.slice(markerIndex + "base64,".length).trim();
+      }
+
       // Fetch the image from Discord CDN with bounded download checks
       const response = await safeDownload(avatarUrl, {
         maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,

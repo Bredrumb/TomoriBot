@@ -1,8 +1,10 @@
-﻿# Add a New AI Provider
+---
+title: "Add a New AI Provider"
+---
 
 This is the current implementation guide for adding a provider to TomoriBot.
 
-Read [providers.md](../ai/providers.md) first if you need the architecture overview.
+Read [`docs/pipelines/provider/`](../pipelines/provider/) first if you need the architecture overview.
 Use this guide when you are actually wiring a new provider into the codebase.
 
 ## Mental Model
@@ -13,13 +15,13 @@ Today, adding a provider usually means all of the following:
 
 1. Add the provider implementation under `src/providers/{providerName}/`.
 2. Add static provider metadata in `providerInfo.ts`.
-3. Register that metadata in `src/utils/provider/providerInfoRegistry.ts`.
-4. Seed provider model inventory in the database.
-5. If the provider supports app-level runtime features beyond core chat, implement the relevant optional capability interfaces on the provider class.
+3. Seed provider model inventory in the database.
+4. If the provider supports app-level runtime features beyond core chat, implement the relevant optional capability interfaces on the provider class.
 
 Important rules:
 
-- `ProviderFactory` auto-discovers provider classes, not all provider metadata and feature executors.
+- `ProviderFactory` auto-discovers provider classes.
+- `providerInfoRegistry` auto-discovers `src/providers/*/providerInfo.ts` metadata and provider-owned feature implementation declarations.
 - Text model defaults come from the database/cache, not from hardcoded model arrays in provider code.
 - If a command only needs to know whether a provider supports a feature, use `providerSupportsFeature()`.
 - If a command needs provider-specific runtime execution, resolve a provider-owned capability instead of hardcoding `provider === "google"` style checks.
@@ -54,9 +56,7 @@ Use existing providers as references:
 - `src/providers/novelai/`
 - `src/providers/custom/`
 
-If the vendor exposes an OpenAI-style chat/completions API, read this before cloning provider code:
-
-- `docs/guides/openai-compatible-provider-family.md`
+If the vendor exposes an OpenAI-style chat/completions API, read the [OpenAI-Compatible Providers](#openai-compatible-providers) section below before cloning provider code.
 
 ## 3. Define Static Provider Metadata
 
@@ -79,7 +79,8 @@ export const exampleProviderInfo: ProviderInfo = {
 	supportsVideos: false,
 	apiFamily: "openai-compatible",
 	featureSupport: {
-		nativeImageGeneration: false,
+		imageGeneration: "none",
+		videoGeneration: "none",
 		embeddings: false,
 		structuredOutput: false,
 		presetGeneration: false,
@@ -88,6 +89,7 @@ export const exampleProviderInfo: ProviderInfo = {
 		conversationCompaction: false,
 		historyExtraction: false,
 	},
+	supportedParams: ["temperature", "topP"] as const,
 };
 ```
 
@@ -96,6 +98,8 @@ Notes:
 - `supportedModels` is usually `[]` because the database is the source of truth for model inventory.
 - `apiFamily` should describe the underlying API surface, not the marketing name.
 - `featureSupport` should reflect app-level support, not just raw vendor API capability.
+- `featureImplementations` is optional. Use it only when this provider routes a shared runtime feature through an existing implementation key, such as `imageGeneration`, `videoGeneration`, or `liveTokenCounting`.
+- `usageCostMode: "none"` is optional metadata for providers where `/tool estimate cost` should not report per-token usage charges.
 
 ## 4. Implement the Provider Class
 
@@ -137,6 +141,15 @@ Important:
 
 - provider tool conversion is not fully generic across vendors
 - if you add nested tool-schema support or other serializer behavior, update all provider tool adapters consistently
+- **image/video placeholder contract** — do not silently skip image or video
+  parts when `seesImages`/`seesVideos` is false. The context pipeline may
+  embed media parts even for non-vision primary models when a fallback model
+  in the chain supports that media type. When your adapter encounters a part
+  it cannot render, push a `{ type: "text", text: "[System: An image/video is
+  attached to this message that this model cannot process.]" }` entry so the
+  model is still aware the media exists. See
+  `openaiCompatibleMessageBuilder.ts` and `openrouterStreamAdapter.ts` for
+  the reference pattern.
 
 ### Reasoning output contract
 
@@ -200,21 +213,17 @@ The pattern (used by Google, OpenRouter, and OpenAI-compatible adapters):
 If this step is missing, guild-registered MCP tools will be discovered and logged
 but never sent to the LLM — the model won't know they exist.
 
-## 6. Register the Provider Metadata
+## 6. Verify Provider Metadata Discovery
 
-`ProviderFactory` will auto-discover `{providerName}Provider.ts`, but that is not enough by itself.
+`ProviderFactory` auto-discovers `{providerName}Provider.ts`, and `providerInfoRegistry` auto-discovers `providerInfo.ts`.
 
-You must also update `src/utils/provider/providerInfoRegistry.ts`:
-
-1. import your `providerInfo.ts`
-2. add it to the `providerInfos` array
-This registry is what powers:
+The metadata registry powers:
 
 - alias normalization
 - capability checks via `providerSupportsFeature()`
-- legacy runtime execution routing via `resolveProviderFeatureImplementation()`
+- temporary runtime execution routing via `resolveProviderFeatureImplementation()`
 
-If you skip this step, the provider may stream chat successfully but still behave as unsupported in feature-gated commands.
+If `providerInfo.ts` is missing or does not export a valid `ProviderInfo` object, the provider may stream chat successfully but still behave as unsupported in feature-gated commands.
 
 ## 7. Implement Optional Runtime Capabilities When Needed
 
@@ -246,13 +255,32 @@ Do not scatter exact provider-name checks across commands. Put routing in the pr
 
 ## 8. Seed Model Inventory
 
-Add the provider's models to `src/db/seed.sql` or the relevant migration path.
+Models live in a **typed catalog** and are seeded into the database directly from
+it at startup — there is no model seed `.sql` file. Add the provider's rows to
+`src/db/seed/catalog/models.ts` as named-field objects (every capability flag is
+optional and defaults to `false`, so you only list the ones that are `true`). That
+is the whole change — nothing to regenerate or compile.
 
-Tables currently used by the app:
+```ts
+// src/db/seed/catalog/models.ts
+{ provider: "google", codename: "gemini-2.5-flash", isDefault: true, hasTools: true,
+  seesImages: true, seesVideos: true, seesYoutube: true, supportsStructoutput: true,
+  desc: "Balanced model…", ja: "汎用…" },
+```
 
-- `llms` for text/chat models
-- `image_diffusion_models` for native image generation models
-- `embedding_models` for embedding providers/models
+How it runs: `seedModelsFromCatalog()` (in `src/db/seed/catalog/modelSeed.ts`) renders
+each section into one `INSERT … ON CONFLICT` per table and executes it during
+database initialization, before the persona, system prompt, and NovelAI preset
+catalog seeders. Seeding is an idempotent upsert on every
+startup, exactly as the old `01_models.sql` was. To deprecate a model, set
+`isDeprecated: true` on its row; to remove one, delete its row.
+
+Tables currently modeled in the catalog:
+
+- `llmSections` → `llms` for text/chat models
+- `imageSections` → `image_diffusion_models` for native image generation models
+- `videoSections` → `video_generation_models` for native video generation models
+- `embeddingSections` → `embedding_models` for embedding providers/models
 
 Use the tables that match the features you actually support.
 
@@ -264,6 +292,19 @@ Examples:
 
 Do not hardcode default models in provider code when the app already resolves them from the database/cache.
 
+### Invariants (validated at startup and by `bun run check-models`)
+
+`seedModelsFromCatalog()` validates the catalog and **throws before any DB write**
+if an invariant is violated, so a malformed catalog fails fast on boot. The same
+check is available offline via `bun run check-models`, which now validates every
+typed seed catalog (models, personas, system prompts, and NovelAI presets):
+
+- exactly one `isDefault` per provider, and that default is not deprecated;
+- at least one `isSmartest` per provider in `llms`, with at least one not deprecated;
+- unique `(provider, codename)` within each table.
+
+The `custom` provider is exempt (its `custom/bootstrap` row is configured per-server).
+
 ## 8.5 Update User-Facing Help
 
 When adding a provider, update the user-facing setup/help copy in the same change.
@@ -271,8 +312,8 @@ When adding a provider, update the user-facing setup/help copy in the same chang
 Minimum reminders:
 
 - update `/help api-key` provider choices in `src/commands/help/api-key.ts`
-- add localized `/help api-key` copy in both `src/locales/en-US.ts` and `src/locales/ja.ts`
-- review the `/config params` success embed strings in `src/locales/en-US.ts` and `src/locales/ja.ts`
+- add localized `/help api-key` copy in both locale trees (`src/locales/en-US/` and `src/locales/ja/`)
+- review the `/config params` success embed strings in both locale trees
 - keep those `/config params` provider lists accurate per parameter; do not add a provider unless that exact saved setting is wired through the provider runtime
 - if the provider changes onboarding guidance, also review `/help setup`
 - if the provider changes pricing guidance or model-tag expectations, review `/help cost` and any related help text
@@ -364,7 +405,7 @@ Use this as the last pass before you call a provider integration "done".
 
 - if the vendor has a verified request-side reasoning control, map the `thinking_level` option from `/config samplers` in the provider layer
 - if the vendor only supports startup flags, GUI toggles, or backend-template-specific reasoning controls, do not invent a generic request field
-- document the result in `docs/ai/thinking-level.md` and the provider notes
+- document the result in `docs/subsystems/thinking-level.md` and the provider notes
 - if the provider only guarantees JSON objects, inject the required prompt guidance and validate locally with Zod
 - seed `llms.supports_structoutput` only for models validated end-to-end in TomoriBot
 - if history extraction depends on structured output, do not enable `featureSupport.historyExtraction` until that path works
@@ -384,8 +425,8 @@ Use this as the last pass before you call a provider integration "done".
 - only implement this if the app already has a native image-generation path for the provider
 - implement the provider-owned image-generation capability instead of faking it through text chat
 - seed `image_diffusion_models` only for models that are actually wired and tested
-- confirm `/config model image` and any image-generation commands use the provider cleanly
-- if the provider has no native image generation, leave `featureSupport.nativeImageGeneration = false` and do not seed image rows
+- confirm `/model image` and any image-generation commands use the provider cleanly
+- if the provider has no native image generation, leave `featureSupport.imageGeneration = "none"` and do not seed image rows
 
 ### Embedding Models
 
@@ -433,7 +474,7 @@ Minimum test checklist:
 - aliases resolve correctly
 - `/config provider add` and `/config provider switch` validation work
 - `/config setup` and provider-specific error formatting work
-- `/config model text` shows the provider's seeded models
+- `/model text` shows the provider's seeded models
 - normal chat streaming works
 - tool calling works if supported
 - structured output works if supported
@@ -466,8 +507,7 @@ Run `bun run check-locales` only if you changed locale files or command metadata
 
 ## Related Files
 
-- `docs/ai/providers.md`
-- `docs/guides/openai-compatible-provider-family.md`
+- `docs/pipelines/provider/` (provider pipeline architecture reference)
 - `src/types/provider/interfaces.ts`
 - `src/types/provider/featureInterfaces.ts`
 - `src/utils/provider/providerFactory.ts`
@@ -475,4 +515,242 @@ Run `bun run check-locales` only if you changed locale files or command metadata
 - `src/utils/provider/providerCapabilityResolver.ts`
 - `src/providers/utils/providerFeatureExecutors.ts`
 - `src/events/clientReady/02_registerMCPs.ts`
-- `src/db/seed.sql`
+- `src/db/seed/catalog/models.ts` (typed model catalog — edit this)
+- `src/db/seed/catalog/types.ts` (catalog input types)
+- `src/db/seed/catalog/modelSeed.ts` (renders + validates the catalog and seeds it at startup)
+- `scripts/checks/checkModelCatalog.ts` (`bun run check-models` — offline seed-catalog invariant check)
+
+---
+
+## OpenAI-Compatible Providers
+
+This section is the concrete refactor blueprint for adding multiple new providers that expose an OpenAI-style chat API.
+
+### Why This Exists
+
+TomoriBot already has one practical OpenAI-compatible provider: `src/providers/custom/`. It also has another provider that speaks an OpenAI-like message shape but is not a good generic base: `src/providers/openrouter/`.
+
+`custom` is the highest-ROI extraction starting point for vendors such as DeepSeek, Z.ai, and some NVIDIA NIM chat endpoints.
+
+It is **not** the right base for:
+
+- Vertex AI — auth/config is Google Cloud-oriented rather than simple API-key + base URL
+- Codex CLI — better treated as a local tool/client integration than an `LLMProvider`
+
+### Current Reality
+
+The useful split in TomoriBot is:
+
+- `ProviderInfo.featureSupport`: app-level feature support
+- `llms` rows: per-model chat/runtime capability flags (`has_tools`, `sees_images`, `supports_structoutput`)
+- `image_diffusion_models`: native image generation inventory
+- `embedding_models`: embedding inventory
+
+A provider can be chat-only, chat + tools, chat + tools + vision, chat + embeddings, or chat + native image generation without pretending it supports everything.
+
+Important existing behavior: setup/provider switching already tolerates providers with no image models or embedding models by storing `NULL` in `server_model_configs.diffusion_model_id` and `server_model_configs.embedding_model_id`.
+
+### Refactor Goal
+
+The goal is **not** to make every new provider inherit `custom` directly. The goal is to extract a reusable OpenAI-compatible family layer from `custom`, then let multiple concrete providers consume it.
+
+First target consumers: `custom`, `deepseek`, `zai`, `nvidia`.
+
+Deferred or separate work: `openrouter` migration into the shared family, `vertex` provider, `codex-cli` integration.
+
+### Non-Goals
+
+Do not try to solve all of this in the first extraction:
+
+- OpenRouter capability probing and parameter-drop retry logic
+- OpenRouter reasoning block preservation
+- OpenRouter assistant-image role workaround
+- Google/Vertex auth flows
+- cross-provider native image generation routing
+
+### Recommended Extraction Boundary
+
+Extract the **stream/tool/message-format** layer first. Do **not** start by forcing a single abstract provider class for everything.
+
+The high-value shared pieces are:
+
+- OpenAI-style message assembly from `StructuredContextItem[]`
+- OpenAI-style tool schema conversion
+- OpenAI-style SSE stream parsing
+- streamed tool-call accumulation
+- shared image-part conversion for providers that accept `image_url`
+- shared sanitized request logging
+- baseline OpenAI-compatible HTTP error parsing
+
+Keep these provider-owned: `providerInfo.ts`, base URL, auth header shape, API key validation strategy, provider display name/aliases, provider-specific locale namespace, request parameter policy, feature flags in `ProviderInfo.featureSupport`, optional runtime capability implementations, and provider-specific structured-output/image-generation/embedding/cost helpers that make vendor-specific HTTP requests.
+
+User-facing reminder: when adding a new provider in this family, also update `/help api-key` choices and localized provider instructions.
+
+### File Layout
+
+Recommended new shared folder:
+
+```text
+src/providers/openaiCompatible/
+  openaiCompatibleTypes.ts
+  openaiCompatibleMessageBuilder.ts
+  openaiCompatibleSse.ts
+  openaiCompatibleErrorFormatter.ts
+  openaiCompatibleStreamAdapter.ts
+  openaiCompatibleToolAdapter.ts
+```
+
+Responsibility split:
+
+- `openaiCompatibleTypes.ts` — shared chunk/tool types; provider-family options (`providerName`, `endpointUrl`, `supportsVision`, `supportsVideos`)
+- `openaiCompatibleMessageBuilder.ts` — convert Tomori context into OpenAI chat messages, handle image parts, sanitized logging helper
+- `openaiCompatibleSse.ts` — read SSE lines, parse `data:` payloads, normalize `[DONE]`
+- `openaiCompatibleErrorFormatter.ts` — baseline HTTP/OpenAI-style error parsing, retryable vs non-retryable helpers
+- `openaiCompatibleStreamAdapter.ts` — shared `StreamProvider` implementation, tool-call accumulation, finish-reason handling
+- `openaiCompatibleToolAdapter.ts` — generic OpenAI function schema conversion, global and guild MCP tool injection
+
+Concrete providers then stay small:
+
+```text
+src/providers/custom/
+  customProvider.ts  customStreamAdapter.ts  customToolAdapter.ts  providerInfo.ts
+
+src/providers/deepseek/
+  deepseekProvider.ts  deepseekStreamAdapter.ts  deepseekToolAdapter.ts  providerInfo.ts
+
+src/providers/zai/
+  zaiProvider.ts  zaiStreamAdapter.ts  zaiToolAdapter.ts  providerInfo.ts
+```
+
+### What To Extract From `custom`
+
+Good first extraction candidates from `customStreamAdapter.ts`: OpenAI chunk type definitions, SSE parsing loop, message assembly, tool-call accumulation, finish-reason handling, sanitized request logging, shared image-to-`image_url` conversion.
+
+Good first extraction candidates from `customToolAdapter.ts`: OpenAI function declaration shape, generic schema cloning, tools array conversion, MCP function export path, common tool-result formatting.
+
+### What Not To Extract From `openrouter` Yet
+
+`src/providers/openrouter/` is useful as a reference but should stay separate in phase 1. It has provider-specific capability cache usage, parameter probe-drop retry logic, `reasoning_details` preservation, assistant-turn image role rewriting, and stricter request shaping for upstream vendors.
+
+### Capability Rules For New Providers
+
+When a vendor lacks a feature, do not emulate support unless the app path is actually wired:
+
+- No native image generation → `featureSupport.nativeImageGeneration = false`, no `image_diffusion_models` rows
+- No embeddings → `featureSupport.embeddings = false`, no `embedding_models` rows
+- Only some models support tools/vision/structured output → keep provider-level flags broad only when true in principle; gate at `llms` per-model flags
+- Vendor API capability but no TomoriBot runtime path → keep `featureSupport` flag `false`
+
+### Provider Mapping
+
+**DeepSeek** — chat streaming, tool calling (where seeded), thinking-mode tool continuation if `reasoning_content` replay is wired, JSON structured output only if validated. Do not assume embeddings or native image generation.
+
+**Z.ai** — chat streaming, tool calling, vision if seeded models support it, structured output if validated. Possible second pass: embeddings, native image generation.
+
+**NVIDIA NIM** — curated text/chat models only; tool calling and vision on seeded rows only; structured output on validated NVIDIA subset; provider-owned embeddings via `nv-embed-v1`; native image generation via NVIDIA's Stability endpoint. Keep treating NVIDIA as a curated catalog, not a blanket claim.
+
+**Vertex AI** — do not place in this family. Even with Vertex's OpenAI-compatible endpoint, the project needs a Google Cloud auth/config story that doesn't fit TomoriBot's current credential model.
+
+**Codex CLI** — do not implement as an `LLMProvider`. If pursued: local tool integration, MCP server bridge, or separate OpenAI API provider for coding models.
+
+### Rollout Order
+
+**Phase 1: Extract Shared Family Helpers** — create `src/providers/openaiCompatible/`, move common helpers, keep behavior identical for `custom`.
+
+**Phase 2: Migrate `custom`** — make `custom` the first consumer; verify no behavior change.
+
+**Phase 3: Add `deepseek`** — provider folder, static `providerInfo.ts`, registry registration, `llms` seed rows, chat streaming, tool calling.
+
+MVP constraints: chat streaming only through shared layer; tool calling only for models seeded with `has_tools = true`; preserve `reasoning_content` only within same tool loop turn; `featureSupport.nativeImageGeneration = false`; `featureSupport.embeddings = false`; enable `structuredOutput` and `historyExtraction` only if validated end-to-end; implement DeepSeek beta prefix completion for assistant prefills; no image/embedding rows unless implemented; if `/tool estimate cost` should support DeepSeek, add minimal non-streaming prompt-token probe.
+
+Recommended provider-local files:
+
+```text
+src/providers/deepseek/
+  providerInfo.ts  deepseekProvider.ts  deepseekStreamAdapter.ts  deepseekToolAdapter.ts
+```
+
+Seed scope: one default general chat model; optionally one reasoning model; per-model flags set conservatively from validated behavior, not vendor marketing copy.
+
+**Phase 4: Add `zai`** — same pattern as `deepseek`; enable only features confirmed by seeded models and runtime wiring.
+
+**Phase 5: Add `nvidia`** — keep supported model set small and curated; wire provider-owned embeddings and native image generation only when exact NVIDIA endpoint contract is implemented.
+
+**Phase 6: Optional Embedding Decoupling** — allow `/model embedding` to choose from any seeded embedding provider; stop coupling embedding selection to the active chat provider.
+
+### Capability Checklist For Future OpenAI-Compatible Providers
+
+When adding the next vendor in this family, verify these areas explicitly:
+
+- **Tool calls**: confirm per-model support before seeding `has_tools = true`; verify the exact assistant/tool message format
+- **Structured output**: confirm whether the provider supports strict schema mode or only JSON-object mode; implement prompt shaping + local validation for JSON-object-only providers
+- **Reasoning/thinking mode**: check for replay-only fields like DeepSeek `reasoning_content`; preserve only where vendor requires; map `thinking_level` or document deliberate no-op
+- **Assistant prefills**: check whether native prefix completion requires a beta endpoint or message flag like `prefix: true`
+- **Live cost estimation**: prefer API-reported prompt token usage; use provider-specific pricing sources; document any cache-hit/miss caveats
+- **Image generation and embeddings**: only seed rows if the app runtime path is actually implemented; leave feature flags off otherwise
+- **Media placeholder contract**: when your stream adapter encounters an image or video part but `seesImages`/`seesVideos` is false, emit a text placeholder — never silently skip. Context may include media parts for fallback models even when the primary cannot render them.
+
+### Acceptance Criteria For The Refactor
+
+The extraction is successful when:
+
+- `custom` still works without behavior regression
+- new OpenAI-compatible providers can be added without cloning large stream/tool files
+- unsupported provider features fail cleanly
+- provider metadata remains the source of truth for app-level feature gating
+- per-model DB flags remain the source of truth for chat-model capability gating
+
+The combined extraction + DeepSeek slice is successful when `custom` still works, `deepseek` is auto-discovered, setup/switch/validation commands work, chat streaming and tool calling work for seeded models, structured output and history extraction work only for validated models, `deepseek-reasoner` tool continuation preserves `reasoning_content` within the same turn, assistant prefills use DeepSeek beta prefix completion, and `/tool estimate cost` returns a live estimate.
+
+### Files To Keep In View
+
+- `src/providers/custom/customProvider.ts`
+- `src/providers/custom/customStreamAdapter.ts`
+- `src/providers/custom/customToolAdapter.ts`
+- `src/providers/openrouter/openrouterStreamAdapter.ts`
+- `src/utils/provider/providerInfoRegistry.ts`
+- `src/utils/provider/providerCapabilityResolver.ts`
+- `src/providers/utils/providerFeatureExecutors.ts`
+- `src/commands/config/api-key/set.ts`
+- `src/commands/model/image.ts`
+- `src/commands/model/embedding.ts`
+- `src/utils/db/repositories/LlmRepository.ts`
+
+### Practical Recommendation
+
+If you want the fastest route to shipping new vendors:
+
+1. Extract the shared OpenAI-compatible stream/tool/message layer.
+2. Migrate `custom` first.
+3. Add `deepseek`.
+4. Add `zai`.
+5. Add `nvidia` with a curated model inventory and provider-owned embedding/image helpers.
+
+Do **not** block that work on Vertex AI or Codex CLI.
+
+### Handoff Scope
+
+If you want another agent to implement this in one pass, give it this bounded scope:
+
+1. Implement Phase 1 and Phase 2.
+2. Implement only the DeepSeek MVP described in Phase 3.
+3. Do not start Z.ai, Vertex AI, or Codex CLI.
+4. Preserve current `custom` behavior.
+5. Run `bun run check` and `bun run lint`.
+
+Recommended handoff prompt:
+
+```text
+Implement Phase 1 and Phase 2 from the OpenAI-Compatible Providers section in docs/guides/adding-new-provider.md, then implement only the bounded DeepSeek MVP from the same guide.
+
+Constraints:
+- preserve current custom-provider behavior
+- keep OpenRouter untouched unless a tiny shared extraction is unavoidable
+- seed DeepSeek text models conservatively
+- do not implement DeepSeek embeddings or native image generation
+- do not start Z.ai, Vertex AI, or Codex CLI
+
+Validation:
+- bun run check
+- bun run lint
+```

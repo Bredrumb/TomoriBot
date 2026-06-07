@@ -7,8 +7,8 @@ import {
 } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { updateTomoriConfig } from "@/utils/db/dbWrite";
-import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { configRepository } from "@/utils/db/repositories";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -67,7 +67,7 @@ export async function execute(
 
     const currentChannelId = tomoriState.config.thought_log_channel_disc_id;
     const nextChannelId = currentChannelId === selectedChannel.id ? null : selectedChannel.id;
-    const updatedConfig = await updateTomoriConfig(tomoriState.server_id, {
+    const updatedConfig = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
       thought_log_channel_disc_id: nextChannelId,
     });
 

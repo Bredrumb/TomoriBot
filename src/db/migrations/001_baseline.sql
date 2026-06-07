@@ -1,0 +1,16 @@
+-- 001_baseline
+--
+-- Baseline schema marker. The initial schema (tables, functions, indexes, and
+-- seed data) is bootstrapped by initializeDatabase.ts at bot startup via:
+--   src/db/schema.sql
+--   src/db/schema_rag.sql  (when pgvector is available)
+--   src/db/schema_stpreset.sql
+--   src/db/seed/catalog/*.ts seeders
+--
+-- This migration contains no executable SQL. Its sole purpose is to anchor
+-- the migration version sequence so that all Phase 6+ numbered migrations
+-- can reference a known starting point.
+--
+-- A fresh install boots cleanly through the existing schema init flow;
+-- the migration runner records this entry and then applies any pending
+-- migrations that follow (002+).

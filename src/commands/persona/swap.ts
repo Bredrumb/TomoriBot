@@ -11,10 +11,8 @@ import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { loadAllPersonasForServer } from "../../utils/db/dbRead";
-import { downloadImage } from "../../utils/image/avatarHelper";
+import { personaRepository } from "@/utils/db/repositories";
 import { convertToPNG } from "../../utils/image/imageProcessor";
-import { sql } from "../../utils/db/client";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import {
   deletePersonaAvatarFromStorage,
@@ -60,6 +58,31 @@ function isAvatarUpdateRateLimited(status: number, errorText: string): boolean {
   }
 
   return /AVATAR_RATE_LIMIT/i.test(errorText) || /RATE_LIMIT/i.test(errorText) || /too fast/i.test(errorText);
+}
+
+async function resolveCurrentBotAvatarUrl(
+  client: Client,
+  interaction: ChatInputCommandInteraction,
+): Promise<string | null> {
+  if (!interaction.guild) {
+    return client.user?.displayAvatarURL({ size: 1024, extension: "png", forceStatic: true }) ?? null;
+  }
+
+  const fetchedBotMember = client.user
+    ? await interaction.guild.members.fetch({ user: client.user.id, force: true }).catch((error) => {
+        log.warn(
+          `Failed to fetch fresh bot member avatar for swap: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+        return null;
+      })
+    : null;
+
+  return (
+    fetchedBotMember?.displayAvatarURL({ size: 1024, extension: "png", forceStatic: true }) ??
+    interaction.guild.members.me?.displayAvatarURL({ size: 1024, extension: "png", forceStatic: true }) ??
+    client.user?.displayAvatarURL({ size: 1024, extension: "png", forceStatic: true }) ??
+    null
+  );
 }
 
 // Constants for modal configuration
@@ -120,7 +143,7 @@ export async function execute(
     }
 
     // 3. Load all personas for this server
-    const allPersonas = await loadAllPersonasForServer(interaction.guild.id);
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
 
     // 4. Get main and alter personas
     const mainPersona = allPersonas.find((p) => !p.is_alter);
@@ -158,7 +181,7 @@ export async function execute(
 
     // 6. Build select options for modal
     const alterSelectOptions: SelectOption[] = alterPersonas.map((persona, index) => ({
-      label: safeSelectOptionText(persona.tomori_nickname),
+      label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(), // Use index to avoid truncation issues
     }));
 
@@ -199,21 +222,14 @@ export async function execute(
     const previousMainAvatarUrl = mainPersona.webhook_avatar_url;
 
     // 8. Capture current bot avatar BEFORE swapping (represents former main persona)
-    const formerMainAvatarUrl =
-      interaction.guild.members.me?.displayAvatarURL({
-        size: 1024,
-        extension: "png",
-        forceStatic: true,
-      }) ??
-      _client.user?.displayAvatarURL({
-        size: 1024,
-        extension: "png",
-        forceStatic: true,
-      });
+    const liveFormerMainAvatarUrl = await resolveCurrentBotAvatarUrl(_client, interaction);
+    const formerMainAvatarReference = liveFormerMainAvatarUrl ?? previousMainAvatarUrl;
+    const formerMainAvatarDisplayUrl =
+      formerMainAvatarReference && /^https?:\/\//i.test(formerMainAvatarReference) ? formerMainAvatarReference : null;
     let formerMainAvatarBuffer: Buffer | null = null;
-    if (formerMainAvatarUrl) {
+    if (formerMainAvatarReference) {
       try {
-        formerMainAvatarBuffer = await downloadImage(formerMainAvatarUrl);
+        formerMainAvatarBuffer = await loadStoredPersonaAvatarBuffer(formerMainAvatarReference);
       } catch (downloadError) {
         log.warn(
           `Failed to prefetch former main avatar for embed (non-fatal): ${downloadError instanceof Error ? downloadError.message : "Unknown error"}`,
@@ -223,19 +239,11 @@ export async function execute(
 
     // 9. Swap is_alter flags in database.
     // Trigger words are persona-scoped in persona_configs and do not need migration.
-    await sql.transaction(async (tx) => {
-      await tx`
-				UPDATE tomoris
-				SET is_alter = true
-				WHERE tomori_id = ${mainPersona.tomori_id}
-			`;
-
-      await tx`
-				UPDATE tomoris
-				SET is_alter = false
-				WHERE tomori_id = ${selectedAlter.tomori_id}
-			`;
-    });
+    // biome-ignore lint/style/noNonNullAssertion: guaranteed by prior checks
+    const swapSucceeded = await personaRepository.swapPersona(mainPersona.persona_id!, selectedAlter.persona_id!);
+    if (!swapSucceeded) {
+      throw new Error("Persona swap database update failed.");
+    }
 
     // 10. Try to update nickname and avatar separately (non-fatal if fails)
     let avatarSwapSuccess = false;
@@ -259,7 +267,7 @@ export async function execute(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          nick: selectedAlter.tomori_nickname,
+          nick: selectedAlter.persona_nickname,
         }),
       });
 
@@ -304,7 +312,7 @@ export async function execute(
           if (response.ok) {
             avatarSwapSuccess = true;
             log.success(
-              `Successfully swapped guild avatar to "${selectedAlter.tomori_nickname}" for guild ${interaction.guild.id}`,
+              `Successfully swapped guild avatar to "${selectedAlter.persona_nickname}" for guild ${interaction.guild.id}`,
             );
           } else {
             const errorText = await response.text();
@@ -335,8 +343,8 @@ export async function execute(
     // 13. Show success embed with former main's avatar as image
     const descriptionLines = [
       localizer(locale, "commands.persona.swap.success_description", {
-        new_main: selectedAlter.tomori_nickname,
-        old_main: mainPersona.tomori_nickname,
+        new_main: selectedAlter.persona_nickname,
+        old_main: mainPersona.persona_nickname,
       }),
     ];
 
@@ -368,18 +376,18 @@ export async function execute(
 
     let formerMainAvatarAttachment: AttachmentBuilder | null = null;
     if (formerMainAvatarBuffer) {
-      const sanitizedNickname = sanitizeAttachmentFilenamePart(mainPersona.tomori_nickname, {
+      const sanitizedNickname = sanitizeAttachmentFilenamePart(mainPersona.persona_nickname, {
         fallback: "persona",
         maxLength: 50,
       });
       const timestamp = Date.now();
-      const avatarFilename = `persona-swap-${sanitizedNickname}-${timestamp}.png`;
+      const avatarFilename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
       formerMainAvatarAttachment = new AttachmentBuilder(formerMainAvatarBuffer, {
         name: avatarFilename,
       });
       successEmbed.setImage(`attachment://${avatarFilename}`);
-    } else if (formerMainAvatarUrl) {
-      successEmbed.setImage(formerMainAvatarUrl);
+    } else if (formerMainAvatarDisplayUrl) {
+      successEmbed.setImage(formerMainAvatarDisplayUrl);
     }
 
     // Add footer warning to keep embed (used for avatar URL storage)
@@ -396,33 +404,29 @@ export async function execute(
     });
 
     // 14. Extract former main's avatar URL from success embed and store it
-    if (formerMainAvatarUrl) {
+    if (formerMainAvatarReference) {
       try {
         const sentEmbed = reply.embeds[0];
         const s3StoredUrl =
-          formerMainAvatarBuffer && mainPersona.tomori_id
+          formerMainAvatarBuffer && mainPersona.persona_id
             ? await uploadPersonaAvatarToStorage({
-                personaId: mainPersona.tomori_id,
+                personaId: mainPersona.persona_id,
                 serverDiscId: interaction.guild.id,
                 label: "former main swap",
                 buffer: formerMainAvatarBuffer,
               })
             : null;
         newFormerMainS3Url = s3StoredUrl;
-        const storedAvatarUrl = s3StoredUrl ?? sentEmbed?.image?.url ?? null;
+        const storedAvatarUrl = s3StoredUrl ?? sentEmbed?.image?.url ?? previousMainAvatarUrl ?? null;
         newFormerMainAvatarUrl = storedAvatarUrl;
 
         if (storedAvatarUrl) {
-          // Store in former main's webhook_avatar_url
-          await sql`
-						UPDATE tomoris
-						SET webhook_avatar_url = ${storedAvatarUrl}
-						WHERE tomori_id = ${mainPersona.tomori_id}
-					`;
+          // biome-ignore lint/style/noNonNullAssertion: guaranteed by prior checks
+          await personaRepository.setAvatar(mainPersona.persona_id!, storedAvatarUrl);
 
-          log.success(`Stored former main persona "${mainPersona.tomori_nickname}" avatar URL for future use`);
+          log.success(`Stored former main persona "${mainPersona.persona_nickname}" avatar URL for future use`);
         } else {
-          log.warn(`Failed to extract image URL from success embed for former main persona ${mainPersona.tomori_id}`);
+          log.warn(`Failed to extract image URL from success embed for former main persona ${mainPersona.persona_id}`);
         }
       } catch (storageError) {
         // Non-fatal error - persona swap was successful, avatar storage failed
@@ -433,20 +437,16 @@ export async function execute(
     }
 
     // 14b. Ensure selected alter has a stable avatar URL stored (optional)
-    if (selectedAlterAvatarBuffer && selectedAlter.tomori_id) {
+    if (selectedAlterAvatarBuffer && selectedAlter.persona_id) {
       const selectedAlterS3Url = await uploadPersonaAvatarToStorage({
-        personaId: selectedAlter.tomori_id,
+        personaId: selectedAlter.persona_id,
         serverDiscId: interaction.guild.id,
         label: "selected alter swap",
         buffer: selectedAlterAvatarBuffer,
       });
 
       if (selectedAlterS3Url) {
-        await sql`
-					UPDATE tomoris
-					SET webhook_avatar_url = ${selectedAlterS3Url}
-					WHERE tomori_id = ${selectedAlter.tomori_id}
-				`;
+        await personaRepository.setAvatar(selectedAlter.persona_id, selectedAlterS3Url);
         if (previousSelectedAlterAvatarUrl && previousSelectedAlterAvatarUrl !== selectedAlterS3Url) {
           await deletePersonaAvatarFromStorage(previousSelectedAlterAvatarUrl);
         }
@@ -463,7 +463,7 @@ export async function execute(
     }
 
     log.success(
-      `Successfully swapped personas: "${selectedAlter.tomori_nickname}" is now main, "${mainPersona.tomori_nickname}" is now alter for guild ${interaction.guild.id}`,
+      `Successfully swapped personas: "${selectedAlter.persona_nickname}" is now main, "${mainPersona.persona_nickname}" is now alter for guild ${interaction.guild.id}`,
     );
   } catch (error) {
     log.error("Error executing persona swap command:", error, {

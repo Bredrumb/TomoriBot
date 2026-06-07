@@ -1,5 +1,5 @@
 import type { WhitelistCheckResult } from "@/types/misc/channelWhitelist";
-import { checkChannelWhitelist } from "@/utils/db/channelWhitelist";
+import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 
 /**
  * Cache for channel whitelist status
@@ -73,7 +73,12 @@ export async function getCachedWhitelistStatus(
   // Cache miss - fetch from database
   cacheMisses++;
 
-  const result = await checkChannelWhitelist(serverDiscId, channelDiscId, memberRoleDiscIds, parentChannelDiscId);
+  const result = await whitelistRepository.checkChannelWhitelist(
+    serverDiscId,
+    channelDiscId,
+    memberRoleDiscIds,
+    parentChannelDiscId,
+  );
 
   // Store in cache
   whitelistCache.set(cacheKey, {

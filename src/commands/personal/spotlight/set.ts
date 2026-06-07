@@ -18,14 +18,14 @@ import {
   getCachedPersonalSpotlightStatus,
   invalidatePersonalSpotlightCache,
 } from "@/utils/cache/personalSpotlightCache";
-import { replacePersonalSpotlight } from "@/utils/db/personalSpotlight";
+import { userRepository } from "@/utils/db/repositories/UserRepository";
 import {
   acknowledgeModalSubmitForRefresh,
   promptWithPaginatedModal,
   promptWithRawModal,
-  replyInfoEmbed,
   safeSelectOptionText,
-} from "@/utils/discord/interactionHelper";
+} from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -35,7 +35,7 @@ const MAX_PERSONAS_PER_MODAL = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
 const CHECKBOX_ID_PREFIX = "personal_spotlight_set_checkbox_group";
 const AUTO_TRIGGER_INPUT_ID = "personal_spotlight_auto_trigger_persona";
 
-type PersonaWithId = TomoriState & { tomori_id: number };
+type PersonaWithId = TomoriState & { persona_id: number };
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -65,7 +65,7 @@ export async function execute(
   const errorContext: ErrorContext = {
     userId: userData.user_id,
     serverId: null,
-    tomoriId: null,
+    personaId: null,
     metadata: {
       command: "personal spotlight set",
       guildId: interaction.guildId,
@@ -120,10 +120,10 @@ export async function execute(
     }
 
     errorContext.serverId = tomoriState.server_id;
-    errorContext.tomoriId = tomoriState.tomori_id;
+    errorContext.personaId = tomoriState.persona_id;
 
     const allPersonas = allPersonasRaw.filter(
-      (persona): persona is PersonaWithId => typeof persona.tomori_id === "number",
+      (persona): persona is PersonaWithId => typeof persona.persona_id === "number",
     );
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -179,7 +179,7 @@ export async function execute(
       return;
     }
 
-    const selectedPersonas = allPersonas.filter((persona) => selectedPersonaIds.includes(persona.tomori_id));
+    const selectedPersonas = allPersonas.filter((persona) => selectedPersonaIds.includes(persona.persona_id));
     const finishButtonId = `personal_spotlight_finish_${interaction.id}`;
     const autoTriggerButtonId = `personal_spotlight_auto_${interaction.id}`;
     const transactionEmbed = new EmbedBuilder()
@@ -243,7 +243,7 @@ export async function execute(
       await buttonInteraction.deferUpdate();
     } else if (selectedPersonas.length === 1) {
       await buttonInteraction.deferUpdate();
-      finalAutoTriggerPersonaId = selectedPersonas[0]?.tomori_id ?? null;
+      finalAutoTriggerPersonaId = selectedPersonas[0]?.persona_id ?? null;
     } else {
       const autoTriggerModalResult =
         selectedPersonas.length <= MAX_OPTIONS_PER_GROUP
@@ -330,7 +330,7 @@ export async function execute(
       return;
     }
 
-    await replacePersonalSpotlight(
+    await userRepository.replacePersonalSpotlight(
       tomoriState.server_id,
       userData.user_id,
       selectedChannel.id,
@@ -396,8 +396,8 @@ function buildPersonaCheckboxGroups(
       minValues: 0,
       required: false,
       options: chunk.map((persona) => ({
-        label: safeSelectOptionText(persona.tomori_nickname),
-        value: persona.tomori_id.toString(),
+        label: safeSelectOptionText(persona.persona_nickname),
+        value: persona.persona_id.toString(),
         description: safeSelectOptionText(
           localizer(
             locale,
@@ -406,7 +406,7 @@ function buildPersonaCheckboxGroups(
               : "commands.bot.respond.main_persona_description",
           ),
         ),
-        default: selectedPersonaIds.has(persona.tomori_id),
+        default: selectedPersonaIds.has(persona.persona_id),
       })),
     });
   }
@@ -440,16 +440,16 @@ function buildExpiresAt(hours: number): Date | null {
 
 function buildAutoTriggerRadioOptions(personas: PersonaWithId[]) {
   return personas.map((persona, index) => ({
-    label: safeSelectOptionText(persona.tomori_nickname),
-    value: persona.tomori_id.toString(),
+    label: safeSelectOptionText(persona.persona_nickname),
+    value: persona.persona_id.toString(),
     default: index === 0,
   }));
 }
 
 function buildAutoTriggerSelectOptions(personas: PersonaWithId[], locale: string): SelectOption[] {
   return personas.map((persona) => ({
-    label: safeSelectOptionText(persona.tomori_nickname),
-    value: persona.tomori_id.toString(),
+    label: safeSelectOptionText(persona.persona_nickname),
+    value: persona.persona_id.toString(),
     description: localizer(
       locale,
       persona.is_alter
@@ -476,13 +476,13 @@ function formatAutoTriggerText(locale: string, personas: PersonaWithId[], autoTr
   }
 
   return (
-    personas.find((persona) => persona.tomori_id === autoTriggerPersonaId)?.tomori_nickname ??
+    personas.find((persona) => persona.persona_id === autoTriggerPersonaId)?.persona_nickname ??
     autoTriggerPersonaId.toString()
   );
 }
 
 function formatPersonaList(locale: string, personas: PersonaWithId[]): string {
-  const visiblePersonas = personas.slice(0, 8).map((persona) => `**${persona.tomori_nickname}**`);
+  const visiblePersonas = personas.slice(0, 8).map((persona) => `**${persona.persona_nickname}**`);
   if (personas.length > visiblePersonas.length) {
     visiblePersonas.push(
       localizer(locale, "commands.personal.spotlight.set.more_personas", {

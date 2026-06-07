@@ -2,7 +2,9 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { CustomEndpointApiStyle, CustomEndpointCapability, ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
+import { llmProviderRepo } from "@/utils/db/repositories";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 import {
@@ -12,14 +14,17 @@ import {
   parseCapabilityModalFields,
 } from "@/utils/provider/customEndpointCapabilityModal";
 import { registerCustomEndpoint, validateCustomEndpointReachability } from "@/utils/provider/customEndpointService";
+import {
+  buildImageEndpointSupportsComponent,
+  IMAGE_ENDPOINT_SUPPORTS_ID,
+  imageEndpointSupportsFromSubmittedValues,
+} from "@/utils/provider/customImageEndpointSupport";
 import { isValidCustomEndpointLabel, normalizeCustomEndpointLabel } from "@/utils/provider/customProviderUtils";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { localizer } from "@/utils/text/localizer";
 
 const WORKFLOW_UPLOAD_ID = "workflow_json";
-const WORKFLOW_SUPPORTS_ID = "workflow_supports";
-const DEFAULT_WORKFLOW_SUPPORTS = ["txt2img", "img2img"];
 
 /** Download and parse a workflow JSON from a URL returned by Discord's CDN. */
 async function loadWorkflowJson(url: string | null): Promise<Record<string, unknown> | null> {
@@ -70,7 +75,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
       option
         .setName("api_style")
         .setDescription(localizer("en-US", "commands.personal.custom_models.add.api_style_description"))
-        .setRequired(true)
+        // Optional: inherited from an existing sibling under the same label+capability when omitted.
+        .setRequired(false)
         .addChoices(
           { name: localizer("en-US", "general.api_styles.openai_compatible"), value: "openai-compatible" },
           { name: localizer("en-US", "general.api_styles.comfyui"), value: "comfyui" },
@@ -81,7 +87,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
       option
         .setName("endpoint_url")
         .setDescription(localizer("en-US", "commands.personal.custom_models.add.endpoint_url_description"))
-        .setRequired(true),
+        // Optional: inherited from an existing sibling under the same label+capability when omitted.
+        .setRequired(false),
     )
     .addStringOption((option) =>
       option
@@ -120,14 +127,46 @@ export async function execute(
   const rawLabel = interaction.options.getString("endpoint_label", true);
   const label = normalizeCustomEndpointLabel(rawLabel);
   const capability = interaction.options.getString("capability", true) as CustomEndpointCapability;
-  const apiStyle = interaction.options.getString("api_style", true) as CustomEndpointApiStyle;
-  const endpointUrl = interaction.options.getString("endpoint_url", true).trim();
+  // api_style and endpoint_url are optional: a second model under an existing label+capability
+  // inherits the sibling's connection details.
+  const apiStyleOption = interaction.options.getString("api_style") as CustomEndpointApiStyle | null;
+  const endpointUrlOption = interaction.options.getString("endpoint_url")?.trim() || null;
   const authToken = interaction.options.getString("auth_token");
 
   if (!isValidCustomEndpointLabel(label)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.invalid_option_title",
       descriptionKey: "commands.config.custom_models.validation.invalid_label",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // Inherit connection details from an existing model under this label+capability ("one connection
+  // per label"). A sibling also makes model_name mandatory so the new model is distinguishable.
+  const siblingEndpoint = await llmProviderRepo.loadCustomEndpoint({
+    userId: userData.user_id,
+    label,
+    capability,
+  });
+  const hasSibling = siblingEndpoint != null;
+  const apiStyle = apiStyleOption ?? (siblingEndpoint?.api_style as CustomEndpointApiStyle | undefined) ?? null;
+  const endpointUrl = endpointUrlOption ?? siblingEndpoint?.endpoint_url ?? null;
+
+  if (!apiStyle) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.invalid_option_title",
+      descriptionKey: "commands.config.custom_models.validation.api_style_required",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+  if (!endpointUrl) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.invalid_option_title",
+      descriptionKey: "commands.config.custom_models.validation.endpoint_url_required",
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
@@ -213,6 +252,8 @@ export async function execute(
         hasTools: parsed.hasTools,
         seesImages: parsed.seesImages,
         supportsStructOutput: parsed.supportsStructOutput,
+        strictRoleAlternation: parsed.strictRoleAlternation,
+        supportsPrefixCompletion: parsed.supportsPrefixCompletion,
         extraConfig: {},
       });
 
@@ -235,7 +276,7 @@ export async function execute(
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id,
-        tomoriId: tomoriState.tomori_id,
+        personaId: tomoriState.persona_id,
         errorType: "CommandExecutionError",
         metadata: {
           command: "personal custom-endpoint add",
@@ -281,47 +322,7 @@ export async function execute(
         maxValues: 1,
         required: false,
       },
-      ...(capability === "image" && apiStyle === "comfyui"
-        ? [
-            {
-              kind: "checkboxGroup" as const,
-              customId: WORKFLOW_SUPPORTS_ID,
-              labelKey: "commands.config.custom_models.capability_modal.workflow_supports_label",
-              descriptionKey: "commands.config.custom_models.capability_modal.workflow_supports_description",
-              options: [
-                {
-                  value: "txt2img",
-                  label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_txt2img"),
-                  description: localizer(
-                    locale,
-                    "commands.config.custom_models.capability_modal.workflow_support_txt2img_description",
-                  ),
-                  default: true,
-                },
-                {
-                  value: "img2img",
-                  label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_img2img"),
-                  description: localizer(
-                    locale,
-                    "commands.config.custom_models.capability_modal.workflow_support_img2img_description",
-                  ),
-                  default: true,
-                },
-                {
-                  value: "inpaint",
-                  label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_inpaint"),
-                  description: localizer(
-                    locale,
-                    "commands.config.custom_models.capability_modal.workflow_support_inpaint_description",
-                  ),
-                },
-              ],
-              minValues: 1,
-              maxValues: 3,
-              required: true,
-            },
-          ]
-        : []),
+      ...(capability === "image" ? [buildImageEndpointSupportsComponent(locale, apiStyle)] : []),
     ],
   });
 
@@ -338,7 +339,17 @@ export async function execute(
     const modelName = modalResult.values?.[ModalFieldId.model_name]?.trim() || null;
     const displayName = modalResult.values?.[ModalFieldId.display_name]?.trim() || label;
     const workflowAttachment = modalResult.attachments?.[WORKFLOW_UPLOAD_ID];
-    const workflowSupportValues = new Set(modalResult.multiValues?.[WORKFLOW_SUPPORTS_ID] ?? DEFAULT_WORKFLOW_SUPPORTS);
+    const workflowSupportValues = modalResult.multiValues?.[IMAGE_ENDPOINT_SUPPORTS_ID];
+
+    // A second model under an existing label+capability needs a distinct model name to identify it.
+    if (hasSibling && !modelName) {
+      await replyInfoEmbed(modalSubmit, locale, {
+        titleKey: "general.errors.invalid_option_title",
+        descriptionKey: "commands.config.custom_models.validation.model_name_required_sibling",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
     if ((capability === "image" || capability === "video") && apiStyle === "comfyui" && !workflowAttachment) {
       await replyInfoEmbed(modalSubmit, locale, {
@@ -367,13 +378,7 @@ export async function execute(
 
     const workflow = workflowAttachment ? await loadWorkflowJson(workflowAttachment.url) : null;
     const workflowSupports =
-      capability === "image" && apiStyle === "comfyui"
-        ? {
-            txt2img: workflowSupportValues.has("txt2img"),
-            img2img: workflowSupportValues.has("img2img"),
-            inpaint: workflowSupportValues.has("inpaint"),
-          }
-        : undefined;
+      capability === "image" ? imageEndpointSupportsFromSubmittedValues(workflowSupportValues, apiStyle) : undefined;
 
     const registered = await registerCustomEndpoint({
       scope: { kind: "personal", ownerId: userData.user_id, baseConfig: tomoriState.config },
@@ -409,7 +414,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
-      tomoriId: tomoriState.tomori_id,
+      personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "personal custom-endpoint add",

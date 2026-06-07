@@ -31,22 +31,40 @@ export const PRESET_MAX_STRING_LENGTH = parsePositiveIntegerEnv("PRESET_MAX_STRI
 export const PRESET_MAX_ATTRIBUTES = parsePositiveIntegerEnv("PRESET_MAX_ATTRIBUTES", 200);
 export const PRESET_MAX_SAMPLE_DIALOGUES = parsePositiveIntegerEnv("PRESET_MAX_SAMPLE_DIALOGUES", 100);
 export const PRESET_MAX_TRIGGER_WORDS = parsePositiveIntegerEnv("PRESET_MAX_TRIGGER_WORDS", 100);
-export const PRESET_MAX_NAI_TAGS = parsePositiveIntegerEnv("PRESET_MAX_NAI_TAGS", 200);
+export const PRESET_MAX_IMAGE_TAGS = parsePositiveIntegerEnv("PRESET_MAX_IMAGE_TAGS", 200);
+
+/**
+ * Generated presets use the canonical 6-attribute layout from presetCommon.ts:
+ * Description, Appearance, Personality, Likes, Dislikes, Behavioral Quirks.
+ */
+const GENERATED_PRESET_APPEARANCE_ATTRIBUTE_INDEX = 1;
+
+export function buildPrivateAttributePublicFlags(attributeList: readonly string[]): boolean[] {
+  return attributeList.map(() => false);
+}
+
+export function buildGeneratedPresetAttributePublicFlags(attributeList: readonly string[]): boolean[] {
+  return attributeList.map((_attribute, index) => index === GENERATED_PRESET_APPEARANCE_ATTRIBUTE_INDEX);
+}
 
 /**
  * Preset personality data structure
- * Contains all personality-related fields from tomoris and tomori_configs tables
+ * Contains all personality-related fields from personas and persona-scoped config tables.
  */
 export interface PresetExportData {
   tomori_nickname: string;
   attribute_list: string[];
+  /** Visibility flags aligned to attribute_list; true exposes the attribute to other triggered personas */
+  attribute_public_flags?: boolean[];
   sample_dialogues_in: string[];
   sample_dialogues_out: string[];
   trigger_words: string[];
   persona_prompt?: string | null;
   persona_lineage_id?: number;
-  /** Imageboard-style persona appearance tags for NovelAI character rendering */
-  nai_tags?: string[];
+  /** Official preset lineage, when this export was materialized from a preset pointer */
+  preset_lineage_id?: number;
+  /** Public imageboard-style persona physical appearance tags for image generation */
+  physical_appearance_tags?: string[];
   /** Persona-specific NovelAI character reference image URL */
   nai_char_ref_url?: string | null;
   /** ATTG: Story author name */
@@ -118,6 +136,7 @@ export interface ValidationResult {
 export const presetExportDataSchema = z.object({
   tomori_nickname: z.string().min(1, "Nickname cannot be empty").max(100, "Nickname too long"),
   attribute_list: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_ATTRIBUTES),
+  attribute_public_flags: z.array(z.boolean()).max(PRESET_MAX_ATTRIBUTES).optional(),
   sample_dialogues_in: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   sample_dialogues_out: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   trigger_words: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_TRIGGER_WORDS),
@@ -133,7 +152,18 @@ export const presetExportDataSchema = z.object({
       return value;
     }, z.number().int().nonnegative())
     .optional(),
-  nai_tags: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_NAI_TAGS).optional(),
+  preset_lineage_id: z
+    .preprocess((value) => {
+      if (typeof value === "bigint") {
+        return Number(value);
+      }
+      if (typeof value === "string" && value.trim() !== "") {
+        return Number(value);
+      }
+      return value;
+    }, z.number().int().nonnegative())
+    .optional(),
+  physical_appearance_tags: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_IMAGE_TAGS).optional(),
   nai_char_ref_url: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_author: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_title: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),

@@ -10,15 +10,30 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - name: Assign PR author
+      - name: Assign PR author and add labels
         uses: actions/github-script@v7
         with:
           script: |
+            const body = context.payload.pull_request.body || "";
+            const labels = ["Unspecified"];
+
+            // Parse Type(s) from PR body
+            if (body.match(/- \[x\] Bug Fix/i)) labels.push("bug");
+            if (body.match(/- \[x\] Feature/i)) labels.push("enhancement");
+            if (body.match(/- \[x\] Refactor \/ Chore/i)) labels.push("chore");
+
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               assignees: [context.payload.pull_request.user.login],
+            });
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: labels,
             });
 
       - name: Add to project and set Under Testing/Review
@@ -29,6 +44,14 @@ jobs:
             const projectId = "PVT_kwHOA-NKoc4BW2Oz";
             const statusFieldId = "PVTSSF_lAHOA-NKoc4BW2OzzhSHQbE";
             const underReviewOptionId = "47fc9ee4";
+            // Release Version single-select field. New PRs are seeded to
+            // "Unspecified" so the field is never blank in board views; a human
+            // re-selects the real target release later.
+            const releaseVersionFieldId = "PVTSSF_lAHOA-NKoc4BW2OzzhTGK28";
+            const releaseVersionUnspecifiedOptionId = "aa390795";
+            // Type single-select field. Derived from the PR body's Type
+            // checkboxes (same source as the repo labels set in the prior step).
+            const typeFieldId = "PVTSSF_lAHOA-NKoc4BW2OzzhTGTNA";
 
             // 1. Add PR to the project board
             const addResult = await github.graphql(`
@@ -62,3 +85,58 @@ jobs:
               fieldId: statusFieldId,
               optionId: underReviewOptionId,
             });
+
+            // 3. Seed Release Version to "Unspecified" (same single-select
+            //    mutation shape as the Status update above, different field).
+            await github.graphql(`
+              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId,
+                  itemId: $itemId,
+                  fieldId: $fieldId,
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }
+            `, {
+              projectId,
+              itemId,
+              fieldId: releaseVersionFieldId,
+              optionId: releaseVersionUnspecifiedOptionId,
+            });
+
+            // 4. Derive the Type field from the PR body's Type checkboxes.
+            //    Type is single-select but multiple boxes may be ticked, so we
+            //    resolve in priority order (first match wins). Reorder this
+            //    array to change precedence. Sub-Feature/Content have no
+            //    checkbox source and stay manual-only.
+            const body = context.payload.pull_request.body || "";
+            const typeOptionByPriority = [
+              { pattern: /- \[x\] Feature/i, optionId: "b8bc8fe5" },          // Feature
+              { pattern: /- \[x\] Bug Fix/i, optionId: "33408431" },          // Bugfix
+              { pattern: /- \[x\] Refactor \/ Chore/i, optionId: "3f2a1ae6" }, // Dev-Facing
+            ];
+            const typeMatch = typeOptionByPriority.find((t) => t.pattern.test(body));
+
+            // Only set Type when a checkbox actually matched; otherwise leave it
+            // blank for manual selection rather than guessing a value.
+            if (typeMatch) {
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId,
+                    itemId: $itemId,
+                    fieldId: $fieldId,
+                    value: { singleSelectOptionId: $optionId }
+                  }) {
+                    projectV2Item { id }
+                  }
+                }
+              `, {
+                projectId,
+                itemId,
+                fieldId: typeFieldId,
+                optionId: typeMatch.optionId,
+              });
+            }

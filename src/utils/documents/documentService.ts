@@ -58,7 +58,7 @@ function toPgTextArray(values: string[]): string {
 
 export async function insertDocumentWithChunks(params: {
   serverId: number;
-  tomoriId: number | null;
+  personaId: number | null;
   uploaderUserId: number | null;
   documentName: string;
   fileName: string | null;
@@ -76,7 +76,7 @@ export async function insertDocumentWithChunks(params: {
 }): Promise<number> {
   const {
     serverId,
-    tomoriId,
+    personaId,
     uploaderUserId,
     documentName,
     fileName,
@@ -99,7 +99,7 @@ export async function insertDocumentWithChunks(params: {
     const [documentRow] = await tx`
 			INSERT INTO documents (
 				server_id,
-				tomori_id,
+				persona_id,
 				uploader_user_id,
 				document_name,
 				file_name,
@@ -110,7 +110,7 @@ export async function insertDocumentWithChunks(params: {
 				channel_tags
 			) VALUES (
 				${serverId},
-				${tomoriId},
+				${personaId},
 				${uploaderUserId},
 				${documentName},
 				${fileName},
@@ -158,7 +158,7 @@ export async function insertDocumentWithChunks(params: {
 
 export async function retrieveRelevantDocumentChunks(params: {
   serverId: number;
-  tomoriId?: number | null;
+  personaId?: number | null;
   query: string;
   embeddingModel: EmbeddingModelRow;
   apiKey: string;
@@ -168,7 +168,7 @@ export async function retrieveRelevantDocumentChunks(params: {
   /** When set, excludes chunks whose document has channel_tags that don't include this channel */
   channelName?: string | null;
 }): Promise<RetrievedDocumentChunk[]> {
-  const { serverId, tomoriId, query, embeddingModel, apiKey, maxResults, minSimilarity, batchSize, channelName } =
+  const { serverId, personaId, query, embeddingModel, apiKey, maxResults, minSimilarity, batchSize, channelName } =
     params;
 
   if (!query.trim()) {
@@ -179,6 +179,7 @@ export async function retrieveRelevantDocumentChunks(params: {
     provider: embeddingModel.provider,
     apiKey,
     model: embeddingModel.codename,
+    modelId: embeddingModel.embedding_model_id,
     inputs: [query],
     taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_QUERY" : undefined,
     batchSize,
@@ -196,7 +197,7 @@ export async function retrieveRelevantDocumentChunks(params: {
       : sql``;
 
   const rows =
-    tomoriId === null || tomoriId === undefined
+    personaId === null || personaId === undefined
       ? await sql<
           Array<{
             document_id: number;
@@ -215,7 +216,7 @@ export async function retrieveRelevantDocumentChunks(params: {
 					JOIN documents d ON d.document_id = dc.document_id
 					WHERE dc.server_id = ${serverId}
 					  AND dc.embedding_family = ${embeddingModel.model_family}
-					  AND d.tomori_id IS NULL
+					  AND d.persona_id IS NULL
 					  ${channelFilter}
 					ORDER BY dc.embedding <=> ${queryVector}::vector
 					LIMIT ${maxResults}
@@ -239,8 +240,8 @@ export async function retrieveRelevantDocumentChunks(params: {
 					WHERE dc.server_id = ${serverId}
 					  AND dc.embedding_family = ${embeddingModel.model_family}
 					  AND (
-						d.tomori_id = ${tomoriId}
-						OR d.tomori_id IS NULL
+						d.persona_id = ${personaId}
+						OR d.persona_id IS NULL
 					  )
 					  ${channelFilter}
 					ORDER BY dc.embedding <=> ${queryVector}::vector
@@ -324,6 +325,7 @@ export async function reembedServerDocuments(params: {
       provider: embeddingModel.provider,
       apiKey,
       model: embeddingModel.codename,
+      modelId: embeddingModel.embedding_model_id,
       inputs: chunks,
       taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_DOCUMENT" : undefined,
       batchSize: 16,

@@ -27,16 +27,17 @@ import type { FunctionCall, ThoughtLogEntry } from "../../types/provider/interfa
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { truncateBeforeGenericSpeakerLine } from "../../utils/text/stringHelper";
+import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
+import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
   ProcessedChunk,
   ProviderError,
   RawStreamChunk,
   StreamConfig,
   StreamContext,
-  StreamProvider,
 } from "../../types/stream/interfaces";
 import { extractGifKeyframes } from "../../utils/media/gifProcessor";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
@@ -87,12 +88,13 @@ interface GoogleStreamChunk {
  * - Thought signatures and summaries are included in ProcessedChunk.metadata
  * - Enables the model to maintain reasoning context across function calls
  */
-export class GoogleStreamAdapter implements StreamProvider {
+export class GoogleStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
   private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
     ContextItemTag.SYSTEM_HUMANIZER_RULES,
+    ContextItemTag.SYSTEM_PERSONA_PROMPT,
     ContextItemTag.SYSTEM_PERSONALITY,
     ContextItemTag.KNOWLEDGE_SERVER_INFO,
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
@@ -104,6 +106,14 @@ export class GoogleStreamAdapter implements StreamProvider {
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
 
+  constructor() {
+    super({
+      name: "google",
+      version: "2.5",
+      supportsFunctionCalling: true,
+    });
+  }
+
   /**
    * Build a Gemini payload for token counting (or other non-stream requests)
    * using the exact same context transformation and system-instruction fallback
@@ -113,12 +123,14 @@ export class GoogleStreamAdapter implements StreamProvider {
     contextItems: StructuredContextItem[],
     model?: string,
     messageIdMap?: StreamContext["messageIdMap"],
+    seesImages = true,
   ): Promise<GoogleTokenCountPayload> {
     const { systemInstruction, dialogueContents } = await this.assembleGoogleContext(
       contextItems,
       [],
       undefined,
       messageIdMap,
+      seesImages,
     );
 
     const contents = [...dialogueContents];
@@ -159,7 +171,7 @@ export class GoogleStreamAdapter implements StreamProvider {
       existingStops: requestConfig.stopSequences,
       providerName: "google",
       model: config.model,
-      personaName: context.tomoriState.tomori_nickname,
+      personaName: context.tomoriState.persona_nickname,
       configuredStops: context.tomoriState.config.llm_stop_strings,
       includePersonaSpeakerStop: speakerStopPatternEnabled,
     });
@@ -174,7 +186,12 @@ export class GoogleStreamAdapter implements StreamProvider {
     }
 
     // Assemble context for Google format (shared with token counting path)
-    const payload = await this.buildTokenCountPayload(context.contextItems, config.model, context.messageIdMap);
+    const payload = await this.buildTokenCountPayload(
+      context.contextItems,
+      config.model,
+      context.messageIdMap,
+      context.tomoriState.llm.sees_images,
+    );
     const finalContents = [...payload.contents];
 
     if (payload.systemInstruction) {
@@ -287,8 +304,12 @@ export class GoogleStreamAdapter implements StreamProvider {
         config: requestConfig,
       });
 
-      // Yield each chunk
+      // Yield each chunk; bail out immediately if the external abort signal fired.
       for await (const chunkResponse of stream) {
+        if (context.abortSignal?.aborted) {
+          log.warn(`Google stream aborting for channel ${context.channel.id}: external abort signal received.`);
+          return;
+        }
         const normalizedChunk = this.normalizeGoogleStreamChunk(chunkResponse);
         const chunksToEmit = this.splitChunkWithTextAndFunctionCalls(normalizedChunk);
 
@@ -359,15 +380,7 @@ export class GoogleStreamAdapter implements StreamProvider {
       }
 
       // Convert Google API errors to our format
-      const providerError = this.handleProviderError(error);
-      yield {
-        data: { error: providerError },
-        provider: "google",
-        metadata: {
-          timestamp: Date.now(),
-          error: true,
-        },
-      };
+      yield this.createProviderErrorChunk(error);
     }
   }
 
@@ -978,18 +991,6 @@ export class GoogleStreamAdapter implements StreamProvider {
   }
 
   /**
-   * Get provider information
-   */
-  getProviderInfo() {
-    return {
-      name: "google",
-      version: "2.5",
-      supportsStreaming: true,
-      supportsFunctionCalling: true,
-    };
-  }
-
-  /**
    * Assemble context items into Google's expected format
    * Extracted from the original streamGeminiToDiscord function (lines 218-390)
    */
@@ -1002,11 +1003,13 @@ export class GoogleStreamAdapter implements StreamProvider {
       preToolCallTextParts?: Array<Record<string, unknown>>;
     }>,
     messageIdMap?: StreamContext["messageIdMap"],
+    seesImages = true,
   ): Promise<{ systemInstruction?: string; dialogueContents: Content[] }> {
     const systemInstructionParts: string[] = [];
     const dialogueContents: Content[] = [];
+    const relocatedContextItems = relocateAssistantMediaContextItems(contextItems);
 
-    for (const item of contextItems) {
+    for (const item of relocatedContextItems) {
       let itemTextContent = "";
       if (item.parts.some((p) => p.type === "text")) {
         itemTextContent = item.parts
@@ -1032,6 +1035,14 @@ export class GoogleStreamAdapter implements StreamProvider {
         for (const part of item.parts) {
           if (part.type === "text") {
             geminiParts.push({ text: part.text });
+          } else if (part.type === "image" && !seesImages) {
+            // Defense-in-depth: an image part reached the adapter but the routed
+            // model cannot process it. The per-attempt media resolver should
+            // normally prevent this; keep a text placeholder here as a backstop
+            // so leaked media parts are not silently dropped.
+            geminiParts.push({
+              text: "[System: An image is attached to this message that this model cannot process.]",
+            });
           } else if (part.type === "image" && part.uri && part.mimeType) {
             // Handle images with URI - fetch and convert to base64
             try {
@@ -1083,9 +1094,22 @@ export class GoogleStreamAdapter implements StreamProvider {
                 });
               }
             } catch (imgErr) {
-              log.warn(`GoogleStreamAdapter: Image processing error ${part.uri}`, {
-                error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-              });
+              const fallback = (part as { fallbackUri?: string }).fallbackUri;
+              if (fallback && fallback !== part.uri) {
+                try {
+                  const optimized = await fetchAndOptimizeImage(fallback, part.mimeType);
+                  geminiParts.push({ inlineData: { mimeType: optimized.mimeType, data: optimized.data } });
+                  log.info(`GoogleStreamAdapter: Image loaded via fallback CDN URL ${fallback}`);
+                } catch (fallbackErr) {
+                  log.warn(`GoogleStreamAdapter: Image processing error (proxy + CDN both failed) ${part.uri}`, {
+                    error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+                  });
+                }
+              } else {
+                log.warn(`GoogleStreamAdapter: Image processing error ${part.uri}`, {
+                  error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+                });
+              }
             }
           } else if (part.type === "image" && "inlineData" in part && part.inlineData) {
             // Handle images that already have base64 data (e.g., from profile picture tool)
@@ -1223,8 +1247,7 @@ export class GoogleStreamAdapter implements StreamProvider {
       }
     }
 
-    const systemInstruction =
-      systemInstructionParts.length > 0 ? systemInstructionParts.join("\n\n---\n\n") : undefined;
+    const systemInstruction = systemInstructionParts.length > 0 ? systemInstructionParts.join("\n\n") : undefined;
 
     return { systemInstruction, dialogueContents };
   }

@@ -1,0 +1,61 @@
+/**
+ * Default image prompt tags persisted in server config.
+ * Positive tags are appended to standard image prompts and prepended to NovelAI tag prompts.
+ * Negative tags are consumed by image providers with a real negative-prompt channel.
+ * These mirror the schema defaults in `src/db/schema.sql`.
+ */
+export const DEFAULT_IMAGE_POSITIVE_TAGS = [
+  "absurdres",
+  "aesthetic",
+  "very aesthetic",
+  "masterpiece",
+  "best quality",
+  "good quality",
+  "newest",
+];
+
+export const DEFAULT_IMAGE_NEGATIVE_TAGS = [
+  "lowres",
+  "worst quality",
+  "low quality",
+  "bad quality",
+  "old",
+  "oldest",
+  "unfinished",
+  "scan artifacts",
+  "jpeg artifacts",
+  "jaggy lines",
+  "unclear",
+  "sketch",
+  "blurry",
+  "bad anatomy",
+  "very displeasing",
+  "displeasing",
+  "bad hands",
+  "bad fingers",
+  "missing fingers",
+  "bad proportions",
+  "bad perspective",
+  "bad eyes",
+  "bad pupils",
+  "multiple heads",
+  "extra faces",
+  "many arms",
+  "poorly drawn face",
+  "poorly drawn hands",
+  "fused hands",
+  "bad feet",
+  "too many legs",
+  "malformed limbs",
+  "extra arms",
+  "multiple ears",
+  "extra digits",
+  "fewer digits",
+  "twitter username",
+  "username",
+  "watermark",
+  "signature",
+  "2koma",
+  "4koma",
+  "comic",
+];

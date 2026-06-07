@@ -12,8 +12,21 @@ export interface TriggerConfig {
  */
 export type ContextPart =
   | { type: "text"; text: string }
-  | { type: "image"; uri: string; mimeType: string } // URI could be a public URL or a data URI
+  | { type: "image"; uri: string; mimeType: string; fallbackUri?: string } // URI could be a public URL or a data URI; fallbackUri tried on fetch failure
   | { type: "video"; uri: string; mimeType: string; isYouTubeLink?: boolean }; // Video support with YouTube detection
+
+export interface MediaDescriptor {
+  kind: "image" | "video";
+  uri: string;
+  mimeType: string | null;
+  fallbackUri?: string;
+  mediaId: string;
+  isEmoji?: boolean;
+  withinWindow: boolean;
+  extendBy?: number;
+  isYouTubeLink?: boolean;
+  filename?: string;
+}
 
 export interface ConversationUserReference {
   targetId: string; // Discord snowflake or bridge user ID
@@ -22,12 +35,19 @@ export interface ConversationUserReference {
   mentionable: boolean; // True only when this target can be converted into a Discord mention
 }
 
+export interface ContextItemSender {
+  name: string;
+  type: "user" | "persona";
+}
+
 // New: Define the possible metadata tags for context items (Rule 13)
 export enum ContextItemTag {
   // System-level instructions and configurations
   SYSTEM_INSTRUCTION_BLOCK = "system_instruction_block", // For the main consolidated system prompt
   SYSTEM_PERSONALITY = "system_personality", // Specific to bot's core personality attributes
   SYSTEM_HUMANIZER_RULES = "system_humanizer_rules", // Specific to humanization instructions
+  SYSTEM_CHANNEL_PROMPT = "system_channel_prompt", // Per-channel system prompt override (append mode); injected after SYSTEM_HUMANIZER_RULES
+  SYSTEM_PERSONA_PROMPT = "system_persona_prompt", // Specific to persona prompt
   SYSTEM_FUNCTION_GUIDE = "system_function_guide", // New: For instructions on using available functions
 
   // Knowledge base and environmental context
@@ -56,8 +76,10 @@ export enum ContextItemTag {
 export type StructuredContextItem = {
   role: "system" | "user" | "model"; // 'system' for initial instructions, 'user' for user/tool inputs, 'model' for LLM responses
   parts: ContextPart[];
+  mediaDescriptors?: MediaDescriptor[];
   metadataTag?: ContextItemTag; // Optional tag for internal processing
   messageId?: string; // Optional Discord message ID for tools that need to reference the original message
+  sender?: ContextItemSender; // Hidden sender metadata for provider-side history normalization
   conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
 };
 

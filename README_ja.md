@@ -518,6 +518,26 @@ docker compose up
 
 **注意：** Docker Composeはデータベース接続を自動的に設定します。PostgreSQLサービスは開発モード（SSLなし）で実行され、内部Dockerネットワークに接続します。
 
+#### セルフホスト型Web検索（SearXNGサイドカー）
+
+`web_search` ツールはエンジンチェーン **Brave → SearXNG → DuckDuckGo → Felo** で動作します。ローカルでのSearXNGセットアップ方法は3通り：
+
+1. **Docker Compose（推奨）。** `docker compose up` で `searxng` サービスが自動起動し、bot は `http://searxng:8080/` で接続します。本番では `.env` に32文字以上の `SEARXNG_SECRET` を設定してください（開発ではデフォルト値を使用）。
+2. **スタンドアロンDocker（`bun run dev` 利用時）。** `servers/searxng/README.md` の `docker run` スニペットを参照し、シェルで `SEARXNG_BASE_URL=http://localhost:8080/` を設定。
+3. **SearXNG なし。** `SEARXNG_BASE_URL` を未設定のままにすると、チェーンは `Brave → DDG → Felo` に縮退します。問題ありません。
+
+エンジンごとのタイムアウトとヘルスプローブのキャッシュ時間は `WEB_SEARCH_TIMEOUT_MS` と `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` で調整可能（`.env.optional.example` 参照）。
+
+#### セルフホスト型URL取得レンダリング（Crawl4AIサイドカー）
+
+`fetch_url` ツールは、任意でブラウザレンダリング用サイドカーを先に試し、その後に組み込みMCP fetchエンジンへフォールバックできます。JavaScriptが多いページのレンダリング済み内容を取得したい場合に使います。
+
+1. **Crawl4AI Docker Composeプロファイル。** `docker compose --profile fetch-crawl4ai up` で起動し、botコンテナ用に `.env` へ `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` を設定します。
+2. **スタンドアロンDocker（`bun run dev` 利用時）。** `servers/crawl4ai/README.md` の `docker run` スニペットを参照し、`CRAWL4AI_BASE_URL=http://localhost:11235/` をシェルで設定します。
+3. **ブラウザサイドカーなし。** `CRAWL4AI_BASE_URL` を未設定のままにすると、`fetch_url` は組み込み `mcp_fetch` のみを使用します。
+
+デフォルトのエンジン順は `crawl4ai,mcp_fetch` です。任意設定: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `FETCH_URL_ALLOW_PRIVATE_NETWORK`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`。`FETCH_URL_ALLOW_PRIVATE_NETWORK=false` のままにしてください。このbotが信頼済みのセルフホスト環境で動作し、ユーザーに `fetch_url` からlocalhost/プライベート/内部ネットワークへ到達させてもよい場合だけ有効にします。
+
 #### Grafanaでのモニタリング（オプション）
 
 GrafanaダッシュボードでTomoriBotインスタンスをモニタリングするには：
@@ -571,10 +591,10 @@ TomoriBotはまだベータ版のため、どんなコントリビュートで�
    - すべてのキーとネストされたオブジェクトをコピー
    - `{variable}`のようなプレースホルダーを保持したまま、ユーザー向けテキストをすべて翻訳
 
-3. **プリセット翻訳を追加**（オプションですが推奨） `src/db/seed.sql`に：
-   - 各プリセットの`tomori_preset_desc`フィールドを翻訳
+3. **プリセット翻訳を追加**（オプションですが推奨） `src/db/seed/02_personas.sql`に：
+   - 各プリセットの`persona_preset_desc`フィールドを翻訳
    - `preset_attribute_list`、`preset_sample_dialogues_in`、`preset_sample_dialogues_out`配列を翻訳
-   - `llm_description`フィールドを翻訳してLLM説明を追加（`ja_description`の既存パターンに従う）
+   - `src/db/seed/01_models.sql`で`llm_description`フィールドを翻訳してLLM説明を追加（`ja_description`の既存パターンに従う）
    - `preset_language`をあなたのロケールコードに設定
 
 4. **翻訳をテスト**：
@@ -583,7 +603,7 @@ TomoriBotはまだベータ版のため、どんなコントリビュートで�
    bun run check-locales
    ```
 
-5. **プルリクエストを送信** 新しいロケールファイルとseed.sqlへの追加内容を含めて
+5. **プルリクエストを送信** 新しいロケールファイルと`src/db/seed/*.sql`への追加内容を含めて
 
 ### 新機能にコントリビュートするには
 

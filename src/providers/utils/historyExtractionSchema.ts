@@ -62,8 +62,6 @@ export function buildHistoryExtractionResponseSchema(): Record<string, unknown> 
           properties: {
             lossless_restatement: {
               type: "string" as const,
-              minLength: 10,
-              maxLength: 1000,
               description:
                 "Self-contained restatement of a fact with all pronouns resolved to proper names and absolute timestamps where possible",
             },

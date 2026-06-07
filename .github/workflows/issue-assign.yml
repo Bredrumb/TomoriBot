@@ -12,7 +12,6 @@ jobs:
       issues: write
     steps:
       - name: Assign commenter
-        id: assign
         uses: actions/github-script@v7
         with:
           script: |
@@ -47,54 +46,7 @@ jobs:
               owner, repo, issue_number,
               assignees: [commenter],
             });
-
-            core.setOutput("assigned", "true");
-
-      - name: Move to In-Progress
-        if: steps.assign.outputs.assigned == 'true'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.PROJECTS_TOKEN }}
-          script: |
-            const projectId = "PVT_kwHOA-NKoc4BW2Oz";
-            const statusFieldId = "PVTSSF_lAHOA-NKoc4BW2OzzhSHQbE";
-            const inProgressOptionId = "61e4505c";
-
-            const result = await github.graphql(`
-              query($issueId: ID!) {
-                node(id: $issueId) {
-                  ... on Issue {
-                    projectItems(first: 10) {
-                      nodes {
-                        id
-                        project { id }
-                      }
-                    }
-                  }
-                }
-              }
-            `, { issueId: context.payload.issue.node_id });
-
-            const projectItem = result.node.projectItems.nodes.find(
-              (item) => item.project.id === projectId,
-            );
-
-            if (!projectItem) return;
-
-            await github.graphql(`
-              mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-                updateProjectV2ItemFieldValue(input: {
-                  projectId: $projectId,
-                  itemId: $itemId,
-                  fieldId: $fieldId,
-                  value: { singleSelectOptionId: $optionId }
-                }) {
-                  projectV2Item { id }
-                }
-              }
-            `, {
-              projectId,
-              itemId: projectItem.id,
-              fieldId: statusFieldId,
-              optionId: inProgressOptionId,
-            });
+            // Assigning fires the `issues: assigned` event, which
+            // issue-assigned.yml handles to move the card to In-Progress.
+            // That status transition is intentionally owned solely by that
+            // workflow so it also covers manual assignments via the GitHub UI.

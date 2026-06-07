@@ -9,8 +9,7 @@ export interface ElevenLabsAdapterRequest {
 
 /**
  * Thin adapter that wraps `synthesizeSpeechWithElevenLabs` for use via the
- * custom endpoint pathway. Reads `speech_voice_id` (Phase 4.1+) rather than
- * the legacy `elevenlabs_voice_id` column.
+ * custom endpoint pathway. Reads `speech_voice_id`.
  */
 export async function synthesizeSpeechViaElevenLabsAdapter(
   request: ElevenLabsAdapterRequest,
