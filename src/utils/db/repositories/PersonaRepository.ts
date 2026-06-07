@@ -42,7 +42,7 @@ import { type MemoryValidationResult, getMemoryLimits } from "@/utils/misc/memor
 import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
-import { dedupeTriggerWords } from "@/utils/text/triggerWords";
+import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
 // ── persona config table row shapes ─────────────────────────────────
@@ -2850,6 +2850,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             return [];
           }
 
+          // Collapse shared trigger words to a single owner before returning, so a
+          // word every preset bundles (e.g. "tomori") routes to one persona instead
+          // of firing every alter at once. See applyTriggerWordOwnership.
+          this.applyTriggerWordOwnership(personas);
+
           return personas;
         } catch (error) {
           log.error(`Error loading all personas for server ${serverDiscId}:`, error);
@@ -2861,6 +2866,66 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }, `load all personas for server ${serverDiscId}`)) ?? []
     );
+  }
+
+  /**
+   * Enforces single-owner trigger words across a server's persona set.
+   *
+   * Every official preset deliberately bundles the shared base word ("tomori")
+   * alongside its unique name (e.g. shy = `[tomori, lilya]`). Pointer personas
+   * resolve their triggers live from that shared preset, so without this step the
+   * same word would route to the main persona AND every alter at once. Here we
+   * award each trigger to exactly one persona by priority:
+   *
+   *   1. Main persona(s) (`is_alter = false`) — they additionally reserve the
+   *      configured base trigger words even if their stored list omits them, so
+   *      an alter can never steal the bot's own name regardless of server locale.
+   *   2. Alters in creation order (ascending `persona_id`) — first created wins a
+   *      contested word; later personas drop it.
+   *
+   * Each persona keeps only the triggers no higher-priority persona already owns;
+   * whatever it keeps is then claimed for everyone after it. The main persona's
+   * list is never trimmed. Mutates `trigger_words` in place and preserves the
+   * input array order (callers rely on the main-first / recency load ordering).
+   *
+   * @param personas - Assembled persona states for one server.
+   */
+  private applyTriggerWordOwnership(personas: TomoriState[]): void {
+    // 1. Seed the claimed set with base trigger words for both shipped locales so
+    //    the main persona implicitly owns the bot's name in any language.
+    const claimedTriggerKeys = new Set<string>();
+    for (const baseWord of [...getBaseTriggerWords("en-US"), ...getBaseTriggerWords("ja")]) {
+      const normalizedBaseWord = normalizeTriggerWord(baseWord);
+      if (normalizedBaseWord.length > 0) {
+        claimedTriggerKeys.add(normalizedBaseWord);
+      }
+    }
+
+    // 2. Visit personas in ownership priority: main first, then alters oldest-first.
+    const personasByOwnershipPriority = [...personas].sort((a, b) => {
+      if (a.is_alter !== b.is_alter) {
+        return a.is_alter ? 1 : -1;
+      }
+      return (a.persona_id ?? 0) - (b.persona_id ?? 0);
+    });
+
+    for (const persona of personasByOwnershipPriority) {
+      // 2a. Alters drop any trigger a higher-priority persona already owns; the
+      //     main persona keeps its full list unchanged.
+      if (persona.is_alter) {
+        persona.trigger_words = selectUnclaimedTriggerWords(persona.trigger_words ?? [], claimedTriggerKeys, {
+          lowercase: false,
+        });
+      }
+
+      // 2b. Claim whatever this persona kept so later personas can't reuse it.
+      for (const trigger of persona.trigger_words ?? []) {
+        const normalizedTrigger = normalizeTriggerWord(trigger);
+        if (normalizedTrigger.length > 0) {
+          claimedTriggerKeys.add(normalizedTrigger);
+        }
+      }
+    }
   }
 
   private async loadPersonaConfigRow(personaId: number): Promise<PersonaConfigRow | null> {

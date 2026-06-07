@@ -17,7 +17,7 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
-import { dedupeTriggerWords, normalizeTriggerWord } from "@/utils/text/triggerWords";
+import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -530,7 +530,17 @@ export async function execute(
       return;
     }
 
-    const uniqueAlterTriggers = presetTriggerWords;
+    // Drop trigger words already owned by an existing persona (e.g. the shared
+    // "tomori"/base words owned by the main persona) so this alter stays
+    // unambiguous. Mirrors the live single-owner dedup the loader applies, where
+    // a newly created alter is the lowest-priority claimant.
+    const claimedTriggerWords = [
+      ...getBaseTriggerWords(locale),
+      ...allPersonas.flatMap((persona) => persona.trigger_words ?? []),
+    ];
+    const uniqueAlterTriggers = selectUnclaimedTriggerWords(presetTriggerWords, claimedTriggerWords, {
+      lowercase: false,
+    });
     const hasNoTriggers = uniqueAlterTriggers.length === 0;
 
     const insertedAlterRow = await personaRepository.createPresetPointerAlterPersona({

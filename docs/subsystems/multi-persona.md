@@ -57,6 +57,19 @@ Each persona checks its own trigger list in `persona_configs.trigger_words`. The
 
 If multiple personas match, they respond in deterministic order based on where their trigger first appears in the message. The per-message count is capped by `/config trigger-match-limit`.
 
+#### Single-owner trigger resolution
+
+Every official preset deliberately bundles the shared base word (`tomori`) alongside its unique name — e.g. the *shy* preset ships `[tomori, lilya]`. Pointer personas resolve their triggers live from that shared preset, so without de-duplication the same word (`tomori`) would route to the main persona **and** every alter at once.
+
+To prevent this, `PersonaRepository.loadAllForServer` collapses trigger words to a single owner every time it assembles a server's persona set (`applyTriggerWordOwnership`). Ownership is awarded by priority:
+
+1. **Main persona(s)** (`is_alter = false`) — never trimmed, and they additionally reserve the configured base trigger words (`BASE_TRIGGER_WORDS`, both shipped locales) even if their stored list omits them, so an alter can never steal the bot's own name.
+2. **Alters in creation order** (ascending `persona_id`) — the first-created alter wins a contested word; later personas drop it.
+
+A persona keeps only the words no higher-priority persona already owns. Two identical alters (e.g. two *Default* alters, each `[tomori, rose]`) therefore resolve to: main owns `tomori`, the older alter owns `rose`, and the newer alter ends up with **no addressable trigger** (reachable only by @mention, reply, or its webhook identity).
+
+Because this runs at read time, it self-heals existing servers and covers **every** write path — `/persona default`, `/persona import`, pointer materialization, and preset auto-sync. The creation commands (`/persona default`, `importAlterPreset`) also apply the same de-dup when computing the success-message trigger summary, so what they report matches what the loader will route. Note that for pointer personas, `persona_configs.trigger_words` is **not** the live source (the preset is); it stores the de-duped set for honest display and for the case the pointer is later materialized/forked.
+
 ### Follow-up behavior during active streaming
 
 When a persona is mid-stream and a new message arrives, TomoriBot checks whether the message carries an explicit trigger for a **different** persona before deciding to treat it as a follow-up:

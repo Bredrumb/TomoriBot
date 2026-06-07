@@ -41,6 +41,8 @@ When `is_pointer = true`, runtime reads resolve the persona's preset-backed cont
 
 The persona row and normalized child rows still carry copied values for compatibility with older surfaces, but live preset data is authoritative while the persona is a pointer.
 
+Trigger words are the one preset-resolved field that is further post-processed: because every preset bundles the shared base word (`tomori`), `loadAllForServer` collapses contested words to a single owner after resolving them (main persona wins base words; alters keep only what no higher-priority persona already claimed). See `docs/subsystems/multi-persona.md` → *Single-owner trigger resolution*. The de-duped result, not the raw preset list, is what routes messages.
+
 Avatars are the exception to live pointer resolution. `persona_presets.preset_avatar_path` is an application source asset, not a runtime-resolved pointer field. Main persona avatars live as the bot's Discord guild member avatar, while alter avatars live in `personas.webhook_avatar_url` as an avatar-storage URL/path. Because those are external Discord/storage media references, later seed changes to `preset_avatar_path` do not fan out to existing pointer personas.
 
 ### `persona_presets.preset_attribute_public_flags`

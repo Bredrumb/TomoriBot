@@ -15,7 +15,8 @@ import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import { resolvePersonaAvatarPublicUrl, uploadPersonaAvatarToStorage } from "@/utils/storage/avatarStorage";
-import { normalizeTriggerWord } from "@/utils/text/triggerWords";
+import { getBaseTriggerWords } from "@/utils/text/localizer";
+import { selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExportData } from "@/types/preset/presetExport";
 
 /**
@@ -51,7 +52,7 @@ export type ImportAlterPresetResult =
       personaId: number;
       /** Imported persona nickname. */
       nickname: string;
-      /** Triggers shown to the user (pointer imports keep all; custom imports drop overlaps). */
+      /** Triggers shown to the user (the unique set this alter owns after dropping overlaps). */
       displayedTriggers: string[];
       /** Count of non-overlapping triggers actually stored on the persona config. */
       uniqueTriggerCount: number;
@@ -120,21 +121,23 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
   }
 
   // 3. Gather every trigger already claimed by existing personas so the new
-  //    alter never steals an overlapping trigger word.
-  const allTriggerWords = new Set<string>();
-  for (const persona of allPersonas) {
-    for (const trigger of persona.trigger_words ?? []) {
-      allTriggerWords.add(normalizeTriggerWord(trigger));
-    }
-  }
+  //    alter never steals an overlapping trigger word. Reserve the base words
+  //    ("tomori" etc.) too: they belong to the main persona regardless of locale,
+  //    and the loader's single-owner dedup would strip them from an alter anyway.
+  const claimedTriggerWords = [
+    ...getBaseTriggerWords("en-US"),
+    ...getBaseTriggerWords("ja"),
+    ...allPersonas.flatMap((persona) => persona.trigger_words ?? []),
+  ];
 
-  // 4. Split the incoming triggers into the unique set actually stored vs. the
-  //    full set displayed (official-preset pointers keep all their triggers).
+  // 4. Filter the incoming triggers to the unique set this alter actually owns.
+  //    This is what we store and display for both custom and official-preset
+  //    (pointer) imports — the loader enforces the same ownership at read time.
   const importTriggers = presetData.trigger_words ?? [];
-  const uniqueTriggers = importTriggers.filter((trigger) => !allTriggerWords.has(normalizeTriggerWord(trigger)));
+  const uniqueTriggers = selectUnclaimedTriggerWords(importTriggers, claimedTriggerWords, { lowercase: false });
   const matchingOfficialPreset = await presetRepository.findMatchingOfficialPresetForImport(presetData);
   const createdAsPointer = matchingOfficialPreset !== null;
-  const displayedTriggers = createdAsPointer ? importTriggers : uniqueTriggers;
+  const displayedTriggers = uniqueTriggers;
   const hasNoTriggers = displayedTriggers.length === 0;
 
   // 5. Alters copy structural config from the main persona, so it must exist.
@@ -167,7 +170,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
           preset: matchingOfficialPreset,
           personaLineageId: identityMode === "preserve" ? importedLineageId : null,
           useFreshLineage: identityMode === "fork",
-          triggerWords: importTriggers,
+          triggerWords: uniqueTriggers,
           personaPrompt: typeof presetData.persona_prompt === "string" ? presetData.persona_prompt : null,
         })) ?? undefined)
       : ((await personaRepository.createAlterPersona({
