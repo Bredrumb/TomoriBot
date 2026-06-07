@@ -23,6 +23,7 @@ There are a *lot* of new features and QoL changes so I decided to split it up fr
 - Added [SearXNG](https://github.com/searxng/searxng) as locally hosted alternative to web search
   - Mixes multiple search engines for reliability (supports images, videos, music, etc.), doesn't use cookies, and sends randomized headers to protect your privacy (you still need a VPN to cover your IP address, if you want maximum privacy)
   - To run, set `SEARXNG_BASE_URL=http://searxng:8080/` in .env then launch `docker compose --profile searxng up -d` or `bun launch --searxng` or see the [full guide here](https://github.com/{REPO_OWNER}/{REPO_NAME}/blob/main/docs/guides/setup-searxng.md)
+  - Deployed TomoriBot now uses SearXNG instead of DDG which will make its search more reliable
 - Added [Crawl4AI](https://github.com/unclecode/crawl4ai) as locally hosted alternative to URL fetching
   - Uses a headless browser that can handle lazy-loaded content (websites using JavaScript)
   - Automatically formats websites into LLM-friendly .md format

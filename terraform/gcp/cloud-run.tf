@@ -52,6 +52,16 @@ resource "google_cloud_run_v2_service" "tomoribot" {
       name  = var.container_name
       image = var.container_image
 
+      # Ingress container: Cloud Run requires exactly one container to expose a
+      # port, injects PORT with this value, and targets its startup probe here.
+      # The bot's health server reads process.env.PORT (see src/index.ts) and
+      # binds it. Deliberately 8081 — not 8080 — because Cloud Run containers
+      # share a localhost network namespace and must each bind a unique port;
+      # the SearXNG sidecar keeps 8080.
+      ports {
+        container_port = 8081
+      }
+
       resources {
         limits = {
           cpu    = var.cloud_run_cpu
@@ -127,9 +137,10 @@ resource "google_cloud_run_v2_service" "tomoribot" {
       name  = "searxng"
       image = var.searxng_image
 
-      ports {
-        container_port = 8080
-      }
+      # Sidecar: no `ports` block — only the ingress container (tomoribot) may
+      # expose a port. SearXNG still listens on its default 8080 internally and
+      # is reachable by the bot at http://localhost:8080/ via the shared
+      # network namespace (see SEARXNG_BASE_URL below and the startup_probe).
 
       env {
         name = "SEARXNG_SECRET"
