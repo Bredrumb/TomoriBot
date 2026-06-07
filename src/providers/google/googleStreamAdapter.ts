@@ -1247,8 +1247,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    const systemInstruction =
-      systemInstructionParts.length > 0 ? systemInstructionParts.join("\n\n") : undefined;
+    const systemInstruction = systemInstructionParts.length > 0 ? systemInstructionParts.join("\n\n") : undefined;
 
     return { systemInstruction, dialogueContents };
   }

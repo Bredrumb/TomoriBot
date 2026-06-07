@@ -2302,7 +2302,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * Characters:
    * {botName}
    * {SYSTEM_PERSONALITY text}
-   * 
+   *
    * {SYSTEM_INSTRUCTION_BLOCK / SYSTEM_HUMANIZER_RULES / KNOWLEDGE_SERVER_INFO text}
    *
    * Server Notes:

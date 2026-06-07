@@ -20,6 +20,7 @@ import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 import {
   buildCapabilityEditModalComponents,
   parseCapabilityModalFields,
+  WORKFLOW_UPLOAD_ID,
 } from "@/utils/provider/customEndpointCapabilityModal";
 import { registerCustomEndpoint, validateCustomEndpointReachability } from "@/utils/provider/customEndpointService";
 import {
@@ -36,8 +37,6 @@ const SELECT_MODAL_CUSTOM_ID = "custom_endpoint_edit_select_modal";
 const ENDPOINT_SELECT_ID = "endpoint_select";
 const EDIT_BUTTON_ID = "edit_fields";
 const CANCEL_BUTTON_ID = "cancel_edit";
-const WORKFLOW_BUTTON_ID = "edit_workflow";
-const WORKFLOW_UPLOAD_ID = "workflow_json";
 
 type RegistrationScope =
   | { kind: "server"; ownerId: number; baseConfig: AssembledServerConfig }
@@ -123,21 +122,6 @@ async function loadWorkflowJson(url: string | null): Promise<Record<string, unkn
   }
 
   return JSON.parse(downloadResult.buffer.toString("utf8")) as Record<string, unknown>;
-}
-
-function buildWorkflowEditModalComponents(): ModalComponent[] {
-  const components: ModalComponent[] = [];
-
-  components.push({
-    customId: WORKFLOW_UPLOAD_ID,
-    labelKey: "commands.config.custom_models.capability_modal.workflow_json_label",
-    descriptionKey: "commands.config.custom_models.capability_modal.workflow_json_description",
-    minValues: 0,
-    maxValues: 1,
-    required: false,
-  });
-
-  return components;
 }
 
 function isComfyUiMediaEndpoint(endpoint: CustomEndpointRow): boolean {
@@ -355,6 +339,7 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       transcriptionModel: extra.model as string | null,
       transcriptionLanguage: extra.language as string | null,
     },
+    isComfyUiMediaEndpoint(existingEndpoint),
   );
   if (existingEndpoint.capability === "image") {
     editModalComponents.push(
@@ -467,69 +452,11 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
     }
 
     if (isComfyUiMediaEndpoint(existingEndpoint)) {
-      const workflowButton = new ButtonBuilder()
-        .setCustomId(WORKFLOW_BUTTON_ID)
-        .setLabel(localizer(locale, "commands.config.custom_models.edit.edit_workflow_button"))
-        .setStyle(ButtonStyle.Primary);
-      const skipWorkflowButton = new ButtonBuilder()
-        .setCustomId(CANCEL_BUTTON_ID)
-        .setLabel(localizer(locale, "commands.config.custom_models.edit.keep_workflow_button"))
-        .setStyle(ButtonStyle.Secondary);
-
-      await selectInteraction.editReply({
-        embeds: [summaryEmbed],
-        content: null,
-        components: [new ActionRowBuilder<ButtonBuilder>().addComponents(workflowButton, skipWorkflowButton)],
-      });
-
-      let workflowButtonInteraction: ButtonInteraction;
-      try {
-        workflowButtonInteraction = await summaryMessage.awaitMessageComponent({
-          componentType: ComponentType.Button,
-          filter: (i: ButtonInteraction) =>
-            i.user.id === interaction.user.id && (i.customId === WORKFLOW_BUTTON_ID || i.customId === CANCEL_BUTTON_ID),
-          time: 300_000,
-        });
-      } catch {
-        await selectInteraction.editReply({ components: [] });
-        return;
-      }
-
-      if (workflowButtonInteraction.customId === WORKFLOW_BUTTON_ID) {
-        const workflowModalResult = await promptWithRawModal(workflowButtonInteraction, locale, {
-          modalCustomId: `custom_endpoint_edit_workflow_${interaction.id}`,
-          modalTitleKey: `commands.config.custom_models.capability_modal.${existingEndpoint.capability}_workflow_edit_title`,
-          components: buildWorkflowEditModalComponents(),
-        });
-
-        if (workflowModalResult.outcome !== "submit") {
-          await selectInteraction.editReply({ components: [] });
-          return;
-        }
-
-        // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees interaction exists
-        await workflowModalResult.interaction!.deferUpdate();
-
-        const workflowAttachment = workflowModalResult.attachments?.[WORKFLOW_UPLOAD_ID];
-        if (workflowAttachment) {
-          const workflow = await loadWorkflowJson(workflowAttachment.url);
-          extraConfig = {
-            ...extraConfig,
-            workflow,
-          };
-        } else if (!extraConfig.workflow) {
-          await selectInteraction.editReply({
-            embeds: [],
-            components: [],
-            content: localizer(locale, "commands.config.custom_models.validation.workflow_required"),
-          });
-          return;
-        }
-      } else {
-        await workflowButtonInteraction.update({ components: [] });
-      }
-
-      if (!extraConfig.workflow) {
+      const workflowAttachment = editModalResult.attachments?.[WORKFLOW_UPLOAD_ID];
+      if (workflowAttachment) {
+        const workflow = await loadWorkflowJson(workflowAttachment.url);
+        extraConfig = { ...extraConfig, workflow };
+      } else if (!extraConfig.workflow) {
         await selectInteraction.editReply({
           embeds: [],
           components: [],
@@ -537,6 +464,7 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
         });
         return;
       }
+      // No attachment + existing workflow → keep existing workflow as-is.
     }
 
     const registered = await registerCustomEndpoint({

@@ -9,6 +9,7 @@ There are a *lot* of new features and QoL changes so I decided to split it up fr
 **Do NOT forget to `bun run backup` before pulling all new changes from `main`!**
 
 ## New Tomori Features
+- Added `/server channel-prompt` command which adds a prompt to a channel, either appending to the system prompt or replacing it when Tomori is triggered inside it based on chosen setting
 - You can now set Persona Attributes as "Public", which allows other Personas in chat to see them. Useful for physical appearance descriptions. It can be set through:
   - `/persona attribute` commands as a checkbox
   - Automatically set for physical appearance descriptions in `/persona generate`
@@ -17,7 +18,7 @@ There are a *lot* of new features and QoL changes so I decided to split it up fr
   - `/server image-tags default positive|negative` = image tags that are automatically prepended to all image generation requests done in the server
   - `/persona image-tags` = comma-separated tags of a persona's appearance
   - Use `/image-tags` if you want to help guide image generations relying on comma-separated tags, otherwise you may just use a public `/persona attribute` to describe a persona's appearance.
-  - TomoriBot can now edit and remove reminders by herself through tools, just ask her to! Only successfully executed if the invoker is the owner of the reminder.
+- TomoriBot can now edit and remove reminders by herself through tools, just ask her to! Only successfully executed if the invoker is the owner of the reminder.
 - Created memories and tasks success embeds now show an "Expand" button whenever they exceed the max character count which reveal the full text ephemerally
 - Added [SearXNG](https://github.com/searxng/searxng) as locally hosted alternative to web search
   - Mixes multiple search engines for reliability (supports images, videos, music, etc.), doesn't use cookies, and sends randomized headers to protect your privacy (you still need a VPN to cover your IP address, if you want maximum privacy)
@@ -29,8 +30,7 @@ There are a *lot* of new features and QoL changes so I decided to split it up fr
   - Can take screenshots of websites (this one specifically is not yet integrated into TomoriBot)
   - To run, set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` in .env then launch `docker compose --profile fetch-crawl4ai up -d` or `bun launch --crawl4ai` or see the [full guide here](https://github.com/{REPO_OWNER}/{REPO_NAME}/blob/main/docs/guides/setup-crawl4ai.md)
 - (For those running TomoriBot locally) You can now use `bun launch` instead of `bun run dev` which allows you to pass params that automatically launch servers if they are still not running (eg. `bun launch --qwen3tts --searxng`)
-- Added "Import Now" button to `/persona` creation and generation embeds
-- Added `/server channel-prompt` command which adds a prompt to a channel, either appending to the system prompt or replacing it when Tomori is triggered inside it based on chosen setting. For now, it is a global setting for all personas.
+- Added "Import Now" button to `/persona` creation and generation embeds, can only be pressed by users with Manage Server permissions
 - (Thanks Palinalif!) Added `/deliberate-tool-mode` which causes tools to only appear if a specific keyword corresponding to it is present in the last X messages in context. Useful for saving tokens and improving latency at the cost of potentially losing on-the-fly tool calls
   - Currently simply uses best-effort RegEx patterns to detect keywords 
   - `/deliberate-tool-context` = Adjusts how many last X messages Tomori checks for any tool keywords (default is last 3 messages)
@@ -38,8 +38,12 @@ There are a *lot* of new features and QoL changes so I decided to split it up fr
 - (Thanks Baetican!) `/memory tagging set` = Command that toggles memory tagging behavior, defaults to off (see `/help memory-tagging` to learn more) 
   - Memory tagging toggle now supports channel tags, meaning you can now restrict memories/documents/history to only certain channels
 - (Thanks Baetican!) Various improvements to `/tool compact`:
-  - TODO
+  - You can now edit the prompt used by the compact subagent upon command launch, picking between Conversation/Roleplay/Manual modes
+  - You can now edit the resulting summary by pressing the Edit button below the summary embed
+  - Simplified the tool's Roleplay mode to send plaintext instead of forceful structured output
 - (Thanks Palinalif!) Added Inpainting/Outpainting (img2img) functionality to TomoriBot's image generation tool. Use the [provided ComfyUI workflow in the repo](https://github.com/{REPO_OWNER}/{REPO_NAME}/blob/main/assets/comfyui-workflows/tomoribot-anima-v1-comfyui.json) to use it! (updated to use base Anima v1 instead of preview Anima v3, and now randomizes seeds properly as well)
+- (Thanks Palinalif!) Added extra options in `/custom-endpoint add|edit` commands for image models wherein you can enable/disable capabilities such as img2img
+- Added a "Negative Prompt" option in `/custom-endpoint add|edit` for image models wherein if True, TomoriBot can pass in negative tags unto the prompt (`/image-tags default-negative` is automatically added as well to it)
 - `/initialize expressions` now loops automatically until it processes all emojis and stickers (fails if it gets stuck)
 - You can now register multiple same-capability models under the same Custom Endpoint label, eg. useful if you want to have different workflows for "comfyui" which can be selected with `/model image`
 - `/server nuke` command which deletes all server configs (optionally, you can set it to preserve personas)
@@ -82,12 +86,18 @@ There are a *lot* of new features and QoL changes so I decided to split it up fr
 
 ## Dev-facing
 - Refactored lots of modules within Tomoribot (see the full [PR](https://github.com/Bredrumb/TomoriBot/pull/34) here) 
+  - For those using db viewers to edit memories/attributes: the following tables are now deprecated, edit the alternative tables instead:
+    - `tomoris` → `personas`
+    - `tomori_presets` → `persona_presets`
+    - Column `tomori_id` → `persona_id` (across all related tables)
+    - Column `tomori_nickname` → `persona_nickname`
+    - Preset columns: `tomori_preset_id/name/desc` → `persona_preset_id/name/desc`
 - Added multiple tests with `bun run tests`
 - Added `bun run vl` which will be the main blocker/standard for code contributors
 - Moved TTS/STT Python server files from `/scripts/` into `/servers/`
 - Moved ComfyUI workflows from `/scripts/` into `/assets/comfyui-workflows/`
 - Decomposed seed SQL scripts to readable .ts files in `/src/db/` to make it easier to edit model seeds and persona seeds.
-- Editing default Tomori persona seeds in `/src/db/seed/catalog/personas.ts` will now update it for everyone using the same unmodified Tomori preset (users would still have to re-import if they want to get the update avatar image)
+- Editing default Tomori persona seeds in `/src/db/seed/` will now update it for everyone using the same unmodified Tomori preset (users would still have to re-import if they want to get the update avatar image to respect Discord rate limits)
 
 ## Persona Updates
 Persona updates such as these are automatically applied to ALL servers using default presets, assuming you haven't changed their attribute/sample dialogue/name/avatar (which would unsync it). 
@@ -100,6 +110,8 @@ Do note that for Avatar updates, you still have to re-import this default person
 - Updated Lilya's "likes" to include "Aphel"
 - Nerine now doesn't randomly search for text model 
 - Nerine now doesn't have her forehead exposed in her physical appearance description
+- Nerine's title has been changed from "Professional Tomori" to "Loyal Tomori"
+- Updated Professional Tomori's lore description
 
 ## PLANNED Major Feature Updates
 These are NOT yet implemented, just here to state what to expect in the following updates in the coming weeks:

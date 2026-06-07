@@ -5,7 +5,7 @@
 
 import type { Client, Guild } from "discord.js";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { TomoriPresetRow } from "../../types/db/schema";
 import { log } from "../misc/logger";
@@ -16,6 +16,30 @@ import { safeDownload } from "@/utils/security/safeDownload";
  * PNG file signature (magic bytes) for format verification
  */
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+const IMAGE_EXTENSION_RE = /\.(png|jpg|jpeg|webp|gif)$/i;
+
+/**
+ * Resolves an avatar path to a Buffer.
+ * If the path has a known image extension it is read directly.
+ * Otherwise the path is treated as a directory and the first image file
+ * found (alphabetically) is used — so the filename inside the folder
+ * does not need to be predetermined.
+ */
+async function resolveAvatarPath(avatarPath: string): Promise<Buffer> {
+  const absolute = path.join(process.cwd(), avatarPath);
+
+  if (IMAGE_EXTENSION_RE.test(avatarPath)) {
+    return readFile(absolute);
+  }
+
+  const entries = await readdir(absolute);
+  const imageFile = entries.sort().find((f) => IMAGE_EXTENSION_RE.test(f));
+  if (!imageFile) {
+    throw new Error(`No image file found in avatar directory: ${absolute}`);
+  }
+  return readFile(path.join(absolute, imageFile));
+}
 
 /**
  * Gets TomoriBot's server-specific avatar or falls back to bot's default avatar
@@ -234,10 +258,9 @@ export async function getPresetAvatarBuffer(preset: PresetAvatarInput): Promise<
   }
 
   try {
-    const absolutePath = path.join(process.cwd(), presetAvatarPath);
-    return await readFile(absolutePath);
+    return await resolveAvatarPath(presetAvatarPath);
   } catch (error) {
-    log.warn(`Failed to load preset avatar file "${presetAvatarPath}" for preset ${preset.persona_preset_id}`, error);
+    log.warn(`Failed to load preset avatar "${presetAvatarPath}" for preset ${preset.persona_preset_id}`, error);
     return null;
   }
 }
@@ -267,12 +290,9 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
         continue;
       }
 
-      // 3. Construct absolute path from relative path
-      const absolutePath = path.join(process.cwd(), preset.preset_avatar_path);
-
       try {
-        // 4. Read the image file
-        const imageBuffer = await readFile(absolutePath);
+        // 3. Read the image file (resolves directory paths automatically)
+        const imageBuffer = await resolveAvatarPath(preset.preset_avatar_path);
 
         // 5. Validate it's a PNG
         const validation = validatePNGBuffer(imageBuffer);

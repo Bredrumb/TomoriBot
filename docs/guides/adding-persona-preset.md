@@ -6,7 +6,7 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
 
 ## Steps
 
-1. Add a preset row to `src/db/seed/catalog/personas.ts` in `personaSections`. Required fields:
+1. Create a new folder under `src/db/seed/catalog/personas/<name>/` and add one locale file per language variant (e.g. `en-US.ts`, `ja.ts`). Export a single named `persona` constant of type `PersonaInput` from each file, then import and register it in `src/db/seed/catalog/personas/index.ts`. Required fields:
    - `preset_lineage_id` — a stable identity anchor for this character. Reuse the same lineage ID
      across locale variants of the same character so they are treated as one canonical identity,
      and so applying the preset can stamp a consistent `persona_lineage_id` (memory scope) onto
@@ -19,13 +19,7 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
      are private. Pointer personas resolve these from the live preset row, and materialized
      copies store them in `persona_attributes.is_public`.
 
-2. Add an optional avatar path (stored under `src/db/img/`). Preset application applies the avatar
-   once to the guild (main persona) or uploads it to storage (alter) through `/config setup`,
-   `/persona default`, and preset import without forking the pointer. Runtime pointer reads do not
-   sync avatars from `preset_avatar_path`: existing personas keep their Discord guild avatar or
-   stored `webhook_avatar_url` until the preset is applied again. Later `/server avatar` edits are
-   treated as deliberate customization and materialize the persona before changing or resetting its
-   avatar.
+2. Place an avatar image (PNG recommended) inside the persona folder (e.g. `src/db/seed/catalog/personas/<name>/avatar.png`). Set `avatarPath` in the locale file to the folder path without a filename — the runtime auto-discovers the first image alphabetically, so the filename does not need to match any preset name. Preset application applies the avatar once to the guild (main persona) or uploads it to storage (alter) through `/config setup`, `/persona default`, and preset import without forking the pointer. Runtime pointer reads do not sync avatars from `preset_avatar_path`: existing personas keep their Discord guild avatar or stored `webhook_avatar_url` until the preset is applied again. Later `/server avatar` edits are treated as deliberate customization and materialize the persona before changing or resetting its avatar.
 
 3. Add or edit reusable system prompt presets in `src/db/seed/catalog/systemPrompts.ts`.
    System prompts are split from personas but seed immediately after persona presets at startup.
