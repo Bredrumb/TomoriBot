@@ -178,6 +178,21 @@ RP設定を無効化したチャンネル **{disabled_count}** 件: {disabled_ch
         success_always_description: `自動チャットの閾値を \`{threshold}\` に設定しました。設定済みの自動チャットチャンネルでは、対象メッセージに対して常時応答のように動作します。無効化したい場合はそのチャンネルをリストから削除してください。`,
       },
     },
+    "fast-regeneration": {
+      description: `Tomoriの返信後に短時間表示する再生成/続きリアクションを設定します。`,
+      modal_title: `高速再生成`,
+      checkbox_label: `高速再生成アクション`,
+      checkbox_description: `最近の返信に追加するフォローアップ用リアクションを選択してください。`,
+      retry_label: `再生成`,
+      retry_description: `最後のペルソナ発言を削除して再生成する 🔄 リアクションを追加します。`,
+      continue_label: `続き`,
+      continue_description: `同じペルソナをもう一度起動する ➡️ リアクションを追加します。`,
+      enabled_status: `有効`,
+      disabled_status: `無効`,
+      updated_title: `高速再生成を更新しました`,
+      updated_description: `再生成: **{retry_status}**
+続き: **{continue_status}**`,
+    },
     trigger: {
       description: `トリガーワードを管理`,
       add: {
