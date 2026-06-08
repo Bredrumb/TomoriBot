@@ -686,6 +686,9 @@ export const serverTriggerBehaviorConfigSchema = z.object({
     (value) => normalizeDeliberateToolTriggers(value),
     z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)).default({}),
   ), // Added May 2026 - Server-defined deliberate tool trigger phrases by tool target
+  fast_regeneration_enabled: z.boolean().default(false),
+  fast_regeneration_retry_enabled: z.boolean().default(false),
+  fast_regeneration_continue_enabled: z.boolean().default(false),
   cooldown_type: z.number().int().default(0),
   cooldown_length: z.number().int().default(5),
   created_at: z.date().optional(),

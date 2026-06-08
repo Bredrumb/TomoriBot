@@ -11,7 +11,7 @@ import {
   peekFastRegenerationEntry,
 } from "@/utils/discord/fastRegeneration";
 import { log } from "@/utils/misc/logger";
-import tomoriChat from "@/events/messageCreate/tomoriChat";
+import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 
 export default async function fastRegeneration(
   client: Client,
@@ -101,39 +101,22 @@ export default async function fastRegeneration(
   }
 
   if (actionEmoji === FAST_CONTINUE_EMOJI) {
-    void tomoriChat(
+    void tomoriChat({
       client,
       message,
-      false,
-      true,
-      false,
-      undefined,
-      undefined,
-      false,
-      0,
-      false,
-      undefined,
-      undefined,
-      consumedEntry.personaId,
-      false,
-      false,
-      undefined,
-      "user",
-      `continue:${message.id}:${user.id}`,
-      consumedEntry.triggerUserId,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      {
+      isFromQueue: false,
+      isManuallyTriggered: true,
+      selectedPersonaId: consumedEntry.personaId,
+      textQuotaSource: "user",
+      textQuotaTriggerKey: `continue:${message.id}:${user.id}`,
+      textQuotaUserDiscId: consumedEntry.triggerUserId,
+      manualTriggerInvoker: {
         userDiscId: consumedEntry.triggerUserId,
         username: consumedEntry.triggerUsername,
         locale: consumedEntry.locale,
         member: consumedEntry.member,
       },
-    );
+    });
     return;
   }
 

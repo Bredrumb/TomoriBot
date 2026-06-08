@@ -1,6 +1,6 @@
 import type { AnyThreadChannel, Client, Guild, GuildMember, Message } from "discord.js";
 import { BaseGuildTextChannel } from "discord.js";
-import tomoriChat, { suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
+import { suppressNextSelfReply, tomoriChat } from "@/events/messageCreate/tomoriChat";
 import type { TomoriState } from "@/types/db/schema";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -117,7 +117,7 @@ export async function deletePersonaTurnAndMaybeRegenerate(
 
     const blockMessages = detectedTurn.blockMessages;
     const resolvedPersona = detectedTurn.resolvedPersona;
-    const displayName = resolvedPersona?.tomori_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
+    const displayName = resolvedPersona?.persona_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
     const totalCount = blockMessages.length;
 
     if (totalCount === 0) {
@@ -276,39 +276,22 @@ export async function deletePersonaTurnAndMaybeRegenerate(
           suppressNextSelfReply(options.channel.id);
           regenerated = true;
 
-          void tomoriChat(
-            options.client,
-            lastMessage,
-            false,
-            true,
-            false,
-            undefined,
-            undefined,
-            false,
-            0,
-            false,
-            undefined,
-            undefined,
-            resolvedPersona.tomori_id,
-            false,
-            false,
-            undefined,
-            "user",
-            options.textQuotaTriggerKey,
-            options.triggerUserId,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            {
+          void tomoriChat({
+            client: options.client,
+            message: lastMessage,
+            isFromQueue: false,
+            isManuallyTriggered: true,
+            selectedPersonaId: resolvedPersona.persona_id,
+            textQuotaSource: "user",
+            textQuotaTriggerKey: options.textQuotaTriggerKey,
+            textQuotaUserDiscId: options.triggerUserId,
+            manualTriggerInvoker: {
               userDiscId: options.triggerUserId,
               username: options.triggerUsername,
               locale: options.locale,
               member: options.triggerMember,
             },
-          );
+          });
         }
       } catch (regenError) {
         log.warn(`[deleteTurn] Failed to set up regenerate for persona="${displayName}"`, regenError);
