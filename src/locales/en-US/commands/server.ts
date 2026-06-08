@@ -178,6 +178,21 @@ Disabled auto-trigger on **{disabled_count}** channel(s): {disabled_channels}
         success_always_description: `Auto-chat threshold set to \`{threshold}\`. Configured auto-chat channels will now behave like always-reply for qualifying messages. Remove a channel to disable it there.`,
       },
     },
+    "fast-regeneration": {
+      description: `Configure short-lived retry/continue reactions after Tomori replies.`,
+      modal_title: `Fast Regeneration`,
+      checkbox_label: `Fast Regeneration Actions`,
+      checkbox_description: `Choose which follow-up reactions I should add to recent replies.`,
+      retry_label: `Retry`,
+      retry_description: `Add a 🔄 reaction that deletes and regenerates the last persona turn.`,
+      continue_label: `Continue`,
+      continue_description: `Add a ➡️ reaction that triggers the same persona again.`,
+      enabled_status: `Enabled`,
+      disabled_status: `Disabled`,
+      updated_title: `Fast Regeneration Updated`,
+      updated_description: `Retry: **{retry_status}**
+Continue: **{continue_status}**`,
+    },
     trigger: {
       description: `Manage trigger words`,
       add: {
