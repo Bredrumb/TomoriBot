@@ -259,6 +259,9 @@ export class StreamUiUpdater {
     if (textForState) {
       state.accumulatedText += textForState;
     }
+    if (sentMessage) {
+      context.recordTurnOutputMessage?.(sentMessage, context.tomoriState.persona_id);
+    }
     this.deps.notifyStreamProgress(context);
     const logPreview = textForState
       ? textForState.length > 100

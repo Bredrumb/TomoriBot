@@ -29,6 +29,11 @@ import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/aud
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import {
+  clearFastRegenerationEntriesForChannel,
+  createFastRegenerationRecorder,
+  getEnabledFastRegenerationActions,
+} from "@/utils/discord/fastRegeneration";
+import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
   buildReplyReferenceContextAnnotation,
@@ -89,6 +94,35 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   if (incoming.isFromQueue && turn.persona.is_alter) {
     streamingContext.replyNoticeState = { attempted: false, sent: false };
   }
+
+  const enabledFastRegenerationActions = getEnabledFastRegenerationActions(turn.persona.config);
+  const shouldOfferFastRegeneration =
+    Boolean(message.guildId) &&
+    enabledFastRegenerationActions.length > 0 &&
+    !incoming.isPersonaJob &&
+    !incoming.isUserImpersonation &&
+    !incoming.isStopResponse &&
+    !incoming.reminderRecipientID &&
+    !incoming.reminderData &&
+    !streamingContext.disableCrossChannelMessage;
+
+  if (shouldOfferFastRegeneration) {
+    await clearFastRegenerationEntriesForChannel(channel.id);
+  }
+
+  const fastRegenerationRecorder = shouldOfferFastRegeneration
+    ? createFastRegenerationRecorder({
+        triggerUserId: turn.userDiscId,
+        triggerUsername: turn.triggererName,
+        locale: turn.lockedTurn.admission.locale,
+        member: incoming.manualTriggerInvoker?.member ?? message.member,
+        enabledActions: enabledFastRegenerationActions,
+      })
+    : undefined;
+
+  streamingContext.recordTurnOutputMessage = (outputMessage, personaId) => {
+    fastRegenerationRecorder?.record(outputMessage, personaId);
+  };
 
   const assets = await loadPersonaAssets(turn);
   const history = await buildSimplifiedHistory(turn, messageIdMap);
@@ -343,6 +377,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     deliberateToolModeActive,
     deliberateToolContextTurns,
     deliberateToolTriggerMatchByToolName,
+    fastRegenerationRecorder,
   };
 }
 
