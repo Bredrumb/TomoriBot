@@ -33,6 +33,7 @@ const eventFolderMap: Record<string, string> = {
   stickerCreate: "guildStickersUpdate",
   stickerDelete: "guildStickersUpdate",
   stickerUpdate: "guildStickersUpdate",
+  messageReactionAdd: "messageReactionAdd",
   rateLimit: "rateLimit",
 };
 
