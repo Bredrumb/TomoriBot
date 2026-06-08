@@ -8,7 +8,7 @@ import {
 import type { ModalCheckboxGroupField } from "@/types/discord/modal";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { updateTomoriConfig } from "@/utils/db/dbWrite";
+import { configRepository } from "@/utils/db/repositories";
 import { clearFastRegenerationEntriesForGuild } from "@/utils/discord/fastRegeneration";
 import { promptWithRawModal, replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -92,7 +92,7 @@ export async function execute(
     const continueEnabled = selectedFeatures.has(CONTINUE_FEATURE_VALUE);
     const anyEnabled = retryEnabled || continueEnabled;
 
-    const updatedConfig = await updateTomoriConfig(tomoriState.server_id, {
+    const updatedConfig = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       fast_regeneration_enabled: anyEnabled,
       fast_regeneration_retry_enabled: retryEnabled,
       fast_regeneration_continue_enabled: continueEnabled,
@@ -100,15 +100,15 @@ export async function execute(
 
     if (!updatedConfig) {
       const context: ErrorContext = {
-        tomoriId: tomoriState.tomori_id,
         serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "server fast-regeneration",
           retryEnabled,
           continueEnabled,
-          targetTable: "tomori_configs",
+          targetTable: "server_trigger_behavior_configs",
         },
       };
       await log.error(

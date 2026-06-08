@@ -179,7 +179,7 @@ export class GenerateVideoTool extends BaseTool {
     const recordOutputMessage = (message: import("discord.js").Message): import("discord.js").Message => {
       context.streamContext?.recordTurnOutputMessage?.(
         message,
-        context.activePersonaId ?? context.tomoriState.tomori_id,
+        context.activePersonaId ?? context.tomoriState.persona_id,
       );
       return message;
     };
