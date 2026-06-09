@@ -113,6 +113,8 @@ System prompt presets are authored separately in `src/db/seed/catalog/systemProm
 
 The previous seed-time 3-way rebase sync design has been removed. It used a per-persona baseline and attempted to merge official updates into local copies, but it was fragile and never shipped to production.
 
-Migration `020_persona_preset_pointers.sql` adds the pointer columns and converts only exact matches into pointers. The backfill requires matching lineage, attributes/public flags, sample dialogues, trigger words, and persona prompt. It intentionally does not compare or rewrite avatars, so existing Discord/CDN/storage avatar state stays as-is. Customized personas stay independent copies.
+Migration `020_persona_preset_pointers.sql` adds the pointer columns and converts only exact matches into pointers. The original production pass was too narrow for older setup rows because many of them used generated `persona_lineage_id` values rather than the official `preset_lineage_id`, so they stayed independent copies.
+
+Migration `026_repair_legacy_persona_preset_pointers.sql` is the follow-up repair pass. It recognizes known official preset copy fingerprints from historical seed shapes, including the legacy form that stored `"{bot}'s Description: ..."` as the first attribute, and marks exact copies as pointers even when their memory lineage is custom/generated. It preserves `persona_lineage_id` so existing memories and conditioning stay in their original scope, and it does not rewrite avatars, nicknames, or copied child rows. Customized personas that do not match an official historical fingerprint stay independent copies.
 
 If a pointer references a missing official preset row, materialization fails closed by logging an error and refusing the fork. Runtime reads are more resilient: they log a warning and fall back to the persona's last copied snapshot instead of failing the whole state load.
