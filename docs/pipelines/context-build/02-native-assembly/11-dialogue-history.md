@@ -87,6 +87,11 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.
+- **Copied-render webhook reconstruction** — webhook usernames formatted as
+  `SourcePersona (target)` are attributed to `SourcePersona` for role mapping,
+  self-reply ownership, and reply routing, while `authorName` preserves the full
+  visible label. The resulting dialogue line stays reversible as
+  `SourcePersona (target): content`, so the model can repeat the same syntax.
 - **Sender metadata** — dialogue items carry hidden `sender` metadata
   (`personaName` when available, otherwise `authorName`) so strict-chat
   media relocation can attribute model-role images without parsing the

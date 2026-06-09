@@ -68,6 +68,7 @@ import {
   isSupportedImageAttachmentContentType,
   isSupportedVideoAttachmentContentType,
 } from "@/utils/chat/contextMedia";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -489,7 +490,7 @@ export async function execute(
     const personaByNickname = new Map<string, TomoriState>();
     for (const p of personas) {
       if (!p.persona_nickname) continue;
-      const key = p.persona_nickname.toLowerCase();
+      const key = normalizeRenderModifierName(p.persona_nickname);
       if (!personaByNickname.has(key)) personaByNickname.set(key, p);
     }
     const mainPersona = personas.find((p) => !p.is_alter) ?? tomoriState;
@@ -541,9 +542,14 @@ export async function execute(
         personaName = authorName;
       } else if (message.webhookId) {
         const webhookName = message.author.username?.trim();
-        const matchedPersona = webhookName ? personaByNickname.get(webhookName.toLowerCase()) : undefined;
+        const renderModifierSource = webhookName
+          ? resolveRenderModifierSourcePersona(webhookName, personaByNickname)
+          : null;
+        const matchedPersona = webhookName
+          ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
+          : undefined;
         if (matchedPersona) {
-          authorName = matchedPersona.persona_nickname;
+          authorName = renderModifierSource?.displayName ?? matchedPersona.persona_nickname;
           authorType = "persona";
           personaName = matchedPersona.persona_nickname;
           effectiveAuthorId = String(matchedPersona.persona_id ?? matchedPersona.persona_nickname);

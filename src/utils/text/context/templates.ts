@@ -161,6 +161,21 @@ export async function buildPromptContextItems(params: {
         metadataTag: ContextItemTag.SYSTEM_CHANNEL_PROMPT,
       });
     }
+
+    contextItems.push({
+      role: "system",
+      parts: [
+        {
+          type: "text",
+          text:
+            `[System: To intentionally render one of your own lines with a known user or persona's visible identity, ` +
+            `begin that line exactly as "${params.botName} (known name): message". Use only names already shown in ` +
+            `conversation context. Unknown or ambiguous names have the parenthetical modifier removed and render as ` +
+            `${params.botName} normally.]`,
+        },
+      ],
+      metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+    });
   }
 
   if (!params.isUserImpersonation && params.personaPrompt?.trim()) {

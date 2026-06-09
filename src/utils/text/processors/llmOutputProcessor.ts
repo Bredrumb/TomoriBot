@@ -82,7 +82,7 @@ export function isGenericSpeakerStopLabel(rawLabel: string): boolean {
  */
 export function truncateBeforeGenericSpeakerLine(
   text: string,
-  options: { includeStart?: boolean } = {},
+  options: { includeStart?: boolean; isAllowedSpeakerLabel?: (label: string) => boolean } = {},
 ): {
   text: string;
   stopTriggered: boolean;
@@ -104,6 +104,7 @@ export function truncateBeforeGenericSpeakerLine(
 
     const trimmedLabel = rawLabel.trim();
     if (!isGenericSpeakerStopLabel(trimmedLabel)) continue;
+    if (options.isAllowedSpeakerLabel?.(trimmedLabel)) continue;
 
     return { text: text.slice(0, match.index), stopTriggered: true, matchedSpeaker: trimmedLabel };
   }

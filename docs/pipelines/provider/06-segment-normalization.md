@@ -2,7 +2,7 @@
 title: "06: Segment Normalization"
 ---
 
-Normalizes a flushed text segment — cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill — before handing it to stage 07 for Discord delivery.
+Normalizes a flushed text segment — capturing copied-render modifiers, cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill — before handing it to stage 07 for Discord delivery.
 
 **File:** `src/utils/discord/stream/segmentProcessor.ts:21-233`
 
@@ -19,13 +19,22 @@ The transformation pipeline runs in this order:
    or `...`) are held in `state.pendingOrphanPunctuation` and prepended to the next non-empty
    segment instead of being sent standalone, preventing jarring single-character messages.
 
-2. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
+2. **Copied-render modifier capture** — before normal own-name cleanup runs, an active persona
+   line that starts as `SourcePersona (modifier): text` is parsed. If `modifier` resolves
+   unambiguously to a known copied user/persona from current context, stage 07 receives an
+   identity override and the visible webhook name is formatted as `SourcePersona (target)`.
+   If the modifier is unknown or ambiguous, the parenthetical modifier is stripped and the line
+   is delivered as normal source-persona output. This path is line-scoped across stream splits,
+   ignored inside code blocks and list-like starts, and does not implement avatar-expression
+   variants yet.
+
+3. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
    shortcode (`:name:`) from the segment if the same emoji was already used in a recent bot
    message (lookback window controlled by `EMOJI_UNIQUE_LOOKBACK`, default 5). History is stored
    in converted Discord format (`<:name:id>`), so the filter normalises that form to shortcodes
    before comparison.
 
-3. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
+4. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
    writes it (e.g., `"Tomori: hello"` → `"hello"`), converts `:name:` shortcodes to full Discord
    custom emoji syntax (`<:name:id>`) using the server emoji list, strips unresolved shortcodes by
    default, optionally preserves unresolved shortcodes when
@@ -38,22 +47,24 @@ The transformation pipeline runs in this order:
    extra names; the leaked-preamble and later-boundary passes stay scoped to the active name so
    mid-prose `"Name:"` usages are preserved.
 
-4. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
+5. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
    in the text (e.g., `@alice`) to Discord snowflake mentions (`<@1234567890>`) using the mention
    map built at stream init from `ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION` items.
 
-5. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`) — when
+6. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`) — when
    `context.outputPrefill` is set (hybrid prefix streaming for NAI), the first segment strips the
    model-echoed prefill from its start and the cleaned prefill is prepended to the outgoing
    segment (injected exactly once; subsequent segments are unmodified).
 
-6. **Speaker guard** (`truncateBeforeGenericSpeakerLine`) — if `llm_stop_speaker_pattern_enabled`
+7. **Speaker guard** (`truncateBeforeGenericSpeakerLine`) — if `llm_stop_speaker_pattern_enabled`
    is true and a speaker-label line (e.g., `User:`) appears in the segment, the text is truncated
    before it and `requestStop(channelId, "speaker_guard")` is queued. The segment is sent with
    the truncated content; the stop is processed by the stage 04 orchestrator on the next
-   iteration.
+   iteration. Active copied-render labels such as `Ren (target):` are explicitly allowed through
+   both the provider-level fallback guard and this segment-level guard so they can be resolved
+   instead of treated as foreign speaker turns.
 
-7. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
+8. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
    rendered Markdown table, the segment is split into text parts and table parts. Table parts are
    routed to `StreamMessageDelivery.sendRenderedMarkdownTable()` which renders the table to a PNG
    via `renderMarkdownTableToPng()` and sends it as a Discord file attachment.
@@ -78,6 +89,8 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
 - **`state.pendingOrphanPunctuation`** — may be set (hold) or cleared (prepend to segment).
 - **`state.prefillMatched`** / **`state.prefillInjected`** / **`state.prefillMatchFailed`** —
   updated as prefill stripping/injection progresses.
+- **`state.activeRenderModifier`** — tracks the copied-render identity override until the current
+  generated line ends, so period or chunk splits keep using the copied identity until a newline.
 - **`requestStop(channelId, "speaker_guard")`** — queued if the speaker guard fires; the stop
   is consumed by the stage 04 orchestrator on the next loop iteration.
 - **PNG attachment** — when a Markdown table is detected and rendered successfully, a Discord file

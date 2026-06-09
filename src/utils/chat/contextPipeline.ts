@@ -51,6 +51,7 @@ import {
 } from "@/utils/chat/contextMedia";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 
@@ -448,7 +449,9 @@ async function buildSimplifiedHistory(
   const userIds = new Set<string>();
   const matrixUsers = new Map<string, string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
-  const personaByName = new Map(turn.allPersonas.map((persona) => [persona.persona_nickname.toLowerCase(), persona]));
+  const personaByName = new Map(
+    turn.allPersonas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
+  );
   const reactionBudgetState = createReactionContextBudgetState();
 
   // Tracks whether the most recently pushed entry came from a "$:" debug message.
@@ -624,10 +627,11 @@ async function simplifyMessage(
     personaName = authorName;
   } else if (isWebhook) {
     const webhookName = stripBridgePrefix(msg.author.username);
-    const matchedPersona = personaByName.get(webhookName.toLowerCase());
+    const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByName);
+    const matchedPersona = renderModifierSource?.persona ?? personaByName.get(normalizeRenderModifierName(webhookName));
     if (matchedPersona) {
       authorId = String(matchedPersona.persona_id ?? webhookName);
-      authorName = matchedPersona.persona_nickname;
+      authorName = renderModifierSource?.displayName ?? matchedPersona.persona_nickname;
       authorType = "persona";
       personaName = matchedPersona.persona_nickname;
       syntheticUsers.set(authorId, { displayName: authorName, type: "persona" });
@@ -882,10 +886,12 @@ function appendTailDirectives(args: {
       const webhookName = stripBridgePrefix(queuedMessage.author.username);
       const personaByNicknameMap = new Map<string, (typeof args.turn.allPersonas)[number]>();
       for (const p of args.turn.allPersonas) {
-        if (p.persona_nickname) personaByNicknameMap.set(p.persona_nickname.toLowerCase(), p);
+        if (p.persona_nickname) personaByNicknameMap.set(normalizeRenderModifierName(p.persona_nickname), p);
       }
       queuedReplyTargetName =
-        personaByNicknameMap.get(webhookName.toLowerCase())?.persona_nickname ?? queuedReplyTargetName;
+        resolveRenderModifierSourcePersona(webhookName, personaByNicknameMap)?.persona.persona_nickname ??
+        personaByNicknameMap.get(normalizeRenderModifierName(webhookName))?.persona_nickname ??
+        queuedReplyTargetName;
     }
   }
 

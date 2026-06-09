@@ -6,7 +6,18 @@ import { filterDuplicateCustomEmojis } from "@/utils/text/emojiPenalty";
 import { extractMarkdownTableSegments } from "@/utils/text/markdownTable";
 import { ORPHAN_PUNCTUATION_REGEX, PREFILL_WHITESPACE_SENTINEL } from "@/utils/discord/stream/constants";
 import { resolveGuildMentions } from "@/utils/discord/stream/mentionResolver";
-import type { BufferedDeliveryBoundary, StreamMessageDelivery } from "@/utils/discord/stream/messageDelivery";
+import type {
+  BufferedDeliveryBoundary,
+  StreamDeliveryOptions,
+  StreamMessageDelivery,
+} from "@/utils/discord/stream/messageDelivery";
+import {
+  collectRenderModifierSourceNames,
+  isAllowedRenderModifierSpeakerLabel,
+  parseLeadingRenderModifier,
+} from "@/utils/discord/renderModifierParser";
+import { resolveCopiedRenderModifierTarget } from "@/utils/discord/renderModifierResolver";
+import { isUserImpersonationStreamContext } from "@/utils/discord/stream/uiUpdater";
 
 type StreamSegmentProcessorDependencies = {
   delivery: StreamMessageDelivery;
@@ -46,6 +57,36 @@ export class StreamSegmentProcessor {
       log.info(`Stream Orphan: Prepending held "${state.pendingOrphanPunctuation}" to next segment`);
       workingSegment = `${state.pendingOrphanPunctuation}${segment}`;
       state.pendingOrphanPunctuation = undefined;
+    }
+
+    const renderModifierSourceNames = collectRenderModifierSourceNames(textConfig.botName, textConfig.botNameAliases);
+    let deliveryOptions: StreamDeliveryOptions | undefined;
+    const canUseRenderModifier = !state.isInsideCodeBlock && !isUserImpersonationStreamContext(context);
+    const renderModifierMatch = canUseRenderModifier
+      ? parseLeadingRenderModifier(workingSegment, renderModifierSourceNames)
+      : null;
+    if (renderModifierMatch) {
+      const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
+      const copiedTarget = await resolveCopiedRenderModifierTarget(
+        renderModifierMatch.modifier,
+        context,
+        sourceDisplayName,
+      );
+
+      workingSegment = renderModifierMatch.body;
+      if (copiedTarget) {
+        deliveryOptions = {
+          identityOverride: copiedTarget.identity,
+          accumulatedTextPrefix: `${copiedTarget.identity.username ?? sourceDisplayName}: `,
+        };
+        state.activeRenderModifier = { identity: copiedTarget.identity };
+      } else {
+        state.activeRenderModifier = undefined;
+      }
+    } else if (canUseRenderModifier && state.activeRenderModifier) {
+      deliveryOptions = {
+        identityOverride: state.activeRenderModifier.identity,
+      };
     }
 
     const wasPrefillInjected = state.prefillInjected;
@@ -100,6 +141,7 @@ export class StreamSegmentProcessor {
     if (context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false) {
       const speakerGuardResult = truncateBeforeGenericSpeakerLine(segmentToSend, {
         includeStart: Boolean(state.accumulatedText.trim() || state.pendingAggregatedText.trim()),
+        isAllowedSpeakerLabel: (label) => isAllowedRenderModifierSpeakerLabel(label, renderModifierSourceNames),
       });
       if (speakerGuardResult.stopTriggered) {
         log.warn(
@@ -117,12 +159,23 @@ export class StreamSegmentProcessor {
       return;
     }
 
+    const shouldClearActiveRenderModifier =
+      Boolean(deliveryOptions?.identityOverride) && (boundary === "newline" || segmentToSend.includes("\n"));
     const segmentedParts = extractMarkdownTableSegments(segmentToSend);
     const hasRenderedTable = segmentedParts.some((part) => part.type === "table");
     if (!hasRenderedTable) {
-      await this.deps.delivery.sendSegment(segmentToSend, boundary, textConfig, typingConfig, context, state);
+      await this.deps.delivery.sendSegment(
+        segmentToSend,
+        boundary,
+        textConfig,
+        typingConfig,
+        context,
+        state,
+        deliveryOptions,
+      );
     } else {
       let isFirstTextPart = true;
+      let partDeliveryOptions = deliveryOptions;
       for (const part of segmentedParts) {
         if (part.type === "text") {
           if (!part.content.trim()) continue;
@@ -133,8 +186,15 @@ export class StreamSegmentProcessor {
             typingConfig,
             context,
             state,
+            partDeliveryOptions,
           );
           isFirstTextPart = false;
+          if (partDeliveryOptions) {
+            partDeliveryOptions = {
+              ...partDeliveryOptions,
+              accumulatedTextPrefix: undefined,
+            };
+          }
           continue;
         }
 
@@ -145,9 +205,20 @@ export class StreamSegmentProcessor {
           typingConfig,
           context,
           state,
+          partDeliveryOptions,
         );
         isFirstTextPart = false;
+        if (partDeliveryOptions) {
+          partDeliveryOptions = {
+            ...partDeliveryOptions,
+            accumulatedTextPrefix: undefined,
+          };
+        }
       }
+    }
+
+    if (shouldClearActiveRenderModifier) {
+      state.activeRenderModifier = undefined;
     }
 
     if (shouldStopForSpeakerGuard) {
@@ -205,7 +276,18 @@ export class StreamSegmentProcessor {
     context: StreamContext,
     state: StreamState,
   ): Promise<void> {
-    await this.deps.delivery.flushHeldOrphanPunctuation(boundary, textConfig, typingConfig, context, state);
+    const deliveryOptions =
+      state.activeRenderModifier && !isUserImpersonationStreamContext(context)
+        ? { identityOverride: state.activeRenderModifier.identity }
+        : undefined;
+    await this.deps.delivery.flushHeldOrphanPunctuation(
+      boundary,
+      textConfig,
+      typingConfig,
+      context,
+      state,
+      deliveryOptions,
+    );
   }
 
   private applyPrefillToSegment(segment: string, state: StreamState, context: StreamContext): string {

@@ -5,6 +5,7 @@ import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
+import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { sendWebhookReplyNotice } from "@/utils/discord/webhookReply";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
@@ -12,6 +13,8 @@ import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
 export type StreamSendPayload = {
   content?: string;
   files?: import("discord.js").AttachmentBuilder[];
+  identityOverride?: ResolvedWebhookIdentity;
+  accumulatedTextPrefix?: string;
   allowedMentions?: {
     parse?: Array<"users" | "roles" | "everyone">;
     repliedUser?: boolean;
@@ -58,6 +61,8 @@ export class StreamUiUpdater {
       return null;
     }
 
+    const { identityOverride, accumulatedTextPrefix, ...discordPayload } = payload;
+    const textForAccumulation = `${accumulatedTextPrefix ?? ""}${textForState}`;
     const strictUserImpersonation = isUserImpersonationStreamContext(context);
     let replyNoticeMessage: Message | null = null;
     const threadId = resolveWebhookThreadId(context.channel);
@@ -120,18 +125,28 @@ export class StreamUiUpdater {
       }
 
       let sentMessage: Message | null = null;
-      if (context.webhook && context.personaUsername) {
+      const webhookForIdentity = identityOverride
+        ? await this.resolveWebhookForIdentityOverride(context)
+        : context.webhook;
+      const shouldUseWebhook =
+        Boolean(identityOverride && webhookForIdentity) || Boolean(context.webhook && context.personaUsername);
+
+      if (shouldUseWebhook && webhookForIdentity) {
+        const identity =
+          identityOverride ??
+          ({
+            username: context.personaUsername,
+            avatarUrl: context.personaAvatarUrl,
+            avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+          } satisfies ResolvedWebhookIdentity);
         log.info(
-          `Stream Send: Using webhook for persona "${context.personaUsername}"${context.personaAvatarUrl ? " with custom avatar" : " (default avatar)"}`,
+          `Stream Send: Using webhook for persona "${identity.username ?? context.personaUsername ?? "unknown"}"${
+            identity.avatarUrl || identity.avatarDataUri ? " with custom avatar" : " (default avatar)"
+          }`,
         );
 
-        const identity = {
-          username: context.personaUsername,
-          avatarUrl: context.personaAvatarUrl,
-          avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
-        };
-
         if (
+          !identityOverride &&
           !strictUserImpersonation &&
           context.tomoriState.is_alter &&
           context.replyToMessage &&
@@ -142,7 +157,7 @@ export class StreamUiUpdater {
           context.replyNoticeState.attempted = true;
           try {
             replyNoticeMessage = await sendWebhookReplyNotice(
-              context.webhook,
+              webhookForIdentity,
               context.replyToMessage,
               context.locale,
               identity,
@@ -159,10 +174,10 @@ export class StreamUiUpdater {
         }
 
         sentMessage = await sendWebhookMessageWithIdentity(
-          context.webhook,
+          webhookForIdentity,
           {
-            ...(payload.content !== undefined ? { content: payload.content } : {}),
-            ...(payload.files?.length ? { files: payload.files } : {}),
+            ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+            ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
             allowedMentions: webhookAllowedMentions,
             ...(threadId ? { threadId } : {}),
           },
@@ -172,29 +187,30 @@ export class StreamUiUpdater {
         state.hasRepliedToOriginalMessage = true;
       } else if (!state.hasRepliedToOriginalMessage && context.replyToMessage) {
         sentMessage = await context.replyToMessage.reply({
-          ...(payload.content !== undefined ? { content: payload.content } : {}),
-          ...(payload.files?.length ? { files: payload.files } : {}),
+          ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+          ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
           allowedMentions: regularAllowedMentions,
         });
         state.hasRepliedToOriginalMessage = true;
       } else {
         sentMessage = await context.channel.send({
-          ...(payload.content !== undefined ? { content: payload.content } : {}),
-          ...(payload.files?.length ? { files: payload.files } : {}),
+          ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+          ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
           allowedMentions: regularAllowedMentions,
         });
       }
 
-      this.recordSuccessfulSend(payload, textForState, context, state, sentMessage);
+      this.recordSuccessfulSend(payload, textForAccumulation, context, state, sentMessage);
       return sentMessage;
     } catch (discordError) {
       const recoveredMessage = await this.tryRecoverWebhookSend(
         discordError,
         payload,
-        textForState,
+        textForAccumulation,
         context,
         state,
         webhookAllowedMentions,
+        identityOverride,
       );
       if (recoveredMessage) {
         return recoveredMessage;
@@ -202,8 +218,7 @@ export class StreamUiUpdater {
 
       if (
         !strictUserImpersonation &&
-        context.webhook &&
-        context.personaUsername &&
+        ((context.webhook && context.personaUsername) || identityOverride) &&
         !state.hasRepliedToOriginalMessage
       ) {
         const fallbackMessage = await this.tryFallbackBotSend(
@@ -211,10 +226,11 @@ export class StreamUiUpdater {
           replyNoticeMessage,
           threadId,
           payload,
-          textForState,
+          textForAccumulation,
           context,
           state,
           regularAllowedMentions,
+          identityOverride,
         );
         if (fallbackMessage) {
           return fallbackMessage;
@@ -233,9 +249,9 @@ export class StreamUiUpdater {
         errorType: "StreamOrchestrator",
         metadata: {
           channelId: context.channel.id,
-          contentLength: textForState.length,
-          contentPreview: textForState.substring(0, 200),
-          usingWebhook: !!context.webhook,
+          contentLength: textForAccumulation.length,
+          contentPreview: textForAccumulation.substring(0, 200),
+          usingWebhook: !!context.webhook || !!identityOverride,
         },
       });
 
@@ -268,6 +284,27 @@ export class StreamUiUpdater {
     log.info(`Stream Send: Sent message (${state.messageSentCount}): "${logPreview}"`);
   }
 
+  private async resolveWebhookForIdentityOverride(
+    context: StreamContext,
+  ): Promise<import("discord.js").Webhook | null> {
+    if (context.webhook) {
+      return context.webhook;
+    }
+
+    const webhookTargetChannel = resolveWebhookTargetChannel(context.channel);
+    if (!webhookTargetChannel) {
+      return null;
+    }
+
+    const webhookResult = await getOrCreateWebhook(webhookTargetChannel);
+    if (!webhookResult.webhook) {
+      return null;
+    }
+
+    context.webhook = webhookResult.webhook;
+    return webhookResult.webhook;
+  }
+
   private async tryRecoverWebhookSend(
     discordError: unknown,
     payload: StreamSendPayload,
@@ -275,12 +312,14 @@ export class StreamUiUpdater {
     context: StreamContext,
     state: StreamState,
     webhookAllowedMentions: NonNullable<StreamSendPayload["allowedMentions"]>,
+    identityOverride?: ResolvedWebhookIdentity,
   ): Promise<Message | null> {
     const shouldRecoverWebhook =
       context.webhook &&
-      context.personaUsername &&
-      context.tomoriState.is_alter &&
-      context.personaUsername === context.tomoriState.persona_nickname &&
+      ((context.personaUsername &&
+        context.tomoriState.is_alter &&
+        context.personaUsername === context.tomoriState.persona_nickname) ||
+        identityOverride) &&
       isInvalidWebhookError(discordError);
 
     if (!shouldRecoverWebhook) {
@@ -301,11 +340,13 @@ export class StreamUiUpdater {
       }
 
       const recoveredThreadId = resolveWebhookThreadId(context.channel);
-      const recoveredIdentity = {
-        username: context.personaUsername,
-        avatarUrl: context.personaAvatarUrl,
-        avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
-      };
+      const recoveredIdentity =
+        identityOverride ??
+        ({
+          username: context.personaUsername,
+          avatarUrl: context.personaAvatarUrl,
+          avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+        } satisfies ResolvedWebhookIdentity);
 
       const recoveredReplyMessage = await sendWebhookMessageWithIdentity(
         recreatedWebhook,
@@ -341,11 +382,12 @@ export class StreamUiUpdater {
     context: StreamContext,
     state: StreamState,
     regularAllowedMentions: NonNullable<StreamSendPayload["allowedMentions"]>,
+    identityOverride?: ResolvedWebhookIdentity,
   ): Promise<Message | null> {
     log.warn("Stream Send: Webhook send failed, falling back to regular bot message", discordError);
 
     try {
-      if (replyNoticeMessage && context.webhook) {
+      if (!identityOverride && replyNoticeMessage && context.webhook) {
         await context.webhook.deleteMessage(replyNoticeMessage.id, threadId).catch((deleteError) => {
           log.warn("Stream Send: Failed to delete standalone alter reply notice after webhook fallback", deleteError);
         });

@@ -12,6 +12,7 @@ import { stripBridgePrefix } from "@/utils/bridges";
 import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { getCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { getCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
+import { normalizeRenderModifierName, parseRenderModifierWebhookName } from "@/utils/discord/renderModifierParser";
 
 /** Result of formatting messages for extraction */
 export interface FormattedHistoryResult {
@@ -112,7 +113,7 @@ export function formatMessagesForExtraction(
   const nicknameToTomoriId = new Map<string, number>();
   for (const persona of serverPersonas) {
     if (persona.persona_id !== undefined) {
-      nicknameToTomoriId.set(persona.persona_nickname.toLowerCase(), persona.persona_id);
+      nicknameToTomoriId.set(normalizeRenderModifierName(persona.persona_nickname), persona.persona_id);
     }
   }
 
@@ -179,8 +180,9 @@ export function formatMessagesForExtraction(
 
     // 9. Persona detection: match webhook-authored messages by name
     if (msg.webhookId && msg.author) {
-      const authorLower = msg.author.username.toLowerCase();
-      const matchedTomoriId = nicknameToTomoriId.get(authorLower);
+      const renderModifierName = parseRenderModifierWebhookName(msg.author.username);
+      const authorKey = normalizeRenderModifierName(renderModifierName?.sourceName ?? msg.author.username);
+      const matchedTomoriId = nicknameToTomoriId.get(authorKey);
       if (matchedTomoriId !== undefined) {
         detectedTomoriIds.add(matchedTomoriId);
       }

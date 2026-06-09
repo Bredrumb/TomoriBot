@@ -21,6 +21,7 @@ import {
 } from "@/utils/chat/textQuotaState";
 import { getServerActiveMessageCount, getUserActiveMessageCount } from "@/utils/chat/channelActivity";
 import { resolveReferencedWebhookTarget } from "@/utils/chat/webhookIdentity";
+import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
 
 export interface ChatAccessState {
   whitelistStatus: Awaited<ReturnType<typeof getCachedWhitelistStatus>> | null;
@@ -316,7 +317,7 @@ export async function validateDirectChatTrigger(params: {
 }): Promise<DirectChatTriggerValidation> {
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of params.allPersonas) {
-    const nicknameKey = persona.persona_nickname?.toLowerCase();
+    const nicknameKey = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }

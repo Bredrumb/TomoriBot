@@ -19,7 +19,9 @@ is delivered to Discord. Two classes share the responsibility:
   `state.pendingAggregatedText` via `queueAggregatedSegment()`. Aggregated text is only sent to
   Discord when a flush boundary that forces output arrives: a tool call, a final flush, or a
   Markdown table attachment. This produces a single, uninterrupted Discord message from what would
-  otherwise be many small streaming messages.
+  otherwise be many small streaming messages. A copied-render identity override flushes any
+  pending aggregate first and sends immediately through the webhook path, because webhook identity
+  is line-scoped and cannot be mixed into the regular aggregate buffer.
 
 - **Streaming mode** (degree 1–3) — the segment is split into Discord-safe chunks via
   `chunkMessage()`, then optionally humanized (degree 3 only: `humanizeString()`), and sent
@@ -42,11 +44,19 @@ payload. It handles:
   mode), the message is sent via `sendWebhookMessageWithIdentity()` with the persona's name and
   avatar. For the *first* message of an alter persona response that has a `replyToMessage`, a
   standalone reply notice is sent first via `sendWebhookReplyNotice()`.
+- **Copied-render identity override** — when stage 06 resolves `SourcePersona (target): text`,
+  the payload carries `identityOverride`. The UI updater lazily creates or reuses the managed
+  channel webhook even for the main persona, sends with username `SourcePersona (target)`, and
+  uses the copied target avatar. Ordinary main-persona output remains a regular bot message; the
+  managed webhook is used only for override payloads. Unknown or ambiguous modifiers are stripped
+  before this stage and therefore follow the regular path.
 - **Regular path** — otherwise the message is sent via `context.channel.send()` or
   `context.replyToMessage.reply()` (first message only), with `allowedMentions` set to suppress
   `@everyone` / `@here` pings while allowing user and role mentions.
 - **State tracking** — on a successful send: `state.messageSentCount++`, `state.accumulatedText`
   is appended, and `state.firstReplyUrl` is set on the first message sent (used in thought-log embeds).
+  For copied-render payloads, `state.accumulatedText` is prefixed with the visible label
+  (`SourcePersona (target): `) so result capture, STM, and future prompt context remain reversible.
 - **Invalid-webhook recovery** — if the webhook send fails with Discord error 10015 or 50027
   (unknown/invalid webhook), the webhook cache is invalidated and a fresh webhook is fetched for
   retry.
@@ -133,7 +143,8 @@ message ID), or `null` if the send was skipped (stop request, limit reached, emp
   `context.channel` (or via `context.webhook`).
 - **`state.messageSentCount`** — incremented per message sent.
 - **`state.accumulatedText`** — appended with the text of each sent message (used for STM write
-  at pipeline end).
+  at pipeline end). Copied-render sends append the visible `SourcePersona (target): ` label once
+  at the start of the copied line, even when the line is split across multiple Discord messages.
 - **`state.firstReplyUrl`** — set to the URL of the first reply message (if not already set).
 - **`state.hasRepliedToOriginalMessage`** — set to `true` after the first successful reply.
 - **`state.pendingAggregatedText`** — cleared after an aggregated-mode flush.

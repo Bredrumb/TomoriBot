@@ -16,6 +16,7 @@ import {
 } from "@/utils/chat/triggerProcessor";
 import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
 import { resolveReferencedWebhookTarget } from "@/utils/chat/webhookIdentity";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const DEFAULT_CASCADE_LIMIT = 3;
@@ -86,7 +87,7 @@ export function shouldBotReply(
   let replyPersonaTarget: TomoriState | null = null;
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of allPersonas) {
-    const nicknameKey = persona.persona_nickname?.toLowerCase();
+    const nicknameKey = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }
@@ -113,8 +114,10 @@ export function shouldBotReply(
 
   let senderPersona: TomoriState | undefined;
   if (message.webhookId) {
-    const webhookName = message.author.username.toLowerCase();
-    senderPersona = personaByNickname.get(webhookName);
+    const webhookName = message.author.username;
+    senderPersona =
+      resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??
+      personaByNickname.get(normalizeRenderModifierName(webhookName));
   } else if (message.author.id === message.client.user?.id) {
     senderPersona = allPersonas.find((persona) => !persona.is_alter);
   }

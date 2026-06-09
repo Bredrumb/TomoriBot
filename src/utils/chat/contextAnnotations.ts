@@ -5,6 +5,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import { getCachedBlacklistStatus, getCachedUserRow } from "@/utils/cache/userCache";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { log } from "@/utils/misc/logger";
 import { compactWhitespace, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
@@ -513,7 +514,12 @@ async function resolveMessageAuthorDisplayName(params: {
   serverPersonalizationDisabled: boolean;
 }): Promise<string> {
   const webhookName = stripBridgePrefix(params.message.author.username);
-  const matchedPersona = params.message.webhookId ? params.personaByNickname.get(webhookName.toLowerCase()) : undefined;
+  const renderModifierSource = params.message.webhookId
+    ? resolveRenderModifierSourcePersona(webhookName, params.personaByNickname)
+    : null;
+  const matchedPersona = params.message.webhookId
+    ? (renderModifierSource?.persona ?? params.personaByNickname.get(normalizeRenderModifierName(webhookName)))
+    : undefined;
   const userRow =
     params.message.author.id !== params.clientUserId && !matchedPersona
       ? await getCachedUserRow(params.message.author.id)
@@ -530,6 +536,7 @@ async function resolveMessageAuthorDisplayName(params: {
     return params.botDisplayName || "Bot";
   }
   return (
+    renderModifierSource?.displayName ??
     matchedPersona?.persona_nickname ??
     (userBlacklisted || params.serverPersonalizationDisabled || !userRow?.user_nickname
       ? fallbackName

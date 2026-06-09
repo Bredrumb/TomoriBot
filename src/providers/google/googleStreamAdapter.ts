@@ -28,6 +28,11 @@ import { ContextItemTag, type StructuredContextItem } from "../../types/misc/con
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
+import {
+  collectRenderModifierSourceNames,
+  isAllowedRenderModifierSpeakerLabel,
+} from "@/utils/discord/renderModifierParser";
+import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
@@ -105,6 +110,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
+  private speakerGuardAllowedSourceNames: string[] = [];
 
   constructor() {
     super({
@@ -165,6 +171,11 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
 
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
+    const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
+    this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
+      botName,
+      collectPersonaNameAliases(context.tomoriState, botName),
+    );
     const speakerStopPatternEnabled = context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false;
     this.speakerGuardEnabled = speakerStopPatternEnabled;
     const mergedStopSequences = buildProviderStopStrings({
@@ -614,7 +625,9 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     }
 
     const combined = `${this.speakerGuardPendingTail}${chunkText}`;
-    const speakerGuardResult = truncateBeforeGenericSpeakerLine(combined);
+    const speakerGuardResult = truncateBeforeGenericSpeakerLine(combined, {
+      isAllowedSpeakerLabel: (label) => isAllowedRenderModifierSpeakerLabel(label, this.speakerGuardAllowedSourceNames),
+    });
     const transitionIndex = speakerGuardResult.stopTriggered ? speakerGuardResult.text.length : -1;
 
     if (transitionIndex === -1) {

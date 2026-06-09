@@ -45,6 +45,7 @@ import {
   appendSupportedMediaFromMessage,
   extractEmojiImageAttachments,
 } from "@/utils/chat/contextMedia";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 
 /**
  * Token estimation constants
@@ -671,7 +672,7 @@ async function buildRuntimeParityContext(
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of personas) {
     if (!persona.persona_nickname) continue;
-    const key = persona.persona_nickname.toLowerCase();
+    const key = normalizeRenderModifierName(persona.persona_nickname);
     if (!personaByNickname.has(key)) {
       personaByNickname.set(key, persona);
     }
@@ -706,10 +707,15 @@ async function buildRuntimeParityContext(
       personaName = authorName;
     } else if (message.webhookId) {
       const webhookName = message.author.username?.trim();
-      const matchedPersona = webhookName ? personaByNickname.get(webhookName.toLowerCase()) : undefined;
+      const renderModifierSource = webhookName
+        ? resolveRenderModifierSourcePersona(webhookName, personaByNickname)
+        : null;
+      const matchedPersona = webhookName
+        ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
+        : undefined;
 
       if (matchedPersona) {
-        authorName = matchedPersona.persona_nickname;
+        authorName = renderModifierSource?.displayName ?? matchedPersona.persona_nickname;
         authorType = "persona";
         personaName = matchedPersona.persona_nickname;
         effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;

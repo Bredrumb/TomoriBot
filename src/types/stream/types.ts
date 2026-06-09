@@ -39,6 +39,14 @@ export enum VisibleDeliveryMode {
   STREAMING = "streaming",
 }
 
+export interface StreamRenderModifierState {
+  identity: {
+    username?: string;
+    avatarUrl?: string;
+    avatarDataUri?: string;
+  };
+}
+
 /**
  * Stream state tracking for buffer management and code block and think block detection
  */
@@ -80,6 +88,8 @@ export interface StreamState {
    * flush boundary with exactly one blank line.
    */
   pendingAggregateJoinNextWithBlankLine: boolean;
+  /** Active copied-render identity for the current generated line. */
+  activeRenderModifier?: StreamRenderModifierState;
 }
 
 /**
@@ -258,6 +268,7 @@ export function createDefaultStreamState(): StreamState {
     pendingOrphanPunctuation: undefined,
     pendingAggregatedText: "",
     pendingAggregateJoinNextWithBlankLine: false,
+    activeRenderModifier: undefined,
   };
 }
 

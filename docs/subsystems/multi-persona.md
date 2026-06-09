@@ -46,6 +46,8 @@ Reminders are tied to a persona to preserve the identity that set them:
 - **Reply to bot** (main persona messages) → main persona responds.
 - **Reply to alter webhook message** → the matching alter responds.
   - Matching is done by webhook `author.username` → persona nickname (case-insensitive).
+  - Copied-render webhook names like `Ren (bredrumb)` route replies back to the source persona
+    (`Ren`) while preserving the full visible label in prompt history.
   - Ensure persona nicknames are unique.
 - **Bot mention** → main persona responds.
 - Direct replies and bot mentions can combine with explicit persona trigger words in the same message. For example, replying to Tomori while mentioning `@Ren` routes the turn to Tomori and Ren.
@@ -106,6 +108,27 @@ Configured auto-trigger channels can also pin a single persona per channel:
 - `/server auto-trigger channels` can enable/disable channels in bulk, or target one channel and choose which persona should answer there.
 - The per-channel assignment is stored in `server_auto_trigger_persona_overrides`; the assembled config still exposes it as `autoch_persona_overrides`.
 - If a channel has no explicit assignment, auto-trigger falls back to the main persona.
+
+### Copied Rendering Syntax
+
+An active persona can intentionally render one generated line as a known copied user or persona by
+starting the line as:
+
+```text
+SourcePersona (target): message
+```
+
+For v1, `target` only resolves against known personas and users already present in conversation
+context. If exactly one target matches, TomoriBot sends that line through the managed webhook with
+username `SourcePersona (target)` and the target's avatar, while attribution, quota, self-reply
+bookkeeping, and STM ownership remain attached to `SourcePersona`. If the target is unknown or
+ambiguous, TomoriBot strips the parenthetical modifier and sends the line as normal source-persona
+output.
+
+This parser is intentionally shared with future expression/avatar variants, but variants are not
+implemented yet. A future `SourcePersona (angry):` style avatar variant should resolve before copied
+identity if both names conflict, backed by an explicit named avatar-variant table and `/persona avatar`
+management commands rather than hidden Discord metadata or invisible-character encodings.
 
 ### Personal spotlight
 
