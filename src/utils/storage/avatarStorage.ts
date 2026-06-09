@@ -18,6 +18,7 @@ type AvatarUploadOptions = {
   serverDiscId?: string;
   label?: string;
   buffer: Buffer;
+  assetKind?: "avatar" | "sprite";
 };
 
 type AvatarStorageConfig =
@@ -79,6 +80,9 @@ function getS3Client(region: string): S3Client {
 function buildAvatarObjectKey(config: AvatarStorageConfig, options: AvatarUploadOptions): string {
   const timestamp = Date.now();
   const serverSegment = options.serverDiscId ? `servers/${options.serverDiscId}` : "servers/unknown";
+  if (options.assetKind === "sprite") {
+    return `${config.prefix}/${serverSegment}/personas/${options.personaId}/sprites/${timestamp}.png`;
+  }
   return `${config.prefix}/${serverSegment}/personas/${options.personaId}/${timestamp}.png`;
 }
 
@@ -90,15 +94,22 @@ function buildPublicUrl(config: AvatarStorageConfig, key: string): string {
 function buildLocalStoredPath(options: AvatarUploadOptions): string {
   const timestamp = Date.now();
   const serverSegment = options.serverDiscId || "unknown";
-  return path.posix.join(
-    "data",
-    "avatars",
-    "servers",
-    serverSegment,
-    "personas",
-    String(options.personaId),
-    `${timestamp}.png`,
-  );
+  const pathSegments = ["data", "avatars", "servers", serverSegment, "personas", String(options.personaId)];
+  if (options.assetKind === "sprite") {
+    pathSegments.push("sprites");
+  }
+  pathSegments.push(`${timestamp}.png`);
+
+  return path.posix.join(...pathSegments);
+}
+
+function getAssetLabel(options: AvatarUploadOptions): string {
+  return options.assetKind === "sprite" ? "persona sprite" : "persona avatar";
+}
+
+function getAssetLogLabel(options: AvatarUploadOptions): string {
+  const label = options.label ? ` (${options.label})` : "";
+  return `${getAssetLabel(options)}${label}`;
 }
 
 function normalizeStoredPath(storedPath: string): string {
@@ -237,7 +248,7 @@ export async function loadStoredPersonaAvatarDataUri(reference: string): Promise
 }
 
 export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions): Promise<string | null> {
-  const label = options.label ? ` (${options.label})` : "";
+  const assetLogLabel = getAssetLogLabel(options);
 
   if (IS_PRODUCTION) {
     const config = getAvatarStorageConfig();
@@ -257,10 +268,10 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
             metadata: { cacheControl: "public, max-age=31536000, immutable" },
           });
         const publicUrl = buildPublicUrl(config, key);
-        log.success(`[Avatar Storage] Uploaded persona avatar${label} to GCS (${publicUrl})`);
+        log.success(`[Avatar Storage] Uploaded ${assetLogLabel} to GCS (${publicUrl})`);
         return publicUrl;
       } catch (error) {
-        await log.error(`[Avatar Storage] Failed to upload persona avatar${label} to GCS`, error, {
+        await log.error(`[Avatar Storage] Failed to upload ${assetLogLabel} to GCS`, error, {
           errorType: "GcsUploadError",
           metadata: { bucket: config.bucket, key },
         });
@@ -280,10 +291,10 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
         }),
       );
       const publicUrl = buildPublicUrl(config, key);
-      log.success(`[Avatar Storage] Uploaded persona avatar${label} to S3 (${publicUrl})`);
+      log.success(`[Avatar Storage] Uploaded ${assetLogLabel} to S3 (${publicUrl})`);
       return publicUrl;
     } catch (error) {
-      log.warn(`[Avatar Storage] Failed to upload persona avatar${label} to S3`, error);
+      log.warn(`[Avatar Storage] Failed to upload ${assetLogLabel} to S3`, error);
       return null;
     }
   }
@@ -301,12 +312,21 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
   try {
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
     await fs.writeFile(absolutePath, options.buffer);
-    log.success(`[Avatar Storage] Stored persona avatar${label} at ${storedPath}`);
+    log.success(`[Avatar Storage] Stored ${assetLogLabel} at ${storedPath}`);
     return normalizeStoredPath(storedPath);
   } catch (error) {
-    log.warn(`[Avatar Storage] Failed to store persona avatar${label} locally`, error);
+    log.warn(`[Avatar Storage] Failed to store ${assetLogLabel} locally`, error);
     return null;
   }
+}
+
+export async function uploadPersonaSpriteToStorage(
+  options: Omit<AvatarUploadOptions, "assetKind">,
+): Promise<string | null> {
+  return await uploadPersonaAvatarToStorage({
+    ...options,
+    assetKind: "sprite",
+  });
 }
 
 export async function deletePersonaAvatarFromStorage(reference: string): Promise<boolean> {
@@ -374,4 +394,8 @@ export async function deletePersonaAvatarFromStorage(reference: string): Promise
     log.warn(`[Avatar Storage] Failed to delete local persona avatar ${target}`, error);
     return false;
   }
+}
+
+export async function deletePersonaSpriteFromStorage(reference: string): Promise<boolean> {
+  return await deletePersonaAvatarFromStorage(reference);
 }

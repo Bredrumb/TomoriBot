@@ -16,7 +16,10 @@ import {
   isAllowedRenderModifierSpeakerLabel,
   parseLeadingRenderModifier,
 } from "@/utils/discord/renderModifierParser";
-import { resolveCopiedRenderModifierTarget } from "@/utils/discord/renderModifierResolver";
+import {
+  resolveCopiedRenderModifierTarget,
+  resolveSpriteRenderModifierTarget,
+} from "@/utils/discord/renderModifierResolver";
 import { isUserImpersonationStreamContext } from "@/utils/discord/stream/uiUpdater";
 
 type StreamSegmentProcessorDependencies = {
@@ -67,19 +70,24 @@ export class StreamSegmentProcessor {
       : null;
     if (renderModifierMatch) {
       const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
-      const copiedTarget = await resolveCopiedRenderModifierTarget(
+      workingSegment = renderModifierMatch.body;
+
+      const spriteResolution = await resolveSpriteRenderModifierTarget(
         renderModifierMatch.modifier,
         context,
         sourceDisplayName,
       );
+      const renderTarget =
+        spriteResolution.status === "matched"
+          ? spriteResolution.target
+          : await resolveCopiedRenderModifierTarget(renderModifierMatch.modifier, context, sourceDisplayName);
 
-      workingSegment = renderModifierMatch.body;
-      if (copiedTarget) {
+      if (renderTarget) {
         deliveryOptions = {
-          identityOverride: copiedTarget.identity,
-          accumulatedTextPrefix: `${copiedTarget.identity.username ?? sourceDisplayName}: `,
+          identityOverride: renderTarget.identity,
+          accumulatedTextPrefix: `${renderTarget.identity.username ?? sourceDisplayName}: `,
         };
-        state.activeRenderModifier = { identity: copiedTarget.identity };
+        state.activeRenderModifier = { identity: renderTarget.identity };
       } else {
         state.activeRenderModifier = undefined;
       }

@@ -33,6 +33,17 @@ Key columns:
 Per-persona configuration (one row per persona in `personas`):
 - `trigger_words`: trigger words for this persona — **all personas use this column** (Phase 6 F1 merged the former `personas.alter_triggers` column here; the old `is_alter ? alter_triggers : trigger_words` ternary is gone).
 
+### `persona_sprites`
+
+`persona_sprites` stores named per-persona avatar variants selected by generated render-modifier labels:
+
+- `sprite_name`: display label shown in prompt guidance and webhook names, e.g. `mad`.
+- `sprite_key`: normalized lookup key for case/spacing-insensitive matching.
+- `avatar_url`: production public object URL, or a non-production local path under `data/avatars/servers/{serverDiscId}/personas/{personaId}/sprites/{assetId}.png`.
+- `usage_instructions`: short guidance injected into the active persona's prompt so the model knows when the sprite should be used.
+
+Sprite rows are managed by `/persona sprites add` and `/persona sprites remove`. Reusing a sprite name replaces the existing row and image. The default per-persona limit is 50 (`PERSONA_SPRITE_MAX_PER_PERSONA`), and the prompt only lists the first 20 by default (`PERSONA_SPRITE_PROMPT_MAX_COUNT`).
+
 ### `reminders`
 
 Reminders are tied to a persona to preserve the identity that set them:
@@ -111,24 +122,20 @@ Configured auto-trigger channels can also pin a single persona per channel:
 
 ### Copied Rendering Syntax
 
-An active persona can intentionally render one generated line as a known copied user or persona by
+An active persona can intentionally render one generated line with a sprite avatar, or as a known copied user/persona, by
 starting the line as:
 
 ```text
 SourcePersona (target): message
 ```
 
-For v1, `target` only resolves against known personas and users already present in conversation
-context. If exactly one target matches, TomoriBot sends that line through the managed webhook with
-username `SourcePersona (target)` and the target's avatar, while attribution, quota, self-reply
-bookkeeping, and STM ownership remain attached to `SourcePersona`. If the target is unknown or
-ambiguous, TomoriBot strips the parenthetical modifier and sends the line as normal source-persona
-output.
+Resolution order is:
 
-This parser is intentionally shared with future expression/avatar variants, but variants are not
-implemented yet. A future `SourcePersona (angry):` style avatar variant should resolve before copied
-identity if both names conflict, backed by an explicit named avatar-variant table and `/persona avatar`
-management commands rather than hidden Discord metadata or invisible-character encodings.
+1. **Persona sprite** on the active source persona. A matching `persona_sprites.sprite_key` sends the line through the managed webhook with username `SourcePersona (sprite)` and the sprite image. If the sprite row matches but the stored image is missing/unusable, TomoriBot strips the prefix and sends the text as normal source-persona output; it does not fall through to copied identity.
+2. **Copied identity** if no sprite matched. `target` resolves only against known personas in the server and Discord users already present in conversation context. If exactly one target matches, TomoriBot uses username `SourcePersona (target)` and the target's avatar.
+3. **Plain output** when no sprite/copy target resolves, or copied identity is ambiguous. The parenthetical modifier is stripped before delivery.
+
+Attribution, quota, self-reply bookkeeping, STM ownership, and reply routing remain attached to `SourcePersona`. History reconstruction maps webhook names like `Ren (mad)` back to source persona `Ren` while preserving the visible label in prompt history.
 
 ### Personal spotlight
 

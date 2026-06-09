@@ -415,9 +415,8 @@ export async function generatePresetFromPrompt(
     // 2. Initialize Gemini client (use pre-built if provided)
     const genAI = client ?? new GoogleGenAI({ apiKey });
 
-    // 3. Resolve generation model; Gemini 3 uses flash-preview with a fallback
+    // 3. Resolve generation model
     const configuredModel = params.modelName || "gemini-2.5-flash";
-    const isGemini3 = configuredModel.startsWith("gemini-3");
 
     // 4. Run search sub-agent when web search is requested.
     //    gemini-2.5-flash is hardcoded for the search step across all models —
@@ -457,17 +456,8 @@ export async function generatePresetFromPrompt(
 
     // 5. Set up generation model; always uses the user's configured model so
     //    free-tier users aren't silently upgraded to a paid model.
-    let MODEL_NAME: string;
-    let FALLBACK_MODEL: string | undefined;
-
-    if (isGemini3) {
-      // Gemini 3 preview models may not be stable; fall back to the GA flash release
-      MODEL_NAME = "gemini-3-flash-preview";
-      FALLBACK_MODEL = "gemini-3-flash";
-    } else {
-      MODEL_NAME = configuredModel;
-      FALLBACK_MODEL = undefined;
-    }
+    let MODEL_NAME = configuredModel;
+    const FALLBACK_MODEL = undefined;
 
     // 7. Define JSON schema for structured output with length constraints
     const maxPresetStringLength = PRESET_MAX_STRING_LENGTH;

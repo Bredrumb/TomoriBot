@@ -88,7 +88,7 @@ export interface StreamState {
    * flush boundary with exactly one blank line.
    */
   pendingAggregateJoinNextWithBlankLine: boolean;
-  /** Active copied-render identity for the current generated line. */
+  /** Active render-modifier identity for the current generated line. */
   activeRenderModifier?: StreamRenderModifierState;
 }
 

@@ -8,6 +8,7 @@ import { appendDialogueHistoryContext } from "./dialogueHistory";
 import { convertMentions } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
 import { buildUsersInConversationContextItem } from "./participants";
+import { buildPersonaSpriteContextItem } from "./personaSprites";
 import { buildServerDocumentContextItem } from "./rag";
 import { buildServerEmojiContextItem, buildServerStickerContextItem } from "./serverAssets";
 import { buildServerInfoContextItem } from "./serverInfo";
@@ -197,6 +198,14 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       preloadedStickers,
       toolPromptMacroResolver,
       convertMentions,
+    }),
+  );
+  await appendOptionalItem(
+    contextItems,
+    buildPersonaSpriteContextItem({
+      tomoriState,
+      botName,
+      isUserImpersonation,
     }),
   );
   await appendOptionalItem(

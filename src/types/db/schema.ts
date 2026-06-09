@@ -123,6 +123,18 @@ export const personaAttributeSchema = z.object({
 });
 export type PersonaAttributeRow = z.infer<typeof personaAttributeSchema>;
 
+export const personaSpriteSchema = z.object({
+  sprite_id: z.number().optional(),
+  persona_id: z.number().int(),
+  sprite_name: z.string().min(1).max(64),
+  sprite_key: z.string().min(1).max(64),
+  avatar_url: z.string().min(1),
+  usage_instructions: z.string().max(1000).default(""),
+  created_at: z.coerce.date().optional(),
+  updated_at: z.coerce.date().optional(),
+});
+export type PersonaSpriteRow = z.infer<typeof personaSpriteSchema>;
+
 /**
  * Runtime autochat counters for a persona (Phase 6 Step #16B).
  * Separated from personas so identity rows are not mutated on every message tick.

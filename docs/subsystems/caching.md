@@ -124,7 +124,18 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 - Default TTL: `TOMORI_STATE_CACHE_TTL_MINUTES` (default 10)
 - Backed by the standalone `channel_prompt_overrides` table; `ChannelPromptRepository` invalidates the entry after each successful write/delete (`invalidateChannelPromptCache`). Mirrors the per-channel LLM override cache (`channelLlmCache.ts`).
 
-### 14) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
+### 15) Persona sprite cache (`personaSpriteCache.ts`)
+
+- **Scope:** per `persona_id`
+- **Value:** ordered `persona_sprites` rows used by prompt context and render-modifier resolution
+- Default TTL: `PERSONA_SPRITE_CACHE_TTL_MINUTES` (falls back to `TOMORI_STATE_CACHE_TTL_MINUTES`, default 10)
+- Backed by `persona_sprites`; `PersonaSpriteRepository` invalidates after successful add/replace/delete.
+- Related operational limits:
+  - `PERSONA_SPRITE_MAX_PER_PERSONA` (default 50)
+  - `PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH` (default 300, DB maximum 1000)
+  - `PERSONA_SPRITE_PROMPT_MAX_COUNT` (default 20)
+
+### 16) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
 
 Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an ephemeral
 `Map<number, AvatarCacheEntry>` created per command invocation and discarded when the command finishes.
@@ -164,6 +175,7 @@ Common examples:
 - emoji/sticker update events -> `invalidateEmojiStickerCache(serverId)`
 - persona webhook/avatar changes -> webhook invalidation helpers
 - channel system prompt changes -> `invalidateChannelPromptCache(serverId, channelDiscId)` (handled inside `ChannelPromptRepository`)
+- persona sprite changes -> `invalidatePersonaSpriteCache(personaId)` (handled inside `PersonaSpriteRepository`)
 
 ## Emergency Memory Cleanup
 
@@ -212,6 +224,10 @@ TOMORI_STATE_CACHE_TTL_MINUTES=10
 USER_CACHE_TTL_MINUTES=30
 EMOJI_STICKER_CACHE_TTL_MINUTES=10
 CHANNEL_WHITELIST_CACHE_TTL_MINUTES=5
+PERSONA_SPRITE_CACHE_TTL_MINUTES=10
+PERSONA_SPRITE_MAX_PER_PERSONA=50
+PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH=300
+PERSONA_SPRITE_PROMPT_MAX_COUNT=20
 EMERGENCY_CACHE_CLEAR_ENABLED=true
 EMERGENCY_CACHE_CLEAR_INCLUDE_STM=false
 EMERGENCY_CACHE_CLEAR_DISCORD_VOLATILE=true

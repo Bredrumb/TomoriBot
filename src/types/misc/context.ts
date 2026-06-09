@@ -54,6 +54,7 @@ export enum ContextItemTag {
   KNOWLEDGE_SERVER_INFO = "knowledge_server_info",
   KNOWLEDGE_SERVER_EMOJIS = "knowledge_server_emojis",
   KNOWLEDGE_SERVER_STICKERS = "knowledge_server_stickers",
+  KNOWLEDGE_PERSONA_SPRITES = "knowledge_persona_sprites",
   KNOWLEDGE_SERVER_MEMORIES = "knowledge_server_memories",
   KNOWLEDGE_SERVER_DOCUMENTS = "knowledge_server_documents",
   KNOWLEDGE_SERVER_CONDITIONING = "knowledge_server_conditioning",

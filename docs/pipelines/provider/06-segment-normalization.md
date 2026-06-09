@@ -2,7 +2,7 @@
 title: "06: Segment Normalization"
 ---
 
-Normalizes a flushed text segment — capturing copied-render modifiers, cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill — before handing it to stage 07 for Discord delivery.
+Normalizes a flushed text segment — capturing render modifiers, cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill — before handing it to stage 07 for Discord delivery.
 
 **File:** `src/utils/discord/stream/segmentProcessor.ts:21-233`
 
@@ -19,14 +19,15 @@ The transformation pipeline runs in this order:
    or `...`) are held in `state.pendingOrphanPunctuation` and prepended to the next non-empty
    segment instead of being sent standalone, preventing jarring single-character messages.
 
-2. **Copied-render modifier capture** — before normal own-name cleanup runs, an active persona
-   line that starts as `SourcePersona (modifier): text` is parsed. If `modifier` resolves
-   unambiguously to a known copied user/persona from current context, stage 07 receives an
-   identity override and the visible webhook name is formatted as `SourcePersona (target)`.
-   If the modifier is unknown or ambiguous, the parenthetical modifier is stripped and the line
-   is delivered as normal source-persona output. This path is line-scoped across stream splits,
-   ignored inside code blocks and list-like starts, and does not implement avatar-expression
-   variants yet.
+2. **Render-modifier capture** — before normal own-name cleanup runs, an active persona line
+   that starts as `SourcePersona (modifier): text` is parsed. The modifier resolves against the
+   active persona's `persona_sprites` first; a sprite match sends stage 07 an identity override
+   with username `SourcePersona (sprite)` and the sprite avatar. If the sprite row matches but
+   its image cannot be loaded, the parenthetical modifier is stripped and the line is delivered
+   as normal source-persona output without trying copied identity. If no sprite matches, the
+   modifier falls back to copied-render resolution against known personas and users in current
+   context. Unknown or ambiguous copied targets are stripped and delivered as normal output.
+   This path is line-scoped across stream splits and ignored inside code blocks and list-like starts.
 
 3. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
    shortcode (`:name:`) from the segment if the same emoji was already used in a recent bot
@@ -60,9 +61,9 @@ The transformation pipeline runs in this order:
    is true and a speaker-label line (e.g., `User:`) appears in the segment, the text is truncated
    before it and `requestStop(channelId, "speaker_guard")` is queued. The segment is sent with
    the truncated content; the stop is processed by the stage 04 orchestrator on the next
-   iteration. Active copied-render labels such as `Ren (target):` are explicitly allowed through
-   both the provider-level fallback guard and this segment-level guard so they can be resolved
-   instead of treated as foreign speaker turns.
+   iteration. Active render-modifier labels such as `Ren (mad):` or `Ren (target):` are explicitly
+   allowed through both the provider-level fallback guard and this segment-level guard so they can
+   be resolved instead of treated as foreign speaker turns.
 
 8. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
    rendered Markdown table, the segment is split into text parts and table parts. Table parts are
@@ -89,8 +90,9 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
 - **`state.pendingOrphanPunctuation`** — may be set (hold) or cleared (prepend to segment).
 - **`state.prefillMatched`** / **`state.prefillInjected`** / **`state.prefillMatchFailed`** —
   updated as prefill stripping/injection progresses.
-- **`state.activeRenderModifier`** — tracks the copied-render identity override until the current
-  generated line ends, so period or chunk splits keep using the copied identity until a newline.
+- **`state.activeRenderModifier`** — tracks the active render-modifier identity override until the
+  current generated line ends, so period or chunk splits keep using the sprite/copied identity
+  until a newline.
 - **`requestStop(channelId, "speaker_guard")`** — queued if the speaker guard fires; the stop
   is consumed by the stage 04 orchestrator on the next loop iteration.
 - **PNG attachment** — when a Markdown table is detected and rendered successfully, a Discord file

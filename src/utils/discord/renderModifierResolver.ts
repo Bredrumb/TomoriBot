@@ -1,13 +1,20 @@
 import type { Guild } from "discord.js";
-import type { TomoriState } from "@/types/db/schema";
+import type { PersonaSpriteRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type ConversationUserReference } from "@/types/misc/context";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
+import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { formatRenderModifierWebhookName, normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { log } from "@/utils/misc/logger";
+import { normalizePersonaSpriteKey } from "@/utils/persona/sprites";
+import {
+  isLocalPersonaAvatarPath,
+  loadStoredPersonaAvatarDataUri,
+  resolvePersonaAvatarPublicUrl,
+} from "@/utils/storage/avatarStorage";
 
 type CopiedRenderCandidate =
   | {
@@ -28,6 +35,13 @@ export type CopiedRenderTarget = {
   displayName: string;
   identity: ResolvedWebhookIdentity;
 };
+
+export type SpriteRenderModifierResolution =
+  | { status: "not_found" }
+  | {
+      status: "matched";
+      target: CopiedRenderTarget | null;
+    };
 
 function getStreamGuild(context: StreamContext): Guild | null {
   return (context.channel as { guild?: Guild | null }).guild ?? null;
@@ -58,6 +72,50 @@ function candidateMatches(candidate: CopiedRenderCandidate, normalizedModifier: 
   }
 
   return candidate.aliases.some((alias) => normalizeRenderModifierName(alias) === normalizedModifier);
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function resolveSpriteIdentity(
+  sprite: PersonaSpriteRow,
+  sourceDisplayName: string,
+): Promise<ResolvedWebhookIdentity | null> {
+  const username = formatRenderModifierWebhookName(sourceDisplayName, sprite.sprite_name);
+  const avatarReference = sprite.avatar_url.trim();
+  const publicAvatarUrl = resolvePersonaAvatarPublicUrl(avatarReference);
+  if (publicAvatarUrl && isValidHttpUrl(publicAvatarUrl)) {
+    return {
+      username,
+      avatarUrl: publicAvatarUrl,
+    };
+  }
+
+  if (isLocalPersonaAvatarPath(avatarReference)) {
+    const avatarDataUri = await loadStoredPersonaAvatarDataUri(avatarReference);
+    if (avatarDataUri) {
+      return {
+        username,
+        avatarDataUri,
+      };
+    }
+  }
+
+  if (isValidHttpUrl(avatarReference)) {
+    return {
+      username,
+      avatarUrl: avatarReference,
+    };
+  }
+
+  log.warn(`Persona sprite ${sprite.sprite_id ?? "unknown"} for persona ${sprite.persona_id} has no usable avatar`);
+  return null;
 }
 
 function addCandidate(candidatesByKey: Map<string, CopiedRenderCandidate>, candidate: CopiedRenderCandidate): void {
@@ -154,5 +212,41 @@ export async function resolveCopiedRenderModifierTarget(
       username,
       avatarUrl: userIdentity.avatarUrl,
     },
+  };
+}
+
+export async function resolveSpriteRenderModifierTarget(
+  modifier: string,
+  context: StreamContext,
+  sourceDisplayName: string,
+): Promise<SpriteRenderModifierResolution> {
+  const personaId = context.tomoriState.persona_id;
+  if (typeof personaId !== "number") {
+    return { status: "not_found" };
+  }
+
+  const spriteKey = normalizePersonaSpriteKey(modifier);
+  if (!spriteKey) {
+    return { status: "not_found" };
+  }
+
+  const sprites = await getCachedPersonaSprites(personaId).catch((error) => {
+    log.warn(`Failed to load persona sprites while resolving render modifier for persona ${personaId}`, error);
+    return [];
+  });
+  const sprite = sprites.find((candidate) => candidate.sprite_key === spriteKey);
+  if (!sprite) {
+    return { status: "not_found" };
+  }
+
+  const identity = await resolveSpriteIdentity(sprite, sourceDisplayName);
+  return {
+    status: "matched",
+    target: identity
+      ? {
+          displayName: sprite.sprite_name,
+          identity,
+        }
+      : null,
   };
 }

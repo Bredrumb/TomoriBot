@@ -25,6 +25,10 @@ const GEMINI_TOKEN_LIMITS: Readonly<Record<string, ModelTokenLimits>> = {
   },
   "gemini-2.5-flash": { contextLength: 1_048_576, maxCompletionTokens: 8192 },
   "gemini-2.5-pro": { contextLength: 1_048_576, maxCompletionTokens: 8192 },
+  "gemini-3-flash": {
+    contextLength: 1_048_576,
+    maxCompletionTokens: 8192,
+  },
   "gemini-3-flash-preview": {
     contextLength: 1_048_576,
     maxCompletionTokens: 8192,

@@ -12,6 +12,7 @@ import { llmModelRepo } from "./LlmModelRepository";
 import { llmOverrideRepo } from "./LlmOverrideRepository";
 import { llmProviderRepo } from "./LlmProviderRepository";
 import { personalMemoryRepository } from "./PersonalMemoryRepository";
+import { personaSpriteRepository } from "./PersonaSpriteRepository";
 import { personaRepository } from "./PersonaRepository";
 import { presetRepository } from "./PresetRepository";
 import { ragRepository } from "./RagRepository";
@@ -38,6 +39,7 @@ export {
   llmOverrideRepo,
   llmProviderRepo,
   personalMemoryRepository,
+  personaSpriteRepository,
   personaRepository,
   presetRepository,
   ragRepository,
