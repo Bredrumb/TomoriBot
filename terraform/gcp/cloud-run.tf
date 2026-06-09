@@ -12,6 +12,8 @@
  *     it as a file rather than calling the AWS SDK.
  *   - ingress = INGRESS_TRAFFIC_INTERNAL_ONLY: the bot makes outbound calls only;
  *     no public HTTP endpoint is needed.
+ *   - SearXNG is optional. When disabled, SEARXNG_BASE_URL is left unset and
+ *     web search falls back to the remaining engines.
  */
 
 resource "google_cloud_run_v2_service" "tomoribot" {
@@ -55,9 +57,8 @@ resource "google_cloud_run_v2_service" "tomoribot" {
       # Ingress container: Cloud Run requires exactly one container to expose a
       # port, injects PORT with this value, and targets its startup probe here.
       # The bot's health server reads process.env.PORT (see src/index.ts) and
-      # binds it. Deliberately 8081 — not 8080 — because Cloud Run containers
-      # share a localhost network namespace and must each bind a unique port;
-      # the SearXNG sidecar keeps 8080.
+      # binds it. Keep this stable at 8081 so Cloud Run health checks and
+      # revisions don't shift when optional sidecars are enabled or disabled.
       ports {
         container_port = 8081
       }
@@ -109,13 +110,15 @@ resource "google_cloud_run_v2_service" "tomoribot" {
         value = google_storage_bucket.voice_samples.name
       }
 
-      # SearXNG sidecar reachable on the loopback interface of the same pod.
-      env {
-        name  = "SEARXNG_BASE_URL"
-        value = "http://localhost:8080/"
+      dynamic "env" {
+        for_each = var.enable_searxng_sidecar ? [1] : []
+        content {
+          name  = "SEARXNG_BASE_URL"
+          value = "http://localhost:8080/"
+        }
       }
 
-      depends_on = ["searxng"]
+      depends_on = var.enable_searxng_sidecar ? ["searxng"] : []
 
       volume_mounts {
         name       = "cloudsql"
@@ -129,50 +132,49 @@ resource "google_cloud_run_v2_service" "tomoribot" {
 
     }
 
-    # ------------------------------------------------------------
-    # SearXNG metasearch sidecar (Phase 2).
-    # Cloud Run v2 multi-container — containers share localhost.
-    # ------------------------------------------------------------
-    containers {
-      name  = "searxng"
-      image = var.searxng_image
+    dynamic "containers" {
+      for_each = var.enable_searxng_sidecar ? [1] : []
+      content {
+        name  = "searxng"
+        image = var.searxng_image
 
-      # Sidecar: no `ports` block — only the ingress container (tomoribot) may
-      # expose a port. SearXNG still listens on its default 8080 internally and
-      # is reachable by the bot at http://localhost:8080/ via the shared
-      # network namespace (see SEARXNG_BASE_URL below and the startup_probe).
+        # Sidecar: no `ports` block — only the ingress container (tomoribot)
+        # may expose a port. SearXNG still listens on its default 8080
+        # internally and is reachable by the bot at http://localhost:8080/ via
+        # the shared network namespace.
 
-      env {
-        name = "SEARXNG_SECRET"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.searxng_secret.secret_id
-            version = "latest"
+        env {
+          name = "SEARXNG_SECRET"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.searxng_secret.secret_id
+              version = "latest"
+            }
           }
         }
-      }
 
-      env {
-        name  = "SEARXNG_BASE_URL"
-        value = "http://localhost:8080/"
-      }
-
-      resources {
-        limits = {
-          cpu    = var.searxng_cpu
-          memory = var.searxng_memory
+        env {
+          name  = "SEARXNG_BASE_URL"
+          value = "http://localhost:8080/"
         }
-        cpu_idle = false
-      }
 
-      startup_probe {
-        http_get {
-          path = "/healthz"
-          port = 8080
+        resources {
+          limits = {
+            cpu    = var.searxng_cpu
+            memory = var.searxng_memory
+          }
+          cpu_idle = false
         }
-        initial_delay_seconds = 5
-        period_seconds        = 5
-        failure_threshold     = 6
+
+        startup_probe {
+          http_get {
+            path = "/healthz"
+            port = 8080
+          }
+          initial_delay_seconds = 5
+          period_seconds        = 5
+          failure_threshold     = 6
+        }
       }
     }
   }

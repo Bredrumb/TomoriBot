@@ -181,8 +181,10 @@ Default emergency behavior:
 - Preserves: non-expired short-term memory, static LLM model cache, static provider
   capability maps, command registries, MCP connections, active channel locks, and
   other runtime coordination state.
-- Emits `log.metric("emergency_cache_clear", ...)` and `log.metric("memory_emergency_entered", ...)`
-  so CloudWatch/Grafana can correlate cache eviction with RSS pressure.
+- Emits `log.metric("emergency_cache_clear", ...)` with total and per-cache
+  cleared counts plus pre/post process memory (`rss`, `heapUsed`, `external`,
+  `arrayBuffers`), and `log.metric("memory_emergency_entered", ...)` so
+  CloudWatch/Grafana can correlate cache eviction with RSS pressure.
 
 Operational knobs:
 

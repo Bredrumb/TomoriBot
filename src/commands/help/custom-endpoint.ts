@@ -47,8 +47,8 @@ export async function execute(
           {
             nameKey: "commands.help.custom_models.server_field",
             value: localizer(locale, "commands.help.custom_models.server_value", {
-              add_command: commandRegistry.getCommandMention("config", "custom-endpoint", "add"),
-              remove_command: commandRegistry.getCommandMention("config", "custom-endpoint", "remove"),
+              add_command: commandRegistry.getCommandMention("provider", "custom-endpoint", "add"),
+              remove_command: commandRegistry.getCommandMention("provider", "custom-endpoint", "remove"),
             }),
             inline: false,
           },
@@ -63,17 +63,17 @@ export async function execute(
           {
             nameKey: "commands.help.custom_models.selection_field",
             value: localizer(locale, "commands.help.custom_models.selection_value", {
-              text_command: commandRegistry.getCommandMention("config", "model", "text"),
-              image_command: commandRegistry.getCommandMention("config", "model", "image"),
-              video_command: commandRegistry.getCommandMention("config", "model", "video"),
+              text_command: commandRegistry.getCommandMention("model", "text"),
+              image_command: commandRegistry.getCommandMention("model", "image"),
+              video_command: commandRegistry.getCommandMention("model", "video"),
             }),
             inline: false,
           },
           {
             nameKey: "commands.help.custom_models.labels_field",
             value: localizer(locale, "commands.help.custom_models.labels_value", {
-              server_remove_command: commandRegistry.getCommandMention("config", "custom-endpoint", "remove"),
-              server_provider_remove_command: commandRegistry.getCommandMention("config", "provider", "remove"),
+              server_remove_command: commandRegistry.getCommandMention("provider", "custom-endpoint", "remove"),
+              server_provider_remove_command: commandRegistry.getCommandMention("provider", "remove"),
               personal_remove_command: commandRegistry.getCommandMention("personal", "custom-endpoint", "remove"),
               personal_provider_remove_command: commandRegistry.getCommandMention("personal", "provider", "remove"),
             }),
@@ -110,10 +110,10 @@ export async function execute(
             {
               nameKey: "commands.help.custom_models.comfyui_page1_register_field",
               value: localizer(locale, "commands.help.custom_models.comfyui_page1_register_value", {
-                server_add_command: commandRegistry.getCommandMention("config", "custom-endpoint", "add"),
+                server_add_command: commandRegistry.getCommandMention("provider", "custom-endpoint", "add"),
                 personal_add_command: commandRegistry.getCommandMention("personal", "custom-endpoint", "add"),
-                image_command: commandRegistry.getCommandMention("config", "model", "image"),
-                video_command: commandRegistry.getCommandMention("config", "model", "video"),
+                image_command: commandRegistry.getCommandMention("model", "image"),
+                video_command: commandRegistry.getCommandMention("model", "video"),
               }),
               inline: false,
             },

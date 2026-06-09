@@ -152,8 +152,8 @@ export async function execute(
         titleKey: "commands.provider.add.custom_moved_title",
         descriptionKey: "commands.provider.add.custom_moved_description",
         descriptionVars: {
-          custom_models_add_command: commandRegistry.getCommandMention("config", "custom-endpoint", "add"),
-          model_text_command: commandRegistry.getCommandMention("config", "model", "text"),
+          custom_models_add_command: commandRegistry.getCommandMention("provider", "custom-endpoint", "add"),
+          model_text_command: commandRegistry.getCommandMention("model", "text"),
           help_custom_models_command: commandRegistry.getCommandMention("help", "custom-endpoint"),
         },
         color: ColorCode.WARN,
@@ -266,12 +266,12 @@ export async function execute(
       personaId: tomoriState.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config provider add",
+        command: "provider add",
         guildId: interaction.guild?.id,
         executorDiscordId: interaction.user.id,
       },
     };
-    await log.error(`Error executing /config provider add for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /provider add for user ${userData.user_disc_id}`, error as Error, context);
 
     await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
       titleKey: "general.errors.unknown_error_title",

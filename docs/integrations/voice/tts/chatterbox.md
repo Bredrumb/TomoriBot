@@ -13,7 +13,7 @@ pip install -r servers\tts\chatterbox\requirements.txt
 python servers\tts\chatterbox\server.py
 ```
 
-Register with `/config custom-endpoint add`:
+Register with `/provider custom-endpoint add`:
 
 - capability: `speech`
 - api_style: `tts-clone`

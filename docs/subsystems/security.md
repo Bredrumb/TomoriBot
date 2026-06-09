@@ -206,7 +206,8 @@ Critical memory behavior:
 - Emergency mode disables media processing and triggers `clearEmergencyCaches()`.
 - Cache clearing preserves non-expired short-term memory by default; operators can
   opt into full STM clearing with `EMERGENCY_CACHE_CLEAR_INCLUDE_STM=true`.
-- Forced GC runs after cache clearing when the runtime exposes `global.gc`.
+- Forced GC runs after cache clearing when the runtime exposes `Bun.gc` or
+  Node's `global.gc`; `memory_forced_gc` logs pre/post process memory fields.
 
 ## Supply Chain Security
 

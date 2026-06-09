@@ -13,7 +13,7 @@ pip install -r requirements.txt
 python whisperx_server.py
 ```
 
-Register with `/config custom-endpoint add`:
+Register with `/provider custom-endpoint add`:
 
 - capability: `transcription`
 - api_style: `openai-compatible-transcription`

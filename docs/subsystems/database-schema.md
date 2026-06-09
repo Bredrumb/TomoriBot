@@ -387,6 +387,14 @@ the next boot. Invariants are validated on startup and via `bun run check-models
 `seedPersonasFromCatalog()` also preserves the derived `official_attribute_flags` update
 for official persona attribute visibility flags.
 
+The persona upsert keys on the stable `(preset_lineage_id, preset_language)` pair, not on
+`persona_preset_name`. `persona_preset_name` is a mutable, human-facing catalog label, so it
+is a normal updated column: renaming a preset is a one-line edit to the catalog `name` field
+that resolves to the existing lineage/language row and updates the label in place on the next
+boot — no rename bridge or migration required. (Keying on the name would instead orphan the
+old row, create a duplicate, and collide with `idx_persona_presets_lineage_language_unique`,
+aborting the whole batch INSERT.)
+
 Use a **numbered migration** for:
 - Adding new columns that older installations need before or after a rollout
 - `DROP COLUMN` / `DROP TABLE`

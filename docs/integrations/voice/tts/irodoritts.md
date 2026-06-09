@@ -42,7 +42,7 @@ Both `Irodori-TTS` and `dacvae` are installed from GitHub. The install script pi
 
 ## Registering in TomoriBot
 
-After the server is running, register it with `/config custom-endpoint add`:
+After the server is running, register it with `/provider custom-endpoint add`:
 
 - `capability`: `speech`
 - `api_style`: `tts-clone`

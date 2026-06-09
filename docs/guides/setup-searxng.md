@@ -1,3 +1,6 @@
+---
+title: "Setup: SearXNG Web Search Sidecar"
+---
 # Setup: SearXNG Web Search Sidecar
 
 The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → Felo**. By running our own instance of SearXNG, we sidestep single-engine rate limits and scrape breakage, and unlock SearXNG-only categories: `science`, `it`, `files`, and `music`.
@@ -52,7 +55,13 @@ Add SearXNG as a sidecar container in the same task definition. Set `SEARXNG_BAS
 
 ### 4. GCP Cloud Run
 
-Use a multi-container service with SearXNG alongside the bot. Set `SEARXNG_BASE_URL=http://localhost:8080/`. Inject `SEARXNG_SECRET` via Secret Manager.
+GCP Terraform keeps the SearXNG sidecar disabled by default to avoid paying for an always-on Cloud Run sidecar:
+
+```hcl
+enable_searxng_sidecar = false
+```
+
+To run it in the same Cloud Run service, set `enable_searxng_sidecar = true`. Terraform then adds the SearXNG container, injects `SEARXNG_SECRET` through Secret Manager, and sets `SEARXNG_BASE_URL=http://localhost:8080/` on the bot container. For production, override `searxng_image` with a pinned digest instead of `searxng/searxng:latest`.
 
 ---
 

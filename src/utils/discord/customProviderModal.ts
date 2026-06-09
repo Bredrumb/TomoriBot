@@ -2,7 +2,7 @@
  * Legacy Custom Provider Modal Utilities
  *
  * Shared utilities for the retired inline custom-provider setup flow.
- * Phase 3 moved user-facing setup to /config custom-endpoint and /personal custom-endpoint.
+ * Phase 3 moved user-facing setup to /provider custom-endpoint and /personal custom-endpoint.
  *
  * These helpers remain for compatibility with legacy data and shared constants.
  */

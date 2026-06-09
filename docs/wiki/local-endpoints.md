@@ -25,7 +25,7 @@ TomoriBot ships a ready-to-use Anima v1 ComfyUI workflow for txt2img and img2img
 
 - **Anima v1 workflow**: [`assets/comfyui-workflows/tomoribot-anima-v1-comfyui.json`](../../assets/comfyui-workflows/tomoribot-anima-v1-comfyui.json)
 - **Workflow notes**: [`assets/comfyui-workflows/README.md`](../../assets/comfyui-workflows/README.md)
-- Upload the `.json` workflow during `/config custom-endpoints add` (capability: `image`, API style: `comfyui`)
+- Upload the `.json` workflow during `/provider custom-endpoints add` (capability: `image`, API style: `comfyui`)
 - ComfyUI must be reachable on the network, TomoriBot polls its `/history` endpoint until the image is ready
 
 ### Local TTS (Voice Messages)
@@ -38,7 +38,7 @@ Three reference FastAPI wrapper servers are included, each exposing a `/synthesi
 | [Qwen3-TTS](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base) | [`servers/tts/qwen3tts/`](../../servers/tts/qwen3tts/) | Qwen3-TTS 1.7B Base | Large but accurate multilingual reference-audio cloning (RECOMMENDED) |
 | [IrodoriTTS](https://huggingface.co/Aratako/Irodori-TTS-500M-v2) | [`servers/tts/irodoritts/`](../../servers/tts/irodoritts/) | Irodori-TTS 500M v2 | Japanese-focused reference-audio cloning, styles with emojis |
 
-Each folder contains a `server.py` and `requirements.txt`. Start the server, then register it in Discord with `/config custom-endpoints add` (capability: `speech`). Upload a short reference audio clip via `/speech voice-add` and assign it to a persona with `/speech voice-assign`. The clip can be in any audio format (TomoriBot automatically converts it to mono WAV), but it is strongly recommended to use a 10-20 second clip with no background music.
+Each folder contains a `server.py` and `requirements.txt`. Start the server, then register it in Discord with `/provider custom-endpoints add` (capability: `speech`). Upload a short reference audio clip via `/speech voice-add` and assign it to a persona with `/speech voice-assign`. The clip can be in any audio format (TomoriBot automatically converts it to mono WAV), but it is strongly recommended to use a 10-20 second clip with no background music.
 
 ElevenLabs is also supported as a cloud TTS/STT option via `/speech elevenlabs`.
 

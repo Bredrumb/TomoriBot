@@ -17,7 +17,7 @@ export default {
       free_suffix: `Free`,
       already_existing_suffix: `Already Existing`,
       already_existing_description: `このプロバイダーは既に設定済みです。送信すると認証情報が更新されます。`,
-      custom_deprecated_description: `/config custom-endpoint add に移動しました。リダイレクト案内を見るときだけ選択してください。`,
+      custom_deprecated_description: `/provider custom-endpoint add に移動しました。リダイレクト案内を見るときだけ選択してください。`,
       api_key_description: `このキーは安全に保存されます。カスタムエンドポイントを選んでリダイレクト案内だけ確認したい場合は空欄で構いません。`,
       api_key_label: `APIキー`,
       api_key_description_with_custom: `APIキー、またはCustomの場合はOpenAIエンドポイントURL（例：http://localhost:11434/v1）`,
@@ -29,14 +29,14 @@ export default {
     remove: {
       description: `保存されたプロバイダー設定を削除します。`,
       no_saved_title: `保存済み設定がありません`,
-      no_saved_description: `削除する保存済みプロバイダー設定がありません。先に\`/config provider add\`でプロバイダーを追加してください。`,
+      no_saved_description: `削除する保存済みプロバイダー設定がありません。先に\`/provider add\`でプロバイダーを追加してください。`,
       picker_title: `プロバイダー設定を削除`,
       picker_description: `削除するプロバイダーを選択してください。保存されたAPIキーが削除され、依存するモデル選択がリセットされます。`,
       active_provider_note: `**{provider}**は現在のアクティブプロバイダーであるため、使用中は削除できません。先に\`/model\`で別のプロバイダーに切り替えてください。`,
-      custom_endpoint_note: `カスタムエンドポイント（ElevenLabsやローカルサーバーなど）を削除するには、代わりに\`/config custom-endpoint remove\`を使用してください。`,
+      custom_endpoint_note: `カスタムエンドポイント（ElevenLabsやローカルサーバーなど）を削除するには、代わりに\`/provider custom-endpoint remove\`を使用してください。`,
       select_placeholder: `削除するプロバイダーを選択...`,
       success_title: `保存済み設定を削除しました`,
-      success_description: `**{provider}**の保存済み設定を削除しました。再度使用するには\`/config provider add\`で登録してください。`,
+      success_description: `**{provider}**の保存済み設定を削除しました。再度使用するには\`/provider add\`で登録してください。`,
       auto_reassigned_description: `**{provider}** の保存済み設定を削除しました。
 
 依存していた選択も更新しました:
@@ -93,7 +93,7 @@ export default {
         action_purge: `すべてのキーを削除`,
         key_description: `ローテーションプールに追加するAPIキー（追加アクションに必要）`,
         no_main_key_title: `メインAPIキーがありません`,
-        no_main_key_description: `ローテーションキーを追加する前に、\`/config provider add\`で有効なプロバイダー認証情報を登録する必要があります。`,
+        no_main_key_description: `ローテーションキーを追加する前に、\`/provider add\`で有効なプロバイダー認証情報を登録する必要があります。`,
         custom_provider_title: `サポートされていません`,
         custom_provider_description: `カスタムプロバイダーではAPIキーローテーションはサポートされていません。`,
         key_required_title: `キーが必要です`,

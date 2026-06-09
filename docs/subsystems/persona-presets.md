@@ -15,6 +15,7 @@ Official preset rows carry a stable `preset_lineage_id`.
 - Reuse the same `preset_lineage_id` across locale variants of the same character.
 - Do not change a character's `preset_lineage_id` just because text, triggers, sample dialogue, or avatar art changed.
 - New official characters need a new stable `preset_lineage_id`.
+- `(preset_lineage_id, preset_language)` is the catalog upsert key, so the display name (`persona_preset_name`) is freely renamable: edit the catalog `name` field and the existing row is relabeled in place on the next boot. Renaming a character does **not** need a new lineage or a migration.
 
 `preset_lineage_id` is related to, but not the same operational concern as `personas.persona_lineage_id`:
 

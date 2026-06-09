@@ -32,8 +32,8 @@ export async function execute(
 ): Promise<void> {
   try {
     // Resolve command mentions for cross-references in the guide
-    const configMcpAddMention = commandRegistry.getCommandMention("config", "mcp", "add");
-    const configMcpRemoveMention = commandRegistry.getCommandMention("config", "mcp", "remove");
+    const configMcpAddMention = commandRegistry.getCommandMention("mcp", "add");
+    const configMcpRemoveMention = commandRegistry.getCommandMention("mcp", "remove");
 
     const embedOptions: SummaryEmbedOptions = {
       titleKey: "commands.help.mcp.title",

@@ -21,7 +21,7 @@ export default {
       file_too_large: `生成された動画（{size_mb} MB）がDiscordの25 MBファイルサイズ制限を超えています。`,
     },
     generate_image_nai: {
-      no_google_api_key: `インペインティングには画像セグメンテーション用のGoogleプロバイダー認証情報が必要です。\`/config provider add\` で追加するか、Googleプロバイダーに切り替えてください。`,
+      no_google_api_key: `インペインティングには画像セグメンテーション用のGoogleプロバイダー認証情報が必要です。\`/provider add\` で追加するか、Googleプロバイダーに切り替えてください。`,
       model_not_configured: `現在、NovelAI画像生成は無効です。まず \`/model image\` でNovelAI画像モデルを選択してください。`,
       provider_quota_exceeded: `このアカウントではNovelAI画像生成クォータを使い切っています。Anlasを補充するか、クォータのリフレッシュ後に再試行してください。`,
       characters_require_v4: `キャラクター配置にはNovelAI V4以降の拡散モデルが必要です。`,

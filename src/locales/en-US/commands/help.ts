@@ -32,7 +32,7 @@ export default {
       labels_field: `Labels And Removal`,
       labels_value: `A label groups every capability under one custom provider bundle. {server_remove_command} and {personal_remove_command} remove only the capabilities you uncheck. {server_provider_remove_command} and {personal_provider_remove_command} delete the whole labeled bundle.`,
       comfyui_page1_title: `ComfyUI Setup`,
-      comfyui_page1_description: `This guide assumes ComfyUI is already installed and running. Page 1 covers the minimum setup to reach a working \`/config custom-endpoint add\` or \`/personal custom-endpoint add\` registration. You may also use the ready-to-use [ComfyUI workflows](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) from the GitHub repository instead.`,
+      comfyui_page1_description: `This guide assumes ComfyUI is already installed and running. Page 1 covers the minimum setup to reach a working \`/provider custom-endpoint add\` or \`/personal custom-endpoint add\` registration. You may also use the ready-to-use [ComfyUI workflows](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) from the GitHub repository instead.`,
       comfyui_page1_workflow_field: `1. Build The Workflow`,
       comfyui_page1_workflow_value: `Create and test the workflow in ComfyUI first. For images, the MVP should end in \`SaveImage\` so TomoriBot can download the finished file. A minimal image graph is usually: \`CheckpointLoaderSimple\` -> positive/negative \`CLIPTextEncode\` -> \`EmptyLatentImage\` -> \`KSampler\` -> \`VAEDecode\` -> \`SaveImage\`.`,
       comfyui_page1_placeholders_field: `2. Add Placeholders`,
@@ -291,7 +291,7 @@ Transcription supports ~100 languages (auto-detected).`,
   - **Z.ai (Zhipu)**: Chinese AI models with a coding plan ⚠️ *ToS restricts usage to coding/agent scenarios only*
   - **Custom**: any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.)
 - Do **NOT** share this API key with anyone else
-- Custom endpoints can add a Bearer auth token after setup via {configApiKeySet} or {configProviderSwitch}`,
+- Custom endpoints can add a Bearer auth token after setup via {configApiKeySet}`,
       step2_title: `Step 2: Run the Setup Command`,
       step2_description: `- Use {configSetup} to securely add your API key and initialize TomoriBot
 - (Recommended) Run {serverInitializeExpressions} so I can properly use your server's emojis/stickers

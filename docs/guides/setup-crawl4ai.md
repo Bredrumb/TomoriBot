@@ -1,3 +1,6 @@
+---
+title: "Setup: Crawl4AI Sidecar"
+---
 # Setup: Crawl4AI Sidecar
 
 The `fetch_url` tool can optionally try a browser-rendering sidecar before falling back to the bundled MCP fetch engine. Use it when you want rendered content for JS-heavy pages.

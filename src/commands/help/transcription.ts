@@ -34,10 +34,10 @@ export async function execute(
 ): Promise<void> {
   try {
     const engine = (interaction.options.getString("engine") ?? "overview") as TranscriptionHelpEngine;
-    const customEndpointAdd = commandRegistry.getCommandMention("config", "custom-endpoint", "add");
+    const customEndpointAdd = commandRegistry.getCommandMention("provider", "custom-endpoint", "add");
     const modelTranscription = commandRegistry.getCommandMention("config", "model", "transcription");
-    const elevenLabs = commandRegistry.getCommandMention("config", "speech", "elevenlabs");
-    const speechTranscripts = commandRegistry.getCommandMention("config", "speech", "transcripts");
+    const elevenLabs = commandRegistry.getCommandMention("speech", "elevenlabs");
+    const speechTranscripts = commandRegistry.getCommandMention("speech", "transcripts");
     const helpSpeech = commandRegistry.getCommandMention("help", "speech");
 
     const embedOptions: SummaryEmbedOptions = {

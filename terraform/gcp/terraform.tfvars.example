@@ -10,6 +10,11 @@ github_repo_name  = "TomoriBot"
 # Passed via TF_VAR_container_image in CI, or set manually for local apply
 container_image = "us-central1-docker.pkg.dev/your-gcp-project-id/tomoribot/tomoribot:latest"
 
+# Production-sized singleton bot container. SearXNG is optional and disabled by
+# default to avoid paying for an always-on sidecar.
+cloud_run_memory          = "2Gi"
+enable_searxng_sidecar    = false
+
 # Cloud SQL password — store this securely; it is also in the runtime secret JSON
 db_password = "change-me"
 

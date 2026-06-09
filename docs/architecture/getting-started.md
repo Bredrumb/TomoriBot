@@ -86,11 +86,11 @@ If you are testing a server that should start in member-funded mode, `/config se
 If you want to use only a self-hosted or proxy-backed custom endpoint, `/config setup` now also exposes `Custom Endpoint (finish after setup)`. That bootstraps the server without enabling BYOK, then you finish the provider setup with:
 
 ```text
-/config custom-endpoint add
+/provider custom-endpoint add
 /model text
 ```
 
-Later changes to that registration can be done in place with `/config custom-endpoint edit`.
+Later changes to that registration can be done in place with `/provider custom-endpoint edit`.
 
 If you want to save an additional provider afterward:
 
@@ -105,7 +105,7 @@ Common saved providers:
 - `provider:openrouter`
 - `provider:novelai`
 
-The old inline `custom` provider path is deprecated. Use `/config custom-endpoint add` instead.
+The old inline `custom` provider path is deprecated. Use `/provider custom-endpoint add` instead.
 
 ## Common Development Commands
 
