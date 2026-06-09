@@ -487,10 +487,32 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     return parts
       .map((part) => {
         if (!part || typeof part !== "object") return "";
-        const text = (part as { text?: unknown }).text;
+        const partObj = part as { text?: unknown; thought?: unknown };
+        if (partObj.thought === true) return "";
+        const text = partObj.text;
         return typeof text === "string" ? text : "";
       })
       .join("");
+  }
+
+  private extractThoughtsFromParts(parts: unknown[]): ThoughtLogEntry[] {
+    const thoughts: ThoughtLogEntry[] = [];
+
+    for (const part of parts) {
+      if (!part || typeof part !== "object") continue;
+
+      const partObj = part as { text?: unknown; thought?: unknown };
+      if (partObj.thought !== true || typeof partObj.text !== "string" || partObj.text.length === 0) {
+        continue;
+      }
+
+      thoughts.push({
+        kind: "raw",
+        content: partObj.text,
+      });
+    }
+
+    return thoughts;
   }
 
   private extractFunctionCallsFromParts(parts: unknown[]): GoogleFunctionCall[] {
@@ -732,6 +754,11 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         content: googleChunk.thoughtSummary,
       });
       log.info("GoogleStreamAdapter: Received thought summary");
+    }
+    const partThoughts = this.extractThoughtsFromParts(this.getCandidateParts(googleChunk));
+    if (partThoughts.length > 0) {
+      thoughts.push(...partThoughts);
+      log.info(`GoogleStreamAdapter: Received ${partThoughts.length} thought part(s)`);
     }
 
     // Check for function calls

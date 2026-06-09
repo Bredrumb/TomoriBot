@@ -508,10 +508,32 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     return parts
       .map((part) => {
         if (!part || typeof part !== "object") return "";
-        const text = (part as { text?: unknown }).text;
+        const partObj = part as { text?: unknown; thought?: unknown };
+        if (partObj.thought === true) return "";
+        const text = partObj.text;
         return typeof text === "string" ? text : "";
       })
       .join("");
+  }
+
+  private extractThoughtsFromParts(parts: unknown[]): ThoughtLogEntry[] {
+    const thoughts: ThoughtLogEntry[] = [];
+
+    for (const part of parts) {
+      if (!part || typeof part !== "object") continue;
+
+      const partObj = part as { text?: unknown; thought?: unknown };
+      if (partObj.thought !== true || typeof partObj.text !== "string" || partObj.text.length === 0) {
+        continue;
+      }
+
+      thoughts.push({
+        kind: "raw",
+        content: partObj.text,
+      });
+    }
+
+    return thoughts;
   }
 
   private extractFunctionCallsFromParts(parts: unknown[]): GoogleFunctionCall[] {
@@ -745,6 +767,11 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
         content: vertexChunk.thoughtSummary,
       });
       log.info("VertexStreamAdapter: Received thought summary");
+    }
+    const partThoughts = this.extractThoughtsFromParts(this.getCandidateParts(vertexChunk));
+    if (partThoughts.length > 0) {
+      thoughts.push(...partThoughts);
+      log.info(`VertexStreamAdapter: Received ${partThoughts.length} thought part(s)`);
     }
 
     // Check for function calls

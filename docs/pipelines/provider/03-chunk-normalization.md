@@ -33,10 +33,11 @@ The method also handles two additional responsibilities:
   key-rotation logic in `runGenerationTurn` can make retry decisions without inspecting
   provider-specific error objects.
 
-- **Thought log extraction** — for providers that emit thought summaries or thought signatures
-  (Google's `thoughtSummary` and `thoughtSignature` fields), these are extracted into
-  `ThoughtLogEntry[]` on the returned chunk so the orchestrator can accumulate them into
-  `state.thoughtSummarySegments` / `state.thoughtRawSegments` independently of visible text.
+- **Thought log extraction** — for providers that emit reasoning fields, thought summaries, or
+  thought signatures (for example Google/Gemini `part.thought`, `thoughtSummary`, and
+  `thoughtSignature` fields), these are extracted into `ThoughtLogEntry[]` on the returned chunk
+  so the orchestrator can accumulate them into `state.thoughtSummarySegments` /
+  `state.thoughtRawSegments` independently of visible text.
 
 ## Input
 
