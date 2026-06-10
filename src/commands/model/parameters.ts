@@ -65,7 +65,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setName("top_k")
         .setDescription(localizer("en-US", "commands.model.parameters.top_k_description"))
         .setMinValue(0)
-        .setMaxValue(40)
+        .setMaxValue(256)
         .setRequired(false),
     )
     .addNumberOption((option) =>

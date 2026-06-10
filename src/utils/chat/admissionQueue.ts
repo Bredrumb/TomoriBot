@@ -238,6 +238,7 @@ async function evaluateLockedChannelAdmission(args: {
       manualTriggerInvoker: incoming.manualTriggerInvoker,
       reminderRecipientID: incoming.reminderRecipientID,
       reminderData: incoming.reminderData,
+      sceneTurn: incoming.sceneTurn,
       manualStreamingContextOverrides: incoming.manualStreamingContextOverrides
         ? {
             ...(incoming.manualStreamingContextOverrides.disableCrossChannelMessage

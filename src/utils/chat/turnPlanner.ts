@@ -21,10 +21,11 @@ import {
   setMessageTriggerCooldownForAdmission,
   validateDirectChatTrigger,
 } from "@/utils/chat/admissionGuards";
-import { channelLocks, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
+import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
 import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
+import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/chat/sceneTurn";
 import {
   determineMatchingPersonas,
   getAutochatAssignedPersonaId,
@@ -258,6 +259,49 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       isUserImpersonation: incoming.isUserImpersonation,
       impersonatedUserId: incoming.impersonatedUserId,
     });
+  }
+
+  if (
+    incoming.sceneTurn &&
+    incoming.sceneTurn.turnIndex === 0 &&
+    !incoming.skipLock &&
+    incoming.retryCount === 0 &&
+    lockEntry
+  ) {
+    const rootSceneTurn = incoming.sceneTurn;
+    const remainingSceneJobs = rootSceneTurn.sequence.slice(1).map((speaker, offset) => {
+      const sceneTurn = {
+        ...rootSceneTurn,
+        turnIndex: offset + 1,
+      };
+
+      return {
+        personaName: speaker.personaName,
+        selectedPersonaId: speaker.personaId,
+        sceneTurn,
+        manualSystemPrompt: buildSceneTurnDirective(sceneTurn),
+        textQuotaTriggerKey: buildSceneTextQuotaTriggerKey(sceneTurn),
+      };
+    });
+
+    if (remainingSceneJobs.length > 0) {
+      queueScenePersonaJobsAtFront({
+        lockEntry,
+        message,
+        sceneJobs: remainingSceneJobs,
+        triggeredPersonaIds,
+        forceReason: incoming.forceReason,
+        reasoningQuery: incoming.reasoningQuery,
+        llmOverrideCodename: incoming.llmOverrideCodename,
+        textQuotaSource: incoming.textQuotaSource,
+        textQuotaUserDiscId: incoming.textQuotaUserDiscId ?? cooldownUserDiscId,
+        shouldSurfaceUserErrors,
+        injectedContextItems: incoming.injectedContextItems,
+        forcedMentions: incoming.forcedMentions,
+        manualTriggerInvoker: incoming.manualTriggerInvoker,
+        manualStreamingContextOverrides: incoming.manualStreamingContextOverrides,
+      });
+    }
   }
 
   if (
@@ -640,7 +684,7 @@ async function enforceTurnGuards(
     if (!rateLimitAllowed) return false;
   }
 
-  if (!incoming.isStopResponse && !isSelfMessage && textCredentialSource !== "personal") {
+  if (!incoming.isStopResponse && !incoming.isPersonaJob && !isSelfMessage && textCredentialSource !== "personal") {
     const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
       serverDiscId: message.guild?.id ?? message.author.id,
       userDiscId: admission.cooldownUserDiscId ?? userDiscId,
@@ -674,7 +718,7 @@ async function enforceTurnGuards(
   );
   const triggerState = getSelfReplyChainState(channel.id);
   if (
-    (isSelfMessage || incoming.isPersonaJob) &&
+    (isSelfMessage || (incoming.isPersonaJob && !incoming.sceneTurn)) &&
     !incoming.reminderRecipientID &&
     !incoming.reminderData?.self_reminder &&
     !incoming.isStopResponse
@@ -697,6 +741,7 @@ async function prepareTextQuota(
 ): Promise<{ allowed: boolean; shouldApply: boolean; triggerKey: string; state: TextQuotaTriggerState | null }> {
   const incoming = lockedTurn.admission.incoming;
   const triggerKey = incoming.textQuotaTriggerKey ?? lockedTurn.admission.message.id;
+  const shouldTreatAsQuotaSharedPersonaJob = incoming.isPersonaJob && !incoming.sceneTurn;
   const shouldApply =
     incoming.textQuotaSource === "user" &&
     !lockedTurn.admission.isDMChannel &&
@@ -707,7 +752,7 @@ async function prepareTextQuota(
 
   const quota = await checkTextQuotaForAdmission({
     shouldApplyTextQuota: shouldApply,
-    isPersonaJob: incoming.isPersonaJob,
+    isPersonaJob: shouldTreatAsQuotaSharedPersonaJob,
     triggerKey,
     serverId: tomoriState.server_id,
     userDiscId: incoming.textQuotaUserDiscId ?? lockedTurn.admission.cooldownUserDiscId ?? userRow.user_disc_id,

@@ -880,6 +880,7 @@ function appendTailDirectives(args: {
   const trimmedPrefill = incoming.manualPrefill?.trim();
   if (
     incoming.isManuallyTriggered &&
+    !incoming.sceneTurn &&
     !incoming.isUserImpersonation &&
     !incoming.reasoningQuery &&
     !incoming.reminderRecipientID &&

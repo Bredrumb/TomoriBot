@@ -8,7 +8,13 @@ import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { log } from "@/utils/misc/logger";
 import { isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
-import type { LockedChatTurn, ManualTriggerInvoker, RunnableChatAdmission, TextQuotaSource } from "@/utils/chat/types";
+import type {
+  LockedChatTurn,
+  ManualTriggerInvoker,
+  RunnableChatAdmission,
+  SceneTurnMetadata,
+  TextQuotaSource,
+} from "@/utils/chat/types";
 
 function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
   if (typeof value !== "string") return defaultValue;
@@ -52,6 +58,7 @@ export type QueuedMessage = {
     StreamingContext,
     "disableCrossChannelMessage" | "disableRecentMessageReplyTool" | "disableReminderTool"
   >;
+  sceneTurn?: SceneTurnMetadata;
   reminderRecipientID?: string;
   reminderData?: ChatReminderData;
 };
@@ -304,6 +311,59 @@ export function queuePersonaJobsAtFront(args: {
   log.info(
     `Queued ${args.personaJobs.length} persona job(s) for message ${args.message.id}: ${args.personaJobs
       .map((personaJob) => personaJob.personaName)
+      .join(", ")}`,
+  );
+}
+
+export function queueScenePersonaJobsAtFront(args: {
+  lockEntry: ChannelLockEntry;
+  message: Message;
+  sceneJobs: Array<{
+    personaName: string;
+    selectedPersonaId: number;
+    sceneTurn: SceneTurnMetadata;
+    manualSystemPrompt: string;
+    textQuotaTriggerKey: string;
+  }>;
+  triggeredPersonaIds: number[];
+  forceReason?: boolean;
+  reasoningQuery?: string;
+  llmOverrideCodename?: string;
+  textQuotaSource: TextQuotaSource;
+  textQuotaUserDiscId: string;
+  shouldSurfaceUserErrors?: boolean;
+  injectedContextItems?: StructuredContextItem[];
+  forcedMentions?: ForcedMention[];
+  manualTriggerInvoker?: ManualTriggerInvoker;
+  manualStreamingContextOverrides?: QueuedMessage["manualStreamingContextOverrides"];
+}): void {
+  for (let i = args.sceneJobs.length - 1; i >= 0; i--) {
+    const queuedSceneJob = args.sceneJobs[i];
+    args.lockEntry.messageQueue.unshift({
+      message: args.message,
+      isManuallyTriggered: true,
+      forceReason: args.forceReason,
+      reasoningQuery: args.reasoningQuery,
+      llmOverrideCodename: args.llmOverrideCodename,
+      selectedPersonaId: queuedSceneJob.selectedPersonaId,
+      triggeredPersonaIds: args.triggeredPersonaIds,
+      isPersonaJob: true,
+      textQuotaSource: args.textQuotaSource,
+      textQuotaTriggerKey: queuedSceneJob.textQuotaTriggerKey,
+      textQuotaUserDiscId: args.textQuotaUserDiscId,
+      manualSystemPrompt: queuedSceneJob.manualSystemPrompt,
+      shouldSurfaceUserErrors: args.shouldSurfaceUserErrors,
+      injectedContextItems: args.injectedContextItems,
+      forcedMentions: args.forcedMentions,
+      manualTriggerInvoker: args.manualTriggerInvoker,
+      manualStreamingContextOverrides: args.manualStreamingContextOverrides,
+      sceneTurn: queuedSceneJob.sceneTurn,
+    });
+  }
+
+  log.info(
+    `Queued ${args.sceneJobs.length} scene persona job(s) for message ${args.message.id}: ${args.sceneJobs
+      .map((sceneJob) => sceneJob.personaName)
       .join(", ")}`,
   );
 }

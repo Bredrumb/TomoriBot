@@ -346,7 +346,7 @@ Rules:
 
 ## Representative Command Groups
 
-- `bot`: respond, generate(image), kill, impersonate
+- `bot`: respond, generate(image/scene), kill, impersonate
 - `config`: setup, model(text/image/embedding/video/vision/speech/transcription), api-key(rotation), provider(add/remove), custom-endpoint(add/edit/remove), image-tags(default-positive/default-negative), system-prompt(set/remove/preset), context-note(set), params(*), timezone, message-fetch-limit, bot-permissions -> tool-use(toggle/manage), notice-embeds(visibility)
 - `speech`: elevenlabs, voice-add, voice-remove, voice-assign, transcripts, chatterbox(parameters)
 - `nsfw`: jailbreaks
@@ -368,6 +368,8 @@ Rules:
 `/persona sprites add` is a one-modal Manage Server flow that selects a persona, validates a sprite label, uploads an image, converts it to PNG, and upserts a `persona_sprites` row. Reusing a normalized label replaces the existing sprite. `/persona sprites edit` uses the persona picker, sprite picker, and confirmation bridge before opening a prefilled modal for name, optional replacement image, usage instructions, and identity status; replacement images consume the shared avatar quota, while metadata-only edits do not. `/persona sprites remove` starts from `replyPaginatedPersonaChoicesV2(...)`, then opens checkbox groups where checked sprites are kept and unchecked sprites are deleted. When a persona has more than one modal page of sprites, the command shows a localized range-button picker before opening the checkbox modal.
 
 `/bot generate image` is a modal-driven, fire-and-forget scene snapshot command. It plans against the current channel context with the active text provider, then renders with either the current provider's native image path or NovelAI's tag-based image tool when a NovelAI backend is available. Personal provider overlays apply before the hidden turn is built so personal text/image routing is respected.
+
+`/bot generate scene` is a modal-driven scripted text-scene command. V1 requires two different personas, optionally accepts a third, blocks duplicate selections, and only opens when the available persona set fits Discord's 25-option select limit. The `Rounds` field repeats the selected speaking order and is bounded by `BOT_GENERATE_SCENE_MAX_CYCLES` (default `3`). Each generated turn receives a concise tail directive: additional instructions when provided, then "Begin your next reply as {persona}. Write only this character's next message." Scene turns keep tools enabled, suppress `/bot respond` continuation prompting, and use unique text-quota trigger keys so each generated turn is charged separately.
 
 `/generate video` is a modal-driven async generation command. It validates `videogen_enabled`, provider capability, API key, configured `video_model_id`, and server quota before polling the selected provider until the MP4 result is ready.
 
