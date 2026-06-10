@@ -136,6 +136,20 @@ export const personaSpriteSchema = z.object({
 export type PersonaSpriteRow = z.infer<typeof personaSpriteSchema>;
 
 /**
+ * Maps a webhook-delivered sprite message to the sprite label it rendered with.
+ * Sprite messages display a clean persona name in Discord; context rebuilding
+ * uses these rows to recover the decorated "Name (sprite):" label for the model.
+ */
+export const personaSpriteMessageSchema = z.object({
+  message_disc_id: z.string().min(1),
+  persona_id: z.number().int(),
+  sprite_name: z.string().min(1).max(64),
+  channel_disc_id: z.string().min(1),
+  created_at: z.coerce.date().optional(),
+});
+export type PersonaSpriteMessageRow = z.infer<typeof personaSpriteMessageSchema>;
+
+/**
  * Runtime autochat counters for a persona (Phase 6 Step #16B).
  * Separated from personas so identity rows are not mutated on every message tick.
  * FK column is persona_id → personas(persona_id); ON DELETE CASCADE keeps cleanup atomic.

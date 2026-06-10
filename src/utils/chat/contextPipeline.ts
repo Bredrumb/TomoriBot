@@ -52,6 +52,8 @@ import {
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
+import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
+import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 
@@ -445,6 +447,10 @@ async function buildSimplifiedHistory(
     }
   }
 
+  // Prime the sprite message cache with one batched query so per-message
+  // "Name (sprite):" label lookups inside simplifyMessage() are cache hits.
+  await primePersonaSpriteMessageRecords(messages.filter((msg) => msg.webhookId).map((msg) => msg.id));
+
   const simplifiedMessages: SimplifiedMessageForContext[] = [];
   const userIds = new Set<string>();
   const matrixUsers = new Map<string, string>();
@@ -630,8 +636,13 @@ async function simplifyMessage(
     const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByName);
     const matchedPersona = renderModifierSource?.persona ?? personaByName.get(normalizeRenderModifierName(webhookName));
     if (matchedPersona) {
+      // Clean-named sprite messages carry no "(sprite)" suffix in the webhook
+      // name; recover the decorated label from the persisted mapping.
+      const spriteDisplayName = renderModifierSource
+        ? null
+        : await resolveSpriteMessageDisplayName(msg.id, matchedPersona.persona_id, matchedPersona.persona_nickname);
       authorId = String(matchedPersona.persona_id ?? webhookName);
-      authorName = renderModifierSource?.displayName ?? matchedPersona.persona_nickname;
+      authorName = renderModifierSource?.displayName ?? spriteDisplayName ?? matchedPersona.persona_nickname;
       authorType = "persona";
       personaName = matchedPersona.persona_nickname;
       syntheticUsers.set(authorId, { displayName: authorName, type: "persona" });

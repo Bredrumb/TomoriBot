@@ -1,7 +1,12 @@
 import { AttachmentBuilder, type Message } from "discord.js";
 import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamContext } from "@/types/stream/interfaces";
-import type { StreamState, TextProcessingConfig, TypingSimulationConfig } from "@/types/stream/types";
+import type {
+  SpriteMessageRecordInfo,
+  StreamState,
+  TextProcessingConfig,
+  TypingSimulationConfig,
+} from "@/types/stream/types";
 import { VisibleDeliveryMode, DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
 import { renderMarkdownTableToPng } from "@/utils/image/markdownTableRenderer";
@@ -26,6 +31,8 @@ export type BufferedDeliveryBoundary =
 export type StreamDeliveryOptions = {
   identityOverride?: ResolvedWebhookIdentity;
   accumulatedTextPrefix?: string;
+  /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
+  spriteRecord?: SpriteMessageRecordInfo;
 };
 
 type StreamMessageDeliveryDependencies = {
@@ -150,6 +157,7 @@ export class StreamMessageDelivery {
         },
         identityOverride: options?.identityOverride,
         accumulatedTextPrefix: options?.accumulatedTextPrefix,
+        spriteRecord: options?.spriteRecord,
       },
       tableMarkdown,
       context,
@@ -297,6 +305,7 @@ export class StreamMessageDelivery {
         content,
         identityOverride: options?.identityOverride,
         accumulatedTextPrefix: options?.accumulatedTextPrefix,
+        spriteRecord: options?.spriteRecord,
       },
       content,
       context,

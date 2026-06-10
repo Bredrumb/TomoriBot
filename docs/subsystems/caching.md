@@ -135,6 +135,21 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
   - `PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH` (default 300, DB maximum 1000)
   - `PERSONA_SPRITE_PROMPT_MAX_COUNT` (default 20)
 
+### 15b) Persona sprite message cache (`personaSpriteMessageCache.ts`)
+
+- **Scope:** per Discord `message_disc_id`
+- **Value:** the `persona_sprite_messages` mapping row, or `null` (negative entry) when the
+  message has no sprite mapping — most persona webhook messages are plain sends, so caching
+  the miss avoids re-querying them every turn
+- Entries are **immutable** (a sent message's sprite never changes), so the cache needs no
+  invalidation; the TTL only bounds memory (`PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES`, default 120)
+- Context builds prime it with one batched query (`primePersonaSpriteMessageRecords`) over the
+  fetched history window's webhook message IDs; sends seed it directly (`recordPersonaSpriteMessage`)
+- On transient DB errors the prime/lookup skips seeding instead of negative-caching, so real
+  sprite messages are not masked for the TTL duration
+- DB retention pruning (`PERSONA_SPRITE_MESSAGE_RETENTION_DAYS`, default 30) piggybacks on the
+  write path, gated to run at most once per few hours
+
 ### 16) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
 
 Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an ephemeral
@@ -228,6 +243,8 @@ PERSONA_SPRITE_CACHE_TTL_MINUTES=10
 PERSONA_SPRITE_MAX_PER_PERSONA=50
 PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH=300
 PERSONA_SPRITE_PROMPT_MAX_COUNT=20
+PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES=120
+PERSONA_SPRITE_MESSAGE_RETENTION_DAYS=30
 EMERGENCY_CACHE_CLEAR_ENABLED=true
 EMERGENCY_CACHE_CLEAR_INCLUDE_STM=false
 EMERGENCY_CACHE_CLEAR_DISCORD_VOLATILE=true

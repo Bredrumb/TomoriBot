@@ -1,6 +1,7 @@
 import type { BaseGuildTextChannel, Message } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
-import type { StreamState } from "@/types/stream/types";
+import type { SpriteMessageRecordInfo, StreamState } from "@/types/stream/types";
+import { recordPersonaSpriteMessage } from "@/utils/cache/personaSpriteMessageCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
@@ -15,6 +16,8 @@ export type StreamSendPayload = {
   files?: import("discord.js").AttachmentBuilder[];
   identityOverride?: ResolvedWebhookIdentity;
   accumulatedTextPrefix?: string;
+  /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
+  spriteRecord?: SpriteMessageRecordInfo;
   allowedMentions?: {
     parse?: Array<"users" | "roles" | "everyone">;
     repliedUser?: boolean;
@@ -61,7 +64,7 @@ export class StreamUiUpdater {
       return null;
     }
 
-    const { identityOverride, accumulatedTextPrefix, ...discordPayload } = payload;
+    const { identityOverride, accumulatedTextPrefix, spriteRecord: _spriteRecord, ...discordPayload } = payload;
     const textForAccumulation = `${accumulatedTextPrefix ?? ""}${textForState}`;
     const strictUserImpersonation = isUserImpersonationStreamContext(context);
     let replyNoticeMessage: Message | null = null;
@@ -270,6 +273,19 @@ export class StreamUiUpdater {
   ): void {
     if (!state.firstReplyUrl && sentMessage?.url) {
       state.firstReplyUrl = sentMessage.url;
+    }
+    // Persist the message → sprite mapping fire-and-forget; webhook sends only
+    // (bot-fallback messages can't carry persona identity in context anyway).
+    // A lost row degrades the future context label to the plain persona name.
+    if (payload.spriteRecord && sentMessage?.webhookId) {
+      void recordPersonaSpriteMessage({
+        messageDiscId: sentMessage.id,
+        personaId: payload.spriteRecord.personaId,
+        spriteName: payload.spriteRecord.spriteName,
+        channelDiscId: sentMessage.channelId,
+      }).catch((recordError) => {
+        log.warn("Stream Send: Failed to record sprite message mapping", recordError as Error);
+      });
     }
     state.messageSentCount++;
     if (textForState) {

@@ -22,12 +22,19 @@ The transformation pipeline runs in this order:
 2. **Render-modifier capture** — before normal own-name cleanup runs, an active persona line
    that starts as `SourcePersona (modifier): text` is parsed. The modifier resolves against the
    active persona's `persona_sprites` first; a sprite match sends stage 07 an identity override
-   with username `SourcePersona (sprite)` and the sprite avatar. If the sprite row matches but
-   its image cannot be loaded, the parenthetical modifier is stripped and the line is delivered
-   as normal source-persona output without trying copied identity. If no sprite matches, the
-   modifier falls back to copied-render resolution against known personas and users in current
-   context. Unknown or ambiguous copied targets are stripped and delivered as normal output.
-   This path is line-scoped across stream splits and ignored inside code blocks and list-like starts.
+   with the **clean username `SourcePersona`** (no `(sprite)` suffix in Discord) and the sprite
+   avatar, plus a `spriteRecord` so the message → sprite-label mapping is persisted after the
+   send (`persona_sprite_messages`). The accumulated-text prefix keeps the decorated
+   `SourcePersona (sprite): ` label so the model still sees its own sprite usage. If the sprite
+   row matches but its image cannot be loaded, the parenthetical modifier is stripped and the
+   line is delivered as normal source-persona output without trying copied identity. If no
+   sprite matches, the modifier falls back to copied-render resolution against known personas
+   and users in current context; copied matches use the **flipped** webhook username
+   `target (SourcePersona)` (impersonated name first for the in-chat disguise) while the
+   accumulated-text prefix stays source-first (`SourcePersona (target): `) for the model.
+   Unknown or ambiguous copied targets are stripped and delivered as
+   normal output. This path is line-scoped across stream splits and ignored inside code blocks
+   and list-like starts.
 
 3. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
    shortcode (`:name:`) from the segment if the same emoji was already used in a recent bot

@@ -69,6 +69,7 @@ import {
   isSupportedVideoAttachmentContentType,
 } from "@/utils/chat/contextMedia";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
+import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -549,7 +550,16 @@ export async function execute(
           ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
           : undefined;
         if (matchedPersona) {
-          authorName = renderModifierSource?.displayName ?? matchedPersona.persona_nickname;
+          // Mirror the real pipeline: recover the decorated "Name (sprite)" label
+          // for clean-named sprite messages from the persisted mapping.
+          const spriteDisplayName = renderModifierSource
+            ? null
+            : await resolveSpriteMessageDisplayName(
+                message.id,
+                matchedPersona.persona_id,
+                matchedPersona.persona_nickname,
+              );
+          authorName = renderModifierSource?.displayName ?? spriteDisplayName ?? matchedPersona.persona_nickname;
           authorType = "persona";
           personaName = matchedPersona.persona_nickname;
           effectiveAuthorId = String(matchedPersona.persona_id ?? matchedPersona.persona_nickname);

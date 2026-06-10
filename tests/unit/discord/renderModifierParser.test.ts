@@ -63,13 +63,39 @@ describe("render modifier parser", () => {
     });
   });
 
-  it("resolves copied-render webhook names to the source persona while preserving display label", () => {
+  it("resolves legacy copied-render webhook names to the source persona while preserving display label", () => {
     const personaByNickname = new Map([["ren", persona("Ren", 123)]]);
 
     const result = resolveRenderModifierSourcePersona("Ren (bredrumb)", personaByNickname);
 
     expect(result?.persona.persona_id).toBe(123);
     expect(result?.displayName).toBe("Ren (bredrumb)");
+  });
+
+  it("resolves flipped copied-render webhook names and rebuilds the source-first context label", () => {
+    const personaByNickname = new Map([["ren", persona("Ren", 123)]]);
+
+    // Discord display puts the impersonated name first; the model-facing label
+    // must come back source-persona-first.
+    const result = resolveRenderModifierSourcePersona("bredrumb (Ren)", personaByNickname);
+
+    expect(result?.persona.persona_id).toBe(123);
+    expect(result?.displayName).toBe("Ren (bredrumb)");
+  });
+
+  it("prefers the flipped orientation when both name parts match personas", () => {
+    const personaByNickname = new Map([
+      ["ren", persona("Ren", 123)],
+      ["tomori", persona("Tomori", 456)],
+    ]);
+
+    // New persona-impersonates-persona display: "Tomori (Ren)" = Ren disguised
+    // as Tomori. Legacy messages with the same shape are misattributed until
+    // they age out of the history fetch window (documented trade-off).
+    const result = resolveRenderModifierSourcePersona("Tomori (Ren)", personaByNickname);
+
+    expect(result?.persona.persona_id).toBe(123);
+    expect(result?.displayName).toBe("Ren (Tomori)");
   });
 
   it("allows active render-modifier speaker labels through the speaker guard", () => {

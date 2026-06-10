@@ -83,17 +83,25 @@ export class StreamSegmentProcessor {
           : await resolveCopiedRenderModifierTarget(renderModifierMatch.modifier, context, sourceDisplayName);
 
       if (renderTarget) {
+        // The accumulated-text prefix keeps the decorated "Name (modifier): "
+        // label so the model sees its own modifier usage, even when the webhook
+        // username is the clean persona name (sprite renders).
         deliveryOptions = {
           identityOverride: renderTarget.identity,
-          accumulatedTextPrefix: `${renderTarget.identity.username ?? sourceDisplayName}: `,
+          accumulatedTextPrefix: `${renderTarget.contextLabel}: `,
+          spriteRecord: renderTarget.spriteRecord,
         };
-        state.activeRenderModifier = { identity: renderTarget.identity };
+        state.activeRenderModifier = {
+          identity: renderTarget.identity,
+          spriteRecord: renderTarget.spriteRecord,
+        };
       } else {
         state.activeRenderModifier = undefined;
       }
     } else if (canUseRenderModifier && state.activeRenderModifier) {
       deliveryOptions = {
         identityOverride: state.activeRenderModifier.identity,
+        spriteRecord: state.activeRenderModifier.spriteRecord,
       };
     }
 
@@ -286,7 +294,10 @@ export class StreamSegmentProcessor {
   ): Promise<void> {
     const deliveryOptions =
       state.activeRenderModifier && !isUserImpersonationStreamContext(context)
-        ? { identityOverride: state.activeRenderModifier.identity }
+        ? {
+            identityOverride: state.activeRenderModifier.identity,
+            spriteRecord: state.activeRenderModifier.spriteRecord,
+          }
         : undefined;
     await this.deps.delivery.flushHeldOrphanPunctuation(
       boundary,

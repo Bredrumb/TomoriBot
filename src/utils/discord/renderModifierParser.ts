@@ -108,6 +108,22 @@ export function isAllowedRenderModifierSpeakerLabel(label: string, sourceNames: 
   );
 }
 
+/**
+ * Resolves the source persona behind a decorated webhook name, accepting both
+ * name orientations, and rebuilds the model-facing "SourcePersona (modifier)"
+ * label:
+ *
+ * 1. Flipped copied-identity format (current): "impersonated (SourcePersona)" —
+ *    Discord shows the impersonated name first so the disguise reads naturally,
+ *    while the model-facing label keeps the source persona first.
+ * 2. Legacy format: "SourcePersona (modifier)" — pre-flip copied identities and
+ *    pre-clean-name sprite messages still in fetched history windows.
+ *
+ * When BOTH parts match personas (persona impersonating another persona) the
+ * flipped interpretation wins, since all newly sent messages use it; legacy
+ * persona-on-persona messages in the transition window are misattributed until
+ * they age out of the history fetch window.
+ */
 export function resolveRenderModifierSourcePersona(
   webhookName: string,
   personaByNickname: Map<string, TomoriState>,
@@ -115,11 +131,19 @@ export function resolveRenderModifierSourcePersona(
   const parsed = parseRenderModifierWebhookName(webhookName);
   if (!parsed) return null;
 
-  const persona = personaByNickname.get(normalizeRenderModifierName(parsed.sourceName));
-  if (!persona) return null;
+  const flippedPersona = personaByNickname.get(normalizeRenderModifierName(parsed.modifier));
+  if (flippedPersona) {
+    return {
+      persona: flippedPersona,
+      displayName: formatRenderModifierWebhookName(flippedPersona.persona_nickname, parsed.sourceName),
+    };
+  }
+
+  const legacyPersona = personaByNickname.get(normalizeRenderModifierName(parsed.sourceName));
+  if (!legacyPersona) return null;
 
   return {
-    persona,
-    displayName: formatRenderModifierWebhookName(persona.persona_nickname, parsed.modifier),
+    persona: legacyPersona,
+    displayName: formatRenderModifierWebhookName(legacyPersona.persona_nickname, parsed.modifier),
   };
 }

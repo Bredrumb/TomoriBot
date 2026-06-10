@@ -30,11 +30,18 @@ import { makeFakeInteraction, callMethods } from "../../helpers/fakeInteraction"
 // (e.g. safeSelectOptionText) while one of them is replaced with a mock.
 
 mock.module("@/utils/misc/logger", () => ({
+  // Values must stay hex STRINGS mirroring the real enum: modules evaluated
+  // under this mock call string methods on them at load time (e.g.
+  // contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
   ColorCode: {
-    SUCCESS: 0x57f287,
-    WARN: 0xfee75c,
-    ERROR: 0xed4245,
-    INFO: 0x5865f2,
+    INFO: "#3498DB",
+    SUCCESS: "#2ECC71",
+    MEMORY_UPDATE: "#25d4da",
+    WARN: "#F1C40F",
+    ERROR: "#E74C3C",
+    SECTION: "#E066FF",
+    AFFECTION: "#ff10cb",
+    RATE_LIMIT: "#FFA500",
   },
   log: {
     error: () => undefined,

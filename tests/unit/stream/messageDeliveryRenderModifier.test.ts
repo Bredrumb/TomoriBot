@@ -52,19 +52,51 @@ describe("StreamMessageDelivery copied-render options", () => {
       } as StreamUiUpdater,
     });
 
+    // Copied identities flip the Discord display name ("bredrumb (Ren)") while
+    // the accumulated-text prefix stays source-persona-first for the model.
     await delivery.sendSegment("hi", "period", textConfig(), typingConfig, context, createDefaultStreamState(), {
       identityOverride: {
-        username: "Ren (bredrumb)",
+        username: "bredrumb (Ren)",
         avatarUrl: "https://example.com/avatar.png",
       },
       accumulatedTextPrefix: "Ren (bredrumb): ",
     });
 
     expect(sentPayloads).toHaveLength(1);
-    expect(sentPayloads[0].payload.identityOverride?.username).toBe("Ren (bredrumb)");
+    expect(sentPayloads[0].payload.identityOverride?.username).toBe("bredrumb (Ren)");
     expect(sentPayloads[0].payload.identityOverride?.avatarUrl).toBe("https://example.com/avatar.png");
     expect(sentPayloads[0].payload.accumulatedTextPrefix).toBe("Ren (bredrumb): ");
     expect(sentPayloads[0].textForState).toBe("hi");
+  });
+
+  it("passes sprite records with a clean username and decorated accumulated prefix", async () => {
+    const sentPayloads: Array<{ payload: StreamSendPayload; textForState: string }> = [];
+    const delivery = new StreamMessageDelivery({
+      hasStopRequest: () => false,
+      uiUpdater: {
+        sendSinglePayload: async (payload, textForState) => {
+          sentPayloads.push({ payload, textForState });
+          return null;
+        },
+      } as StreamUiUpdater,
+    });
+
+    // Sprite renders keep the webhook username clean ("Ren"); the decorated
+    // label only appears in the accumulated-text prefix, and the sprite record
+    // rides along for post-send persistence.
+    await delivery.sendSegment("grr", "period", textConfig(), typingConfig, context, createDefaultStreamState(), {
+      identityOverride: {
+        username: "Ren",
+        avatarUrl: "https://example.com/sprites/mad.png",
+      },
+      accumulatedTextPrefix: "Ren (mad): ",
+      spriteRecord: { personaId: 42, spriteName: "mad" },
+    });
+
+    expect(sentPayloads).toHaveLength(1);
+    expect(sentPayloads[0].payload.identityOverride?.username).toBe("Ren");
+    expect(sentPayloads[0].payload.accumulatedTextPrefix).toBe("Ren (mad): ");
+    expect(sentPayloads[0].payload.spriteRecord).toEqual({ personaId: 42, spriteName: "mad" });
   });
 
   it("flushes aggregate-mode bot text before sending a copied-render override", async () => {
@@ -90,7 +122,7 @@ describe("StreamMessageDelivery copied-render options", () => {
       state,
       {
         identityOverride: {
-          username: "Ren (bredrumb)",
+          username: "bredrumb (Ren)",
         },
         accumulatedTextPrefix: "Ren (bredrumb): ",
       },
@@ -103,6 +135,6 @@ describe("StreamMessageDelivery copied-render options", () => {
       content: "copied text",
       accumulatedTextPrefix: "Ren (bredrumb): ",
     });
-    expect(sentPayloads[1].identityOverride?.username).toBe("Ren (bredrumb)");
+    expect(sentPayloads[1].identityOverride?.username).toBe("bredrumb (Ren)");
   });
 });

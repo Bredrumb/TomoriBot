@@ -39,12 +39,24 @@ export enum VisibleDeliveryMode {
   STREAMING = "streaming",
 }
 
+/**
+ * Sprite mapping persisted after a successful webhook send so context
+ * rebuilding can recover the decorated "Name (sprite):" label even though the
+ * webhook displays only the clean persona name.
+ */
+export interface SpriteMessageRecordInfo {
+  personaId: number;
+  spriteName: string;
+}
+
 export interface StreamRenderModifierState {
   identity: {
     username?: string;
     avatarUrl?: string;
     avatarDataUri?: string;
   };
+  /** Present when the active render modifier is a persona sprite. */
+  spriteRecord?: SpriteMessageRecordInfo;
 }
 
 /**

@@ -46,18 +46,27 @@ payload. It handles:
   standalone reply notice is sent first via `sendWebhookReplyNotice()`.
 - **Render-modifier identity override** — when stage 06 resolves `SourcePersona (modifier): text`,
   the payload carries `identityOverride`. The UI updater lazily creates or reuses the managed
-  channel webhook even for the main persona, sends with username `SourcePersona (modifier)`, and
-  uses either the matched sprite avatar or copied target avatar. Ordinary main-persona output
+  channel webhook even for the main persona. Sprite matches send with the clean username
+  `SourcePersona` and the sprite avatar; copied-identity matches send with the flipped username
+  `target (SourcePersona)` and the target's avatar (the model-facing context label stays
+  `SourcePersona (target)`). Ordinary main-persona output
   remains a regular bot message; the managed webhook is used only for override payloads. Unknown,
   ambiguous, or unusable modifiers are stripped before this stage and therefore follow the regular
   path.
+- **Sprite message persistence** — payloads carrying a `spriteRecord` write a
+  `persona_sprite_messages` row fire-and-forget after a successful *webhook* send (bot-fallback
+  sends are skipped — they cannot carry persona identity in context). Context rebuilding uses
+  this mapping to recover the decorated `SourcePersona (sprite):` label; a lost row degrades the
+  label to the plain persona name, never an error.
 - **Regular path** — otherwise the message is sent via `context.channel.send()` or
   `context.replyToMessage.reply()` (first message only), with `allowedMentions` set to suppress
   `@everyone` / `@here` pings while allowing user and role mentions.
 - **State tracking** — on a successful send: `state.messageSentCount++`, `state.accumulatedText`
   is appended, and `state.firstReplyUrl` is set on the first message sent (used in thought-log embeds).
-  For render-modifier payloads, `state.accumulatedText` is prefixed with the visible label
-  (`SourcePersona (modifier): `) so result capture, STM, and future prompt context remain reversible.
+  For render-modifier payloads, `state.accumulatedText` is prefixed with the model-facing
+  source-first label (`SourcePersona (modifier): `) — which may differ from the visible webhook
+  username (clean name for sprites, flipped name for copied identities) — so result capture,
+  STM, and future prompt context remain reversible.
 - **Invalid-webhook recovery** — if the webhook send fails with Discord error 10015 or 50027
   (unknown/invalid webhook), the webhook cache is invalidated and a fresh webhook is fetched for
   retry.

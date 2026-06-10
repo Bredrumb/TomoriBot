@@ -19,7 +19,19 @@ let toolExecuteQueue: ToolResult[] = [];
 // --------------------------------------------------------------------------
 
 mock.module("@/utils/misc/logger", () => ({
-  ColorCode: { WARN: "WARN", ERROR: "ERROR", INFO: "INFO" },
+  // Values must stay hex STRINGS mirroring the real enum: modules evaluated
+  // while this global mock is in effect call string methods on them at load
+  // time (e.g. contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
+  ColorCode: {
+    INFO: "#3498DB",
+    SUCCESS: "#2ECC71",
+    MEMORY_UPDATE: "#25d4da",
+    WARN: "#F1C40F",
+    ERROR: "#E74C3C",
+    SECTION: "#E066FF",
+    AFFECTION: "#ff10cb",
+    RATE_LIMIT: "#FFA500",
+  },
   log: {
     error: () => undefined,
     info: () => undefined,
@@ -125,10 +137,29 @@ mock.module("@/utils/chat/channelQueue", () => ({
   queueStopResponseAtFront: () => undefined,
 }));
 
+// This mock must stub the module's COMPLETE export surface: bun module mocks
+// are process-wide for the rest of the test run, so any test file loaded later
+// that imports an omitted named export (e.g. contextMedia ->
+// formatInlineSystemContent) fails module linking. Only the first three stubs
+// carry behavior this test depends on; the rest exist to satisfy linking and
+// mirror the real signatures inertly.
 mock.module("@/utils/chat/contextAnnotations", () => ({
   annotateRecentMessageMetadataInContext: () => ({ annotatedCount: 0, patchedReplyReferenceCount: 0 }),
   buildTailDirectiveMessage: () => null,
   buildRevealedMessageMetadataTailDirective: () => "",
+  buildCombinedTailDirectiveMessage: () => null,
+  buildSpeakerGuardRetryDirective: () => null,
+  buildReplyReferenceContextAnnotation: async () => null,
+  buildReactionContextAnnotation: async () => null,
+  createReactionContextBudgetState: () => ({}),
+  findReplyContextTargetInMessage: () => null,
+  mergeForcedMentions: () => [],
+  mergeInjectedContextItems: (items: unknown) => items,
+  appendInjectedContextItems: () => undefined,
+  insertBeforeLatestDialoguePair: () => undefined,
+  stripAtPersonaTriggers: (content: string) => content,
+  formatInlineSystemContent: (content: string | null | undefined) =>
+    content?.replace(/\s+/g, " ").trim() || "[System: No text content was included]",
 }));
 
 // The ToolRegistry singleton — executeTool drains toolExecuteQueue.

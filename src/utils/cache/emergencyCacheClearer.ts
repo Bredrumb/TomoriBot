@@ -10,6 +10,11 @@ import {
   getOpenRouterOnDemandCapabilityCacheSize,
 } from "@/utils/cache/openrouterCapabilityCache";
 import { clearPersonalSpotlightCache, getPersonalSpotlightCacheStats } from "@/utils/cache/personalSpotlightCache";
+import { clearPersonaSpriteCache, getPersonaSpriteCacheSize } from "@/utils/cache/personaSpriteCacheStore";
+import {
+  clearPersonaSpriteMessageCache,
+  getPersonaSpriteMessageCacheSize,
+} from "@/utils/cache/personaSpriteMessageCache";
 import {
   clearExpiredEntries,
   clearShortTermMemoryCache,
@@ -222,6 +227,8 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
   clearMeasured(steps, "presetAvatar", getPresetAvatarCacheSize, clearPresetAvatarCache);
   clearMeasured(steps, "voiceTranscript", getVoiceTranscriptCacheSize, clearVoiceTranscriptCache);
   clearMeasured(steps, "markdownTable", getMarkdownTableCacheSize, clearMarkdownTableCache);
+  clearMeasured(steps, "personaSprite", getPersonaSpriteCacheSize, clearPersonaSpriteCache);
+  clearMeasured(steps, "personaSpriteMessage", getPersonaSpriteMessageCacheSize, clearPersonaSpriteMessageCache);
 
   clearMeasured(steps, "shortTermMemoryExpired", () => getShortTermMemoryCacheStats().size, clearExpiredEntries);
   if (includeShortTermMemory) {

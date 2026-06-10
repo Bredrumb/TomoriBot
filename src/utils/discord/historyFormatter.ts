@@ -178,13 +178,21 @@ export function formatMessagesForExtraction(
     // 8. Build formatted line
     lines.push(`[${timestamp}] ${authorName}: ${content}`);
 
-    // 9. Persona detection: match webhook-authored messages by name
+    // 9. Persona detection: match webhook-authored messages by name.
+    //    Decorated names carry the persona in either part: flipped copied
+    //    identities ("impersonated (SourcePersona)") put it inside the parens,
+    //    legacy decorations ("SourcePersona (modifier)") put it first.
     if (msg.webhookId && msg.author) {
       const renderModifierName = parseRenderModifierWebhookName(msg.author.username);
-      const authorKey = normalizeRenderModifierName(renderModifierName?.sourceName ?? msg.author.username);
-      const matchedTomoriId = nicknameToTomoriId.get(authorKey);
-      if (matchedTomoriId !== undefined) {
-        detectedTomoriIds.add(matchedTomoriId);
+      const authorKeys = renderModifierName
+        ? [renderModifierName.modifier, renderModifierName.sourceName]
+        : [msg.author.username];
+      for (const authorKey of authorKeys) {
+        const matchedTomoriId = nicknameToTomoriId.get(normalizeRenderModifierName(authorKey));
+        if (matchedTomoriId !== undefined) {
+          detectedTomoriIds.add(matchedTomoriId);
+          break;
+        }
       }
     }
   }

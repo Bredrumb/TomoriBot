@@ -2,6 +2,7 @@ import type { Guild } from "discord.js";
 import type { PersonaSpriteRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type ConversationUserReference } from "@/types/misc/context";
 import type { StreamContext } from "@/types/stream/interfaces";
+import type { SpriteMessageRecordInfo } from "@/types/stream/types";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -34,6 +35,14 @@ type CopiedRenderCandidate =
 export type CopiedRenderTarget = {
   displayName: string;
   identity: ResolvedWebhookIdentity;
+  /**
+   * Decorated "Name (modifier)" label recorded in accumulated text so the model
+   * sees its own modifier usage. For sprites this differs from the webhook
+   * username, which stays the clean persona name.
+   */
+  contextLabel: string;
+  /** Present for sprite targets: persisted after send for context label recovery. */
+  spriteRecord?: SpriteMessageRecordInfo;
 };
 
 export type SpriteRenderModifierResolution =
@@ -87,7 +96,10 @@ async function resolveSpriteIdentity(
   sprite: PersonaSpriteRow,
   sourceDisplayName: string,
 ): Promise<ResolvedWebhookIdentity | null> {
-  const username = formatRenderModifierWebhookName(sourceDisplayName, sprite.sprite_name);
+  // Sprite messages display the clean persona name in Discord; the sprite label
+  // is persisted per message (persona_sprite_messages) and recovered during
+  // context rebuilding so only the model sees "Name (sprite):".
+  const username = sourceDisplayName.trim() || "Persona";
   const avatarReference = sprite.avatar_url.trim();
   const publicAvatarUrl = resolvePersonaAvatarPublicUrl(avatarReference);
   if (publicAvatarUrl && isValidHttpUrl(publicAvatarUrl)) {
@@ -184,7 +196,13 @@ export async function resolveCopiedRenderModifierTarget(
   }
 
   const [candidate] = candidates;
-  const username = formatRenderModifierWebhookName(sourceDisplayName, candidate.displayName);
+  // Discord shows the impersonated name first ("bredrumb (Ren)") so the
+  // disguise reads naturally in chat; the model-facing label keeps the source
+  // persona first ("Ren (bredrumb)") so the LLM never confuses who is speaking.
+  // resolveRenderModifierSourcePersona reconstructs the source persona from
+  // either orientation when rebuilding context from webhook names.
+  const username = formatRenderModifierWebhookName(candidate.displayName, sourceDisplayName);
+  const contextLabel = formatRenderModifierWebhookName(sourceDisplayName, candidate.displayName);
   if (candidate.kind === "persona") {
     const guild = getStreamGuild(context);
     if (!guild) return null;
@@ -197,6 +215,7 @@ export async function resolveCopiedRenderModifierTarget(
         avatarUrl: personaIdentity.avatarUrl,
         avatarDataUri: personaIdentity.avatarDataUri,
       },
+      contextLabel,
     };
   }
 
@@ -212,6 +231,7 @@ export async function resolveCopiedRenderModifierTarget(
       username,
       avatarUrl: userIdentity.avatarUrl,
     },
+    contextLabel,
   };
 }
 
@@ -246,6 +266,11 @@ export async function resolveSpriteRenderModifierTarget(
       ? {
           displayName: sprite.sprite_name,
           identity,
+          contextLabel: formatRenderModifierWebhookName(sourceDisplayName, sprite.sprite_name),
+          spriteRecord: {
+            personaId,
+            spriteName: sprite.sprite_name,
+          },
         }
       : null,
   };

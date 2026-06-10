@@ -27,6 +27,7 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 24 re
 | `McpRepository` | MCP server configurations |
 | `PersonalMemoryRepository` | User + persona lineage scoped personal memories |
 | `PersonaRepository` | Persona state loading + writes (`personas`, `persona_configs`) |
+| `PersonaSpriteMessageRepository` | Sprite message → label mappings (`persona_sprite_messages`) |
 | `PersonaSpriteRepository` | Persona sprite rows (`persona_sprites`) |
 | `PresetRepository` | TomoriBot preset export/import + SillyTavern preset CRUD + ST card conversion |
 | `QuotaRepository` | Image, text, and video generation quota tracking |
@@ -40,7 +41,7 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 24 re
 | `UserRepository` | User registration, privacy, personalization, spotlight |
 | `WhitelistRepository` | Channel, persona, and role whitelist rules |
 
-Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports all 24 instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
+Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports all 26 instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
 
 ### SQL convention
 
@@ -173,6 +174,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - Official rows in `persona_presets` carry `preset_lineage_id` as a stable identity anchor for each bundled character. Applying an official preset (`/config setup`, `/persona default`) creates a copy-on-write pointer when possible: `personas.is_pointer = true`, with `personas.preset_lineage_id` and `personas.preset_language` resolving the live `persona_presets` row. The first local content edit materializes the persona into an independent copy while preserving `persona_id` and `persona_lineage_id`.
 - `persona_presets.preset_attribute_public_flags` stores boolean visibility flags aligned to `preset_attribute_list`; official appearance attributes are public by default. Pointer personas resolve these flags from the live preset row, while materialized/imported copies store them in `persona_attributes.is_public`.
 - `persona_sprites` stores named sprite avatars for render-modifier labels such as `Tomori (mad):`. Rows are keyed by `(persona_id, sprite_key)`, cascade with the persona, and store `avatar_url` as either a production public object URL or a local development path under `data/avatars/servers/{serverDiscId}/personas/{personaId}/sprites/`. `/persona sprites add` and `/persona sprites remove` are the owner commands.
+- `persona_sprite_messages` maps a sprite-rendered webhook message (`message_disc_id` PK) to the `sprite_name` it displayed. Sprite messages show the clean persona name in Discord; context rebuilding uses this mapping to recover the decorated `Name (sprite):` label for the model. Rows are immutable, cascade with the persona, and are pruned after `PERSONA_SPRITE_MESSAGE_RETENTION_DAYS` (default 30) via an opportunistic write-path prune.
 - Persona names are constrained unique per server (case-insensitive, trimmed).
 - Exactly one non-alter persona (`is_alter = false`) per server is enforced by partial unique index `personas_one_main_per_server ON personas(server_id) WHERE is_alter = false` (added in Phase 6 Step #14.6, migration `012`). This hardens the invariant that was previously enforced only at the command layer.
 - `persona_configs.reward_conditioning_enabled` and `persona_configs.punish_conditioning_enabled` are persona-scoped prompt-injection toggles for conditioning memory.
