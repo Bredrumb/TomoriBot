@@ -44,6 +44,7 @@ import {
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { safeDownload } from "@/utils/security/safeDownload";
 
 type ComfyUiGenerationMode = "image" | "video";
 type ComfyUiOutpaintStrategy = "edge_extend" | "zoom_out" | "full_canvas";
@@ -53,6 +54,12 @@ interface ComfyUiReferenceImage {
   mimeType: string;
   data: string;
   url?: string;
+  fallbackUrl?: string;
+  width?: number;
+  height?: number;
+  comfyUiFilename?: string;
+  comfyUiSubfolder?: string;
+  comfyUiType?: string;
 }
 
 interface ComfyUiGenerationOptions {
@@ -63,6 +70,8 @@ interface ComfyUiGenerationOptions {
   durationSeconds?: number;
   resolution?: string;
   generateAudio?: boolean;
+  audioPrompt?: string;
+  loop?: boolean;
   referenceImages?: ComfyUiReferenceImage[];
   referenceImageDataUrl?: string | null;
   inpaint?: boolean;
@@ -98,7 +107,13 @@ interface ComfyUiGenerationOptions {
 
 type WorkflowPlaceholderValue = string | number | boolean | null | Record<string, unknown> | Array<unknown>;
 type ComfyUiWorkflow = Record<string, unknown>;
-type ComfyUiAsset = { filename: string; subfolder?: string; type?: string };
+type ComfyUiAsset = {
+  filename: string;
+  subfolder?: string;
+  type?: string;
+  mediaKind?: "image" | "gif" | "video";
+};
+type ComfyUiMediaKind = NonNullable<ComfyUiAsset["mediaKind"]>;
 type ComfyUiGenerationResponse = { files: ComfyUiAsset[]; seed: number };
 type ComfyUiWorkflowSupports = {
   txt2img: boolean;
@@ -149,6 +164,22 @@ const COMFYUI_LANPAINT_SUPPORTED_SAMPLERS = new Set([
 ]);
 const COMFYUI_BASE_NEGATIVE_PROMPT =
   "low quality, worst quality, low detail, bad drawing, bad quality, oldest, (score_3, score_2, score_1:0.25), jpeg artifacts, watermark, signature, artist name, missing head, missing limb, bad anatomy, bad proportions, bad hands, missing fingers, spiral eyes, multiple views, duplicate face, extra face, second character, collage, inset image, tiny subject, distant subject, small subject, excessive empty space, subject too small";
+const COMFYUI_DEFAULT_VIDEO_DURATION_SECONDS = 5;
+const COMFYUI_DEFAULT_VIDEO_FPS = 16;
+const COMFYUI_DEFAULT_VIDEO_PLAYBACK_SPEED_MULTIPLIER = 1.5;
+const COMFYUI_REFERENCE_IMAGE_DOWNLOAD_MAX_MB = 25;
+const COMFYUI_DEFAULT_VIDEO_STEPS = 4;
+const COMFYUI_DEFAULT_VIDEO_CFG = 1;
+const COMFYUI_VIDEO_PROMPT_STABILIZER =
+  "Preserve the exact character identity, face proportions, eye shape, hairstyle, clothing, composition, and anime art style from the reference image. Use subtle, natural motion only. Keep the face cute and coherent. Hands must remain anatomically correct with five fingers per hand.";
+const COMFYUI_VIDEO_NEGATIVE_PROMPT =
+  "melted face, distorted face, uncanny face, warped eyes, misaligned eyes, broken mouth, deformed cheeks, excessive face deformation, extra hands, missing hands, malformed hands, extra fingers, missing fingers, fused fingers, broken fingers, dislocated arms, duplicated person, duplicated face, body horror, aggressive squeezing, violent motion, jitter, flicker, morphing identity, changed character, changed hairstyle, changed outfit, low quality, worst quality, blurry, artifacts, watermark, subtitles, text";
+const COMFYUI_DEFAULT_VIDEO_AUDIO_STEPS = 25;
+const COMFYUI_DEFAULT_VIDEO_AUDIO_CFG = 4.5;
+const COMFYUI_VIDEO_AUDIO_PROMPT_STABILIZER =
+  "Generate synchronized foley and ambient sound effects that match the visible motion. Keep the audio clean and natural. Do not add speech, vocals, or music unless explicitly requested.";
+const COMFYUI_VIDEO_AUDIO_NEGATIVE_PROMPT =
+  "low quality, distorted, clipping, harsh noise, static, hiss, crackle, out of sync, loud music, vocals, speech, dialogue, narration";
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -1179,7 +1210,7 @@ function buildComfyUiVideoDimensions(
   width: number;
   height: number;
 } {
-  const normalizedResolution = resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p";
+  const normalizedResolution = normalizeComfyUiVideoResolution(resolution);
   const normalizedAspectRatio = aspectRatio === "9:16" || aspectRatio === "1:1" ? aspectRatio : "16:9";
 
   if (normalizedAspectRatio === "9:16") {
@@ -1211,10 +1242,207 @@ function buildComfyUiVideoDimensions(
   return { width: 854, height: 480 };
 }
 
+function getComfyUiVideoLongSide(resolution: string | undefined): number {
+  const normalizedResolution = normalizeComfyUiVideoResolution(resolution);
+  if (normalizedResolution === "1080p") {
+    return 1920;
+  }
+  if (normalizedResolution === "720p") {
+    return 1280;
+  }
+  return 854;
+}
+
+function buildComfyUiVideoDimensionsFromReference(
+  referenceImage: ComfyUiReferenceImage,
+  resolution: string | undefined,
+): { width: number; height: number } | null {
+  if (
+    typeof referenceImage.width !== "number" ||
+    typeof referenceImage.height !== "number" ||
+    !Number.isFinite(referenceImage.width) ||
+    !Number.isFinite(referenceImage.height) ||
+    referenceImage.width <= 0 ||
+    referenceImage.height <= 0
+  ) {
+    return null;
+  }
+
+  const maxSide = getComfyUiVideoLongSide(resolution);
+  const scale = Math.min(1, maxSide / Math.max(referenceImage.width, referenceImage.height));
+  const width = Math.max(16, Math.floor((referenceImage.width * scale) / 16) * 16);
+  const height = Math.max(16, Math.floor((referenceImage.height * scale) / 16) * 16);
+  return { width, height };
+}
+
 function buildComfyUiDimensions(options: ComfyUiGenerationOptions): { width: number; height: number } {
-  return options.mode === "video"
-    ? buildComfyUiVideoDimensions(options.aspectRatio, options.resolution)
-    : buildComfyUiImageDimensions(options.aspectRatio);
+  if (options.mode === "video") {
+    const referenceDimensions = options.referenceImages?.[0]
+      ? buildComfyUiVideoDimensionsFromReference(options.referenceImages[0], options.resolution)
+      : null;
+    return referenceDimensions ?? buildComfyUiVideoDimensions(options.aspectRatio, options.resolution);
+  }
+
+  return buildComfyUiImageDimensions(options.aspectRatio);
+}
+
+function normalizeComfyUiVideoResolution(resolution: string | undefined): "480p" | "720p" | "1080p" {
+  return resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p";
+}
+
+function readComfyUiVideoMaxResolution(): "480p" | "720p" | "1080p" | null {
+  const rawValue =
+    readOptionalStringEnv("COMFYUI_VIDEO_MAX_RESOLUTION") ??
+    readOptionalStringEnv("TOMORI_COMFYUI_VIDEO_MAX_RESOLUTION") ??
+    readOptionalStringEnv("COMFYUI_MAX_VIDEO_RESOLUTION");
+  if (!rawValue) {
+    return null;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === "1080p" || normalized === "1080") {
+    return "1080p";
+  }
+  if (normalized === "720p" || normalized === "720") {
+    return "720p";
+  }
+  if (normalized === "480p" || normalized === "480") {
+    return "480p";
+  }
+  return null;
+}
+
+function capComfyUiVideoResolution(resolution: string | undefined): "480p" | "720p" | "1080p" {
+  const normalizedResolution = normalizeComfyUiVideoResolution(resolution);
+  const maxResolution = readComfyUiVideoMaxResolution();
+  if (!maxResolution) {
+    return normalizedResolution;
+  }
+
+  const rank = { "480p": 0, "720p": 1, "1080p": 2 } as const;
+  return rank[normalizedResolution] > rank[maxResolution] ? maxResolution : normalizedResolution;
+}
+
+function resolveComfyUiVideoDurationSeconds(durationSeconds: number | undefined): number {
+  const requested =
+    typeof durationSeconds === "number" && Number.isFinite(durationSeconds) && durationSeconds > 0
+      ? durationSeconds
+      : COMFYUI_DEFAULT_VIDEO_DURATION_SECONDS;
+  const maxDuration =
+    readOptionalNumberEnv("COMFYUI_VIDEO_MAX_DURATION_SECONDS") ??
+    readOptionalNumberEnv("TOMORI_COMFYUI_VIDEO_MAX_DURATION_SECONDS") ??
+    readOptionalNumberEnv("COMFYUI_MAX_VIDEO_DURATION_SECONDS");
+  const capped = maxDuration !== null && maxDuration > 0 ? Math.min(requested, maxDuration) : requested;
+  return clampNumber(capped, 1, 60);
+}
+
+function resolveComfyUiVideoFps(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_VIDEO_FPS") ??
+      readOptionalNumberEnv("TOMORI_COMFYUI_VIDEO_FPS") ??
+      COMFYUI_DEFAULT_VIDEO_FPS,
+    1,
+    120,
+  );
+}
+
+function resolveComfyUiVideoOutputFps(baseFps: number): number {
+  const explicitOutputFps =
+    readOptionalNumberEnv("COMFYUI_VIDEO_OUTPUT_FPS") ?? readOptionalNumberEnv("TOMORI_COMFYUI_VIDEO_OUTPUT_FPS");
+  if (explicitOutputFps !== null) {
+    return clampNumber(explicitOutputFps, 1, 120);
+  }
+
+  const playbackSpeed = clampNumber(
+    readOptionalNumberEnv("COMFYUI_VIDEO_PLAYBACK_SPEED_MULTIPLIER") ??
+      readOptionalNumberEnv("TOMORI_COMFYUI_VIDEO_PLAYBACK_SPEED_MULTIPLIER") ??
+      COMFYUI_DEFAULT_VIDEO_PLAYBACK_SPEED_MULTIPLIER,
+    0.25,
+    4,
+  );
+  return clampNumber(baseFps * playbackSpeed, 1, 120);
+}
+
+function resolveComfyUiVideoFrameCount(durationSeconds: number, fps: number): number {
+  return Math.max(1, Math.floor(durationSeconds * fps + 1));
+}
+
+function resolveComfyUiVideoSteps(): number {
+  return Math.round(
+    clampNumber(
+      readOptionalNumberEnv("COMFYUI_VIDEO_STEPS") ??
+        readOptionalNumberEnv("TOMORI_COMFYUI_VIDEO_STEPS") ??
+        COMFYUI_DEFAULT_VIDEO_STEPS,
+      1,
+      100,
+    ),
+  );
+}
+
+function resolveComfyUiVideoCfg(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_VIDEO_CFG") ??
+      readOptionalNumberEnv("TOMORI_COMFYUI_VIDEO_CFG") ??
+      COMFYUI_DEFAULT_VIDEO_CFG,
+    0,
+    30,
+  );
+}
+
+function resolveComfyUiVideoAudioSteps(): number {
+  return Math.round(
+    clampNumber(
+      readOptionalNumberEnv("COMFYUI_VIDEO_AUDIO_STEPS") ??
+        readOptionalNumberEnv("TOMORI_COMFYUI_VIDEO_AUDIO_STEPS") ??
+        COMFYUI_DEFAULT_VIDEO_AUDIO_STEPS,
+      1,
+      100,
+    ),
+  );
+}
+
+function resolveComfyUiVideoAudioCfg(): number {
+  return clampNumber(
+    readOptionalNumberEnv("COMFYUI_VIDEO_AUDIO_CFG") ??
+      readOptionalNumberEnv("TOMORI_COMFYUI_VIDEO_AUDIO_CFG") ??
+      COMFYUI_DEFAULT_VIDEO_AUDIO_CFG,
+    0,
+    30,
+  );
+}
+
+function normalizeComfyUiVideoOptions<T extends ComfyUiGenerationOptions>(options: T): T {
+  if (options.mode !== "video") {
+    return options;
+  }
+
+  return {
+    ...options,
+    durationSeconds: resolveComfyUiVideoDurationSeconds(options.durationSeconds),
+    resolution: capComfyUiVideoResolution(options.resolution),
+  } as T;
+}
+
+function buildComfyUiVideoPrompt(prompt: string): string {
+  const extra = readOptionalStringEnv("COMFYUI_VIDEO_PROMPT_SUFFIX") ?? COMFYUI_VIDEO_PROMPT_STABILIZER;
+  const trimmedPrompt = prompt.trim();
+  const trimmedExtra = extra.trim();
+  return trimmedExtra ? `${trimmedPrompt}\n\n${trimmedExtra}` : trimmedPrompt;
+}
+
+function buildComfyUiVideoNegativePrompt(): string {
+  return readOptionalStringEnv("COMFYUI_VIDEO_NEGATIVE_PROMPT") ?? COMFYUI_VIDEO_NEGATIVE_PROMPT;
+}
+
+function buildComfyUiVideoAudioPrompt(prompt: string, audioPrompt?: string): string {
+  const extra = readOptionalStringEnv("COMFYUI_VIDEO_AUDIO_PROMPT_SUFFIX") ?? COMFYUI_VIDEO_AUDIO_PROMPT_STABILIZER;
+  const trimmedPrompt = (audioPrompt?.trim() || prompt).trim();
+  const trimmedExtra = extra.trim();
+  return trimmedExtra ? `${trimmedPrompt}\n\n${trimmedExtra}` : trimmedPrompt;
+}
+
+function buildComfyUiVideoAudioNegativePrompt(): string {
+  return readOptionalStringEnv("COMFYUI_VIDEO_AUDIO_NEGATIVE_PROMPT") ?? COMFYUI_VIDEO_AUDIO_NEGATIVE_PROMPT;
 }
 
 function buildComfyUiReferencePayload(referenceImages: ComfyUiReferenceImage[]): Array<Record<string, unknown>> {
@@ -1224,7 +1452,139 @@ function buildComfyUiReferencePayload(referenceImages: ComfyUiReferenceImage[]):
     data: referenceImage.data,
     dataUrl: `data:${referenceImage.mimeType};base64,${referenceImage.data}`,
     ...(referenceImage.url ? { url: referenceImage.url } : {}),
+    ...(referenceImage.fallbackUrl ? { fallbackUrl: referenceImage.fallbackUrl } : {}),
+    ...(referenceImage.comfyUiFilename ? { filename: referenceImage.comfyUiFilename } : {}),
+    ...(referenceImage.comfyUiSubfolder ? { subfolder: referenceImage.comfyUiSubfolder } : {}),
+    ...(referenceImage.comfyUiType ? { type: referenceImage.comfyUiType } : {}),
   }));
+}
+
+function getComfyUiImageExtension(mimeType: string): string {
+  const normalized = mimeType.toLowerCase();
+  if (normalized.includes("jpeg") || normalized.includes("jpg")) {
+    return "jpg";
+  }
+  if (normalized.includes("webp")) {
+    return "webp";
+  }
+  if (normalized.includes("gif")) {
+    return "gif";
+  }
+  return "png";
+}
+
+function normalizeComfyUiUploadField(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function buildDiscordDownloadInit(url: string): RequestInit | undefined {
+  if (!process.env.DISCORD_TOKEN || !/discord(?:app)?\.(?:com|net)|discordcdn\.com/i.test(url)) {
+    return undefined;
+  }
+
+  return {
+    headers: {
+      Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+    },
+  };
+}
+
+async function resolveComfyUiReferenceImageBuffer(referenceImage: ComfyUiReferenceImage): Promise<{
+  buffer: Buffer;
+  mimeType: string;
+}> {
+  if (referenceImage.data) {
+    return {
+      buffer: Buffer.from(referenceImage.data, "base64"),
+      mimeType: referenceImage.mimeType || "image/png",
+    };
+  }
+
+  if (!referenceImage.url) {
+    throw new Error("ComfyUI image-to-video requires a reference image payload or URL.");
+  }
+
+  const urls = [referenceImage.url, referenceImage.fallbackUrl].filter((url): url is string => !!url);
+  let lastDownloadDetails = "unknown error";
+  for (const url of urls) {
+    const downloadResult = await safeDownload(url, {
+      maxSizeMB: COMFYUI_REFERENCE_IMAGE_DOWNLOAD_MAX_MB,
+      timeoutMs: 15_000,
+      requestInit: buildDiscordDownloadInit(url),
+    });
+    if (downloadResult.success && downloadResult.buffer) {
+      return {
+        buffer: downloadResult.buffer,
+        mimeType: downloadResult.contentType ?? referenceImage.mimeType ?? "image/png",
+      };
+    }
+    lastDownloadDetails = downloadResult.details ?? downloadResult.error ?? lastDownloadDetails;
+  }
+
+  throw new Error(`Failed to download ComfyUI reference image: ${lastDownloadDetails}`);
+}
+
+async function uploadComfyUiReferenceImage(
+  endpoint: CustomEndpointRow,
+  apiKey: string,
+  referenceImage: ComfyUiReferenceImage,
+  index: number,
+): Promise<ComfyUiReferenceImage> {
+  const { buffer, mimeType } = await resolveComfyUiReferenceImageBuffer(referenceImage);
+  const filename = `tomoribot_ref_${Date.now()}_${index}.${getComfyUiImageExtension(mimeType)}`;
+  const imageBytes = new Uint8Array(buffer.length);
+  imageBytes.set(buffer);
+  const formData = new FormData();
+  formData.append("image", new Blob([imageBytes], { type: mimeType }), filename);
+  formData.append("type", "input");
+  formData.append("overwrite", "true");
+
+  const headers = buildCustomHeaders(apiKey);
+  delete headers["Content-Type"];
+  const response = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/upload/image`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`ComfyUI reference image upload failed: ${response.status} ${response.statusText}`);
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as {
+    name?: string;
+    subfolder?: string;
+    type?: string;
+  };
+  const metadata = await sharp(buffer).metadata().catch(() => null);
+
+  return {
+    ...referenceImage,
+    data: referenceImage.data || buffer.toString("base64"),
+    mimeType,
+    ...(typeof metadata?.width === "number" && metadata.width > 0 ? { width: metadata.width } : {}),
+    ...(typeof metadata?.height === "number" && metadata.height > 0 ? { height: metadata.height } : {}),
+    comfyUiFilename: normalizeComfyUiUploadField(payload.name) ?? filename,
+    comfyUiSubfolder: normalizeComfyUiUploadField(payload.subfolder),
+    comfyUiType: normalizeComfyUiUploadField(payload.type) ?? "input",
+  };
+}
+
+async function uploadComfyUiReferenceImages(
+  endpoint: CustomEndpointRow,
+  apiKey: string,
+  referenceImages: ComfyUiReferenceImage[],
+): Promise<ComfyUiReferenceImage[]> {
+  if (referenceImages.length === 0) {
+    return [];
+  }
+
+  return Promise.all(
+    referenceImages.map((referenceImage, index) =>
+      uploadComfyUiReferenceImage(endpoint, apiKey, referenceImage, index + 1),
+    ),
+  );
 }
 
 function pruneComfyUiOutpaintDiagnosticSaveNodes(workflow: ComfyUiWorkflow): number {
@@ -1820,6 +2180,16 @@ function buildComfyUiPlaceholderMap(
     outpaint,
     outpaintPixels,
   );
+  const videoDurationSeconds = resolveComfyUiVideoDurationSeconds(options.durationSeconds);
+  const videoFps = resolveComfyUiVideoFps();
+  const videoOutputFps = resolveComfyUiVideoOutputFps(videoFps);
+  const videoFrameCount = resolveComfyUiVideoFrameCount(videoDurationSeconds, videoFps);
+  const videoOutputDurationSeconds = videoFrameCount / videoOutputFps;
+  const videoSteps = resolveComfyUiVideoSteps();
+  const videoCfg = resolveComfyUiVideoCfg();
+  const videoAudioSteps = resolveComfyUiVideoAudioSteps();
+  const videoAudioCfg = resolveComfyUiVideoAudioCfg();
+  const workflowPrompt = options.mode === "video" ? buildComfyUiVideoPrompt(options.prompt) : options.prompt;
   const workflowSourceWidth = outpaintLayout?.placedSourceWidth ?? dimensions.source.width;
   const workflowSourceHeight = outpaintLayout?.placedSourceHeight ?? dimensions.source.height;
   const outpaintSourceX = outpaintLayout?.placedSourceX ?? 0;
@@ -1849,7 +2219,8 @@ function buildComfyUiPlaceholderMap(
   const bottomStageHeight = dimensions.source.height + outpaintPadTop;
   const bottomCropHeight = Math.max(1, bottomStageHeight - outpaintPadBottom);
   const placeholderMap: Record<string, WorkflowPlaceholderValue> = {
-    TOMORI_PROMPT: options.prompt,
+    TOMORI_PROMPT: workflowPrompt,
+    TOMORI_RAW_PROMPT: options.prompt,
     TOMORI_PROMPT_WITH_DEFAULTS: buildComfyUiPromptWithDefaults(
       promptOptions,
       inpaint,
@@ -1858,6 +2229,7 @@ function buildComfyUiPlaceholderMap(
       hasReference,
     ),
     TOMORI_NEGATIVE_PROMPT: buildComfyUiNegativePrompt(options, inpaint, maskMode),
+    TOMORI_VIDEO_NEGATIVE_PROMPT: buildComfyUiVideoNegativePrompt(),
     TOMORI_MODEL: endpoint.model_name ?? endpoint.display_name,
     TOMORI_MODEL_NAME: endpoint.model_name ?? endpoint.display_name,
     TOMORI_MODE: options.mode,
@@ -2064,16 +2436,41 @@ function buildComfyUiPlaceholderMap(
     TOMORI_REFERENCE_IMAGE_COUNT: referencePayload.length,
     TOMORI_REFERENCE_IMAGES: referencePayload,
     TOMORI_REFERENCE_IMAGES_JSON: JSON.stringify(referencePayload),
-    TOMORI_VIDEO_DURATION: options.durationSeconds ?? 0,
-    TOMORI_DURATION_SECONDS: options.durationSeconds ?? 0,
+    TOMORI_VIDEO_DURATION: videoDurationSeconds,
+    TOMORI_DURATION_SECONDS: videoDurationSeconds,
+    TOMORI_VIDEO_OUTPUT_DURATION: videoOutputDurationSeconds,
+    TOMORI_OUTPUT_DURATION: videoOutputDurationSeconds,
     TOMORI_VIDEO_RESOLUTION: options.resolution ?? "",
     TOMORI_RESOLUTION: options.resolution ?? "",
+    TOMORI_VIDEO_FPS: videoFps,
+    TOMORI_FPS: videoFps,
+    TOMORI_VIDEO_OUTPUT_FPS: videoOutputFps,
+    TOMORI_OUTPUT_FPS: videoOutputFps,
+    TOMORI_VIDEO_FRAME_COUNT: videoFrameCount,
+    TOMORI_FRAME_COUNT: videoFrameCount,
+    TOMORI_VIDEO_STEPS: videoSteps,
+    TOMORI_STEPS: videoSteps,
+    TOMORI_VIDEO_CFG: videoCfg,
     TOMORI_GENERATE_AUDIO: options.generateAudio ?? false,
+    TOMORI_VIDEO_AUDIO_PROMPT: buildComfyUiVideoAudioPrompt(options.prompt, options.audioPrompt),
+    TOMORI_AUDIO_PROMPT: buildComfyUiVideoAudioPrompt(options.prompt, options.audioPrompt),
+    TOMORI_VIDEO_AUDIO_NEGATIVE_PROMPT: buildComfyUiVideoAudioNegativePrompt(),
+    TOMORI_AUDIO_NEGATIVE_PROMPT: buildComfyUiVideoAudioNegativePrompt(),
+    TOMORI_VIDEO_AUDIO_STEPS: videoAudioSteps,
+    TOMORI_AUDIO_STEPS: videoAudioSteps,
+    TOMORI_VIDEO_AUDIO_CFG: videoAudioCfg,
+    TOMORI_AUDIO_CFG: videoAudioCfg,
+    TOMORI_VIDEO_LOOP: options.loop === true,
+    TOMORI_LOOP_VIDEO: options.loop === true,
   };
 
   placeholderMap.TOMORI_REFERENCE_IMAGE_1_DATA_URL = placeholderMap.TOMORI_REFERENCE_IMAGE_DATA_URL;
   placeholderMap.TOMORI_REFERENCE_IMAGE_1_BASE64 = placeholderMap.TOMORI_REFERENCE_IMAGE_BASE64;
   placeholderMap.TOMORI_REFERENCE_IMAGE_1_MIME_TYPE = placeholderMap.TOMORI_REFERENCE_IMAGE_MIME_TYPE;
+  placeholderMap.TOMORI_REFERENCE_IMAGE_FILENAME = "";
+  placeholderMap.TOMORI_REFERENCE_IMAGE_1_FILENAME = "";
+  placeholderMap.TOMORI_REFERENCE_IMAGE_1_SUBFOLDER = "";
+  placeholderMap.TOMORI_REFERENCE_IMAGE_1_TYPE = "";
 
   for (const referenceImage of referencePayload) {
     const index = referenceImage.index as number;
@@ -2084,9 +2481,160 @@ function buildComfyUiPlaceholderMap(
     if (typeof referenceImage.url === "string") {
       placeholderMap[`TOMORI_REFERENCE_IMAGE_${index}_URL`] = referenceImage.url;
     }
+    if (typeof referenceImage.filename === "string") {
+      placeholderMap[`TOMORI_REFERENCE_IMAGE_${index}_FILENAME`] = referenceImage.filename;
+      if (index === 1) {
+        placeholderMap.TOMORI_REFERENCE_IMAGE_FILENAME = referenceImage.filename;
+      }
+    }
+    if (typeof referenceImage.subfolder === "string") {
+      placeholderMap[`TOMORI_REFERENCE_IMAGE_${index}_SUBFOLDER`] = referenceImage.subfolder;
+    }
+    if (typeof referenceImage.type === "string") {
+      placeholderMap[`TOMORI_REFERENCE_IMAGE_${index}_TYPE`] = referenceImage.type;
+    }
   }
 
   return placeholderMap;
+}
+
+function applyComfyUiVideoLoopDefaults(workflow: ComfyUiWorkflow, options: ComfyUiGenerationOptions): number {
+  if (options.mode !== "video" || options.loop === true) {
+    return 0;
+  }
+
+  let updated = 0;
+  for (const node of Object.values(workflow)) {
+    if (!isRecord(node) || typeof node.class_type !== "string" || !isRecord(node.inputs)) {
+      continue;
+    }
+
+    if (node.class_type !== "WanFirstLastFrameToVideo") {
+      continue;
+    }
+
+    node.class_type = "WanImageToVideo";
+    updated += 1;
+    if ("end_image" in node.inputs) {
+      delete node.inputs.end_image;
+    }
+    delete node.inputs.clip_vision_start_image;
+    if ("clip_vision_end_image" in node.inputs) {
+      delete node.inputs.clip_vision_end_image;
+    }
+  }
+
+  return updated;
+}
+
+function applyComfyUiVideoAudioDefaults(workflow: ComfyUiWorkflow, options: ComfyUiGenerationOptions): number {
+  if (options.mode !== "video" || options.generateAudio === true) {
+    return 0;
+  }
+
+  let updated = 0;
+  for (const node of Object.values(workflow)) {
+    if (!isRecord(node) || typeof node.class_type !== "string" || !isRecord(node.inputs)) {
+      continue;
+    }
+
+    if ("audio" in node.inputs) {
+      delete node.inputs.audio;
+      updated += 1;
+    }
+  }
+
+  return updated;
+}
+
+function inferComfyUiAssetMediaKind(filename: string, fallback?: ComfyUiMediaKind): ComfyUiMediaKind {
+  const normalized = filename.toLowerCase();
+  if (/\.(gif)$/.test(normalized)) {
+    return "gif";
+  }
+  if (/\.(mp4|webm|mov|mkv)$/.test(normalized)) {
+    return "video";
+  }
+  if (/\.(png|jpe?g|webp|bmp)$/.test(normalized)) {
+    return "image";
+  }
+  return fallback ?? "image";
+}
+
+function normalizeComfyUiAsset(value: unknown, fallback?: ComfyUiMediaKind): ComfyUiAsset | null {
+  if (!isRecord(value) || typeof value.filename !== "string" || value.filename.trim() === "") {
+    return null;
+  }
+
+  return {
+    filename: value.filename,
+    ...(typeof value.subfolder === "string" ? { subfolder: value.subfolder } : {}),
+    ...(typeof value.type === "string" ? { type: value.type } : {}),
+    mediaKind: inferComfyUiAssetMediaKind(value.filename, fallback),
+  };
+}
+
+function collectComfyUiAssetsFromValue(
+  value: unknown,
+  fallback?: ComfyUiMediaKind,
+  depth = 0,
+): ComfyUiAsset[] {
+  if (depth > 6) {
+    return [];
+  }
+
+  const directAsset = normalizeComfyUiAsset(value, fallback);
+  if (directAsset) {
+    return [directAsset];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectComfyUiAssetsFromValue(item, fallback, depth + 1));
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  return Object.entries(value).flatMap(([key, childValue]) => {
+    const childFallback =
+      key === "videos" || key === "video"
+        ? "video"
+        : key === "gifs" || key === "gif"
+          ? "gif"
+          : key === "images" || key === "image"
+            ? "image"
+            : fallback;
+    return collectComfyUiAssetsFromValue(childValue, childFallback, depth + 1);
+  });
+}
+
+function collectComfyUiHistoryFiles(outputs: Record<string, unknown> | undefined): ComfyUiAsset[] {
+  if (!outputs) {
+    return [];
+  }
+
+  return Object.values(outputs).flatMap((output) => collectComfyUiAssetsFromValue(output));
+}
+
+function describeComfyUiHistoryOutputs(outputs: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!outputs) {
+    return { nodeCount: 0 };
+  }
+
+  return {
+    nodeCount: Object.keys(outputs).length,
+    nodes: Object.entries(outputs).map(([nodeId, output]) => ({
+      nodeId,
+      keys: isRecord(output) ? Object.keys(output) : [],
+      files: collectComfyUiAssetsFromValue(output).map((file) => ({
+        filename: file.filename,
+        subfolder: file.subfolder ?? null,
+        type: file.type ?? null,
+        mediaKind: file.mediaKind ?? null,
+      })),
+    })),
+  };
 }
 
 async function generateWithComfyUi(
@@ -2105,7 +2653,19 @@ async function generateWithComfyUi(
     stripComfyUiHairRecolorPreservationClauses(options.prompt, options.maskPrompt),
   );
   const strengthenedPrompt = strengthenComfyUiHairRecolorPrompt(sanitizedPrompt || options.prompt, options.maskPrompt);
-  const generationOptions = { ...options, prompt: strengthenedPrompt, seed };
+  const generationOptions = normalizeComfyUiVideoOptions({ ...options, prompt: strengthenedPrompt, seed });
+  const uploadedReferenceImages = await uploadComfyUiReferenceImages(
+    endpoint,
+    apiKey,
+    generationOptions.referenceImages ?? [],
+  );
+  if (generationOptions.mode === "video") {
+    const firstUploadedReference = uploadedReferenceImages[0];
+    if (!firstUploadedReference?.comfyUiFilename) {
+      throw new Error("ComfyUI image-to-video requires an uploaded reference image.");
+    }
+  }
+  generationOptions.referenceImages = uploadedReferenceImages;
   const sourceDimensions = buildComfyUiDimensions(generationOptions);
   const outpaint =
     generationOptions.mode === "image" &&
@@ -2121,7 +2681,7 @@ async function generateWithComfyUi(
       ? buildComfyUiOutpaintDimensions(generationOptions, sourceDimensions, outpaintDirection, outpaintPixels)
       : sourceDimensions,
   };
-  const referencePayload = buildComfyUiReferencePayload(generationOptions.referenceImages ?? []);
+  const referencePayload = buildComfyUiReferencePayload(uploadedReferenceImages);
   const placeholders = buildComfyUiPlaceholderMap(endpoint, generationOptions, dimensions, referencePayload);
   const workflowSupports = readComfyUiWorkflowSupports(endpoint);
   const workflow = deepCloneWorkflow(savedWorkflow as Record<string, unknown>);
@@ -2136,6 +2696,8 @@ async function generateWithComfyUi(
   }
 
   const preparedWorkflow = replaceWorkflowPlaceholders(workflow, placeholders) as ComfyUiWorkflow;
+  const videoLoopRewrites = applyComfyUiVideoLoopDefaults(preparedWorkflow, generationOptions);
+  const videoAudioRewrites = applyComfyUiVideoAudioDefaults(preparedWorkflow, generationOptions);
   const constantConditionalRewrites = foldConstantComfyUiConditionals(preparedWorkflow);
   const prunedOutpaintDiagnosticSaves = outpaint ? pruneComfyUiOutpaintDiagnosticSaveNodes(preparedWorkflow) : 0;
   const prunedUnreachableNodes = pruneUnreachableComfyUiNodes(preparedWorkflow);
@@ -2143,7 +2705,7 @@ async function generateWithComfyUi(
     throw new Error(
       [
         "This ComfyUI workflow does not have active outpainting support.",
-        "Update the stored endpoint workflow or configure workflow_path/COMFYUI_WORKFLOW_JSON_PATH to the latest tomoribot-anima3-comfyui.json.",
+        "Update the stored endpoint workflow to the latest tomoribot-anima3-comfyui.json.",
         "The active workflow must expose InpaintCropImproved extend_for_outpainting with the TOMORI_OUTPAINT placeholders, or use TOMORI_OUTPAINT_FULL_CANVAS for full-canvas outpainting.",
       ].join(" "),
     );
@@ -2182,6 +2744,30 @@ async function generateWithComfyUi(
         prunedUnreachableNodes,
       })}`,
     );
+  } else if (generationOptions.mode === "video") {
+    log.info(
+      `Prepared ComfyUI video generation payload ${JSON.stringify({
+        workflowPath: workflowPath ?? null,
+        hasReference: uploadedReferenceImages.length > 0,
+        referenceFilename: uploadedReferenceImages[0]?.comfyUiFilename ?? null,
+        seed,
+        durationSeconds: generationOptions.durationSeconds,
+        resolution: generationOptions.resolution,
+        width: dimensions.output.width,
+        height: dimensions.output.height,
+        referenceWidth: uploadedReferenceImages[0]?.width ?? null,
+        referenceHeight: uploadedReferenceImages[0]?.height ?? null,
+        fps: placeholders.TOMORI_VIDEO_FPS,
+        outputFps: placeholders.TOMORI_VIDEO_OUTPUT_FPS,
+        outputDurationSeconds: placeholders.TOMORI_VIDEO_OUTPUT_DURATION,
+        generateAudio: generationOptions.generateAudio === true,
+        loop: generationOptions.loop === true,
+        videoLoopRewrites,
+        videoAudioRewrites,
+        constantConditionalRewrites,
+        prunedUnreachableNodes,
+      })}`,
+    );
   }
 
   const postHeaders = buildCustomHeaders(apiKey);
@@ -2209,7 +2795,15 @@ async function generateWithComfyUi(
     throw new Error("ComfyUI did not return a prompt_id.");
   }
 
+  log.info(
+    `ComfyUI prompt accepted ${JSON.stringify({
+      promptId: promptPayload.prompt_id,
+      mode: generationOptions.mode,
+    })}`,
+  );
+
   const timeoutAt = Date.now() + getComfyUiTimeoutMs();
+  let loggedHistoryWithoutFinal = false;
   while (Date.now() < timeoutAt) {
     const historyResponse = await fetchUserRemoteUrl(
       `${endpoint.endpoint_url.replace(/\/+$/, "")}/history/${encodeURIComponent(promptPayload.prompt_id)}`,
@@ -2228,20 +2822,40 @@ async function generateWithComfyUi(
               videos?: Array<{ filename: string; subfolder?: string; type?: string }>;
             }
           >;
+          status?: {
+            completed?: boolean;
+            status_str?: string;
+          };
         }
       >;
 
-      const historyItem = historyPayload[promptPayload.prompt_id];
-      const outputs = historyItem?.outputs ? Object.values(historyItem.outputs) : [];
-      const files = outputs.flatMap((output) => [
-        ...(output.images ?? []),
-        ...(output.gifs ?? []),
-        ...(output.videos ?? []),
-      ]);
+      const directHistoryItem = isRecord(historyPayload.outputs) ? historyPayload : null;
+      const historyItem = historyPayload[promptPayload.prompt_id] ?? directHistoryItem;
+      const outputs = isRecord(historyItem?.outputs) ? historyItem.outputs : undefined;
+      const files = collectComfyUiHistoryFiles(outputs);
       const finalFiles =
-        generationOptions.mode === "image" ? files.filter((file) => !isComfyUiDiagnosticAsset(file)) : files;
+        generationOptions.mode === "image"
+          ? files.filter((file) => !isComfyUiDiagnosticAsset(file))
+          : files.filter((file) => file.mediaKind === "video" || file.mediaKind === "gif");
       if (finalFiles.length > 0) {
-        return { files, seed };
+        return { files: generationOptions.mode === "video" ? finalFiles : files, seed };
+      }
+      if (historyItem && !loggedHistoryWithoutFinal) {
+        loggedHistoryWithoutFinal = true;
+        log.warn(
+          `ComfyUI history had no final ${generationOptions.mode} files yet ${JSON.stringify({
+            promptId: promptPayload.prompt_id,
+            status: historyItem.status ?? null,
+            outputs: describeComfyUiHistoryOutputs(outputs),
+          })}`,
+        );
+      }
+      if (generationOptions.mode === "video" && historyItem?.status?.completed === true) {
+        throw new Error(
+          `ComfyUI completed video prompt without returning a video file. Outputs: ${JSON.stringify(
+            describeComfyUiHistoryOutputs(outputs),
+          ).slice(0, 2000)}`,
+        );
       }
     }
 
@@ -2270,6 +2884,46 @@ async function downloadComfyUiAsset(endpoint: CustomEndpointRow, apiKey: string,
   }
 
   return Buffer.from(await response.arrayBuffer());
+}
+
+function inferComfyUiVideoMimeType(asset: ComfyUiAsset, buffer: Buffer): string {
+  const filename = asset.filename.toLowerCase();
+  if (filename.endsWith(".gif") || buffer.subarray(0, 3).toString("ascii") === "GIF") {
+    return "image/gif";
+  }
+  if (filename.endsWith(".webm")) {
+    return "video/webm";
+  }
+  if (filename.endsWith(".mov")) {
+    return "video/quicktime";
+  }
+  return "video/mp4";
+}
+
+function buildComfyUiVideoDownloadFilename(asset: ComfyUiAsset, mimeType: string): string {
+  const sourceFilename = asset.filename.split(/[\\/]/).pop()?.trim();
+  if (sourceFilename && /\.[a-z0-9]{2,5}$/i.test(sourceFilename)) {
+    return sourceFilename;
+  }
+
+  const extension = mimeType === "image/gif" ? "gif" : mimeType === "video/webm" ? "webm" : "mp4";
+  return `generated_${Date.now()}.${extension}`;
+}
+
+function describeVideoBufferSignature(buffer: Buffer): string {
+  if (buffer.length === 0) {
+    return "empty";
+  }
+  if (buffer.subarray(0, 3).toString("ascii") === "GIF") {
+    return "gif";
+  }
+  if (buffer.subarray(4, 8).toString("ascii") === "ftyp") {
+    return `mp4:${buffer.subarray(8, 12).toString("ascii")}`;
+  }
+  if (buffer.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) {
+    return "webm";
+  }
+  return `unknown:${buffer.subarray(0, 16).toString("hex")}`;
 }
 
 export async function generateComfyUiImageViaEndpoint(params: {
@@ -2690,8 +3344,21 @@ export async function generateComfyUiVideoViaEndpoint(params: {
   resolution?: string;
   referenceImages?: ProviderNativeVideoGenerationRequest["referenceImages"];
   generateAudio?: boolean;
+  audioPrompt?: string;
+  loop?: boolean;
 }): Promise<ProviderNativeVideoGenerationResult> {
-  const { endpoint, apiKey, prompt, aspectRatio, durationSeconds, resolution, referenceImages, generateAudio } = params;
+  const {
+    endpoint,
+    apiKey,
+    prompt,
+    aspectRatio,
+    durationSeconds,
+    resolution,
+    referenceImages,
+    generateAudio,
+    audioPrompt,
+    loop,
+  } = params;
 
   const { files } = await generateWithComfyUi(endpoint, apiKey, {
     mode: "video",
@@ -2701,11 +3368,35 @@ export async function generateComfyUiVideoViaEndpoint(params: {
     resolution,
     referenceImages,
     generateAudio,
+    audioPrompt,
+    loop,
   });
   const firstFile = files[0];
+  log.info(
+    `ComfyUI video output selected ${JSON.stringify({
+      filename: firstFile.filename,
+      subfolder: firstFile.subfolder ?? null,
+      type: firstFile.type ?? null,
+      mediaKind: firstFile.mediaKind ?? null,
+    })}`,
+  );
   const videoBuffer = await downloadComfyUiAsset(endpoint, apiKey, firstFile);
+  if (videoBuffer.length === 0) {
+    throw new Error("ComfyUI returned an empty video file.");
+  }
+  const mimeType = inferComfyUiVideoMimeType(firstFile, videoBuffer);
+  const filename = buildComfyUiVideoDownloadFilename(firstFile, mimeType);
+  log.info(
+    `ComfyUI video downloaded ${JSON.stringify({
+      filename,
+      mimeType,
+      bytes: videoBuffer.length,
+      signature: describeVideoBufferSignature(videoBuffer),
+    })}`,
+  );
   return {
     videoData: videoBuffer,
-    mimeType: "video/mp4",
+    mimeType,
+    filename,
   };
 }

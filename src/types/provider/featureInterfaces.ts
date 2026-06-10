@@ -196,6 +196,7 @@ export interface ProviderNativeVideoReference {
   mimeType: string;
   data: string; // Base64-encoded image data (used when url is not available)
   url?: string; // Original source URL — preferred over base64 for remote APIs to avoid body size limits
+  fallbackUrl?: string;
 }
 
 export type ProviderNativeVideoResolution = "480p" | "720p" | "1080p";
@@ -212,12 +213,17 @@ export interface ProviderNativeVideoGenerationRequest {
   referenceImages?: ProviderNativeVideoReference[];
   /** Whether the provider should generate audio alongside the video. Defaults to false. */
   generateAudio?: boolean;
+  /** Optional separate prompt describing the desired audio, foley, ambience, music, or speech. */
+  audioPrompt?: string;
+  /** Whether image-to-video generation should reuse the start image as the end frame for a loop. Defaults to false. */
+  loop?: boolean;
 }
 
 /** Result of a native video generation operation */
 export interface ProviderNativeVideoGenerationResult {
   videoData: Buffer | null; // Raw MP4 bytes (not base64 — videos are too large)
   mimeType: string | null;
+  filename?: string;
   durationSeconds?: number;
 }
 
