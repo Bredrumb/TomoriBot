@@ -39,7 +39,7 @@ export default {
         main_persona_description: `Main Persona`,
         alter_persona_description: `Alter Persona`,
         sprite_name_label: `Sprite Name`,
-        sprite_name_description: `Label used in lines like Tomori (mad):. Reusing a label replaces it.`,
+        sprite_name_description: `Label used for the sprite. Reusing a label replaces the corresponding sprite.`,
         sprite_name_placeholder: `mad`,
         image_label: `Sprite Image`,
         image_description: `Upload a PNG, JPG, or GIF. It will be converted to PNG.`,

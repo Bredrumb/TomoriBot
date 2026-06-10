@@ -9,9 +9,10 @@ import { buildCustomThinkingRequest } from "@/utils/provider/thinkingControl";
 
 /**
  * When true, the stream adapter scans `delta.content` for Gemma 4's hallucinated
- * `<|tool_call>...<tool_call|>` token format and converts matches into proper
- * function_call chunks. Set CUSTOM_GEMMA_TOOL_PARSER_ENABLED=false to disable if
- * another local model produces similar token strings unexpectedly.
+ * tool-call formats — both the special-token `<|tool_call>...<tool_call|>` form and
+ * the Python-call `<tool_code>name(...)</tool_code>` form — and converts matches into
+ * proper function_call chunks. Set CUSTOM_GEMMA_TOOL_PARSER_ENABLED=false to disable
+ * if another local model produces similar token strings unexpectedly.
  */
 const GEMMA_TOOL_PARSER_ENABLED = (process.env.CUSTOM_GEMMA_TOOL_PARSER_ENABLED ?? "true").toLowerCase() !== "false";
 
@@ -103,8 +104,9 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
    *    tool call follows in the same chunk the entire blob arrives as raw content.
    *    GemmaThinkingParser runs first to extract thoughts before the tool parser sees it.
    *
-   * 2. `<|tool_call>call:name{...}<tool_call|>` — hallucinated tool call token.
-   *    GemmaToolCallParser converts completed blocks into function_call chunks.
+   * 2. `<|tool_call>call:name{...}<tool_call|>` or `<tool_code>name(...)</tool_code>`
+   *    — hallucinated tool call leaked as text. GemmaToolCallParser recognises both
+   *    dialects and converts completed blocks into function_call chunks.
    *
    * Parsers are intentionally serial and each maintains its own scanHoldback,
    * so a chunk boundary mid-token is handled safely by whichever parser is active.
