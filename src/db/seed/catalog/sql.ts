@@ -7,6 +7,9 @@ export const str = (value: string): string => `'${value.replace(/'/g, "''")}'`;
 /** Render a nullable description column. */
 export const desc = (value: string | null): string => (value === null ? "NULL" : str(value));
 
+/** Render a nullable numeric column (undefined/null => SQL NULL). */
+export const num = (value?: number | null): string => (value === undefined || value === null ? "NULL" : String(value));
+
 /** Render a Postgres TEXT[] literal. */
 export function textArray(items: string[]): string {
   if (items.length === 0) {

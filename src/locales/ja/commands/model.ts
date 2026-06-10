@@ -306,7 +306,7 @@ export default {
       provider_description: `更新するプロバイダーを指定します。未指定なら現在のテキストプロバイダーです。`,
       temperature_description: `このプロバイダーの Temperature 上書き値（0〜2）。`,
       top_p_description: `このプロバイダーの Top-P 上書き値（0〜1）。`,
-      top_k_description: `このプロバイダーの Top-K 上書き値（0〜40）。`,
+      top_k_description: `このプロバイダーの Top-K 上書き値（0〜256）。`,
       frequency_penalty_description: `このプロバイダーの頻度ペナルティ上書き値（-2〜2）。`,
       presence_penalty_description: `このプロバイダーの出現ペナルティ上書き値（-2〜2）。`,
       min_p_description: `このプロバイダーの Min-P 上書き値（0〜1）。`,

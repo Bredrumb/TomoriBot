@@ -370,6 +370,12 @@ SELECT add_column_if_not_exists('llms', 'strict_role_alternation', 'BOOLEAN', 'f
 SELECT add_column_if_not_exists('llms', 'supports_prefix_completion', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
+-- Per-model official pricing (USD per million tokens, uncached standard rate). Nullable on purpose:
+-- OpenRouter rows are priced dynamically from its live API cache, and free/non-metered providers
+-- (novelai subscription, nvidia free tier, custom bootstrap) leave these NULL. Seeded from the typed
+-- catalog (src/db/seed/catalog/models.ts) — see seedModelsFromCatalog.
+SELECT add_column_if_not_exists('llms', 'input_price_per_million', 'NUMERIC');
+SELECT add_column_if_not_exists('llms', 'output_price_per_million', 'NUMERIC');
 
 -- Removed updated_at trigger for llms table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_llms_timestamp ON llms;

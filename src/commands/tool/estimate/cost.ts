@@ -47,6 +47,7 @@ import {
 } from "@/utils/chat/contextMedia";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
+import { llmSections } from "@/db/seed/catalog/models";
 
 /**
  * Token estimation constants
@@ -83,68 +84,12 @@ const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sti
 const EST_OUTPUT_SHORT = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_SHORT, 80, 1);
 const EST_OUTPUT_TYPICAL = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_TYPICAL, 220, 1);
 const EST_OUTPUT_LONG = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_LONG, 500, 1);
-const GOOGLE_INPUT_PRICE_PER_MILLION = parseFloatEnv(process.env.HELP_COST_GOOGLE_INPUT_PRICE_PER_MILLION, 0.3, 0);
-const GOOGLE_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(process.env.HELP_COST_GOOGLE_OUTPUT_PRICE_PER_MILLION, 2.5, 0);
-const DEEPSEEK_INPUT_PRICE_PER_MILLION = parseFloatEnv(process.env.HELP_COST_DEEPSEEK_INPUT_PRICE_PER_MILLION, 0.28, 0);
-const DEEPSEEK_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_DEEPSEEK_OUTPUT_PRICE_PER_MILLION,
-  0.42,
-  0,
-);
-const ZAI_GENERAL_INPUT_PRICE_PER_MILLION = parseFloatEnv(process.env.HELP_COST_ZAI_INPUT_PRICE_PER_MILLION, 0.6, 0);
-const ZAI_GENERAL_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(process.env.HELP_COST_ZAI_OUTPUT_PRICE_PER_MILLION, 2.2, 0);
-const ZAICODING_INPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_ZAICODING_INPUT_PRICE_PER_MILLION,
-  1.0,
-  0,
-);
-const ZAICODING_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_ZAICODING_OUTPUT_PRICE_PER_MILLION,
-  3.0,
-  0,
-);
-const zaiPricingByProvider: Record<"zai" | "zaicoding", { input: number; output: number }> = {
-  zai: {
-    input: ZAI_GENERAL_INPUT_PRICE_PER_MILLION,
-    output: ZAI_GENERAL_OUTPUT_PRICE_PER_MILLION,
-  },
-  zaicoding: {
-    input: ZAICODING_INPUT_PRICE_PER_MILLION,
-    output: ZAICODING_OUTPUT_PRICE_PER_MILLION,
-  },
-};
-// Anthropic Claude model-tier pricing (USD per million tokens).
-// Tier is detected from the model codename: opus > sonnet > haiku.
-const ANTHROPIC_OPUS_INPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_ANTHROPIC_OPUS_INPUT_PRICE_PER_MILLION,
-  5.0,
-  0,
-);
-const ANTHROPIC_OPUS_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_ANTHROPIC_OPUS_OUTPUT_PRICE_PER_MILLION,
-  25.0,
-  0,
-);
-const ANTHROPIC_SONNET_INPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_ANTHROPIC_SONNET_INPUT_PRICE_PER_MILLION,
-  3.0,
-  0,
-);
-const ANTHROPIC_SONNET_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_ANTHROPIC_SONNET_OUTPUT_PRICE_PER_MILLION,
-  15.0,
-  0,
-);
-const ANTHROPIC_HAIKU_INPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_ANTHROPIC_HAIKU_INPUT_PRICE_PER_MILLION,
-  1.0,
-  0,
-);
-const ANTHROPIC_HAIKU_OUTPUT_PRICE_PER_MILLION = parseFloatEnv(
-  process.env.HELP_COST_ANTHROPIC_HAIKU_OUTPUT_PRICE_PER_MILLION,
-  5.0,
-  0,
-);
+
+// Per-model prices now live on the `llms` catalog rows (input_price_per_million /
+// output_price_per_million), resolved at runtime by resolveModelPricing(). The old
+// HELP_COST_*_PRICE_PER_MILLION env constants and the Anthropic codename-sniffing tier
+// guess have been removed: a first-party model with no catalog price now reports "pricing
+// unavailable" rather than billing against a coarse provider-wide fallback.
 
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
@@ -300,13 +245,6 @@ interface DeepseekProbeResponse {
 function parseIntegerEnv(value: string | undefined, fallback: number, minimum: number): number {
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return fallback;
-  return Math.max(minimum, parsed);
-}
-
-function parseFloatEnv(value: string | undefined, fallback: number, minimum: number): number {
-  if (!value) return fallback;
-  const parsed = Number.parseFloat(value);
   if (Number.isNaN(parsed)) return fallback;
   return Math.max(minimum, parsed);
 }
@@ -519,6 +457,57 @@ function calculateCost(
   return inputCost + outputCost;
 }
 
+/**
+ * Resolve per-million input/output pricing for the active model.
+ *
+ * Precedence (see docs/subsystems/database-schema.md):
+ *  1. The model row's own `input_price_per_million` / `output_price_per_million` columns — the official,
+ *     DB-backed source of truth, seeded from the typed catalog (src/db/seed/catalog/models.ts).
+ *  2. The optional caller-supplied `fallback` (e.g. OpenRouter's live API pricing cache) — used only when
+ *     the row carries no price. First-party providers pass no fallback: a model with no catalog price
+ *     resolves to `null`, and the caller surfaces "pricing unavailable" instead of guessing a rate.
+ *
+ * @param tomoriState - Active server/persona state; its `llm` row carries the price columns
+ * @param fallback - Optional prices used only when the row's columns are null/undefined
+ * @returns Resolved input/output price per million tokens, or `null` when no price can be determined
+ */
+function resolveModelPricing(
+  tomoriState: TomoriState,
+  fallback?: { input: number; output: number },
+): { input: number; output: number } | null {
+  const dbInput = tomoriState.llm.input_price_per_million;
+  const dbOutput = tomoriState.llm.output_price_per_million;
+  // 1. DB columns win when both are present (a model priced in the catalog)
+  if (typeof dbInput === "number" && typeof dbOutput === "number") {
+    return { input: dbInput, output: dbOutput };
+  }
+  // 2. Otherwise use the optional fallback, or null when none was supplied (→ "pricing unavailable")
+  return fallback ?? null;
+}
+
+/**
+ * Illustrative example pricing for the legacy (no-server / no-key) estimate embed.
+ *
+ * Reads the Google default model's catalog price so the static example stays in lockstep with the
+ * seeded source of truth (src/db/seed/catalog/models.ts) instead of a duplicated env/hardcoded value.
+ * The `?? ` literals are a defensive backstop only — the Google default row always carries a price.
+ *
+ * @returns Representative input/output price per million tokens
+ */
+function getLegacyExampleGooglePricing(): { input: number; output: number } {
+  for (const section of llmSections) {
+    for (const row of section.rows) {
+      if (row.provider === "google" && row.isDefault) {
+        return {
+          input: row.inputPricePerMillion ?? 0.3,
+          output: row.outputPricePerMillion ?? 2.5,
+        };
+      }
+    }
+  }
+  return { input: 0.3, output: 2.5 };
+}
+
 function normalizeTailDirective(text: string): string {
   let trimmed = text.trim();
   if (!trimmed) return "";
@@ -662,7 +651,7 @@ async function buildRuntimeParityContext(
   interaction: ChatInputCommandInteraction,
   tomoriState: TomoriState,
   provider: LiveProvider,
-): Promise<StructuredContextItem[]> {
+): Promise<{ contextItems: StructuredContextItem[]; historyOutputTokens: number | null }> {
   const textChannel = interaction.channel;
   if (!textChannel?.isTextBased() || !("messages" in textChannel)) {
     throw new Error("Current channel does not support message history fetch");
@@ -901,7 +890,20 @@ async function buildRuntimeParityContext(
     }
   }
 
-  return contextSegments;
+  // Estimate the persona's typical reply size from this channel's own history: average the character
+  // length of the bot/persona (non-user) turns and convert to tokens. Null when the channel has no
+  // persona turns yet, so the caller can omit the history-based output band rather than show a guess.
+  const personaReplyLengths = simplifiedMessages
+    .filter((message) => message.authorType === "persona" && message.content)
+    .map((message) => message.content?.length ?? 0);
+  const historyOutputTokens =
+    personaReplyLengths.length > 0
+      ? charsToTokensText(
+          Math.round(personaReplyLengths.reduce((sum, length) => sum + length, 0) / personaReplyLengths.length),
+        )
+      : null;
+
+  return { contextItems: contextSegments, historyOutputTokens };
 }
 
 async function measureGoogleInputTokens(
@@ -958,13 +960,18 @@ async function measureGoogleInputTokens(
     throw new Error("Google countTokens did not return totalTokens");
   }
 
+  // First-party providers carry their price on the catalog row; no env fallback remains.
+  const pricing = resolveModelPricing(tomoriState);
+  if (!pricing) {
+    throw new Error(`No catalog price for Google model ${providerConfig.model}`);
+  }
   return {
     provider: "google",
     providerLabel: "Google Gemini",
     model: providerConfig.model,
     inputTokens: Math.round(measuredTokens),
-    inputPricePerMillion: GOOGLE_INPUT_PRICE_PER_MILLION,
-    outputPricePerMillion: GOOGLE_OUTPUT_PRICE_PER_MILLION,
+    inputPricePerMillion: pricing.input,
+    outputPricePerMillion: pricing.output,
   };
 }
 
@@ -1060,9 +1067,17 @@ async function measureOpenRouterInputTokens(
     throw new Error("OpenRouter model pricing unavailable for other-model");
   }
 
-  const pricing = getOpenRouterPricing(providerConfig.model);
+  // OpenRouter pricing is authoritative from the live API cache and auto-updates with OpenRouter's
+  // rates, so it wins here. The catalog row's price (Phase 5) is only a cache-miss safety net: if the
+  // live cache has no entry for this model, fall back to the seeded DB price before giving up.
+  const livePricing = getOpenRouterPricing(providerConfig.model);
+  const pricing = livePricing
+    ? { input: livePricing.promptPricePerMillion, output: livePricing.completionPricePerMillion }
+    : resolveModelPricing(tomoriState);
   if (!pricing) {
-    throw new Error(`OpenRouter pricing cache miss for model ${providerConfig.model}`);
+    throw new Error(
+      `OpenRouter pricing unavailable for model ${providerConfig.model} (live cache miss, no catalog price)`,
+    );
   }
 
   return {
@@ -1070,8 +1085,8 @@ async function measureOpenRouterInputTokens(
     providerLabel: "OpenRouter",
     model: providerConfig.model,
     inputTokens: measuredPromptTokens,
-    inputPricePerMillion: pricing.promptPricePerMillion,
-    outputPricePerMillion: pricing.completionPricePerMillion,
+    inputPricePerMillion: pricing.input,
+    outputPricePerMillion: pricing.output,
   };
 }
 
@@ -1125,13 +1140,17 @@ async function measureDeepseekInputTokens(
     throw new Error("DeepSeek probe response missing prompt token usage");
   }
 
+  const pricing = resolveModelPricing(tomoriState);
+  if (!pricing) {
+    throw new Error(`No catalog price for DeepSeek model ${providerConfig.model}`);
+  }
   return {
     provider: "deepseek",
     providerLabel: "DeepSeek",
     model: providerConfig.model,
     inputTokens: measuredPromptTokens,
-    inputPricePerMillion: DEEPSEEK_INPUT_PRICE_PER_MILLION,
-    outputPricePerMillion: DEEPSEEK_OUTPUT_PRICE_PER_MILLION,
+    inputPricePerMillion: pricing.input,
+    outputPricePerMillion: pricing.output,
   };
 }
 
@@ -1199,34 +1218,23 @@ async function measureZaiInputTokens(
     throw new Error("Z.ai probe response missing prompt token usage");
   }
 
+  const pricing = resolveModelPricing(tomoriState);
+  if (!pricing) {
+    throw new Error(`No catalog price for ${providerName} model ${providerConfig.model}`);
+  }
   return {
     provider: providerName,
     providerLabel: getProviderDisplayName(providerName),
     model: providerConfig.model,
     inputTokens: measuredPromptTokens,
-    inputPricePerMillion: zaiPricingByProvider[providerName].input,
-    outputPricePerMillion: zaiPricingByProvider[providerName].output,
+    inputPricePerMillion: pricing.input,
+    outputPricePerMillion: pricing.output,
   };
 }
 
 const ANTHROPIC_COUNT_TOKENS_URL = "https://api.anthropic.com/v1/messages/count_tokens";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const ANTHROPIC_TOKEN_COUNTING_BETA = "token-counting-2024-11-01";
-
-/**
- * Determine Anthropic model pricing tier from the model codename.
- * Tier precedence: opus > haiku > sonnet (default).
- */
-function getAnthropicModelPricing(model: string): { input: number; output: number } {
-  if (model.includes("opus")) {
-    return { input: ANTHROPIC_OPUS_INPUT_PRICE_PER_MILLION, output: ANTHROPIC_OPUS_OUTPUT_PRICE_PER_MILLION };
-  }
-  if (model.includes("haiku")) {
-    return { input: ANTHROPIC_HAIKU_INPUT_PRICE_PER_MILLION, output: ANTHROPIC_HAIKU_OUTPUT_PRICE_PER_MILLION };
-  }
-  // Default: sonnet (covers claude-sonnet-* and any unknown model)
-  return { input: ANTHROPIC_SONNET_INPUT_PRICE_PER_MILLION, output: ANTHROPIC_SONNET_OUTPUT_PRICE_PER_MILLION };
-}
 
 /**
  * Use Anthropic's dedicated /v1/messages/count_tokens endpoint to measure exact
@@ -1279,7 +1287,11 @@ async function measureAnthropicInputTokens(
     throw new Error("Anthropic count_tokens response missing input_tokens");
   }
 
-  const pricing = getAnthropicModelPricing(providerConfig.model);
+  // Pricing comes solely from the catalog row; the old codename-sniffing tier guess is gone.
+  const pricing = resolveModelPricing(tomoriState);
+  if (!pricing) {
+    throw new Error(`No catalog price for Anthropic model ${providerConfig.model}`);
+  }
 
   return {
     provider: "anthropic",
@@ -1308,6 +1320,7 @@ async function sendLiveEstimateEmbed(
   interaction: ChatInputCommandInteraction,
   locale: string,
   measurement: LiveCostMeasurement,
+  historyOutputTokens: number | null,
 ): Promise<void> {
   const inputCost = calculateCost(
     measurement.inputTokens,
@@ -1329,6 +1342,16 @@ async function sendLiveEstimateEmbed(
       titleKey: "commands.tool.estimate.cost.current_output_long_title",
       outputTokens: EST_OUTPUT_LONG,
     },
+    // 4th band: empirical output size derived from this channel's own persona replies. Omitted entirely
+    // when the channel has no persona turns yet, so we never show a "your history" label without history.
+    ...(historyOutputTokens && historyOutputTokens > 0
+      ? [
+          {
+            titleKey: "commands.tool.estimate.cost.current_output_history_title",
+            outputTokens: historyOutputTokens,
+          },
+        ]
+      : []),
   ];
 
   const fields = [
@@ -1386,8 +1409,9 @@ async function sendLegacyEstimateEmbed(
   showFallbackNotice: boolean,
 ): Promise<void> {
   const scenarios = buildScenarioEstimates();
-  const inputPrice = GOOGLE_INPUT_PRICE_PER_MILLION;
-  const outputPrice = GOOGLE_OUTPUT_PRICE_PER_MILLION;
+  // This embed is purely illustrative (no server/key context), so it borrows the catalog price of the
+  // Google default model as a representative example rather than any per-server rate.
+  const { input: inputPrice, output: outputPrice } = getLegacyExampleGooglePricing();
   const exampleProvider = "Google Gemini";
 
   const minInputTokens = calculateTotalInputTokens(scenarios.minimum);
@@ -1583,9 +1607,11 @@ export async function execute(
     }
 
     let contextItems: StructuredContextItem[];
+    let historyOutputTokens: number | null = null;
     try {
-      contextItems = await buildRuntimeParityContext(client, interaction, tomoriState, provider);
-      contextItems = await resolveMediaForModel(contextItems, tomoriState);
+      const parity = await buildRuntimeParityContext(client, interaction, tomoriState, provider);
+      historyOutputTokens = parity.historyOutputTokens;
+      contextItems = await resolveMediaForModel(parity.contextItems, tomoriState);
     } catch (contextError) {
       await log.error(
         "/tool estimate cost failed to build runtime-parity context",
@@ -1598,7 +1624,7 @@ export async function execute(
 
     try {
       const measurement = await liveTokenCounters[provider](tomoriState, decryptedApiKey, contextItems);
-      await sendLiveEstimateEmbed(interaction, locale, measurement);
+      await sendLiveEstimateEmbed(interaction, locale, measurement, historyOutputTokens);
     } catch (countError) {
       await log.error(
         "/tool estimate cost live provider token counting failed; reporting live-count unavailability",

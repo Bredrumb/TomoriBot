@@ -6,6 +6,24 @@
 
 import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
 
+// ── Per-model pricing sources (USD per million tokens, uncached/base input + output) ──────────────
+// inputPricePerMillion / outputPricePerMillion below are the official standard rates, verified 2026-06-10:
+//   - Google Gemini : https://ai.google.dev/gemini-api/docs/pricing (Pro tiers use the ≤200k-context rate;
+//                     TomoriBot contexts sit well under 200k). gemini-3.5-pro had not shipped pricing at
+//                     verification time, and Gemma is an open model with no paid tier → both left undefined.
+//                     Vertex / Vertex Express reuse the same Gemini SKU prices.
+//   - Anthropic     : https://platform.claude.com/docs/en/about-claude/pricing
+//   - DeepSeek      : https://api-docs.deepseek.com/quick_start/pricing (deepseek-chat/-reasoner share the
+//                     deepseek-v4-flash rate per the docs)
+//   - Z.ai          : https://docs.z.ai/guides/overview/pricing (direct-API rates; *-flash variants are free)
+// gemini-3.5-pro and gemini-3-flash were re-checked 2026-06-11 and still have no published rate → left
+// undefined (they resolve to "pricing unavailable" until Google ships pricing).
+// Deprecated Gemini preview snapshots are priced to their stable SKU's verified rate (same model, alias),
+// so users still on a deprecated codename keep accurate costs now that the env fallback is gone.
+// OpenRouter rows are priced live from the OpenRouter API cache (authoritative, auto-updating). The
+// inputPricePerMillion / outputPricePerMillion below are a cache-miss fallback only — used solely when the
+// live cache has no entry. Researched 2026-06-11 from the OpenRouter model pages. Free/image/`:free` and
+// `other-model` rows stay undefined.
 export const llmSections: ModelSection<LlmInput>[] = [
   {
     comment: "Google Models (all Gemini models support vision, videos, YouTube, and structured output)",
@@ -13,6 +31,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-2.0-flash",
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0.4,
         isFree: true,
         hasTools: true,
         seesImages: true,
@@ -26,6 +46,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-2.5-flash-lite",
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0.4,
         isFree: true,
         hasTools: true,
         seesImages: true,
@@ -38,6 +60,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-2.5-flash-preview-05-20",
+        inputPricePerMillion: 0.3,
+        outputPricePerMillion: 2.5,
         isFree: true,
         hasTools: true,
         seesImages: true,
@@ -51,6 +75,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-2.5-flash-preview-09-2025",
+        inputPricePerMillion: 0.3,
+        outputPricePerMillion: 2.5,
         isFree: true,
         hasTools: true,
         seesImages: true,
@@ -64,6 +90,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-2.5-flash",
+        inputPricePerMillion: 0.3,
+        outputPricePerMillion: 2.5,
         isDefault: true,
         isFree: true,
         hasTools: true,
@@ -77,6 +105,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-2.5-pro",
+        inputPricePerMillion: 1.25,
+        outputPricePerMillion: 10.0,
         isSmartest: true,
         isReasoning: true,
         isFree: true,
@@ -117,6 +147,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.1-flash-lite-preview",
+        inputPricePerMillion: 0.25,
+        outputPricePerMillion: 1.5,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -129,6 +161,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.1-flash-lite",
+        inputPricePerMillion: 0.25,
+        outputPricePerMillion: 1.5,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -140,6 +174,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.5-flash",
+        inputPricePerMillion: 1.5,
+        outputPricePerMillion: 9.0,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -162,6 +198,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3-pro-preview",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -175,6 +213,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.1-pro",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -187,6 +227,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.1-pro-preview",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -234,6 +276,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-2.5-flash-lite",
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0.4,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -245,6 +289,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-2.5-flash",
+        inputPricePerMillion: 0.3,
+        outputPricePerMillion: 2.5,
         isDefault: true,
         hasTools: true,
         seesImages: true,
@@ -257,6 +303,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-2.5-pro",
+        inputPricePerMillion: 1.25,
+        outputPricePerMillion: 10.0,
         isSmartest: true,
         isReasoning: true,
         hasTools: true,
@@ -294,6 +342,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.1-flash-lite-preview",
+        inputPricePerMillion: 0.25,
+        outputPricePerMillion: 1.5,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -306,6 +356,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.1-flash-lite",
+        inputPricePerMillion: 0.25,
+        outputPricePerMillion: 1.5,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -317,6 +369,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.5-flash",
+        inputPricePerMillion: 1.5,
+        outputPricePerMillion: 9.0,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -339,6 +393,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.1-pro",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -351,6 +407,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.1-pro-preview",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -386,6 +444,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.0-flash-001",
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0.4,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -395,6 +455,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.0-flash-lite-001",
+        inputPricePerMillion: 0.075,
+        outputPricePerMillion: 0.3,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -404,6 +466,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.5-flash-lite-09-2025",
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0.4,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -413,6 +477,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.5-flash-lite-preview-09-2025",
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0.4,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -423,6 +489,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.5-flash-lite",
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0.4,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -432,6 +500,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.5-flash",
+        inputPricePerMillion: 0.3,
+        outputPricePerMillion: 2.5,
         isDefault: true,
         hasTools: true,
         seesImages: true,
@@ -442,6 +512,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.5-pro",
+        inputPricePerMillion: 1.25,
+        outputPricePerMillion: 10.0,
         isSmartest: true,
         isReasoning: true,
         hasTools: true,
@@ -473,6 +545,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-3-pro",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -483,6 +557,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-3-pro-preview",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -494,6 +570,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-3.1-pro",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -505,6 +583,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-3.1-pro-preview",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -593,6 +673,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "z-ai/glm-5",
+        inputPricePerMillion: 0.6,
+        outputPricePerMillion: 1.92,
         hasTools: true,
         supportsStructoutput: true,
         desc: "Latest GLM 5 model with advanced natural language understanding and role-play capabilities",
@@ -611,6 +693,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "thedrummer/cydonia-24b-v4.1",
+        inputPricePerMillion: 0.3,
+        outputPricePerMillion: 0.5,
         isUncensored: true,
         supportsStructoutput: true,
         desc: "Uncensored model specializing in creative writing and role-play",
@@ -639,6 +723,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "deepseek/deepseek-v4-flash",
+        inputPricePerMillion: 0.0983,
+        outputPricePerMillion: 0.1966,
         hasTools: true,
         isUncensored: true,
         supportsStructoutput: true,
@@ -670,6 +756,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "x-ai/grok-4.1-fast",
+        inputPricePerMillion: 0.2,
+        outputPricePerMillion: 0.5,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -692,6 +780,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "google/gemini-3.1-flash-lite-preview",
+        inputPricePerMillion: 0.25,
+        outputPricePerMillion: 1.5,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -715,6 +805,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "google/gemini-3.1-pro-preview",
+        inputPricePerMillion: 2.0,
+        outputPricePerMillion: 12.0,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -726,6 +818,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "google/gemma-4-31b-it",
+        inputPricePerMillion: 0.12,
+        outputPricePerMillion: 0.36,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -756,6 +850,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "anthropic/claude-sonnet-4.6",
+        inputPricePerMillion: 3.0,
+        outputPricePerMillion: 15.0,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -765,6 +861,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "anthropic/claude-haiku-4.5",
+        inputPricePerMillion: 1.0,
+        outputPricePerMillion: 5.0,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -786,6 +884,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "openai/gpt-5.1-chat",
+        inputPricePerMillion: 1.25,
+        outputPricePerMillion: 10.0,
         isSmartest: true,
         isReasoning: true,
         hasTools: true,
@@ -892,6 +992,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "qwen/qwen3.5-27b",
+        inputPricePerMillion: 0.195,
+        outputPricePerMillion: 1.56,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -902,6 +1004,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "qwen/qwen3.5-flash-02-23",
+        inputPricePerMillion: 0.065,
+        outputPricePerMillion: 0.26,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -912,6 +1016,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "nvidia/nemotron-3-super-120b-a12b",
+        inputPricePerMillion: 0.09,
+        outputPricePerMillion: 0.45,
         hasTools: true,
         supportsStructoutput: true,
         desc: "Nemotron model with tool use and structured output support",
@@ -940,6 +1046,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "moonshotai/kimi-k2.6",
+        inputPricePerMillion: 0.68,
+        outputPricePerMillion: 3.41,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -974,6 +1082,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "rekaai/reka-edge",
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0.1,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -988,6 +1098,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-v4-flash",
+        inputPricePerMillion: 0.14,
+        outputPricePerMillion: 0.28,
         supportsPrefixCompletion: true,
         isDefault: true,
         hasTools: true,
@@ -998,6 +1110,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-v4-pro",
+        inputPricePerMillion: 0.435,
+        outputPricePerMillion: 0.87,
         supportsPrefixCompletion: true,
         isSmartest: true,
         hasTools: true,
@@ -1008,6 +1122,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-chat",
+        inputPricePerMillion: 0.14,
+        outputPricePerMillion: 0.28,
         supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1017,6 +1133,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-reasoner",
+        inputPricePerMillion: 0.14,
+        outputPricePerMillion: 0.28,
         supportsPrefixCompletion: true,
         isSmartest: true,
         isReasoning: true,
@@ -1109,6 +1227,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-4.6",
+        inputPricePerMillion: 0.6,
+        outputPricePerMillion: 2.2,
         supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1118,6 +1238,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-4.6v",
+        inputPricePerMillion: 0.3,
+        outputPricePerMillion: 0.9,
         supportsPrefixCompletion: true,
         hasTools: true,
         seesImages: true,
@@ -1139,6 +1261,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-4.7",
+        inputPricePerMillion: 0.6,
+        outputPricePerMillion: 2.2,
         supportsPrefixCompletion: true,
         isDefault: true,
         isSmartest: true,
@@ -1161,6 +1285,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-5",
+        inputPricePerMillion: 1.0,
+        outputPricePerMillion: 3.2,
         supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
@@ -1171,6 +1297,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-5.1",
+        inputPricePerMillion: 1.4,
+        outputPricePerMillion: 4.4,
         supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
@@ -1181,6 +1309,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-5-turbo",
+        inputPricePerMillion: 1.2,
+        outputPricePerMillion: 4.0,
         supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1190,6 +1320,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zaicoding",
         codename: "glm-5v-turbo",
+        inputPricePerMillion: 1.2,
+        outputPricePerMillion: 4.0,
         supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
@@ -1206,6 +1338,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-4.6",
+        inputPricePerMillion: 0.6,
+        outputPricePerMillion: 2.2,
         supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1215,6 +1349,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-4.6v",
+        inputPricePerMillion: 0.3,
+        outputPricePerMillion: 0.9,
         supportsPrefixCompletion: true,
         hasTools: true,
         seesImages: true,
@@ -1236,6 +1372,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-4.7",
+        inputPricePerMillion: 0.6,
+        outputPricePerMillion: 2.2,
         supportsPrefixCompletion: true,
         isDefault: true,
         isSmartest: true,
@@ -1258,6 +1396,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-5",
+        inputPricePerMillion: 1.0,
+        outputPricePerMillion: 3.2,
         supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
@@ -1268,6 +1408,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-5.1",
+        inputPricePerMillion: 1.4,
+        outputPricePerMillion: 4.4,
         supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
@@ -1278,6 +1420,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-5-turbo",
+        inputPricePerMillion: 1.2,
+        outputPricePerMillion: 4.0,
         supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
@@ -1287,6 +1431,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "zai",
         codename: "zai/glm-5v-turbo",
+        inputPricePerMillion: 1.2,
+        outputPricePerMillion: 4.0,
         supportsPrefixCompletion: true,
         isReasoning: true,
         hasTools: true,
@@ -1303,6 +1449,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-haiku-4-5",
+        inputPricePerMillion: 1.0,
+        outputPricePerMillion: 5.0,
         strictRoleAlternation: true,
         hasTools: true,
         seesImages: true,
@@ -1313,6 +1461,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-sonnet-4-6",
+        inputPricePerMillion: 3.0,
+        outputPricePerMillion: 15.0,
         strictRoleAlternation: true,
         isDefault: true,
         hasTools: true,
@@ -1324,6 +1474,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-opus-4-6",
+        inputPricePerMillion: 5.0,
+        outputPricePerMillion: 25.0,
         strictRoleAlternation: true,
         isSmartest: true,
         isReasoning: true,
@@ -1336,6 +1488,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-opus-4-7",
+        inputPricePerMillion: 5.0,
+        outputPricePerMillion: 25.0,
         strictRoleAlternation: true,
         isSmartest: true,
         isReasoning: true,

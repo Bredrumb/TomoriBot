@@ -57,6 +57,13 @@ export interface LlmInput extends CommonInput {
    * Required for deepseek/zai/zaicoding; enforced by the check-models per-provider invariant.
    */
   supportsPrefixCompletion?: boolean;
+  /**
+   * Official uncached input price in USD per million tokens. Omit for OpenRouter (priced live from its
+   * API) and free/non-metered models — the column stays NULL and the cost command falls back.
+   */
+  inputPricePerMillion?: number;
+  /** Official uncached output price in USD per million tokens. See {@link inputPricePerMillion}. */
+  outputPricePerMillion?: number;
 }
 
 /** A row in the `image_diffusion_models` table. */

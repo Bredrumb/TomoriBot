@@ -203,6 +203,10 @@ export const llmSchema = z.object({
   supports_prefix_completion: z.boolean().default(false),
   llm_description: z.string().nullable().optional(),
   ja_description: z.string().nullable().optional(),
+  // Official per-model pricing (USD per million tokens, uncached standard rate). Null for OpenRouter
+  // (dynamic live cache) and free/non-metered providers. Coerced because Postgres NUMERIC arrives as a string.
+  input_price_per_million: z.coerce.number().nullable().optional(),
+  output_price_per_million: z.coerce.number().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
