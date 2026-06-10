@@ -373,6 +373,9 @@ export class ImportRepository {
         config.deliberate_tool_mode !== undefined ||
         config.deliberate_tool_context_turns !== undefined ||
         config.deliberate_tool_triggers !== undefined ||
+        config.fast_regeneration_enabled !== undefined ||
+        config.fast_regeneration_retry_enabled !== undefined ||
+        config.fast_regeneration_continue_enabled !== undefined ||
         config.cooldown_type !== undefined ||
         config.cooldown_length !== undefined
           ? configRepository.updateTriggerBehaviorConfig(serverId, {
@@ -388,6 +391,15 @@ export class ImportRepository {
               }),
               ...(config.deliberate_tool_triggers !== undefined && {
                 deliberate_tool_triggers: config.deliberate_tool_triggers,
+              }),
+              ...(config.fast_regeneration_enabled !== undefined && {
+                fast_regeneration_enabled: config.fast_regeneration_enabled,
+              }),
+              ...(config.fast_regeneration_retry_enabled !== undefined && {
+                fast_regeneration_retry_enabled: config.fast_regeneration_retry_enabled,
+              }),
+              ...(config.fast_regeneration_continue_enabled !== undefined && {
+                fast_regeneration_continue_enabled: config.fast_regeneration_continue_enabled,
               }),
               ...(config.cooldown_type !== undefined && { cooldown_type: config.cooldown_type }),
               ...(config.cooldown_length !== undefined && { cooldown_length: config.cooldown_length }),

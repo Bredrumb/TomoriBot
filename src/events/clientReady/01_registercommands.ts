@@ -2,6 +2,7 @@ import { type Client, REST, Routes } from "discord.js";
 import { log } from "../../utils/misc/logger";
 import { loadCommandData } from "../../utils/discord/commandLoader";
 import type { ErrorContext } from "../../types/db/schema";
+import { resolveEnvironment } from "@/types/config";
 
 /**
  * Event handler for registering commands when the bot is ready
@@ -50,6 +51,14 @@ export default async (client: Client): Promise<void> => {
         body: registrationData,
       });
       log.success(`Successfully registered ${registrationData.length} commands globally`);
+
+      const testGuildId = process.env.TESTSRV_ID;
+      if (resolveEnvironment() !== "production" && testGuildId) {
+        await rest.put(Routes.applicationGuildCommands(applicationId, testGuildId), {
+          body: registrationData,
+        });
+        log.success(`Successfully registered ${registrationData.length} commands in test guild ${testGuildId}`);
+      }
     } catch (error) {
       const context: ErrorContext = {
         errorType: "CommandRegistrationError",

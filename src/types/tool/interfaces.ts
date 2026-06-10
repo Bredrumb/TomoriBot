@@ -102,6 +102,8 @@ export interface StreamingContext {
   abortSignal?: AbortSignal;
   /** Called when streaming makes visible or provider-side progress, so outer watchdogs can refresh their timers. */
   onStreamProgress?: () => void;
+  /** Records final visible Tomori output messages for short-lived regenerate reactions. */
+  recordTurnOutputMessage?: (message: Message, personaId?: number) => void;
   /**
    * Tool names that should return `endTurn: true` on success.
    * Used by hidden agent turns (e.g., the hidden image agent) to terminate the streaming

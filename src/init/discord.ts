@@ -85,7 +85,7 @@ export function createDiscordClient(includePresences: boolean): Client {
 
   const client = new Client({
     intents,
-    partials: [Partials.Channel, Partials.Message],
+    partials: [Partials.Channel, Partials.Message, Partials.Reaction, Partials.User],
     sweepers: {
       messages: {
         interval: 3600, // Run sweep every 1 hour (in seconds)

@@ -11,6 +11,7 @@ import type {
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { DeliberateToolIntentMatch } from "@/utils/tools/deliberateToolMode";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
+import type { FastRegenerationRecorder } from "@/utils/discord/fastRegeneration";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
@@ -238,6 +239,8 @@ export interface ChatTurnContext {
   deliberateToolContextTurns: number;
   /** Map of tool name -> the trigger match that admitted it (used for hidden-notice routing). */
   deliberateToolTriggerMatchByToolName: Map<string, DeliberateToolIntentMatch>;
+  /** Short-lived reaction recorder for retry/continue actions on the final visible output message. */
+  fastRegenerationRecorder?: FastRegenerationRecorder;
 }
 
 export interface ChatResponseTarget {
