@@ -369,6 +369,7 @@ function estimateToolSchemaTokens(): number {
         imagegen_enabled: true,
         videogen_enabled: true,
         voice_message_enabled: true,
+        user_blocking_enabled: true,
         thread_creation_enabled: true,
       },
     };

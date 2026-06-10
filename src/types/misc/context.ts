@@ -58,6 +58,7 @@ export enum ContextItemTag {
   KNOWLEDGE_SERVER_MEMORIES = "knowledge_server_memories",
   KNOWLEDGE_SERVER_DOCUMENTS = "knowledge_server_documents",
   KNOWLEDGE_SERVER_CONDITIONING = "knowledge_server_conditioning",
+  KNOWLEDGE_PERSONA_USER_BLOCKS = "knowledge_persona_user_blocks",
   KNOWLEDGE_USER_MEMORIES = "knowledge_user_memories", // For a block of multiple users' memories
   KNOWLEDGE_USER_STATUS = "knowledge_user_status", // For a block of multiple users' statuses
   KNOWLEDGE_CURRENT_CONTEXT = "knowledge_current_context", // Time, channel info

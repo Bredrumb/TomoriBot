@@ -165,6 +165,7 @@ export const serverCapabilitiesConfigExportSchema = z.object({
   videogen_enabled: z.boolean().optional(),
   voice_message_enabled: z.boolean().optional(),
   thread_creation_enabled: z.boolean().optional(),
+  user_blocking_enabled: z.boolean().optional(),
   tool_use_enabled: z.boolean().optional(),
 });
 

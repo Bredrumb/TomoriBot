@@ -1339,6 +1339,7 @@ async function fetchProviderTools(
       imagegen_enabled: persona.config.imagegen_enabled,
       videogen_enabled: persona.config.videogen_enabled,
       voice_message_enabled: persona.config.voice_message_enabled,
+      user_blocking_enabled: persona.config.user_blocking_enabled,
       thread_creation_enabled: persona.config.thread_creation_enabled,
     },
   };

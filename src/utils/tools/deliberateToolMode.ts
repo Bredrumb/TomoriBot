@@ -128,6 +128,17 @@ const MESSAGE_METADATA_INTENT_PATTERNS: RegExp[] = [
   /\b(?:who|which\s+user)\b.{0,80}\b(?:sent|posted|said|wrote)\b/i,
 ];
 
+const USER_BLOCK_INTENT_PATTERNS: RegExp[] = [
+  /\b(?:block|mute)\b.{0,100}\b(?:user|member|person|them|him|her|someone|@[A-Za-z0-9_.-]+|<@\d+>|[A-Za-z0-9_.-]{2,})\b/i,
+  /\b(?:stop|prevent)\b.{0,100}\b(?:from\s+)?(?:triggering|calling|pinging|talking\s+to)\b.{0,80}\b(?:you|this\s+persona|the\s+persona)\b/i,
+  /\b(?:hide|do\s+not|don't)\b.{0,100}\b(?:their|his|her|that\s+user'?s|the\s+user'?s)\b.{0,80}\b(?:messages|media|context)\b/i,
+];
+
+const USER_UNBLOCK_INTENT_PATTERNS: RegExp[] = [
+  /\b(?:unblock|unmute)\b.{0,100}\b(?:user|member|person|them|him|her|someone|@[A-Za-z0-9_.-]+|<@\d+>|[A-Za-z0-9_.-]{2,})\b/i,
+  /\b(?:remove|clear|delete)\b.{0,100}\b(?:user\s+)?(?:block|mute)\b/i,
+];
+
 const TOOL_FOLLOW_UP_PATTERNS: RegExp[] = [
   /\b(?:do|try|make|send|say|generate|run|repeat|redo)\b.{0,80}\b(?:that|it|this|one|again|same)\b/i,
   /\buse\s+(?:that|it|this|one|the\s+same)\b/i,
@@ -170,6 +181,7 @@ const MEDIA_ANALYSIS_TOOL_NAMES = [
 const MESSAGE_ACTION_TOOL_NAMES = ["interact_with_recent_message", "manage_message", "reveal_message_metadata"];
 const CAPABILITY_TOOL_NAMES = ["review_capabilities"];
 const STICKER_TOOL_NAMES = ["select_sticker_for_response"];
+const USER_BLOCKING_TOOL_NAMES = ["block_user", "unblock_user"];
 
 export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
   { value: "image", label: "Image generation", toolNames: IMAGE_GENERATION_TOOL_NAMES },
@@ -181,6 +193,7 @@ export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
   { value: "memory", label: "Memory", toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES] },
   { value: "media-analysis", label: "Media analysis", toolNames: MEDIA_ANALYSIS_TOOL_NAMES },
   { value: "message-action", label: "Message actions", toolNames: MESSAGE_ACTION_TOOL_NAMES },
+  { value: "user-blocking", label: "Persona user blocking", toolNames: USER_BLOCKING_TOOL_NAMES },
   { value: "sticker", label: "Sticker selection", toolNames: STICKER_TOOL_NAMES },
   { value: "thread", label: "Thread creation", toolNames: ["create_thread"] },
   { value: "capabilities", label: "Capability review", toolNames: CAPABILITY_TOOL_NAMES },
@@ -335,6 +348,13 @@ export function hasDeliberateToolIntent(
   }
 
   if (MESSAGE_METADATA_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
+    return true;
+  }
+
+  if (
+    USER_BLOCK_INTENT_PATTERNS.some((pattern) => pattern.test(text)) ||
+    USER_UNBLOCK_INTENT_PATTERNS.some((pattern) => pattern.test(text))
+  ) {
     return true;
   }
 
@@ -497,6 +517,14 @@ export function getDeliberateToolIntentResult(
 
   if (MESSAGE_METADATA_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
     addToolMatches(allowedToolNames, matches, ["reveal_message_metadata"], "message metadata request", "built-in");
+  }
+
+  if (USER_BLOCK_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
+    addToolMatches(allowedToolNames, matches, ["block_user"], "persona user block request", "built-in");
+  }
+
+  if (USER_UNBLOCK_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
+    addToolMatches(allowedToolNames, matches, ["unblock_user"], "persona user unblock request", "built-in");
   }
 
   if (CROSS_CHANNEL_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {

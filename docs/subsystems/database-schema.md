@@ -11,7 +11,7 @@ This document summarizes the current PostgreSQL schema used by TomoriBot.
 
 ## Data Access Boundary
 
-The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 24 repository classes implement the shared `IRepository<TExport>` contract:
+The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repository classes implement the shared `IRepository<TExport>` contract:
 
 | Repository | Domain |
 |---|---|
@@ -26,6 +26,7 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 24 re
 | `LlmProviderRepository` | Saved provider configs, custom endpoints, OpenRouter registrations |
 | `McpRepository` | MCP server configurations |
 | `PersonalMemoryRepository` | User + persona lineage scoped personal memories |
+| `PersonaUserBlockRepository` | Persona-scoped user mutes/blocks (`persona_user_blocks`) |
 | `PersonaRepository` | Persona state loading + writes (`personas`, `persona_configs`) |
 | `PersonaSpriteMessageRepository` | Sprite message → label mappings (`persona_sprite_messages`) |
 | `PersonaSpriteRepository` | Persona sprite rows (`persona_sprites`) |
@@ -41,7 +42,7 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 24 re
 | `UserRepository` | User registration, privacy, personalization, spotlight |
 | `WhitelistRepository` | Channel, persona, and role whitelist rules |
 
-Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports all 26 instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
+Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports repository instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
 
 ### SQL convention
 
@@ -114,6 +115,7 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 ### Permissions/privacy/routing
 
 - `personalization_blacklist`
+- `persona_user_blocks`
 - `personal_spotlights`
 - `personal_spotlight_personas`
 - `channel_persona_whitelist`
@@ -207,6 +209,8 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_novelai_imagegen_configs.nai_sampler`, `nai_steps`, `nai_scale`, `nai_noise_schedule`, and `nai_cfg_rescale` store optional server overrides for NovelAI image generation params; `NULL` means use the env fallback.
 - `server_member_permissions_configs.self_teaching_enabled` and `server_member_permissions_configs.personal_memories_enabled` are exposed in `/capabilities manage` because they gate core bot behavior, but they remain in the member-permissions split table with the other teaching/privacy toggles.
 - `server_capabilities_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
+- `server_capabilities_configs.user_blocking_enabled` gates the `block_user` and `unblock_user` built-in tools. The DB default is `true`.
+- `persona_user_blocks` stores active persona-scoped mutes/blocks keyed by `(server_id, persona_id, user_disc_id)`, with `block_type` (`mute` or `block`), `reason`, and `expires_at`. Expired rows are ignored by repository reads. The table is intentionally separate from `personalization_blacklist`.
 - `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null.
 - `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`.
 

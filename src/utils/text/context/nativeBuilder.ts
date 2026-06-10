@@ -8,6 +8,7 @@ import { appendDialogueHistoryContext } from "./dialogueHistory";
 import { convertMentions } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
 import { buildUsersInConversationContextItem } from "./participants";
+import { buildPersonaUserBlocksContextItem } from "./personaUserBlocks";
 import { buildPersonaSpriteContextItem } from "./personaSprites";
 import { buildServerDocumentContextItem } from "./rag";
 import { buildServerEmojiContextItem, buildServerStickerContextItem } from "./serverAssets";
@@ -56,6 +57,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     impersonatedUserPrompt,
     matrixUsers,
     syntheticUsers,
+    personaUserBlocks,
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
     suppressDefaultSystemPrompt = false,
@@ -98,6 +100,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
               imagegen_enabled: tomoriConfig.imagegen_enabled,
               videogen_enabled: tomoriConfig.videogen_enabled,
               voice_message_enabled: tomoriConfig.voice_message_enabled,
+              user_blocking_enabled: tomoriConfig.user_blocking_enabled,
               thread_creation_enabled: tomoriConfig.thread_creation_enabled,
             },
           }
@@ -141,6 +144,16 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       tomoriConfig,
       snapshot,
       convertMentions,
+    }),
+  );
+  await appendOptionalItem(
+    contextItems,
+    buildPersonaUserBlocksContextItem({
+      client,
+      guildId,
+      botName,
+      tomoriConfig,
+      personaUserBlocks,
     }),
   );
 

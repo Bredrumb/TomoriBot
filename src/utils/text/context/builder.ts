@@ -46,6 +46,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
                     imagegen_enabled: params.tomoriConfig.imagegen_enabled,
                     videogen_enabled: params.tomoriConfig.videogen_enabled,
                     voice_message_enabled: params.tomoriConfig.voice_message_enabled,
+                    user_blocking_enabled: params.tomoriConfig.user_blocking_enabled,
                     thread_creation_enabled: params.tomoriConfig.thread_creation_enabled,
                   },
                 }

@@ -18,6 +18,12 @@ Runtime validation remains required. Assembly prevents the LLM from seeing unsup
 
 Image generation progress notices are also backend-aware. They only announce default negative tags when a negative-prompt channel is active, always include the image-tags setup hint, list saved user/persona image tags detected in the current context, and call out avatar references separately from message image references.
 
+## Persona User Blocking
+
+`block_user` and `unblock_user` are built-in Discord tools gated by `user_blocking_enabled` in `/capabilities manage`. They write to `persona_user_blocks`, scoped to the active persona rather than the whole server.
+
+`mute` blocks only trigger eligibility for that persona. `block` also filters the target user's recent live dialogue-history turns and direct media during context building, and suppresses reply annotations that would quote filtered messages. It does not remove memories, reminders, documents, short-term memory summaries, or generic references from other users.
+
 ## Unified Web Tools
 
 `web_search` is the LLM-visible web search surface. Its dispatcher routes through internal engines and keeps engine-specific tool names hidden. The assembled schema guarantees the category enum for the current turn, so the tool description should not use fail-first language such as "this category may be unavailable" for advertised enum values.

@@ -57,6 +57,27 @@ export default {
       hide_footer: `\`/config notice-embeds visibility\` で非表示にできます`,
       hide_footer_with_kill: `\`/config notice-embeds visibility\` で非表示にできます · 止まっていると思ったら \`/bot kill\` を使用してください`,
     },
+    user_block: {
+      type_mute: `ミュート`,
+      type_block: `ブロック`,
+      effect_mute: `対象ユーザーはこのペルソナをトリガーできません。`,
+      effect_block: `対象ユーザーはこのペルソナをトリガーできず、そのユーザーの最近のメッセージ/メディアはこのペルソナのコンテキストから非表示になります。`,
+      block_mute_title: `{persona_name} が {user_name} をミュートしました`,
+      block_block_title: `{persona_name} が {user_name} をブロックしました`,
+      block_success_description: `**対象:** {user_name}
+**有効なペルソナ:** {persona_name}
+**種類:** {block_type}
+**効果:** {effect}
+**期間:** {duration_hours} 時間
+**期限:** {expires_at}
+**理由:** {reason}
+
+範囲: これは {persona_name} のみに影響します。\`unblock_user\` または \`/server user-blacklist remove\` で解除できます。`,
+      unblock_success_title: `{persona_name} が {user_name} のブロックを解除しました`,
+      unblock_success_description: `**{user_name}** に対する **{persona_name}** の有効な {block_type} を解除しました。
+
+範囲: このペルソナのブロックのみが解除されました。`,
+    },
     video: {
       youtube_processing_title: `👁️ YouTube動画を視聴中...`,
       youtube_processing_description: `現在、YouTube動画を視聴しています: {video_url}`,

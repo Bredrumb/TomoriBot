@@ -154,6 +154,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           imagegen_enabled: config.imagegen_enabled,
           videogen_enabled: config.videogen_enabled,
           voice_message_enabled: config.voice_message_enabled ?? true,
+          user_blocking_enabled: config.user_blocking_enabled ?? true,
           thread_creation_enabled: config.thread_creation_enabled,
         },
       };
@@ -854,6 +855,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
             imagegen_enabled: config.imagegen_enabled,
             videogen_enabled: config.videogen_enabled,
             voice_message_enabled: config.voice_message_enabled ?? true,
+            user_blocking_enabled: config.user_blocking_enabled ?? true,
             thread_creation_enabled: config.thread_creation_enabled,
           },
         });

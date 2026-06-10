@@ -302,6 +302,9 @@ export class ImportRepository {
         ...(config.thread_creation_enabled !== undefined && {
           thread_creation_enabled: config.thread_creation_enabled,
         }),
+        ...(config.user_blocking_enabled !== undefined && {
+          user_blocking_enabled: config.user_blocking_enabled,
+        }),
         ...(config.tool_use_enabled !== undefined && { tool_use_enabled: config.tool_use_enabled }),
       };
 

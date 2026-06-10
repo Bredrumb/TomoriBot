@@ -57,6 +57,27 @@ export default {
       hide_footer: `Hide this using \`/config notice-embeds visibility\``,
       hide_footer_with_kill: `Hide this using \`/config notice-embeds visibility\` · Use \`/bot kill\` if you think I'm stuck`,
     },
+    user_block: {
+      type_mute: `mute`,
+      type_block: `block`,
+      effect_mute: `The target cannot trigger this persona.`,
+      effect_block: `The target cannot trigger this persona, and their recent messages/media are hidden from this persona's context.`,
+      block_mute_title: `{persona_name} Muted {user_name}`,
+      block_block_title: `{persona_name} Blocked {user_name}`,
+      block_success_description: `**Target:** {user_name}
+**Active persona:** {persona_name}
+**Type:** {block_type}
+**Effect:** {effect}
+**Duration:** {duration_hours} hour(s)
+**Expires:** {expires_at}
+**Reason:** {reason}
+
+Scope: This affects only {persona_name}. Remove it with \`unblock_user\` or \`/server user-blacklist remove\`.`,
+      unblock_success_title: `{persona_name} Unblocked {user_name}`,
+      unblock_success_description: `Removed the active {block_type} for **{user_name}** from **{persona_name}**.
+
+Scope: only this persona's block was removed.`,
+    },
     video: {
       youtube_processing_title: `👁️  Watching YouTube Video...`,
       youtube_processing_description: `I'm currently watching the YouTube video: {video_url}`,

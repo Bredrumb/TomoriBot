@@ -57,6 +57,12 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 **Per message:**
 
 - **Role mapping** computed from author type and impersonation flags.
+- **Persona user block filtering** happens before this stage in
+  `buildSimplifiedHistory`: active `persona_user_blocks` with `block_type =
+  'block'` remove that user's recent live dialogue turns/direct media for the
+  active persona and suppress reply annotations quoting those filtered
+  messages. Memories, reminders, documents, and generic references from other
+  users are not redacted.
 - **Media-window calculation** — `effectiveMediaWindow = min(requested,
   message_fetch_limit)`; `mediaWindowCutoff = totalMessages - effectiveMediaWindow`.
 - **Media descriptor emission**:
@@ -134,6 +140,7 @@ After this stage runs:
 | Env var | Default | Purpose |
 |---|---|---|
 | `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
+| `PERSONA_USER_BLOCK_CACHE_TTL_SECONDS` | `60` | TTL for active persona user block lookups |
 
 | Source | Field | Effect |
 |---|---|---|

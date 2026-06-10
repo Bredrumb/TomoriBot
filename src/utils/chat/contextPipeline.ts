@@ -2,8 +2,9 @@ import type { Message } from "discord.js";
 import { MessageReferenceType, MessageType } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
 import { ContextItemTag } from "@/types/misc/context";
-import { PrivacyLevel, type ServerEmojiRow, type ServerStickerRow } from "@/types/db/schema";
+import { PrivacyLevel, type PersonaUserBlockRow, type ServerEmojiRow, type ServerStickerRow } from "@/types/db/schema";
 import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
+import { getCachedActiveBlocksForPersona } from "@/utils/cache/personaUserBlockCache";
 import { loadEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { buildForcedMentionsForUser } from "@/utils/discord/mentionHelper";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -267,6 +268,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     userList: Array.from(history.userIds),
     matrixUsers: history.matrixUsers,
     syntheticUsers: history.syntheticUsers,
+    personaUserBlocks: history.activeUserBlocks,
     channelDesc: turn.channelDescription,
     channelName: turn.channelName,
     channelId: channel.id,
@@ -395,6 +397,7 @@ async function buildSimplifiedHistory(
   matrixUsers: Map<string, string>;
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
   rawMessages: Message[];
+  activeUserBlocks: PersonaUserBlockRow[];
 }> {
   const channel = turn.lockedTurn.admission.channel;
   const fetchLimit = normalizeMessageFetchLimit(turn.persona.config.message_fetch_limit);
@@ -430,11 +433,20 @@ async function buildSimplifiedHistory(
     messages = messages.slice(startIndex);
   }
 
+  const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
+  const blockedContextUserIds = new Set(
+    activeUserBlocks.filter((block) => block.block_type === "block").map((block) => block.user_disc_id),
+  );
+  const visibleRawMessages =
+    blockedContextUserIds.size > 0
+      ? messages.filter((msg) => !blockedContextUserIds.has(getBlockComparableAuthorId(msg)))
+      : messages;
+
   // Pre-populate the voice transcript cache for historical audio messages (Fix #5).
   // Runs STT before the main loop so cache lookups inside simplifyMessage() are synchronous.
   // Skipped in chat mode (transcripts are already posted as text messages in that mode).
   if (!(turn.persona.config.voice_transcript_chat_mode ?? false)) {
-    for (const msg of messages) {
+    for (const msg of visibleRawMessages) {
       if (msg.author.bot || msg.webhookId) continue;
       if (getCachedVoiceTranscript(msg.id)) continue;
       const hasAudio = [...msg.attachments.values()].some(isAudioAttachment);
@@ -449,7 +461,7 @@ async function buildSimplifiedHistory(
 
   // Prime the sprite message cache with one batched query so per-message
   // "Name (sprite):" label lookups inside simplifyMessage() are cache hits.
-  await primePersonaSpriteMessageRecords(messages.filter((msg) => msg.webhookId).map((msg) => msg.id));
+  await primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id));
 
   const simplifiedMessages: SimplifiedMessageForContext[] = [];
   const userIds = new Set<string>();
@@ -464,7 +476,7 @@ async function buildSimplifiedHistory(
   // A debug message and a normal message from the same user share an authorId, so
   // this guard keeps them as separate turns (mirrors main's prevWasDebugMessage).
   let previousEntryWasDebug = false;
-  for (const msg of messages) {
+  for (const msg of visibleRawMessages) {
     if ((await getCachedPrivacyLevel(msg.author.id)) === PrivacyLevel.FULL) {
       continue;
     }
@@ -477,6 +489,7 @@ async function buildSimplifiedHistory(
       syntheticUsers,
       matrixUsers,
       reactionBudgetState,
+      blockedContextUserIds,
     );
     if (!result) continue;
     const { message: simplified, isDebug } = result;
@@ -580,7 +593,14 @@ async function buildSimplifiedHistory(
     );
   }
 
-  return { simplifiedMessages, userIds, matrixUsers, syntheticUsers, rawMessages: messages };
+  return {
+    simplifiedMessages,
+    userIds,
+    matrixUsers,
+    syntheticUsers,
+    rawMessages: visibleRawMessages,
+    activeUserBlocks,
+  };
 }
 
 async function simplifyMessage(
@@ -591,6 +611,7 @@ async function simplifyMessage(
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>,
   matrixUsers: Map<string, string>,
   reactionBudgetState: ReactionContextBudgetState,
+  blockedContextUserIds: Set<string>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
   const isJoin = msg.type === MessageType.UserJoin;
   const isDebug = !isJoin && msg.content.startsWith("$:");
@@ -600,7 +621,7 @@ async function simplifyMessage(
     : isDebug
       ? msg.content.slice(2)
       : msg.content;
-  const replyContext = await withReplyContext(turn, msg, content, messageIdMap, personaByName);
+  const replyContext = await withReplyContext(turn, msg, content, messageIdMap, personaByName, blockedContextUserIds);
   content = replyContext.content;
   content = await withReactionContext(turn, msg, content, reactionBudgetState);
 
@@ -765,6 +786,7 @@ async function withReplyContext(
   content: string,
   messageIdMap: MessageIdMap,
   personaByNickname: Map<string, ChatTurn["persona"]>,
+  blockedContextUserIds: Set<string>,
 ): Promise<{ content: string; referencedMessage?: Message }> {
   if (msg.reference?.type === MessageReferenceType.Forward || !("messages" in msg.channel)) {
     return { content };
@@ -780,6 +802,9 @@ async function withReplyContext(
     }
     const referenced =
       msg.channel.messages.cache.get(referenceMessageId) ?? (await msg.channel.messages.fetch(referenceMessageId));
+    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced))) {
+      return { content };
+    }
     const annotation = await buildReplyReferenceContextAnnotation({
       replyMessage: msg,
       referencedMessage: referenced,
@@ -795,6 +820,21 @@ async function withReplyContext(
     log.warn(`Could not fetch referenced message ${referenceMessageIdForLog ?? "unknown"} for context`, error);
     return { content };
   }
+}
+
+async function loadActivePersonaUserBlocks(turn: ChatTurn): Promise<PersonaUserBlockRow[]> {
+  if (turn.isDMChannel || !turn.persona.server_id || typeof turn.persona.persona_id !== "number") {
+    return [];
+  }
+
+  return getCachedActiveBlocksForPersona(turn.persona.server_id, turn.persona.persona_id);
+}
+
+function getBlockComparableAuthorId(msg: Message): string {
+  if (msg.webhookId) {
+    return getCachedImpersonatedUserIdForWebhook(msg.webhookId) ?? msg.author.id;
+  }
+  return msg.author.id;
 }
 
 async function withReactionContext(

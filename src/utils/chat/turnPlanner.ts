@@ -520,6 +520,12 @@ function selectPersonasForTurn(args: {
   const selectedPersona = incoming.selectedPersonaId
     ? (args.allPersonas.find((persona) => persona.persona_id === incoming.selectedPersonaId) ?? args.fallbackPersona)
     : args.fallbackPersona;
+  const isAllowedByAccessState = (persona: TomoriState | null | undefined): persona is TomoriState =>
+    Boolean(
+      persona &&
+        (!args.allowedPersonaIds ||
+          (typeof persona.persona_id === "number" && args.allowedPersonaIds.has(persona.persona_id))),
+    );
 
   // Reminder turns are system-initiated: bypass personal spotlight (a user preference
   // that governs which persona responds *to them*, not system-triggered events). Only
@@ -532,7 +538,8 @@ function selectPersonasForTurn(args: {
   }
   if (incoming.isManuallyTriggered) {
     return selectedPersona &&
-      isPersonaAllowedForTrigger(args.whitelistStatus, args.personalSpotlightStatus, selectedPersona.persona_id)
+      isPersonaAllowedForTrigger(args.whitelistStatus, args.personalSpotlightStatus, selectedPersona.persona_id) &&
+      isAllowedByAccessState(selectedPersona)
       ? [selectedPersona]
       : [];
   }

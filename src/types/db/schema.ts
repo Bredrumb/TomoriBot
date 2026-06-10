@@ -641,6 +641,7 @@ export const serverCapabilitiesConfigSchema = z.object({
   imagegen_enabled: z.boolean().default(true),
   videogen_enabled: z.boolean().default(false),
   voice_message_enabled: z.boolean().default(true),
+  user_blocking_enabled: z.boolean().default(true),
   tool_use_enabled: z.boolean().default(true),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -1045,6 +1046,21 @@ export const personalizationBlacklistSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonalizationBlacklistRow = z.infer<typeof personalizationBlacklistSchema>;
+
+export const personaUserBlockTypeSchema = z.enum(["mute", "block"]);
+export type PersonaUserBlockType = z.infer<typeof personaUserBlockTypeSchema>;
+
+export const personaUserBlockSchema = z.object({
+  server_id: z.number().int(),
+  persona_id: z.number().int(),
+  user_disc_id: z.string(),
+  block_type: personaUserBlockTypeSchema,
+  reason: z.string(),
+  expires_at: z.date(),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type PersonaUserBlockRow = z.infer<typeof personaUserBlockSchema>;
 
 /**
  * Channel Whitelist Schema

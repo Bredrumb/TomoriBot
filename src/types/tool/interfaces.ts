@@ -213,6 +213,7 @@ export interface ToolAssemblyState {
     imagegen_enabled: boolean;
     videogen_enabled: boolean;
     voice_message_enabled: boolean;
+    user_blocking_enabled: boolean;
     thread_creation_enabled: boolean;
   };
 }

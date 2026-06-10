@@ -364,6 +364,7 @@ async function evaluateEarlyAccessState(args: {
       whitelistStatus: null,
       personalSpotlightStatus: null,
       allowedPersonaIds: null,
+      blockedPersonaIds: new Set(),
       rejectedByWhitelist: false,
       personalDtm,
     };

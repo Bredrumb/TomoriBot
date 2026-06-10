@@ -3,6 +3,7 @@ import type { BaseGuildTextChannel, DMChannel, TextChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { CooldownType } from "@/types/db/schema";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
+import { getCachedActiveBlocksForUser } from "@/utils/cache/personaUserBlockCache";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import { getLastDbError } from "@/utils/cache/tomoriStateCache";
@@ -27,6 +28,7 @@ export interface ChatAccessState {
   whitelistStatus: Awaited<ReturnType<typeof getCachedWhitelistStatus>> | null;
   personalSpotlightStatus: Awaited<ReturnType<typeof getCachedPersonalSpotlightStatus>> | null;
   allowedPersonaIds: Set<number> | null;
+  blockedPersonaIds: Set<number>;
   rejectedByWhitelist: boolean;
   personalDtm?: "off" | "follow" | "on";
 }
@@ -259,6 +261,7 @@ export async function evaluateChatAccess(params: {
       whitelistStatus: null,
       personalSpotlightStatus: null,
       allowedPersonaIds: null,
+      blockedPersonaIds: new Set(),
       rejectedByWhitelist: false,
     };
   }
@@ -283,7 +286,7 @@ export async function evaluateChatAccess(params: {
     );
   }
 
-  const allowedPersonaIds =
+  const policyAllowedPersonaIds =
     whitelistStatus.hasActivePersonaWhitelist || personalSpotlightStatus
       ? new Set(
           params.allPersonas.flatMap((persona) =>
@@ -294,13 +297,62 @@ export async function evaluateChatAccess(params: {
           ),
         )
       : null;
+  const blockedPersonaIds = await resolveBlockedPersonaIdsForTrigger(params);
+  const allowedPersonaIds =
+    blockedPersonaIds.size === 0
+      ? policyAllowedPersonaIds
+      : filterAllowedPersonaIdsByBlocks(params.allPersonas, policyAllowedPersonaIds, blockedPersonaIds);
 
   return {
     whitelistStatus,
     personalSpotlightStatus,
     allowedPersonaIds,
+    blockedPersonaIds,
     rejectedByWhitelist,
   };
+}
+
+async function resolveBlockedPersonaIdsForTrigger(params: {
+  isDMChannel: boolean;
+  isStopResponse: boolean;
+  serverId: number;
+  fallbackUserDiscId: string;
+  allPersonas: TomoriState[];
+}): Promise<Set<number>> {
+  if (params.isDMChannel || params.isStopResponse) {
+    return new Set();
+  }
+
+  const activeBlocks = await getCachedActiveBlocksForUser(params.serverId, params.fallbackUserDiscId);
+  if (activeBlocks.length === 0) {
+    return new Set();
+  }
+
+  const knownPersonaIds = new Set(
+    params.allPersonas.flatMap((persona) => (typeof persona.persona_id === "number" ? [persona.persona_id] : [])),
+  );
+  return new Set(
+    activeBlocks
+      .map((block) => block.persona_id)
+      .filter((personaId): personaId is number => knownPersonaIds.has(personaId)),
+  );
+}
+
+function filterAllowedPersonaIdsByBlocks(
+  allPersonas: TomoriState[],
+  policyAllowedPersonaIds: Set<number> | null,
+  blockedPersonaIds: Set<number>,
+): Set<number> {
+  const baseAllowedPersonaIds =
+    policyAllowedPersonaIds ??
+    new Set(allPersonas.flatMap((persona) => (typeof persona.persona_id === "number" ? [persona.persona_id] : [])));
+  const filtered = new Set<number>();
+  for (const personaId of baseAllowedPersonaIds) {
+    if (!blockedPersonaIds.has(personaId)) {
+      filtered.add(personaId);
+    }
+  }
+  return filtered;
 }
 
 export async function validateDirectChatTrigger(params: {
