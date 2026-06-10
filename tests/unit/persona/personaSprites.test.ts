@@ -11,6 +11,7 @@ function sprite(name: string, instructions = ""): PersonaSpriteRow {
     sprite_key: normalizePersonaSpriteKey(name),
     avatar_url: "data/avatars/servers/test/personas/10/sprites/1.png",
     usage_instructions: instructions,
+    is_identity: false,
   };
 }
 

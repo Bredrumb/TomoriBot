@@ -22,9 +22,11 @@ The transformation pipeline runs in this order:
 2. **Render-modifier capture** — before normal own-name cleanup runs, an active persona line
    that starts as `SourcePersona (modifier): text` is parsed. The modifier resolves against the
    active persona's `persona_sprites` first; a sprite match sends stage 07 an identity override
-   with the **clean username `SourcePersona`** (no `(sprite)` suffix in Discord) and the sprite
-   avatar, plus a `spriteRecord` so the message → sprite-label mapping is persisted after the
-   send (`persona_sprite_messages`). The accumulated-text prefix keeps the decorated
+   and the sprite avatar, plus a `spriteRecord` so the message → sprite-label mapping is persisted
+   after the send (`persona_sprite_messages`). Ordinary sprites use the **clean username
+   `SourcePersona`** (no `(sprite)` suffix in Discord); identity sprites (`is_identity = true`)
+   use the **flipped username `sprite (SourcePersona)`** shown directly in Discord, DID-alter
+   style. The accumulated-text prefix keeps the decorated
    `SourcePersona (sprite): ` label so the model still sees its own sprite usage. If the sprite
    row matches but its image cannot be loaded, the parenthetical modifier is stripped and the
    line is delivered as normal source-persona output without trying copied identity. If no

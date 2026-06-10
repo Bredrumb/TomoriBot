@@ -3,7 +3,6 @@ import {
   MessageFlags,
   PermissionsBitField,
   TextInputStyle,
-  type APIAttachment,
   type ChatInputCommandInteraction,
   type Client,
   type ModalSubmitInteraction,
@@ -23,8 +22,11 @@ import {
   PERSONA_SPRITE_LIMITS,
   validatePersonaSpriteName,
 } from "@/utils/persona/sprites";
+import {
+  downloadPersonaSpriteImageAttachment,
+  validatePersonaSpriteImageAttachment,
+} from "@/utils/persona/spriteImages";
 import { memoryGuard, PERSONA_LIMITS, reserveAvatarQuota } from "@/utils/security/rateLimiter";
-import { safeDownload } from "@/utils/security/safeDownload";
 import { deletePersonaSpriteFromStorage, uploadPersonaSpriteToStorage } from "@/utils/storage/avatarStorage";
 import { localizer } from "@/utils/text/localizer";
 import { forkPointerForAvatarChange } from "../avatar";
@@ -34,16 +36,7 @@ const PERSONA_SELECT_ID = "persona_select";
 const SPRITE_NAME_INPUT_ID = "sprite_name_input";
 const SPRITE_IMAGE_UPLOAD_ID = "sprite_image_upload";
 const SPRITE_INSTRUCTIONS_INPUT_ID = "sprite_usage_instructions";
-const DOWNLOAD_TIMEOUT_MS = 15000;
-const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/gif"]);
-const ALLOWED_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif"]);
-
-type ImageValidationResult =
-  | { ok: true }
-  | {
-      ok: false;
-      reason: "file_too_large" | "invalid_format";
-    };
+const SPRITE_IDENTITY_CHECKBOX_ID = "sprite_save_as_identity";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.persona.sprites.add.description"));
@@ -133,6 +126,13 @@ export async function execute(
           required: false,
           maxLength: PERSONA_SPRITE_LIMITS.MAX_INSTRUCTIONS_LENGTH,
         },
+        {
+          kind: "checkbox",
+          customId: SPRITE_IDENTITY_CHECKBOX_ID,
+          labelKey: "commands.persona.sprites.add.identity_label",
+          descriptionKey: "commands.persona.sprites.add.identity_description",
+          default: false,
+        },
       ],
     });
 
@@ -174,6 +174,10 @@ export async function execute(
       return;
     }
 
+    // "Save as Identity" is authoritative on every add: re-adding an existing
+    // sprite with the box unchecked demotes it back to an ordinary sprite.
+    const saveAsIdentity = modalResult.values?.[SPRITE_IDENTITY_CHECKBOX_ID] === "true";
+
     const usageInstructions = normalizePersonaSpriteInstructions(modalResult.values?.[SPRITE_INSTRUCTIONS_INPUT_ID]);
     if (isPersonaSpriteInstructionsTooLong(usageInstructions)) {
       await replyInfoEmbed(responseInteraction, locale, {
@@ -197,7 +201,7 @@ export async function execute(
       return;
     }
 
-    const imageValidation = validateImageAttachment(imageAttachment);
+    const imageValidation = validatePersonaSpriteImageAttachment(imageAttachment);
     if (!imageValidation.ok) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.persona.sprites.add.invalid_image_title",
@@ -278,7 +282,7 @@ export async function execute(
       invalidateTomoriStateCache(interaction.guild.id);
     }
 
-    const downloadedBuffer = await downloadAttachmentBuffer(imageAttachment);
+    const downloadedBuffer = await downloadPersonaSpriteImageAttachment(imageAttachment);
     if (!downloadedBuffer.ok) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.persona.sprites.add.invalid_image_title",
@@ -325,6 +329,7 @@ export async function execute(
       spriteKey: nameValidation.spriteKey,
       avatarUrl: uploadedReference,
       usageInstructions,
+      isIdentity: saveAsIdentity,
     });
     if (!upsertResult) {
       await deletePersonaSpriteFromStorage(uploadedReference);
@@ -395,45 +400,4 @@ function buildPersonaSelectOptions(
       description: persona.is_alter ? localizer(locale, alterDescriptionKey) : localizer(locale, mainDescriptionKey),
     }))
     .filter((option) => option.value !== "");
-}
-
-function validateImageAttachment(attachment: APIAttachment): ImageValidationResult {
-  const maxSizeBytes = PERSONA_LIMITS.MAX_AVATAR_SIZE_MB * 1024 * 1024;
-  if (attachment.size > maxSizeBytes) {
-    return { ok: false, reason: "file_too_large" };
-  }
-
-  const contentType = attachment.content_type?.toLowerCase();
-  if (!contentType || !ALLOWED_IMAGE_TYPES.has(contentType)) {
-    return { ok: false, reason: "invalid_format" };
-  }
-
-  const extension = attachment.filename.toLowerCase().split(".").pop();
-  if (!extension || !ALLOWED_IMAGE_EXTENSIONS.has(extension)) {
-    return { ok: false, reason: "invalid_format" };
-  }
-
-  return { ok: true };
-}
-
-async function downloadAttachmentBuffer(
-  attachment: APIAttachment,
-): Promise<{ ok: true; buffer: Buffer } | { ok: false; reason: "timeout" | "download_failed" }> {
-  const downloadResult = await safeDownload(attachment.url, {
-    maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
-    timeoutMs: DOWNLOAD_TIMEOUT_MS,
-    knownSize: attachment.size,
-  });
-
-  if (!downloadResult.success || !downloadResult.buffer) {
-    return {
-      ok: false,
-      reason: downloadResult.error === "timeout" ? "timeout" : "download_failed",
-    };
-  }
-
-  return {
-    ok: true,
-    buffer: downloadResult.buffer,
-  };
 }

@@ -94,12 +94,13 @@ function isValidHttpUrl(value: string): boolean {
 
 async function resolveSpriteIdentity(
   sprite: PersonaSpriteRow,
-  sourceDisplayName: string,
+  webhookUsername: string,
 ): Promise<ResolvedWebhookIdentity | null> {
-  // Sprite messages display the clean persona name in Discord; the sprite label
-  // is persisted per message (persona_sprite_messages) and recovered during
-  // context rebuilding so only the model sees "Name (sprite):".
-  const username = sourceDisplayName.trim() || "Persona";
+  // The webhook username is decided by the caller: ordinary sprites use the clean
+  // persona name (and recover "Name (sprite):" from persona_sprite_messages during
+  // context rebuilding), while identity sprites show the decorated "Sprite (Name)"
+  // label directly in Discord like a DID alter / copied identity.
+  const username = webhookUsername.trim() || "Persona";
   const avatarReference = sprite.avatar_url.trim();
   const publicAvatarUrl = resolvePersonaAvatarPublicUrl(avatarReference);
   if (publicAvatarUrl && isValidHttpUrl(publicAvatarUrl)) {
@@ -259,7 +260,15 @@ export async function resolveSpriteRenderModifierTarget(
     return { status: "not_found" };
   }
 
-  const identity = await resolveSpriteIdentity(sprite, sourceDisplayName);
+  // Identity sprites render the decorated "Sprite (Persona)" name in Discord (the
+  // disguise reads naturally, like copied identities); ordinary sprites keep the
+  // clean persona name. The model-facing contextLabel stays "Persona (Sprite)"
+  // either way, and the decorated webhook name still recovers to the source
+  // persona via resolveRenderModifierSourcePersona during context rebuilding.
+  const webhookUsername = sprite.is_identity
+    ? formatRenderModifierWebhookName(sprite.sprite_name, sourceDisplayName)
+    : sourceDisplayName;
+  const identity = await resolveSpriteIdentity(sprite, webhookUsername);
   return {
     status: "matched",
     target: identity

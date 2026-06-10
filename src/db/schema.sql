@@ -217,6 +217,10 @@ CREATE TABLE IF NOT EXISTS persona_sprites (
 CREATE INDEX IF NOT EXISTS idx_persona_sprites_persona
   ON persona_sprites(persona_id, sprite_key);
 
+-- Identity sprites render their decorated "Sprite (Persona)" name directly in
+-- Discord (like a DID alter), instead of the clean persona name. See migration 029.
+SELECT add_column_if_not_exists('persona_sprites', 'is_identity', 'BOOLEAN', 'false', 'NOT NULL');
+
 DROP TRIGGER IF EXISTS update_persona_sprites_timestamp ON persona_sprites;
 CREATE TRIGGER update_persona_sprites_timestamp
 BEFORE UPDATE ON persona_sprites

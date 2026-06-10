@@ -41,8 +41,9 @@ Per-persona configuration (one row per persona in `personas`):
 - `sprite_key`: normalized lookup key for case/spacing-insensitive matching.
 - `avatar_url`: production public object URL, or a non-production local path under `data/avatars/servers/{serverDiscId}/personas/{personaId}/sprites/{assetId}.png`.
 - `usage_instructions`: short guidance injected into the active persona's prompt so the model knows when the sprite should be used.
+- `is_identity`: when `true`, the sprite renders its **decorated** `sprite_name (SourcePersona)` name directly in Discord (DID alter / "system member" style) instead of the clean persona name. Set via the **Save as Identity** checkbox on `/persona sprites add` or `/persona sprites edit` (default unchecked on add). The checkbox is authoritative on every save — saving an existing sprite with the box unchecked demotes it back to an ordinary sprite.
 
-Sprite rows are managed by `/persona sprites add` and `/persona sprites remove`. Reusing a sprite name replaces the existing row and image. The default per-persona limit is 50 (`PERSONA_SPRITE_MAX_PER_PERSONA`), and the prompt only lists the first 20 by default (`PERSONA_SPRITE_PROMPT_MAX_COUNT`).
+Sprite rows are managed by `/persona sprites add`, `/persona sprites edit`, and `/persona sprites remove`. Reusing a sprite name on `add` replaces the existing row and image. `edit` changes a sprite's name, optional replacement image, usage instructions, and `is_identity` flag in place; image replacements consume the same shared avatar quota as `add`, while metadata-only edits stay quota-free. Renaming updates `sprite_key` and is rejected if it would collide with another sprite on the same persona. The default per-persona limit is 50 (`PERSONA_SPRITE_MAX_PER_PERSONA`), and the prompt only lists the first 20 by default (`PERSONA_SPRITE_PROMPT_MAX_COUNT`). Identity status is not surfaced to the model — invocation syntax is identical for both kinds, so only the rendered webhook name differs.
 
 ### `reminders`
 
@@ -131,7 +132,11 @@ SourcePersona (target): message
 
 Resolution order is:
 
-1. **Persona sprite** on the active source persona. A matching `persona_sprites.sprite_key` sends the line through the managed webhook with the **clean username `SourcePersona`** and the sprite image — the `(sprite)` suffix is not shown in Discord. The message → sprite-label mapping is persisted to `persona_sprite_messages` so context rebuilding can recover the decorated `SourcePersona (sprite):` label for the model. If the sprite row matches but the stored image is missing/unusable, TomoriBot strips the prefix and sends the text as normal source-persona output; it does not fall through to copied identity.
+1. **Persona sprite** on the active source persona. A matching `persona_sprites.sprite_key` sends the line through the managed webhook with the sprite image. The username depends on the sprite's `is_identity` flag:
+   - **Ordinary sprite** (`is_identity = false`): the **clean username `SourcePersona`** — the `(sprite)` suffix is not shown in Discord. The message → sprite-label mapping is persisted to `persona_sprite_messages` so context rebuilding can recover the decorated `SourcePersona (sprite):` label for the model.
+   - **Identity sprite** (`is_identity = true`): the **flipped username `sprite (SourcePersona)`** is shown directly in Discord, like a copied identity / DID alter. No mapping lookup is needed for recovery — the decorated name re-attributes to the source persona through `resolveRenderModifierSourcePersona` (the persona nickname sits in the parens), and the message → sprite-label mapping is still persisted as a fallback.
+
+   In both cases the model-facing context label stays `SourcePersona (sprite)`. If the sprite row matches but the stored image is missing/unusable, TomoriBot strips the prefix and sends the text as normal source-persona output; it does not fall through to copied identity.
 2. **Copied identity** if no sprite matched. `target` resolves only against known personas in the server and Discord users already present in conversation context. If exactly one target matches, TomoriBot uses the **flipped** username `target (SourcePersona)` and the target's avatar — the impersonated name leads so the disguise reads naturally in chat, while the model-facing context label stays `SourcePersona (target)` so the LLM never confuses who is speaking.
 3. **Plain output** when no sprite/copy target resolves, or copied identity is ambiguous. The parenthetical modifier is stripped before delivery.
 

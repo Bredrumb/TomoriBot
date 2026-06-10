@@ -19,8 +19,7 @@ import { normalizeTriggerWord, parseTriggerWordListInput } from "@/utils/text/tr
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Rule 20: Constants for modal configuration
-const MODAL_CUSTOM_ID = "server_triggeradd_modal";
+const MODAL_CUSTOM_ID = "persona_triggeradd_modal";
 const PERSONA_SELECT_ID = "persona_select";
 const TRIGGERS_INPUT_ID = "triggers_input";
 
@@ -34,7 +33,7 @@ const formatTriggerList = (triggers: string[]): string =>
 
 // Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("add").setDescription(localizer("en-US", "commands.server.trigger.add.description"));
+  subcommand.setName("add").setDescription(localizer("en-US", "commands.persona.trigger.add.description"));
 
 /**
  * Adds trigger words that will make a selected persona respond automatically when mentioned in chat
@@ -79,8 +78,8 @@ export async function execute(
         label: safeSelectOptionText(persona.persona_nickname),
         value: persona.persona_id?.toString() ?? "",
         description: persona.is_alter
-          ? localizer(locale, "commands.server.trigger.add.alter_persona_description")
-          : localizer(locale, "commands.server.trigger.add.main_persona_description"),
+          ? localizer(locale, "commands.persona.trigger.add.alter_persona_description")
+          : localizer(locale, "commands.persona.trigger.add.main_persona_description"),
       }))
       .filter((option) => option.value !== "");
     if (personaSelectOptions.length === 0) {
@@ -95,21 +94,21 @@ export async function execute(
 
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
-      modalTitleKey: "commands.server.trigger.add.modal_title",
+      modalTitleKey: "commands.persona.trigger.add.modal_title",
       components: [
         {
           customId: PERSONA_SELECT_ID,
-          labelKey: "commands.server.trigger.add.persona_select_label",
-          descriptionKey: "commands.server.trigger.add.persona_select_description",
-          placeholder: "commands.server.trigger.add.persona_select_placeholder",
+          labelKey: "commands.persona.trigger.add.persona_select_label",
+          descriptionKey: "commands.persona.trigger.add.persona_select_description",
+          placeholder: "commands.persona.trigger.add.persona_select_placeholder",
           required: true,
           options: personaSelectOptions,
         },
         {
           customId: TRIGGERS_INPUT_ID,
-          labelKey: "commands.server.trigger.add.triggers_input_label",
-          descriptionKey: "commands.server.trigger.add.triggers_input_description",
-          placeholder: "commands.server.trigger.add.triggers_input_placeholder",
+          labelKey: "commands.persona.trigger.add.triggers_input_label",
+          descriptionKey: "commands.persona.trigger.add.triggers_input_description",
+          placeholder: "commands.persona.trigger.add.triggers_input_placeholder",
           style: TextInputStyle.Paragraph,
           required: true,
           maxLength: MAX_TEXT_INPUT_LENGTH,
@@ -153,8 +152,8 @@ export async function execute(
 
     if (uniqueTriggers.length === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.server.trigger.add.no_triggers_title",
-        descriptionKey: "commands.server.trigger.add.no_triggers_description",
+        titleKey: "commands.persona.trigger.add.no_triggers_title",
+        descriptionKey: "commands.persona.trigger.add.no_triggers_description",
         color: ColorCode.ERROR,
       });
       return;
@@ -163,8 +162,8 @@ export async function execute(
     for (const trigger of uniqueTriggers) {
       if (trigger.length < 2) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
-          titleKey: "commands.server.trigger.add.too_short_title",
-          descriptionKey: "commands.server.trigger.add.too_short_description",
+          titleKey: "commands.persona.trigger.add.too_short_title",
+          descriptionKey: "commands.persona.trigger.add.too_short_description",
           color: ColorCode.ERROR,
         });
         return;
@@ -173,8 +172,8 @@ export async function execute(
       const contentValidation = validateMemoryContent(trigger);
       if (!contentValidation.isValid) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
-          titleKey: "commands.server.trigger.add.content_too_long_title",
-          descriptionKey: "commands.server.trigger.add.content_too_long_description",
+          titleKey: "commands.persona.trigger.add.content_too_long_title",
+          descriptionKey: "commands.persona.trigger.add.content_too_long_description",
           descriptionVars: { max_length: memoryLimits.maxMemoryLength },
           color: ColorCode.ERROR,
         });
@@ -188,10 +187,10 @@ export async function execute(
     if (newTriggers.length === 0) {
       const descriptionKey =
         uniqueTriggers.length === 1
-          ? "commands.server.trigger.add.already_exists_description"
-          : "commands.server.trigger.add.already_exists_multiple_description";
+          ? "commands.persona.trigger.add.already_exists_description"
+          : "commands.persona.trigger.add.already_exists_multiple_description";
       await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.server.trigger.add.already_exists_title",
+        titleKey: "commands.persona.trigger.add.already_exists_title",
         descriptionKey,
         descriptionVars:
           uniqueTriggers.length === 1 ? { word: uniqueTriggers[0] } : { words: formatTriggerList(uniqueTriggers) },
@@ -203,8 +202,8 @@ export async function execute(
     const updatedTriggerCount = currentTriggerWords.length + newTriggers.length;
     if (updatedTriggerCount > memoryLimits.maxTriggerWords) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.server.trigger.add.limit_exceeded_title",
-        descriptionKey: "commands.server.trigger.add.limit_exceeded_description",
+        titleKey: "commands.persona.trigger.add.limit_exceeded_title",
+        descriptionKey: "commands.persona.trigger.add.limit_exceeded_description",
         descriptionVars: {
           current_count: currentTriggerWords.length.toString(),
           max_allowed: memoryLimits.maxTriggerWords.toString(),
@@ -229,7 +228,7 @@ export async function execute(
         serverId: selectedPersona.server_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config triggeradd",
+          command: "persona trigger add",
           guildId: interaction.guild.id,
           wordAdded: newTriggers,
           updatedField: "trigger_words",
@@ -254,8 +253,8 @@ export async function execute(
     invalidateTomoriStateCache(interaction.guild.id);
 
     await replyInfoEmbed(modalSubmitInteraction, locale, {
-      titleKey: "commands.server.trigger.add.success_title",
-      descriptionKey: "commands.server.trigger.add.success_description",
+      titleKey: "commands.persona.trigger.add.success_title",
+      descriptionKey: "commands.persona.trigger.add.success_description",
       descriptionVars: {
         persona_name: selectedPersona.persona_nickname,
         added_words: formatTriggerList(newTriggers),
@@ -268,12 +267,12 @@ export async function execute(
     const context: ErrorContext = {
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config triggeradd",
+        command: "persona trigger add",
         guildId: interaction.guild.id,
         personaId: selectedPersona?.persona_id ?? null,
       },
     };
-    await log.error("Error in /config triggeradd command", error, context);
+    await log.error("Error in /persona trigger add command", error, context);
 
     const errorReplyInteraction = modalSubmitInteraction ?? interaction;
 

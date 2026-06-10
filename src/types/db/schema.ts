@@ -130,6 +130,9 @@ export const personaSpriteSchema = z.object({
   sprite_key: z.string().min(1).max(64),
   avatar_url: z.string().min(1),
   usage_instructions: z.string().max(1000).default(""),
+  // When true, the sprite renders its decorated "Sprite (Persona)" name in
+  // Discord (DID alter style) instead of the clean persona name.
+  is_identity: z.boolean().default(false),
   created_at: z.coerce.date().optional(),
   updated_at: z.coerce.date().optional(),
 });

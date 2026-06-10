@@ -9,6 +9,7 @@ export type PersonaSpriteUpsertInput = {
   spriteKey: string;
   avatarUrl: string;
   usageInstructions: string;
+  isIdentity: boolean;
 };
 
 export type PersonaSpriteUpsertResult = {
@@ -17,16 +18,35 @@ export type PersonaSpriteUpsertResult = {
   replaced: boolean;
 };
 
+export type PersonaSpriteMetadataUpdateInput = {
+  spriteId: number;
+  personaId: number;
+  spriteName: string;
+  spriteKey: string;
+  avatarUrl?: string;
+  usageInstructions: string;
+  isIdentity: boolean;
+};
+
 type PersonaSpriteUpsertRow = PersonaSpriteRow & {
   previous_avatar_url: string | null;
   previous_sprite_id: number | null;
+};
+
+type PersonaSpriteUpdateRow = PersonaSpriteRow & {
+  previous_avatar_url: string | null;
+};
+
+export type PersonaSpriteMetadataUpdateResult = {
+  sprite: PersonaSpriteRow;
+  previousAvatarUrl: string | null;
 };
 
 export class PersonaSpriteRepository {
   async listForPersona(personaId: number): Promise<PersonaSpriteRow[]> {
     try {
       const rows = await sql<PersonaSpriteRow[]>`
-        SELECT sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, created_at, updated_at
+        SELECT sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
         FROM persona_sprites
         WHERE persona_id = ${personaId}
         ORDER BY sprite_key ASC, sprite_id ASC
@@ -56,7 +76,7 @@ export class PersonaSpriteRepository {
   async getByKey(personaId: number, spriteKey: string): Promise<PersonaSpriteRow | null> {
     try {
       const [row] = await sql<PersonaSpriteRow[]>`
-        SELECT sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, created_at, updated_at
+        SELECT sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
         FROM persona_sprites
         WHERE persona_id = ${personaId}
           AND sprite_key = ${spriteKey}
@@ -79,21 +99,23 @@ export class PersonaSpriteRepository {
             AND sprite_key = ${input.spriteKey}
         ),
         upserted AS (
-          INSERT INTO persona_sprites (persona_id, sprite_name, sprite_key, avatar_url, usage_instructions)
+          INSERT INTO persona_sprites (persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity)
           VALUES (
             ${input.personaId},
             ${input.spriteName},
             ${input.spriteKey},
             ${input.avatarUrl},
-            ${input.usageInstructions}
+            ${input.usageInstructions},
+            ${input.isIdentity}
           )
           ON CONFLICT (persona_id, sprite_key) DO UPDATE
           SET
             sprite_name = EXCLUDED.sprite_name,
             avatar_url = EXCLUDED.avatar_url,
             usage_instructions = EXCLUDED.usage_instructions,
+            is_identity = EXCLUDED.is_identity,
             updated_at = NOW()
-          RETURNING sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, created_at, updated_at
+          RETURNING sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
         )
         SELECT
           upserted.*,
@@ -124,6 +146,67 @@ export class PersonaSpriteRepository {
     }
   }
 
+  /**
+   * Updates a sprite's metadata in place (name, lookup key, usage instructions,
+   * and identity flag). When `avatarUrl` is provided, the stored image reference
+   * is replaced in the same write.
+   *
+   * Renaming changes `sprite_key`; callers must guarantee the new key does not
+   * collide with another sprite on the same persona (the `(persona_id, sprite_key)`
+   * unique constraint). A collision surfaces as a caught error returning null.
+   *
+   * @param input - target sprite identifiers plus the new metadata values
+   * @returns the updated row and previous avatar URL, or null when no row matched or the update failed
+   */
+  async updateSpriteMetadata(
+    input: PersonaSpriteMetadataUpdateInput,
+  ): Promise<PersonaSpriteMetadataUpdateResult | null> {
+    try {
+      const [row] = await sql<PersonaSpriteUpdateRow[]>`
+        WITH existing AS (
+          SELECT avatar_url
+          FROM persona_sprites
+          WHERE sprite_id = ${input.spriteId}
+            AND persona_id = ${input.personaId}
+        ),
+        updated AS (
+          UPDATE persona_sprites
+          SET
+            sprite_name = ${input.spriteName},
+            sprite_key = ${input.spriteKey},
+            avatar_url = COALESCE(${input.avatarUrl ?? null}, avatar_url),
+            usage_instructions = ${input.usageInstructions},
+            is_identity = ${input.isIdentity},
+            updated_at = NOW()
+          WHERE sprite_id = ${input.spriteId}
+            AND persona_id = ${input.personaId}
+          RETURNING sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
+        )
+        SELECT updated.*, existing.avatar_url AS previous_avatar_url
+        FROM updated
+        LEFT JOIN existing ON true
+      `;
+
+      if (!row) {
+        return null;
+      }
+
+      const sprite = this.parseRow(row, `persona ${input.personaId} sprite ${input.spriteId}`);
+      if (!sprite) {
+        return null;
+      }
+
+      invalidatePersonaSpriteCache(input.personaId);
+      return {
+        sprite,
+        previousAvatarUrl: row.previous_avatar_url ?? null,
+      };
+    } catch (error) {
+      log.error(`Error updating persona sprite ${input.spriteId} for persona ${input.personaId}:`, error);
+      return null;
+    }
+  }
+
   async deleteSpritesByIds(personaId: number, spriteIds: number[]): Promise<PersonaSpriteRow[]> {
     if (spriteIds.length === 0) {
       return [];
@@ -134,7 +217,7 @@ export class PersonaSpriteRepository {
         DELETE FROM persona_sprites
         WHERE persona_id = ${personaId}
           AND sprite_id = ANY(${sql.array(spriteIds, "int4")})
-        RETURNING sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, created_at, updated_at
+        RETURNING sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
       `;
       const parsedRows = this.parseRows(rows, `persona ${personaId} sprite deletion`);
       if (parsedRows.length > 0) {

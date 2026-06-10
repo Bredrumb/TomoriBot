@@ -23,15 +23,15 @@ import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from 
 import { personaRepository } from "@/utils/db/repositories";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
-const TRIGGER_MODAL_CUSTOM_ID = "server_triggerremove_trigger_modal";
+const TRIGGER_MODAL_CUSTOM_ID = "persona_triggerremove_trigger_modal";
 const TRIGGER_SELECT_ID = "trigger_select";
-const TRIGGER_CHECKBOX_ID_PREFIX = "server_trigger_checkbox_group";
+const TRIGGER_CHECKBOX_ID_PREFIX = "persona_trigger_checkbox_group";
 const MAX_OPTIONS_PER_GROUP = 10;
 const MAX_GROUPS_PER_MODAL = 5;
 const MAX_ENTRIES_PER_MODAL = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("remove").setDescription(localizer("en-US", "commands.server.trigger.remove.description"));
+  subcommand.setName("remove").setDescription(localizer("en-US", "commands.persona.trigger.remove.description"));
 
 export async function execute(
   _client: Client,
@@ -109,8 +109,8 @@ export async function execute(
         await updateButtonComponentsV2Status(
           personaSelection.interaction,
           locale,
-          "commands.server.trigger.remove.no_triggers_title",
-          "commands.server.trigger.remove.no_triggers_description",
+          "commands.persona.trigger.remove.no_triggers_title",
+          "commands.persona.trigger.remove.no_triggers_description",
           ColorCode.WARN,
           undefined,
           "general.pagination.reloading_persona_picker",
@@ -138,7 +138,7 @@ export async function execute(
 
       const triggerModalResult = await promptWithRawModal(responseInteraction, locale, {
         modalCustomId: TRIGGER_MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.server.trigger.remove.modal_title",
+        modalTitleKey: "commands.persona.trigger.remove.modal_title",
         components: checkboxGroups,
       });
 
@@ -175,8 +175,8 @@ export async function execute(
         await replyComponentsV2Status(
           interaction,
           locale,
-          "commands.server.trigger.remove.no_removals_title",
-          "commands.server.trigger.remove.no_removals_description",
+          "commands.persona.trigger.remove.no_removals_title",
+          "commands.persona.trigger.remove.no_removals_description",
           ColorCode.INFO,
           undefined,
           "general.pagination.reloading_persona_picker",
@@ -200,8 +200,8 @@ export async function execute(
       await replyComponentsV2Status(
         interaction,
         locale,
-        "commands.server.trigger.remove.success_title",
-        "commands.server.trigger.remove.success_description",
+        "commands.persona.trigger.remove.success_title",
+        "commands.persona.trigger.remove.success_description",
         ColorCode.SUCCESS,
         {
           triggerWords: formatTriggerList(currentTriggerWords.filter((_, index) => removedIndices.includes(index))),
@@ -216,13 +216,13 @@ export async function execute(
       personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "server trigger remove",
+        command: "persona trigger remove",
         guildId: interaction.guild?.id,
         executorDiscordId: interaction.user.id,
       },
     };
     await log.error(
-      `Unexpected error in /server trigger remove for user ${userData.user_disc_id}`,
+      `Unexpected error in /persona trigger remove for user ${userData.user_disc_id}`,
       error as Error,
       context,
     );
@@ -259,13 +259,13 @@ async function handlePaginatedTriggerRemovalFallback(
 
   const triggerModalResult = await promptWithPaginatedModal(responseInteraction, locale, {
     modalCustomId: TRIGGER_MODAL_CUSTOM_ID,
-    modalTitleKey: "commands.server.trigger.remove.modal_title",
+    modalTitleKey: "commands.persona.trigger.remove.modal_title",
     components: [
       {
         customId: TRIGGER_SELECT_ID,
-        labelKey: "commands.server.trigger.remove.select_label",
-        descriptionKey: "commands.server.trigger.remove.select_description",
-        placeholder: "commands.server.trigger.remove.select_placeholder",
+        labelKey: "commands.persona.trigger.remove.select_label",
+        descriptionKey: "commands.persona.trigger.remove.select_description",
+        placeholder: "commands.persona.trigger.remove.select_placeholder",
         required: true,
         options: triggerOptions,
       },
@@ -319,8 +319,8 @@ async function handlePaginatedTriggerRemovalFallback(
   await replyComponentsV2Status(
     responseInteraction,
     locale,
-    "commands.server.trigger.remove.success_title",
-    "commands.server.trigger.remove.success_description",
+    "commands.persona.trigger.remove.success_title",
+    "commands.persona.trigger.remove.success_description",
     ColorCode.SUCCESS,
     {
       triggerWords: formatTriggerList([selectedTriggerWord]),
@@ -347,8 +347,8 @@ async function performTriggerWordRemoval(
 
   if (removedTriggerWords.length === 0) {
     await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "commands.server.trigger.remove.no_removals_title",
-      descriptionKey: "commands.server.trigger.remove.no_removals_description",
+      titleKey: "commands.persona.trigger.remove.no_removals_title",
+      descriptionKey: "commands.persona.trigger.remove.no_removals_description",
       color: ColorCode.INFO,
     });
     return false;
@@ -363,7 +363,7 @@ async function performTriggerWordRemoval(
       userId: userData.user_id,
       errorType: "DatabaseUpdateError",
       metadata: {
-        command: "server trigger remove",
+        command: "persona trigger remove",
         guildId,
         removedIndices,
         removedTriggerWords,
@@ -391,8 +391,8 @@ async function performTriggerWordRemoval(
 
   if (!suppressSuccessReply) {
     await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "commands.server.trigger.remove.success_title",
-      descriptionKey: "commands.server.trigger.remove.success_description",
+      titleKey: "commands.persona.trigger.remove.success_title",
+      descriptionKey: "commands.persona.trigger.remove.success_description",
       descriptionVars: {
         triggerWords: formatTriggerList(removedTriggerWords),
       },
@@ -420,9 +420,9 @@ function buildTriggerCheckboxGroups(currentTriggerWords: string[]): ModalCheckbo
       customId: `${TRIGGER_CHECKBOX_ID_PREFIX}_${groupIndex}`,
       labelKey:
         groupIndex === 0
-          ? "commands.server.trigger.remove.checkbox_label"
-          : "commands.server.trigger.remove.checkbox_label_continued",
-      descriptionKey: groupIndex === 0 ? "commands.server.trigger.remove.checkbox_description" : undefined,
+          ? "commands.persona.trigger.remove.checkbox_label"
+          : "commands.persona.trigger.remove.checkbox_label_continued",
+      descriptionKey: groupIndex === 0 ? "commands.persona.trigger.remove.checkbox_description" : undefined,
       minValues: 0,
       required: false,
       options,

@@ -254,7 +254,7 @@ Character Name: ${characterName}`;
 
 Focus on gathering authentic information that would help create an accurate character representation.
 
-IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referring to other people or the conversation partner, and {bot} if referring to the self.`;
+IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the conversation partner's name (not for the pronoun "you"), and "{bot}" ONLY where you would write the character's own name (not for "I"/"me"). Keep ordinary pronouns like "you", "I", and "me" exactly as-is.`;
 
     // 7. Prepare user prompt content
     const userPromptContent: Content = {
@@ -522,8 +522,8 @@ Instructions:
 - Create a rich, detailed character profile in the structured JSON format
 - The character should be interesting and engaging for conversation
 - Do NOT prepend the sample dialogues with character names or "User:"/"Character:" prefixes - the chat application will handle that
-- Use "{user}" as a placeholder when referring to other people or the conversation partner in dialogues
-- Use "{bot}" as a placeholder when referring to the character themselves
+- Use "{user}" ONLY where you would write the conversation partner's name (NOT for the pronoun "you") — keep "you" as "you"
+- Use "{bot}" ONLY where you would write the character's own name (NOT for the pronouns "I"/"me") — keep "I" as "I" and "I'm" as "I'm"
 - Ensure exactly 5 sample dialogue pairs (sample_dialogues_in paired with sample_dialogues_out)
 
 The attribute_list MUST contain exactly 6 items in this exact order:
@@ -599,8 +599,8 @@ ${params.existingPresetContext.trim()}`;
 - sample_dialogues_in: Keep user messages concise (1-3 sentences, MAX ${maxPresetStringLength} characters each)
 - sample_dialogues_out: Character responses can be longer and more detailed to showcase personality (MAX ${maxPresetStringLength} characters each)
 - No speaker name prefixes in any dialogue (no "User:", "Character:", "{user}:", "{bot}:", etc.)
-- Use "{user}" placeholder when character refers to other people in their responses
-- Use "{bot}" placeholder when character refers to themselves in their responses
+- "{user}" and "{bot}" are NAME placeholders, never pronoun replacements: use "{user}" only in place of the conversation partner's name and "{bot}" only in place of the character's own name
+- NEVER replace pronouns — write "you", "I", "me", "I'm" literally (e.g. write "I'm {bot}", never "{bot}'m {bot}")
 - All string lengths must not exceed ${maxPresetStringLength} characters per item`;
 
     // 11. Prepare prompt parts (text + optional image)

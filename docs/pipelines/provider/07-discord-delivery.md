@@ -46,10 +46,11 @@ payload. It handles:
   standalone reply notice is sent first via `sendWebhookReplyNotice()`.
 - **Render-modifier identity override** — when stage 06 resolves `SourcePersona (modifier): text`,
   the payload carries `identityOverride`. The UI updater lazily creates or reuses the managed
-  channel webhook even for the main persona. Sprite matches send with the clean username
-  `SourcePersona` and the sprite avatar; copied-identity matches send with the flipped username
-  `target (SourcePersona)` and the target's avatar (the model-facing context label stays
-  `SourcePersona (target)`). Ordinary main-persona output
+  channel webhook even for the main persona. Ordinary sprite matches send with the clean username
+  `SourcePersona` and the sprite avatar; identity sprites (`persona_sprites.is_identity`) and
+  copied-identity matches send with the flipped username `target (SourcePersona)` and the
+  target's/sprite avatar (the model-facing context label stays `SourcePersona (target)`).
+  Ordinary main-persona output
   remains a regular bot message; the managed webhook is used only for override payloads. Unknown,
   ambiguous, or unusable modifiers are stripped before this stage and therefore follow the regular
   path.

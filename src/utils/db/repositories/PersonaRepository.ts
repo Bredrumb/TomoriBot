@@ -2805,9 +2805,15 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             const sampleDialoguesOut = pointerPreset
               ? pointerPreset.preset_sample_dialogues_out
               : ((tomoriRow.sample_dialogues_out as string[] | undefined) ?? []);
-            const triggerWords = pointerPreset
-              ? resolvePresetTriggerWords(pointerPreset)
-              : (personaConfig?.trigger_words ?? []);
+            // Prefer per-persona trigger_words from persona_configs (set on import/generate).
+            // Only fall back to the preset's triggers when no custom triggers were saved,
+            // so pointer personas created via Import Now use their user-specified triggers
+            // rather than the canonical preset's trigger words.
+            const triggerWords = personaConfig?.trigger_words?.length
+              ? personaConfig.trigger_words
+              : pointerPreset
+                ? resolvePresetTriggerWords(pointerPreset)
+                : [];
             const personaPrompt = pointerPreset
               ? resolvePresetPersonaPrompt(pointerPreset)
               : (personaConfig?.persona_prompt ?? null);
