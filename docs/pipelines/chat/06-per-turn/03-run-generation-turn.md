@@ -146,6 +146,7 @@ The stage is a coordinator over several plugin-relevant subsystems:
 
 | Env var | Default | Purpose |
 |---|---|---|
+| `OPENROUTER_APP_ATTRIBUTION_ENABLED` | `true` | Sends TomoriBot app attribution headers to OpenRouter for app rankings and aggregated usage analytics. Set to `false` to omit them. |
 | `OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS` | `2` | Per-retry history-pair drop count when OpenRouter returns empty/length |
 | `OPENROUTER_MAX_OUTPUT_TOKENS` | `8192` | Cap on OpenRouter truncation output-token budget |
 

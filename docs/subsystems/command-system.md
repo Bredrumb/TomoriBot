@@ -11,9 +11,9 @@ TomoriBot uses Discord slash commands loaded dynamically from `src/commands/`.
 
 Flow:
 
-1. `loadCommandData()` scans command folders.
+1. `loadCommandData()` scans command folders and top-level command files.
 2. Command metadata is built into `SlashCommandBuilder` trees.
-3. `handleCommands.ts` resolves category + group + subcommand.
+3. `handleCommands.ts` resolves a root command, or category + group + subcommand.
 4. Category cooldown is checked/set in `cooldowns` table (`COMMAND_CATEGORY`).
 5. Target `execute()` is called with `(client, interaction, userData, locale)`.
 
@@ -48,14 +48,49 @@ Keep webhook cache invalidation in the same success path as the write or delete 
 
 ## Command File Contract
 
-Each command module exports:
+Subcommand modules export:
 
 - `configureSubcommand(subcommand)`
+- `execute(client, interaction, userData, locale)`
+
+Root command modules export:
+
+- `configureCommand(command)`
 - `execute(client, interaction, userData, locale)`
 
 Grouped commands are represented by folders:
 
 - `src/commands/model/text.ts` -> `/model text`
+
+Root commands are represented by top-level command files:
+
+- `src/commands/subscribe.ts` -> `/subscribe`
+
+Root command files may also export optional command-level flags:
+
+- `guildOnly = true` - restricts the command to guilds
+- `managerOnly = true` - requires `ManageGuild`
+- `nsfw = true` - marks the command as age-restricted
+- `isCommandEnabled(context)` - returns `false` to skip command registration and
+  execution-map wiring for this module
+
+Use `isCommandEnabled` for commands that are present in source but should be
+absent unless a feature gate is active. The loader evaluates the gate after
+importing the module but before calling `configureCommand()` or
+`configureSubcommand()`. If every subcommand in a category is disabled, the
+top-level category command is omitted from registration.
+
+Example:
+
+```ts
+export const isCommandEnabled = () =>
+  process.env.RUN_ENV === "production" &&
+  process.env.TOMORI_SUPPORTER_BILLING_ENABLED === "true";
+```
+
+Command modules must not perform production-only side effects at import time.
+Keep feature-gated initialization in startup hooks or inside the gated runtime
+handler.
 
 ## Current Top-Level Categories
 
@@ -101,6 +136,9 @@ Use `localizer("en-US", key)` in command builders.
 
 Key pattern:
 
+- Root command description: `commands.{command}.description`
+- Root command option description: `commands.{command}.{option}_description`
+- Root command choice name: `commands.{command}.{option}_choice_{value}`
 - Subcommand description: `commands.{category}.{path}.description`
 - Option description: `commands.{category}.{path}.{option}_description`
 - Choice name: `commands.{category}.{path}.{option}_choice_{value}`
@@ -109,6 +147,11 @@ Example path:
 
 - file: `src/commands/memory/personal/remove.ts`
 - command path: `memory.personal.remove`
+
+Root command example:
+
+- file: `src/commands/subscribe.ts`
+- command path: `subscribe`
 
 ## Interaction Timing Rules (Important)
 
@@ -386,7 +429,8 @@ Forward-looking command rewrite guidance (naming conventions, checklist-style se
 ## Adding a New Command
 
 1. Add a `.ts` file under the correct command category/group path.
-2. Export `configureSubcommand` and `execute`.
+2. Export `configureSubcommand` and `execute`. Root commands export
+   `configureCommand` and `execute`.
 3. Add locale keys in both locale trees (`src/locales/en-US/` and `src/locales/ja/`). Command keys live in `commands/{category}.ts` within each locale directory.
 4. Run:
    - `bun run check-locales`

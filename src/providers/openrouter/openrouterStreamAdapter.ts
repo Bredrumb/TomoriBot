@@ -35,6 +35,7 @@ import { buildProviderStopStrings } from "../utils/stopStrings";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
 import { assistantMediaRelocationNotice, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
@@ -670,6 +671,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...buildOpenRouterAttributionHeaders(),
       };
 
       if (config.apiKey && config.apiKey.trim() !== "") {

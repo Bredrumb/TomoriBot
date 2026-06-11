@@ -67,6 +67,7 @@ import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchSe
 import { openrouterProviderInfo } from "./providerInfo";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { resolveEffectiveOpenRouterSeesYouTube } from "@/utils/provider/openrouterModelCapabilities";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
@@ -188,6 +189,7 @@ export class OpenrouterProvider
         method: "GET",
         headers: {
           Authorization: `Bearer ${apiKey}`,
+          ...buildOpenRouterAttributionHeaders(),
         },
       });
 
@@ -301,10 +303,15 @@ export class OpenrouterProvider
 
     try {
       const openRouter = new OpenRouter({ apiKey: request.apiKey });
-      const response = await openRouter.embeddings.generate({
-        model: request.model,
-        input: request.inputs,
-      });
+      const response = await openRouter.embeddings.generate(
+        {
+          model: request.model,
+          input: request.inputs,
+        },
+        {
+          headers: buildOpenRouterAttributionHeaders(),
+        },
+      );
 
       return extractOpenRouterEmbeddings(response);
     } catch (error: unknown) {

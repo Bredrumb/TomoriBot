@@ -9,6 +9,7 @@ import type { GeneratePresetParams, PresetGenerationResult } from "@/types/provi
 import type { ToolContext } from "@/types/tool/interfaces";
 import { executeTool } from "@/tools/toolRegistry";
 import { getOpenRouterSupportedParameters } from "@/utils/cache/openrouterCapabilityCache";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { getOpenrouterToolAdapter } from "./openrouterToolAdapter";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import {
@@ -128,6 +129,7 @@ export async function generatePresetFromPromptOpenrouter(
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        ...buildOpenRouterAttributionHeaders(),
       },
       body: JSON.stringify(body),
     });

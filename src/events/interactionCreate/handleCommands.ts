@@ -3,7 +3,12 @@ import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
 import { cooldownRepository, userRepository } from "@/utils/db/repositories";
-import { loadCommandData, type CommandExecutionMap, type CommandCooldownMap } from "../../utils/discord/commandLoader";
+import {
+  loadCommandData,
+  ROOT_COMMAND_EXECUTION_KEY,
+  type CommandExecutionMap,
+  type CommandCooldownMap,
+} from "../../utils/discord/commandLoader";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
 
 // Define constants at the top (Rule #20)
@@ -109,31 +114,21 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
       return;
     }
 
-    // If no subcommand was specified but we require one
-    if (!subcommandName) {
-      log.warn(`No subcommand specified for category: ${commandName}`);
-      await replyInfoEmbed(
-        interaction,
-        initialLocale,
-        {
-          titleKey: "general.errors.unknown_error_title",
-          descriptionKey: "general.errors.unknown_error_description",
-          color: ColorCode.ERROR,
-        },
-        MessageFlags.Ephemeral,
-      );
-      return;
-    }
-
     // Build execution key based on whether command is grouped or flat
-    const executionKey = groupName ? `${groupName}.${subcommandName}` : subcommandName;
+    const executionKey = subcommandName
+      ? groupName
+        ? `${groupName}.${subcommandName}`
+        : subcommandName
+      : ROOT_COMMAND_EXECUTION_KEY;
 
     // Get the execute function for this subcommand
     const executeFunction = subcommandMap.get(executionKey);
     if (!executeFunction) {
       const fullCommandPath = groupName
         ? `${commandName} ${groupName} ${subcommandName}`
-        : `${commandName} ${subcommandName}`;
+        : subcommandName
+          ? `${commandName} ${subcommandName}`
+          : commandName;
       log.warn(`Subcommand not found: ${fullCommandPath}`);
       await replyInfoEmbed(
         interaction,
@@ -225,7 +220,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
           errorType: "UserDataError",
           metadata: {
             userDiscordId: interaction.user.id,
-            command: `${commandName} ${subcommandName}`,
+            command: subcommandName ? `${commandName} ${subcommandName}` : commandName,
           },
         };
         await log.error("User data unavailable for command execution", undefined, context);

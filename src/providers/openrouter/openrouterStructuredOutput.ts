@@ -8,6 +8,7 @@ import { stripAnthropicUnsupportedConstraints } from "@/providers/utils/presetCo
 import type { ProviderStructuredJsonRequest, StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 
 type OpenrouterStructuredOutputRequest = ProviderStructuredJsonRequest;
 type GenericStructuredOutputRequest = ProviderStructuredJsonRequest;
@@ -87,6 +88,7 @@ export async function callOpenrouterStructuredJSON<T>(
       headers: {
         Authorization: `Bearer ${request.apiKey}`,
         "Content-Type": "application/json",
+        ...buildOpenRouterAttributionHeaders(),
       },
       body: JSON.stringify(body),
     });
@@ -242,6 +244,7 @@ export async function callOpenrouterStructuredOutput(
       headers: {
         Authorization: `Bearer ${request.apiKey}`,
         "Content-Type": "application/json",
+        ...buildOpenRouterAttributionHeaders(),
       },
       body: JSON.stringify(body),
     });
