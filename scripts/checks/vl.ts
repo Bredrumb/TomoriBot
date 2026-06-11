@@ -401,7 +401,7 @@ async function main() {
     runLint(),
     runAudit(),
     runCheck("SQL Audit (bun run audit-sql)", ["bun", "run", "audit-sql"], true),
-    runCheck("Seed Catalog (bun run check-models)", ["bun", "run", "check-models"], true),
+    runCheck("Seed Catalog (bun run check-seed-catalogs)", ["bun", "run", "check-seed-catalogs"], true),
     runTests(),
     dbConfigured
       ? runCheck("Schema Drift Check (bun run check-schema)", ["bun", "run", "check-schema"], true)

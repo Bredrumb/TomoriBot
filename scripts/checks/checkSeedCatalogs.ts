@@ -8,8 +8,8 @@
  * Exits non-zero if any invariant is violated.
  *
  * Usage:
- *   bun run check-models
- *   bun run scripts/checks/checkModelCatalog.ts
+ *   bun run check-seed-catalogs
+ *   bun run scripts/checks/checkSeedCatalogs.ts
  */
 import { readFileSync } from "node:fs";
 import { validateNaiPresets } from "../../src/db/seed/catalog/naiSeed";
@@ -60,8 +60,8 @@ const violations = [
 ];
 
 if (violations.length > 0) {
-  console.error("[check-models] seed catalog invariant violations:");
+  console.error("[check-seed-catalogs] seed catalog invariant violations:");
   for (const v of violations) console.error(`  - ${v}`);
   process.exit(1);
 }
-console.log("[check-models] seed catalogs OK");
+console.log("[check-seed-catalogs] seed catalogs OK");

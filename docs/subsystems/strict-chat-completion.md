@@ -86,11 +86,11 @@ const enablePrefix =
   providerRequiresPrefixCompletion(provider) || (llm?.supports_prefix_completion ?? false);
 ```
 
-### Enforced by check-models (no UI guard)
+### Enforced by check-seed-catalogs (no UI guard)
 
 Built-in `llms` rows have no capability-editing command surface, so there is no write/UI guard.
 Instead the per-provider required-flag invariant runs at boot and in CI via
-[`bun run check-models`](../../scripts/checks/checkModelCatalog.ts) → `collectStrictChatFlagViolations`
+[`bun run check-seed-catalogs`](../../scripts/checks/checkSeedCatalogs.ts) → `collectStrictChatFlagViolations`
 in [`modelSeed.ts`](../../src/db/seed/catalog/modelSeed.ts). It fails if any anthropic model lacks
 `strictRoleAlternation`, or any deepseek/zai/zaicoding model lacks `supportsPrefixCompletion`. Keep
 the `REQUIRED_*_PROVIDERS` sets in `modelSeed.ts` in lockstep with `providerRequires*` in

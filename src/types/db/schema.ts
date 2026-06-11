@@ -597,6 +597,7 @@ export const serverChatConfigSchema = z.object({
   cascade_limit: z.number().int().default(3),
   timezone_offset: z.number().int().default(0),
   self_debug_enabled: z.boolean().default(false),
+  model_randomizer_enabled: z.boolean().default(false),
   system_prompt: z.string().nullable().optional(),
   context_note: z.string().nullable().optional(),
   context_note_depth: z.number().int().default(0),

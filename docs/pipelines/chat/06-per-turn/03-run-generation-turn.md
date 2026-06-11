@@ -48,8 +48,28 @@ a non-error result *and* the loop falls through (rare; defensive).
 - Selects an API key from the rotation pool, falling back to the server's
   own encrypted key via `decryptApiKey`.
 - Builds a `ProviderConfig` via the resolved `LLMProvider.createConfig`.
-- For each fallback entry: builds another attempt (custom-endpoint or
-  saved-provider-config flavor).
+- Assembles a **unified pool** with the primary model at index 0 followed by
+  every configured fallback entry, then builds one attempt per pool member
+  (custom-endpoint or saved-provider-config flavor). The lead attempt is always
+  labelled `"primary"` in logs even when the randomizer (below) promoted a
+  fallback into that slot; the true model is still visible via `successModel`.
+
+**Per-turn model randomizer (`buildGenerationAttempts`):**
+
+- When `config.model_randomizer_enabled` is `true` and the pool has ≥2 members,
+  a random pool member is spliced to the front of the attempt list **per
+  generation turn**; the remaining members keep their relative order as the
+  failover tail. This is a pure *reordering* — the original primary stays in the
+  chain and serves as failover if the random lead errors. No model is dropped
+  and no model is attempted twice.
+- Because the fallback-used notice keys on `index > 0`, a randomized lead that
+  *succeeds* stays silent (no spurious "Fallback Used" embed); a genuine
+  failover after the lead fails still notifies correctly.
+- When the toggle is `false`, the pool order is unchanged (`[primary,
+  ...fallbacks]`), preserving the deterministic primary-first behavior.
+- The toggle is server-level (`server_chat_configs.model_randomizer_enabled`)
+  and is enabled via `/config model-randomizer`, which refuses to enable unless
+  ≥1 fallback model is configured — guaranteeing the pool always has ≥2 members.
 
 **Per-attempt context prep (`prepareProviderContextItems`):**
 

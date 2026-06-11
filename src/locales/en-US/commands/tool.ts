@@ -219,6 +219,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       field_manage_message: `Message Management Tool`,
       field_hide_respond_embed: `Hide Respond Embed`,
       field_self_debug: `Self-Debug Error Embeds`,
+      field_model_randomizer: `Model Randomizer`,
       field_blacklisted_members: `Blacklisted Members`,
       field_api_key_set: `API Key Set`,
       field_brave_api_key_set: `Brave API Key Set`,

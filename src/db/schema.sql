@@ -364,7 +364,7 @@ SELECT add_column_if_not_exists('llms', 'sees_videos', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'sees_youtube', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_uncensored', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'false');
--- Strict chat-completion compatibility flags (migration 025). See seed catalog + check-models for
+-- Strict chat-completion compatibility flags (migration 025). See seed catalog + check-seed-catalogs for
 -- the per-provider required defaults (anthropic → alternation; deepseek/zai/zaicoding → prefix).
 SELECT add_column_if_not_exists('llms', 'strict_role_alternation', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_prefix_completion', 'BOOLEAN', 'false');
@@ -2509,6 +2509,7 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
   cascade_limit                    INT         NOT NULL DEFAULT 3,
   timezone_offset                  INT         NOT NULL DEFAULT 0,
   self_debug_enabled               BOOLEAN     NOT NULL DEFAULT false,
+  model_randomizer_enabled         BOOLEAN     NOT NULL DEFAULT false,
   system_prompt                    TEXT,
   context_note                     TEXT,
   context_note_depth               INT         NOT NULL DEFAULT 0,

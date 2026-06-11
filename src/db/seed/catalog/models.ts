@@ -2,7 +2,7 @@
 // Flags default to false; list only the ones that are true.
 // Seeded into the database at startup by seedModelsFromCatalog (./modelSeed.ts) — there
 // is no generated SQL file. Edit and commit; the change seeds on the next boot.
-// Run `bun run check-models` to validate the per-provider invariants offline.
+// Run `bun run check-seed-catalogs` to validate the per-provider invariants offline.
 
 import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
 
@@ -324,8 +324,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         isDeprecated: true,
-        desc: "Latest model with enhanced performance and capabilities via Vertex AI (deprecated, use gemini-3.5-flash)",
-        ja: "Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のモデル（非推奨、gemini-3.5-flashを使用）",
+        desc: "Latest model with enhanced performance and capabilities via Vertex AI (deprecated, model not available on Vertex, use gemini-3.5-flash)",
+        ja: "Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のモデル（非推奨、Vertexでは利用不可、gemini-3.5-flashを使用）",
       },
       {
         provider: "vertex",
@@ -336,8 +336,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         isDeprecated: true,
-        desc: "Latest preview model with enhanced performance and capabilities via Vertex AI (deprecated, use gemini-3-flash)",
-        ja: "Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、gemini-3-flashを使用）",
+        desc: "Latest preview model with enhanced performance and capabilities via Vertex AI (deprecated, model not available on Vertex, use gemini-3-flash)",
+        ja: "Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、Vertexでは利用不可、gemini-3-flashを使用）",
       },
       {
         provider: "vertex",
@@ -425,8 +425,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
-        desc: "Vision-capable Vertex-hosted Gemma 4.31B IT model with tool use and structured output (video disabled)",
-        ja: "動画非対応ながらツール利用と構造化出力をサポートするVertex AI向けGemma 4.31B ITモデル",
+        isDeprecated: true,
+        desc: "Vision-capable Vertex-hosted Gemma 4.31B IT model with tool use and structured output (video disabled) (deprecated, model not available on Vertex)",
+        ja: "動画非対応ながらツール利用と構造化出力をサポートするVertex AI向けGemma 4.31B ITモデル (非推奨、Vertexでは利用不可)",
       },
       {
         provider: "vertex",
@@ -529,8 +530,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         isDeprecated: true,
-        desc: "Gemini 3 Flash model via Vertex AI Express (deprecated, use gemini-3.5-flash)",
-        ja: "Vertex AI Express経由で利用できるGemini 3 Flashモデル（非推奨、gemini-3.5-flashを使用）",
+        desc: "Gemini 3 Flash model via Vertex AI Express (deprecated, model not available on Vertex, use gemini-3.5-flash)",
+        ja: "Vertex AI Express経由で利用できるGemini 3 Flashモデル（非推奨、Vertexでは利用不可、gemini-3.5-flashを使用）",
       },
       {
         provider: "vertexexpress",
@@ -539,8 +540,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         isDeprecated: true,
-        desc: "Preview Gemini 3 Flash model via Vertex AI Express (deprecated, use gemini-3-flash)",
-        ja: "Vertex AI Express経由で利用できるGemini 3 Flashプレビューモデル（非推奨、gemini-3-flashを使用）",
+        desc: "Preview Gemini 3 Flash model via Vertex AI Express (deprecated, model not available on Vertex, use gemini-3-flash)",
+        ja: "Vertex AI Express経由で利用できるGemini 3 Flashプレビューモデル（非推奨、Vertexでは利用不可、gemini-3-flashを使用）",
       },
       {
         provider: "vertexexpress",

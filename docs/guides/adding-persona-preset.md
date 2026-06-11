@@ -24,7 +24,7 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
 3. Add or edit reusable system prompt presets in `src/db/seed/catalog/systemPrompts.ts`.
    System prompts are split from personas but seed immediately after persona presets at startup.
 
-4. Run `bun run check-models` to validate all seed catalogs offline. It checks persona name
+4. Run `bun run check-seed-catalogs` to validate all seed catalogs offline. It checks persona name
    uniqueness, paired sample-dialogue arrays, required official attributes, non-empty system
    prompt text, and NovelAI default uniqueness.
 
@@ -55,7 +55,7 @@ preset with the same lineage; customized files import as independent copies.
 ## Quality Gate
 
 ```bash
-bun run check-models # seed catalog invariants
+bun run check-seed-catalogs # seed catalog invariants
 bun run check        # TypeScript strict mode
 bun run lint         # Biome formatting
 ```

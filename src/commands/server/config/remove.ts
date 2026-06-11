@@ -82,6 +82,7 @@ export async function execute(
         timezone_offset: 0,
         message_fetch_limit: 80,
         self_debug_enabled: false,
+        model_randomizer_enabled: false,
       }),
       configRepository.updateMemberPermissionsConfig(serverId, {
         server_memteaching_enabled: true,

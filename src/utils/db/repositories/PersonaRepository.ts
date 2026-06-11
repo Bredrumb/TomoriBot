@@ -1835,6 +1835,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         -- 2. server_chat_configs
         scc.humanizer_degree, scc.message_fetch_limit, scc.send_message_limit,
         scc.match_limit, scc.cascade_limit, scc.timezone_offset, scc.self_debug_enabled,
+        scc.model_randomizer_enabled,
         scc.system_prompt, scc.context_note, scc.context_note_depth,
         scc.llm_stop_strings, scc.llm_stop_speaker_pattern_enabled,
         scc.llm_max_output_tokens, scc.llm_top_p, scc.llm_top_k,
@@ -1937,6 +1938,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         -- 2. server_chat_configs
         scc.humanizer_degree, scc.message_fetch_limit, scc.send_message_limit,
         scc.match_limit, scc.cascade_limit, scc.timezone_offset, scc.self_debug_enabled,
+        scc.model_randomizer_enabled,
         scc.system_prompt, scc.context_note, scc.context_note_depth,
         scc.llm_stop_strings, scc.llm_stop_speaker_pattern_enabled,
         scc.llm_max_output_tokens, scc.llm_top_p, scc.llm_top_k,
@@ -2807,15 +2809,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             const sampleDialoguesOut = pointerPreset
               ? pointerPreset.preset_sample_dialogues_out
               : ((tomoriRow.sample_dialogues_out as string[] | undefined) ?? []);
-            // Prefer per-persona trigger_words from persona_configs (set on import/generate).
-            // Only fall back to the preset's triggers when no custom triggers were saved,
-            // so pointer personas created via Import Now use their user-specified triggers
-            // rather than the canonical preset's trigger words.
-            const triggerWords = personaConfig?.trigger_words?.length
-              ? personaConfig.trigger_words
-              : pointerPreset
-                ? resolvePresetTriggerWords(pointerPreset)
-                : [];
+            // A live pointer resolves trigger_words from its preset (mirrors
+            // persona_prompt below), so preset edits propagate until the first
+            // content edit forks the persona. Once forked, `pointerPreset` is
+            // undefined and the persona's own persona_configs triggers are used.
+            const triggerWords = pointerPreset
+              ? resolvePresetTriggerWords(pointerPreset)
+              : (personaConfig?.trigger_words ?? []);
             const personaPrompt = pointerPreset
               ? resolvePresetPersonaPrompt(pointerPreset)
               : (personaConfig?.persona_prompt ?? null);

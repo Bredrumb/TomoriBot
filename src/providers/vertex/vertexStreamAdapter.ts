@@ -971,13 +971,18 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
         break;
     }
 
+    const sanitizeMessage = (msg: string | undefined) => {
+      if (!msg) return msg;
+      return msg.replace(/projects\/[^/]+\//g, "projects/[PROJECT_ID]/");
+    };
+
     const providerError: ProviderError = {
       type: errorType,
-      message: `Vertex AI error (${errorCode || "unknown"}): ${errorMessage}`,
+      message: sanitizeMessage(`Vertex AI error (${errorCode || "unknown"}): ${errorMessage}`) as string,
       code: errorCode?.toString() || googleApiError?.status || "unknown",
       retryable,
       originalError: error,
-      userMessage: extractedMessage,
+      userMessage: sanitizeMessage(extractedMessage),
     };
 
     return providerError;

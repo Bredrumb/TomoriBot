@@ -219,6 +219,7 @@ export default {
       field_manage_message: `メッセージ管理ツール`,
       field_hide_respond_embed: `応答埋め込みを非表示`,
       field_self_debug: `セルフデバッグエラー埋め込み`,
+      field_model_randomizer: `モデルランダマイザー`,
       field_blacklisted_members: `ブラックリスト登録済みメンバー`,
       field_api_key_set: `APIキー設定済み`,
       field_brave_api_key_set: `Brave APIキー設定済み`,

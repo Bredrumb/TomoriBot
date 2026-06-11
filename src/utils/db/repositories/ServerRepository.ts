@@ -75,6 +75,7 @@ export type ServerChatConfigsRow = {
   cascade_limit: number;
   timezone_offset: number;
   self_debug_enabled: boolean;
+  model_randomizer_enabled: boolean;
   system_prompt: string | null;
   context_note: string | null;
   context_note_depth: number;
@@ -1373,7 +1374,8 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     try {
       const [row] = await sql`
         SELECT humanizer_degree, message_fetch_limit, send_message_limit, match_limit,
-               cascade_limit, timezone_offset, self_debug_enabled, system_prompt,
+               cascade_limit, timezone_offset, self_debug_enabled, model_randomizer_enabled,
+               system_prompt,
                context_note, context_note_depth, llm_stop_strings,
                llm_stop_speaker_pattern_enabled, llm_max_output_tokens,
                llm_top_p, llm_top_k, llm_frequency_penalty, llm_presence_penalty,
@@ -1454,6 +1456,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       INSERT INTO server_chat_configs (
         server_id, humanizer_degree, message_fetch_limit, send_message_limit,
         match_limit, cascade_limit, timezone_offset, self_debug_enabled,
+        model_randomizer_enabled,
         system_prompt, context_note, context_note_depth, llm_stop_strings,
         llm_stop_speaker_pattern_enabled, llm_max_output_tokens,
         llm_top_p, llm_top_k, llm_frequency_penalty, llm_presence_penalty,
@@ -1461,7 +1464,8 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       ) VALUES (
         ${serverId}, ${row.humanizer_degree}, ${row.message_fetch_limit},
         ${row.send_message_limit}, ${row.match_limit}, ${row.cascade_limit},
-        ${row.timezone_offset}, ${row.self_debug_enabled}, ${row.system_prompt},
+        ${row.timezone_offset}, ${row.self_debug_enabled}, ${row.model_randomizer_enabled},
+        ${row.system_prompt},
         ${row.context_note}, ${row.context_note_depth},
         ${sql.array(row.llm_stop_strings, "TEXT")}, ${row.llm_stop_speaker_pattern_enabled},
         ${row.llm_max_output_tokens}, ${row.llm_top_p}, ${row.llm_top_k},
@@ -1476,6 +1480,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         cascade_limit                    = EXCLUDED.cascade_limit,
         timezone_offset                  = EXCLUDED.timezone_offset,
         self_debug_enabled               = EXCLUDED.self_debug_enabled,
+        model_randomizer_enabled         = EXCLUDED.model_randomizer_enabled,
         system_prompt                    = EXCLUDED.system_prompt,
         context_note                     = EXCLUDED.context_note,
         context_note_depth               = EXCLUDED.context_note_depth,
