@@ -107,6 +107,14 @@ After this stage runs:
 - Mention aliases marked as `unique` are exactly those that appear *once*
   across `aliasCounts` — duplicates are silently dropped from the mention
   handle list (the LLM is told "mention requires clarification" instead).
+- Each entry's `aliases` (server nickname, global name, username, custom
+  nickname) plus its `displayLabel` are emitted as `conversationUsers` metadata
+  for tool-side user resolution (`resolveUserTarget`). The conversation stage of
+  that resolver matches input against the full alias set, but breaks ties by
+  preferring a single candidate whose `displayLabel` (primary name) equals the
+  input over candidates that only matched a secondary alias — so one user's
+  server-nickname alias colliding with another user's actual name no longer
+  forces a needless clarify round-trip.
 - Personal memories are filtered by privacy (`PrivacyLevel.MINIMAL`
   required) AND blacklist AND `personal_memories_enabled` AND
   conversation-corpus tag match (if `memory_tagging_enabled`).

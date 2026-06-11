@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { DEFAULT_BLOCK_USER_MAX_DURATION_HOURS, parseBlockUserArgs } from "@/tools/functionCalls/userBlockToolShared";
+import {
+  DEFAULT_BLOCK_USER_MAX_DURATION_HOURS,
+  formatBlockedUserNoticeContent,
+  parseBlockUserArgs,
+} from "@/tools/functionCalls/userBlockToolShared";
 
 describe("block_user argument parsing", () => {
   it("accepts valid mute arguments", () => {
@@ -101,5 +105,35 @@ describe("block_user argument parsing", () => {
     if (!parsed.ok) {
       expect(parsed.status).toBe("user_block_failed_invalid_reason");
     }
+  });
+});
+
+describe("formatBlockedUserNoticeContent", () => {
+  const now = new Date("2026-06-11T00:00:00.000Z");
+
+  it("rounds remaining hours up and pluralizes for multi-hour blocks", () => {
+    // 2.5 hours out -> ceil to 3
+    const expiresAt = new Date(now.getTime() + 2.5 * 60 * 60 * 1000);
+    const notice = formatBlockedUserNoticeContent("Alice", expiresAt, now);
+
+    expect(notice).toBe(
+      "[System: Alice sent a message but is currently blocked by you for 3 more hours. Use `unblock_user` to unblock if needed]",
+    );
+  });
+
+  it("floors at one hour and uses singular when under an hour remains", () => {
+    // 12 minutes out -> ceil is 1, singular "hour"
+    const expiresAt = new Date(now.getTime() + 12 * 60 * 1000);
+    const notice = formatBlockedUserNoticeContent("Bob", expiresAt, now);
+
+    expect(notice).toContain("for 1 more hour.");
+    expect(notice).not.toContain("hours");
+  });
+
+  it("never reports zero or negative hours for an already-expired window", () => {
+    const expiresAt = new Date(now.getTime() - 60 * 60 * 1000);
+    const notice = formatBlockedUserNoticeContent("Carol", expiresAt, now);
+
+    expect(notice).toContain("for 1 more hour.");
   });
 });

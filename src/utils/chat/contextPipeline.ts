@@ -5,6 +5,7 @@ import { ContextItemTag } from "@/types/misc/context";
 import { PrivacyLevel, type PersonaUserBlockRow, type ServerEmojiRow, type ServerStickerRow } from "@/types/db/schema";
 import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
 import { getCachedActiveBlocksForPersona } from "@/utils/cache/personaUserBlockCache";
+import { formatBlockedUserNoticeContent } from "@/tools/functionCalls/userBlockToolShared";
 import { loadEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { buildForcedMentionsForUser } from "@/utils/discord/mentionHelper";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -434,9 +435,20 @@ async function buildSimplifiedHistory(
   }
 
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
-  const blockedContextUserIds = new Set(
-    activeUserBlocks.filter((block) => block.block_type === "block").map((block) => block.user_disc_id),
-  );
+  // Map each 'block'-type target to its row so the simplify loop can render a
+  // notice that includes the remaining block duration (from expires_at). 'mute'
+  // blocks are excluded here — they affect triggering, not dialogue context.
+  const blockedContextBlocksById = new Map<string, PersonaUserBlockRow>();
+  for (const block of activeUserBlocks) {
+    if (block.block_type === "block") {
+      blockedContextBlocksById.set(block.user_disc_id, block);
+    }
+  }
+  const blockedContextUserIds = new Set(blockedContextBlocksById.keys());
+  // visibleRawMessages excludes blocked authors entirely so they cannot leak into
+  // tool-intent scanning, voice transcription, or sprite priming. The blocked
+  // messages are still surfaced as `[System: ...]` notices in the simplify loop
+  // below, which iterates the full (unfiltered) `messages` list instead.
   const visibleRawMessages =
     blockedContextUserIds.size > 0
       ? messages.filter((msg) => !blockedContextUserIds.has(getBlockComparableAuthorId(msg)))
@@ -476,8 +488,41 @@ async function buildSimplifiedHistory(
   // A debug message and a normal message from the same user share an authorId, so
   // this guard keeps them as separate turns (mirrors main's prevWasDebugMessage).
   let previousEntryWasDebug = false;
-  for (const msg of visibleRawMessages) {
+  // Tracks the blocked author of the most recently pushed `[System: ...]` block
+  // notice. Consecutive messages from the same blocked user collapse into a single
+  // notice so a spamming blocked user does not flood context with duplicates.
+  // Reset to null whenever a normal (non-notice) entry is appended.
+  let previousBlockNoticeAuthorId: string | null = null;
+  // Iterate the full message list (not visibleRawMessages): blocked authors are
+  // rendered as notices here rather than dropped.
+  for (const msg of messages) {
     if ((await getCachedPrivacyLevel(msg.author.id)) === PrivacyLevel.FULL) {
+      continue;
+    }
+
+    // 0. Blocked-author short-circuit: replace this user's live message with a
+    //    single system notice instead of running the full simplify pipeline.
+    const blockComparableId = getBlockComparableAuthorId(msg);
+    const activeContextBlock = blockedContextBlocksById.get(blockComparableId);
+    if (activeContextBlock) {
+      // Collapse a run of messages from the same blocked user into one notice.
+      if (previousBlockNoticeAuthorId === blockComparableId) {
+        continue;
+      }
+      const blockedLabel = await resolveBlockedAuthorLabel(msg, blockComparableId);
+      simplifiedMessages.push({
+        id: `synthetic-user-block-${msg.id}`,
+        authorId: blockComparableId,
+        authorName: "System",
+        authorType: "user",
+        personaName: null,
+        content: formatBlockedUserNoticeContent(blockedLabel, activeContextBlock.expires_at),
+        createdAt: msg.createdTimestamp,
+        imageAttachments: [],
+        videoAttachments: [],
+      });
+      previousBlockNoticeAuthorId = blockComparableId;
+      previousEntryWasDebug = false;
       continue;
     }
 
@@ -493,6 +538,8 @@ async function buildSimplifiedHistory(
     );
     if (!result) continue;
     const { message: simplified, isDebug } = result;
+    // A real (non-blocked) message breaks any run of block notices.
+    previousBlockNoticeAuthorId = null;
     userIds.add(simplified.authorId);
 
     // 1. Decide whether this message collapses into the previous turn.
@@ -837,6 +884,27 @@ function getBlockComparableAuthorId(msg: Message): string {
   return msg.author.id;
 }
 
+/**
+ * Resolves the name a persona knows a blocked user by, for use in the block
+ * notice. Prefers the cached bot-facing nickname, then Discord display/global/
+ * username; for webhook-impersonated authors whose underlying user differs, falls
+ * back to a mention of the impersonated Discord ID.
+ *
+ * @param msg - The original (blocked) Discord message.
+ * @param comparableId - The block-comparable author ID from getBlockComparableAuthorId.
+ * @returns A human-readable label for the blocked user.
+ */
+async function resolveBlockedAuthorLabel(msg: Message, comparableId: string): Promise<string> {
+  const row = await getCachedUserRow(comparableId);
+  if (row?.user_nickname) {
+    return row.user_nickname;
+  }
+  if (!msg.webhookId) {
+    return msg.member?.displayName || msg.author.globalName || msg.author.username;
+  }
+  return `<@${comparableId}>`;
+}
+
 async function withReactionContext(
   turn: ChatTurn,
   msg: Message,
@@ -947,8 +1015,13 @@ function appendTailDirectives(args: {
     }
   }
 
+  // Scene turns share a single trigger message and carry their own per-turn
+  // directive via `manualSystemPrompt` (buildSceneTurnDirective). Emitting the
+  // generic "reply to <trigger>'s message" directive here would point every scene
+  // turn at the same unrelated message and compete with the scene script, so it is
+  // suppressed for scene turns (mirrors the visual reply suppression in toolLoop.ts).
   const queuedDirective =
-    incoming.isFromQueue && !incoming.isStopResponse
+    incoming.isFromQueue && !incoming.isStopResponse && !incoming.sceneTurn
       ? buildQueuedReplyDirective(
           args.turn.lockedTurn.admission.message,
           queuedReplyTargetName,

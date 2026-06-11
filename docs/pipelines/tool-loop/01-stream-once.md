@@ -57,6 +57,12 @@ long but active stream is not killed — only a truly stalled one is. Returns a
 - **Clears the timeout and the kill registration** (`clearTimeout`,
   `setChannelStreamKill(channelId, null)`) in the `finally` block regardless of
   success or error.
+- **Derives the `replyToMessage` argument** passed to the provider. Queued turns
+  (`isFromQueue`) normally reply to their trigger message so the response renders
+  as a Discord reply. Scene turns are the exception: every queued scene persona
+  job shares the *same* trigger message, so replying would make all of them render
+  "replying to" one message. When `incoming.sceneTurn` is set, `replyToMessage` is
+  forced to `undefined` so the generated scene reads as a free-standing dialogue.
 
 ## Invariants
 

@@ -62,21 +62,14 @@ export default {
       type_block: `block`,
       effect_mute: `The target cannot trigger this persona.`,
       effect_block: `The target cannot trigger this persona, and their recent messages/media are hidden from this persona's context.`,
-      block_mute_title: `{persona_name} Muted {user_name}`,
-      block_block_title: `{persona_name} Blocked {user_name}`,
-      block_success_description: `**Target:** {user_name}
-**Active persona:** {persona_name}
-**Type:** {block_type}
-**Effect:** {effect}
-**Duration:** {duration_hours} hour(s)
-**Expires:** {expires_at}
-**Reason:** {reason}
-
-Scope: This affects only {persona_name}. Remove it with \`unblock_user\` or \`/server user-blacklist remove\`.`,
-      unblock_success_title: `{persona_name} Unblocked {user_name}`,
-      unblock_success_description: `Removed the active {block_type} for **{user_name}** from **{persona_name}**.
-
-Scope: only this persona's block was removed.`,
+      block_mute_title: `🔇 {persona_name} Muted {user_name} for {duration_hours} hour(s)`,
+      block_block_title: `❌ {persona_name} Blocked {user_name} for {duration_hours} hour(s)`,
+      block_success_description: `{user_name} cannot trigger {persona_name} and their messages/media are now hidden until {expires_at}.`,
+      mute_success_description: `{user_name} cannot trigger {persona_name} until {expires_at}.`,
+      block_footer: `Server managers may remove this with /server user-blacklist remove.`,
+      unmute_success_title: `🔊 {persona_name} Unmuted {user_name}`,
+      unblock_success_title: `✅ {persona_name} Unblocked {user_name}`,
+      unblock_success_description: `Removed the active {block_type} for {user_name} from {persona_name}.`,
     },
     video: {
       youtube_processing_title: `👁️  Watching YouTube Video...`,

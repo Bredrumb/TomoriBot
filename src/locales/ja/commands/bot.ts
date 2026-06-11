@@ -61,8 +61,11 @@ export default {
         invalid_personas_description: `異なるペルソナを少なくとも2人選択してください。同じキャラクターを重複して選ぶことはできません。`,
         invalid_cycles_title: `ラウンド数が無効です`,
         invalid_cycles_description: `ラウンド数は **1** から **{max}** までの整数で入力してください。`,
-        success_title: `シーンを開始しました`,
-        success_description: `このチャンネルに **{turns}** 件のシーン生成ターンをキューしました。`,
+        success_title: `🎬 シーンを生成中...`,
+        success_order_line: `**発話順:** {order}`,
+        success_rounds_line: `**ラウンド数:** {rounds} · {turns} ターン`,
+        success_instructions_line: `**追加指示:** {instructions}`,
+        success_footer: `{user} がトリガーしました`,
         modal: {
           title: `シーン生成`,
           character_1_label: `キャラクター1`,

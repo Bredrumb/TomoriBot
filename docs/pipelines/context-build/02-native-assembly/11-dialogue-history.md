@@ -57,12 +57,15 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 **Per message:**
 
 - **Role mapping** computed from author type and impersonation flags.
-- **Persona user block filtering** happens before this stage in
+- **Persona user block handling** happens before this stage in
   `buildSimplifiedHistory`: active `persona_user_blocks` with `block_type =
-  'block'` remove that user's recent live dialogue turns/direct media for the
-  active persona and suppress reply annotations quoting those filtered
-  messages. Memories, reminders, documents, and generic references from other
-  users are not redacted.
+  'block'` replace that user's recent live dialogue turns/direct media with a
+  single `[System: ...]` block notice for the active persona (consecutive
+  messages from the same blocked user collapse into one notice) and suppress
+  reply annotations quoting those messages. The blocked user is still excluded
+  from tool-intent scanning, voice transcription, and sprite priming
+  (`visibleRawMessages`). Memories, reminders, documents, and generic
+  references from other users are not redacted.
 - **Media-window calculation** — `effectiveMediaWindow = min(requested,
   message_fetch_limit)`; `mediaWindowCutoff = totalMessages - effectiveMediaWindow`.
 - **Media descriptor emission**:

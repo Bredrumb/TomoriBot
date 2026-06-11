@@ -179,6 +179,26 @@ export async function resolveDiscordBlockTarget(input: string, context: ToolCont
   };
 }
 
+/**
+ * Builds the dialogue-history placeholder shown in place of a 'block'-type user's
+ * live messages. Instead of silently dropping their messages from context, the
+ * persona sees a single English `[System: ...]` notice (mirroring reminder/join
+ * system injections, which are intentionally LLM-facing and not localized).
+ *
+ * @param displayName - Name the persona knows the blocked user by.
+ * @param expiresAt - When the active block lapses; used to derive hours remaining.
+ * @param now - Reference time, injectable for deterministic tests (defaults to now).
+ * @returns A `[System: ...]` notice string for the simplified history.
+ */
+export function formatBlockedUserNoticeContent(displayName: string, expiresAt: Date, now: Date = new Date()): string {
+  // 1. Round remaining time up to whole hours, flooring at 1 so a block that is
+  //    minutes from expiry still reads as "1 more hour" rather than "0".
+  const hoursRemaining = Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 3_600_000));
+  // 2. Pluralize the unit so the notice reads naturally for the persona.
+  const hourLabel = hoursRemaining === 1 ? "hour" : "hours";
+  return `[System: ${displayName} sent a message but is currently blocked by you for ${hoursRemaining} more ${hourLabel}. Use \`unblock_user\` to unblock if needed]`;
+}
+
 function formatExpiry(expiresAt: Date, timezoneOffset: number): string {
   return `${formatTimeWithOffset(expiresAt, timezoneOffset, {
     year: "numeric",
@@ -222,8 +242,12 @@ export async function sendUserBlockedEmbed(params: {
       titleVars: {
         persona_name: personaName,
         user_name: params.targetDisplayName,
+        duration_hours: params.durationHours,
       },
-      descriptionKey: "tools.user_block.block_success_description",
+      descriptionKey:
+        params.blockType === "mute"
+          ? "tools.user_block.mute_success_description"
+          : "tools.user_block.block_success_description",
       descriptionVars: {
         user_name: params.targetDisplayName,
         persona_name: personaName,
@@ -231,8 +255,8 @@ export async function sendUserBlockedEmbed(params: {
         effect: getBlockEffectText(locale, params.blockType),
         duration_hours: params.durationHours,
         expires_at: formatExpiry(params.expiresAt, timezoneOffset),
-        reason: params.reason,
       },
+      footerKey: "tools.user_block.block_footer",
       color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,
     },
     {
@@ -259,7 +283,10 @@ export async function sendUserUnblockedEmbed(params: {
     params.context.channel,
     locale,
     {
-      titleKey: "tools.user_block.unblock_success_title",
+      titleKey:
+        params.removedBlock.block_type === "mute"
+          ? "tools.user_block.unmute_success_title"
+          : "tools.user_block.unblock_success_title",
       titleVars: {
         persona_name: personaName,
         user_name: params.targetDisplayName,

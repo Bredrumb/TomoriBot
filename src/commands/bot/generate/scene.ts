@@ -1,4 +1,5 @@
 import {
+  EmbedBuilder,
   MessageFlags,
   PermissionFlagsBits,
   TextInputStyle,
@@ -43,7 +44,7 @@ function parsePositiveIntegerEnv(value: string | undefined, defaultValue: number
 }
 
 function getMaxCycles(): number {
-  return parsePositiveIntegerEnv(process.env.BOT_GENERATE_SCENE_MAX_CYCLES, 3, 1);
+  return parsePositiveIntegerEnv(process.env.BOT_GENERATE_SCENE_MAX_CYCLES, 10, 1);
 }
 
 function getPersonaOptions(personas: TomoriState[], locale: string) {
@@ -330,7 +331,10 @@ export async function execute(
         },
       ],
     },
-    MessageFlags.Ephemeral,
+    // Do not auto-defer the modal submission: the success path replies with a
+    // *non-ephemeral* embed so it becomes a real channel message the context
+    // builder can re-read as a [System: ...] scene directive. All post-submit
+    // work below is synchronous, so we still acknowledge within the 3s window.
   );
 
   if (modalResult.outcome !== "submit" || !modalResult.interaction) {
@@ -348,6 +352,7 @@ export async function execute(
       titleKey: "commands.bot.generate.scene.invalid_personas_title",
       descriptionKey: "commands.bot.generate.scene.invalid_personas_description",
       color: ColorCode.WARN,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -359,6 +364,7 @@ export async function execute(
       descriptionKey: "commands.bot.generate.scene.invalid_cycles_description",
       descriptionVars: { max: String(maxCycles) },
       color: ColorCode.WARN,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -369,6 +375,7 @@ export async function execute(
         titleKey: "general.message_cooldown_title",
         descriptionKey: "commands.bot.generate.scene.persona_access_blocked",
         color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -384,13 +391,45 @@ export async function execute(
     additionalInstructions,
   };
 
-  await replyInfoEmbed(modalInteraction, locale, {
-    titleKey: "commands.bot.generate.scene.success_title",
-    descriptionKey: "commands.bot.generate.scene.success_description",
-    descriptionVars: {
+  // 1. Summarize the modal input so the executor can confirm what they queued at a
+  //    glance: the per-round speaking order, the round/turn count, and any one-off
+  //    instructions they supplied.
+  const speakingOrder = speakers.map((speaker) => speaker.personaName).join(" → ");
+  const descriptionLines = [
+    localizer(locale, "commands.bot.generate.scene.success_order_line", { order: speakingOrder }),
+    localizer(locale, "commands.bot.generate.scene.success_rounds_line", {
+      rounds: String(cycles),
       turns: String(sequence.length),
-    },
-    color: ColorCode.SUCCESS,
+    }),
+  ];
+  if (additionalInstructions) {
+    descriptionLines.push(
+      localizer(locale, "commands.bot.generate.scene.success_instructions_line", {
+        instructions: additionalInstructions,
+      }),
+    );
+  }
+
+  // 2. Footer shows who triggered the scene, mirroring the executor identity pattern
+  //    in /bot impersonate (guild member avatar, falling back to the global user avatar).
+  const executorAvatarUrl = invokingMember
+    ? invokingMember.displayAvatarURL({ size: 64, extension: "png", forceStatic: true })
+    : interaction.user.displayAvatarURL({ size: 64, extension: "png", forceStatic: true });
+
+  // 3. Send the "Scene generating..." status embed as the command-execution confirmation.
+  await modalInteraction.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setTitle(localizer(locale, "commands.bot.generate.scene.success_title"))
+        .setDescription(descriptionLines.join("\n"))
+        .setColor(ColorCode.SUCCESS)
+        .setFooter({
+          text: localizer(locale, "commands.bot.generate.scene.success_footer", {
+            user: interaction.user.username,
+          }),
+          iconURL: executorAvatarUrl,
+        }),
+    ],
   });
 
   log.info(

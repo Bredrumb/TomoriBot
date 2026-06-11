@@ -61,8 +61,11 @@ export default {
         invalid_personas_description: `Choose at least two different personas. Duplicate character selections are not allowed.`,
         invalid_cycles_title: `Invalid Rounds`,
         invalid_cycles_description: `Rounds must be a whole number between **1** and **{max}**.`,
-        success_title: `Scene Started`,
-        success_description: `Queued **{turns}** generated scene turn(s) in this channel.`,
+        success_title: `🎬 Scene Generating...`,
+        success_order_line: `**Speaking order:** {order}`,
+        success_rounds_line: `**Rounds:** {rounds} · {turns} turn(s)`,
+        success_instructions_line: `**Instructions:** {instructions}`,
+        success_footer: `Triggered by {user}`,
         modal: {
           title: `Generate Scene`,
           character_1_label: `Character 1`,

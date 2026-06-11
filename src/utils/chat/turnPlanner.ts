@@ -341,12 +341,24 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     incoming.manualTriggerInvoker?.member?.displayName ??
     incoming.manualTriggerInvoker?.username ??
     message.author.username;
-  const triggererName =
+  let triggererName =
     requestSnapshot.isTriggererBlacklisted ||
     tomoriState.config.personal_memories_enabled === false ||
     !userRow.user_nickname
       ? displayName
       : userRow.user_nickname;
+
+  // Scene turns are a scripted persona-to-persona chain: each speaker responds to the
+  // PREVIOUS speaker, so {{user}} (which resolves to triggererName) should be that prior
+  // persona rather than the command invoker — matching how a normal self-reply queue
+  // resolves the triggerer to the last persona in the chain. Turn 0 has no prior speaker
+  // and keeps the invoker as the entity being responded to.
+  if (incoming.sceneTurn && incoming.sceneTurn.turnIndex > 0) {
+    const previousSpeakerName = incoming.sceneTurn.sequence[incoming.sceneTurn.turnIndex - 1]?.personaName.trim();
+    if (previousSpeakerName) {
+      triggererName = previousSpeakerName;
+    }
+  }
 
   const turns: ChatTurn[] = personasToRespond.map((persona, personaIndex) => ({
     lockedTurn,

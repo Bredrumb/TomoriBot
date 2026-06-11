@@ -164,6 +164,13 @@ async function streamOnce(
   params.context.streamingContext.onStreamProgress = refreshTimeout;
   refreshTimeout();
 
+  // Scene turns are queued (isFromQueue=true) but all share the same trigger
+  // message. Replying to it would make every queued persona render "replying to"
+  // the very same message, so suppress the reply reference for scene turns and let
+  // them read as a free-standing back-and-forth dialogue instead.
+  const isSceneTurn = Boolean(params.context.turn.lockedTurn.admission.incoming.sceneTurn);
+  const replyToMessage = params.context.isFromQueue && !isSceneTurn ? params.context.message : undefined;
+
   try {
     return await Promise.race([
       params.provider.streamToDiscord(
@@ -176,7 +183,7 @@ async function streamOnce(
         params.context.emojiStrings,
         functionHistory.length > 0 ? functionHistory : undefined,
         undefined,
-        params.context.isFromQueue ? params.context.message : undefined,
+        replyToMessage,
         params.context.streamingContext,
         params.context.locale,
         params.context.responseTarget?.webhook,

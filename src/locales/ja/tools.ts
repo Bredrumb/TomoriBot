@@ -62,21 +62,14 @@ export default {
       type_block: `ブロック`,
       effect_mute: `対象ユーザーはこのペルソナをトリガーできません。`,
       effect_block: `対象ユーザーはこのペルソナをトリガーできず、そのユーザーの最近のメッセージ/メディアはこのペルソナのコンテキストから非表示になります。`,
-      block_mute_title: `{persona_name} が {user_name} をミュートしました`,
-      block_block_title: `{persona_name} が {user_name} をブロックしました`,
-      block_success_description: `**対象:** {user_name}
-**有効なペルソナ:** {persona_name}
-**種類:** {block_type}
-**効果:** {effect}
-**期間:** {duration_hours} 時間
-**期限:** {expires_at}
-**理由:** {reason}
-
-範囲: これは {persona_name} のみに影響します。\`unblock_user\` または \`/server user-blacklist remove\` で解除できます。`,
-      unblock_success_title: `{persona_name} が {user_name} のブロックを解除しました`,
-      unblock_success_description: `**{user_name}** に対する **{persona_name}** の有効な {block_type} を解除しました。
-
-範囲: このペルソナのブロックのみが解除されました。`,
+      block_mute_title: `🔇 {persona_name} が {user_name} を {duration_hours} 時間ミュートしました`,
+      block_block_title: `❌ {persona_name} が {user_name} を {duration_hours} 時間ブロックしました`,
+      block_success_description: `{user_name} は {persona_name} をトリガーできず、そのメッセージやメディアは {expires_at} まで非表示になります。`,
+      mute_success_description: `{user_name} は {expires_at} まで {persona_name} をトリガーできません。`,
+      block_footer: `サーバー管理者は /server user-blacklist remove でこれを解除できます。`,
+      unmute_success_title: `🔊 {persona_name} が {user_name} のミュートを解除しました`,
+      unblock_success_title: `✅ {persona_name} が {user_name} のブロックを解除しました`,
+      unblock_success_description: `{user_name} に対する {persona_name} の有効な {block_type} を解除しました。`,
     },
     video: {
       youtube_processing_title: `👁️ YouTube動画を視聴中...`,
