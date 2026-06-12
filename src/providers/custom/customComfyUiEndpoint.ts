@@ -2239,7 +2239,7 @@ function buildComfyUiPlaceholderMap(
   const videoDurationSeconds = resolveComfyUiVideoDurationSeconds(options.durationSeconds);
   const videoFps = resolveComfyUiVideoFps();
   const videoOutputFps = resolveComfyUiVideoOutputFps(videoFps);
-  const videoFrameCount = resolveComfyUiVideoFrameCount(videoDurationSeconds, videoFps);
+  const videoFrameCount = resolveComfyUiVideoFrameCount(videoDurationSeconds, videoOutputFps);
   const videoOutputDurationSeconds = videoFrameCount / videoOutputFps;
   const videoSteps = resolveComfyUiVideoSteps();
   const videoCfg = resolveComfyUiVideoCfg();
