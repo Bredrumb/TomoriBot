@@ -117,7 +117,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       edit_button_label: `Edit Summary`,
       edit_modal_title: `Edit Summary`,
       edit_field_label: `Summary Text`,
-      edit_footer: `You have until {deadline} UTC to edit this summary.`,
+      edit_footer: `You have until {deadline} UTC to edit this summary. After that period, a button that allows you save it as a document will appear.`,
       add_to_docs_button_label: `Add to Document Store`,
       add_to_docs_footer: `Requires local RAG · Click to save this summary as a document.`,
       add_to_docs_stored_footer: `Summary saved to document memory.`,

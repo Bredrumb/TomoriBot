@@ -117,7 +117,7 @@ export default {
       edit_button_label: `要約を編集`,
       edit_modal_title: `要約を編集`,
       edit_field_label: `要約テキスト`,
-      edit_footer: `{deadline} UTC まで要約を編集できます。`,
+      edit_footer: `{deadline} UTC まで要約を編集できます。その期間が過ぎると、ドキュメントとして保存できるボタンが表示されます。`,
       add_to_docs_button_label: `ドキュメントストアに追加`,
       add_to_docs_footer: `ローカルRAG必須 · クリックしてこの要約をドキュメントとして保存。`,
       add_to_docs_stored_footer: `要約をドキュメントメモリに保存しました。`,
