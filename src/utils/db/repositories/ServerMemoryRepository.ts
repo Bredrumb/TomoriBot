@@ -502,22 +502,28 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   async loadDocuments(
     serverId: number,
     personaId: number | null,
-  ): Promise<Array<{ document_id: number; document_name: string }>> {
+  ): Promise<Array<{ document_id: number; document_name: string; first_chunk: string | null }>> {
     if (personaId === null) {
-      return await sql<Array<{ document_id: number; document_name: string }>>`
-        SELECT document_id, document_name
-        FROM documents
-        WHERE server_id = ${serverId}
-          AND persona_id IS NULL
-        ORDER BY created_at DESC
+      return await sql<Array<{ document_id: number; document_name: string; first_chunk: string | null }>>`
+        SELECT d.document_id, d.document_name, dc.content AS first_chunk
+        FROM documents d
+        LEFT JOIN document_chunks dc
+          ON dc.document_id = d.document_id
+          AND dc.chunk_index = 0
+        WHERE d.server_id = ${serverId}
+          AND d.persona_id IS NULL
+        ORDER BY d.created_at DESC
       `;
     }
-    return await sql<Array<{ document_id: number; document_name: string }>>`
-      SELECT document_id, document_name
-      FROM documents
-      WHERE server_id = ${serverId}
-        AND persona_id = ${personaId}
-      ORDER BY created_at DESC
+    return await sql<Array<{ document_id: number; document_name: string; first_chunk: string | null }>>`
+      SELECT d.document_id, d.document_name, dc.content AS first_chunk
+      FROM documents d
+      LEFT JOIN document_chunks dc
+        ON dc.document_id = d.document_id
+        AND dc.chunk_index = 0
+      WHERE d.server_id = ${serverId}
+        AND d.persona_id = ${personaId}
+      ORDER BY d.created_at DESC
     `;
   }
 
