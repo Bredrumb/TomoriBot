@@ -177,6 +177,62 @@ function toUpperSnakeCase(value: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
+function readOptionalBooleanEnv(name: string): boolean | null {
+  const rawValue = process.env[name];
+  if (rawValue === undefined || rawValue.trim() === "") {
+    return null;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "n", "off"].includes(normalized)) {
+    return false;
+  }
+  return null;
+}
+
+function shouldUnloadComfyUiModelsAfterSuccessfulGeneration(): boolean {
+  return (
+    readOptionalBooleanEnv("COMFYUI_UNLOAD_MODELS_AFTER_SUCCESS") ??
+    readOptionalBooleanEnv("TOMORI_COMFYUI_UNLOAD_MODELS_AFTER_SUCCESS") ??
+    false
+  );
+}
+
+async function unloadComfyUiModelsAfterSuccessfulGeneration(
+  endpoint: CustomEndpointRow,
+  apiKey: string,
+  mode: ComfyUiGenerationMode,
+): Promise<void> {
+  if (!shouldUnloadComfyUiModelsAfterSuccessfulGeneration()) {
+    return;
+  }
+
+  try {
+    const response = await fetchUserRemoteUrl(`${endpoint.endpoint_url.replace(/\/+$/, "")}/free`, {
+      method: "POST",
+      headers: buildCustomHeaders(apiKey),
+      body: JSON.stringify({
+        unload_models: true,
+        free_memory: true,
+      }),
+    });
+
+    if (!response.ok) {
+      log.warn(
+        `ComfyUI model unload after successful ${mode} generation failed: ${response.status} ${response.statusText}`,
+      );
+      return;
+    }
+
+    log.info(`ComfyUI models unloaded after successful ${mode} generation.`);
+  } catch (error) {
+    log.warn(`ComfyUI model unload after successful ${mode} generation failed`, error);
+  }
+}
+
 function resolveComfyUiRuntimeWorkflowPath(endpoint: CustomEndpointRow): string | null {
   const extraConfigPath =
     isRecord(endpoint.extra_config) && typeof endpoint.extra_config.workflow_path === "string"
@@ -2674,6 +2730,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
       };
     }),
   );
+  await unloadComfyUiModelsAfterSuccessfulGeneration(endpoint, apiKey, "image");
   return {
     imageData: imageBuffer.toString("base64"),
     mimeType: "image/png",
@@ -2704,6 +2761,7 @@ export async function generateComfyUiVideoViaEndpoint(params: {
   });
   const firstFile = files[0];
   const videoBuffer = await downloadComfyUiAsset(endpoint, apiKey, firstFile);
+  await unloadComfyUiModelsAfterSuccessfulGeneration(endpoint, apiKey, "video");
   return {
     videoData: videoBuffer,
     mimeType: "video/mp4",
