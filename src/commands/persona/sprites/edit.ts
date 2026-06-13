@@ -145,9 +145,12 @@ export async function execute(
 
       // 3. Choose which sprite to edit. promptWithPaginatedModal splits the select
       //    across pages automatically when a persona has more than 25 sprites.
+      // Identify sprites by their lookup key (stable across a pointer→materialized
+      // fork) rather than sprite_id, which is reassigned when preset sprites are
+      // copied into persona_sprites on the fork.
       const spriteSelectOptions: SelectOption[] = sprites.map((sprite) => ({
         label: safeSelectOptionText(sprite.sprite_name, 100),
-        value: sprite.sprite_id.toString(),
+        value: sprite.sprite_key,
         description: safeSelectOptionText(formatSpriteOptionDescription(sprite, locale), 100),
       }));
 
@@ -179,13 +182,13 @@ export async function execute(
       }
 
       const selectModalInteraction = selectModalResult.interaction;
-      const selectedSpriteIdRaw = selectModalResult.values?.[SPRITE_SELECT_ID];
-      if (!selectModalInteraction || !selectedSpriteIdRaw) {
+      const selectedSpriteKeyRaw = selectModalResult.values?.[SPRITE_SELECT_ID];
+      if (!selectModalInteraction || !selectedSpriteKeyRaw) {
         log.error("Sprite edit selection unexpectedly missing interaction or values");
         return;
       }
 
-      const selectedSprite = sprites.find((sprite) => sprite.sprite_id.toString() === selectedSpriteIdRaw);
+      const selectedSprite = sprites.find((sprite) => sprite.sprite_key === selectedSpriteKeyRaw);
       if (!selectedSprite) {
         await replyInfoEmbed(selectModalInteraction, locale, {
           titleKey: "general.errors.operation_failed_title",
@@ -339,7 +342,7 @@ export async function execute(
       // 7. Renaming changes the sprite_key; reject a key already owned by a
       //    different sprite on this persona (the unique constraint would block it).
       const duplicateKey = sprites.some(
-        (sprite) => sprite.sprite_id !== selectedSprite.sprite_id && sprite.sprite_key === nameValidation.spriteKey,
+        (sprite) => sprite.sprite_key !== selectedSprite.sprite_key && sprite.sprite_key === nameValidation.spriteKey,
       );
       if (duplicateKey) {
         await replyInfoEmbed(editModalInteraction, locale, {
@@ -462,7 +465,7 @@ export async function execute(
       }
 
       const updateResult = await personaSpriteRepository.updateSpriteMetadata({
-        spriteId: selectedSprite.sprite_id,
+        currentSpriteKey: selectedSprite.sprite_key,
         personaId,
         spriteName: nameValidation.displayName,
         spriteKey: nameValidation.spriteKey,
@@ -488,7 +491,7 @@ export async function execute(
 
       const updatedSprite = updateResult.sprite;
       log.success(
-        `Edited sprite ${selectedSprite.sprite_id} for persona ${personaId} by ${userData.user_disc_id}: "${updatedSprite.sprite_name}" (identity=${updatedSprite.is_identity})`,
+        `Edited sprite "${selectedSprite.sprite_key}" for persona ${personaId} by ${userData.user_disc_id}: "${updatedSprite.sprite_name}" (identity=${updatedSprite.is_identity})`,
       );
 
       // 10. Acknowledge the edit modal, refresh the picker, and reload personas so

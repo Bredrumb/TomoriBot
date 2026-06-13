@@ -6,7 +6,8 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { configRepository, personaRepository } from "@/utils/db/repositories";
+import { configRepository, personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
+import { invalidatePersonaSpriteCache } from "@/utils/cache/personaSpriteCache";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
@@ -16,7 +17,7 @@ import type { SelectOption } from "../../types/discord/modal";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
+import { deletePersonaSpriteFromStorage, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 
 function isUniqueViolation(error: unknown): boolean {
@@ -323,7 +324,14 @@ export async function execute(
         return;
       }
 
-      // 11a. Turn the main persona into a live preset pointer.
+      // 11a. Capture the persona's current sprite images BEFORE re-pointing, so we
+      //      can clean up server-owned ones afterward (resetting to the preset set).
+      //      For a still-pointer persona these are shared preset URLs (the delete
+      //      guard skips them); for a materialized persona they are its own rows.
+      const spritesBeforeReset = await personaSpriteRepository.listForPersona(targetPersonaId);
+
+      // 11b. Turn the main persona into a live preset pointer (this also drops the
+      //      persona's own sprite rows, so it resolves preset sprites live again).
       const updatedTomoriResult = await personaRepository.applyPresetPointerToPersona({
         personaId: targetPersonaId,
         nickname: resolvedPersonaName,
@@ -363,7 +371,13 @@ export async function execute(
 
       invalidateTomoriStateCache(serverDiscId);
 
-      // 11c. Update guild avatar/nickname only for main/default target
+      // 11c. Finish the sprite reset: delete server-owned sprite images now that
+      //      the rows are gone (the guard skips shared preset images), and drop the
+      //      stale sprite cache so the next read resolves the new preset's sprites.
+      await Promise.all(spritesBeforeReset.map((sprite) => deletePersonaSpriteFromStorage(sprite.avatar_url)));
+      invalidatePersonaSpriteCache(targetPersonaId);
+
+      // 11d. Update guild avatar/nickname only for main/default target
       const isDM = !interaction.guild;
       let avatarUpdateFailed = false;
       let nicknameUpdateFailed = false;

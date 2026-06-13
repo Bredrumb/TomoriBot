@@ -35,6 +35,8 @@ Per-persona configuration (one row per persona in `personas`):
 
 ### `persona_sprites`
 
+Default (preset-pointer) personas can ship with an **official sprite set** that resolves live from the shared `preset_sprites` table, so every server's pointer persona gets them with no per-server storage. `PersonaSpriteRepository.listForPersona()` resolves preset sprites for pointer personas and own-rows for materialized ones, so everything below applies uniformly. See [persona-presets](../subsystems/persona-presets) → *`preset_sprites`*.
+
 `persona_sprites` stores named per-persona avatar variants selected by generated render-modifier labels:
 
 - `sprite_name`: display label shown in prompt guidance and webhook names, e.g. `mad`.

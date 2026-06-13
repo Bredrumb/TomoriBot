@@ -12,6 +12,7 @@
  *   bun run scripts/checks/checkSeedCatalogs.ts
  */
 import { readFileSync } from "node:fs";
+import { personaSections } from "../../src/db/seed/catalog/personas";
 import { validateNaiPresets } from "../../src/db/seed/catalog/naiSeed";
 import { validatePersonas } from "../../src/db/seed/catalog/personaSeed";
 import { validateModels } from "../../src/db/seed/catalog/modelSeed";
@@ -26,6 +27,7 @@ function validateStartupSeedOrder(): string[] {
   const expectedCalls = [
     "await seedModelsFromCatalog(client);",
     "await seedPersonasFromCatalog(client);",
+    "await seedPersonaSpritesFromCatalog(client);",
     "await seedSystemPromptsFromCatalog(client);",
     "await seedNaiPresetsFromCatalog(client);",
   ];
@@ -51,9 +53,42 @@ function validateStartupSeedOrder(): string[] {
   return errors;
 }
 
+/**
+ * Validates catalog-authored preset sprites without touching storage: each
+ * sprite needs a non-empty name (<= 64 chars) and image file, and names must be
+ * unique within a persona (they collapse to a unique sprite_key at seed time).
+ */
+function validatePresetSprites(): string[] {
+  const errors: string[] = [];
+  for (const section of personaSections) {
+    for (const persona of section.rows) {
+      if (!persona.sprites) {
+        continue;
+      }
+      const seenNames = new Set<string>();
+      for (const sprite of persona.sprites) {
+        const trimmedName = sprite.name?.trim() ?? "";
+        if (trimmedName.length === 0 || trimmedName.length > 64) {
+          errors.push(`preset_sprites/${persona.name}: invalid sprite name "${sprite.name}" (1-64 chars)`);
+        }
+        const nameKey = trimmedName.toLowerCase();
+        if (seenNames.has(nameKey)) {
+          errors.push(`preset_sprites/${persona.name}: duplicate sprite name "${sprite.name}"`);
+        }
+        seenNames.add(nameKey);
+        if (!sprite.file?.trim()) {
+          errors.push(`preset_sprites/${persona.name}/${sprite.name}: missing image file`);
+        }
+      }
+    }
+  }
+  return errors;
+}
+
 const violations = [
   ...validateModels(),
   ...validatePersonas(),
+  ...validatePresetSprites(),
   ...validateSystemPrompts(),
   ...validateNaiPresets(),
   ...validateStartupSeedOrder(),

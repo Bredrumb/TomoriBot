@@ -156,12 +156,14 @@ export async function execute(
     }
 
     responseInteraction = modalResult.interaction;
-    const checkedIds = collectCheckedSpriteIds(modalResult.multiValues, checkboxGroups.length);
-    const spriteIdsToRemove = displayedSprites
-      .filter((sprite) => !checkedIds.has(sprite.sprite_id.toString()))
-      .map((sprite) => sprite.sprite_id);
+    // Checked = keep, unchecked = remove. Identify sprites by their lookup key
+    // (stable across a pointer→materialized fork) rather than sprite_id.
+    const checkedKeys = collectCheckedSpriteKeys(modalResult.multiValues, checkboxGroups.length);
+    const spriteKeysToRemove = displayedSprites
+      .filter((sprite) => !checkedKeys.has(sprite.sprite_key))
+      .map((sprite) => sprite.sprite_key);
 
-    if (spriteIdsToRemove.length === 0) {
+    if (spriteKeysToRemove.length === 0) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.persona.sprites.remove.no_changes_title",
         descriptionKey: "commands.persona.sprites.remove.no_changes_description",
@@ -184,7 +186,7 @@ export async function execute(
       invalidateTomoriStateCache(interaction.guild.id);
     }
 
-    const removedSprites = await personaSpriteRepository.deleteSpritesByIds(personaId, spriteIdsToRemove);
+    const removedSprites = await personaSpriteRepository.deleteSpritesByKeys(personaId, spriteKeysToRemove);
     if (removedSprites.length === 0) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -385,7 +387,7 @@ function buildSpriteCheckboxGroups(sprites: SpriteWithId[], locale: string): Mod
     const groupIndex = Math.floor(index / PERSONA_SPRITE_LIMITS.MAX_OPTIONS_PER_GROUP);
     const options: CheckboxGroupOption[] = chunk.map((sprite) => ({
       label: safeSelectOptionText(sprite.sprite_name, 100),
-      value: sprite.sprite_id.toString(),
+      value: sprite.sprite_key,
       description: safeSelectOptionText(formatSpriteDescription(sprite, locale), 100),
       default: true,
     }));
@@ -408,15 +410,15 @@ function buildSpriteCheckboxGroups(sprites: SpriteWithId[], locale: string): Mod
   return groups;
 }
 
-function collectCheckedSpriteIds(multiValues: Record<string, string[]> | undefined, groupCount: number): Set<string> {
-  const checkedIds = new Set<string>();
+function collectCheckedSpriteKeys(multiValues: Record<string, string[]> | undefined, groupCount: number): Set<string> {
+  const checkedKeys = new Set<string>();
   for (let groupIndex = 0; groupIndex < groupCount; groupIndex++) {
     const groupValues = multiValues?.[`${CHECKBOX_ID_PREFIX}_${groupIndex}`] ?? [];
-    for (const spriteId of groupValues) {
-      checkedIds.add(spriteId);
+    for (const spriteKey of groupValues) {
+      checkedKeys.add(spriteKey);
     }
   }
-  return checkedIds;
+  return checkedKeys;
 }
 
 function formatSpriteDescription(sprite: PersonaSpriteRow, locale: string): string {

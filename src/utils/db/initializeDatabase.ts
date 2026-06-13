@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { seedNaiPresetsFromCatalog } from "@/db/seed/catalog/naiSeed";
 import { seedPersonasFromCatalog } from "@/db/seed/catalog/personaSeed";
+import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSeed";
 import { seedModelsFromCatalog } from "@/db/seed/catalog/modelSeed";
 import { seedSystemPromptsFromCatalog } from "@/db/seed/catalog/systemPromptSeed";
 import { markAllMigrationsApplied, runMigrations } from "@/db/migrationRunner";
@@ -350,6 +351,11 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
 
       await seedPersonasFromCatalog(client);
       log.success("PostgreSQL persona catalog seeded");
+
+      // Preset sprites are seeded after personas (they share the preset lineage)
+      // and upload their shared images once to the immutable `presets/` prefix.
+      await seedPersonaSpritesFromCatalog(client);
+      log.success("PostgreSQL preset sprite catalog seeded");
 
       await seedSystemPromptsFromCatalog(client);
       log.success("PostgreSQL system prompt catalog seeded");

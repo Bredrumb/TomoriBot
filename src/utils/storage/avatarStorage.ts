@@ -9,9 +9,18 @@ import { Storage } from "@google-cloud/storage";
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { PERSONA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { log } from "@/utils/misc/logger";
+
+/**
+ * Shared object-storage prefix segment for official preset assets (e.g. preset
+ * sprites). Everything under this segment is uploaded once and referenced by
+ * many servers' pointer personas, so it is treated as IMMUTABLE and is never
+ * deleted by the per-persona cleanup paths (see {@link isSharedPresetAssetReference}).
+ */
+const SHARED_PRESET_SEGMENT = "presets";
 
 type AvatarUploadOptions = {
   personaId: number;
@@ -329,9 +338,163 @@ export async function uploadPersonaSpriteToStorage(
   });
 }
 
+/**
+ * Builds the deterministic, content-addressed filename for a preset sprite image.
+ * Including the content hash means identical art yields the same name (so a
+ * re-seed is a no-op) while changed art yields a new name (so the URL changes and
+ * pointer personas pick it up live). The sprite key is sanitized for path safety.
+ *
+ * @param spriteKey - Normalized sprite lookup key
+ * @param contentHash - Short hash of the PNG bytes
+ * @returns A path-safe filename like `mad-ab12cd34ef56.png`
+ */
+export function buildPresetSpriteFilename(spriteKey: string, contentHash: string): string {
+  const safeKey = sanitizeAttachmentFilenamePart(spriteKey, { fallback: "sprite", maxLength: 40 });
+  return `${safeKey}-${contentHash}.png`;
+}
+
+/** Build the storage-relative key/path for a shared preset sprite. */
+function buildPresetSpriteRelativeKey(options: {
+  lineageId: number;
+  language: string;
+  spriteKey: string;
+  contentHash: string;
+}): string {
+  const safeLanguage = sanitizeAttachmentFilenamePart(options.language, { fallback: "lang", maxLength: 16 });
+  const filename = buildPresetSpriteFilename(options.spriteKey, options.contentHash);
+  return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/${safeLanguage}/sprites/${filename}`;
+}
+
+/**
+ * Uploads a shared preset sprite image to the immutable `presets/` storage prefix.
+ *
+ * The image is shared across every server whose pointer persona resolves this
+ * preset, so the key is deterministic (lineage/language/key + content hash) and
+ * the upload is overwrite-safe and idempotent. Returns a public URL in
+ * production, or the local stored path in non-production.
+ *
+ * @returns The stored reference (URL or local path), or null on failure
+ */
+export async function uploadPresetSpriteToStorage(options: {
+  lineageId: number;
+  language: string;
+  spriteKey: string;
+  contentHash: string;
+  buffer: Buffer;
+}): Promise<string | null> {
+  const relativeKey = buildPresetSpriteRelativeKey(options);
+  const logLabel = `preset sprite (lineage ${options.lineageId}/${options.language}/${options.spriteKey})`;
+
+  if (IS_PRODUCTION) {
+    const config = getAvatarStorageConfig();
+    if (!config) {
+      return null;
+    }
+
+    const key = `${config.prefix}/${relativeKey}`;
+    if (config.backend === "gcs") {
+      try {
+        await getGcsStorage()
+          .bucket(config.bucket)
+          .file(key)
+          .save(options.buffer, {
+            contentType: "image/png",
+            metadata: { cacheControl: "public, max-age=31536000, immutable" },
+          });
+        const publicUrl = buildPublicUrl(config, key);
+        log.success(`[Avatar Storage] Uploaded ${logLabel} to GCS (${publicUrl})`);
+        return publicUrl;
+      } catch (error) {
+        await log.error(`[Avatar Storage] Failed to upload ${logLabel} to GCS`, error, {
+          errorType: "GcsUploadError",
+          metadata: { bucket: config.bucket, key },
+        });
+        return null;
+      }
+    }
+
+    try {
+      await getS3Client(config.region).send(
+        new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+          Body: options.buffer,
+          ContentType: "image/png",
+          CacheControl: "public, max-age=31536000, immutable",
+        }),
+      );
+      const publicUrl = buildPublicUrl(config, key);
+      log.success(`[Avatar Storage] Uploaded ${logLabel} to S3 (${publicUrl})`);
+      return publicUrl;
+    } catch (error) {
+      log.warn(`[Avatar Storage] Failed to upload ${logLabel} to S3`, error);
+      return null;
+    }
+  }
+
+  // Non-production: store under data/avatars/presets/... so the local webhook
+  // renderer can load it (the loader only trusts paths under data/avatars/).
+  const storedPath = `${LOCAL_AVATAR_ROOT_PREFIX}${relativeKey}`;
+  const absolutePath = resolveLocalAvatarPath(storedPath);
+  if (!absolutePath) {
+    return null;
+  }
+  try {
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, options.buffer);
+    log.success(`[Avatar Storage] Stored ${logLabel} at ${storedPath}`);
+    return normalizeStoredPath(storedPath);
+  } catch (error) {
+    log.warn(`[Avatar Storage] Failed to store ${logLabel} locally`, error);
+    return null;
+  }
+}
+
+/**
+ * Detects whether a stored reference points at a SHARED preset asset (under the
+ * immutable `presets/` prefix). Such assets are referenced by many servers'
+ * pointer personas, so per-persona delete paths must never remove them.
+ *
+ * @param reference - A stored avatar/sprite reference (URL or local path)
+ * @returns true when the reference is a shared preset asset
+ */
+export function isSharedPresetAssetReference(reference?: string | null): boolean {
+  const trimmed = reference?.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  // Local form: data/avatars/presets/...
+  const normalized = normalizeStoredPath(trimmed);
+  if (normalized.startsWith(`${LOCAL_AVATAR_ROOT_PREFIX}${SHARED_PRESET_SEGMENT}/`)) {
+    return true;
+  }
+
+  // URL form: match the preset layout segment regardless of host/prefix, e.g.
+  // .../presets/{lineage}/{language}/sprites/...
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const pathName = new URL(trimmed).pathname.replace(/^\/+/, "");
+      return new RegExp(`(^|/)${SHARED_PRESET_SEGMENT}/[^/]+/[^/]+/sprites/`).test(pathName);
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 export async function deletePersonaAvatarFromStorage(reference: string): Promise<boolean> {
   const target = reference.trim();
   if (!target) {
+    return false;
+  }
+
+  // Shared preset assets are immutable and referenced by many servers' pointer
+  // personas. A per-persona delete (sprite replace/remove, re-default reset)
+  // must never remove them or it would break every other server. Skip silently.
+  if (isSharedPresetAssetReference(target)) {
+    log.info(`[Avatar Storage] Skipping delete of shared preset asset ${target}`);
     return false;
   }
 

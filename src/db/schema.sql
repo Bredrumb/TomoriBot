@@ -227,6 +227,36 @@ BEFORE UPDATE ON persona_sprites
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
+-- Shared official preset sprites resolved live by pointer personas. Keyed by the
+-- preset identity (preset_lineage_id, preset_language) instead of persona_id, so
+-- one row + one shared object-storage image serves every server's default persona.
+-- See migration 032 and docs/subsystems/persona-presets.md.
+CREATE TABLE IF NOT EXISTS preset_sprites (
+  preset_sprite_id SERIAL PRIMARY KEY,
+  preset_lineage_id BIGINT NOT NULL,
+  preset_language TEXT NOT NULL,
+  sprite_name TEXT NOT NULL,
+  sprite_key TEXT NOT NULL,
+  avatar_url TEXT NOT NULL,
+  usage_instructions TEXT NOT NULL DEFAULT '',
+  is_identity BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (preset_lineage_id, preset_language, sprite_key),
+  CHECK (char_length(btrim(sprite_name)) BETWEEN 1 AND 64),
+  CHECK (char_length(btrim(sprite_key)) BETWEEN 1 AND 64),
+  CHECK (char_length(usage_instructions) <= 1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_preset_sprites_lineage_language
+  ON preset_sprites(preset_lineage_id, preset_language);
+
+DROP TRIGGER IF EXISTS update_preset_sprites_timestamp ON preset_sprites;
+CREATE TRIGGER update_preset_sprites_timestamp
+BEFORE UPDATE ON preset_sprites
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
 -- Maps webhook-delivered sprite messages to the sprite label they rendered with.
 -- Sprite messages display a clean persona name in Discord (no "(sprite)" suffix);
 -- this table lets context rebuilding recover the decorated "Name (sprite):" label

@@ -111,6 +111,7 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `server_emojis`
 - `server_stickers`
 - `persona_sprites`
+- `preset_sprites`
 
 ### Permissions/privacy/routing
 
@@ -176,6 +177,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - Official rows in `persona_presets` carry `preset_lineage_id` as a stable identity anchor for each bundled character. Applying an official preset (`/config setup`, `/persona default`) creates a copy-on-write pointer when possible: `personas.is_pointer = true`, with `personas.preset_lineage_id` and `personas.preset_language` resolving the live `persona_presets` row. The first local content edit materializes the persona into an independent copy while preserving `persona_id` and `persona_lineage_id`.
 - `persona_presets.preset_attribute_public_flags` stores boolean visibility flags aligned to `preset_attribute_list`; official appearance attributes are public by default. Pointer personas resolve these flags from the live preset row, while materialized/imported copies store them in `persona_attributes.is_public`.
 - `persona_sprites` stores named sprite avatars for render-modifier labels such as `Tomori (mad):`. Rows are keyed by `(persona_id, sprite_key)`, cascade with the persona, and store `avatar_url` as either a production public object URL or a local development path under `data/avatars/servers/{serverDiscId}/personas/{personaId}/sprites/`. The `is_identity` boolean (default `false`, added in migration `029`) controls webhook rendering: ordinary sprites show the clean persona name, while identity sprites show the decorated `sprite (Persona)` name directly in Discord (DID alter style). `/persona sprites add` (with the **Save as Identity** checkbox), `/persona sprites edit` (metadata plus optional image replacement), and `/persona sprites remove` are the owner commands. `/persona sprites export` and `/persona sprites import` move a persona's whole sprite set between servers as a `.zip` (manifest + images); import overwrites same-key rows and rejects the batch if it would exceed the per-persona cap.
+- `preset_sprites` stores the official, SHARED sprite set for bundled characters, keyed by `(preset_lineage_id, preset_language, sprite_key)` and seeded from the persona catalog (migration `032`). Its `avatar_url` is a shared object-storage reference under the immutable `presets/` prefix (uploaded once, used by every server). Pointer personas resolve their sprites live from here via `PersonaSpriteRepository.listForPersona()`; materialization copies these rows into `persona_sprites` by reference (shared URL, no byte duplication). The per-persona delete paths never delete `presets/` images. See [persona-presets](persona-presets) and [multi-persona](multi-persona).
 - `persona_sprite_messages` maps a sprite-rendered webhook message (`message_disc_id` PK) to the `sprite_name` it displayed. Sprite messages show the clean persona name in Discord; context rebuilding uses this mapping to recover the decorated `Name (sprite):` label for the model. Rows are immutable, cascade with the persona, and are pruned after `PERSONA_SPRITE_MESSAGE_RETENTION_DAYS` (default 30) via an opportunistic write-path prune.
 - Persona names are constrained unique per server (case-insensitive, trimmed).
 - Exactly one non-alter persona (`is_alter = false`) per server is enforced by partial unique index `personas_one_main_per_server ON personas(server_id) WHERE is_alter = false` (added in Phase 6 Step #14.6, migration `012`). This hardens the invariant that was previously enforced only at the command layer.
@@ -397,7 +399,8 @@ Use **`src/db/seed/catalog/*.ts`** (idempotent, runs every boot through `initial
 
 The catalog seeders render the same idempotent `INSERT … ON CONFLICT` upserts in code.
 Startup order is models (`seedModelsFromCatalog`) → personas (`seedPersonasFromCatalog`)
-→ system prompts (`seedSystemPromptsFromCatalog`) → NovelAI presets (`seedNaiPresetsFromCatalog`).
+→ preset sprites (`seedPersonaSpritesFromCatalog`) → system prompts (`seedSystemPromptsFromCatalog`)
+→ NovelAI presets (`seedNaiPresetsFromCatalog`).
 There are no startup seed `.sql` files; edit the typed catalog and the change is seeded on
 the next boot. Invariants are validated on startup and via `bun run check-seed-catalogs`.
 `seedPersonasFromCatalog()` also preserves the derived `official_attribute_flags` update

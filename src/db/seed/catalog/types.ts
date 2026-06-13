@@ -83,6 +83,22 @@ export interface EmbeddingInput extends CommonInput {
   family: string;
 }
 
+/**
+ * One official preset sprite, authored in the persona catalog.
+ * The image file lives inside the persona's `avatarPath` directory and is
+ * uploaded once to shared storage at seed time; pointer personas resolve it live.
+ * @property name Display label / lookup label, e.g. `"mad"` (normalized to a key).
+ * @property file Image path relative to the persona's `avatarPath` dir, e.g. `"sprites/mad.png"`.
+ * @property usageInstructions Optional prompt guidance for when to use this sprite.
+ * @property isIdentity When true, renders the decorated `sprite (Persona)` name (DID alter style).
+ */
+export interface PresetSpriteInput {
+  name: string;
+  file: string;
+  usageInstructions?: string;
+  isIdentity?: boolean;
+}
+
 /** A row in the `persona_presets` seed catalog. */
 export interface PersonaInput {
   name: string;
@@ -94,6 +110,12 @@ export interface PersonaInput {
   avatarPath: string;
   triggerWords: string[];
   lineageId: number;
+  /**
+   * Optional official sprite set for this preset. Seeded into `preset_sprites`
+   * and resolved live by pointer personas. Omit (or leave empty) and the persona
+   * simply has no default sprites — a graceful no-op.
+   */
+  sprites?: PresetSpriteInput[];
 }
 
 /** A row in the `system_prompt_presets` seed catalog. */

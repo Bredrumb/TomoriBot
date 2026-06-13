@@ -46,6 +46,16 @@ Trigger words are the one preset-resolved field that is further post-processed: 
 
 Avatars are the exception to live pointer resolution. `persona_presets.preset_avatar_path` is an application source asset, not a runtime-resolved pointer field. Main persona avatars live as the bot's Discord guild member avatar, while alter avatars live in `personas.webhook_avatar_url` as an avatar-storage URL/path. Because those are external Discord/storage media references, later seed changes to `preset_avatar_path` do not fan out to existing pointer personas.
 
+### `preset_sprites` (shared, live-resolved)
+
+Sprites — unlike avatars — **do** fan out to pointer personas. A sprite image is fetched on demand by URL at webhook-send time (it never becomes an external Discord resource), so it can be a shared reference resolved live, exactly like attributes/dialogues/triggers.
+
+`preset_sprites` holds the official sprite set keyed by `(preset_lineage_id, preset_language, sprite_key)`. Each image is uploaded **once** to the immutable shared `presets/{lineage}/{language}/sprites/{key}-{hash}.png` storage prefix (content-addressed filename), so N servers cost one stored copy. The catalog authors sprites via the optional `PersonaInput.sprites` array (image files live under the persona's `avatarPath` directory); `seedPersonaSpritesFromCatalog()` uploads each once (idempotent: same content → same filename → skipped) and reconciles removed sprites. See [adding-persona-preset](../guides/adding-persona-preset).
+
+Resolution is centralized in `PersonaSpriteRepository.listForPersona()`: for a pointer persona it returns the shared `preset_sprites` set (shaped as `PersonaSpriteRow`); for a materialized persona it returns the persona's own `persona_sprites` rows. Every downstream consumer (prompt context builder, render-modifier resolver, `/persona sprites export`) reads through that one method, so they are pointer-agnostic. Editing the catalog sprite set fans out to all still-pointer personas on the next boot.
+
+The shared `presets/` images are **immutable and never deleted** by per-persona paths — `deletePersonaAvatarFromStorage` refuses any reference under that prefix (`isSharedPresetAssetReference`), so one server replacing/removing a sprite, or re-running `/persona default`, can never delete art other servers rely on.
+
 ### `persona_presets.preset_attribute_public_flags`
 
 A `BOOLEAN[]` aligned 1:1 with `preset_attribute_list`. Pointer personas resolve these flags from the live preset row; materialized copies store them in `persona_attributes.is_public`. Official Tomori presets mark their first appearance-style attribute public; public attributes can be shown to other personas triggered by the same message. All other seeded attributes are private.
@@ -62,7 +72,7 @@ Setup creates the main persona as a pointer to the selected official preset, sta
 
 ### `/persona default`
 
-For the main/default target, `/persona default` re-points the main persona to the selected official preset and patches the bot's Discord guild avatar. Re-running it after customization discards local preset-backed content by establishing a fresh pointer.
+For the main/default target, `/persona default` re-points the main persona to the selected official preset and patches the bot's Discord guild avatar. Re-running it after customization discards local preset-backed content by establishing a fresh pointer. This also **resets sprites**: the persona's own `persona_sprites` rows are dropped (server-owned sprite images are deleted; shared `presets/` images are kept) so the persona resolves the official preset sprite set live again.
 
 For `type=alter`, `/persona default` creates an alter pointer from the preset, uploads a copy of the preset avatar through avatar storage, and stores the resulting reference in `personas.webhook_avatar_url`.
 
@@ -70,7 +80,7 @@ Preset-application avatar writes are one-time operational Discord/storage update
 
 ## Materialization
 
-The first local content edit forks a pointer into an independent copy. Materialization preserves `persona_id` and `persona_lineage_id`, copies the current live preset content into `personas`, `persona_attributes`, and `persona_configs`, then sets `is_pointer = false`.
+The first local content edit forks a pointer into an independent copy. Materialization preserves `persona_id` and `persona_lineage_id`, copies the current live preset content into `personas`, `persona_attributes`, `persona_configs`, and `persona_sprites`, then sets `is_pointer = false`. Preset sprites are copied **by reference** — the new `persona_sprites` rows reuse the shared `presets/` image URL (no byte duplication), so the immutable-delete guard still protects them. A sprite edit (`/persona sprites add|edit|remove|import`) forks through this same path, so the user keeps the default sprite set and layers their changes on top.
 
 This fork is binary per persona, not field-level: after any content edit, future seed updates no longer change that persona's preset-backed content. Re-running `/persona default` is the supported way to opt back into the live official preset.
 

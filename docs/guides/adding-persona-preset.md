@@ -21,14 +21,27 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
 
 2. Place an avatar image (PNG recommended) inside the persona folder (e.g. `src/db/seed/catalog/personas/<name>/avatar.png`). Set `avatarPath` in the locale file to the folder path without a filename — the runtime auto-discovers the first image alphabetically, so the filename does not need to match any preset name. Preset application applies the avatar once to the guild (main persona) or uploads it to storage (alter) through `/config setup`, `/persona default`, and preset import without forking the pointer. Runtime pointer reads do not sync avatars from `preset_avatar_path`: existing personas keep their Discord guild avatar or stored `webhook_avatar_url` until the preset is applied again. Later `/server avatar` edits are treated as deliberate customization and materialize the persona before changing or resetting its avatar.
 
-3. Add or edit reusable system prompt presets in `src/db/seed/catalog/systemPrompts.ts`.
+3. (Optional) Give the preset an official **sprite set**. Add the sprite images under the persona folder (e.g. `src/db/seed/catalog/personas/<name>/sprites/mad.png`) and author a `sprites` array on the `PersonaInput`:
+
+   ```ts
+   sprites: [
+     { name: "mad", file: "sprites/mad.png", usageInstructions: "Use when angry or annoyed." },
+     { name: "shy", file: "sprites/shy.png", isIdentity: false },
+   ],
+   ```
+
+   - `name` is the render label (normalized to a `sprite_key`); `file` is relative to `avatarPath`.
+   - `usageInstructions` (optional) is prompt guidance; `isIdentity` (optional) renders the decorated `sprite (Persona)` name.
+   - Author `sprites` per locale file (instructions can be localized). Sprites seed into the shared `preset_sprites` table: each image uploads **once** to the immutable `presets/` storage prefix and is resolved live by every server's pointer persona. Editing the array fans out on the next boot; removing a sprite removes it from pointer personas. Omitting `sprites` entirely is a graceful no-op (the persona simply has no default sprites). See [persona-presets](../subsystems/persona-presets) → *`preset_sprites`*.
+
+4. Add or edit reusable system prompt presets in `src/db/seed/catalog/systemPrompts.ts`.
    System prompts are split from personas but seed immediately after persona presets at startup.
 
-4. Run `bun run check-seed-catalogs` to validate all seed catalogs offline. It checks persona name
-   uniqueness, paired sample-dialogue arrays, required official attributes, non-empty system
-   prompt text, and NovelAI default uniqueness.
+5. Run `bun run check-seed-catalogs` to validate all seed catalogs offline. It checks persona name
+   uniqueness, paired sample-dialogue arrays, required official attributes, sprite name/file
+   validity, non-empty system prompt text, and NovelAI default uniqueness.
 
-5. Validate via `/config setup`, `/persona default`, `/persona export`, and `/persona import`.
+6. Validate via `/config setup`, `/persona default`, `/persona export`, and `/persona import`.
    Pointer personas should resolve the seeded values, reflect later seed edits after cache
    invalidation, and materialize on the first local content edit.
 

@@ -1127,6 +1127,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           params.triggerWords ?? resolvePresetTriggerWords(params.preset),
           params.personaPrompt ?? resolvePresetPersonaPrompt(params.preset),
         );
+        // Re-pointing resets sprites: drop the persona's own rows so it resolves
+        // the official preset sprite set live again. Server-owned sprite IMAGES
+        // are cleaned up by the caller (the shared preset images are immutable).
+        await tx`DELETE FROM persona_sprites WHERE persona_id = ${params.personaId}`;
 
         return updatedRow;
       });
@@ -2090,8 +2094,34 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       resolvePresetTriggerWords(preset),
       resolvePresetPersonaPrompt(preset),
     );
+    // Copy the shared preset sprites into this persona's own rows, reusing the
+    // shared image URL (no byte duplication). The persona stops resolving sprites
+    // live once materialized, so this freezes its current default sprite set.
+    await this.copyPresetSpritesWithClient(client, personaId, pointerLineageId, pointerLanguage);
 
     return true;
+  }
+
+  /**
+   * Copies a preset's shared sprites into `persona_sprites` for a persona being
+   * materialized. The `avatar_url` is the shared `presets/` reference, so the
+   * per-persona delete guard later refuses to delete it (other servers rely on it).
+   * Existing keys are left untouched (a re-materialization is a no-op).
+   */
+  private async copyPresetSpritesWithClient(
+    client: SQL,
+    personaId: number,
+    presetLineageId: number,
+    presetLanguage: string,
+  ): Promise<void> {
+    await client`
+      INSERT INTO persona_sprites (persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity)
+      SELECT ${personaId}, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity
+      FROM preset_sprites
+      WHERE preset_lineage_id = ${presetLineageId}
+        AND preset_language = ${presetLanguage}
+      ON CONFLICT (persona_id, sprite_key) DO NOTHING
+    `;
   }
 
   private async loadPresetForPointer(
