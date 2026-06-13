@@ -4,6 +4,7 @@ import path from "node:path";
 import { seedNaiPresetsFromCatalog } from "@/db/seed/catalog/naiSeed";
 import { seedPersonasFromCatalog } from "@/db/seed/catalog/personaSeed";
 import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSeed";
+import { seedPersonaAvatarsFromCatalog } from "@/db/seed/catalog/presetAvatarSeed";
 import { seedModelsFromCatalog } from "@/db/seed/catalog/modelSeed";
 import { seedSystemPromptsFromCatalog } from "@/db/seed/catalog/systemPromptSeed";
 import { markAllMigrationsApplied, runMigrations } from "@/db/migrationRunner";
@@ -356,6 +357,13 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
       // and upload their shared images once to the immutable `presets/` prefix.
       await seedPersonaSpritesFromCatalog(client);
       log.success("PostgreSQL preset sprite catalog seeded");
+
+      // Preset avatars follow the same shared-upload model: each persona's avatar
+      // is uploaded once and its URL + content hash recorded on the preset row,
+      // so pointer alters live-resolve it and the main-avatar reconciler can gate
+      // guild-avatar PATCHes on a real byte change.
+      await seedPersonaAvatarsFromCatalog(client);
+      log.success("PostgreSQL preset avatar catalog seeded");
 
       await seedSystemPromptsFromCatalog(client);
       log.success("PostgreSQL system prompt catalog seeded");

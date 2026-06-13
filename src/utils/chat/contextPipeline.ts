@@ -564,7 +564,10 @@ async function buildSimplifiedHistory(
         previousEntry.imageAttachments.length > 0 ||
         previousEntry.videoAttachments.length > 0);
     const isSameEffectiveAuthor =
-      !!previousEntry && previousEntry.authorId === simplified.authorId && previousEntryWasDebug === isDebug;
+      !!previousEntry &&
+      previousEntry.authorId === simplified.authorId &&
+      previousEntry.authorName === simplified.authorName &&
+      previousEntryWasDebug === isDebug;
     const shouldKeepSeparateMediaTurn = currentHasMedia || previousHasMedia;
 
     if (

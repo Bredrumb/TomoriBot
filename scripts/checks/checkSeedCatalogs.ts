@@ -28,6 +28,7 @@ function validateStartupSeedOrder(): string[] {
     "await seedModelsFromCatalog(client);",
     "await seedPersonasFromCatalog(client);",
     "await seedPersonaSpritesFromCatalog(client);",
+    "await seedPersonaAvatarsFromCatalog(client);",
     "await seedSystemPromptsFromCatalog(client);",
     "await seedNaiPresetsFromCatalog(client);",
   ];

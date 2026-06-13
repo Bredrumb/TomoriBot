@@ -7,8 +7,8 @@
     "preview": "astro preview"
   },
   "devDependencies": {
-    "@astrojs/starlight": "^0.30.0",
-    "astro": "^5.0.0",
+    "@astrojs/starlight": "^0.40.0",
+    "astro": "^6.4.6",
     "picocolors": "^1.1.1"
   }
 }

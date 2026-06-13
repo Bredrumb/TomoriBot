@@ -652,6 +652,9 @@ export async function execute(
               ? `Set preset avatar for "${selectedPresetOption.name}"`
               : "Reset guild avatar to bot default";
             log.info(`${actionDescription} for guild ${interaction.guild.id} during setup`);
+            // Stamp the applied avatar hash so the background fan-out reconciler
+            // skips this freshly-set-up server until the catalog art changes again.
+            await personaRepository.markServerMainAvatarSynced(interaction.guild.id);
           } else {
             avatarUpdateFailed = true;
             log.warn(`Failed to update guild avatar during setup: ${response.status} ${response.statusText}`);

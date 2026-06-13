@@ -19,7 +19,7 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
      are private. Pointer personas resolve these from the live preset row, and materialized
      copies store them in `persona_attributes.is_public`.
 
-2. Place an avatar image (PNG recommended) inside the persona folder (e.g. `src/db/seed/catalog/personas/<name>/avatar.png`). Set `avatarPath` in the locale file to the folder path without a filename — the runtime auto-discovers the first image alphabetically, so the filename does not need to match any preset name. Preset application applies the avatar once to the guild (main persona) or uploads it to storage (alter) through `/config setup`, `/persona default`, and preset import without forking the pointer. Runtime pointer reads do not sync avatars from `preset_avatar_path`: existing personas keep their Discord guild avatar or stored `webhook_avatar_url` until the preset is applied again. Later `/server avatar` edits are treated as deliberate customization and materialize the persona before changing or resetting its avatar.
+2. Place an avatar image (PNG recommended) inside the persona folder (e.g. `src/db/seed/catalog/personas/<name>/avatar.png`). Set `avatarPath` in the locale file to the folder path without a filename — the runtime auto-discovers the first image alphabetically, so the filename does not need to match any preset name. The avatar seed (`seedPersonaAvatarsFromCatalog`) uploads this image **once** to the immutable `presets/` prefix and records `preset_avatar_shared_url` + `preset_avatar_hash`. Both delivery channels then **sync** when you edit the art: pointer **alters** live-resolve the shared URL (fan out on the next boot, no per-server upload), and each still-pointer **main** persona's Discord guild avatar is re-PATCHed by the background reconciler, gated on the content hash. Later `/server avatar` edits are deliberate customization and materialize the persona before changing or resetting its avatar.
 
 3. (Optional) Give the preset an official **sprite set**. Add the sprite images under the persona folder (e.g. `src/db/seed/catalog/personas/<name>/sprites/mad.png`) and author a `sprites` array on the `PersonaInput`:
 
@@ -52,10 +52,13 @@ Applying an official preset is a **copy-on-write pointer** when the preset has
 `preset_lineage_id`/`preset_language`, and runtime reads resolve preset-backed text/config content
 from the live `persona_presets` row.
 
-Avatars are not part of that live sync. `preset_avatar_path` is a source image for application time:
-main personas are patched into Discord guild-member avatar state, while alter personas store an
-uploaded avatar reference in `webhook_avatar_url`. Changing the seed avatar affects future
-applications, not already-applied pointer personas.
+Avatars now sync too, by delivery channel. `preset_avatar_path` is the catalog source image the
+seed reads to build one shared upload (`preset_avatar_shared_url` + `preset_avatar_hash`). Pointer
+**alters** live-resolve that shared URL into their cached state, so editing the seed avatar fans out
+to them on the next boot exactly like text/sprites. Pointer **main** personas deliver via the bot's
+Discord guild-member avatar, which the `reconcilePresetMainAvatars` background reconciler re-PATCHes
+per guild, gated on `applied_avatar_hash != preset_avatar_hash`. Materialized (forked) copies do not
+change.
 
 The first local content edit materializes that persona into an independent copy while preserving
 `persona_id` and `persona_lineage_id`. Memory/runtime writes do not materialize. Re-running

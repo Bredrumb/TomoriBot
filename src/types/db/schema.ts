@@ -94,6 +94,7 @@ export const tomoriSchema = z.object({
   // autoch_counter and autoch_next_target moved to personaAutochRuntimeStateSchema (migration 015).
   is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
+  applied_avatar_hash: z.string().nullable().optional(), // Added migration 033 - preset_avatar_hash last PATCHed onto this persona's guild member avatar (NULL = never synced)
   physical_appearance_tags: z.array(z.string()).default([]), // Public imageboard-style physical appearance tags
   nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - Persona-specific NovelAI character reference image
   nai_attg_author: z.string().nullable().optional(), // Added March 2026 - ATTG: Story author name
@@ -923,6 +924,11 @@ export const tomoriPresetSchema = z.object({
   preset_sample_dialogues_out: z.array(z.string()).default([]),
   preset_language: z.string(),
   preset_avatar_path: z.string().nullable().optional(),
+  // Shared object-storage URL of the official avatar image (migration 033),
+  // uploaded once and live-resolved by pointer alters; the hash is its
+  // content-addressed version token used to gate the main-avatar fan-out.
+  preset_avatar_shared_url: z.string().nullable().optional(),
+  preset_avatar_hash: z.string().nullable().optional(),
   preset_trigger_words: z.array(z.string()).default([]),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),

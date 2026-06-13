@@ -14,7 +14,7 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 - **Shared config**: all personas in a server share the same server-scoped config tables (`server_*_configs`).
 - **Sequential responses**: if multiple personas match a trigger, they respond one-by-one via the channel queue.
 
-Official bundled character presets have their own pointer behavior for seeded text and one-time avatar application. See [Persona Presets](./persona-presets).
+Official bundled character presets have their own pointer behavior for seeded text, sprites, and avatars. Pointer alters live-resolve a shared preset avatar; the main persona's guild avatar is fanned out by a hash-gated background reconciler. See [Persona Presets](./persona-presets).
 
 ## Data Model
 
@@ -27,6 +27,8 @@ Key columns:
 - `webhook_avatar_url`: stored alter avatar reference.
   - Production: stable public URL (S3 / CloudFront).
   - Non-production: stable local path under `data/avatars/...`, or a legacy HTTP URL until lazy migration runs.
+  - **NULL for an unforked preset-pointer alter**: it live-resolves the shared `persona_presets.preset_avatar_shared_url` into its cached state at load time, so one image is shared across servers and catalog avatar edits fan out on reseed (see [Persona Presets](./persona-presets) → *Avatar syncing*).
+- `applied_avatar_hash`: for a main preset-pointer persona, the `preset_avatar_hash` last PATCHed onto this guild's member avatar by the fan-out reconciler. NULL = never synced.
 
 ### `persona_configs`
 

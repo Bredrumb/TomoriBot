@@ -157,6 +157,9 @@ ALTER TABLE personas ALTER COLUMN is_pointer SET NOT NULL;
 SELECT add_column_if_not_exists('personas', 'physical_appearance_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 -- nai_char_ref_url: Stored reference image URL/path for NovelAI character consistency
 SELECT add_column_if_not_exists('personas', 'nai_char_ref_url', 'TEXT');
+-- applied_avatar_hash: preset_avatar_hash last PATCHed onto this persona's guild
+-- member avatar by the main-avatar fan-out reconciler (migration 033). NULL = never synced.
+SELECT add_column_if_not_exists('personas', 'applied_avatar_hash', 'TEXT');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 
@@ -693,11 +696,15 @@ CREATE TABLE IF NOT EXISTS persona_presets (
 -- Removed updated_at trigger for persona_presets table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_persona_presets_timestamp ON persona_presets;
 
--- Add preset avatar path column for profile pictures 
+-- Add preset avatar path column for profile pictures
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_path', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_trigger_words', 'TEXT[]', 'ARRAY[]::TEXT[]');
 SELECT add_column_if_not_exists('persona_presets', 'preset_lineage_id', 'BIGINT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_attribute_public_flags', 'BOOLEAN[]', 'ARRAY[]::BOOLEAN[]');
+-- Preset avatar syncing (migration 033): the shared storage URL of the official
+-- avatar and a content-hash version token, populated by the avatar seed step.
+SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_shared_url', 'TEXT');
+SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_hash', 'TEXT');
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_persona_presets_lineage_language_unique
   ON persona_presets(preset_lineage_id, preset_language)

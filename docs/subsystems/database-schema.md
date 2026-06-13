@@ -399,8 +399,12 @@ Use **`src/db/seed/catalog/*.ts`** (idempotent, runs every boot through `initial
 
 The catalog seeders render the same idempotent `INSERT … ON CONFLICT` upserts in code.
 Startup order is models (`seedModelsFromCatalog`) → personas (`seedPersonasFromCatalog`)
-→ preset sprites (`seedPersonaSpritesFromCatalog`) → system prompts (`seedSystemPromptsFromCatalog`)
-→ NovelAI presets (`seedNaiPresetsFromCatalog`).
+→ preset sprites (`seedPersonaSpritesFromCatalog`) → preset avatars (`seedPersonaAvatarsFromCatalog`)
+→ system prompts (`seedSystemPromptsFromCatalog`) → NovelAI presets (`seedNaiPresetsFromCatalog`).
+The avatar seed (migration 033) uploads each persona's avatar once to the shared `presets/`
+prefix and records `persona_presets.preset_avatar_shared_url` + `preset_avatar_hash`; pointer
+alters live-resolve the URL and the main-avatar reconciler gates guild-avatar PATCHes on the
+hash (`personas.applied_avatar_hash`). The order is enforced by `check-seed-catalogs`.
 There are no startup seed `.sql` files; edit the typed catalog and the change is seeded on
 the next boot. Invariants are validated on startup and via `bun run check-seed-catalogs`.
 `seedPersonasFromCatalog()` also preserves the derived `official_attribute_flags` update

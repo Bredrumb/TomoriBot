@@ -1112,6 +1112,12 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             is_pointer = true,
             preset_lineage_id = ${pointerLineageId},
             preset_language = ${params.preset.preset_language},
+            -- Re-pointing is a fresh pointer: drop any stored avatar so the persona
+            -- resolves the official preset avatar again (alters live-resolve the
+            -- shared image; mains re-receive it via the guild-avatar reconciler).
+            -- The caller deletes the old server-owned image (shared presets/ images
+            -- are immutable and skipped by the delete guard).
+            webhook_avatar_url = NULL,
             updated_at = NOW()
           WHERE persona_id = ${params.personaId}
           RETURNING *
@@ -1139,6 +1145,42 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     } catch (error) {
       log.error(`Error applying preset pointer to persona ${params.personaId}:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Records that a server's main persona guild avatar is now in sync with its
+   * preset — call this immediately after a SUCCESSFUL guild-avatar PATCH at an
+   * apply site (`/config setup`, `/persona default`). It stamps
+   * `applied_avatar_hash = preset_avatar_hash` so the background fan-out
+   * reconciler skips this persona until the catalog art actually changes again
+   * (preventing a redundant re-PATCH on the next boot).
+   *
+   * Only stamps an unforked **main pointer** whose preset carries a seeded avatar
+   * hash; materialized/non-pointer mains and avatar-less presets are no-ops (the
+   * reconciler ignores them anyway), so this is safe to call unconditionally on
+   * any successful guild-avatar apply.
+   *
+   * @param serverDiscId - The Discord guild id whose main avatar was just applied
+   */
+  async markServerMainAvatarSynced(serverDiscId: string): Promise<void> {
+    try {
+      await sql`
+        UPDATE personas p
+        SET applied_avatar_hash = pp.preset_avatar_hash
+        FROM servers s, persona_presets pp
+        WHERE s.server_disc_id = ${serverDiscId}
+          AND p.server_id = s.server_id
+          AND p.is_alter = false
+          AND p.is_pointer = true
+          AND pp.preset_lineage_id = p.preset_lineage_id
+          AND pp.preset_language = p.preset_language
+          AND pp.preset_avatar_hash IS NOT NULL
+          AND p.applied_avatar_hash IS DISTINCT FROM pp.preset_avatar_hash
+      `;
+    } catch (error) {
+      // Non-fatal: a missed stamp only costs one redundant reconciler PATCH later.
+      log.warn(`Failed to stamp applied_avatar_hash for server ${serverDiscId} (non-fatal)`, error);
     }
   }
 
@@ -2098,6 +2140,20 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     // shared image URL (no byte duplication). The persona stops resolving sprites
     // live once materialized, so this freezes its current default sprite set.
     await this.copyPresetSpritesWithClient(client, personaId, pointerLineageId, pointerLanguage);
+    // Freeze the alter avatar by reference too: a pointer alter live-resolves the
+    // shared preset avatar, so once it materializes it must keep that exact
+    // reference (still the immutable presets/ URL — no byte duplication, and the
+    // delete guard still protects it). Mains deliver via the guild avatar, so
+    // only fill this for alters that have no avatar of their own.
+    if (preset.preset_avatar_shared_url) {
+      await client`
+        UPDATE personas
+        SET webhook_avatar_url = ${preset.preset_avatar_shared_url}
+        WHERE persona_id = ${personaId}
+          AND is_alter = true
+          AND webhook_avatar_url IS NULL
+      `;
+    }
 
     return true;
   }
@@ -2188,6 +2244,32 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
 
     return presetsByPersonaId;
+  }
+
+  /**
+   * Resolves a persona's effective webhook avatar reference for the cached state.
+   *
+   * An unforked pointer ALTER with no avatar of its own live-resolves the shared
+   * preset avatar (`preset_avatar_shared_url`), so catalog avatar edits fan out
+   * to it on the next reseed — exactly like preset sprites/triggers/prompt. The
+   * resolution happens once at load time, so every downstream avatar consumer
+   * reads it from the cache with no hot-path query, and the existing pointer
+   * cache invalidation refreshes it after a seed update. Main personas deliver
+   * via the bot's guild member avatar, so their stored reference is untouched
+   * here (the main-avatar fan-out reconciler owns that channel).
+   *
+   * @param row - The raw persona row
+   * @param pointerPreset - The live preset backing this row, or undefined when forked
+   * @returns The avatar reference to store on the cached state
+   */
+  private resolvePointerAlterAvatarUrl(
+    row: TomoriRow,
+    pointerPreset: TomoriPresetRow | undefined,
+  ): string | null | undefined {
+    if (pointerPreset && row.is_alter === true && !row.webhook_avatar_url && pointerPreset.preset_avatar_shared_url) {
+      return pointerPreset.preset_avatar_shared_url;
+    }
+    return row.webhook_avatar_url;
   }
 
   private buildPresetAttributeRows(personaId: number, preset: TomoriPresetRow): PersonaAttributeRow[] {
@@ -2510,6 +2592,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // 11. Combine and validate the full state
       const combinedState = {
         ...tomoriData,
+        // Pointer alters live-resolve the shared preset avatar (see helper).
+        webhook_avatar_url: this.resolvePointerAlterAvatarUrl(tomoriData, pointerPreset),
         attribute_list: attributeList,
         sample_dialogues_in: sampleDialoguesIn,
         sample_dialogues_out: sampleDialoguesOut,
@@ -2852,6 +2936,8 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
             const combinedState = {
               ...tomoriRow,
+              // Pointer alters live-resolve the shared preset avatar (see helper).
+              webhook_avatar_url: this.resolvePointerAlterAvatarUrl(tomoriRow, pointerPreset),
               attribute_list: attributeList,
               sample_dialogues_in: sampleDialoguesIn,
               sample_dialogues_out: sampleDialoguesOut,
