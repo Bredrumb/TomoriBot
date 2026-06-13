@@ -1235,6 +1235,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                   geminiParts.push({
                     fileData: {
                       fileUri: part.uri,
+                      mimeType: "video/mp4",
                     },
                   });
                 } else {

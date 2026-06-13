@@ -43,7 +43,7 @@ function buildCheckboxOptions(endpoints: CustomEndpointRow[]): CheckboxGroupOpti
   return endpoints.map((endpoint) => {
     // A label may host several models; include model_name in the label so each option is distinct.
     const modelName = endpoint.model_name?.trim();
-    const optionLabel = modelName ? `${endpoint.label} — ${modelName}` : endpoint.label;
+    const optionLabel = modelName ? `${modelName} (${endpoint.label})` : endpoint.label;
     return {
       value: endpoint.custom_endpoint_id?.toString() ?? `${endpoint.capability}:${endpoint.label}`,
       label: truncateModalText(optionLabel, 100),

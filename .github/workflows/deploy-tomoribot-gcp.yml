@@ -330,6 +330,7 @@ jobs:
     needs: security-gate
     outputs:
       image_uri: ${{ steps.ar_uri.outputs.uri }}
+      searxng_image_uri: ${{ steps.searxng_uri.outputs.uri }}
       deploy: ${{ steps.ar_uri.outputs.deploy }}
       version: ${{ steps.package_version.outputs.version }}
     steps:
@@ -396,7 +397,7 @@ jobs:
             exit 0
           fi
 
-          changed_files=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- terraform/gcp .github/workflows/deploy-tomoribot-gcp.yml || true)
+          changed_files=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- terraform/gcp .github/workflows/deploy-tomoribot-gcp.yml servers/searxng/ || true)
           if [ -n "$changed_files" ]; then
             echo "Infrastructure changes detected:"
             echo "$changed_files"
@@ -468,6 +469,25 @@ jobs:
           echo "uri=${DEPLOY_IMAGE_URI}" >> $GITHUB_OUTPUT
           echo "deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
 
+      - name: Build and push custom SearXNG image
+        id: searxng_uri
+        env:
+          AR_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          SEARXNG_BASE="${AR_REPO}/tomoribot-searxng"
+
+          docker build \
+            --platform linux/amd64 \
+            --tag "${SEARXNG_BASE}:${IMAGE_TAG}" \
+            --tag "${SEARXNG_BASE}:latest" \
+            servers/searxng/
+
+          docker push "${SEARXNG_BASE}:${IMAGE_TAG}"
+          docker push "${SEARXNG_BASE}:latest"
+          echo "Pushed custom SearXNG image: ${SEARXNG_BASE}:${IMAGE_TAG}"
+          echo "uri=${SEARXNG_BASE}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
   deploy-with-terraform:
     runs-on: ubuntu-24.04
     needs: push-to-artifact-registry
@@ -475,6 +495,7 @@ jobs:
     env:
       TF_VAR_gcp_project_id: ${{ secrets.GCP_PROJECT_ID }}
       TF_VAR_db_password: ${{ secrets.CLOUD_SQL_INSTANCE_PASSWORD }}
+      TF_VAR_searxng_image: ${{ needs.push-to-artifact-registry.outputs.searxng_image_uri }}
       TF_IN_AUTOMATION: "1"
       TF_INPUT: "0"
     steps:

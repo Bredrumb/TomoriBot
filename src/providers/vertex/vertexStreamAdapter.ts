@@ -1188,7 +1188,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
 
                 if (isEnhancedContext) {
                   geminiParts.push({
-                    fileData: { fileUri: part.uri },
+                    fileData: { fileUri: part.uri, mimeType: "video/mp4" },
                   });
                 } else {
                   log.info(`VertexStreamAdapter: Skipping YouTube auto-processing: ${part.uri}`);
