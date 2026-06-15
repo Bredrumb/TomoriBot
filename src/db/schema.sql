@@ -157,6 +157,9 @@ ALTER TABLE personas ALTER COLUMN is_pointer SET NOT NULL;
 SELECT add_column_if_not_exists('personas', 'physical_appearance_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
 -- nai_char_ref_url: Stored reference image URL/path for NovelAI character consistency
 SELECT add_column_if_not_exists('personas', 'nai_char_ref_url', 'TEXT');
+-- applied_avatar_hash: preset_avatar_hash last PATCHed onto this persona's guild
+-- member avatar by the main-avatar fan-out reconciler (migration 033). NULL = never synced.
+SELECT add_column_if_not_exists('personas', 'applied_avatar_hash', 'TEXT');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 
@@ -197,6 +200,83 @@ CREATE TRIGGER update_persona_attributes_timestamp
 BEFORE UPDATE ON persona_attributes
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS persona_sprites (
+  sprite_id SERIAL PRIMARY KEY,
+  persona_id INT NOT NULL,
+  sprite_name TEXT NOT NULL,
+  sprite_key TEXT NOT NULL,
+  avatar_url TEXT NOT NULL,
+  usage_instructions TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE,
+  UNIQUE (persona_id, sprite_key),
+  CHECK (char_length(btrim(sprite_name)) BETWEEN 1 AND 64),
+  CHECK (char_length(btrim(sprite_key)) BETWEEN 1 AND 64),
+  CHECK (char_length(usage_instructions) <= 1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_persona_sprites_persona
+  ON persona_sprites(persona_id, sprite_key);
+
+-- Identity sprites render their decorated "Sprite (Persona)" name directly in
+-- Discord (like a DID alter), instead of the clean persona name. See migration 029.
+SELECT add_column_if_not_exists('persona_sprites', 'is_identity', 'BOOLEAN', 'false', 'NOT NULL');
+
+DROP TRIGGER IF EXISTS update_persona_sprites_timestamp ON persona_sprites;
+CREATE TRIGGER update_persona_sprites_timestamp
+BEFORE UPDATE ON persona_sprites
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+-- Shared official preset sprites resolved live by pointer personas. Keyed by the
+-- preset identity (preset_lineage_id, preset_language) instead of persona_id, so
+-- one row + one shared object-storage image serves every server's default persona.
+-- See migration 032 and docs/subsystems/persona-presets.md.
+CREATE TABLE IF NOT EXISTS preset_sprites (
+  preset_sprite_id SERIAL PRIMARY KEY,
+  preset_lineage_id BIGINT NOT NULL,
+  preset_language TEXT NOT NULL,
+  sprite_name TEXT NOT NULL,
+  sprite_key TEXT NOT NULL,
+  avatar_url TEXT NOT NULL,
+  usage_instructions TEXT NOT NULL DEFAULT '',
+  is_identity BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (preset_lineage_id, preset_language, sprite_key),
+  CHECK (char_length(btrim(sprite_name)) BETWEEN 1 AND 64),
+  CHECK (char_length(btrim(sprite_key)) BETWEEN 1 AND 64),
+  CHECK (char_length(usage_instructions) <= 1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_preset_sprites_lineage_language
+  ON preset_sprites(preset_lineage_id, preset_language);
+
+DROP TRIGGER IF EXISTS update_preset_sprites_timestamp ON preset_sprites;
+CREATE TRIGGER update_preset_sprites_timestamp
+BEFORE UPDATE ON preset_sprites
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+-- Maps webhook-delivered sprite messages to the sprite label they rendered with.
+-- Sprite messages display a clean persona name in Discord (no "(sprite)" suffix);
+-- this table lets context rebuilding recover the decorated "Name (sprite):" label
+-- for the model. Rows are immutable and pruned after a configurable retention.
+CREATE TABLE IF NOT EXISTS persona_sprite_messages (
+  message_disc_id TEXT PRIMARY KEY,
+  persona_id INT NOT NULL,
+  sprite_name TEXT NOT NULL,
+  channel_disc_id TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE,
+  CHECK (char_length(btrim(sprite_name)) BETWEEN 1 AND 64)
+);
+
+-- Retention pruning deletes by age.
+CREATE INDEX IF NOT EXISTS idx_persona_sprite_messages_created
+  ON persona_sprite_messages(created_at);
 
 -- Create lineage sequence (start high so reserved low IDs stay available)
 CREATE SEQUENCE IF NOT EXISTS persona_lineage_id_seq
@@ -317,12 +397,18 @@ SELECT add_column_if_not_exists('llms', 'sees_videos', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'sees_youtube', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'is_uncensored', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'false');
--- Strict chat-completion compatibility flags (migration 025). See seed catalog + check-models for
+-- Strict chat-completion compatibility flags (migration 025). See seed catalog + check-seed-catalogs for
 -- the per-provider required defaults (anthropic → alternation; deepseek/zai/zaicoding → prefix).
 SELECT add_column_if_not_exists('llms', 'strict_role_alternation', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_prefix_completion', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
+-- Per-model official pricing (USD per million tokens, uncached standard rate). Nullable on purpose:
+-- OpenRouter rows are priced dynamically from its live API cache, and free/non-metered providers
+-- (novelai subscription, nvidia free tier, custom bootstrap) leave these NULL. Seeded from the typed
+-- catalog (src/db/seed/catalog/models.ts) — see seedModelsFromCatalog.
+SELECT add_column_if_not_exists('llms', 'input_price_per_million', 'NUMERIC');
+SELECT add_column_if_not_exists('llms', 'output_price_per_million', 'NUMERIC');
 
 -- Removed updated_at trigger for llms table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_llms_timestamp ON llms;
@@ -610,11 +696,15 @@ CREATE TABLE IF NOT EXISTS persona_presets (
 -- Removed updated_at trigger for persona_presets table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_persona_presets_timestamp ON persona_presets;
 
--- Add preset avatar path column for profile pictures 
+-- Add preset avatar path column for profile pictures
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_path', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_trigger_words', 'TEXT[]', 'ARRAY[]::TEXT[]');
 SELECT add_column_if_not_exists('persona_presets', 'preset_lineage_id', 'BIGINT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_attribute_public_flags', 'BOOLEAN[]', 'ARRAY[]::BOOLEAN[]');
+-- Preset avatar syncing (migration 033): the shared storage URL of the official
+-- avatar and a content-hash version token, populated by the avatar seed step.
+SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_shared_url', 'TEXT');
+SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_hash', 'TEXT');
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_persona_presets_lineage_language_unique
   ON persona_presets(preset_lineage_id, preset_language)
@@ -1087,6 +1177,32 @@ CREATE TABLE IF NOT EXISTS personalization_blacklist (
 DROP TRIGGER IF EXISTS update_personalization_blacklist_timestamp ON personalization_blacklist;
 CREATE TRIGGER update_personalization_blacklist_timestamp
 BEFORE UPDATE ON personalization_blacklist
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS persona_user_blocks (
+  server_id INT NOT NULL,
+  persona_id INT NOT NULL,
+  user_disc_id TEXT NOT NULL,
+  block_type TEXT NOT NULL CHECK (block_type IN ('mute', 'block')),
+  reason TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (server_id, persona_id, user_disc_id),
+  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
+  FOREIGN KEY (persona_id) REFERENCES personas(persona_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_persona_user_blocks_persona_active
+ON persona_user_blocks(server_id, persona_id, expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_persona_user_blocks_user_active
+ON persona_user_blocks(server_id, user_disc_id, expires_at);
+
+DROP TRIGGER IF EXISTS update_persona_user_blocks_timestamp ON persona_user_blocks;
+CREATE TRIGGER update_persona_user_blocks_timestamp
+BEFORE UPDATE ON persona_user_blocks
 FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 
@@ -2430,6 +2546,7 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
   cascade_limit                    INT         NOT NULL DEFAULT 3,
   timezone_offset                  INT         NOT NULL DEFAULT 0,
   self_debug_enabled               BOOLEAN     NOT NULL DEFAULT false,
+  model_randomizer_enabled         BOOLEAN     NOT NULL DEFAULT false,
   system_prompt                    TEXT,
   context_note                     TEXT,
   context_note_depth               INT         NOT NULL DEFAULT 0,
@@ -2565,6 +2682,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   imagegen_enabled       BOOLEAN NOT NULL DEFAULT true,
   videogen_enabled       BOOLEAN NOT NULL DEFAULT false,
   voice_message_enabled  BOOLEAN NOT NULL DEFAULT true,
+  user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()

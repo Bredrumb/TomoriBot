@@ -26,7 +26,7 @@ const IMAGE_EXTENSION_RE = /\.(png|jpg|jpeg|webp|gif)$/i;
  * found (alphabetically) is used — so the filename inside the folder
  * does not need to be predetermined.
  */
-async function resolveAvatarPath(avatarPath: string): Promise<Buffer> {
+export async function resolveAvatarPath(avatarPath: string): Promise<Buffer> {
   const absolute = path.join(process.cwd(), avatarPath);
 
   if (IMAGE_EXTENSION_RE.test(avatarPath)) {

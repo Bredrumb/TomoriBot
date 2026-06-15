@@ -6,6 +6,7 @@ import {
   stripLeakedOwnNameLabels,
   truncateBeforeGenericSpeakerLine,
 } from "@/utils/text/processors/llmOutputProcessor";
+import { isAllowedRenderModifierSpeakerLabel } from "@/utils/discord/renderModifierParser";
 
 // ─── cleanLLMOutput ─────────────────────────────────────────────────────────
 
@@ -447,6 +448,30 @@ describe("truncateBeforeGenericSpeakerLine", () => {
     it("does NOT trigger on first-line speaker when includeStart is false (default)", () => {
       const result = truncateBeforeGenericSpeakerLine("User: starts here");
       expect(result.stopTriggered).toBe(false);
+    });
+  });
+
+  describe("allowed speaker labels", () => {
+    it("does not stop on active render-modifier syntax", () => {
+      const text = "Ren (bredrumb): hi\nOther: stop here";
+      const result = truncateBeforeGenericSpeakerLine(text, {
+        includeStart: true,
+        isAllowedSpeakerLabel: (label) => isAllowedRenderModifierSpeakerLabel(label, ["Ren"]),
+      });
+
+      expect(result.stopTriggered).toBe(true);
+      expect(result.matchedSpeaker).toBe("Other");
+      expect(result.text).toBe("Ren (bredrumb): hi");
+    });
+
+    it("still stops on render-modifier syntax from another speaker", () => {
+      const result = truncateBeforeGenericSpeakerLine("Other (bredrumb): hi", {
+        includeStart: true,
+        isAllowedSpeakerLabel: (label) => isAllowedRenderModifierSpeakerLabel(label, ["Ren"]),
+      });
+
+      expect(result.stopTriggered).toBe(true);
+      expect(result.matchedSpeaker).toBe("Other (bredrumb)");
     });
   });
 });

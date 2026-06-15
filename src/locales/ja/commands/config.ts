@@ -424,6 +424,18 @@ export default {
       enabled_success: `セルフデバッグを**有効**にしました。私のエラー埋め込みと診断埋め込みを [System: ...] メッセージとしてコンテキストに取り込みます。`,
       disabled_success: `セルフデバッグを**無効**にしました。私のエラー埋め込みと診断埋め込みはコンテキストに取り込みません。`,
     },
+    "model-randomizer": {
+      description: `各返信を主導するモデルをランダムに選ぶか切り替えます（反復防止）。`,
+      set_description: `ターンごとのモデルランダマイザーを有効または無効にします。`,
+      success_title: `モデルランダマイザーを更新しました`,
+      enabled_success: `モデルランダマイザーを**有効**にしました。返信ごとに**メインモデル＋フォールバックモデル**のプールから主導モデルをランダムに選びます。残りはフォールバックとして待機します。これにより特定のモデルの反復的な言い回しから抜け出しやすくなります。`,
+      disabled_success: `モデルランダマイザーを**無効**にしました。常にメインモデルを優先し、失敗時のみフォールバックを使用します。`,
+      already_set_title: `モデルランダマイザーは既に設定済みです`,
+      already_enabled_description: `モデルランダマイザーは既に**有効**です。`,
+      already_disabled_description: `モデルランダマイザーは既に**無効**です。`,
+      no_fallbacks_title: `フォールバックモデルが未設定です`,
+      no_fallbacks_description: `ランダマイザーには選択対象となるフォールバックモデルが少なくとも1つ必要です。まず \`/model fallback\` でフォールバックを追加してから有効にしてください。`,
+    },
     "message-fetch-limit": {
       description: `コンテキスト取得メッセージ数を設定します (20-100、デフォルト: 80)。`,
       limit_description: `コンテキスト取得メッセージ数 (20-100、デフォルト: 80)。`,
@@ -490,7 +502,7 @@ export default {
       api_provider_description: `お好みのLLMのプロバイダーを選択してください`,
       api_provider_placeholder: `選択してください...`,
       api_provider_custom_endpoint_label: `カスタムエンドポイント（セットアップ後に完了）`,
-      api_provider_custom_endpoint_description: `先にセットアップだけを完了し、その後 /config custom-endpoint add と /model text に進みます。`,
+      api_provider_custom_endpoint_description: `先にセットアップだけを完了し、その後 /provider custom-endpoint add と /model text に進みます。`,
       api_provider_user_byok_label: `なし（ユーザーBYOK）`,
       api_provider_user_byok_description: `サーバー側のテキストプロバイダーなしで初期化します。メンバーは個人プロバイダーを使う必要があります。`,
       api_key_label: `APIキー`,
@@ -541,7 +553,7 @@ export default {
       zai_tos_warning_field: `⚠️ Z.ai利用規約について`,
       zai_tos_warning_value: `Z.aiの利用規約が更新され、コーディング/エージェントのユースケースのみが許可されるようになりました。Z.aiを一般チャットに使用する場合は自己責任となり、規約に違反する可能性があります。`,
       custom_bearer_hint_field: `🔑 Bearerトークン`,
-      custom_bearer_hint_value: `エンドポイントに認証が必要な場合は、{apiKeySet}または{providerSwitch}でBearerトークンを追加してください。`,
+      custom_bearer_hint_value: `エンドポイントに認証が必要な場合は、{apiKeySet}でBearerトークンを追加してください。`,
       preset_field: `人格プリセット`,
       name_field: `私の名前`,
       byok_bootstrap_field: `ユーザーBYOK`,
@@ -564,7 +576,7 @@ export default {
 {model_text_command} で有効なモデルを割り当てるか、{provider_add_command} で新しいプロバイダーを登録してください。問題が解決しない場合は、サーバー管理者にお問い合わせください。`,
       already_setup_description: `このサーバーでは既に設定が完了しています。設定を変更するには、\`/config\`、\`/persona\`、\`/memory\`、\`/server\`などの他のコマンドを使用してください。
 
-				プロバイダーを変更したい場合は、\`/config provider add\`で新しいプロバイダーを登録し、\`/model text\`でアクティブにしてください。`,
+				プロバイダーを変更したい場合は、\`/provider add\`で新しいプロバイダーを登録し、\`/model text\`でアクティブにしてください。`,
     },
     params: {
       description: `AI生成品質のサンプリングパラメーターを調整します。`,

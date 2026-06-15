@@ -12,13 +12,24 @@ import {
 } from "discord.js";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
-import { personaRepository, serverRepository, userRepository } from "@/utils/db/repositories";
+import {
+  personaRepository,
+  personaUserBlockRepository,
+  serverRepository,
+  userRepository,
+} from "@/utils/db/repositories";
+import type {
+  PersonaUserBlockKey,
+  PersonaUserBlockWithPersona,
+} from "@/utils/db/repositories/PersonaUserBlockRepository";
+import { invalidatePersonaUserBlockCache } from "@/utils/cache/personaUserBlockCache";
 import { invalidateUserBlacklistCache } from "@/utils/cache/userCache";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import type { ErrorContext, UserRow } from "@/types/db/schema";
+import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
+import type { ErrorContext, PersonaUserBlockType, UserRow } from "@/types/db/schema";
 
 const MODAL_CUSTOM_ID = "server_user_blacklist_remove_modal";
 const CHECKBOX_ID_PREFIX = "server_user_blacklist_remove_checkbox_group";
@@ -30,10 +41,26 @@ const USERS_PER_PAGE = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
 const MAX_PAGE_BUTTONS = 24;
 const PAGE_SELECT_TIMEOUT_MS = 300_000;
 
-type BlacklistedUserTarget = {
+type RemovalEntryBase = {
   id: string;
+  userId: string;
   displayName: string;
+  label: string;
+  description: string;
 };
+
+type PersonalizationBlacklistRemovalEntry = RemovalEntryBase & {
+  source: "personalization";
+};
+
+type PersonaBlockRemovalEntry = RemovalEntryBase & {
+  source: "persona_block";
+  personaId: number;
+  personaName: string;
+  blockType: PersonaUserBlockType;
+};
+
+type UserBlacklistRemovalEntry = PersonalizationBlacklistRemovalEntry | PersonaBlockRemovalEntry;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.server.user-blacklist.remove.description"));
@@ -64,8 +91,11 @@ export async function execute(
       return;
     }
 
-    const blacklistedIds = await userRepository.getBlacklistedMemberIds(tomoriState.server_id);
-    if (blacklistedIds.length === 0) {
+    const [blacklistedIds, personaBlocks] = await Promise.all([
+      userRepository.getBlacklistedMemberIds(tomoriState.server_id),
+      personaUserBlockRepository.loadActiveBlocksForServer(tomoriState.server_id),
+    ]);
+    if (blacklistedIds.length === 0 && personaBlocks.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.user-blacklist.remove.none_title",
         descriptionKey: "commands.server.user-blacklist.remove.none_description",
@@ -75,15 +105,21 @@ export async function execute(
       return;
     }
 
-    const availableUsers = await loadBlacklistedUsers(interaction, blacklistedIds);
-    const initialSelectedIds = new Set(blacklistedIds);
+    const availableEntries = await loadRemovalEntries(
+      interaction,
+      locale,
+      blacklistedIds,
+      personaBlocks,
+      tomoriState.config.timezone_offset ?? 0,
+    );
+    const initialSelectedIds = new Set(availableEntries.map((entry) => entry.id));
 
-    if (availableUsers.length <= USERS_PER_PAGE) {
-      await executeSinglePage(interaction, locale, tomoriState.server_id, availableUsers, initialSelectedIds);
+    if (availableEntries.length <= USERS_PER_PAGE) {
+      await executeSinglePage(interaction, locale, tomoriState.server_id, availableEntries, initialSelectedIds);
       return;
     }
 
-    await executeMultiPage(interaction, locale, tomoriState.server_id, availableUsers, initialSelectedIds);
+    await executeMultiPage(interaction, locale, tomoriState.server_id, availableEntries, initialSelectedIds);
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
@@ -107,10 +143,10 @@ async function executeSinglePage(
   interaction: ChatInputCommandInteraction,
   locale: string,
   serverId: number,
-  availableUsers: BlacklistedUserTarget[],
+  availableEntries: UserBlacklistRemovalEntry[],
   selectedIds: Set<string>,
 ): Promise<void> {
-  const checkboxGroups = buildCheckboxGroups(availableUsers, selectedIds);
+  const checkboxGroups = buildCheckboxGroups(availableEntries, selectedIds);
   const modalResult = await promptWithRawModal(
     interaction,
     locale,
@@ -127,17 +163,17 @@ async function executeSinglePage(
   }
 
   const nextSelectedIds = collectSelectedIds(modalResult.multiValues, checkboxGroups.length);
-  await persistUpdate(modalResult.interaction, locale, serverId, selectedIds, nextSelectedIds, availableUsers);
+  await persistUpdate(modalResult.interaction, locale, serverId, selectedIds, nextSelectedIds, availableEntries);
 }
 
 async function executeMultiPage(
   interaction: ChatInputCommandInteraction,
   locale: string,
   serverId: number,
-  availableUsers: BlacklistedUserTarget[],
+  availableEntries: UserBlacklistRemovalEntry[],
   initialSelectedIds: Set<string>,
 ): Promise<void> {
-  const totalPages = Math.ceil(availableUsers.length / USERS_PER_PAGE);
+  const totalPages = Math.ceil(availableEntries.length / USERS_PER_PAGE);
   let selectedIds = new Set(initialSelectedIds);
 
   if (totalPages > MAX_PAGE_BUTTONS) {
@@ -145,7 +181,7 @@ async function executeMultiPage(
       titleKey: "commands.server.user-blacklist.remove.too_many_pages_title",
       descriptionKey: "commands.server.user-blacklist.remove.too_many_pages_description",
       descriptionVars: {
-        user_count: availableUsers.length.toString(),
+        entry_count: availableEntries.length.toString(),
         max_pages: MAX_PAGE_BUTTONS.toString(),
       },
       color: ColorCode.WARN,
@@ -155,8 +191,8 @@ async function executeMultiPage(
   }
 
   await interaction.reply({
-    embeds: [buildPageSelectEmbed(locale, availableUsers.length, totalPages, selectedIds.size)],
-    components: buildPageActionRows(totalPages, availableUsers.length, locale),
+    embeds: [buildPageSelectEmbed(locale, availableEntries.length, totalPages, selectedIds.size)],
+    components: buildPageActionRows(totalPages, availableEntries.length, locale),
     flags: MessageFlags.Ephemeral,
   });
 
@@ -189,8 +225,8 @@ async function executeMultiPage(
     }
 
     const startIndex = (selectedPage - 1) * USERS_PER_PAGE;
-    const pageUsers = availableUsers.slice(startIndex, startIndex + USERS_PER_PAGE);
-    const checkboxGroups = buildCheckboxGroups(pageUsers, selectedIds);
+    const pageEntries = availableEntries.slice(startIndex, startIndex + USERS_PER_PAGE);
+    const checkboxGroups = buildCheckboxGroups(pageEntries, selectedIds);
 
     const modalResult = await promptWithRawModal(
       buttonInteraction,
@@ -207,11 +243,11 @@ async function executeMultiPage(
       const pageSelectedIds = collectSelectedIds(modalResult.multiValues, checkboxGroups.length);
       const nextSelectedIds = new Set(selectedIds);
 
-      for (const user of pageUsers) {
-        nextSelectedIds.delete(user.id);
+      for (const entry of pageEntries) {
+        nextSelectedIds.delete(entry.id);
       }
-      for (const userId of pageSelectedIds) {
-        nextSelectedIds.add(userId);
+      for (const entryId of pageSelectedIds) {
+        nextSelectedIds.add(entryId);
       }
 
       selectedIds = await persistUpdate(
@@ -220,14 +256,14 @@ async function executeMultiPage(
         serverId,
         selectedIds,
         nextSelectedIds,
-        availableUsers,
+        availableEntries,
       );
     }
 
     try {
       await interaction.editReply({
-        embeds: [buildPageSelectEmbed(locale, availableUsers.length, totalPages, selectedIds.size)],
-        components: buildPageActionRows(totalPages, availableUsers.length, locale),
+        embeds: [buildPageSelectEmbed(locale, availableEntries.length, totalPages, selectedIds.size)],
+        components: buildPageActionRows(totalPages, availableEntries.length, locale),
       });
     } catch {
       break;
@@ -236,7 +272,7 @@ async function executeMultiPage(
 
   try {
     await interaction.editReply({
-      embeds: [buildPageSelectEmbed(locale, availableUsers.length, totalPages, selectedIds.size)],
+      embeds: [buildPageSelectEmbed(locale, availableEntries.length, totalPages, selectedIds.size)],
       components: [],
     });
   } catch {
@@ -244,39 +280,103 @@ async function executeMultiPage(
   }
 }
 
-async function loadBlacklistedUsers(
+async function loadRemovalEntries(
   interaction: ChatInputCommandInteraction,
+  locale: string,
   userIds: string[],
-): Promise<BlacklistedUserTarget[]> {
-  const users: BlacklistedUserTarget[] = [];
+  personaBlocks: PersonaUserBlockWithPersona[],
+  timezoneOffset: number,
+): Promise<UserBlacklistRemovalEntry[]> {
+  const entries: UserBlacklistRemovalEntry[] = [];
+  const displayNameCache = new Map<string, string>();
 
   for (const userId of userIds) {
-    let user: User | null = null;
-    try {
-      user = await interaction.client.users.fetch(userId);
-    } catch {
-      user = null;
-    }
+    const displayName = await resolveUserDisplayName(interaction, userId, displayNameCache);
 
-    users.push({
-      id: userId,
-      displayName: user?.username ?? userId,
+    entries.push({
+      id: `personalization:${userId}`,
+      source: "personalization",
+      userId,
+      displayName,
+      label: localizer(locale, "commands.server.user-blacklist.remove.personalization_entry_label", {
+        user_name: displayName,
+      }),
+      description: localizer(locale, "commands.server.user-blacklist.remove.personalization_entry_description"),
     });
   }
 
-  return users.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  for (const block of personaBlocks) {
+    const displayName = await resolveUserDisplayName(interaction, block.user_disc_id, displayNameCache);
+    const blockTypeLabel = localizer(locale, `tools.user_block.type_${block.block_type}`);
+
+    entries.push({
+      id: `persona-block:${block.persona_id}:${block.user_disc_id}`,
+      source: "persona_block",
+      userId: block.user_disc_id,
+      displayName,
+      personaId: block.persona_id,
+      personaName: block.persona_name,
+      blockType: block.block_type,
+      label: localizer(locale, "commands.server.user-blacklist.remove.persona_block_entry_label", {
+        user_name: displayName,
+        persona_name: block.persona_name,
+        block_type: blockTypeLabel,
+      }),
+      description: localizer(locale, "commands.server.user-blacklist.remove.persona_block_entry_description", {
+        block_type: blockTypeLabel,
+        expires_at: formatEntryExpiry(block.expires_at, timezoneOffset),
+      }),
+    });
+  }
+
+  return entries.sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function buildCheckboxGroups(users: BlacklistedUserTarget[], selectedIds: Set<string>): ModalCheckboxGroupField[] {
+async function resolveUserDisplayName(
+  interaction: ChatInputCommandInteraction,
+  userId: string,
+  cache: Map<string, string>,
+): Promise<string> {
+  const cached = cache.get(userId);
+  if (cached) {
+    return cached;
+  }
+
+  let user: User | null = null;
+  try {
+    user = await interaction.client.users.fetch(userId);
+  } catch {
+    user = null;
+  }
+
+  const displayName = user?.username ?? userId;
+  cache.set(userId, displayName);
+  return displayName;
+}
+
+function formatEntryExpiry(expiresAt: Date, timezoneOffset: number): string {
+  return `${formatTimeWithOffset(expiresAt, timezoneOffset, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })} ${formatUTCOffset(timezoneOffset)}`;
+}
+
+function buildCheckboxGroups(
+  entries: UserBlacklistRemovalEntry[],
+  selectedIds: Set<string>,
+): ModalCheckboxGroupField[] {
   const checkboxGroups: ModalCheckboxGroupField[] = [];
 
-  for (let index = 0; index < users.length; index += MAX_OPTIONS_PER_GROUP) {
-    const chunk = users.slice(index, index + MAX_OPTIONS_PER_GROUP);
+  for (let index = 0; index < entries.length; index += MAX_OPTIONS_PER_GROUP) {
+    const chunk = entries.slice(index, index + MAX_OPTIONS_PER_GROUP);
     const groupIndex = Math.floor(index / MAX_OPTIONS_PER_GROUP);
-    const options: CheckboxGroupOption[] = chunk.map((user) => ({
-      label: safeSelectOptionText(user.displayName),
-      value: user.id,
-      default: selectedIds.has(user.id),
+    const options: CheckboxGroupOption[] = chunk.map((entry) => ({
+      label: safeSelectOptionText(entry.label),
+      value: entry.id,
+      description: safeSelectOptionText(entry.description),
+      default: selectedIds.has(entry.id),
     }));
 
     checkboxGroups.push({
@@ -310,12 +410,12 @@ function collectSelectedIds(multiValues: Record<string, string[]> | undefined, g
   return selectedIds;
 }
 
-function buildPageSelectEmbed(locale: string, userCount: number, totalPages: number, selectedCount: number) {
+function buildPageSelectEmbed(locale: string, entryCount: number, totalPages: number, selectedCount: number) {
   return createStandardEmbed(locale, {
     titleKey: "commands.server.user-blacklist.remove.select_page_title",
     descriptionKey: "commands.server.user-blacklist.remove.select_page_description",
     descriptionVars: {
-      user_count: userCount.toString(),
+      entry_count: entryCount.toString(),
       total_pages: totalPages.toString(),
       selected_count: selectedCount.toString(),
     },
@@ -325,14 +425,14 @@ function buildPageSelectEmbed(locale: string, userCount: number, totalPages: num
 
 function buildPageActionRows(
   totalPages: number,
-  totalUsers: number,
+  totalEntries: number,
   locale: string,
 ): ActionRowBuilder<ButtonBuilder>[] {
   const buttons: ButtonBuilder[] = [];
 
   for (let page = 1; page <= totalPages; page++) {
     const start = (page - 1) * USERS_PER_PAGE + 1;
-    const end = Math.min(page * USERS_PER_PAGE, totalUsers);
+    const end = Math.min(page * USERS_PER_PAGE, totalEntries);
 
     buttons.push(
       new ButtonBuilder()
@@ -363,11 +463,16 @@ async function persistUpdate(
   serverId: number,
   previousSelectedIds: Set<string>,
   nextSelectedIds: Set<string>,
-  availableUsers: BlacklistedUserTarget[],
+  availableEntries: UserBlacklistRemovalEntry[],
 ): Promise<Set<string>> {
-  const removedIds = [...previousSelectedIds].filter((userId) => !nextSelectedIds.has(userId));
+  const removedIds = [...previousSelectedIds].filter((entryId) => !nextSelectedIds.has(entryId));
+  const entryLookup = new Map(availableEntries.map((entry) => [entry.id, entry]));
+  const removedEntries = removedIds.flatMap((entryId) => {
+    const entry = entryLookup.get(entryId);
+    return entry ? [entry] : [];
+  });
 
-  if (removedIds.length === 0) {
+  if (removedEntries.length === 0) {
     await replyInfoEmbed(responseInteraction, locale, {
       titleKey: "commands.server.user-blacklist.remove.no_changes_title",
       descriptionKey: "commands.server.user-blacklist.remove.no_changes_description",
@@ -376,19 +481,39 @@ async function persistUpdate(
     return previousSelectedIds;
   }
 
-  await serverRepository.removeUserBlacklistMany(serverId, removedIds);
+  const personalizationUserIds = removedEntries
+    .filter((entry): entry is PersonalizationBlacklistRemovalEntry => entry.source === "personalization")
+    .map((entry) => entry.userId);
+  const personaBlockEntries = removedEntries.filter(
+    (entry): entry is PersonaBlockRemovalEntry => entry.source === "persona_block",
+  );
 
-  for (const userId of removedIds) {
-    invalidateUserBlacklistCache(responseInteraction.guildId ?? "", userId);
+  if (personalizationUserIds.length > 0) {
+    await serverRepository.removeUserBlacklistMany(serverId, personalizationUserIds);
+
+    for (const userId of personalizationUserIds) {
+      invalidateUserBlacklistCache(responseInteraction.guildId ?? "", userId);
+    }
   }
 
-  const userLookup = new Map(availableUsers.map((user) => [user.id, user.displayName]));
+  if (personaBlockEntries.length > 0) {
+    const keys: PersonaUserBlockKey[] = personaBlockEntries.map((entry) => ({
+      personaId: entry.personaId,
+      userDiscId: entry.userId,
+    }));
+    await personaUserBlockRepository.removeBlocksByKeys(serverId, keys);
+
+    for (const entry of personaBlockEntries) {
+      invalidatePersonaUserBlockCache(serverId, entry.personaId, entry.userId);
+    }
+  }
+
   await replyInfoEmbed(responseInteraction, locale, {
     titleKey: "commands.server.user-blacklist.remove.success_title",
     descriptionKey: "commands.server.user-blacklist.remove.success_description",
     descriptionVars: {
-      removed_count: removedIds.length.toString(),
-      removed_users: formatUserList(removedIds, userLookup),
+      removed_count: removedEntries.length.toString(),
+      removed_entries: formatEntryList(removedEntries),
       selected_count: nextSelectedIds.size.toString(),
     },
     color: ColorCode.SUCCESS,
@@ -397,6 +522,6 @@ async function persistUpdate(
   return nextSelectedIds;
 }
 
-function formatUserList(userIds: string[], userLookup: Map<string, string>): string {
-  return userIds.map((userId) => `\`${userLookup.get(userId) ?? userId}\``).join(", ");
+function formatEntryList(entries: UserBlacklistRemovalEntry[]): string {
+  return entries.map((entry) => `\`${entry.label}\``).join(", ");
 }

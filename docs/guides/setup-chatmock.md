@@ -1,4 +1,6 @@
-# Setup: Codex CLI via ChatMock
+---
+title: "Setup: Codex CLI via ChatMock"
+---
 
 If you want TomoriBot to use your ChatGPT account through a local OpenAI-compatible bridge, you can run [ChatMock](https://github.com/RayBytes/ChatMock) and point TomoriBot's `custom` provider at it.
 

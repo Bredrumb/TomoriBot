@@ -21,7 +21,7 @@ export default {
       file_too_large: `The generated video ({size_mb} MB) exceeds Discord's 25 MB file size limit.`,
     },
     generate_image_nai: {
-      no_google_api_key: `Inpainting requires saved Google provider credentials for image segmentation. Add them with \`/config provider add\`, or switch to the Google provider.`,
+      no_google_api_key: `Inpainting requires saved Google provider credentials for image segmentation. Add them with \`/provider add\`, or switch to the Google provider.`,
       model_not_configured: `NovelAI image generation is disabled right now. Select a NovelAI image model with \`/model image\` first.`,
       provider_quota_exceeded: `NovelAI image generation quota is exhausted for this account. Recharge Anlas or wait for the quota to refresh, then try again.`,
       characters_require_v4: `Character positioning requires a NovelAI V4 diffusion model or newer.`,
@@ -56,6 +56,20 @@ export default {
     tool_notice: {
       hide_footer: `Hide this using \`/config notice-embeds visibility\``,
       hide_footer_with_kill: `Hide this using \`/config notice-embeds visibility\` · Use \`/bot kill\` if you think I'm stuck`,
+    },
+    user_block: {
+      type_mute: `mute`,
+      type_block: `block`,
+      effect_mute: `The target cannot trigger this persona.`,
+      effect_block: `The target cannot trigger this persona, and their recent messages/media are hidden from this persona's context.`,
+      block_mute_title: `🔇 {persona_name} Muted {user_name} for {duration_hours} hour(s)`,
+      block_block_title: `❌ {persona_name} Blocked {user_name} for {duration_hours} hour(s)`,
+      block_success_description: `{user_name} cannot trigger {persona_name} and their messages/media are now hidden until {expires_at}.`,
+      mute_success_description: `{user_name} cannot trigger {persona_name} until {expires_at}.`,
+      block_footer: `Server managers may remove this with /server user-blacklist remove.`,
+      unmute_success_title: `🔊 {persona_name} Unmuted {user_name}`,
+      unblock_success_title: `✅ {persona_name} Unblocked {user_name}`,
+      unblock_success_description: `Removed the active {block_type} for {user_name} from {persona_name}.`,
     },
     video: {
       youtube_processing_title: `👁️  Watching YouTube Video...`,

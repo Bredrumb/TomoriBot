@@ -69,7 +69,12 @@ function formatTargetEmbedForContext(
   embedType: ReturnType<typeof checkTargetEmbedTitle>["type"],
   tomoriNickname: string | null | undefined,
 ): string {
-  if (embedType === "system_injection" || embedType === "compact_summary" || embedType === "compact_refresh") {
+  if (
+    embedType === "system_injection" ||
+    embedType === "scene_directive" ||
+    embedType === "compact_summary" ||
+    embedType === "compact_refresh"
+  ) {
     const titleLine =
       (embedType === "compact_summary" || embedType === "compact_refresh") && embed.title ? `## ${embed.title}\n` : "";
     return `[System: ${titleLine}${embed.description}]`;

@@ -69,9 +69,9 @@ export default {
       tomori_updating_description: `現在アップデート中のため、まもなく復旧します。しばらくしてからもう一度お試しください！`,
       tomori_not_setup_dm_footer: `DMは「ミニサーバー」として扱われ、私はあなたのメッセージに個人的に応答します。ほとんどのサーバー関連コマンドは意図通りに動作します。`,
       api_key_missing_title: `APIキーがありません`,
-      api_key_missing_description: `機能するには有効なプロバイダー設定が必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/setup\`（初回）または\`/config provider add\`で設定できます。`,
+      api_key_missing_description: `機能するには有効なプロバイダー設定が必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/setup\`（初回）または\`/provider add\`で設定できます。`,
       api_key_error_title: `APIキーエラー`,
-      api_key_error_description: `設定されたプロバイダー認証情報へのアクセスまたは復号化で問題が発生しました。\`/config provider add\`で再設定してください。`,
+      api_key_error_description: `設定されたプロバイダー認証情報へのアクセスまたは復号化で問題が発生しました。\`/provider add\`で再設定してください。`,
       personal_provider_required_title: `個人プロバイダーが必要です`,
       personal_provider_required_description: `このサーバーでは、ユーザーが発言したメッセージに対してメンバー自身のAIプロバイダー設定を使用しています。\`/help personal-provider\` を確認し、\`/personal provider add\` で設定してください。`,
       personal_provider_credentials_error_title: `個人プロバイダーエラー`,
@@ -160,7 +160,7 @@ export default {
       rejoin_title: `TomoriBotが戻ってきました！`,
       rejoin_description: `このサーバーに再追加されたようです。以前の設定と人格はそのままです！\`/config\`、\`/persona\`、\`/memory\`、\`/server\`コマンドで私を管理できます。\`/memory personal export\`、\`/memory server export\`、\`/personal config\`、\`/server config\`でいつでもデータのエクスポートやリセットができます。
 
-			プロバイダーを変更したい場合は、\`/config provider add\`で新しいプロバイダーを登録し、\`/model text\`でアクティブにしてください。
+			プロバイダーを変更したい場合は、\`/provider add\`で新しいプロバイダーを登録し、\`/model text\`でアクティブにしてください。
 
 			**TomoriBotを使用することで、[利用規約](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/terms-of-service.md)と[プライバシーポリシー](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/privacy-policy.md)に同意したことになります。**\`/legal terms\`と\`/legal privacy\`でいつでも確認できます。`,
       setup_prompt_title: `TomoriBotの追加が完了しました`,

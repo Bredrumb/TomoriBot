@@ -20,6 +20,7 @@ export type TargetEmbedType =
   | "reset"
   | "reminder_set"
   | "system_injection"
+  | "scene_directive"
   | "compact_summary"
   | "compact_refresh"
   | "reward"
@@ -79,6 +80,12 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
     }
     if (embedTitle === localizer(supportedLocale, "commands.bot.impersonate.system_title")) {
       return { isTarget: true, type: "system_injection" };
+    }
+
+    // 2b. Scene-generation status embed — surfaced to the LLM so it knows a scripted
+    //     scene is underway and can read the speaking order / instructions as context.
+    if (embedTitle === localizer(supportedLocale, "commands.bot.generate.scene.success_title")) {
+      return { isTarget: true, type: "scene_directive" };
     }
 
     // 3. Reward/punish titles — dynamically discovered from locale sub-keys

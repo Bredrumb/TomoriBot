@@ -94,6 +94,7 @@ export const tomoriSchema = z.object({
   // autoch_counter and autoch_next_target moved to personaAutochRuntimeStateSchema (migration 015).
   is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
+  applied_avatar_hash: z.string().nullable().optional(), // Added migration 033 - preset_avatar_hash last PATCHed onto this persona's guild member avatar (NULL = never synced)
   physical_appearance_tags: z.array(z.string()).default([]), // Public imageboard-style physical appearance tags
   nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - Persona-specific NovelAI character reference image
   nai_attg_author: z.string().nullable().optional(), // Added March 2026 - ATTG: Story author name
@@ -122,6 +123,53 @@ export const personaAttributeSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonaAttributeRow = z.infer<typeof personaAttributeSchema>;
+
+export const personaSpriteSchema = z.object({
+  sprite_id: z.number().optional(),
+  persona_id: z.number().int(),
+  sprite_name: z.string().min(1).max(64),
+  sprite_key: z.string().min(1).max(64),
+  avatar_url: z.string().min(1),
+  usage_instructions: z.string().max(1000).default(""),
+  // When true, the sprite renders its decorated "Sprite (Persona)" name in
+  // Discord (DID alter style) instead of the clean persona name.
+  is_identity: z.boolean().default(false),
+  created_at: z.coerce.date().optional(),
+  updated_at: z.coerce.date().optional(),
+});
+export type PersonaSpriteRow = z.infer<typeof personaSpriteSchema>;
+
+// Shared official preset sprites, resolved live by pointer personas. Keyed by
+// the preset identity (preset_lineage_id, preset_language) and seeded from the
+// catalog; the avatar_url is a shared object-storage reference used by every
+// server's pointer persona. See docs/subsystems/persona-presets.md.
+export const presetSpriteSchema = z.object({
+  preset_sprite_id: z.number().optional(),
+  preset_lineage_id: z.coerce.number().int(),
+  preset_language: z.string(),
+  sprite_name: z.string().min(1).max(64),
+  sprite_key: z.string().min(1).max(64),
+  avatar_url: z.string().min(1),
+  usage_instructions: z.string().max(1000).default(""),
+  is_identity: z.boolean().default(false),
+  created_at: z.coerce.date().optional(),
+  updated_at: z.coerce.date().optional(),
+});
+export type PresetSpriteRow = z.infer<typeof presetSpriteSchema>;
+
+/**
+ * Maps a webhook-delivered sprite message to the sprite label it rendered with.
+ * Sprite messages display a clean persona name in Discord; context rebuilding
+ * uses these rows to recover the decorated "Name (sprite):" label for the model.
+ */
+export const personaSpriteMessageSchema = z.object({
+  message_disc_id: z.string().min(1),
+  persona_id: z.number().int(),
+  sprite_name: z.string().min(1).max(64),
+  channel_disc_id: z.string().min(1),
+  created_at: z.coerce.date().optional(),
+});
+export type PersonaSpriteMessageRow = z.infer<typeof personaSpriteMessageSchema>;
 
 /**
  * Runtime autochat counters for a persona (Phase 6 Step #16B).
@@ -174,6 +222,10 @@ export const llmSchema = z.object({
   supports_prefix_completion: z.boolean().default(false),
   llm_description: z.string().nullable().optional(),
   ja_description: z.string().nullable().optional(),
+  // Official per-model pricing (USD per million tokens, uncached standard rate). Null for OpenRouter
+  // (dynamic live cache) and free/non-metered providers. Coerced because Postgres NUMERIC arrives as a string.
+  input_price_per_million: z.coerce.number().nullable().optional(),
+  output_price_per_million: z.coerce.number().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -564,6 +616,7 @@ export const serverChatConfigSchema = z.object({
   cascade_limit: z.number().int().default(3),
   timezone_offset: z.number().int().default(0),
   self_debug_enabled: z.boolean().default(false),
+  model_randomizer_enabled: z.boolean().default(false),
   system_prompt: z.string().nullable().optional(),
   context_note: z.string().nullable().optional(),
   context_note_depth: z.number().int().default(0),
@@ -612,6 +665,7 @@ export const serverCapabilitiesConfigSchema = z.object({
   imagegen_enabled: z.boolean().default(true),
   videogen_enabled: z.boolean().default(false),
   voice_message_enabled: z.boolean().default(true),
+  user_blocking_enabled: z.boolean().default(true),
   tool_use_enabled: z.boolean().default(true),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -873,6 +927,11 @@ export const tomoriPresetSchema = z.object({
   preset_sample_dialogues_out: z.array(z.string()).default([]),
   preset_language: z.string(),
   preset_avatar_path: z.string().nullable().optional(),
+  // Shared object-storage URL of the official avatar image (migration 033),
+  // uploaded once and live-resolved by pointer alters; the hash is its
+  // content-addressed version token used to gate the main-avatar fan-out.
+  preset_avatar_shared_url: z.string().nullable().optional(),
+  preset_avatar_hash: z.string().nullable().optional(),
   preset_trigger_words: z.array(z.string()).default([]),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -1019,6 +1078,21 @@ export const personalizationBlacklistSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonalizationBlacklistRow = z.infer<typeof personalizationBlacklistSchema>;
+
+export const personaUserBlockTypeSchema = z.enum(["mute", "block"]);
+export type PersonaUserBlockType = z.infer<typeof personaUserBlockTypeSchema>;
+
+export const personaUserBlockSchema = z.object({
+  server_id: z.number().int(),
+  persona_id: z.number().int(),
+  user_disc_id: z.string(),
+  block_type: personaUserBlockTypeSchema,
+  reason: z.string(),
+  expires_at: z.date(),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type PersonaUserBlockRow = z.infer<typeof personaUserBlockSchema>;
 
 /**
  * Channel Whitelist Schema

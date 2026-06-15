@@ -54,6 +54,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     forcedMentions: input.forcedMentions,
     manualTriggerInvoker: input.manualTriggerInvoker,
     manualStreamingContextOverrides: input.manualStreamingContextOverrides,
+    sceneTurn: input.sceneTurn,
   };
 }
 

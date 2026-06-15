@@ -40,6 +40,26 @@ export enum VisibleDeliveryMode {
 }
 
 /**
+ * Sprite mapping persisted after a successful webhook send so context
+ * rebuilding can recover the decorated "Name (sprite):" label even though the
+ * webhook displays only the clean persona name.
+ */
+export interface SpriteMessageRecordInfo {
+  personaId: number;
+  spriteName: string;
+}
+
+export interface StreamRenderModifierState {
+  identity: {
+    username?: string;
+    avatarUrl?: string;
+    avatarDataUri?: string;
+  };
+  /** Present when the active render modifier is a persona sprite. */
+  spriteRecord?: SpriteMessageRecordInfo;
+}
+
+/**
  * Stream state tracking for buffer management and code block and think block detection
  */
 export interface StreamState {
@@ -80,6 +100,20 @@ export interface StreamState {
    * flush boundary with exactly one blank line.
    */
   pendingAggregateJoinNextWithBlankLine: boolean;
+  /** Active render-modifier identity for the current generated line. */
+  activeRenderModifier?: StreamRenderModifierState;
+  /**
+   * Sprite-key of the most recently delivered non-identity sprite, used to detect
+   * when the sprite changes so the group-break name representation can be toggled.
+   */
+  lastDeliveredSpriteKey?: string;
+  /**
+   * Toggles each time a non-identity sprite changes. Decides whether the current
+   * sprite uses the clean persona name (`false`) or the decorated `Persona (sprite)`
+   * name (`true`), so adjacent different-sprite messages never share a username and
+   * Discord renders each avatar instead of grouping them under the first.
+   */
+  spriteGroupParity?: boolean;
 }
 
 /**
@@ -258,6 +292,9 @@ export function createDefaultStreamState(): StreamState {
     pendingOrphanPunctuation: undefined,
     pendingAggregatedText: "",
     pendingAggregateJoinNextWithBlankLine: false,
+    activeRenderModifier: undefined,
+    lastDeliveredSpriteKey: undefined,
+    spriteGroupParity: false,
   };
 }
 

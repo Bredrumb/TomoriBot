@@ -181,7 +181,7 @@ export async function execute(
         executorDiscordId: interaction.user.id,
       },
     };
-    await log.error("Error executing /config custom-endpoint remove", error as Error, context);
+    await log.error("Error executing /provider custom-endpoint remove", error as Error, context);
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

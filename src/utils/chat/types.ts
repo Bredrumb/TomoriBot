@@ -31,6 +31,19 @@ export interface ManualTriggerInvoker {
   member?: GuildMember | null;
 }
 
+export interface SceneTurnSpeaker {
+  personaId: number;
+  personaName: string;
+}
+
+export interface SceneTurnMetadata {
+  commandId: string;
+  sequence: SceneTurnSpeaker[];
+  turnIndex: number;
+  totalTurns: number;
+  additionalInstructions?: string;
+}
+
 /** Public input to tomoriChat() — optional fields apply defaults in normalizeChatInvocation. */
 export interface TomoriChatInput {
   client: Client;
@@ -62,6 +75,7 @@ export interface TomoriChatInput {
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
+  sceneTurn?: SceneTurnMetadata;
 }
 
 export interface ChatIncoming {
@@ -94,6 +108,7 @@ export interface ChatIncoming {
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
+  sceneTurn?: SceneTurnMetadata;
 }
 
 export type ChatAdmissionDisposition = "run" | "ignore" | "queued" | "blocked" | "error";

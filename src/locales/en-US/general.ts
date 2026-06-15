@@ -69,9 +69,9 @@ export default {
       tomori_updating_description: `I'm currently being updated and will be back shortly. Please try again in a few moments!`,
       tomori_not_setup_dm_footer: `DMs are treated as mini "servers" wherein I respond to any of your messages privately. Most server related commands will still work as intended.`,
       api_key_missing_title: `API Key Missing`,
-      api_key_missing_description: `I need an active provider to function, but none is configured for this server. A server member with \`Manage Server\` permissions can set one using \`/setup\` (first time) or \`/config provider add\`.`,
+      api_key_missing_description: `I need an active provider to function, but none is configured for this server. A server member with \`Manage Server\` permissions can set one using \`/setup\` (first time) or \`/provider add\`.`,
       api_key_error_title: `API Key Error`,
-      api_key_error_description: `There was an issue accessing or decrypting the configured provider credentials. Please reconfigure them using \`/config provider add\`.`,
+      api_key_error_description: `There was an issue accessing or decrypting the configured provider credentials. Please reconfigure them using \`/provider add\`.`,
       personal_provider_required_title: `Personal Provider Required`,
       personal_provider_required_description: `This server is using member-provided AI access for user-triggered messages. Run \`/help personal-provider\` and then \`/personal provider add\` to set up your own provider.`,
       personal_provider_credentials_error_title: `Personal Provider Error`,
@@ -160,7 +160,7 @@ export default {
       rejoin_title: `I'm Back!`,
       rejoin_description: `Looks like I was re-added to this server. My previous settings and personality are still intact! You can manage me using the \`/config\`, \`/persona\`, \`/memory\`, and \`/server\` commands. You can also export or reset your data anytime with \`/memory personal export\`, \`/memory server export\`, \`/personal config\`, and \`/server config\`.
 
-			If you wish to change my provider, use \`/config provider add\` to register a new provider, then \`/model text\` to activate it.
+			If you wish to change my provider, use \`/provider add\` to register a new provider, then \`/model text\` to activate it.
 
 			**By using me, you agree to these [Terms of Service](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/terms-of-service.md) and [Privacy Policy](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/privacy-policy.md).** View them anytime with \`/legal terms\` and \`/legal privacy\`.`,
       setup_prompt_title: `Successfully Added`,

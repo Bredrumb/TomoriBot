@@ -296,6 +296,11 @@ export async function showServerConfigStatus(
         inline: true,
       },
       {
+        nameKey: "commands.tool.status.field_model_randomizer",
+        value: formatBooleanLocalized(config.model_randomizer_enabled, locale),
+        inline: true,
+      },
+      {
         nameKey: "commands.tool.status.field_uncensor_injection",
         value: formatBooleanLocalized(config.uncensor_injection_enabled, locale),
         inline: true,

@@ -14,7 +14,7 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 - **Shared config**: all personas in a server share the same server-scoped config tables (`server_*_configs`).
 - **Sequential responses**: if multiple personas match a trigger, they respond one-by-one via the channel queue.
 
-Official bundled character presets have their own pointer behavior for seeded text and one-time avatar application. See [Persona Presets](./persona-presets).
+Official bundled character presets have their own pointer behavior for seeded text, sprites, and avatars. Pointer alters live-resolve a shared preset avatar; the main persona's guild avatar is fanned out by a hash-gated background reconciler. See [Persona Presets](./persona-presets).
 
 ## Data Model
 
@@ -27,11 +27,35 @@ Key columns:
 - `webhook_avatar_url`: stored alter avatar reference.
   - Production: stable public URL (S3 / CloudFront).
   - Non-production: stable local path under `data/avatars/...`, or a legacy HTTP URL until lazy migration runs.
+  - **NULL for an unforked preset-pointer alter**: it live-resolves the shared `persona_presets.preset_avatar_shared_url` into its cached state at load time, so one image is shared across servers and catalog avatar edits fan out on reseed (see [Persona Presets](./persona-presets) → *Avatar syncing*).
+- `applied_avatar_hash`: for a main preset-pointer persona, the `preset_avatar_hash` last PATCHed onto this guild's member avatar by the fan-out reconciler. NULL = never synced.
 
 ### `persona_configs`
 
 Per-persona configuration (one row per persona in `personas`):
 - `trigger_words`: trigger words for this persona — **all personas use this column** (Phase 6 F1 merged the former `personas.alter_triggers` column here; the old `is_alter ? alter_triggers : trigger_words` ternary is gone).
+
+### `persona_sprites`
+
+Default (preset-pointer) personas can ship with an **official sprite set** that resolves live from the shared `preset_sprites` table, so every server's pointer persona gets them with no per-server storage. `PersonaSpriteRepository.listForPersona()` resolves preset sprites for pointer personas and own-rows for materialized ones, so everything below applies uniformly. See [persona-presets](../subsystems/persona-presets) → *`preset_sprites`*.
+
+`persona_sprites` stores named per-persona avatar variants selected by generated render-modifier labels:
+
+- `sprite_name`: display label shown in prompt guidance and webhook names, e.g. `mad`.
+- `sprite_key`: normalized lookup key for case/spacing-insensitive matching.
+- `avatar_url`: production public object URL, or a non-production local path under `data/avatars/servers/{serverDiscId}/personas/{personaId}/sprites/{assetId}.png`.
+- `usage_instructions`: short guidance injected into the active persona's prompt so the model knows when the sprite should be used.
+- `is_identity`: when `true`, the sprite renders its **decorated** `sprite_name (SourcePersona)` name directly in Discord (DID alter / "system member" style) instead of the clean persona name. Set via the **Save as Identity** checkbox on `/persona sprites add` or `/persona sprites edit` (default unchecked on add). The checkbox is authoritative on every save — saving an existing sprite with the box unchecked demotes it back to an ordinary sprite.
+
+Sprite rows are managed by `/persona sprites add`, `/persona sprites edit`, and `/persona sprites remove`. Reusing a sprite name on `add` replaces the existing row and image. `edit` changes a sprite's name, optional replacement image, usage instructions, and `is_identity` flag in place; image replacements consume the same shared avatar quota as `add`, while metadata-only edits stay quota-free. Renaming updates `sprite_key` and is rejected if it would collide with another sprite on the same persona. The default per-persona limit is 50 (`PERSONA_SPRITE_MAX_PER_PERSONA`), and the prompt only lists the first 20 by default (`PERSONA_SPRITE_PROMPT_MAX_COUNT`). Identity status is not surfaced to the model — invocation syntax is identical for both kinds, so only the rendered webhook name differs.
+
+#### Sprite export / import (`.zip`)
+
+A persona's whole sprite set can be shared as a `.zip` via `/persona sprites export` and `/persona sprites import`. This is kept separate from `/persona export` (which carries only the persona card) so sprite images do not balloon the card file. The archive format lives in `src/utils/persona/spriteArchive.ts`:
+
+- **Layout:** `manifest.json` (format `version`, `source_persona` info, and a per-sprite list of `sprite_name` / `sprite_key` / `usage_instructions` / `is_identity` / `file`) plus the images under `sprites/NN-{key}.png`. Storage references and DB ids are deliberately excluded — they are meaningless on another server.
+- **Export** (`export.ts`): a persona-select modal; the command loads each sprite's stored image, normalizes it to PNG, and bundles them. Sprites whose image can no longer be loaded are skipped and the result is reported as partial. The reply is public (for sharing), like `/persona export`.
+- **Import** (`import.ts`): a single modal — persona string-select plus a `.zip` file-upload field — mirroring `/persona sprites add`. Requires a guild and Manage Server. The whole batch reserves **one** import-operation quota slot (not one avatar-quota slot per sprite). Names are re-validated and every image is re-converted to PNG **before** any storage/DB write, so a bad entry aborts cleanly. Name conflicts **overwrite** the existing sprite (old image is deleted from storage). If the archive would push the persona past `PERSONA_SPRITE_MAX_PER_PERSONA`, the **entire import is rejected** (all-or-nothing) — only new keys count toward the cap, since same-key entries are overwrites. Untrusted archives are guarded against ZIP bombs by entry-count, per-file, and total-decompressed caps.
 
 ### `reminders`
 
@@ -46,6 +70,8 @@ Reminders are tied to a persona to preserve the identity that set them:
 - **Reply to bot** (main persona messages) → main persona responds.
 - **Reply to alter webhook message** → the matching alter responds.
   - Matching is done by webhook `author.username` → persona nickname (case-insensitive).
+  - Copied-render webhook names like `Ren (bredrumb)` route replies back to the source persona
+    (`Ren`) while preserving the full visible label in prompt history.
   - Ensure persona nicknames are unique.
 - **Bot mention** → main persona responds.
 - Direct replies and bot mentions can combine with explicit persona trigger words in the same message. For example, replying to Tomori while mentioning `@Ren` routes the turn to Tomori and Ren.
@@ -106,6 +132,27 @@ Configured auto-trigger channels can also pin a single persona per channel:
 - `/server auto-trigger channels` can enable/disable channels in bulk, or target one channel and choose which persona should answer there.
 - The per-channel assignment is stored in `server_auto_trigger_persona_overrides`; the assembled config still exposes it as `autoch_persona_overrides`.
 - If a channel has no explicit assignment, auto-trigger falls back to the main persona.
+
+### Copied Rendering Syntax
+
+An active persona can intentionally render one generated line with a sprite avatar, or as a known copied user/persona, by
+starting the line as:
+
+```text
+SourcePersona (target): message
+```
+
+Resolution order is:
+
+1. **Persona sprite** on the active source persona. A matching `persona_sprites.sprite_key` sends the line through the managed webhook with the sprite image. The username depends on the sprite's `is_identity` flag:
+   - **Ordinary sprite** (`is_identity = false`): the **clean username `SourcePersona`** — the `(sprite)` suffix is not shown in Discord. The message → sprite-label mapping is persisted to `persona_sprite_messages` so context rebuilding can recover the decorated `SourcePersona (sprite):` label for the model. Because Discord groups consecutive webhook messages by `webhook_id` + `username` (ignoring the per-message avatar) **and strips zero-width/blank characters from usernames**, back-to-back ordinary sprites that share the clean name would otherwise all render under the *first* sprite's avatar, and no invisible marker can break that. To prevent it, when a sprite change would collide with the previous message's clean name, that one follow-up message falls back to the decorated `SourcePersona (sprite)` username (so it reads as a distinct Discord author and its avatar renders); the clean name is kept otherwise. A parity toggle flipped on each sprite change (`StreamState.spriteGroupParity` / `lastDeliveredSpriteKey`) drives this, so adjacent different-sprite messages alternate clean/decorated and never match, while same-sprite runs keep an identical username and still group. The decorated fallback round-trips through `resolveRenderModifierSourcePersona` for attribution, exactly like an identity sprite.
+   - **Identity sprite** (`is_identity = true`): the **flipped username `sprite (SourcePersona)`** is shown directly in Discord, like a copied identity / DID alter. No mapping lookup is needed for recovery — the decorated name re-attributes to the source persona through `resolveRenderModifierSourcePersona` (the persona nickname sits in the parens), and the message → sprite-label mapping is still persisted as a fallback.
+
+   In both cases the model-facing context label stays `SourcePersona (sprite)`. If the sprite row matches but the stored image is missing/unusable, TomoriBot strips the prefix and sends the text as normal source-persona output; it does not fall through to copied identity.
+2. **Copied identity** if no sprite matched. `target` resolves only against known personas in the server and Discord users already present in conversation context. If exactly one target matches, TomoriBot uses the **flipped** username `target (SourcePersona)` and the target's avatar — the impersonated name leads so the disguise reads naturally in chat, while the model-facing context label stays `SourcePersona (target)` so the LLM never confuses who is speaking.
+3. **Plain output** when no sprite/copy target resolves, or copied identity is ambiguous. The parenthetical modifier is stripped before delivery.
+
+Attribution, quota, self-reply bookkeeping, STM ownership, and reply routing remain attached to `SourcePersona`. History reconstruction (`resolveRenderModifierSourcePersona`) accepts both webhook-name orientations: flipped copied identities like `bredrumb (Ren)` (persona inside the parens, current format) and legacy `Ren (bredrumb)` decorations, always rebuilding the source-first `Ren (bredrumb)` label for prompt history. When *both* parts match personas (persona impersonating another persona), the flipped interpretation wins; legacy persona-on-persona messages are misattributed until they age out of the fetch window. Sprite messages are visually identical to plain `Ren` messages in Discord; their decorated prompt label is recovered from the `persona_sprite_messages` mapping (cache-primed per context build), and a missing mapping degrades to the plain persona name.
 
 ### Personal spotlight
 

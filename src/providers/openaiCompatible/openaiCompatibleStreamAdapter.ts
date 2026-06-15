@@ -42,6 +42,11 @@ import { localizer } from "@/utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
+import {
+  collectRenderModifierSourceNames,
+  isAllowedRenderModifierSpeakerLabel,
+} from "@/utils/discord/renderModifierParser";
+import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
 
 export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
@@ -56,6 +61,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
   private accumulatedReasoningContent = "";
   private pendingThinkBlockThoughtText = "";
   private speakerGuardEnabled = false;
+  private speakerGuardAllowedSourceNames: string[] = [];
 
   constructor(private readonly options: OpenAICompatibleStreamAdapterOptions) {
     super({
@@ -97,6 +103,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     log.info(`${this.options.adapterName}: Using API URL: ${apiUrl}`);
 
     this.speakerGuardPendingTail = "";
+    const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
+    this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
+      botName,
+      collectPersonaNameAliases(context.tomoriState, botName),
+    );
 
     // Determine whether the resolved endpoint accepts system-role messages.
     // The supportsSystemRole callback receives the final API URL and model so
@@ -836,7 +847,9 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     }
 
     const combined = `${this.speakerGuardPendingTail}${String(content)}`;
-    const speakerGuardResult = truncateBeforeGenericSpeakerLine(combined);
+    const speakerGuardResult = truncateBeforeGenericSpeakerLine(combined, {
+      isAllowedSpeakerLabel: (label) => isAllowedRenderModifierSpeakerLabel(label, this.speakerGuardAllowedSourceNames),
+    });
     const transitionIndex = speakerGuardResult.stopTriggered ? speakerGuardResult.text.length : -1;
 
     if (transitionIndex === -1) {

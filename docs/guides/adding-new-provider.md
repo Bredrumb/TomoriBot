@@ -292,11 +292,11 @@ Examples:
 
 Do not hardcode default models in provider code when the app already resolves them from the database/cache.
 
-### Invariants (validated at startup and by `bun run check-models`)
+### Invariants (validated at startup and by `bun run check-seed-catalogs`)
 
 `seedModelsFromCatalog()` validates the catalog and **throws before any DB write**
 if an invariant is violated, so a malformed catalog fails fast on boot. The same
-check is available offline via `bun run check-models`, which now validates every
+check is available offline via `bun run check-seed-catalogs`, which now validates every
 typed seed catalog (models, personas, system prompts, and NovelAI presets):
 
 - exactly one `isDefault` per provider, and that default is not deprecated;
@@ -518,7 +518,7 @@ Run `bun run check-locales` only if you changed locale files or command metadata
 - `src/db/seed/catalog/models.ts` (typed model catalog — edit this)
 - `src/db/seed/catalog/types.ts` (catalog input types)
 - `src/db/seed/catalog/modelSeed.ts` (renders + validates the catalog and seeds it at startup)
-- `scripts/checks/checkModelCatalog.ts` (`bun run check-models` — offline seed-catalog invariant check)
+- `scripts/checks/checkSeedCatalogs.ts` (`bun run check-seed-catalogs` — offline seed-catalog invariant check)
 
 ---
 

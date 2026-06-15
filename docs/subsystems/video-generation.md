@@ -24,7 +24,7 @@ This document summarizes the current video generation stack.
 3. Validate provider support for `nativeVideoGeneration`.
 4. Validate configured API key and `video_model_id`.
 5. Check video quota with `utils/quota/videoQuotaManager.ts`.
-6. Show a modal for prompt, aspect ratio, and optional reference image.
+6. Show a modal for prompt, aspect ratio, required duration, optional FPS, and optional reference image.
 7. Poll the provider asynchronously until the generated MP4 is ready.
 8. Send the final file back to Discord.
 9. Increment quota only after a successful delivery path.
@@ -67,6 +67,8 @@ The command supports:
 - Text-to-video
 - Image-to-video through an optional uploaded reference image
 - Aspect ratio selection
+- `duration` in seconds (required modal field, prefilled with the default)
+- `fps` (optional modal field)
 
 The built-in `generate_video` tool also supports:
 
@@ -77,6 +79,15 @@ Tool defaults are:
 
 - `duration = 5`
 - `resolution = 720p`
+
+`fps` is an optional, provider-dependent hint. Hosted providers (Google Veo, OpenRouter, Z.ai) do
+not expose an FPS control and silently ignore it. Custom ComfyUI workflows can consume it via the
+`TOMORI_VIDEO_FPS` / `TOMORI_FPS` placeholders; when the user leaves FPS blank, the
+`COMFYUI_VIDEO_FPS` default (16) is substituted so workflow nodes stay valid.
+
+Modal input bounds are env-configurable: `VIDEO_GEN_DEFAULT_DURATION_SECONDS` (default 5),
+`VIDEO_GEN_MAX_DURATION_SECONDS` (default 20), and `VIDEO_GEN_MAX_FPS` (default 60). These are
+UI-level guardrails only.
 
 Provider adapters normalize unsupported values to the nearest supported provider/model combination instead of blindly passing invalid values through.
 

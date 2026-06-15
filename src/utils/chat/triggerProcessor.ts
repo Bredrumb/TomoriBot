@@ -2,6 +2,7 @@ import type { Client, Message } from "discord.js";
 import { DMChannel } from "discord.js";
 import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
@@ -137,7 +138,18 @@ export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[
   const authorName = message.author.username?.toLowerCase();
   if (!authorName) return false;
 
-  return allPersonas.some((persona) => persona.persona_nickname?.toLowerCase() === authorName);
+  const personaByNickname = new Map<string, TomoriState>();
+  for (const persona of allPersonas) {
+    const nicknameKey = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
+    if (nicknameKey && !personaByNickname.has(nicknameKey)) {
+      personaByNickname.set(nicknameKey, persona);
+    }
+  }
+
+  return Boolean(
+    resolveRenderModifierSourcePersona(message.author.username, personaByNickname) ??
+      personaByNickname.get(normalizeRenderModifierName(authorName)),
+  );
 }
 
 export function getAutochatRange(config: AssembledServerConfig): {
@@ -219,7 +231,7 @@ export function hasExplicitCrossPersonaTrigger(
   // Build nickname → persona lookup for webhook/reply resolution
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of allPersonas) {
-    const key = persona.persona_nickname?.toLowerCase();
+    const key = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
     if (key && !personaByNickname.has(key)) personaByNickname.set(key, persona);
   }
 
@@ -237,7 +249,9 @@ export function hasExplicitCrossPersonaTrigger(
 
   // 2. Reply to a webhook persona message triggers that persona
   if (refMessage?.webhookId) {
-    const webhookPersona = personaByNickname.get(refMessage.author.username.toLowerCase());
+    const webhookPersona =
+      resolveRenderModifierSourcePersona(refMessage.author.username, personaByNickname)?.persona ??
+      personaByNickname.get(normalizeRenderModifierName(refMessage.author.username));
     if (webhookPersona && webhookPersona.persona_id !== activePersonaId) {
       return true;
     }
@@ -310,13 +324,15 @@ export function determineMatchingPersonas(
   let senderPersona: TomoriState | undefined;
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of allPersonas) {
-    const nicknameKey = persona.persona_nickname?.toLowerCase();
+    const nicknameKey = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }
   if (message.webhookId) {
-    const webhookName = message.author.username.toLowerCase();
-    senderPersona = personaByNickname.get(webhookName);
+    const webhookName = message.author.username;
+    senderPersona =
+      resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??
+      personaByNickname.get(normalizeRenderModifierName(webhookName));
   } else if (message.author.id === client.user?.id) {
     senderPersona = allPersonas.find((persona) => !persona.is_alter);
   }
@@ -328,8 +344,10 @@ export function determineMatchingPersonas(
       if (referenceMessage.author.id === client.user?.id) {
         repliedToPersona = allPersonas.find((persona) => !persona.is_alter);
       } else if (referenceMessage.webhookId) {
-        const webhookName = referenceMessage.author.username.toLowerCase();
-        repliedToPersona = personaByNickname.get(webhookName);
+        const webhookName = referenceMessage.author.username;
+        repliedToPersona =
+          resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??
+          personaByNickname.get(normalizeRenderModifierName(webhookName));
       }
     }
   }

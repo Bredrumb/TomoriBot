@@ -270,6 +270,7 @@ export class ImportRepository {
         message_fetch_limit: config.message_fetch_limit,
         system_prompt: config.system_prompt ?? null,
         self_debug_enabled: config.self_debug_enabled,
+        model_randomizer_enabled: config.model_randomizer_enabled,
         ...(hasMaxOutputTokens && { llm_max_output_tokens: config.llm_max_output_tokens ?? null }),
         ...(config.context_note !== undefined && { context_note: config.context_note }),
         ...(config.context_note_depth !== undefined && { context_note_depth: config.context_note_depth }),
@@ -301,6 +302,9 @@ export class ImportRepository {
         ...(config.voice_message_enabled !== undefined && { voice_message_enabled: config.voice_message_enabled }),
         ...(config.thread_creation_enabled !== undefined && {
           thread_creation_enabled: config.thread_creation_enabled,
+        }),
+        ...(config.user_blocking_enabled !== undefined && {
+          user_blocking_enabled: config.user_blocking_enabled,
         }),
         ...(config.tool_use_enabled !== undefined && { tool_use_enabled: config.tool_use_enabled }),
       };

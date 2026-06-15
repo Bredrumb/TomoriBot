@@ -1,7 +1,12 @@
 import { AttachmentBuilder, type Message } from "discord.js";
 import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamContext } from "@/types/stream/interfaces";
-import type { StreamState, TextProcessingConfig, TypingSimulationConfig } from "@/types/stream/types";
+import type {
+  SpriteMessageRecordInfo,
+  StreamState,
+  TextProcessingConfig,
+  TypingSimulationConfig,
+} from "@/types/stream/types";
 import { VisibleDeliveryMode, DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
 import { renderMarkdownTableToPng } from "@/utils/image/markdownTableRenderer";
@@ -11,6 +16,7 @@ import { chunkMessage } from "@/utils/text/processors/chunkProcessor";
 import { humanizeString } from "@/utils/text/processors/formatters";
 import { PREFILL_WHITESPACE_SENTINEL } from "@/utils/discord/stream/constants";
 import type { StreamSendPayload, StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
+import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 
 export type BufferedDeliveryBoundary =
   | "code_open"
@@ -21,6 +27,13 @@ export type BufferedDeliveryBoundary =
   | "attachment"
   | "final"
   | "tool_call";
+
+export type StreamDeliveryOptions = {
+  identityOverride?: ResolvedWebhookIdentity;
+  accumulatedTextPrefix?: string;
+  /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
+  spriteRecord?: SpriteMessageRecordInfo;
+};
 
 type StreamMessageDeliveryDependencies = {
   hasStopRequest: (channelId: string) => boolean;
@@ -92,6 +105,7 @@ export class StreamMessageDelivery {
     typingConfig: TypingSimulationConfig,
     context: StreamContext,
     state: StreamState,
+    options?: StreamDeliveryOptions,
   ): Promise<void> {
     if (!state.pendingOrphanPunctuation) {
       return;
@@ -100,7 +114,7 @@ export class StreamMessageDelivery {
     const orphan = state.pendingOrphanPunctuation;
     state.pendingOrphanPunctuation = undefined;
     log.info(`Stream Orphan: Releasing held "${orphan}" at ${boundary} boundary.`);
-    await this.sendSegment(orphan, boundary, textConfig, typingConfig, context, state);
+    await this.sendSegment(orphan, boundary, textConfig, typingConfig, context, state, options);
   }
 
   public async sendRenderedMarkdownTable(
@@ -110,21 +124,22 @@ export class StreamMessageDelivery {
     typingConfig: TypingSimulationConfig,
     context: StreamContext,
     state: StreamState,
+    options?: StreamDeliveryOptions,
   ): Promise<void> {
     const tableSegments = extractMarkdownTableSegments(tableMarkdown);
     const firstTableSegment = tableSegments.find((segment) => segment.type === "table");
     if (!firstTableSegment || firstTableSegment.type !== "table") {
-      await this.sendSegment(fallbackText, undefined, textConfig, typingConfig, context, state);
+      await this.sendSegment(fallbackText, undefined, textConfig, typingConfig, context, state, options);
       return;
     }
 
     const renderedBuffer = await renderMarkdownTableToPng(firstTableSegment.table);
     if (!renderedBuffer) {
-      await this.sendSegment(fallbackText, undefined, textConfig, typingConfig, context, state);
+      await this.sendSegment(fallbackText, undefined, textConfig, typingConfig, context, state, options);
       return;
     }
 
-    await this.flushHeldOrphanPunctuation("attachment", textConfig, typingConfig, context, state);
+    await this.flushHeldOrphanPunctuation("attachment", textConfig, typingConfig, context, state, options);
     if (textConfig.visibleDeliveryMode === VisibleDeliveryMode.AGGREGATED_PHASE) {
       await this.flushAggregatedTextBuffer(textConfig, context, state);
     }
@@ -140,6 +155,9 @@ export class StreamMessageDelivery {
           parse: [],
           repliedUser: false,
         },
+        identityOverride: options?.identityOverride,
+        accumulatedTextPrefix: options?.accumulatedTextPrefix,
+        spriteRecord: options?.spriteRecord,
       },
       tableMarkdown,
       context,
@@ -158,12 +176,17 @@ export class StreamMessageDelivery {
     typingConfig: TypingSimulationConfig,
     context: StreamContext,
     state: StreamState,
+    options?: StreamDeliveryOptions,
   ): Promise<void> {
     if (!segment.trim()) return;
 
-    if (textConfig.visibleDeliveryMode === VisibleDeliveryMode.AGGREGATED_PHASE) {
+    if (textConfig.visibleDeliveryMode === VisibleDeliveryMode.AGGREGATED_PHASE && !options?.identityOverride) {
       this.queueAggregatedSegment(segment, boundary, state);
       return;
+    }
+
+    if (textConfig.visibleDeliveryMode === VisibleDeliveryMode.AGGREGATED_PHASE && options?.identityOverride) {
+      await this.flushAggregatedTextBuffer(textConfig, context, state);
     }
 
     const rawMessageChunks = chunkMessage(segment, textConfig.humanizerDegree, textConfig.maxMessageLength).map(
@@ -187,9 +210,9 @@ export class StreamMessageDelivery {
     if (!finalMessageChunks.length) return;
 
     if (typingConfig.enabled) {
-      await this.sendChunksWithTyping(finalMessageChunks, typingConfig, context, state);
+      await this.sendChunksWithTyping(finalMessageChunks, typingConfig, context, state, options);
     } else {
-      await this.sendChunksImmediate(finalMessageChunks, context, state);
+      await this.sendChunksImmediate(finalMessageChunks, context, state, options);
     }
   }
 
@@ -207,6 +230,7 @@ export class StreamMessageDelivery {
     typingConfig: TypingSimulationConfig,
     context: StreamContext,
     state: StreamState,
+    options?: StreamDeliveryOptions,
   ): Promise<void> {
     if (this.deps.hasStopRequest(context.channel.id)) {
       log.info("Stream Send: Stop request detected before sending chunks with typing");
@@ -214,7 +238,7 @@ export class StreamMessageDelivery {
     }
 
     const firstChunk = chunks[0];
-    await this.sendSingleMessage(firstChunk, context, state);
+    await this.sendSingleMessage(firstChunk, context, state, options);
 
     for (let i = 1; i < chunks.length; i++) {
       if (this.deps.hasStopRequest(context.channel.id)) {
@@ -236,7 +260,10 @@ export class StreamMessageDelivery {
         return;
       }
 
-      await this.sendSingleMessage(chunkToSend, context, state);
+      await this.sendSingleMessage(chunkToSend, context, state, {
+        ...options,
+        accumulatedTextPrefix: undefined,
+      });
 
       if (i < chunks.length - 1 && typingConfig.randomPauseEnabled) {
         const pauseCancelled = await this.addThinkingPauseInterruptible(typingConfig, context);
@@ -248,19 +275,42 @@ export class StreamMessageDelivery {
     }
   }
 
-  private async sendChunksImmediate(chunks: string[], context: StreamContext, state: StreamState): Promise<void> {
-    for (const chunk of chunks) {
+  private async sendChunksImmediate(
+    chunks: string[],
+    context: StreamContext,
+    state: StreamState,
+    options?: StreamDeliveryOptions,
+  ): Promise<void> {
+    for (const [index, chunk] of chunks.entries()) {
       if (this.deps.hasStopRequest(context.channel.id)) {
         log.info("Stream Send: Stop request detected before sending chunk in immediate mode");
         return;
       }
 
-      await this.sendSingleMessage(chunk, context, state);
+      await this.sendSingleMessage(chunk, context, state, {
+        ...options,
+        accumulatedTextPrefix: index === 0 ? options?.accumulatedTextPrefix : undefined,
+      });
     }
   }
 
-  private async sendSingleMessage(content: string, context: StreamContext, state: StreamState): Promise<void> {
-    await this.sendSinglePayload({ content }, content, context, state);
+  private async sendSingleMessage(
+    content: string,
+    context: StreamContext,
+    state: StreamState,
+    options?: StreamDeliveryOptions,
+  ): Promise<void> {
+    await this.sendSinglePayload(
+      {
+        content,
+        identityOverride: options?.identityOverride,
+        accumulatedTextPrefix: options?.accumulatedTextPrefix,
+        spriteRecord: options?.spriteRecord,
+      },
+      content,
+      context,
+      state,
+    );
   }
 
   private async addThinkingPauseInterruptible(

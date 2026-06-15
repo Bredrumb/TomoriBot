@@ -8,15 +8,22 @@ const OFFICIAL_LINEAGE_IDS = new Set<number>([4, 716, 1770, 3585, 50]); // 1337 
 const PERSONA_COLUMNS =
   "persona_preset_name, persona_preset_desc, preset_attribute_list, preset_sample_dialogues_in, preset_sample_dialogues_out, preset_language, preset_avatar_path, preset_trigger_words, preset_lineage_id";
 
-const PERSONA_ON_CONFLICT = `ON CONFLICT (persona_preset_name) DO UPDATE SET
+// Upsert identity is the stable (lineage, language) pair, NOT persona_preset_name.
+// The name is a mutable, human-facing catalog label, so keying on it would turn a
+// rename into an orphan-plus-duplicate (and collide with the lineage/language unique
+// index, aborting the whole batch INSERT). Matching on the lineage pair instead lets a
+// name change resolve to the existing row and update the label in place. The arbiter is
+// the partial index `idx_persona_presets_lineage_language_unique`, so its WHERE predicate
+// must be restated here for inference. persona_preset_name is therefore now a normal
+// updated column rather than the conflict target.
+const PERSONA_ON_CONFLICT = `ON CONFLICT (preset_lineage_id, preset_language) WHERE preset_lineage_id IS NOT NULL DO UPDATE SET
+  persona_preset_name = EXCLUDED.persona_preset_name,
   persona_preset_desc = EXCLUDED.persona_preset_desc,
   preset_attribute_list = EXCLUDED.preset_attribute_list,
   preset_sample_dialogues_in = EXCLUDED.preset_sample_dialogues_in,
   preset_sample_dialogues_out = EXCLUDED.preset_sample_dialogues_out,
-  preset_language = EXCLUDED.preset_language,
   preset_avatar_path = EXCLUDED.preset_avatar_path,
   preset_trigger_words = EXCLUDED.preset_trigger_words,
-  preset_lineage_id = EXCLUDED.preset_lineage_id,
   updated_at = CURRENT_TIMESTAMP`;
 
 const OFFICIAL_ATTRIBUTE_FLAGS_UPDATE = `WITH official_attribute_flags AS (
@@ -61,13 +68,25 @@ export function validatePersonas(): string[] {
   const errors: string[] = [];
   const rows = rowsOf();
   const seenNames = new Set<string>();
+  const seenLineageLanguages = new Set<string>();
   const seenOfficialLineages = new Set<number>();
 
   for (const preset of rows) {
+    // persona_preset_name still carries a UNIQUE constraint, so duplicate labels remain invalid.
     if (seenNames.has(preset.name)) {
       errors.push(`persona_presets: duplicate persona_preset_name ${preset.name}`);
     }
     seenNames.add(preset.name);
+
+    // (lineage, language) is the upsert identity; a collision here would abort the batch
+    // INSERT against idx_persona_presets_lineage_language_unique, so fail early and clearly.
+    const lineageLanguageKey = `${preset.lineageId}::${preset.language}`;
+    if (seenLineageLanguages.has(lineageLanguageKey)) {
+      errors.push(
+        `persona_presets: duplicate (preset_lineage_id, preset_language) ${preset.lineageId}/${preset.language}`,
+      );
+    }
+    seenLineageLanguages.add(lineageLanguageKey);
 
     if (preset.sampleDialoguesIn.length !== preset.sampleDialoguesOut.length) {
       errors.push(

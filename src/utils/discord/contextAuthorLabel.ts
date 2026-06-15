@@ -2,6 +2,8 @@ import type { GuildMember, Message } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { userRepository } from "@/utils/db/repositories";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
+import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { log } from "@/utils/misc/logger";
 
@@ -33,11 +35,27 @@ export async function resolveContextAuthorLabel(
     if (guildId && guildId !== "DM") {
       try {
         const personas = await getCachedAllPersonas(guildId);
-        const matchedPersona = personas.find(
-          (persona) => persona.persona_nickname?.trim().toLowerCase() === webhookName?.trim().toLowerCase(),
+        const personaByNickname = new Map(
+          personas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
         );
+        const renderModifierSource = webhookName
+          ? resolveRenderModifierSourcePersona(webhookName, personaByNickname)
+          : null;
+        const matchedPersona = webhookName
+          ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
+          : undefined;
+        if (renderModifierSource) {
+          return renderModifierSource.displayName;
+        }
         if (matchedPersona?.persona_nickname) {
-          return matchedPersona.persona_nickname;
+          // Clean-named sprite messages carry no "(sprite)" suffix in the
+          // webhook name; recover the decorated label from the persisted mapping.
+          const spriteDisplayName = await resolveSpriteMessageDisplayName(
+            message.id,
+            matchedPersona.persona_id,
+            matchedPersona.persona_nickname,
+          );
+          return spriteDisplayName ?? matchedPersona.persona_nickname;
         }
       } catch (error) {
         log.warn("Failed to resolve persona name for webhook-authored boomerang context message", error);

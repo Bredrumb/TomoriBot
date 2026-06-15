@@ -67,6 +67,7 @@ import { isBraveSearchAvailable } from "../../tools/restAPIs/brave/braveSearchSe
 import { openrouterProviderInfo } from "./providerInfo";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { resolveEffectiveOpenRouterSeesYouTube } from "@/utils/provider/openrouterModelCapabilities";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
@@ -188,6 +189,7 @@ export class OpenrouterProvider
         method: "GET",
         headers: {
           Authorization: `Bearer ${apiKey}`,
+          ...buildOpenRouterAttributionHeaders(),
         },
       });
 
@@ -301,10 +303,15 @@ export class OpenrouterProvider
 
     try {
       const openRouter = new OpenRouter({ apiKey: request.apiKey });
-      const response = await openRouter.embeddings.generate({
-        model: request.model,
-        input: request.inputs,
-      });
+      const response = await openRouter.embeddings.generate(
+        {
+          model: request.model,
+          input: request.inputs,
+        },
+        {
+          headers: buildOpenRouterAttributionHeaders(),
+        },
+      );
 
       return extractOpenRouterEmbeddings(response);
     } catch (error: unknown) {
@@ -396,6 +403,7 @@ export class OpenrouterProvider
         imagegen_enabled: false,
         videogen_enabled: false,
         voice_message_enabled: false,
+        user_blocking_enabled: false,
         thread_creation_enabled: false,
       },
     };
@@ -475,6 +483,7 @@ export class OpenrouterProvider
           imagegen_enabled: tomoriState.config.imagegen_enabled,
           videogen_enabled: tomoriState.config.videogen_enabled,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
+          user_blocking_enabled: tomoriState.config.user_blocking_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
       };

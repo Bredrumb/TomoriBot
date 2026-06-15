@@ -8,7 +8,7 @@
 --
 -- The column on the active llms row is the runtime source of truth (D4 "column-is-truth"); a
 -- request-time providerRequires(...) set is the belt-and-suspenders safety net. The built-in
--- defaults backfilled here are also enforced going forward by the seed catalog + `check-models`.
+-- defaults backfilled here are also enforced going forward by the seed catalog + `check-seed-catalogs`.
 --
 -- This migration is additive (new nullable-with-default boolean columns + value backfills); no
 -- rows are deleted and no destructive changes occur.

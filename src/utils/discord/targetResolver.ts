@@ -308,6 +308,18 @@ function resolveConversationUserMatch(
     return null;
   }
 
+  // 1. Identify targets the input matched on their PRIMARY/display name (e.g. the
+  //    rendered "Misuzu"/"Bredrumb" label) rather than only on a secondary alias
+  //    (server nickname, global name, username). The conversation stage flattens
+  //    all alias types into one set, so without this distinction a user's
+  //    secondary alias can collide with another user's actual name and force a
+  //    needless clarify round-trip.
+  const primaryNameTargetIds = new Set(
+    matches
+      .filter((match) => normalizeUserTargetInput(match.displayLabel) === normalizedInput)
+      .map((match) => match.targetId),
+  );
+
   const dedupedMatches = dedupeUserCandidates(
     matches.map((match) => ({
       label: isBridgeUserId(match.targetId) ? formatBridgeUserLabel(match) : match.displayLabel,
@@ -316,8 +328,15 @@ function resolveConversationUserMatch(
     })),
   );
 
-  if (dedupedMatches.length === 1) {
-    const match = dedupedMatches[0];
+  // 2. Precedence tie-break: when exactly one candidate matched on its primary
+  //    name, prefer it over candidates that only matched a secondary alias.
+  //    Otherwise (zero or several primary matches) fall back to the full set so a
+  //    genuine same-name collision still surfaces as ambiguous.
+  const primaryNameMatches = dedupedMatches.filter((candidate) => primaryNameTargetIds.has(candidate.targetId));
+  const effectiveMatches = primaryNameMatches.length === 1 ? primaryNameMatches : dedupedMatches;
+
+  if (effectiveMatches.length === 1) {
+    const match = effectiveMatches[0];
     return {
       status: "resolved",
       targetId: match.targetId,
@@ -330,7 +349,7 @@ function resolveConversationUserMatch(
   return {
     status: "ambiguous",
     input: normalizedInput,
-    candidates: dedupedMatches.slice(0, 3),
+    candidates: effectiveMatches.slice(0, 3),
   };
 }
 

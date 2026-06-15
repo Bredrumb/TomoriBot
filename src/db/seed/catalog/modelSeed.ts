@@ -11,7 +11,7 @@
 
 import type { SQL } from "bun";
 import { embeddingSections, imageSections, llmSections, videoSections } from "./models";
-import { bool, desc, str } from "./sql";
+import { bool, desc, num, str } from "./sql";
 import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
 
 /** Providers exempt from the default/smartest invariants (bootstrap placeholders). */
@@ -43,7 +43,7 @@ interface TableSpec<T extends RowLike> {
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
-    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, ja_description",
+    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, ja_description, input_price_per_million, output_price_per_million",
   tuple: (m) =>
     [
       str(m.provider),
@@ -63,6 +63,8 @@ const llmSpec: TableSpec<LlmInput> = {
       bool(m.supportsPrefixCompletion),
       desc(m.desc),
       desc(m.ja),
+      num(m.inputPricePerMillion),
+      num(m.outputPricePerMillion),
     ].join(", "),
   onConflict: `ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
@@ -81,6 +83,8 @@ const llmSpec: TableSpec<LlmInput> = {
   supports_structoutput = EXCLUDED.supports_structoutput,
   strict_role_alternation = EXCLUDED.strict_role_alternation,
   supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+  input_price_per_million = EXCLUDED.input_price_per_million,
+  output_price_per_million = EXCLUDED.output_price_per_million,
   updated_at = CURRENT_TIMESTAMP`,
   hasSmartest: true,
   sections: llmSections,
@@ -243,6 +247,59 @@ export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
   return errors;
 }
 
+// Providers billed per-token by the live `/tool estimate cost` path. Every active, billable row of these
+// providers must carry an explicit catalog price: the env-based price fallback has been removed, so an
+// unpriced row makes resolveModelPricing (src/commands/tool/estimate/cost.ts) return null and the command
+// reports "pricing unavailable". OpenRouter is intentionally absent — it is priced live from the OpenRouter
+// API cache, with any catalog price acting only as a cache-miss fallback.
+const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
+  "google",
+  "vertex",
+  "vertexexpress",
+  "anthropic",
+  "deepseek",
+  "zai",
+  "zaicoding",
+]);
+
+// Active first-party rows that legitimately have no published price yet (the provider has not shipped one).
+// Re-checked 2026-06-11. Remove a codename here once its official rate is filled into models.ts.
+const PRICING_PENDING_CODENAMES = new Set<string>(["gemini-3.5-pro"]);
+
+/**
+ * Enforce that every billable first-party llms row carries explicit per-million input/output prices.
+ * With the env price fallback gone, an unpriced active row would surface "pricing unavailable" in
+ * `/tool estimate cost`, so this invariant catches the next added model that forgets its catalog price.
+ *
+ * Excluded: deprecated rows (may predate verified pricing), Gemma codenames (open model, no first-party
+ * paid tier), isFree endpoint variants (not billed), and {@link PRICING_PENDING_CODENAMES} (provider has
+ * not published a rate yet).
+ *
+ * Pure and exported so the invariant can be unit-tested with crafted rows.
+ * @param rows - The llms catalog rows to validate.
+ * @returns A list of violation messages (empty when valid).
+ */
+export function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
+  const errors: string[] = [];
+  for (const row of rows) {
+    // 1. Only first-party metered providers are gated
+    if (!METERED_FIRST_PARTY_PROVIDERS.has(row.provider)) continue;
+    // 2. Skip rows that are intentionally unpriced
+    if (row.isDeprecated || row.isFree) continue;
+    if (row.codename.includes("gemma")) continue;
+    if (PRICING_PENDING_CODENAMES.has(row.codename)) continue;
+    // 3. The remaining active, billable rows MUST carry both prices
+    const hasInput = typeof row.inputPricePerMillion === "number";
+    const hasOutput = typeof row.outputPricePerMillion === "number";
+    if (!hasInput || !hasOutput) {
+      errors.push(
+        `llms/${row.provider}: model ${row.codename} must set inputPricePerMillion and outputPricePerMillion (billed first-party model)`,
+      );
+    }
+  }
+  return errors;
+}
+
 /**
  * Validate every model table against the per-provider invariants.
  * @returns A list of human-readable violation messages (empty when valid).
@@ -254,6 +311,7 @@ export function validateModels(): string[] {
   validateSpec(videoSpec, errors);
   validateSpec(embeddingSpec, errors);
   errors.push(...collectStrictChatFlagViolations(rowsOf(llmSpec)));
+  errors.push(...collectMeteredPriceViolations(rowsOf(llmSpec)));
   return errors;
 }
 

@@ -19,7 +19,9 @@ is delivered to Discord. Two classes share the responsibility:
   `state.pendingAggregatedText` via `queueAggregatedSegment()`. Aggregated text is only sent to
   Discord when a flush boundary that forces output arrives: a tool call, a final flush, or a
   Markdown table attachment. This produces a single, uninterrupted Discord message from what would
-  otherwise be many small streaming messages.
+  otherwise be many small streaming messages. A render-modifier identity override flushes any
+  pending aggregate first and sends immediately through the webhook path, because webhook identity
+  is line-scoped and cannot be mixed into the regular aggregate buffer.
 
 - **Streaming mode** (degree 1–3) — the segment is split into Discord-safe chunks via
   `chunkMessage()`, then optionally humanized (degree 3 only: `humanizeString()`), and sent
@@ -42,11 +44,30 @@ payload. It handles:
   mode), the message is sent via `sendWebhookMessageWithIdentity()` with the persona's name and
   avatar. For the *first* message of an alter persona response that has a `replyToMessage`, a
   standalone reply notice is sent first via `sendWebhookReplyNotice()`.
+- **Render-modifier identity override** — when stage 06 resolves `SourcePersona (modifier): text`,
+  the payload carries `identityOverride`. The UI updater lazily creates or reuses the managed
+  channel webhook even for the main persona. Ordinary sprite matches send with the clean username
+  `SourcePersona` and the sprite avatar; identity sprites (`persona_sprites.is_identity`) and
+  copied-identity matches send with the flipped username `target (SourcePersona)` and the
+  target's/sprite avatar (the model-facing context label stays `SourcePersona (target)`).
+  Ordinary main-persona output
+  remains a regular bot message; the managed webhook is used only for override payloads. Unknown,
+  ambiguous, or unusable modifiers are stripped before this stage and therefore follow the regular
+  path.
+- **Sprite message persistence** — payloads carrying a `spriteRecord` write a
+  `persona_sprite_messages` row fire-and-forget after a successful *webhook* send (bot-fallback
+  sends are skipped — they cannot carry persona identity in context). Context rebuilding uses
+  this mapping to recover the decorated `SourcePersona (sprite):` label; a lost row degrades the
+  label to the plain persona name, never an error.
 - **Regular path** — otherwise the message is sent via `context.channel.send()` or
   `context.replyToMessage.reply()` (first message only), with `allowedMentions` set to suppress
   `@everyone` / `@here` pings while allowing user and role mentions.
 - **State tracking** — on a successful send: `state.messageSentCount++`, `state.accumulatedText`
   is appended, and `state.firstReplyUrl` is set on the first message sent (used in thought-log embeds).
+  For render-modifier payloads, `state.accumulatedText` is prefixed with the model-facing
+  source-first label (`SourcePersona (modifier): `) — which may differ from the visible webhook
+  username (clean name for sprites, flipped name for copied identities) — so result capture,
+  STM, and future prompt context remain reversible.
 - **Invalid-webhook recovery** — if the webhook send fails with Discord error 10015 or 50027
   (unknown/invalid webhook), the webhook cache is invalidated and a fresh webhook is fetched for
   retry.
@@ -133,7 +154,8 @@ message ID), or `null` if the send was skipped (stop request, limit reached, emp
   `context.channel` (or via `context.webhook`).
 - **`state.messageSentCount`** — incremented per message sent.
 - **`state.accumulatedText`** — appended with the text of each sent message (used for STM write
-  at pipeline end).
+  at pipeline end). Render-modifier sends append the visible `SourcePersona (modifier): ` label once
+  at the start of the modified line, even when the line is split across multiple Discord messages.
 - **`state.firstReplyUrl`** — set to the URL of the first reply message (if not already set).
 - **`state.hasRepliedToOriginalMessage`** — set to `true` after the first successful reply.
 - **`state.pendingAggregatedText`** — cleared after an aggregated-mode flush.

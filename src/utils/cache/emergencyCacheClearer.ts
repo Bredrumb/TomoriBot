@@ -10,6 +10,11 @@ import {
   getOpenRouterOnDemandCapabilityCacheSize,
 } from "@/utils/cache/openrouterCapabilityCache";
 import { clearPersonalSpotlightCache, getPersonalSpotlightCacheStats } from "@/utils/cache/personalSpotlightCache";
+import { clearPersonaSpriteCache, getPersonaSpriteCacheSize } from "@/utils/cache/personaSpriteCacheStore";
+import {
+  clearPersonaSpriteMessageCache,
+  getPersonaSpriteMessageCacheSize,
+} from "@/utils/cache/personaSpriteMessageCache";
 import {
   clearExpiredEntries,
   clearShortTermMemoryCache,
@@ -22,6 +27,12 @@ import { clearWebhookIdentityCache, getWebhookIdentityCacheSize } from "@/utils/
 import { clearWebhookCache, getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { clearPresetAvatarCache, getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
+import {
+  addProcessMemoryDeltaFields,
+  addProcessMemorySnapshotFields,
+  collectProcessMemorySnapshot,
+  type ProcessMemorySnapshot,
+} from "@/utils/misc/processMemory";
 import { clearMarkdownTableCache, getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
 
 export interface EmergencyCacheClearStep {
@@ -38,6 +49,8 @@ export interface EmergencyCacheClearReport {
   clearDiscordVolatileCaches: boolean;
   totalClearedEntries: number;
   failedCaches: number;
+  memoryBeforeClear: ProcessMemorySnapshot;
+  memoryAfterClear: ProcessMemorySnapshot;
   steps: EmergencyCacheClearStep[];
 }
 
@@ -61,6 +74,16 @@ function getWebhookTotalCacheSize(): number {
 
 function getStepErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function getStepMetricName(name: string): string {
+  return name.replace(/[^A-Za-z0-9]/g, "_");
+}
+
+function addPerCacheClearMetricFields(fields: Record<string, number | string>, steps: EmergencyCacheClearStep[]): void {
+  for (const step of steps) {
+    fields[`cleared_${getStepMetricName(step.name)}`] = step.cleared;
+  }
 }
 
 function clearMeasured(steps: EmergencyCacheClearStep[], name: string, getSize: () => number, clear: () => void): void {
@@ -167,8 +190,10 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
   const shouldClearDiscordVolatileCaches =
     options.clearDiscordVolatileCaches ?? parseBooleanEnv("EMERGENCY_CACHE_CLEAR_DISCORD_VOLATILE", true);
   const steps: EmergencyCacheClearStep[] = [];
+  const memoryBeforeClear = collectProcessMemorySnapshot();
 
   if (!enabled) {
+    const memoryAfterClear = collectProcessMemorySnapshot();
     log.warn("[Emergency Cache Clear] Skipped because EMERGENCY_CACHE_CLEAR_ENABLED=false");
     return {
       enabled: false,
@@ -176,6 +201,8 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
       clearDiscordVolatileCaches: shouldClearDiscordVolatileCaches,
       totalClearedEntries: 0,
       failedCaches: 0,
+      memoryBeforeClear,
+      memoryAfterClear,
       steps,
     };
   }
@@ -200,6 +227,8 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
   clearMeasured(steps, "presetAvatar", getPresetAvatarCacheSize, clearPresetAvatarCache);
   clearMeasured(steps, "voiceTranscript", getVoiceTranscriptCacheSize, clearVoiceTranscriptCache);
   clearMeasured(steps, "markdownTable", getMarkdownTableCacheSize, clearMarkdownTableCache);
+  clearMeasured(steps, "personaSprite", getPersonaSpriteCacheSize, clearPersonaSpriteCache);
+  clearMeasured(steps, "personaSpriteMessage", getPersonaSpriteMessageCacheSize, clearPersonaSpriteMessageCache);
 
   clearMeasured(steps, "shortTermMemoryExpired", () => getShortTermMemoryCacheStats().size, clearExpiredEntries);
   if (includeShortTermMemory) {
@@ -210,6 +239,7 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
     steps.push(...clearDiscordVolatileCaches(options.client));
   }
 
+  const memoryAfterClear = collectProcessMemorySnapshot();
   const totalClearedEntries = steps.reduce((total, step) => total + step.cleared, 0);
   const failedCaches = steps.filter((step) => step.error !== undefined).length;
   const clearedSummary = steps
@@ -231,13 +261,19 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
     log.warn(`[Emergency Cache Clear] ${failedCaches} cache clear step(s) failed: ${failures}`);
   }
 
-  log.metric("emergency_cache_clear", {
+  const metricFields: Record<string, number | string> = {
     totalClearedEntries,
     failedCaches,
     cacheGroups: steps.length,
     includeShortTermMemory: includeShortTermMemory ? 1 : 0,
     clearDiscordVolatileCaches: options.client && shouldClearDiscordVolatileCaches ? 1 : 0,
-  });
+  };
+  addProcessMemorySnapshotFields(metricFields, "before_clear", memoryBeforeClear);
+  addProcessMemorySnapshotFields(metricFields, "after_clear", memoryAfterClear);
+  addProcessMemoryDeltaFields(metricFields, "clear", memoryBeforeClear, memoryAfterClear);
+  addPerCacheClearMetricFields(metricFields, steps);
+
+  log.metric("emergency_cache_clear", metricFields);
 
   return {
     enabled,
@@ -245,6 +281,8 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
     clearDiscordVolatileCaches: shouldClearDiscordVolatileCaches,
     totalClearedEntries,
     failedCaches,
+    memoryBeforeClear,
+    memoryAfterClear,
     steps,
   };
 }

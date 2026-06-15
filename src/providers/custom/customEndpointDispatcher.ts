@@ -56,6 +56,7 @@ export async function generateCustomVideoViaEndpoint(
     prompt,
     aspectRatio,
     durationSeconds,
+    fps,
     resolution,
     referenceImages,
     generateAudio,
@@ -75,6 +76,8 @@ export async function generateCustomVideoViaEndpoint(
       prompt,
       aspect_ratio: aspectRatio,
       duration: durationSeconds,
+      // Only include fps when explicitly provided so endpoints that don't accept it are unaffected.
+      ...(fps !== undefined ? { fps } : {}),
       resolution,
       generate_audio: generateAudio,
       audio_prompt: audioPrompt,

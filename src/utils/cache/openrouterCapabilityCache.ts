@@ -14,6 +14,7 @@
  */
 
 import { log } from "../misc/logger";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 
 /**
  * OpenRouter API model response structure
@@ -242,6 +243,7 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
     const response = await fetch("https://openrouter.ai/api/v1/models", {
       headers: {
         "Content-Type": "application/json",
+        ...buildOpenRouterAttributionHeaders(),
       },
     });
 
@@ -472,6 +474,7 @@ export async function testAccountSettingModel(apiKey: string): Promise<
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
+        ...buildOpenRouterAttributionHeaders(),
       },
       body: JSON.stringify(testPayload),
     });
@@ -594,6 +597,7 @@ export async function getOrFetchOpenRouterCapabilities(modelCodename: string): P
     const response = await fetch(`https://openrouter.ai/api/v1/models/${encodeURIComponent(modelCodename)}`, {
       headers: {
         "Content-Type": "application/json",
+        ...buildOpenRouterAttributionHeaders(),
       },
     });
 

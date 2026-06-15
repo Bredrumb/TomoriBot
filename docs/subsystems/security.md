@@ -120,6 +120,8 @@ Blacklisted users:
 - Are not globally opted out.
 - Can still exist and interact; blacklist controls personalization scope rather than account existence.
 
+`/server user-blacklist remove` also lists active `persona_user_blocks` rows so moderators can remove persona-scoped mutes/blocks through the same checklist flow. These rows are separate from `personalization_blacklist`: a `mute` prevents the target from triggering that persona, while a `block` also hides the target's recent live dialogue-history messages/media from that persona's context. Persona user blocks are not data deletion, forgetting, or memory redaction.
+
 ## Data Export and Deletion (Current Behavior)
 
 Primary files:
@@ -206,7 +208,8 @@ Critical memory behavior:
 - Emergency mode disables media processing and triggers `clearEmergencyCaches()`.
 - Cache clearing preserves non-expired short-term memory by default; operators can
   opt into full STM clearing with `EMERGENCY_CACHE_CLEAR_INCLUDE_STM=true`.
-- Forced GC runs after cache clearing when the runtime exposes `global.gc`.
+- Forced GC runs after cache clearing when the runtime exposes `Bun.gc` or
+  Node's `global.gc`; `memory_forced_gc` logs pre/post process memory fields.
 
 ## Supply Chain Security
 

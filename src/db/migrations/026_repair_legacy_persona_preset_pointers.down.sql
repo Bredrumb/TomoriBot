@@ -1,0 +1,6 @@
+-- No-op rollback.
+--
+-- This migration only marks exact official preset copies as live preset pointers
+-- while preserving persona_lineage_id. Reversing it would require knowing which
+-- pointer rows were created here versus by /config setup, /persona default, or
+-- imports after the migration ran.

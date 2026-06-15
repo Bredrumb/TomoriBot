@@ -5,3 +5,9 @@
 #
 # Non-sensitive CI overrides:
 environment = "production"
+
+# Keep the Discord bot singleton always-on, but give Bun enough RSS headroom.
+cloud_run_memory = "2Gi"
+
+# Disable the always-on SearXNG sidecar in production to reduce Cloud Run cost.
+enable_searxng_sidecar = false

@@ -32,7 +32,7 @@ export default {
       labels_field: `ラベルと削除`,
       labels_value: `1つのラベルは対応する全機能をまとめたカスタムプロバイダーバンドルです。{server_remove_command} と {personal_remove_command} はチェックを外した機能だけ削除します。{server_provider_remove_command} と {personal_provider_remove_command} はそのラベル全体を削除します。`,
       comfyui_page1_title: `ComfyUI セットアップ`,
-      comfyui_page1_description: `このガイドでは、ComfyUI がすでにインストール済みかつ起動中である前提で進めます。1ページ目では、\`/config custom-endpoint add\` または \`/personal custom-endpoint add\` まで到達する最小構成を説明します。または、GitHubリポジトリにあるそのまま使える[ComfyUIワークフロー](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)を使用することもできます。`,
+      comfyui_page1_description: `このガイドでは、ComfyUI がすでにインストール済みかつ起動中である前提で進めます。1ページ目では、\`/provider custom-endpoint add\` または \`/personal custom-endpoint add\` まで到達する最小構成を説明します。または、GitHubリポジトリにあるそのまま使える[ComfyUIワークフロー](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)を使用することもできます。`,
       comfyui_page1_workflow_field: `1. ワークフローを作る`,
       comfyui_page1_workflow_value: `まず ComfyUI 側でワークフローを作成し、正常に動くことを確認してください。画像用 MVP では、TomoriBot が完成ファイルを取得できるよう最後を \`SaveImage\` で終える必要があります。最小構成の画像グラフは通常、\`CheckpointLoaderSimple\` -> positive/negative \`CLIPTextEncode\` -> \`EmptyLatentImage\` -> \`KSampler\` -> \`VAEDecode\` -> \`SaveImage\` です。`,
       comfyui_page1_placeholders_field: `2. プレースホルダーを入れる`,
@@ -291,7 +291,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
   - **Z.ai (Zhipu)** — 中国のAIモデル、コーディングプランあり ⚠️ *利用規約でコーディング/エージェントのシナリオのみに制限*
   - **Custom**: OpenAI互換エンドポイント（Ollama、vLLM、LiteLLMなど）
 - このAPIキーを**他人と共有しないでください**
-- Customエンドポイントはセットアップ後に{configApiKeySet}または{configProviderSwitch}でBearer認証トークンを追加可能`,
+- Customエンドポイントはセットアップ後に{configApiKeySet}でBearer認証トークンを追加可能`,
       step2_title: `ステップ2：セットアップコマンドを実行`,
       step2_description: `- {configSetup}を使用してAPIキーを安全に追加し、TomoriBotを初期化
 - （推奨）{serverInitializeExpressions}を実行して、サーバーの絵文字/スタンプ表現を適切に使えるようにする
@@ -877,14 +877,6 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 \`\`\`
 - チャットして変更をテストし、しっくりくるまで繰り返す
 - ペルソナをエクスポートしてバックアップするか、他のサーバーと共有！`,
-    },
-    updates: {
-      description: `TomoriBotの最新リリース情報を表示`,
-      title: `TomoriBot {version} リリース！`,
-      no_notes: `このバージョンのリリースノートはありません。`,
-      footer: `更新情報が古い可能性があります。最新のリリースと更新は \`/support discord\` を確認してください。`,
-      fetch_error_title: `最新リリース情報の取得に失敗`,
-      fetch_error_description: `GitHubから最新リリース情報を取得できませんでした。しばらくお待ちください。または、[GitHubリリース](https://github.com/Bredrumb/TomoriBot/releases)ページを直接確認してください。`,
     },
     mcp: {
       description: `MCPツールサーバーの追加と管理方法を学ぶ`,

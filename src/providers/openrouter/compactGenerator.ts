@@ -6,6 +6,7 @@ import type {
 } from "@/types/provider/featureInterfaces";
 import type { CompactRoleplaySummary } from "@/types/misc/compact";
 import { buildRoleplaySchema } from "@/providers/utils/compactCommon";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 export type {
   CompactConversationResult,
   CompactRoleplayResult,
@@ -66,6 +67,7 @@ export async function generateConversationSummaryOpenrouter(
       headers: {
         Authorization: `Bearer ${request.apiKey}`,
         "Content-Type": "application/json",
+        ...buildOpenRouterAttributionHeaders(),
       },
       body: JSON.stringify(body),
     });
@@ -164,6 +166,7 @@ export async function generateRoleplaySummaryOpenrouter(
       headers: {
         Authorization: `Bearer ${request.apiKey}`,
         "Content-Type": "application/json",
+        ...buildOpenRouterAttributionHeaders(),
       },
       body: JSON.stringify(body),
     });

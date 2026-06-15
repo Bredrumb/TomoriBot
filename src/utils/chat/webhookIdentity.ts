@@ -1,6 +1,7 @@
 import type { Client, Guild, Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { extractBridgeUserId, stripBridgePrefix } from "@/utils/bridges";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 
 const USER_IMPERSONATION_WEBHOOK_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -183,7 +184,9 @@ export function resolveReferencedWebhookTarget(
   const rawWebhookName = referenceMessage.author.username;
   if (rawWebhookName && !extractBridgeUserId(rawWebhookName)) {
     const webhookName = stripBridgePrefix(rawWebhookName);
-    const matchedPersona = personaByNickname.get(webhookName.toLowerCase());
+    const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByNickname);
+    const matchedPersona =
+      renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName));
     if (matchedPersona) {
       return { replyPersona: matchedPersona, impersonatedUserId: null };
     }

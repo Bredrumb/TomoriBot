@@ -47,6 +47,8 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{image_generation_tool}": "generate_image",
   "{anime_image_generation_tool}": "generate_image_nai",
   "{voice_message_tool}": "generate_voice_message",
+  "{block_user_tool}": "block_user",
+  "{unblock_user_tool}": "unblock_user",
 };
 
 const DYNAMIC_TOOL_PROMPT_MACROS = {
@@ -250,6 +252,18 @@ export const TOOL_PROMPT_MACRO_DOCS: ToolPromptMacroDocEntry[] = [
     type: "static",
     currentTarget: "generate_voice_message",
     notes: "Send a spoken voice-message response.",
+  },
+  {
+    macro: "{block_user_tool}",
+    type: "static",
+    currentTarget: "block_user",
+    notes: "Temporarily mute or block a Discord user for the active persona.",
+  },
+  {
+    macro: "{unblock_user_tool}",
+    type: "static",
+    currentTarget: "unblock_user",
+    notes: "Remove an active persona-scoped mute/block for a Discord user.",
   },
   {
     macro: "{web_search_tool}",

@@ -172,18 +172,41 @@ function setStreamUserErrorSuppression(context: ChatTurnContext, temporarySuppre
 async function buildGenerationAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
   const disableAllTools = !!context.streamingContext.disableAllTools;
   const primaryState = await resolvePrimaryTomoriState(context);
-  const attempts: GenerationAttempt[] = [await createAttempt("primary", primaryState, undefined, disableAllTools)];
   const fallbackEntries =
     primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 
-  for (const [index, entry] of fallbackEntries.entries()) {
+  // 1. Build a unified pool: the primary model leads at index 0, then the existing failover chain.
+  const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
+
+  // 2. Model randomizer: when enabled, splice a random pool member to the front so a different model
+  //    leads each turn. The remainder keeps its relative order as the failover tail. This is a pure
+  //    reordering — every model (including the original primary) stays in the chain, so failover
+  //    semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
+  if (primaryState.config.model_randomizer_enabled && pool.length > 1) {
+    const leadIdx = Math.floor(Math.random() * pool.length);
+    pool.unshift(...pool.splice(leadIdx, 1));
+  }
+
+  // 3. Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
+  //    primary's own llm entry yields a state equivalent to primaryState (provider matches, no config
+  //    swap), so index 0 stays semantically identical to the old dedicated "primary" attempt.
+  const attempts: GenerationAttempt[] = [];
+  for (const [index, entry] of pool.entries()) {
     try {
-      const fallback = await createFallbackAttempt(primaryState, entry, index + 1, disableAllTools);
-      if (fallback) {
-        attempts.push(fallback);
+      const attempt = await createFallbackAttempt(primaryState, entry, index, disableAllTools);
+      if (!attempt) {
+        // Only an unusable custom-endpoint lead resolves to null; the primary llm entry never does,
+        // so at least one valid attempt always remains in the chain.
+        continue;
       }
+      // 4. Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
+      //    The true model still surfaces via successModel for log verification.
+      if (index === 0) {
+        attempt.label = "primary";
+      }
+      attempts.push(attempt);
     } catch (error) {
-      log.warn(`Skipping fallback ${index + 1}: failed to prepare provider config.`, error as Error);
+      log.warn(`Skipping pool entry ${index}: failed to prepare provider config.`, error as Error);
     }
   }
 

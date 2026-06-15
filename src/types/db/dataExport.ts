@@ -143,6 +143,7 @@ export const serverChatConfigExportSchema = z.object({
   context_note: z.string().nullable().optional(),
   context_note_depth: z.number().int().min(0).max(100).optional(),
   self_debug_enabled: z.boolean().default(false),
+  model_randomizer_enabled: z.boolean().default(false),
 });
 
 /** Portable server_member_permissions_configs export fields. */
@@ -165,6 +166,7 @@ export const serverCapabilitiesConfigExportSchema = z.object({
   videogen_enabled: z.boolean().optional(),
   voice_message_enabled: z.boolean().optional(),
   thread_creation_enabled: z.boolean().optional(),
+  user_blocking_enabled: z.boolean().optional(),
   tool_use_enabled: z.boolean().optional(),
 });
 

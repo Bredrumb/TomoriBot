@@ -43,6 +43,45 @@ describe("GoogleStreamAdapter.processChunk", () => {
     expect(result.thoughts?.[0]).toMatchObject({ kind: "summary", content: "hidden thought" });
   });
 
+  it("captures candidate thought parts as raw thoughts and emits no visible text", () => {
+    const adapter = new GoogleStreamAdapter();
+    const result = adapter.processChunk(
+      makeGoogleChunk({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: "internal reasoning step", thought: true }],
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result.type).toBe("text");
+    expect(result.content).toBe("");
+    expect(result.thoughts?.[0]).toMatchObject({ kind: "raw", content: "internal reasoning step" });
+  });
+
+  it("keeps candidate thought parts separate from visible candidate text", () => {
+    const adapter = new GoogleStreamAdapter();
+    const result = adapter.processChunk(
+      makeGoogleChunk({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: "hidden thought", thought: true }, { text: "Visible reply." }],
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result.type).toBe("text");
+    expect(result.content).toBe("Visible reply.");
+    expect(result.content).not.toContain("hidden thought");
+    expect(result.thoughts?.[0]).toMatchObject({ kind: "raw", content: "hidden thought" });
+  });
+
   it("normalizes promptFeedback block to content_blocked error, not retryable", () => {
     const adapter = new GoogleStreamAdapter();
     // "SAFETY" is the string value of BlockedReason.SAFETY

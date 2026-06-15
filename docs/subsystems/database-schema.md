@@ -11,7 +11,7 @@ This document summarizes the current PostgreSQL schema used by TomoriBot.
 
 ## Data Access Boundary
 
-The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 23 repository classes implement the shared `IRepository<TExport>` contract:
+The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repository classes implement the shared `IRepository<TExport>` contract:
 
 | Repository | Domain |
 |---|---|
@@ -26,7 +26,10 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 23 re
 | `LlmProviderRepository` | Saved provider configs, custom endpoints, OpenRouter registrations |
 | `McpRepository` | MCP server configurations |
 | `PersonalMemoryRepository` | User + persona lineage scoped personal memories |
+| `PersonaUserBlockRepository` | Persona-scoped user mutes/blocks (`persona_user_blocks`) |
 | `PersonaRepository` | Persona state loading + writes (`personas`, `persona_configs`) |
+| `PersonaSpriteMessageRepository` | Sprite message → label mappings (`persona_sprite_messages`) |
+| `PersonaSpriteRepository` | Persona sprite rows (`persona_sprites`) |
 | `PresetRepository` | TomoriBot preset export/import + SillyTavern preset CRUD + ST card conversion |
 | `QuotaRepository` | Image, text, and video generation quota tracking |
 | `RagRepository` | RAG document and chunk storage |
@@ -39,7 +42,7 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. All 23 re
 | `UserRepository` | User registration, privacy, personalization, spotlight |
 | `WhitelistRepository` | Channel, persona, and role whitelist rules |
 
-Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports all 23 instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
+Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports repository instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
 
 ### SQL convention
 
@@ -107,10 +110,13 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `conditioning_history`
 - `server_emojis`
 - `server_stickers`
+- `persona_sprites`
+- `preset_sprites`
 
 ### Permissions/privacy/routing
 
 - `personalization_blacklist`
+- `persona_user_blocks`
 - `personal_spotlights`
 - `personal_spotlight_personas`
 - `channel_persona_whitelist`
@@ -170,6 +176,9 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `persona_attributes` is the source of truth for ordered persona attributes and their `is_public` visibility flag. `personas.attribute_list` remains as a denormalized text-array mirror for older import/export and status surfaces. Native preset/card data stores aligned `attribute_public_flags`; missing flags from legacy files are normalized to all-private rows on import.
 - Official rows in `persona_presets` carry `preset_lineage_id` as a stable identity anchor for each bundled character. Applying an official preset (`/config setup`, `/persona default`) creates a copy-on-write pointer when possible: `personas.is_pointer = true`, with `personas.preset_lineage_id` and `personas.preset_language` resolving the live `persona_presets` row. The first local content edit materializes the persona into an independent copy while preserving `persona_id` and `persona_lineage_id`.
 - `persona_presets.preset_attribute_public_flags` stores boolean visibility flags aligned to `preset_attribute_list`; official appearance attributes are public by default. Pointer personas resolve these flags from the live preset row, while materialized/imported copies store them in `persona_attributes.is_public`.
+- `persona_sprites` stores named sprite avatars for render-modifier labels such as `Tomori (mad):`. Rows are keyed by `(persona_id, sprite_key)`, cascade with the persona, and store `avatar_url` as either a production public object URL or a local development path under `data/avatars/servers/{serverDiscId}/personas/{personaId}/sprites/`. The `is_identity` boolean (default `false`, added in migration `029`) controls webhook rendering: ordinary sprites show the clean persona name, while identity sprites show the decorated `sprite (Persona)` name directly in Discord (DID alter style). `/persona sprites add` (with the **Save as Identity** checkbox), `/persona sprites edit` (metadata plus optional image replacement), and `/persona sprites remove` are the owner commands. `/persona sprites export` and `/persona sprites import` move a persona's whole sprite set between servers as a `.zip` (manifest + images); import overwrites same-key rows and rejects the batch if it would exceed the per-persona cap.
+- `preset_sprites` stores the official, SHARED sprite set for bundled characters, keyed by `(preset_lineage_id, preset_language, sprite_key)` and seeded from the persona catalog (migration `032`). Its `avatar_url` is a shared object-storage reference under the immutable `presets/` prefix (uploaded once, used by every server). Pointer personas resolve their sprites live from here via `PersonaSpriteRepository.listForPersona()`; materialization copies these rows into `persona_sprites` by reference (shared URL, no byte duplication). The per-persona delete paths never delete `presets/` images. See [persona-presets](persona-presets) and [multi-persona](multi-persona).
+- `persona_sprite_messages` maps a sprite-rendered webhook message (`message_disc_id` PK) to the `sprite_name` it displayed. Sprite messages show the clean persona name in Discord; context rebuilding uses this mapping to recover the decorated `Name (sprite):` label for the model. Rows are immutable, cascade with the persona, and are pruned after `PERSONA_SPRITE_MESSAGE_RETENTION_DAYS` (default 30) via an opportunistic write-path prune.
 - Persona names are constrained unique per server (case-insensitive, trimmed).
 - Exactly one non-alter persona (`is_alter = false`) per server is enforced by partial unique index `personas_one_main_per_server ON personas(server_id) WHERE is_alter = false` (added in Phase 6 Step #14.6, migration `012`). This hardens the invariant that was previously enforced only at the command layer.
 - `persona_configs.reward_conditioning_enabled` and `persona_configs.punish_conditioning_enabled` are persona-scoped prompt-injection toggles for conditioning memory.
@@ -184,6 +193,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_chat_configs.llm_logit_biases` stores server-wide logit-bias entries as raw text/token-ID input plus tokenizer-specific cached resolutions. Raw text stays canonical so entries can be refreshed when `llm_id` changes.
 - `server_chat_configs.context_note` stores the server-wide author's note injected into conversation history at inference time. Acts as a fallback when the active persona has no persona-specific note.
 - `server_chat_configs.context_note_depth` stores the injection depth for the global note: `0` = bottom of fetched history (most recent), `N` = N messages from the bottom, clamped to top if it exceeds the actual count.
+- `server_chat_configs.model_randomizer_enabled` (BOOLEAN, default `false`) toggles the per-turn text model randomizer (`/config model-randomizer`). When `true`, each generation turn randomly promotes one member of the pool (primary model + configured fallbacks) to lead the attempt list; the rest stay as failover. Enabling is gated on ≥1 configured fallback so the pool always has ≥2 members. See [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn).
 - `server_model_configs.thinking_level` stores the active text provider's mirrored reasoning preference (`auto`, `none`, `low`, `medium`, `high`). This is a deprecated Phase 1.5 mirror; it remains on the active runtime config while provider-specific snapshots live in `saved_provider_configs`.
 - `server_model_configs.diffusion_model_id` stores the active standard image generation model; `NULL` means standard image generation is disabled until a model is explicitly selected again.
 - `server_model_configs.vision_llm_id` stores the dedicated vision model for non-vision chat models; `NULL` means no vision tool is available. When set, the `analyze_image` tool is exposed so non-vision models can delegate image analysis to this model.
@@ -202,6 +212,8 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_novelai_imagegen_configs.nai_sampler`, `nai_steps`, `nai_scale`, `nai_noise_schedule`, and `nai_cfg_rescale` store optional server overrides for NovelAI image generation params; `NULL` means use the env fallback.
 - `server_member_permissions_configs.self_teaching_enabled` and `server_member_permissions_configs.personal_memories_enabled` are exposed in `/capabilities manage` because they gate core bot behavior, but they remain in the member-permissions split table with the other teaching/privacy toggles.
 - `server_capabilities_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
+- `server_capabilities_configs.user_blocking_enabled` gates the `block_user` and `unblock_user` built-in tools. The DB default is `true`.
+- `persona_user_blocks` stores active persona-scoped mutes/blocks keyed by `(server_id, persona_id, user_disc_id)`, with `block_type` (`mute` or `block`), `reason`, and `expires_at`. Expired rows are ignored by repository reads. The table is intentionally separate from `personalization_blacklist`.
 - `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null.
 - `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`.
 
@@ -278,7 +290,13 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 - `saved_provider_configs.api_key` + `saved_provider_configs.key_version`
 - `saved_provider_configs.thinking_level` mirrors `server_model_configs.thinking_level` so provider switching can restore the previous provider-specific reasoning preference.
 - `saved_provider_configs.fallback_model_refs` and `user_saved_provider_configs.fallback_model_refs` store ordered polymorphic fallback references as JSON objects shaped like `{type: "llm" | "custom_endpoint", id: number}`. The legacy `fallback_llm_ids` column was dropped by migration 011 (Phase 6 Step #14.5); `fallback_model_refs` is now the sole source of truth.
-- `custom_endpoints` stores labeled self-hosted or proxy-backed endpoint registrations. Rows are scoped either to `server_id` or `user_id` and carry adapter metadata such as `api_style`, `endpoint_url`, `model_name`, capability flags, workflow JSON or speech/STT adapter options (`extra_config`), `is_default`, and whether auth is required. Uniqueness is `(scope, label, capability, COALESCE(model_name, ''))` via scoped partial unique indexes (migration 024), so one labeled connection may host **several models of the same capability** distinguished by `model_name` (at most one unnamed model per capability). `model_ref_id` links each row to the synthetic model it owns (`llms` / `embedding_models` / `image_diffusion_models` / `video_generation_models`, chosen by `capability`); the runtime uses it to resolve the active model back to its exact endpoint when a label hosts multiple models — see `resolveCustomEndpointForProvider(provider, capability, activeModelId)`. Text endpoints also carry `strict_role_alternation` and `supports_prefix_completion` (migration 025), synced to the synthetic `llms` row so the runtime resolves them uniformly with built-in providers — see [`subsystems/strict-chat-completion.md`](./strict-chat-completion). The same two columns exist on `llms`, where built-in providers seed the required defaults (anthropic → alternation; deepseek/zai/zaicoding → prefix), enforced by `bun run check-models`.
+- `custom_endpoints` stores labeled self-hosted or proxy-backed endpoint registrations. Rows are scoped either to `server_id` or `user_id` and carry adapter metadata such as `api_style`, `endpoint_url`, `model_name`, capability flags, workflow JSON or speech/STT adapter options (`extra_config`), `is_default`, and whether auth is required. Uniqueness is `(scope, label, capability, COALESCE(model_name, ''))` via scoped partial unique indexes (migration 024), so one labeled connection may host **several models of the same capability** distinguished by `model_name` (at most one unnamed model per capability). `model_ref_id` links each row to the synthetic model it owns (`llms` / `embedding_models` / `image_diffusion_models` / `video_generation_models`, chosen by `capability`); the runtime uses it to resolve the active model back to its exact endpoint when a label hosts multiple models — see `resolveCustomEndpointForProvider(provider, capability, activeModelId)`. Text endpoints also carry `strict_role_alternation` and `supports_prefix_completion` (migration 025), synced to the synthetic `llms` row so the runtime resolves them uniformly with built-in providers — see [`subsystems/strict-chat-completion.md`](./strict-chat-completion). The same two columns exist on `llms`, where built-in providers seed the required defaults (anthropic → alternation; deepseek/zai/zaicoding → prefix), enforced by `bun run check-seed-catalogs`.
+- `llms.input_price_per_million` and `llms.output_price_per_million` hold each model's official USD-per-million-token price (uncached standard rate), seeded from the typed catalog (`src/db/seed/catalog/models.ts`). Both are **nullable**: NovelAI / NVIDIA-free / `custom` / Gemma / `:free` rows are non-metered, and `gemini-3.5-pro` / `gemini-3-flash` stay NULL until Google publishes a rate. `/tool estimate cost` resolves price through `resolveModelPricing`:
+  - **First-party providers** (google/vertex/vertexexpress/anthropic/deepseek/zai/zaicoding) are **DB-only** — the column is the sole source of truth. The old `HELP_COST_*` env constants and the Anthropic codename-sniffing tier guess were removed; a row with no price now reports **"pricing unavailable"** rather than billing a coarse fallback.
+  - **OpenRouter** is priced **live-first** from the OpenRouter API cache (`getOpenRouterPricing`), which auto-updates with OpenRouter's rates. A catalog price on an OpenRouter row is only a **cache-miss fallback** — used solely when the live cache has no entry for that model. `other-model` (arbitrary user codename) stays NULL.
+  - `bun run check-seed-catalogs` enforces that every active, billable first-party row carries both prices (`collectMeteredPriceViolations` in `modelSeed.ts`), excluding deprecated / Gemma / `isFree` / pricing-pending rows.
+
+  Prices live on the row (not in code), so registering a model's cost is a one-line catalog edit re-seeded on boot. See the command at `src/commands/tool/estimate/cost.ts`.
 - `voice_samples` stores server-scoped reference audio metadata for local speech cloning. `file_path` is a production S3/CloudFront URL or a local `data/voice-samples/` path. Phase 4 allows one uploaded local sample per server.
 - `server_speech_configs.chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, and `chatterbox_exaggeration` store server-scoped Chatterbox speech settings. CFG weight and exaggeration are forwarded to local TTS clone endpoints but only affect the bundled Chatterbox server when Turbo is disabled.
 - `personas.speech_voice_sample_id`, `personas.speech_voice_id`, and `personas.speech_voice_name` store per-persona voice assignment for local clone samples and provider-hosted voices. The legacy `elevenlabs_voice_*` columns were dropped by migration 010 (Phase 6 Step #14.2); `speech_voice_id` is now the sole voice identifier.
@@ -381,11 +399,24 @@ Use **`src/db/seed/catalog/*.ts`** (idempotent, runs every boot through `initial
 
 The catalog seeders render the same idempotent `INSERT … ON CONFLICT` upserts in code.
 Startup order is models (`seedModelsFromCatalog`) → personas (`seedPersonasFromCatalog`)
+→ preset sprites (`seedPersonaSpritesFromCatalog`) → preset avatars (`seedPersonaAvatarsFromCatalog`)
 → system prompts (`seedSystemPromptsFromCatalog`) → NovelAI presets (`seedNaiPresetsFromCatalog`).
+The avatar seed (migration 033) uploads each persona's avatar once to the shared `presets/`
+prefix and records `persona_presets.preset_avatar_shared_url` + `preset_avatar_hash`; pointer
+alters live-resolve the URL and the main-avatar reconciler gates guild-avatar PATCHes on the
+hash (`personas.applied_avatar_hash`). The order is enforced by `check-seed-catalogs`.
 There are no startup seed `.sql` files; edit the typed catalog and the change is seeded on
-the next boot. Invariants are validated on startup and via `bun run check-models`.
+the next boot. Invariants are validated on startup and via `bun run check-seed-catalogs`.
 `seedPersonasFromCatalog()` also preserves the derived `official_attribute_flags` update
 for official persona attribute visibility flags.
+
+The persona upsert keys on the stable `(preset_lineage_id, preset_language)` pair, not on
+`persona_preset_name`. `persona_preset_name` is a mutable, human-facing catalog label, so it
+is a normal updated column: renaming a preset is a one-line edit to the catalog `name` field
+that resolves to the existing lineage/language row and updates the label in place on the next
+boot — no rename bridge or migration required. (Keying on the name would instead orphan the
+old row, create a duplicate, and collide with `idx_persona_presets_lineage_language_unique`,
+aborting the whole batch INSERT.)
 
 Use a **numbered migration** for:
 - Adding new columns that older installations need before or after a rollout

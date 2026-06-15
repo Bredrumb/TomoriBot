@@ -31,6 +31,20 @@ describe("deliberate tool mode", () => {
     expect(allowedNames).toContain("update_task");
   });
 
+  it("allows user blocking tools for block and unblock intent", () => {
+    expect(getDeliberateToolAllowedNames("mute Alice for one hour")).toContain("block_user");
+    expect(getDeliberateToolAllowedNames("remove the user block for Alice")).toContain("unblock_user");
+  });
+
+  it("exposes block_user and unblock_user for user-blocking custom triggers", () => {
+    const allowedNames = getDeliberateToolAllowedNames("moderation please", {
+      "user-blocking": ["moderation"],
+    });
+
+    expect(allowedNames).toContain("block_user");
+    expect(allowedNames).toContain("unblock_user");
+  });
+
   it("supports wildcard custom triggers without breaking regex triggers", () => {
     expect(getDeliberateToolAllowedNames("", { image: ["^"] })).toContain("generate_image");
     expect(

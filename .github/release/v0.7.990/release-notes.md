@@ -1,6 +1,6 @@
 # v0.7.990 | Makeover Edition
   
-![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.990/liphel-outing.png)
+![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.990/liphel-makeover.webp)
 
 Happy ~~Liphel~~ Pride Month! This major release is the buffer before 0.8.0.00, it already contains the major refactor changes to make TomoriBot prepared for further architectural changes ~~and so I can let people test it more before moving on~~, splitting up all the 1k+ line code files as well as general optimizations (hence, Makeover, considering Personas can now handle physical appearances better this edition too!)
 

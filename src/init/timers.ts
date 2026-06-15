@@ -67,6 +67,26 @@ export function initTimers(client: Client): void {
     log.error("Failed to initialize cache metrics logger", error as Error);
   }
 
+  log.section("Scheduling Preset Avatar Fan-out...");
+  try {
+    // Background, best-effort reconcile of main-persona guild avatars to the
+    // latest preset art. Deferred to clientReady (needs guilds) and NOT awaited
+    // so it never blocks startup; it is throttled and resumes across boots.
+    client.once("clientReady", () => {
+      import("@/utils/persona/presetAvatarReconciler")
+        .then(({ reconcilePresetMainAvatars }) => {
+          void reconcilePresetMainAvatars(client).catch((error: Error) => {
+            log.error("Preset avatar fan-out reconcile failed", error);
+          });
+        })
+        .catch((error: Error) => {
+          log.error("Failed to load preset avatar reconciler", error);
+        });
+    });
+  } catch (error) {
+    log.error("Failed to schedule preset avatar fan-out", error as Error);
+  }
+
   log.section("Initializing Upload Quota System...");
   try {
     import("@/utils/security/rateLimiter")

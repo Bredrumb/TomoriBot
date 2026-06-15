@@ -21,7 +21,7 @@ export default {
       file_too_large: `生成された動画（{size_mb} MB）がDiscordの25 MBファイルサイズ制限を超えています。`,
     },
     generate_image_nai: {
-      no_google_api_key: `インペインティングには画像セグメンテーション用のGoogleプロバイダー認証情報が必要です。\`/config provider add\` で追加するか、Googleプロバイダーに切り替えてください。`,
+      no_google_api_key: `インペインティングには画像セグメンテーション用のGoogleプロバイダー認証情報が必要です。\`/provider add\` で追加するか、Googleプロバイダーに切り替えてください。`,
       model_not_configured: `現在、NovelAI画像生成は無効です。まず \`/model image\` でNovelAI画像モデルを選択してください。`,
       provider_quota_exceeded: `このアカウントではNovelAI画像生成クォータを使い切っています。Anlasを補充するか、クォータのリフレッシュ後に再試行してください。`,
       characters_require_v4: `キャラクター配置にはNovelAI V4以降の拡散モデルが必要です。`,
@@ -56,6 +56,20 @@ export default {
     tool_notice: {
       hide_footer: `\`/config notice-embeds visibility\` で非表示にできます`,
       hide_footer_with_kill: `\`/config notice-embeds visibility\` で非表示にできます · 止まっていると思ったら \`/bot kill\` を使用してください`,
+    },
+    user_block: {
+      type_mute: `ミュート`,
+      type_block: `ブロック`,
+      effect_mute: `対象ユーザーはこのペルソナをトリガーできません。`,
+      effect_block: `対象ユーザーはこのペルソナをトリガーできず、そのユーザーの最近のメッセージ/メディアはこのペルソナのコンテキストから非表示になります。`,
+      block_mute_title: `🔇 {persona_name} が {user_name} を {duration_hours} 時間ミュートしました`,
+      block_block_title: `❌ {persona_name} が {user_name} を {duration_hours} 時間ブロックしました`,
+      block_success_description: `{user_name} は {persona_name} をトリガーできず、そのメッセージやメディアは {expires_at} まで非表示になります。`,
+      mute_success_description: `{user_name} は {expires_at} まで {persona_name} をトリガーできません。`,
+      block_footer: `サーバー管理者は /server user-blacklist remove でこれを解除できます。`,
+      unmute_success_title: `🔊 {persona_name} が {user_name} のミュートを解除しました`,
+      unblock_success_title: `✅ {persona_name} が {user_name} のブロックを解除しました`,
+      unblock_success_description: `{user_name} に対する {persona_name} の有効な {block_type} を解除しました。`,
     },
     video: {
       youtube_processing_title: `👁️ YouTube動画を視聴中...`,

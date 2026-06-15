@@ -49,13 +49,14 @@ sidebar:
     - memory monitor init
     - cache metrics logger init
 15. Initialize upload quota cleanup scheduler.
-16. Call `client.login(DISCORD_TOKEN)`.
+16. `await client.login(DISCORD_TOKEN)` inside a try/catch — a `DisallowedIntents` rejection (privileged intent requested without approval) is logged as an actionable misconfiguration and exits, rather than leaving the process alive but disconnected.
 
 ## Error Criticality
 
 - Fatal (process exits):
   - database init failure
   - tool registry init failure
+  - Discord login failure (including `DisallowedIntents` for an unapproved privileged intent)
 - Non-fatal (warn and continue):
   - cache warmup failures
   - pg_cron setup failures
@@ -65,7 +66,8 @@ sidebar:
 
 ## Discord Client Configuration Notes
 
-- `GuildPresences` intent is only added outside production.
+- `GuildPresences` is a privileged intent resolved by `resolvePresenceIntentEnabled()` in `src/init/discord.ts`. Before the client is built, it probes `GET /applications/@me` and includes the intent only when Discord reports it as enabled (`ApplicationFlags.GatewayPresence` or `GatewayPresenceLimited`). This is self-resolving: the intent turns on automatically on the next restart once Discord approves it — no code or env change. If the probe fails (e.g. network error), it falls back to the legacy default: enabled outside production, disabled in production.
+- Consumers detect the intent at runtime via `client.options.intents.has(GatewayIntentBits.GuildPresences)` (see the participants context builder) and omit presence/status lines when it is absent, so toggling it needs no other code changes.
 - Sweeper configuration is enabled for message/user cache pressure control.
 
 ## clientReady Event Work

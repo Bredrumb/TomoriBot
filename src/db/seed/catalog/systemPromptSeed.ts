@@ -39,12 +39,19 @@ export function validateSystemPrompts(): string[] {
 }
 
 export function buildSystemPromptSeedStatements(): string[] {
-  const values = rowsOf()
-    .map((preset) => `  (${renderSystemPromptTuple(preset)})`)
-    .join(",\n");
+  const currentPresets = rowsOf();
+
+  if (currentPresets.length === 0) {
+    return ["DELETE FROM system_prompt_presets"];
+  }
+
+  const values = currentPresets.map((preset) => `  (${renderSystemPromptTuple(preset)})`).join(",\n");
+
+  const validNames = currentPresets.map((preset) => str(preset.name)).join(", ");
 
   return [
     `INSERT INTO system_prompt_presets (${SYSTEM_PROMPT_COLUMNS})\nVALUES\n${values}\n${SYSTEM_PROMPT_ON_CONFLICT}`,
+    `DELETE FROM system_prompt_presets WHERE system_prompt_preset_name NOT IN (${validNames})`,
   ];
 }
 

@@ -531,7 +531,7 @@ function renderUserEntries(
     }
 
     if (entry.imageAppearanceTags && entry.imageAppearanceTags.length > 0) {
-      text += `- Physical Appearance: ${entry.imageAppearanceTags.join(", ")}\n`;
+      text += `- ${entry.displayName}'s Physical Appearance: ${entry.imageAppearanceTags.join(", ")}\n`;
     }
     for (const line of entry.detailLines) text += `${line}\n`;
     text += "\n";

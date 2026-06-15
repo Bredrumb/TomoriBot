@@ -2,7 +2,7 @@
 title: "06: Segment Normalization"
 ---
 
-Normalizes a flushed text segment — cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill — before handing it to stage 07 for Discord delivery.
+Normalizes a flushed text segment — capturing render modifiers, cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill — before handing it to stage 07 for Discord delivery.
 
 **File:** `src/utils/discord/stream/segmentProcessor.ts:21-233`
 
@@ -19,13 +19,32 @@ The transformation pipeline runs in this order:
    or `...`) are held in `state.pendingOrphanPunctuation` and prepended to the next non-empty
    segment instead of being sent standalone, preventing jarring single-character messages.
 
-2. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
+2. **Render-modifier capture** — before normal own-name cleanup runs, an active persona line
+   that starts as `SourcePersona (modifier): text` is parsed. The modifier resolves against the
+   active persona's `persona_sprites` first; a sprite match sends stage 07 an identity override
+   and the sprite avatar, plus a `spriteRecord` so the message → sprite-label mapping is persisted
+   after the send (`persona_sprite_messages`). Ordinary sprites use the **clean username
+   `SourcePersona`** (no `(sprite)` suffix in Discord); identity sprites (`is_identity = true`)
+   use the **flipped username `sprite (SourcePersona)`** shown directly in Discord, DID-alter
+   style. The accumulated-text prefix keeps the decorated
+   `SourcePersona (sprite): ` label so the model still sees its own sprite usage. If the sprite
+   row matches but its image cannot be loaded, the parenthetical modifier is stripped and the
+   line is delivered as normal source-persona output without trying copied identity. If no
+   sprite matches, the modifier falls back to copied-render resolution against known personas
+   and users in current context; copied matches use the **flipped** webhook username
+   `target (SourcePersona)` (impersonated name first for the in-chat disguise) while the
+   accumulated-text prefix stays source-first (`SourcePersona (target): `) for the model.
+   Unknown or ambiguous copied targets are stripped and delivered as
+   normal output. This path is line-scoped across stream splits and ignored inside code blocks
+   and list-like starts.
+
+3. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
    shortcode (`:name:`) from the segment if the same emoji was already used in a recent bot
    message (lookback window controlled by `EMOJI_UNIQUE_LOOKBACK`, default 5). History is stored
    in converted Discord format (`<:name:id>`), so the filter normalises that form to shortcodes
    before comparison.
 
-3. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
+4. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
    writes it (e.g., `"Tomori: hello"` → `"hello"`), converts `:name:` shortcodes to full Discord
    custom emoji syntax (`<:name:id>`) using the server emoji list, strips unresolved shortcodes by
    default, optionally preserves unresolved shortcodes when
@@ -38,22 +57,24 @@ The transformation pipeline runs in this order:
    extra names; the leaked-preamble and later-boundary passes stay scoped to the active name so
    mid-prose `"Name:"` usages are preserved.
 
-4. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
+5. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
    in the text (e.g., `@alice`) to Discord snowflake mentions (`<@1234567890>`) using the mention
    map built at stream init from `ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION` items.
 
-5. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`) — when
+6. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`) — when
    `context.outputPrefill` is set (hybrid prefix streaming for NAI), the first segment strips the
    model-echoed prefill from its start and the cleaned prefill is prepended to the outgoing
    segment (injected exactly once; subsequent segments are unmodified).
 
-6. **Speaker guard** (`truncateBeforeGenericSpeakerLine`) — if `llm_stop_speaker_pattern_enabled`
+7. **Speaker guard** (`truncateBeforeGenericSpeakerLine`) — if `llm_stop_speaker_pattern_enabled`
    is true and a speaker-label line (e.g., `User:`) appears in the segment, the text is truncated
    before it and `requestStop(channelId, "speaker_guard")` is queued. The segment is sent with
    the truncated content; the stop is processed by the stage 04 orchestrator on the next
-   iteration.
+   iteration. Active render-modifier labels such as `Ren (mad):` or `Ren (target):` are explicitly
+   allowed through both the provider-level fallback guard and this segment-level guard so they can
+   be resolved instead of treated as foreign speaker turns.
 
-7. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
+8. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
    rendered Markdown table, the segment is split into text parts and table parts. Table parts are
    routed to `StreamMessageDelivery.sendRenderedMarkdownTable()` which renders the table to a PNG
    via `renderMarkdownTableToPng()` and sends it as a Discord file attachment.
@@ -78,6 +99,24 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
 - **`state.pendingOrphanPunctuation`** — may be set (hold) or cleared (prepend to segment).
 - **`state.prefillMatched`** / **`state.prefillInjected`** / **`state.prefillMatchFailed`** —
   updated as prefill stripping/injection progresses.
+- **`state.activeRenderModifier`** — tracks the active render-modifier identity override so period
+  or chunk splits keep using the sprite/copied identity. Expiry differs by modifier kind:
+  - **Copied identities** (impersonating a user / another persona — no `spriteRecord`) expire at the
+    end of their line (a newline boundary or an embedded `\n`), so the bot reverts to itself on the
+    next line unless it re-declares the label.
+  - **Persona sprites** (regular and `is_identity`, carrying a `spriteRecord`) persist across
+    newlines and only switch when a *different* `SourcePersona (sprite):` label appears — an
+    expression is a sustained visual state, e.g. `"Touko (mad): ARGGHHH!\nFine... I'll do it"` keeps
+    the `mad` sprite for the second line.
+- **`state.lastDeliveredSpriteKey`** / **`state.spriteGroupParity`** — track the last non-identity
+  sprite delivered and a toggle flipped on each sprite change. The toggle decides whether the sprite
+  uses the clean persona name (`false`) or the decorated `Persona (sprite)` name (`true`). Discord
+  groups consecutive webhook messages by `webhook_id` + `username` (ignoring the avatar) and strips
+  zero-width/blank chars from usernames, so a visibly distinct name is the only reliable break:
+  adjacent different-sprite messages alternate clean/decorated and never match, forcing Discord to
+  render each avatar instead of grouping them under the first one, while same-sprite runs keep an
+  identical username and still group. Identity sprites are excluded (their decorated name is already
+  distinct).
 - **`requestStop(channelId, "speaker_guard")`** — queued if the speaker guard fires; the stop
   is consumed by the stage 04 orchestrator on the next loop iteration.
 - **PNG attachment** — when a Markdown table is detected and rendered successfully, a Discord file

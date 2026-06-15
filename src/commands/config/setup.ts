@@ -91,8 +91,8 @@ export async function execute(
         //    user isn't permanently locked out by a setup guard that uses a weaker health check
         //    than the commands that actually require a healthy state.
         if (existingTomoriState) {
-          const providerAddMention = commandRegistry.getCommandMention("config", "provider", "add");
-          const modelTextMention = commandRegistry.getCommandMention("config", "model", "text");
+          const providerAddMention = commandRegistry.getCommandMention("provider", "add");
+          const modelTextMention = commandRegistry.getCommandMention("model", "text");
           const userByokToggleMention = commandRegistry.getCommandMention("server", "user-byok", "toggle");
           const helpPersonalProviderMention = commandRegistry.getCommandMention("help", "personal-provider");
           const currentModelValue =
@@ -149,8 +149,8 @@ export async function execute(
         log.warn(
           `[Setup] Server ${serverId} has a main persona row but state validation failed — surfacing repair guidance`,
         );
-        const modelTextMention = commandRegistry.getCommandMention("config", "model", "text");
-        const providerAddMention = commandRegistry.getCommandMention("config", "provider", "add");
+        const modelTextMention = commandRegistry.getCommandMention("model", "text");
+        const providerAddMention = commandRegistry.getCommandMention("provider", "add");
         await replyInfoEmbed(interaction, locale, {
           titleKey: "commands.config.setup.broken_state_title",
           descriptionKey: "commands.config.setup.broken_state_description",
@@ -652,6 +652,9 @@ export async function execute(
               ? `Set preset avatar for "${selectedPresetOption.name}"`
               : "Reset guild avatar to bot default";
             log.info(`${actionDescription} for guild ${interaction.guild.id} during setup`);
+            // Stamp the applied avatar hash so the background fan-out reconciler
+            // skips this freshly-set-up server until the catalog art changes again.
+            await personaRepository.markServerMainAvatarSynced(interaction.guild.id);
           } else {
             avatarUpdateFailed = true;
             log.warn(`Failed to update guild avatar during setup: ${response.status} ${response.statusText}`);
@@ -727,8 +730,8 @@ export async function execute(
       }
 
       if (isCustomEndpointSetup) {
-        const customModelsAddMention = commandRegistry.getCommandMention("config", "custom-endpoint", "add");
-        const modelTextMention = commandRegistry.getCommandMention("config", "model", "text");
+        const customModelsAddMention = commandRegistry.getCommandMention("provider", "custom-endpoint", "add");
+        const modelTextMention = commandRegistry.getCommandMention("model", "text");
         const helpCustomModelsMention = commandRegistry.getCommandMention("help", "custom-endpoint");
         const helpSpeechMention = commandRegistry.getCommandMention("help", "speech");
         const helpTranscriptionMention = commandRegistry.getCommandMention("help", "transcription");

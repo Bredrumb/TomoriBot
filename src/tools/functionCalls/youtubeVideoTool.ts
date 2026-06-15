@@ -205,7 +205,7 @@ export class YouTubeVideoTool extends BaseTool {
         success: true,
         message: "YouTube video processing initiated - restarting with enhanced context",
         data: {
-          type: "context_restart_with_video",
+          type: "context_restart_with_youtube",
           video_id: videoId,
           video_url: youtubeUrl,
           reason: reason,

@@ -6,7 +6,8 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { configRepository, personaRepository } from "@/utils/db/repositories";
+import { configRepository, personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
+import { invalidatePersonaSpriteCache } from "@/utils/cache/personaSpriteCache";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
@@ -16,7 +17,7 @@ import type { SelectOption } from "../../types/discord/modal";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
+import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 
 function isUniqueViolation(error: unknown): boolean {
@@ -323,7 +324,19 @@ export async function execute(
         return;
       }
 
-      // 11a. Turn the main persona into a live preset pointer.
+      // 11a. Capture the persona's current sprite images BEFORE re-pointing, so we
+      //      can clean up server-owned ones afterward (resetting to the preset set).
+      //      For a still-pointer persona these are shared preset URLs (the delete
+      //      guard skips them); for a materialized persona they are its own rows.
+      const spritesBeforeReset = await personaSpriteRepository.listForPersona(targetPersonaId);
+
+      // 11a.2. Capture the persona's current stored avatar too. applyPresetPointerToPersona
+      //        clears webhook_avatar_url (fresh pointer), so any server-owned image is
+      //        deleted afterward; shared presets/ images are skipped by the delete guard.
+      const previousMainAvatarUrl = mainPersona.webhook_avatar_url ?? null;
+
+      // 11b. Turn the main persona into a live preset pointer (this also drops the
+      //      persona's own sprite rows, so it resolves preset sprites live again).
       const updatedTomoriResult = await personaRepository.applyPresetPointerToPersona({
         personaId: targetPersonaId,
         nickname: resolvedPersonaName,
@@ -363,7 +376,19 @@ export async function execute(
 
       invalidateTomoriStateCache(serverDiscId);
 
-      // 11c. Update guild avatar/nickname only for main/default target
+      // 11c. Finish the sprite reset: delete server-owned sprite images now that
+      //      the rows are gone (the guard skips shared preset images), and drop the
+      //      stale sprite cache so the next read resolves the new preset's sprites.
+      await Promise.all(spritesBeforeReset.map((sprite) => deletePersonaSpriteFromStorage(sprite.avatar_url)));
+      invalidatePersonaSpriteCache(targetPersonaId);
+
+      // 11c.2. Delete the old server-owned main avatar (now unreferenced after the
+      //        re-point cleared webhook_avatar_url). The guard skips shared presets/.
+      if (previousMainAvatarUrl) {
+        await deletePersonaAvatarFromStorage(previousMainAvatarUrl);
+      }
+
+      // 11d. Update guild avatar/nickname only for main/default target
       const isDM = !interaction.guild;
       let avatarUpdateFailed = false;
       let nicknameUpdateFailed = false;
@@ -409,6 +434,10 @@ export async function execute(
                 ? `Set preset avatar for "${selectedPreset.persona_preset_name}"`
                 : "Reset guild avatar to bot default";
               log.info(`${actionDescription} for guild ${interaction.guild.id} after applying preset`);
+              // Stamp the applied avatar hash so the background fan-out reconciler
+              // skips this server until the catalog art changes again (avoids a
+              // redundant guild-avatar re-PATCH on the next boot).
+              await personaRepository.markServerMainAvatarSynced(interaction.guild.id);
             } else {
               avatarUpdateFailed = true;
               log.warn(`Failed to update guild avatar: ${response.status} ${response.statusText}`);
@@ -643,28 +672,14 @@ export async function execute(
       files: avatarAttachment ? [avatarAttachment] : [],
     });
 
-    // Mirror /persona import alter avatar persistence flow so webhook avatars remain stable.
-    let storedAvatarUrl: string | null = null;
-    if (presetAvatarBuffer) {
-      const s3AvatarUrl = await uploadPersonaAvatarToStorage({
-        personaId: newAlterId,
-        serverDiscId,
-        label: "default alter preset",
-        buffer: presetAvatarBuffer,
-      });
-      storedAvatarUrl = s3AvatarUrl;
+    // No per-server avatar upload: a preset-pointer alter leaves webhook_avatar_url
+    // NULL and live-resolves the shared preset avatar (preset_avatar_shared_url)
+    // at state-load time. This both dedups storage (N servers share one image) and
+    // makes catalog avatar edits fan out to this alter on the next reseed, exactly
+    // like its sprites/triggers/prompt. The avatar is materialized by reference
+    // only if the user later forks the persona with a content edit.
 
-      if (storedAvatarUrl) {
-        const avatarUpdated = await personaRepository.setAvatar(newAlterId, storedAvatarUrl);
-        if (!avatarUpdated) {
-          log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);
-        }
-      } else {
-        log.warn(`Failed to persist preset avatar for alter persona ${newAlterId}`);
-      }
-    }
-
-    // Match /persona import cache invalidation timing: after avatar URL persistence.
+    // Match /persona import cache invalidation timing.
     invalidateTomoriStateCache(serverDiscId);
 
     log.success(

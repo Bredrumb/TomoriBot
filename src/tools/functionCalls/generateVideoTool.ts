@@ -491,7 +491,7 @@ export class GenerateVideoTool extends BaseTool {
       }
 
       // 8. Extract reference image if media_id provided
-      let referenceImages: Array<{ mimeType: string; data: string }> | undefined;
+      let referenceImages: Array<{ mimeType: string; data: string; url?: string; fallbackUrl?: string }> | undefined;
 
       if (messageId) {
         log.info(`Extracting reference image from message ${messageId} for image-to-video`);
@@ -602,7 +602,6 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // 12. Create attachment and send to Discord
       log.info(
         `Sending generated video to Discord ${JSON.stringify({
           filename: videoFilename,

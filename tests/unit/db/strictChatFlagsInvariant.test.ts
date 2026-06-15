@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { collectStrictChatFlagViolations, validateModels } from "@/db/seed/catalog/modelSeed";
 import type { LlmInput } from "@/db/seed/catalog/types";
 
-// Verifies the check-models per-provider required-flag invariant: anthropic must set
+// Verifies the check-seed-catalogs per-provider required-flag invariant: anthropic must set
 // strictRoleAlternation; deepseek/zai/zaicoding must set supportsPrefixCompletion.
 
 function row(overrides: Partial<LlmInput> & Pick<LlmInput, "provider" | "codename">): LlmInput {

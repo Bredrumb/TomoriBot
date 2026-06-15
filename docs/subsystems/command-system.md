@@ -11,9 +11,9 @@ TomoriBot uses Discord slash commands loaded dynamically from `src/commands/`.
 
 Flow:
 
-1. `loadCommandData()` scans command folders.
+1. `loadCommandData()` scans command folders and top-level command files.
 2. Command metadata is built into `SlashCommandBuilder` trees.
-3. `handleCommands.ts` resolves category + group + subcommand.
+3. `handleCommands.ts` resolves a root command, or category + group + subcommand.
 4. Category cooldown is checked/set in `cooldowns` table (`COMMAND_CATEGORY`).
 5. Target `execute()` is called with `(client, interaction, userData, locale)`.
 
@@ -48,14 +48,49 @@ Keep webhook cache invalidation in the same success path as the write or delete 
 
 ## Command File Contract
 
-Each command module exports:
+Subcommand modules export:
 
 - `configureSubcommand(subcommand)`
+- `execute(client, interaction, userData, locale)`
+
+Root command modules export:
+
+- `configureCommand(command)`
 - `execute(client, interaction, userData, locale)`
 
 Grouped commands are represented by folders:
 
 - `src/commands/model/text.ts` -> `/model text`
+
+Root commands are represented by top-level command files:
+
+- `src/commands/subscribe.ts` -> `/subscribe`
+
+Root command files may also export optional command-level flags:
+
+- `guildOnly = true` - restricts the command to guilds
+- `managerOnly = true` - requires `ManageGuild`
+- `nsfw = true` - marks the command as age-restricted
+- `isCommandEnabled(context)` - returns `false` to skip command registration and
+  execution-map wiring for this module
+
+Use `isCommandEnabled` for commands that are present in source but should be
+absent unless a feature gate is active. The loader evaluates the gate after
+importing the module but before calling `configureCommand()` or
+`configureSubcommand()`. If every subcommand in a category is disabled, the
+top-level category command is omitted from registration.
+
+Example:
+
+```ts
+export const isCommandEnabled = () =>
+  process.env.RUN_ENV === "production" &&
+  process.env.TOMORI_SUPPORTER_BILLING_ENABLED === "true";
+```
+
+Command modules must not perform production-only side effects at import time.
+Keep feature-gated initialization in startup hooks or inside the gated runtime
+handler.
 
 ## Current Top-Level Categories
 
@@ -101,6 +136,9 @@ Use `localizer("en-US", key)` in command builders.
 
 Key pattern:
 
+- Root command description: `commands.{command}.description`
+- Root command option description: `commands.{command}.{option}_description`
+- Root command choice name: `commands.{command}.{option}_choice_{value}`
 - Subcommand description: `commands.{category}.{path}.description`
 - Option description: `commands.{category}.{path}.{option}_description`
 - Choice name: `commands.{category}.{path}.{option}_choice_{value}`
@@ -109,6 +147,11 @@ Example path:
 
 - file: `src/commands/memory/personal/remove.ts`
 - command path: `memory.personal.remove`
+
+Root command example:
+
+- file: `src/commands/subscribe.ts`
+- command path: `subscribe`
 
 ## Interaction Timing Rules (Important)
 
@@ -346,15 +389,15 @@ Rules:
 
 ## Representative Command Groups
 
-- `bot`: respond, generate(image), kill, impersonate
-- `config`: setup, model(text/image/embedding/video/vision/speech/transcription), api-key(rotation), provider(add/remove), custom-endpoint(add/edit/remove), image-tags(default-positive/default-negative), system-prompt(set/remove/preset), context-note(set), params(*), timezone, message-fetch-limit, bot-permissions -> tool-use(toggle/manage), notice-embeds(visibility)
+- `bot`: respond, generate(image/scene), kill, impersonate
+- `config`: setup, model(text/image/embedding/video/vision/speech/transcription), api-key(rotation), provider(add/remove), custom-endpoint(add/edit/remove), image-tags(default-positive/default-negative), system-prompt(set/remove/preset), context-note(set), params(*), timezone, message-fetch-limit, self-debug, model-randomizer, bot-permissions -> tool-use(toggle/manage), notice-embeds(visibility)
 - `speech`: elevenlabs, voice-add, voice-remove, voice-assign, transcripts, chatterbox(parameters)
 - `nsfw`: jailbreaks
 - `optional-key`: brave/set/remove
 - `server`: trigger(add/delete), whitelist(channel/persona/role/remove), stm(manage), cooldown(triggers), auto-trigger(channels/threshold), matrix(link/unlink), quota(image-generation/text-generation/video-generation/reset), rp-channels, crosschannel-blocklist, welcome-channel(set/remove), private-channels, user-blacklist(add/remove), member-permissions, always-reply, thought-logs-channel, channel-prompt
 - `novelai`: attg, image(params/generate), character-reference
 - `server`: trigger(add/delete), whitelist(channel/persona/role/remove), stm(manage), cooldown(triggers), auto-trigger(*), matrix(link/unlink), quota(image-generation/text-generation/video-generation/reset), rp-channels, crosschannel-blocklist, welcome-channel(set/remove), private-channels, user-blacklist(add/remove)
-- `persona`: create, generate, import, export, default, swap, remove, image-tags, attribute(add/edit/remove), sample-dialogue(add/edit/remove), prompt(set/remove), history(import/remove)
+- `persona`: create, generate, import, export, default, swap, remove, image-tags, sprites(add/edit/remove/export/import), attribute(add/edit/remove), sample-dialogue(add/edit/remove), prompt(set/remove), history(import/remove)
 - `memory`: document(add/remove), personal(add/edit/remove/import/export), server(add/edit/remove/import/export)
 - `personal`: privacy, language, nickname, image-tags, cache, config(import/export/remove), provider(add/remove/model-text/model-embedding/model-image/model-video/model-vision/toggle-models), model(fallback), samplers, impersonate(prompt), spotlight(set/manage)
 - `scheduled-task`: edit, remove
@@ -365,9 +408,15 @@ Rules:
 
 `/server channel-prompt` is a flat, modal-driven command that scopes a system prompt to one channel. It takes a required `channel` option, then opens a prefilled 4-part modal (up to 16000 chars, part 1 optional) plus a Radio Group for Prompt Mode (`Append` / `Replace`). `Append` injects the channel prompt as a distinct `SYSTEM_CHANNEL_PROMPT` block after the server system prompt; `Replace` substitutes the channel prompt for the server system prompt's slot — persona prompt and persona attributes are never affected. Submitting with all prompt parts empty removes the channel's override. State lives in the standalone `channel_prompt_overrides` table (per-channel, never exported) and is resolved per request via `getCachedChannelPrompt`. The override surfaces in `/tool prompt snapshot` under the `Channel Prompt` header.
 
+`/persona sprites add` is a one-modal Manage Server flow that selects a persona, validates a sprite label, uploads an image, converts it to PNG, and upserts a `persona_sprites` row. Reusing a normalized label replaces the existing sprite. `/persona sprites edit` uses the persona picker, sprite picker, and confirmation bridge before opening a prefilled modal for name, optional replacement image, usage instructions, and identity status; replacement images consume the shared avatar quota, while metadata-only edits do not. `/persona sprites remove` starts from `replyPaginatedPersonaChoicesV2(...)`, then opens checkbox groups where checked sprites are kept and unchecked sprites are deleted. When a persona has more than one modal page of sprites, the command shows a localized range-button picker before opening the checkbox modal. `/persona sprites export` selects a persona and bundles its sprites into a shareable `.zip` (public reply). `/persona sprites import` opens a single modal with a persona select plus a `.zip` file-upload field; it validates and converts every image up front, reserves one import-quota slot for the whole batch, overwrites on name conflicts, and rejects the entire import if it would exceed `PERSONA_SPRITE_MAX_PER_PERSONA`. The archive format (manifest + `sprites/` images) and its ZIP-bomb guards live in `src/utils/persona/spriteArchive.ts`. See [multi-persona](multi-persona) for the format details.
+
 `/bot generate image` is a modal-driven, fire-and-forget scene snapshot command. It plans against the current channel context with the active text provider, then renders with either the current provider's native image path or NovelAI's tag-based image tool when a NovelAI backend is available. Personal provider overlays apply before the hidden turn is built so personal text/image routing is respected.
 
+`/bot generate scene` is a modal-driven scripted text-scene command. V1 requires two different personas, optionally accepts a third, blocks duplicate selections, and only opens when the available persona set fits Discord's 25-option select limit. The `Rounds` field repeats the selected speaking order and is bounded by `BOT_GENERATE_SCENE_MAX_CYCLES` (default `10`; TomoriBot is BYOK so each generated turn bills the invoking user's own provider). Each generated turn receives a concise tail directive: additional instructions when provided, then "Begin your next reply as {persona}. Write only this character's next message." Scene turns keep tools enabled, suppress `/bot respond` continuation prompting, and use unique text-quota trigger keys so each generated turn is charged separately. Because every scene turn shares one trigger message, both reply-to-trigger mechanisms are suppressed for scene turns: the visual Discord reply (`replyToMessage` in `toolLoop.ts`) and the textual `buildQueuedReplyDirective` context directive (`contextPipeline.ts`) — otherwise every queued persona would render and be told to reply to the same unrelated message. The command-execution status embed (`commands.bot.generate.scene.success_title`) is sent non-ephemerally so it is classified as a `scene_directive` system embed and re-read into context as `[System: ...]`. For scene turns after the first, `triggererName` (what `{{user}}` resolves to in `turnPlanner.ts`) is overridden to the previous speaker in `sceneTurn.sequence`, so each persona treats the prior persona as the entity it is responding to rather than the command invoker; turn 0 has no prior speaker and keeps the invoker.
+
 `/generate video` is a modal-driven async generation command. It validates `videogen_enabled`, provider capability, API key, configured `video_model_id`, and server quota before polling the selected provider until the MP4 result is ready.
+
+`/config model-randomizer` is a server-level toggle (mirrors `/config self-debug`) for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a **block-until-fallbacks** precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured via `/model fallback`, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` — see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn).
 
 ### Personal-provider (BYOK) routing in commands
 
@@ -380,7 +429,8 @@ Forward-looking command rewrite guidance (naming conventions, checklist-style se
 ## Adding a New Command
 
 1. Add a `.ts` file under the correct command category/group path.
-2. Export `configureSubcommand` and `execute`.
+2. Export `configureSubcommand` and `execute`. Root commands export
+   `configureCommand` and `execute`.
 3. Add locale keys in both locale trees (`src/locales/en-US/` and `src/locales/ja/`). Command keys live in `commands/{category}.ts` within each locale directory.
 4. Run:
    - `bun run check-locales`

@@ -30,6 +30,7 @@ import {
 import { log } from "@/utils/misc/logger";
 import type { TomoriState } from "@/types/db/schema";
 import { resolvePersonaAvatarPublicUrl } from "@/utils/storage/avatarStorage";
+import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 
 // ─── Embed relay helpers ────────────────────────────────────────────────────
 
@@ -334,8 +335,10 @@ const handler = async (client: Client, message: Message): Promise<void> => {
       }) ?? message.author.displayAvatarURL({ size: 256, extension: "png" });
   } else {
     // Alter persona webhook — match by username (case-insensitive)
-    const authornameLower = message.author.username.toLowerCase();
-    persona = allPersonas.find((p) => p.persona_nickname?.toLowerCase() === authornameLower);
+    const personaByNickname = new Map(allPersonas.map((p) => [normalizeRenderModifierName(p.persona_nickname), p]));
+    persona =
+      resolveRenderModifierSourcePersona(message.author.username, personaByNickname)?.persona ??
+      personaByNickname.get(normalizeRenderModifierName(message.author.username));
 
     // Warn if no persona matched — the fallback uses the webhook username as the
     // virtual user localpart, which may create an orphaned Matrix user

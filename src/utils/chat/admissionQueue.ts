@@ -238,6 +238,7 @@ async function evaluateLockedChannelAdmission(args: {
       manualTriggerInvoker: incoming.manualTriggerInvoker,
       reminderRecipientID: incoming.reminderRecipientID,
       reminderData: incoming.reminderData,
+      sceneTurn: incoming.sceneTurn,
       manualStreamingContextOverrides: incoming.manualStreamingContextOverrides
         ? {
             ...(incoming.manualStreamingContextOverrides.disableCrossChannelMessage
@@ -364,6 +365,7 @@ async function evaluateEarlyAccessState(args: {
       whitelistStatus: null,
       personalSpotlightStatus: null,
       allowedPersonaIds: null,
+      blockedPersonaIds: new Set(),
       rejectedByWhitelist: false,
       personalDtm,
     };

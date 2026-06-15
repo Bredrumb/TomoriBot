@@ -899,10 +899,13 @@ jobs:
           # Attempt to download the release image; it becomes the first attachment
           # in the forum post, which Discord uses as the post's preview image
           hasImage=false
+          imageFile=""
           if [ -n "$IMAGE_NAME" ]; then
             imageUrl="https://github.com/${{ github.repository }}/raw/release/.github/release/v$VERSION/$IMAGE_NAME"
+            # Preserve the real extension (e.g. .webp) so Discord renders the attachment as the post's preview image
+            imageFile="release-post-image.${IMAGE_NAME##*.}"
             echo "Downloading release image: $imageUrl"
-            if curl -sL --max-time 30 "$imageUrl" -o "release-post-image.png" && [ -s "release-post-image.png" ]; then
+            if curl -sL --max-time 30 "$imageUrl" -o "$imageFile" && [ -s "$imageFile" ]; then
               hasImage=true
               echo "Release image downloaded"
             else
@@ -931,7 +934,7 @@ jobs:
 
             response=$(curl -s -w "\n%{http_code}" -X POST \
               -F "payload_json=$firstPayload" \
-              -F "files[0]=@release-post-image.png" \
+              -F "files[0]=@$imageFile" \
               "${discordWebhookUrl}?wait=true")
           else
             firstPayload=$(jq -n \

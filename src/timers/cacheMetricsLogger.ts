@@ -36,6 +36,8 @@ import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 import { getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
+import { getPersonaSpriteCacheSize } from "@/utils/cache/personaSpriteCacheStore";
+import { getPersonaSpriteMessageCacheSize } from "@/utils/cache/personaSpriteMessageCache";
 
 /**
  * Default sampling cadence when CACHE_METRICS_INTERVAL_MS is not set.
@@ -130,6 +132,8 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     presetAvatar: getPresetAvatarCacheSize(),
     voiceTranscript: getVoiceTranscriptCacheSize(),
     markdownTable: getMarkdownTableCacheSize(),
+    personaSprite: getPersonaSpriteCacheSize(),
+    personaSpriteMessage: getPersonaSpriteMessageCacheSize(),
     llmCache: getLLMCacheSize(),
     openrouterCapability: getOpenRouterCapabilityCacheSize(),
     openrouterOnDemandCapability: getOpenRouterOnDemandCapabilityCacheSize(),

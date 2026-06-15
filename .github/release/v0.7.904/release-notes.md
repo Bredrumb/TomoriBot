@@ -1,6 +1,6 @@
 # v0.7.904 | Summer-mer Edition
   
-![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.904/nerine-beach.png)
+![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.904/nerine-beach.webp)
 
 But breadcrumb it's still Spring- yes, but where I'm from its tropical and its already Summer. It's hot as hell in here and you know what else is hot? Getting stuffed in a musky arm||oire||. Highlights are SillyTavern preset support, voice integration, and a brand new T\*mori persona default named **Nerine**!
 ## New Tomori Features

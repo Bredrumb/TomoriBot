@@ -124,7 +124,33 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 - Default TTL: `TOMORI_STATE_CACHE_TTL_MINUTES` (default 10)
 - Backed by the standalone `channel_prompt_overrides` table; `ChannelPromptRepository` invalidates the entry after each successful write/delete (`invalidateChannelPromptCache`). Mirrors the per-channel LLM override cache (`channelLlmCache.ts`).
 
-### 14) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
+### 15) Persona sprite cache (`personaSpriteCache.ts`)
+
+- **Scope:** per `persona_id`
+- **Value:** ordered `persona_sprites` rows used by prompt context and render-modifier resolution
+- Default TTL: `PERSONA_SPRITE_CACHE_TTL_MINUTES` (falls back to `TOMORI_STATE_CACHE_TTL_MINUTES`, default 10)
+- Backed by `persona_sprites`; `PersonaSpriteRepository` invalidates after successful add/replace/delete.
+- Related operational limits:
+  - `PERSONA_SPRITE_MAX_PER_PERSONA` (default 50)
+  - `PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH` (default 300, DB maximum 1000)
+  - `PERSONA_SPRITE_PROMPT_MAX_COUNT` (default 20)
+
+### 15b) Persona sprite message cache (`personaSpriteMessageCache.ts`)
+
+- **Scope:** per Discord `message_disc_id`
+- **Value:** the `persona_sprite_messages` mapping row, or `null` (negative entry) when the
+  message has no sprite mapping — most persona webhook messages are plain sends, so caching
+  the miss avoids re-querying them every turn
+- Entries are **immutable** (a sent message's sprite never changes), so the cache needs no
+  invalidation; the TTL only bounds memory (`PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES`, default 120)
+- Context builds prime it with one batched query (`primePersonaSpriteMessageRecords`) over the
+  fetched history window's webhook message IDs; sends seed it directly (`recordPersonaSpriteMessage`)
+- On transient DB errors the prime/lookup skips seeding instead of negative-caching, so real
+  sprite messages are not masked for the TTL duration
+- DB retention pruning (`PERSONA_SPRITE_MESSAGE_RETENTION_DAYS`, default 30) piggybacks on the
+  write path, gated to run at most once per few hours
+
+### 16) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
 
 Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an ephemeral
 `Map<number, AvatarCacheEntry>` created per command invocation and discarded when the command finishes.
@@ -164,6 +190,7 @@ Common examples:
 - emoji/sticker update events -> `invalidateEmojiStickerCache(serverId)`
 - persona webhook/avatar changes -> webhook invalidation helpers
 - channel system prompt changes -> `invalidateChannelPromptCache(serverId, channelDiscId)` (handled inside `ChannelPromptRepository`)
+- persona sprite changes -> `invalidatePersonaSpriteCache(personaId)` (handled inside `PersonaSpriteRepository`)
 
 ## Emergency Memory Cleanup
 
@@ -181,8 +208,10 @@ Default emergency behavior:
 - Preserves: non-expired short-term memory, static LLM model cache, static provider
   capability maps, command registries, MCP connections, active channel locks, and
   other runtime coordination state.
-- Emits `log.metric("emergency_cache_clear", ...)` and `log.metric("memory_emergency_entered", ...)`
-  so CloudWatch/Grafana can correlate cache eviction with RSS pressure.
+- Emits `log.metric("emergency_cache_clear", ...)` with total and per-cache
+  cleared counts plus pre/post process memory (`rss`, `heapUsed`, `external`,
+  `arrayBuffers`), and `log.metric("memory_emergency_entered", ...)` so
+  CloudWatch/Grafana can correlate cache eviction with RSS pressure.
 
 Operational knobs:
 
@@ -210,6 +239,12 @@ TOMORI_STATE_CACHE_TTL_MINUTES=10
 USER_CACHE_TTL_MINUTES=30
 EMOJI_STICKER_CACHE_TTL_MINUTES=10
 CHANNEL_WHITELIST_CACHE_TTL_MINUTES=5
+PERSONA_SPRITE_CACHE_TTL_MINUTES=10
+PERSONA_SPRITE_MAX_PER_PERSONA=50
+PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH=300
+PERSONA_SPRITE_PROMPT_MAX_COUNT=20
+PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES=120
+PERSONA_SPRITE_MESSAGE_RETENTION_DAYS=30
 EMERGENCY_CACHE_CLEAR_ENABLED=true
 EMERGENCY_CACHE_CLEAR_INCLUDE_STM=false
 EMERGENCY_CACHE_CLEAR_DISCORD_VOLATILE=true

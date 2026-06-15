@@ -1,5 +1,10 @@
 import { log } from "@/utils/misc/logger";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
+import {
+  addProcessMemoryDeltaFields,
+  addProcessMemorySnapshotFields,
+  collectProcessMemorySnapshot,
+} from "@/utils/misc/processMemory";
 
 /**
  * ============================================================================
@@ -277,6 +282,43 @@ function notifyMemoryEmergencyHandlers(event: MemoryEmergencyEvent): void {
   }
 }
 
+function forceGarbageCollection(): void {
+  const beforeGc = collectProcessMemorySnapshot();
+  let gcRuntime = "unavailable";
+  let failed = 0;
+
+  try {
+    if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
+      gcRuntime = "bun";
+      log.info("Forcing Bun garbage collection...");
+      Bun.gc(true);
+    } else if (global.gc) {
+      gcRuntime = "node";
+      log.info("Forcing Node garbage collection...");
+      global.gc();
+    } else {
+      log.warn("Garbage collection not available (Bun.gc or Node --expose-gc required for forced GC)");
+    }
+  } catch (error) {
+    failed = 1;
+    log.error("Forced garbage collection failed", error, {
+      errorType: "forced_gc_failed",
+      metadata: { gcRuntime },
+    });
+  }
+
+  const afterGc = collectProcessMemorySnapshot();
+  const metricFields: Record<string, number | string> = {
+    runtime: gcRuntime,
+    available: gcRuntime === "unavailable" ? 0 : 1,
+    failed,
+  };
+  addProcessMemorySnapshotFields(metricFields, "before_gc", beforeGc);
+  addProcessMemorySnapshotFields(metricFields, "after_gc", afterGc);
+  addProcessMemoryDeltaFields(metricFields, "gc", beforeGc, afterGc);
+  log.metric("memory_forced_gc", metricFields);
+}
+
 class MemoryGuard {
   private isInEmergencyMode = false;
   private emergencyModeEnteredAt = 0;
@@ -403,13 +445,7 @@ class MemoryGuard {
 
     notifyMemoryEmergencyHandlers(event);
 
-    // Force garbage collection if available
-    if (global.gc) {
-      log.info("Forcing garbage collection...");
-      global.gc();
-    } else {
-      log.warn("Garbage collection not available (run with --expose-gc flag for better memory management)");
-    }
+    forceGarbageCollection();
   }
 
   /**

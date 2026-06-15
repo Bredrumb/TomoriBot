@@ -185,7 +185,7 @@ variable "cloud_run_cpu" {
 variable "cloud_run_memory" {
   description = "Memory allocation for the Cloud Run container (e.g. '512Mi', '1Gi')"
   type        = string
-  default     = "1Gi"
+  default     = "2Gi"
 }
 
 variable "cloud_run_max_instances" {
@@ -206,7 +206,13 @@ variable "run_env" {
   default     = "production"
 }
 
-# --- SearXNG sidecar (Phase 2) ---
+# --- SearXNG sidecar (optional) ---
+
+variable "enable_searxng_sidecar" {
+  description = "Run SearXNG as a Cloud Run sidecar and expose it to TomoriBot through SEARXNG_BASE_URL"
+  type        = bool
+  default     = false
+}
 
 variable "searxng_image" {
   description = "Pinned SearXNG image (digest recommended, e.g. searxng/searxng@sha256:<DIGEST>)"
@@ -225,4 +231,3 @@ variable "searxng_memory" {
   type        = string
   default     = "512Mi"
 }
-

@@ -85,6 +85,7 @@ export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionD
           forcedMentions: queued.forcedMentions,
           manualTriggerInvoker: queued.manualTriggerInvoker,
           manualStreamingContextOverrides: queued.manualStreamingContextOverrides,
+          sceneTurn: queued.sceneTurn,
         }).then(() => {}),
     },
   );

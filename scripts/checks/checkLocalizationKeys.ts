@@ -254,6 +254,15 @@ async function loadAvailableKeys(): Promise<{
 }
 
 /**
+ * Escapes a string for use in a regular expression
+ * @param str - The string to escape
+ * @returns The escaped string
+ */
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * Validates if a string is likely a valid localization key
  * @param key - The string to validate
  * @returns True if the string looks like a valid localization key
@@ -904,8 +913,9 @@ function extractNullishFallbackLiterals(variableExpression: string): string[] {
  */
 function resolveAssignedStringValues(content: string, variableName: string): string[] {
   const resolvedValues = new Set<string>();
+  const safeVar = escapeRegExp(variableName);
 
-  const directAssignmentPattern = new RegExp(`${variableName}\\s*=\\s*["']([a-zA-Z0-9._-]+)["']`, "g");
+  const directAssignmentPattern = new RegExp(`${safeVar}\\s*=\\s*["']([a-zA-Z0-9._-]+)["']`, "g");
   let directMatch = directAssignmentPattern.exec(content);
   while (directMatch !== null) {
     resolvedValues.add(directMatch[1]);
@@ -913,7 +923,7 @@ function resolveAssignedStringValues(content: string, variableName: string): str
   }
 
   const concatAssignmentPattern = new RegExp(
-    `${variableName}\\s*=\\s*((?:["'][^"']*["']\\s*\\+\\s*)+["'][^"']*["'])`,
+    `${safeVar}\\s*=\\s*((?:["'][^"']*["']\\s*\\+\\s*)+["'][^"']*["'])`,
     "g",
   );
   let concatMatch = concatAssignmentPattern.exec(content);
@@ -975,11 +985,12 @@ function extractLocalizerTemplateKeys(content: string, availableKeys: Set<string
 
     // Extract the variable name (strip any property access)
     const variableName = variable.split(/[.[]/)[0];
+    const safeVar = escapeRegExp(variableName);
 
     // Look for string literal values for this variable via assignments AND strict equality comparisons
     // Patterns like: messageKey = "429_default_message" OR conditioningType === "reward"
     const valuePattern = new RegExp(
-      `(?:${variableName}\\s*(?:=|===)\\s*["'\`]([a-zA-Z0-9._-]+)["'\`]|["'\`]([a-zA-Z0-9._-]+)["'\`]\\s*===\\s*${variableName})`,
+      `(?:${safeVar}\\s*(?:=|===)\\s*["'\`]([a-zA-Z0-9._-]+)["'\`]|["'\`]([a-zA-Z0-9._-]+)["'\`]\\s*===\\s*${safeVar})`,
       "g",
     );
 
@@ -1037,7 +1048,8 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
     const commonCodes = ["400", "401", "403", "404", "429", "500", "503", "504", "unknown"];
 
     // Also search for numeric assignments in the file
-    const numericAssignPattern = new RegExp(`${variableName}\\s*===?\\s*(\\d+|["']\\d+["'])`, "g");
+    const safeVar = escapeRegExp(variableName);
+    const numericAssignPattern = new RegExp(`${safeVar}\\s*===?\\s*(\\d+|["']\\d+["'])`, "g");
     let numMatch = numericAssignPattern.exec(content);
     while (numMatch !== null) {
       const code = numMatch[1].replace(/["']/g, "");
@@ -1073,7 +1085,8 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
     const commonCodes = ["400", "401", "403", "404", "429", "500", "503", "504", "unknown"];
 
     // Also search for numeric assignments in the file
-    const numericAssignPattern = new RegExp(`${variableName}\\s*===?\\s*(\\d+|["']\\d+["'])`, "g");
+    const safeVar = escapeRegExp(variableName);
+    const numericAssignPattern = new RegExp(`${safeVar}\\s*===?\\s*(\\d+|["']\\d+["'])`, "g");
     let numMatch = numericAssignPattern.exec(content);
     while (numMatch !== null) {
       const code = numMatch[1].replace(/["']/g, "");

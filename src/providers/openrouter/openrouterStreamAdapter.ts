@@ -21,6 +21,11 @@ import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import {
+  collectRenderModifierSourceNames,
+  isAllowedRenderModifierSpeakerLabel,
+} from "@/utils/discord/renderModifierParser";
+import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
+import {
   getOpenRouterCapabilities,
   getOpenRouterSupportedParameters,
   getOpenRouterTokenLimits,
@@ -30,6 +35,7 @@ import { buildProviderStopStrings } from "../utils/stopStrings";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
 import { assistantMediaRelocationNotice, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
@@ -195,6 +201,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
+  private speakerGuardAllowedSourceNames: string[] = [];
 
   constructor() {
     super({
@@ -412,6 +419,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     this.reasoningDetailsAccumulator = [];
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
+    const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
+    this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
+      botName,
+      collectPersonaNameAliases(context.tomoriState, botName),
+    );
     this.speakerGuardEnabled = false;
     this.reasoningContentSpillGuard.reset();
     // Persona-label fallback closer for unclosed leaked think blocks.
@@ -659,6 +671,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...buildOpenRouterAttributionHeaders(),
       };
 
       if (config.apiKey && config.apiKey.trim() !== "") {
@@ -1270,7 +1283,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
     const chunkText = String(content);
     const combined = `${this.speakerGuardPendingTail}${chunkText}`;
-    const speakerGuardResult = truncateBeforeGenericSpeakerLine(combined);
+    const speakerGuardResult = truncateBeforeGenericSpeakerLine(combined, {
+      isAllowedSpeakerLabel: (label) => isAllowedRenderModifierSpeakerLabel(label, this.speakerGuardAllowedSourceNames),
+    });
     const transitionIndex = speakerGuardResult.stopTriggered ? speakerGuardResult.text.length : -1;
 
     if (transitionIndex === -1) {

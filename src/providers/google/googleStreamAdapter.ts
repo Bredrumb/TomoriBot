@@ -28,6 +28,11 @@ import { ContextItemTag, type StructuredContextItem } from "../../types/misc/con
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
+import {
+  collectRenderModifierSourceNames,
+  isAllowedRenderModifierSpeakerLabel,
+} from "@/utils/discord/renderModifierParser";
+import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
@@ -105,6 +110,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
+  private speakerGuardAllowedSourceNames: string[] = [];
 
   constructor() {
     super({
@@ -165,6 +171,11 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
 
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
+    const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
+    this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
+      botName,
+      collectPersonaNameAliases(context.tomoriState, botName),
+    );
     const speakerStopPatternEnabled = context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false;
     this.speakerGuardEnabled = speakerStopPatternEnabled;
     const mergedStopSequences = buildProviderStopStrings({
@@ -476,10 +487,32 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     return parts
       .map((part) => {
         if (!part || typeof part !== "object") return "";
-        const text = (part as { text?: unknown }).text;
+        const partObj = part as { text?: unknown; thought?: unknown };
+        if (partObj.thought === true) return "";
+        const text = partObj.text;
         return typeof text === "string" ? text : "";
       })
       .join("");
+  }
+
+  private extractThoughtsFromParts(parts: unknown[]): ThoughtLogEntry[] {
+    const thoughts: ThoughtLogEntry[] = [];
+
+    for (const part of parts) {
+      if (!part || typeof part !== "object") continue;
+
+      const partObj = part as { text?: unknown; thought?: unknown };
+      if (partObj.thought !== true || typeof partObj.text !== "string" || partObj.text.length === 0) {
+        continue;
+      }
+
+      thoughts.push({
+        kind: "raw",
+        content: partObj.text,
+      });
+    }
+
+    return thoughts;
   }
 
   private extractFunctionCallsFromParts(parts: unknown[]): GoogleFunctionCall[] {
@@ -614,7 +647,9 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     }
 
     const combined = `${this.speakerGuardPendingTail}${chunkText}`;
-    const speakerGuardResult = truncateBeforeGenericSpeakerLine(combined);
+    const speakerGuardResult = truncateBeforeGenericSpeakerLine(combined, {
+      isAllowedSpeakerLabel: (label) => isAllowedRenderModifierSpeakerLabel(label, this.speakerGuardAllowedSourceNames),
+    });
     const transitionIndex = speakerGuardResult.stopTriggered ? speakerGuardResult.text.length : -1;
 
     if (transitionIndex === -1) {
@@ -719,6 +754,11 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         content: googleChunk.thoughtSummary,
       });
       log.info("GoogleStreamAdapter: Received thought summary");
+    }
+    const partThoughts = this.extractThoughtsFromParts(this.getCandidateParts(googleChunk));
+    if (partThoughts.length > 0) {
+      thoughts.push(...partThoughts);
+      log.info(`GoogleStreamAdapter: Received ${partThoughts.length} thought part(s)`);
     }
 
     // Check for function calls
@@ -1195,6 +1235,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                   geminiParts.push({
                     fileData: {
                       fileUri: part.uri,
+                      mimeType: "video/mp4",
                     },
                   });
                 } else {

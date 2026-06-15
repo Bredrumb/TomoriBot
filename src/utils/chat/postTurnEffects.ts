@@ -87,6 +87,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     forcedMentions: incoming.forcedMentions,
     manualTriggerInvoker: incoming.manualTriggerInvoker,
     manualStreamingContextOverrides: incoming.manualStreamingContextOverrides,
+    sceneTurn: incoming.sceneTurn,
   });
 }
 
@@ -114,6 +115,7 @@ function updateSelfReplyBookkeeping(context: ChatTurnContext, result: Generation
   if (
     result.personaResponses.length > 0 &&
     (!incoming.isManuallyTriggered || incoming.isPersonaJob) &&
+    !incoming.sceneTurn &&
     !incoming.reminderRecipientID &&
     !incoming.reminderData?.self_reminder &&
     !incoming.isStopResponse

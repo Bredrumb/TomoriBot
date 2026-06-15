@@ -7,11 +7,12 @@ This guide walks through the full process of creating a new slash command in Tom
 ## Steps
 
 1. Create the file in the correct path:
+   - `src/commands/{command}.ts` for root commands
    - `src/commands/{category}/{subcommand}.ts`
    - or `src/commands/{category}/{group}/{subcommand}.ts` for sub-group commands
 
 2. Export the required entry points:
-   - `configureSubcommand(subcommand)` — registers the command metadata (name, description, options)
+   - `configureCommand(command)` for root commands, or `configureSubcommand(subcommand)` for category commands — registers the command metadata (name, description, options)
    - `execute(client, interaction, userData, locale)` — the runtime handler
 
 3. Use `localizer("en-US", ...)` for command description and options so the loader can auto-register locale strings.
@@ -27,7 +28,20 @@ This guide walks through the full process of creating a new slash command in Tom
    - Modal and pagination helpers must NOT be pre-deferred — they handle acknowledgement internally.
    - For full timing patterns and representative command groups, see [`docs/subsystems/command-system.md`](../subsystems/command-system).
 
-6. The command auto-registers on next startup — `commandLoader.ts` discovers any `.ts` file placed in the correct `src/commands/` subfolder.
+6. The command auto-registers on next startup unless it exports
+   `isCommandEnabled()` and that gate returns `false`. `commandLoader.ts`
+   discovers any `.ts` file placed in the correct `src/commands/` path.
+
+For production-only or feature-gated commands, export a gate:
+
+```ts
+export const isCommandEnabled = () =>
+  process.env.RUN_ENV === "production" &&
+  process.env.TOMORI_SUPPORTER_BILLING_ENABLED === "true";
+```
+
+Keep production-only side effects out of module imports. The loader must be able
+to import the file safely even when the gate later skips registration.
 
 ## Quality Gate
 

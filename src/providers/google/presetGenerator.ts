@@ -254,7 +254,7 @@ Character Name: ${characterName}`;
 
 Focus on gathering authentic information that would help create an accurate character representation.
 
-IMPORTANT: In any dialogue examples, use "{user}" as a placeholder when referring to other people or the conversation partner, and {bot} if referring to the self.`;
+IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the conversation partner's name (not for the pronoun "you"), and "{bot}" ONLY where you would write the character's own name (not for "I"/"me"). Keep ordinary pronouns like "you", "I", and "me" exactly as-is.`;
 
     // 7. Prepare user prompt content
     const userPromptContent: Content = {
@@ -415,9 +415,8 @@ export async function generatePresetFromPrompt(
     // 2. Initialize Gemini client (use pre-built if provided)
     const genAI = client ?? new GoogleGenAI({ apiKey });
 
-    // 3. Resolve generation model; Gemini 3 uses flash-preview with a fallback
+    // 3. Resolve generation model
     const configuredModel = params.modelName || "gemini-2.5-flash";
-    const isGemini3 = configuredModel.startsWith("gemini-3");
 
     // 4. Run search sub-agent when web search is requested.
     //    gemini-2.5-flash is hardcoded for the search step across all models —
@@ -457,17 +456,8 @@ export async function generatePresetFromPrompt(
 
     // 5. Set up generation model; always uses the user's configured model so
     //    free-tier users aren't silently upgraded to a paid model.
-    let MODEL_NAME: string;
-    let FALLBACK_MODEL: string | undefined;
-
-    if (isGemini3) {
-      // Gemini 3 preview models may not be stable; fall back to the GA flash release
-      MODEL_NAME = "gemini-3-flash-preview";
-      FALLBACK_MODEL = "gemini-3-flash";
-    } else {
-      MODEL_NAME = configuredModel;
-      FALLBACK_MODEL = undefined;
-    }
+    let MODEL_NAME = configuredModel;
+    const FALLBACK_MODEL = undefined;
 
     // 7. Define JSON schema for structured output with length constraints
     const maxPresetStringLength = PRESET_MAX_STRING_LENGTH;
@@ -532,8 +522,8 @@ Instructions:
 - Create a rich, detailed character profile in the structured JSON format
 - The character should be interesting and engaging for conversation
 - Do NOT prepend the sample dialogues with character names or "User:"/"Character:" prefixes - the chat application will handle that
-- Use "{user}" as a placeholder when referring to other people or the conversation partner in dialogues
-- Use "{bot}" as a placeholder when referring to the character themselves
+- Use "{user}" ONLY where you would write the conversation partner's name (NOT for the pronoun "you") — keep "you" as "you"
+- Use "{bot}" ONLY where you would write the character's own name (NOT for the pronouns "I"/"me") — keep "I" as "I" and "I'm" as "I'm"
 - Ensure exactly 5 sample dialogue pairs (sample_dialogues_in paired with sample_dialogues_out)
 
 The attribute_list MUST contain exactly 6 items in this exact order:
@@ -609,8 +599,8 @@ ${params.existingPresetContext.trim()}`;
 - sample_dialogues_in: Keep user messages concise (1-3 sentences, MAX ${maxPresetStringLength} characters each)
 - sample_dialogues_out: Character responses can be longer and more detailed to showcase personality (MAX ${maxPresetStringLength} characters each)
 - No speaker name prefixes in any dialogue (no "User:", "Character:", "{user}:", "{bot}:", etc.)
-- Use "{user}" placeholder when character refers to other people in their responses
-- Use "{bot}" placeholder when character refers to themselves in their responses
+- "{user}" and "{bot}" are NAME placeholders, never pronoun replacements: use "{user}" only in place of the conversation partner's name and "{bot}" only in place of the character's own name
+- NEVER replace pronouns — write "you", "I", "me", "I'm" literally (e.g. write "I'm {bot}", never "{bot}'m {bot}")
 - All string lengths must not exceed ${maxPresetStringLength} characters per item`;
 
     // 11. Prepare prompt parts (text + optional image)

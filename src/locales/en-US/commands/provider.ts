@@ -17,7 +17,7 @@ export default {
       free_suffix: `Free`,
       already_existing_suffix: `Already Existing`,
       already_existing_description: `This provider is already configured. Submit again to update credentials.`,
-      custom_deprecated_description: `Moved to /config custom-endpoint add.`,
+      custom_deprecated_description: `Moved to /provider custom-endpoint add.`,
       api_key_description: `This key will be securely stored. Leave it blank if you selected Custom Endpoint.`,
       api_key_label: `API Key`,
       api_key_description_with_custom: `API Key, or OpenAI endpoint URL if using Custom (e.g., http://localhost:11434/v1)`,
@@ -29,14 +29,14 @@ export default {
     remove: {
       description: `Remove a saved provider configuration.`,
       no_saved_title: `No Saved Configs`,
-      no_saved_description: `There are no saved provider configurations to remove. Add a provider first with \`/config provider add\`.`,
+      no_saved_description: `There are no saved provider configurations to remove. Add a provider first with \`/provider add\`.`,
       picker_title: `Remove Provider Configuration`,
       picker_description: `Select a provider to remove. This will delete the stored API key and reset any dependent model selections.`,
       active_provider_note: `**{provider}** is your active **text model** provider and cannot be removed while in use. Switch to a different provider with \`/model text\` first.`,
-      custom_endpoint_note: `To remove custom endpoints (e.g. ElevenLabs, local servers), use \`/config custom-endpoint remove\` instead.`,
+      custom_endpoint_note: `To remove custom endpoints (e.g. ElevenLabs, local servers), use \`/provider custom-endpoint remove\` instead.`,
       select_placeholder: `Select a provider to remove...`,
       success_title: `Saved Config Removed`,
-      success_description: `The saved configuration for **{provider}** has been removed. Use \`/config provider add\` to register it again.`,
+      success_description: `The saved configuration for **{provider}** has been removed. Use \`/provider add\` to register it again.`,
       auto_reassigned_description: `The saved configuration for **{provider}** has been removed.
 
 Updated dependent selections:
@@ -93,7 +93,7 @@ Updated dependent selections:
         action_purge: `Purge All Keys`,
         key_description: `The API key to add to the rotation pool (required for add action)`,
         no_main_key_title: `No Main API Key`,
-        no_main_key_description: `A saved provider with active credentials is required before adding rotation keys. Add one with \`/config provider add\`.`,
+        no_main_key_description: `A saved provider with active credentials is required before adding rotation keys. Add one with \`/provider add\`.`,
         custom_provider_title: `Not Supported`,
         custom_provider_description: `API key rotation is not supported for custom providers.`,
         key_required_title: `Key Required`,

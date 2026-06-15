@@ -86,11 +86,11 @@ If you are testing a server that should start in member-funded mode, `/config se
 If you want to use only a self-hosted or proxy-backed custom endpoint, `/config setup` now also exposes `Custom Endpoint (finish after setup)`. That bootstraps the server without enabling BYOK, then you finish the provider setup with:
 
 ```text
-/config custom-endpoint add
+/provider custom-endpoint add
 /model text
 ```
 
-Later changes to that registration can be done in place with `/config custom-endpoint edit`.
+Later changes to that registration can be done in place with `/provider custom-endpoint edit`.
 
 If you want to save an additional provider afterward:
 
@@ -105,7 +105,7 @@ Common saved providers:
 - `provider:openrouter`
 - `provider:novelai`
 
-The old inline `custom` provider path is deprecated. Use `/config custom-endpoint add` instead.
+The old inline `custom` provider path is deprecated. Use `/provider custom-endpoint add` instead.
 
 ## Common Development Commands
 
@@ -121,7 +121,27 @@ bun run backup
 bun run purge-commands
 bun run check-locales
 bun run check-limits
+bun run check-media-size
+bun run compress-media
 ```
+
+`bun run check-media-size` (also bundled into `bun run vl`) rejects tracked media
+over a per-file budget (default 1 MiB, set via `MEDIA_SIZE_LIMIT_BYTES`). It scans
+`src/db/seed/catalog/personas/**` (Default Persona avatars/sprites that ship to
+Discord) and `assets/img/**`.
+
+`bun run compress-media` fixes offenders automatically: it re-encodes losslessly
+(max deflate, metadata stripped — color stays Δ0) and only downscales a file when
+lossless alone cannot reach the budget, capping the long edge at `MEDIA_MAX_DIMENSION`
+(default 768px). Use `--dry-run` to preview, or pass a path substring to target one file.
+Note: these PNGs are already near-optimally compressed, so lossless rarely fits 1 MiB on
+its own — downscaling (invisible at Discord's <=128px avatar render size) is the trade.
+
+`compress-media` also normalizes release cards under `.github/release/**` (not gate-scoped)
+to WebP q`RELEASE_CARD_WEBP_QUALITY` (default 90) at full resolution, rewriting sibling
+`release-notes.md` references. Already-WebP cards are skipped (re-encoding lossy WebP each
+run would degrade it). Published GitHub release bodies hotlink `raw/main`, so after converting
+a card you must update the published body (`gh release edit`) — the command prints the reminder.
 
 ## Quick Health Checks
 

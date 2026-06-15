@@ -5,6 +5,7 @@ import type {
 } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
 import { pollForCompletion } from "@/utils/async/pollForCompletion";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 
 // ─── External HTTP helpers ──────────────────────────────────────────────────────
 //
@@ -381,6 +382,7 @@ export async function generateOpenRouterNativeVideo(
     Authorization: `Bearer ${request.apiKey}`,
     "Content-Type": "application/json",
     Accept: "application/json",
+    ...buildOpenRouterAttributionHeaders(),
   };
   const submitBodyJson = JSON.stringify(body);
 
@@ -428,6 +430,7 @@ export async function generateOpenRouterNativeVideo(
   const pollHeaders = {
     Authorization: `Bearer ${request.apiKey}`,
     Accept: "application/json",
+    ...buildOpenRouterAttributionHeaders(),
   };
 
   const completedJob = await pollForCompletion<OpenRouterVideoPollResponse>({
@@ -494,7 +497,9 @@ export async function generateOpenRouterNativeVideo(
   const downloadUrlOrigin = new URL(videoUrl).origin;
   const openRouterOrigin = new URL(OPENROUTER_VIDEO_URL).origin;
   const downloadHeaders: Record<string, string> =
-    downloadUrlOrigin === openRouterOrigin ? { Authorization: `Bearer ${request.apiKey}` } : {};
+    downloadUrlOrigin === openRouterOrigin
+      ? { Authorization: `Bearer ${request.apiKey}`, ...buildOpenRouterAttributionHeaders() }
+      : {};
 
   log.info(`OpenRouter video generation: downloading video (jobId: ${jobId}, url: ${videoUrl.slice(0, 80)})`);
 

@@ -29,7 +29,7 @@ The snapshot mirrors the real `messageCreate → tomoriChat` pipeline as closely
 | `/compact_refresh` marker | ✅ | Same slicer — history starts **at** the marker (compact summary becomes the new opener). |
 | `FULL` privacy users filtered | ✅ | Skipped from history, matching `tomoriChat.ts`. |
 | Webhook persona attribution | ✅ | Webhooks whose username matches an alter persona are re-attributed. |
-| System-produced embeds | ✅ | `memory_learning`, `reminder_set`, `system_injection`, `compact_summary`, `compact_refresh`, `reward`, `punish` are converted to `[System: …]` text blocks. |
+| System-produced embeds | ✅ | `memory_learning`, `reminder_set`, `system_injection`, `scene_directive`, `compact_summary`, `compact_refresh`, `reward`, `punish` are converted to `[System: …]` text blocks. |
 | Link-preview embeds | ✅ | Twitter/YouTube/article cards from non-bot messages get text + image + thumbnail extraction via `processLinkEmbed`. |
 | Stickers | ✅ | Included as PNG attachments. |
 | YouTube URLs in message text | ✅ | Converted to video attachments. |

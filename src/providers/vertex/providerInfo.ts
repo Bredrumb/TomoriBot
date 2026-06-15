@@ -4,8 +4,9 @@
  * Feature parity with Google AI Studio — all helpers accept an optional
  * pre-built GoogleGenAI client, so Vertex passes its ADC client through.
  *
- * Exceptions (not yet implemented):
- *   - liveTokenCounting: requires measureInputTokens() — not in VertexProvider
+ * liveTokenCounting is backed by the same Google tokenizer: the ADC client
+ * (createVertexClient) exposes models.countTokens(), measured in
+ * cost.ts::measureVertexInputTokens.
  */
 
 import type { ProviderInfo } from "../../types/provider/interfaces";
@@ -28,9 +29,12 @@ export const vertexProviderInfo: ProviderInfo = {
     structuredOutput: true,
     presetGeneration: true,
     expressionInitialization: true,
-    liveTokenCounting: false,
+    liveTokenCounting: true,
     conversationCompaction: true,
     historyExtraction: true,
+  },
+  featureImplementations: {
+    liveTokenCounting: "vertex",
   },
   supportedParams: ["temperature", "topP", "topK"] as const,
 };

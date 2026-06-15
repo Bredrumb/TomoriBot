@@ -57,6 +57,15 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 **Per message:**
 
 - **Role mapping** computed from author type and impersonation flags.
+- **Persona user block handling** happens before this stage in
+  `buildSimplifiedHistory`: active `persona_user_blocks` with `block_type =
+  'block'` replace that user's recent live dialogue turns/direct media with a
+  single `[System: ...]` block notice for the active persona (consecutive
+  messages from the same blocked user collapse into one notice) and suppress
+  reply annotations quoting those messages. The blocked user is still excluded
+  from tool-intent scanning, voice transcription, and sprite priming
+  (`visibleRawMessages`). Memories, reminders, documents, and generic
+  references from other users are not redacted.
 - **Media-window calculation** — `effectiveMediaWindow = min(requested,
   message_fetch_limit)`; `mediaWindowCutoff = totalMessages - effectiveMediaWindow`.
 - **Media descriptor emission**:
@@ -87,6 +96,11 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.
+- **Copied-render webhook reconstruction** — webhook usernames formatted as
+  `SourcePersona (target)` are attributed to `SourcePersona` for role mapping,
+  self-reply ownership, and reply routing, while `authorName` preserves the full
+  visible label. The resulting dialogue line stays reversible as
+  `SourcePersona (target): content`, so the model can repeat the same syntax.
 - **Sender metadata** — dialogue items carry hidden `sender` metadata
   (`personaName` when available, otherwise `authorName`) so strict-chat
   media relocation can attribute model-role images without parsing the
@@ -129,6 +143,7 @@ After this stage runs:
 | Env var | Default | Purpose |
 |---|---|---|
 | `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
+| `PERSONA_USER_BLOCK_CACHE_TTL_SECONDS` | `60` | TTL for active persona user block lookups |
 
 | Source | Field | Effect |
 |---|---|---|

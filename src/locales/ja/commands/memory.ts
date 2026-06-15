@@ -40,7 +40,7 @@ export default {
         no_embedding_model_title: `埋め込みモデルが未設定です`,
         no_embedding_model_description: `埋め込みモデルが設定されていません。\`/model embedding\`で設定してください。`,
         no_api_key_title: `APIキーが未設定です`,
-        no_api_key_description: `履歴の抽出と埋め込みには保存済みの埋め込みプロバイダー認証情報が必要です。\`/config provider add\` で設定してください。`,
+        no_api_key_description: `履歴の抽出と埋め込みには保存済みの埋め込みプロバイダー認証情報が必要です。\`/provider add\` で設定してください。`,
         no_messages_title: `メッセージが見つかりません`,
         no_messages_description: `このチャンネルには知識を抽出できるメッセージがありません。`,
         no_facts_extracted_title: `ファクトが抽出されませんでした`,

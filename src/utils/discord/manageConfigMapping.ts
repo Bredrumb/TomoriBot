@@ -21,6 +21,7 @@ export type CapabilitiesManageCapabilityColumn = Extract<
   | "imagegen_enabled"
   | "videogen_enabled"
   | "voice_message_enabled"
+  | "user_blocking_enabled"
 >;
 
 export type CapabilitiesManageMemberPermissionColumn = Extract<
@@ -164,6 +165,14 @@ export const CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS: readonly CapabilitiesMa
     descKey: "commands.capabilities.manage.voicemessage_desc",
     getState: (c) => c.voice_message_enabled ?? true,
     requiresElevenLabs: true,
+  },
+  {
+    value: "userblocking",
+    table: "capabilities",
+    dbColumn: "user_blocking_enabled",
+    labelKey: "commands.capabilities.manage.userblocking_option",
+    descKey: "commands.capabilities.manage.userblocking_desc",
+    getState: (c) => c.user_blocking_enabled ?? true,
   },
 ];
 

@@ -2,27 +2,40 @@
  * Gemma 4 Embedded Tool Call Parser
  *
  * Gemma 4 running locally (e.g. via KoboldCPP at 4-bit quant) sometimes leaks its
- * internal tool-call vocabulary tokens into `delta.content` instead of emitting a
- * proper `delta.tool_calls` structure. The hallucinated format looks like:
+ * internal tool-call vocabulary into `delta.content` instead of emitting a proper
+ * `delta.tool_calls` structure. Two distinct leaked dialects have been observed:
  *
- *   <|tool_call>call:update_short_term_memory{summary:<|"|>...<|"|>}<tool_call|>
+ * 1. Special-token form (matches the documented KoboldCPP jinja template):
+ *      <|tool_call>call:update_short_term_memory{summary:<|"|>...<|"|>}<tool_call|>
+ *
+ * 2. Python-call form (Gemma's *trained* default the model drifts back to under
+ *    heavy quantization, regardless of the configured template):
+ *      <tool_code>update_short_term_memory(summary="...")</tool_code>
  *
  * This parser is a stateful chunk-by-chunk scanner that:
  * 1. Passes normal text through unchanged.
- * 2. Detects the `<|tool_call>` start token and begins buffering.
- * 3. Parses the complete block once `<tool_call|>` is found.
+ * 2. Detects either dialect's start token and begins buffering (the matched
+ *    dialect becomes "active" for the duration of the block).
+ * 3. Parses the complete block once the active dialect's end token is found.
  * 4. Attempts a best-effort parse if the stream ends mid-block (truncation recovery).
  *
- * Args format inside the block:
- *   - String values:     key:<|"|>value<|"|>
- *   - Non-string values: key:rawValue  (numbers, booleans, bare identifiers)
+ * Each dialect is a self-contained `{ start, end, parse }` entry in `dialects`, so
+ * a format can be removed by deleting one array element without touching the scanner.
  */
 
 import { log } from "@/utils/misc/logger";
 import type { FunctionCall } from "@/types/provider/interfaces";
 
-const START_TOKEN = "<|tool_call>";
-const END_TOKEN = "<tool_call|>";
+/**
+ * A single leaked tool-call format the scanner can recognise.
+ * `parse` receives the raw text between `start` and `end` (or end-of-stream on
+ * truncation) and returns a structured call, or null if it cannot be parsed.
+ */
+interface GemmaDialect {
+  start: string;
+  end: string;
+  parse: (block: string) => FunctionCall | null;
+}
 
 export interface GemmaFeedResult {
   /** Visible text to emit (may be empty string). */
@@ -45,14 +58,36 @@ export interface GemmaFlushResult {
 export class GemmaToolCallParser {
   private mode: "idle" | "accumulating" = "idle";
   /**
-   * Tail held back during idle scanning for a partial START_TOKEN prefix.
-   * Only non-empty when the last chunk ended with a genuine prefix of START_TOKEN
-   * (e.g. `<`, `<|`, `<|t`...). In practice this is almost always empty because
-   * normal model output does not end with `<|`.
+   * Tail held back during idle scanning for a partial start-token prefix.
+   * Only non-empty when the last chunk ended with a genuine prefix of some
+   * dialect's start token (e.g. `<`, `<|`, `<|t`...). In practice this is almost
+   * always empty because normal model output does not end with `<`.
    */
   private scanHoldback = "";
-  /** Raw content accumulated between START_TOKEN and END_TOKEN. */
+  /** Raw content accumulated between the active dialect's start and end tokens. */
   private toolBuffer = "";
+  /** The dialect whose start token opened the current accumulation block. */
+  private activeDialect: GemmaDialect | null = null;
+
+  /**
+   * Recognised leaked formats, in priority order. The scanner picks whichever
+   * dialect's start token appears *earliest* in the stream, so ordering here only
+   * breaks exact-position ties (which cannot happen — the start tokens differ).
+   */
+  private readonly dialects: GemmaDialect[] = [
+    // Special-token form: <|tool_call>call:name{key:value}<tool_call|>
+    {
+      start: "<|tool_call>",
+      end: "<tool_call|>",
+      parse: (block) => this.parseSpecialTokenBlock(block),
+    },
+    // Python-call form: <tool_code>name(key="value")</tool_code>
+    {
+      start: "<tool_code>",
+      end: "</tool_code>",
+      parse: (block) => this.parseToolCodeBlock(block),
+    },
+  ];
 
   /** True while inside a tool call block (START seen, END not yet seen). */
   get isAccumulating(): boolean {
@@ -81,9 +116,10 @@ export class GemmaToolCallParser {
       return { pendingText, functionCall: null };
     }
 
-    // Stream ended mid-accumulation — attempt a best-effort parse.
+    // Stream ended mid-accumulation — attempt a best-effort parse with the
+    // dialect that opened the block.
     log.info("CustomGemmaToolParser: Stream ended during tool call accumulation — attempting truncated parse");
-    const functionCall = this.parseBlock(this.toolBuffer);
+    const functionCall = this.activeDialect?.parse(this.toolBuffer) ?? null;
     this.reset();
 
     if (!functionCall) {
@@ -96,20 +132,33 @@ export class GemmaToolCallParser {
 
   private scanForStart(text: string): GemmaFeedResult {
     const combined = this.scanHoldback + text;
-    const idx = combined.indexOf(START_TOKEN);
 
-    if (idx !== -1) {
+    // Find the earliest start token among all dialects. Earliest wins so a later
+    // dialect's token appearing deeper in the chunk never pre-empts an earlier one.
+    let bestIdx = -1;
+    let bestDialect: GemmaDialect | null = null;
+    for (const dialect of this.dialects) {
+      const idx = combined.indexOf(dialect.start);
+      if (idx !== -1 && (bestIdx === -1 || idx < bestIdx)) {
+        bestIdx = idx;
+        bestDialect = dialect;
+      }
+    }
+
+    if (bestDialect && bestIdx !== -1) {
       // Found it: emit text before the token, start accumulating after it.
-      const visibleText = combined.slice(0, idx);
+      const visibleText = combined.slice(0, bestIdx);
       this.scanHoldback = "";
-      this.toolBuffer = combined.slice(idx + START_TOKEN.length);
+      this.activeDialect = bestDialect;
+      this.toolBuffer = combined.slice(bestIdx + bestDialect.start.length);
       this.mode = "accumulating";
       // The end token may already be present in the same chunk.
       return this.checkForEnd(visibleText);
     }
 
-    // No full match. Only hold back the minimum tail that is a genuine prefix
-    // of START_TOKEN — normal prose never ends with `<|` so holdback is usually "".
+    // No full match. Only hold back the minimum tail that is a genuine prefix of
+    // some dialect's start token — normal prose never ends with `<` mid-token so
+    // holdback is usually "".
     const holdback = this.longestSuffixPrefix(combined);
     this.scanHoldback = holdback;
     return { visibleText: combined.slice(0, combined.length - holdback.length), functionCall: null };
@@ -121,7 +170,13 @@ export class GemmaToolCallParser {
   }
 
   private checkForEnd(prependVisible: string): GemmaFeedResult {
-    const endIdx = this.toolBuffer.indexOf(END_TOKEN);
+    // `activeDialect` is always set while accumulating (scanForStart assigns it).
+    const dialect = this.activeDialect;
+    if (!dialect) {
+      return { visibleText: prependVisible, functionCall: null };
+    }
+
+    const endIdx = this.toolBuffer.indexOf(dialect.end);
     if (endIdx === -1) {
       return { visibleText: prependVisible, functionCall: null };
     }
@@ -129,7 +184,7 @@ export class GemmaToolCallParser {
     const block = this.toolBuffer.slice(0, endIdx);
     this.reset();
 
-    const functionCall = this.parseBlock(block);
+    const functionCall = dialect.parse(block);
     if (!functionCall) {
       // Parse failed — emit raw block as text so nothing is silently dropped.
       log.warn(`CustomGemmaToolParser: Failed to parse block — emitting as text: ${block.slice(0, 200)}`);
@@ -140,25 +195,31 @@ export class GemmaToolCallParser {
   }
 
   /**
-   * Returns the longest suffix of `text` that is also a prefix of START_TOKEN,
-   * excluding the full START_TOKEN itself (that case is handled by indexOf above).
-   * This is how we safely hold back only the minimum necessary chars.
+   * Returns the longest suffix of `text` that is also a prefix of *any* dialect's
+   * start token, excluding a full start token itself (that case is handled by
+   * indexOf in scanForStart). This is how we safely hold back only the minimum
+   * necessary chars while a start token might still be completing on the next chunk.
    */
   private longestSuffixPrefix(text: string): string {
-    for (let len = Math.min(text.length, START_TOKEN.length - 1); len > 0; len--) {
-      if (text.endsWith(START_TOKEN.slice(0, len))) {
-        return text.slice(text.length - len);
+    let longest = "";
+    for (const { start } of this.dialects) {
+      for (let len = Math.min(text.length, start.length - 1); len > longest.length; len--) {
+        if (text.endsWith(start.slice(0, len))) {
+          longest = text.slice(text.length - len);
+          break;
+        }
       }
     }
-    return "";
+    return longest;
   }
 
   /**
-   * Parse the raw content between START_TOKEN and END_TOKEN (or end of stream).
+   * Parse the special-token dialect's block (between `<|tool_call>` and
+   * `<tool_call|>`, or end of stream).
    *
    * Expected format: call:{toolName}{key:<|"|>value<|"|>, ...}
    */
-  private parseBlock(block: string): FunctionCall | null {
+  private parseSpecialTokenBlock(block: string): FunctionCall | null {
     // 1. Try the full well-formed pattern: call:name{...}
     const full = block.match(/^call:(\w+)\{([\s\S]*)\}$/);
     if (full) {
@@ -202,8 +263,10 @@ export class GemmaToolCallParser {
     }
 
     // 3. Non-string args: key:rawValue (number / boolean / bare identifier).
-    //    Only for keys not already captured above.
-    for (const m of argsStr.matchAll(/(\w+):\s*([\w.-]+)/g)) {
+    //    Mask out the already-captured quoted spans first so a `word:word`
+    //    sequence *inside* a string value is not re-scanned as a phantom scalar.
+    const residue = argsStr.replace(/(\w+):\s*<\|"\|>[\s\S]*?<\|"\|>/g, "").replace(/(\w+):\s*"[\s\S]*?"/g, "");
+    for (const m of residue.matchAll(/(\w+):\s*([\w.-]+)/g)) {
       if (matchedKeys.has(m[1])) continue;
 
       const raw = m[2];
@@ -217,9 +280,86 @@ export class GemmaToolCallParser {
     return { name, args };
   }
 
+  /**
+   * Parse the Python-call dialect's block (between `<tool_code>` and
+   * `</tool_code>`, or end of stream).
+   *
+   * Expected format: name(key="value", count=3)
+   * Gemma sometimes wraps the call in `print(...)`, which we unwrap one layer.
+   */
+  private parseToolCodeBlock(block: string): FunctionCall | null {
+    let body = block.trim();
+
+    // 1. Unwrap a single print(...) layer if present: print(name(...)) → name(...)
+    const printWrap = body.match(/^print\(\s*([\s\S]*?)\s*\)$/);
+    if (printWrap) {
+      body = printWrap[1].trim();
+    }
+
+    // 2. Full well-formed pattern: name(...). Greedy up to the last ')' so nested
+    //    parens inside argument values are kept inside the args string.
+    const full = body.match(/^(\w+)\s*\(([\s\S]*)\)$/);
+    if (full) {
+      return this.buildPythonCall(full[1], full[2]);
+    }
+
+    // 3. Truncation recovery: closing paren may be missing.
+    const open = body.match(/^(\w+)\s*\(([\s\S]*)$/);
+    if (open) {
+      log.info(`CustomGemmaToolParser: Recovering truncated tool_code call for "${open[1]}"`);
+      return this.buildPythonCall(open[1], open[2]);
+    }
+
+    log.warn(`CustomGemmaToolParser: Unrecognised tool_code block format: ${block.slice(0, 200)}`);
+    return null;
+  }
+
+  /**
+   * Build a FunctionCall from a Python-style keyword-argument list.
+   *
+   * Handles: key="value" / key='value' (strings), key=3 / key=true (scalars).
+   * Mirrors buildCall's three-pass approach: strings first (so a quoted value
+   * containing `=` or digits is never misread as a scalar), then bare scalars.
+   */
+  private buildPythonCall(name: string, argsStr: string): FunctionCall {
+    const args: Record<string, unknown> = {};
+    const matchedKeys = new Set<string>();
+
+    // 1. Double-quoted strings: key="value"
+    for (const m of argsStr.matchAll(/(\w+)\s*=\s*"([\s\S]*?)"/g)) {
+      args[m[1]] = m[2];
+      matchedKeys.add(m[1]);
+    }
+
+    // 2. Single-quoted strings: key='value' (Gemma uses either quote style).
+    for (const m of argsStr.matchAll(/(\w+)\s*=\s*'([\s\S]*?)'/g)) {
+      if (matchedKeys.has(m[1])) continue;
+      args[m[1]] = m[2];
+      matchedKeys.add(m[1]);
+    }
+
+    // 3. Bare scalars: key=rawValue (number / Python bool / bare identifier).
+    //    Mask out the already-captured quoted spans first so a `word=word`
+    //    sequence *inside* a string value is not re-scanned as a phantom scalar.
+    const residue = argsStr.replace(/(\w+)\s*=\s*"[\s\S]*?"/g, "").replace(/(\w+)\s*=\s*'[\s\S]*?'/g, "");
+    for (const m of residue.matchAll(/(\w+)\s*=\s*([\w.-]+)/g)) {
+      if (matchedKeys.has(m[1])) continue;
+
+      const raw = m[2];
+      if (raw === "true" || raw === "True") args[m[1]] = true;
+      else if (raw === "false" || raw === "False") args[m[1]] = false;
+      else if (!Number.isNaN(Number(raw))) args[m[1]] = Number(raw);
+      else args[m[1]] = raw;
+    }
+
+    log.info(`CustomGemmaToolParser: Parsed tool_code "${name}" → ${JSON.stringify(args)}`);
+    return { name, args };
+  }
+
   private reset(): void {
     this.mode = "idle";
     this.scanHoldback = "";
     this.toolBuffer = "";
+    this.activeDialect = null;
   }
 }

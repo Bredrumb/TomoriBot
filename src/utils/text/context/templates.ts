@@ -9,6 +9,7 @@ import {
 import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
 import { humanizeString } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
+import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { TomoriState, AssembledServerConfig } from "@/types/db/schema";
 
 export const DEFAULT_SYSTEM_PROMPT =
@@ -281,7 +282,12 @@ export async function buildSampleDialogueContextItems(params: {
       });
     }
 
-    let modelSampleText = `${params.botName}: ${tomoriState.sample_dialogues_out[i]}`;
+    const rawOut = tomoriState.sample_dialogues_out[i];
+    const escapedBotName = escapeRegExp(params.botName);
+    const namePattern = `(?:${escapedBotName}|\\{\\{?char\\}\\}?|\\{\\{?bot\\}\\}?)`;
+    const speakerPattern = new RegExp(`^\\s*${namePattern}(?:\\s*\\([^)]+\\))?\\s*[:：]`, "iu");
+
+    let modelSampleText = speakerPattern.test(rawOut) ? rawOut : `${params.botName}: ${rawOut}`;
     if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
       modelSampleText = humanizeString(modelSampleText);
     }

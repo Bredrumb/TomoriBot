@@ -180,11 +180,24 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
   // Each test asserts that the repository returns the same data as the direct
   // repository SQL call, proving delegation is correct rather than silent no-ops.
 
+  // `llms.input_price_per_million` / `output_price_per_million` are Postgres NUMERIC, which the driver
+  // returns as strings on a raw SELECT (e.g. "0.1"). The repository parses rows through `llmSchema`, whose
+  // `z.coerce.number()` turns those columns into real numbers so `/tool estimate cost` can do price math.
+  // Normalize the raw rows the same way before comparing, so this parity check tracks data rather than the
+  // driver's NUMERIC-as-string serialization.
+  const coerceLlmPriceColumns = <T extends Record<string, unknown>>(row: T): T => ({
+    ...row,
+    input_price_per_million:
+      row.input_price_per_million == null ? row.input_price_per_million : Number(row.input_price_per_million),
+    output_price_per_million:
+      row.output_price_per_million == null ? row.output_price_per_million : Number(row.output_price_per_million),
+  });
+
   describe("LlmRepository.loadAvailableLlms", () => {
     it("returns the same rows as the direct repository SQL call", async () => {
       const direct = await testSql`SELECT * FROM llms WHERE is_deprecated = false ORDER BY llm_id ASC`;
       const via = await llmModelRepo.loadAvailableLlms();
-      expect(via).toEqual(direct);
+      expect(via).toEqual(direct.map(coerceLlmPriceColumns));
     });
 
     it("with includeDeprecated=true returns >= non-deprecated count", async () => {
@@ -203,7 +216,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
 
       const direct = await testSql`SELECT * FROM llms WHERE llm_id = ${id} LIMIT 1`;
       const via = await llmModelRepo.loadById(id);
-      expect(via).toEqual(direct[0]);
+      expect(via).toEqual(coerceLlmPriceColumns(direct[0]));
     });
 
     it("returns null for a non-existent ID", async () => {

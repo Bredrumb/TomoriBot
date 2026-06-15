@@ -1,17 +1,71 @@
-import { Client, GatewayIntentBits, Partials } from "discord.js";
+import { ApplicationFlags, Client, GatewayIntentBits, Partials, REST, Routes } from "discord.js";
 import { log } from "@/utils/misc/logger";
 import type { AppEnvironment } from "@/types/config";
+
+/**
+ * Resolves whether the privileged GuildPresences intent should be requested,
+ * preferring Discord's own approval state so the bot self-heals with no manual
+ * configuration.
+ *
+ * GuildPresences is a privileged intent: requesting it without Discord's
+ * approval makes the gateway reject the entire connection (DisallowedIntents /
+ * WS close 4014). To avoid that — and a failed-then-retried connection — we ask
+ * Discord up front whether the intent is enabled for this application.
+ *
+ * Resolution order:
+ *   1. Live probe of the application's gateway flags via REST `GET /applications/@me`.
+ *      `GatewayPresence` (approved for 100+ guild bots) or `GatewayPresenceLimited`
+ *      (enabled for <100 guild bots) means the intent is safe to request. The moment
+ *      Discord grants approval, this flips on the next restart — no code change.
+ *   2. On probe failure (e.g. network/REST error), fall back to the legacy default:
+ *      enabled outside production, disabled in production.
+ *
+ * @param environment - Resolved runtime environment (used only for the fallback)
+ * @returns true if the GuildPresences intent should be included
+ */
+export async function resolvePresenceIntentEnabled(environment: AppEnvironment): Promise<boolean> {
+  // Legacy behavior is the safety net if we cannot reach Discord to probe.
+  const legacyDefault = environment !== "production";
+
+  const token = process.env.DISCORD_TOKEN;
+  if (!token) {
+    log.warn("Cannot probe Presence Intent approval (DISCORD_TOKEN unset); using default");
+    return legacyDefault;
+  }
+
+  // 1. Ask Discord which privileged gateway intents this application is approved for.
+  try {
+    const rest = new REST().setToken(token);
+    const application = (await rest.get(Routes.currentApplication())) as { flags?: number };
+    const flags = application.flags ?? 0;
+    // Either flag indicates the Presence Intent is enabled/approved for this bot.
+    const presenceApproved =
+      (flags & ApplicationFlags.GatewayPresence) !== 0 || (flags & ApplicationFlags.GatewayPresenceLimited) !== 0;
+    log.info(
+      `Presence Intent approval probe: ${presenceApproved ? "approved" : "not approved"} (application flags=${flags})`,
+    );
+    return presenceApproved;
+  } catch (error) {
+    // 2. Probe failed — degrade to the legacy default rather than risk a 4014.
+    log.warn("Failed to probe Presence Intent approval; using default", error);
+    return legacyDefault;
+  }
+}
 
 /**
  * Creates and configures the Discord.js client with appropriate intents,
  * cache sweepers, and process-level error handlers.
  *
- * GuildPresences intent is excluded in production (not approved for production bots).
+ * The privileged GuildPresences intent is included only when
+ * {@link resolvePresenceIntentEnabled} reports it as enabled. Downstream
+ * consumers (e.g. the context builder) detect its presence via
+ * `client.options.intents.has(GatewayIntentBits.GuildPresences)` and degrade
+ * gracefully when it is absent, so flipping it requires no other changes.
  *
- * @param environment - Resolved runtime environment
+ * @param includePresences - Whether to request the privileged GuildPresences intent
  * @returns Configured Discord.js Client (not yet logged in)
  */
-export function createDiscordClient(environment: AppEnvironment): Client {
+export function createDiscordClient(includePresences: boolean): Client {
   const intents = [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
@@ -23,8 +77,9 @@ export function createDiscordClient(environment: AppEnvironment): Client {
     GatewayIntentBits.GuildExpressions,
   ];
 
-  // GuildPresences intent only available in non-production (rejected for production approval)
-  if (environment !== "production") {
+  // GuildPresences is privileged — request it only when Discord has approved it
+  // (or it is force-enabled). See resolvePresenceIntentEnabled.
+  if (includePresences) {
     intents.push(GatewayIntentBits.GuildPresences);
   }
 
