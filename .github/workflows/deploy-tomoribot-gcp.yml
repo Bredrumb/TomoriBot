@@ -23,11 +23,11 @@ on:
         type: boolean
         default: false
 
-# OIDC permissions for GCP Workload Identity Federation
+# Least-privilege default token: OIDC for Workload Identity Federation + read-only
+# repo contents for checkout. Jobs that need more (e.g. create-release) elevate locally.
 permissions:
   id-token: write
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   # ─── SECRETS VALIDATION ────────────────────────────────────────────────────
@@ -37,6 +37,16 @@ jobs:
     if: vars.ACTIVE_PROVIDER == 'gcp' || vars.ACTIVE_PROVIDER == ''
     steps:
       - name: Validate GCP deployment secrets
+        # Secrets are mapped to env vars (not interpolated into the script body) so a
+        # value containing shell metacharacters can never break or inject into the test.
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          ARTIFACT_REGISTRY_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
+          CLOUD_SQL_INSTANCE_PASSWORD: ${{ secrets.CLOUD_SQL_INSTANCE_PASSWORD }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           echo "=========================================="
           echo "Validating GitHub Secrets (GCP Infrastructure)"
@@ -44,13 +54,13 @@ jobs:
 
           missing_secrets=()
 
-          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ];                   then missing_secrets+=("GCP_PROJECT_ID"); fi
-          if [ -z "${{ secrets.GCP_REGION }}" ];                        then missing_secrets+=("GCP_REGION"); fi
-          if [ -z "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ];    then missing_secrets+=("GCP_WORKLOAD_IDENTITY_PROVIDER"); fi
-          if [ -z "${{ secrets.GCP_SERVICE_ACCOUNT }}" ];               then missing_secrets+=("GCP_SERVICE_ACCOUNT"); fi
-          if [ -z "${{ secrets.ARTIFACT_REGISTRY_REPO }}" ];            then missing_secrets+=("ARTIFACT_REGISTRY_REPO"); fi
-          if [ -z "${{ secrets.CLOUD_SQL_INSTANCE_PASSWORD }}" ];       then missing_secrets+=("CLOUD_SQL_INSTANCE_PASSWORD"); fi
-          if [ -z "${{ secrets.PAT_TOKEN }}" ];                         then missing_secrets+=("PAT_TOKEN"); fi
+          if [ -z "$GCP_PROJECT_ID" ];                   then missing_secrets+=("GCP_PROJECT_ID"); fi
+          if [ -z "$GCP_REGION" ];                        then missing_secrets+=("GCP_REGION"); fi
+          if [ -z "$GCP_WORKLOAD_IDENTITY_PROVIDER" ];    then missing_secrets+=("GCP_WORKLOAD_IDENTITY_PROVIDER"); fi
+          if [ -z "$GCP_SERVICE_ACCOUNT" ];               then missing_secrets+=("GCP_SERVICE_ACCOUNT"); fi
+          if [ -z "$ARTIFACT_REGISTRY_REPO" ];            then missing_secrets+=("ARTIFACT_REGISTRY_REPO"); fi
+          if [ -z "$CLOUD_SQL_INSTANCE_PASSWORD" ];       then missing_secrets+=("CLOUD_SQL_INSTANCE_PASSWORD"); fi
+          if [ -z "$PAT_TOKEN" ];                         then missing_secrets+=("PAT_TOKEN"); fi
 
           if [ ${#missing_secrets[@]} -gt 0 ]; then
             echo "Missing required GCP secrets: ${missing_secrets[*]}"
@@ -348,13 +358,15 @@ jobs:
         run: docker load -i tomoribot-image.tar
 
       - name: Authenticate to GCP (Workload Identity Federation)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+        env:
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
 
       - name: Get version from package.json
         id: package_version
@@ -495,7 +507,13 @@ jobs:
     env:
       TF_VAR_gcp_project_id: ${{ secrets.GCP_PROJECT_ID }}
       TF_VAR_db_password: ${{ secrets.CLOUD_SQL_INSTANCE_PASSWORD }}
-      TF_VAR_searxng_image: ${{ needs.push-to-artifact-registry.outputs.searxng_image_uri }}
+      # The image URIs are built from the ARTIFACT_REGISTRY_REPO secret upstream, so the
+      # push job's outputs are scrubbed to empty when they cross the job boundary (GitHub
+      # redacts secret-containing outputs). Rebuild them here from the secret directly
+      # (single-job secret use is allowed) plus the non-secret version/sha, which propagate
+      # cleanly. Terraform auto-reads TF_VAR_* env vars, so no inline -var interpolation.
+      TF_VAR_container_image: ${{ secrets.ARTIFACT_REGISTRY_REPO }}/tomoribot:v${{ needs.push-to-artifact-registry.outputs.version }}
+      TF_VAR_searxng_image: ${{ secrets.ARTIFACT_REGISTRY_REPO }}/tomoribot-searxng:${{ github.sha }}
       TF_IN_AUTOMATION: "1"
       TF_INPUT: "0"
     steps:
@@ -512,7 +530,7 @@ jobs:
           bun-version: 1.3.3
 
       - name: Authenticate to GCP (Workload Identity Federation)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -559,7 +577,8 @@ jobs:
 
       - name: Terraform plan
         working-directory: terraform/gcp
-        run: terraform plan -input=false -var-file=terraform.ci.tfvars -var="container_image=${{ needs.push-to-artifact-registry.outputs.image_uri }}" -out=tfplan
+        # container_image / searxng_image are supplied via TF_VAR_* env (see job env).
+        run: terraform plan -input=false -var-file=terraform.ci.tfvars -out=tfplan
 
       - name: Guard against Cloud SQL destroy/replace
         working-directory: terraform/gcp
@@ -598,7 +617,7 @@ jobs:
           echo "message=$(git log -1 --pretty=format:'%s')" >> $GITHUB_OUTPUT
 
       - name: Authenticate to GCP (Workload Identity Federation)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -675,6 +694,9 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [verify-cloud-run-deployment, check-release-assets]
     if: needs.verify-cloud-run-deployment.outputs.deployment-status == 'success' && needs.check-release-assets.outputs.has-assets == 'true'
+    # Release creation publishes a GitHub Release; the default token needs write here.
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -736,6 +758,7 @@ jobs:
           VERSION: ${{ needs.check-release-assets.outputs.version }}
           IMAGE_NAME: ${{ steps.release-notes.outputs.image-name }}
           MENTION_ROLE_ID: ${{ secrets.RELEASE_DISCORD_MENTION_ROLE_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           releaseNotes=$(cat processed-release-notes.md)
           releaseNotes=$(echo "$releaseNotes" | sed 's/!\[[^]]*\]([^)]*)//g')
@@ -755,7 +778,7 @@ jobs:
             fi
           fi
 
-          discordWebhookUrl="${{ secrets.DISCORD_WEBHOOK_URL }}"
+          discordWebhookUrl="${DISCORD_WEBHOOK_URL}"
           if [ -z "$discordWebhookUrl" ]; then
             echo "DISCORD_WEBHOOK_URL not configured — skipping Discord notification"
             exit 0

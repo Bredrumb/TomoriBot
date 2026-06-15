@@ -213,10 +213,11 @@ export default defineConfig({
     starlight({
       title: "TomoriBot",
       description: "Developer documentation for TomoriBot",
+      // Served from apps/docs/public/tomoricon.ico at the site root as /tomoricon.ico.
+      favicon: "/tomoricon.ico",
       customCss: ["/src/styles/custom.css"],
-      social: {
-        github: "https://github.com/Bredrumb/TomoriBot",
-      },
+      // Starlight v0.33.0+ expects an array of link items instead of a keyed object.
+      social: [{ icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" }],
       sidebar,
     }),
   ],
