@@ -356,6 +356,7 @@ export async function execute(
 
     // 13. Route to provider and generate video
     let videoData: Buffer | null = null;
+    let videoFilename = `generated_${Date.now()}.mp4`;
     const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
 
     if (videoCreds.customEndpoint) {
@@ -367,6 +368,7 @@ export async function execute(
         referenceImages,
       });
       videoData = result.videoData;
+      videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "google") {
       const { generateGoogleNativeVideo } = await import("@/providers/google/googleVideoGeneration");
       const result = await generateGoogleNativeVideo({
@@ -377,6 +379,7 @@ export async function execute(
         referenceImages,
       });
       videoData = result.videoData;
+      videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "openrouter") {
       const { generateOpenRouterNativeVideo } = await import("@/providers/openrouter/openrouterVideoGeneration");
       const result = await generateOpenRouterNativeVideo({
@@ -387,6 +390,7 @@ export async function execute(
         referenceImages,
       });
       videoData = result.videoData;
+      videoFilename = result.filename ?? videoFilename;
     } else if (videoImplementation === "zai") {
       const { generateZaiNativeVideo } = await import("@/providers/zai/zaiVideoGeneration");
       const result = await generateZaiNativeVideo({
@@ -397,6 +401,7 @@ export async function execute(
         referenceImages,
       });
       videoData = result.videoData;
+      videoFilename = result.filename ?? videoFilename;
     } else {
       await modalSubmitInteraction.editReply({
         embeds: [
@@ -446,8 +451,15 @@ export async function execute(
     const elapsedMs = performance.now() - startTime;
     const elapsedSec = (elapsedMs / 1000).toFixed(1);
 
+    log.info(
+      `Sending generated video to Discord ${JSON.stringify({
+        filename: videoFilename,
+        bytes: videoData.length,
+      })}`,
+    );
+
     const attachment = new AttachmentBuilder(videoData, {
-      name: `generated_${Date.now()}.mp4`,
+      name: videoFilename,
     });
 
     await modalSubmitInteraction.editReply({

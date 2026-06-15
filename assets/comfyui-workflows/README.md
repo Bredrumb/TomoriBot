@@ -128,6 +128,19 @@ The workflow uses these TomoriBot placeholders:
 - `{TOMORI_INPAINT_EXTEND_FEATHER}`
 - `{TOMORI_INPAINT_EXTEND_PADDING}`
 
+## Wan I2V Loop Video Workflow
+
+Use `tomoribot-wan-i2v-loop-video.json` for Wan I2V loop video generation.
+
+Supported modes:
+
+- Image-to-video with one reference image
+
+When registering the endpoint, choose the `video` capability and select the
+workflow support modes that match how you want the workflow to be used:
+
+- `img2vid`
+
 Required ComfyUI custom nodes/models are encoded in the workflow itself through
 its node class names and model filenames. The default workflow also uses
 `ComfyUI-Inpaint-CropAndStitch` for normal target inpainting, via
