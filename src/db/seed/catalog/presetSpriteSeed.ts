@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { SQL } from "bun";
+import { sql } from "@/utils/db/client";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import {
@@ -158,6 +159,6 @@ async function reconcileRemovedSprites(client: SQL, persona: PersonaInput, seede
     DELETE FROM preset_sprites
     WHERE preset_lineage_id = ${persona.lineageId}
       AND preset_language = ${persona.language}
-      AND NOT (sprite_key = ANY(${seededKeys}))
+      AND NOT (sprite_key = ANY(${sql.array(seededKeys, "text")}))
   `;
 }

@@ -5,7 +5,7 @@
  * in-place optimizer) reason about the same set of files and the same byte
  * budget, so the scope definition lives here to keep them in lockstep.
  */
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { spawnSync } from "bun";
 
 /** Default per-file budget: 1 MiB. Override with MEDIA_SIZE_LIMIT_BYTES. */
@@ -97,18 +97,46 @@ export function listTrackedFiles(): string[] {
   return result.stdout.toString().split("\0").filter(Boolean);
 }
 
+/**
+ * List untracked, non-gitignored file paths within the given scope prefixes
+ * (forward-slash, repo-relative). These are files present on disk but not yet
+ * staged or committed — `git ls-files` alone misses them entirely.
+ */
+export function listUntrackedInScopePaths(prefixes: string[]): string[] {
+  // --others = untracked files; --exclude-standard = respect .gitignore.
+  // Passing the prefixes as pathspecs scopes the output without a repo-wide walk.
+  const result = spawnSync(
+    ["git", "ls-files", "--others", "--exclude-standard", "-z", "--", ...prefixes],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim();
+    throw new Error(`git ls-files --others failed: ${stderr || `exit code ${result.exitCode}`}`);
+  }
+  return result.stdout.toString().split("\0").filter(Boolean);
+}
+
 /** One in-scope tracked media file with its current on-disk size. */
 export type MediaFile = { path: string; size: number; isPersona: boolean };
 
 /**
- * Return every tracked media file inside SCOPE_PREFIXES, with its size.
- * This is what the gate (check-media-size) iterates — personas + assets only.
+ * Return every tracked or untracked (non-ignored) media file inside
+ * SCOPE_PREFIXES, with its size. Including untracked files ensures that newly
+ * added art is blocked before it is ever committed.
  */
 export function listInScopeMedia(): MediaFile[] {
-  return listTrackedFiles()
-    .filter(
-      (path) => SCOPE_PREFIXES.some((prefix) => path.startsWith(prefix)) && MEDIA_EXTENSIONS.has(extensionOf(path)),
-    )
+  const tracked = listTrackedFiles().filter(
+    (path) => SCOPE_PREFIXES.some((prefix) => path.startsWith(prefix)) && MEDIA_EXTENSIONS.has(extensionOf(path)),
+  );
+  const untracked = listUntrackedInScopePaths(SCOPE_PREFIXES).filter((path) =>
+    MEDIA_EXTENSIONS.has(extensionOf(path)),
+  );
+
+  // Merge, deduplicate by path (a file staged but not committed appears in both).
+  const seen = new Set<string>();
+  return [...tracked, ...untracked]
+    .filter((path) => !seen.has(path) && seen.add(path))
+    .filter((path) => existsSync(path))
     .map((path) => ({ path, size: statSync(path).size, isPersona: path.startsWith(PERSONA_PREFIX) }));
 }
 
@@ -119,18 +147,28 @@ export type CompressStrategy = "lossless-fit" | "webp";
 export type CompressTarget = MediaFile & { strategy: CompressStrategy };
 
 /**
- * Return every tracked media file `compress-media` operates on. This is a SUPERSET
- * of the gate scope: gate-scoped files (personas + assets) get "lossless-fit",
- * while release cards get "webp". The gate itself never sees release cards.
+ * Return every tracked or untracked (non-ignored) media file `compress-media`
+ * operates on. This is a SUPERSET of the gate scope: gate-scoped files (personas
+ * + assets) get "lossless-fit", while release cards get "webp". The gate itself
+ * never sees release cards. Untracked files in scope prefixes are included so
+ * newly added art can be compressed before it is ever committed.
  */
 export function listCompressTargets(): CompressTarget[] {
-  return listTrackedFiles()
-    .filter((path) => MEDIA_EXTENSIONS.has(extensionOf(path)))
-    .filter((path) => SCOPE_PREFIXES.some((prefix) => path.startsWith(prefix)) || path.startsWith(RELEASE_PREFIX))
+  const isInScope = (path: string) =>
+    SCOPE_PREFIXES.some((prefix) => path.startsWith(prefix)) || path.startsWith(RELEASE_PREFIX);
+
+  const tracked = listTrackedFiles().filter((path) => MEDIA_EXTENSIONS.has(extensionOf(path)) && isInScope(path));
+  // Untracked release cards are transient scratch — only scope prefixes matter here.
+  const untracked = listUntrackedInScopePaths(SCOPE_PREFIXES).filter((path) => MEDIA_EXTENSIONS.has(extensionOf(path)));
+
+  const seen = new Set<string>();
+  return [...tracked, ...untracked]
+    .filter((path) => !seen.has(path) && seen.add(path))
+    .filter((path) => existsSync(path))
     .map((path) => ({
       path,
       size: statSync(path).size,
       isPersona: path.startsWith(PERSONA_PREFIX),
-      strategy: path.startsWith(RELEASE_PREFIX) ? "webp" : "lossless-fit",
+      strategy: (path.startsWith(RELEASE_PREFIX) ? "webp" : "lossless-fit") as CompressStrategy,
     }));
 }
