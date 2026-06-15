@@ -215,6 +215,7 @@ export async function execute(
       const documentOptions: SelectOption[] = documents.map((doc) => ({
         label: safeSelectOptionText(doc.document_name),
         value: doc.document_id.toString(),
+        description: doc.first_chunk ? safeSelectOptionText(doc.first_chunk) : undefined,
       }));
 
       const modalResult = await promptWithPaginatedModal(selectionInteraction, locale, {

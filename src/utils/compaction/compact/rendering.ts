@@ -93,11 +93,20 @@ export function buildManualEmbed(
 }
 
 export const COMPACT_EDIT_BUTTON_ID = "compact_edit_summary";
+export const COMPACT_ADD_TO_DOCS_BUTTON_ID = "compact_add_to_docs";
 
 export function buildEditSummaryButtonRow(locale: string): ActionRowBuilder<ButtonBuilder> {
   const button = new ButtonBuilder()
     .setCustomId(COMPACT_EDIT_BUTTON_ID)
     .setLabel(localizer(locale, "commands.tool.compact.edit_button_label"))
+    .setStyle(ButtonStyle.Secondary);
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+}
+
+export function buildAddToDocsButtonRow(locale: string): ActionRowBuilder<ButtonBuilder> {
+  const button = new ButtonBuilder()
+    .setCustomId(COMPACT_ADD_TO_DOCS_BUTTON_ID)
+    .setLabel(localizer(locale, "commands.tool.compact.add_to_docs_button_label"))
     .setStyle(ButtonStyle.Secondary);
   return new ActionRowBuilder<ButtonBuilder>().addComponents(button);
 }
