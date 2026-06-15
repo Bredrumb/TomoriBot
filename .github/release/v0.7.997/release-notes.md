@@ -18,7 +18,7 @@ Valid sprite labels:
 `Touko Fukawa (imagining):` use when imagining a raunchy BL moment to the point of dissociating
 `Touko Fukawa (mad):` use when angry, or being annoyed by {user}, especially when {user} is dissing BL
 ```
-As stated above, all the model has to do to invoke a Sprite is to use the raw name+emotion/identity before their response, otherwise, output normally. With how LLMs work, this may (or may not) cause better responses as a side effect.
+As stated above, all the model has to do to invoke a Sprite is to output the raw name+emotion/identity before their response, otherwise, output normally. With how LLMs work, this may (or may not) cause better responses as a side effect.
 
 See below for more information on the new commands, as well as some other new features/QoL changes batched with this minor update:
 
@@ -28,8 +28,9 @@ See below for more information on the new commands, as well as some other new fe
   - See `/assets/comfyui-workflows/` for sample working workflow
 - (Thanks Palinalif!) Added opt-in automatic model unloading for ComfyUI workflows (`COMFYUI_UNLOAD_MODELS_AFTER_SUCCESS=false`), useful for bigger models (like Ideogram 4.0 or a video model like WAN), or if using multiple models making VRAM scarce, and in slower machines.
 - Added `/persona sprites` command category that allows you to add/edit/remove alternative avatars for your chosen persona based on emotion/identity it wants to use. You may also import/export these as a .zip file.
-  - Limitations: (1) Main persona sprites send as a webhook, (2) if persona sends multiple lines that differ in emotion (eg. `Touko (mad):\nTouko (sad):`), it will add `({emotion})` into the webhook name to properly separate the avatars
+  - Limitations: (1) Main persona sprites send as a webhook, (2) if persona sends multiple lines that differ in emotion (eg. `Touko (mad):\nTouko (sad):`), it will add `({emotion})` into the webhook name to properly separate the avatars because Discord automatically merges same-named webhooks as one, (3) and Discord avatars are very small (may be improved in the future using Message Components)
 - To help with Sprites, sample dialogue entries that follow the `{bot} ({emotion}):` or `{bot}` format at the beginning now do not have `{bot}:` automatically prepended to it (during prompt building) to prevent redundancy.
+- Personas can now impersonate users if they use the `{persona} ({user}):` format (eg. `Ren (bredrumb): I love yuri` will cause bredrumb's avatar and name as a webhook to send that message). This is "opt-in" as this is not included in the prompt by default (add the instructions yourself). Useful for personas that love to shapeshift... like the next Default Tomori persona 🐐
 - `/config model-randomizer` = when on, TomoriBot uses your configured Fallback Models (through `/config model fallback`) as a pool of models to generate responses with, randomly picking one every new request
 - Tomori can now autonomously block/mute users for X hours. Use the `{block_user_tool}` macro in prompts if you want to instruct your persona to use it more/less. Use `/capabilities manage` to disable this.
 - `/bot generate scene` = allows you to automatically generate a text scene with up to 3 characters spanning X amount of rounds
