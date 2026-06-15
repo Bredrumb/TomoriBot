@@ -1,0 +1,38 @@
+---
+// Custom SiteTitle that injects /tomoricon.ico from public/ into the nav header.
+// We bypass the standard `logo` config (which requires an importable image module)
+// and reference the .ico directly as a plain <img> URL instead.
+const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title sl-flex">
+  <img src="/tomoricon.ico" alt="" aria-hidden="true" class="site-icon" />
+  <span translate="no">{siteTitle}</span>
+</a>
+
+<style>
+  @layer starlight.core {
+    .site-title {
+      align-items: center;
+      gap: 0.4rem;
+      font-size: var(--sl-text-h4);
+      font-weight: 600;
+      color: var(--sl-color-text-accent);
+      text-decoration: none;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    span {
+      overflow: hidden;
+    }
+
+    .site-icon {
+      height: calc(var(--sl-nav-height) - 2 * var(--sl-nav-pad-y));
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
+      object-position: 0 50%;
+    }
+  }
+</style>

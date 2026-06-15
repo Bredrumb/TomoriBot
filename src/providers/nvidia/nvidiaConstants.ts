@@ -1,8 +1,9 @@
 export const NVIDIA_CHAT_COMPLETIONS_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+export const NVIDIA_MODELS_URL = "https://integrate.api.nvidia.com/v1/models";
 export const NVIDIA_EMBEDDINGS_URL = "https://integrate.api.nvidia.com/v1/embeddings";
 export const NVIDIA_IMAGE_GENERATION_URL = "https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-3-medium";
 
-export const NVIDIA_DEFAULT_TEXT_MODEL = "deepseek-ai/deepseek-v3.2";
+export const NVIDIA_DEFAULT_TEXT_MODEL = "meta/llama-3.3-70b-instruct";
 export const NVIDIA_DEFAULT_EMBEDDING_MODEL = "nv-embed-v1";
 export const NVIDIA_DEFAULT_IMAGE_MODEL = "stabilityai/stable-diffusion-3-medium";
 

@@ -216,6 +216,12 @@ export default defineConfig({
       // Served from apps/docs/public/tomoricon.ico at the site root as /tomoricon.ico.
       favicon: "/tomoricon.ico",
       customCss: ["/src/styles/custom.css"],
+      // SiteTitle override renders /tomoricon.ico directly as a plain <img> in the nav header.
+      // The standard `logo` config can't reference public/ files because it generates a Vite
+      // import that expects an Astro image object { src, width, height }, not a URL string.
+      components: {
+        SiteTitle: "./src/components/SiteTitle.astro",
+      },
       // Starlight v0.33.0+ expects an array of link items instead of a keyed object.
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" }],
       sidebar,

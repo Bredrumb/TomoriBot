@@ -16,6 +16,7 @@ import {
   NVIDIA_DEFAULT_EMBEDDING_MODEL,
   NVIDIA_DEFAULT_TEXT_MODEL,
   NVIDIA_EMBEDDINGS_URL,
+  NVIDIA_MODELS_URL,
 } from "@/providers/nvidia/nvidiaConstants";
 import {
   createOpenAICompatibleHttpError,
@@ -173,19 +174,12 @@ export class NvidiaProvider
 
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     try {
-      const validationModel = (await getDefaultNvidiaModel().catch(() => null)) || NVIDIA_DEFAULT_TEXT_MODEL;
-      const response = await fetch(NVIDIA_CHAT_COMPLETIONS_URL, {
-        method: "POST",
+      // Use the models list endpoint — no model needed, no tokens consumed
+      const response = await fetch(NVIDIA_MODELS_URL, {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: validationModel,
-          messages: [{ role: "user", content: "ping" }],
-          max_tokens: 1,
-          stream: false,
-        }),
       });
 
       if (!response.ok) {
