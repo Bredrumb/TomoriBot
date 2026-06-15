@@ -102,6 +102,18 @@ export interface StreamState {
   pendingAggregateJoinNextWithBlankLine: boolean;
   /** Active render-modifier identity for the current generated line. */
   activeRenderModifier?: StreamRenderModifierState;
+  /**
+   * Sprite-key of the most recently delivered non-identity sprite, used to detect
+   * when the sprite changes so the group-break name representation can be toggled.
+   */
+  lastDeliveredSpriteKey?: string;
+  /**
+   * Toggles each time a non-identity sprite changes. Decides whether the current
+   * sprite uses the clean persona name (`false`) or the decorated `Persona (sprite)`
+   * name (`true`), so adjacent different-sprite messages never share a username and
+   * Discord renders each avatar instead of grouping them under the first.
+   */
+  spriteGroupParity?: boolean;
 }
 
 /**
@@ -281,6 +293,8 @@ export function createDefaultStreamState(): StreamState {
     pendingAggregatedText: "",
     pendingAggregateJoinNextWithBlankLine: false,
     activeRenderModifier: undefined,
+    lastDeliveredSpriteKey: undefined,
+    spriteGroupParity: false,
   };
 }
 

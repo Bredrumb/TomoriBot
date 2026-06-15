@@ -40,9 +40,57 @@ const MODAL_CUSTOM_ID = "generate_video_modal";
 const PROMPT_INPUT_ID = "prompt_input";
 const ASPECT_RATIO_SELECT_ID = "aspect_ratio_select";
 const REFERENCE_IMAGE_INPUT_ID = "image_upload_1";
+const DURATION_INPUT_ID = "duration_input";
+const FPS_INPUT_ID = "fps_input";
 
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
+
+/**
+ * Parse a positive integer from an environment variable, falling back to a default.
+ * @param name - Environment variable name
+ * @param fallback - Value to use when unset or invalid
+ * @returns A finite positive integer
+ */
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+// Duration/FPS bounds for the modal inputs. Kept env-configurable so operators can tune
+// limits without code changes; providers still normalize values to their own supported ranges.
+const DEFAULT_VIDEO_DURATION_SECONDS = parsePositiveIntEnv("VIDEO_GEN_DEFAULT_DURATION_SECONDS", 5);
+const MAX_VIDEO_DURATION_SECONDS = parsePositiveIntEnv("VIDEO_GEN_MAX_DURATION_SECONDS", 20);
+const MAX_VIDEO_FPS = parsePositiveIntEnv("VIDEO_GEN_MAX_FPS", 60);
+
+/**
+ * Parse and validate an integer entered into a modal text field.
+ * @param raw - Raw string value from the modal submission (may be undefined/empty)
+ * @param min - Inclusive minimum allowed value
+ * @param max - Inclusive maximum allowed value
+ * @returns `{ value }` on success (value is `undefined` when the optional field is blank),
+ *          or `{ error: true }` when the entry is non-numeric or out of range.
+ */
+function parseModalInteger(raw: string | undefined, min: number, max: number): { value?: number; error?: true } {
+  const trimmed = raw?.trim();
+  // 1. Blank input is treated as "not provided" — callers decide if that's allowed.
+  if (!trimmed) {
+    return { value: undefined };
+  }
+
+  // 2. Reject anything that isn't a clean integer (no decimals, units, or letters).
+  if (!/^\d+$/.test(trimmed)) {
+    return { error: true };
+  }
+
+  // 3. Range check against the configured bounds.
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    return { error: true };
+  }
+
+  return { value: parsed };
+}
 
 /**
  * Configure the subcommand
@@ -281,6 +329,26 @@ export async function execute(
           { label: "1:1 (Square)", value: "1:1" },
         ],
       },
+      {
+        customId: DURATION_INPUT_ID,
+        labelKey: "commands.generate.video.modal.duration_label",
+        descriptionKey: "commands.generate.video.modal.duration_description",
+        placeholder: "commands.generate.video.modal.duration_placeholder",
+        required: true,
+        style: TextInputStyle.Short,
+        // Prefill the default so the required field is one keystroke away from valid.
+        value: String(DEFAULT_VIDEO_DURATION_SECONDS),
+        maxLength: 3,
+      },
+      {
+        customId: FPS_INPUT_ID,
+        labelKey: "commands.generate.video.modal.fps_label",
+        descriptionKey: "commands.generate.video.modal.fps_description",
+        placeholder: "commands.generate.video.modal.fps_placeholder",
+        required: false,
+        style: TextInputStyle.Short,
+        maxLength: 3,
+      },
     ];
 
     // 9. Show modal and wait for submission (auto-defer with public reply)
@@ -309,6 +377,45 @@ export async function execute(
       log.error("Modal result unexpectedly missing required values");
       return;
     }
+
+    // 9a. Parse and validate duration (required) and FPS (optional).
+    //     Providers normalize these to their own supported ranges, so we only guard
+    //     against clearly invalid entries here (non-numeric or out of configured bounds).
+    const durationResult = parseModalInteger(modalResult.values?.[DURATION_INPUT_ID], 1, MAX_VIDEO_DURATION_SECONDS);
+    if (durationResult.error || durationResult.value === undefined) {
+      await modalSubmitInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.generate.video.invalid_duration_title"))
+            .setDescription(
+              localizer(locale, "commands.generate.video.invalid_duration_description", {
+                max: MAX_VIDEO_DURATION_SECONDS.toString(),
+              }),
+            )
+            .setColor(ColorCode.ERROR),
+        ],
+      });
+      return;
+    }
+    const durationSeconds = durationResult.value;
+
+    const fpsResult = parseModalInteger(modalResult.values?.[FPS_INPUT_ID], 1, MAX_VIDEO_FPS);
+    if (fpsResult.error) {
+      await modalSubmitInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.generate.video.invalid_fps_title"))
+            .setDescription(
+              localizer(locale, "commands.generate.video.invalid_fps_description", {
+                max: MAX_VIDEO_FPS.toString(),
+              }),
+            )
+            .setColor(ColorCode.ERROR),
+        ],
+      });
+      return;
+    }
+    const fps = fpsResult.value;
 
     // 10. Process reference image (if provided)
     let referenceImages: Array<{ mimeType: string; data: string }> | undefined;
@@ -339,7 +446,7 @@ export async function execute(
       : modelCodename;
 
     log.info(
-      `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, reference: ${referenceImages ? "yes" : "no"})`,
+      `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, duration: ${durationSeconds}s, fps: ${fps ?? "default"}, reference: ${referenceImages ? "yes" : "no"})`,
     );
 
     // 12. Show "generating" embed while we poll for completion
@@ -364,6 +471,8 @@ export async function execute(
         apiKey,
         prompt,
         aspectRatio,
+        durationSeconds,
+        fps,
         referenceImages,
       });
       videoData = result.videoData;
@@ -374,6 +483,8 @@ export async function execute(
         model: modelCodename,
         prompt,
         aspectRatio,
+        durationSeconds,
+        fps,
         referenceImages,
       });
       videoData = result.videoData;
@@ -384,6 +495,8 @@ export async function execute(
         model: modelCodename,
         prompt,
         aspectRatio,
+        durationSeconds,
+        fps,
         referenceImages,
       });
       videoData = result.videoData;
@@ -394,6 +507,8 @@ export async function execute(
         model: modelCodename,
         prompt,
         aspectRatio,
+        durationSeconds,
+        fps,
         referenceImages,
       });
       videoData = result.videoData;

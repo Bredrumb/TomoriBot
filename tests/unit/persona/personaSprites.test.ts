@@ -41,8 +41,8 @@ describe("persona sprites", () => {
     );
 
     expect(prompt).toContain("Available sprites for Tomori:");
-    expect(prompt).toContain("`Tomori ({sprite name}):`");
-    expect(prompt).toContain("Only use the sprite names listed below.");
+    expect(prompt).toContain("`Tomori ({sprite label}):`");
+    expect(prompt).toContain("Valid sprite labels:");
     expect(prompt).toContain("`Tomori (mad):` Use when annoyed.");
     expect(prompt).not.toContain("Tomori (sad)");
   });

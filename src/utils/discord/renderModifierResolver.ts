@@ -43,6 +43,14 @@ export type CopiedRenderTarget = {
   contextLabel: string;
   /** Present for sprite targets: persisted after send for context label recovery. */
   spriteRecord?: SpriteMessageRecordInfo;
+  /**
+   * True only for identity sprites. Identity sprites already use a distinct
+   * decorated "Sprite (Persona)" webhook name, so the zero-width group-break
+   * marker (applied to clean-named non-identity sprites) must not be appended —
+   * a trailing marker would break the decorated-name round-trip in
+   * resolveRenderModifierSourcePersona.
+   */
+  isIdentitySprite?: boolean;
 };
 
 export type SpriteRenderModifierResolution =
@@ -280,6 +288,7 @@ export async function resolveSpriteRenderModifierTarget(
             personaId,
             spriteName: sprite.sprite_name,
           },
+          isIdentitySprite: sprite.is_identity,
         }
       : null,
   };

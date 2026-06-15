@@ -99,9 +99,24 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
 - **`state.pendingOrphanPunctuation`** — may be set (hold) or cleared (prepend to segment).
 - **`state.prefillMatched`** / **`state.prefillInjected`** / **`state.prefillMatchFailed`** —
   updated as prefill stripping/injection progresses.
-- **`state.activeRenderModifier`** — tracks the active render-modifier identity override until the
-  current generated line ends, so period or chunk splits keep using the sprite/copied identity
-  until a newline.
+- **`state.activeRenderModifier`** — tracks the active render-modifier identity override so period
+  or chunk splits keep using the sprite/copied identity. Expiry differs by modifier kind:
+  - **Copied identities** (impersonating a user / another persona — no `spriteRecord`) expire at the
+    end of their line (a newline boundary or an embedded `\n`), so the bot reverts to itself on the
+    next line unless it re-declares the label.
+  - **Persona sprites** (regular and `is_identity`, carrying a `spriteRecord`) persist across
+    newlines and only switch when a *different* `SourcePersona (sprite):` label appears — an
+    expression is a sustained visual state, e.g. `"Touko (mad): ARGGHHH!\nFine... I'll do it"` keeps
+    the `mad` sprite for the second line.
+- **`state.lastDeliveredSpriteKey`** / **`state.spriteGroupParity`** — track the last non-identity
+  sprite delivered and a toggle flipped on each sprite change. The toggle decides whether the sprite
+  uses the clean persona name (`false`) or the decorated `Persona (sprite)` name (`true`). Discord
+  groups consecutive webhook messages by `webhook_id` + `username` (ignoring the avatar) and strips
+  zero-width/blank chars from usernames, so a visibly distinct name is the only reliable break:
+  adjacent different-sprite messages alternate clean/decorated and never match, forcing Discord to
+  render each avatar instead of grouping them under the first one, while same-sprite runs keep an
+  identical username and still group. Identity sprites are excluded (their decorated name is already
+  distinct).
 - **`requestStop(channelId, "speaker_guard")`** — queued if the speaker guard fires; the stop
   is consumed by the stage 04 orchestrator on the next loop iteration.
 - **PNG attachment** — when a Markdown table is detected and rendered successfully, a Discord file

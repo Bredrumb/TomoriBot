@@ -61,6 +61,7 @@ interface ComfyUiGenerationOptions {
   negativePrompt?: string | null;
   aspectRatio?: string;
   durationSeconds?: number;
+  fps?: number;
   resolution?: string;
   generateAudio?: boolean;
   referenceImages?: ComfyUiReferenceImage[];
@@ -118,6 +119,15 @@ const COMFYUI_IMAGE_TARGET_AREA = (() => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1024 * 1024;
 })();
 const COMFYUI_DIMENSION_MULTIPLE = 64;
+/**
+ * Default frames-per-second for ComfyUI video workflows when the caller does not specify one.
+ * Workflows reference this via the `TOMORI_VIDEO_FPS` / `TOMORI_FPS` placeholders, so a sane
+ * non-zero default keeps those nodes valid even when the user leaves the field blank.
+ */
+const COMFYUI_VIDEO_DEFAULT_FPS = (() => {
+  const parsed = Number.parseInt(process.env.COMFYUI_VIDEO_FPS || "16", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 16;
+})();
 const COMFYUI_MAX_RANDOM_SEED = 2 ** 32;
 const COMFYUI_OUTPAINT_INACTIVE_EXTEND_FACTOR = 0.01;
 const COMFYUI_OUTPAINT_PRESERVE_SUBJECT_ONLY = false;
@@ -2066,6 +2076,10 @@ function buildComfyUiPlaceholderMap(
     TOMORI_REFERENCE_IMAGES_JSON: JSON.stringify(referencePayload),
     TOMORI_VIDEO_DURATION: options.durationSeconds ?? 0,
     TOMORI_DURATION_SECONDS: options.durationSeconds ?? 0,
+    // FPS falls back to the configured default so workflow nodes referencing this
+    // placeholder stay valid even when the user leaves the optional field blank.
+    TOMORI_VIDEO_FPS: options.fps ?? COMFYUI_VIDEO_DEFAULT_FPS,
+    TOMORI_FPS: options.fps ?? COMFYUI_VIDEO_DEFAULT_FPS,
     TOMORI_VIDEO_RESOLUTION: options.resolution ?? "",
     TOMORI_RESOLUTION: options.resolution ?? "",
     TOMORI_GENERATE_AUDIO: options.generateAudio ?? false,
@@ -2687,17 +2701,20 @@ export async function generateComfyUiVideoViaEndpoint(params: {
   prompt: string;
   aspectRatio?: string;
   durationSeconds?: number;
+  fps?: number;
   resolution?: string;
   referenceImages?: ProviderNativeVideoGenerationRequest["referenceImages"];
   generateAudio?: boolean;
 }): Promise<ProviderNativeVideoGenerationResult> {
-  const { endpoint, apiKey, prompt, aspectRatio, durationSeconds, resolution, referenceImages, generateAudio } = params;
+  const { endpoint, apiKey, prompt, aspectRatio, durationSeconds, fps, resolution, referenceImages, generateAudio } =
+    params;
 
   const { files } = await generateWithComfyUi(endpoint, apiKey, {
     mode: "video",
     prompt,
     aspectRatio,
     durationSeconds,
+    fps,
     resolution,
     referenceImages,
     generateAudio,

@@ -50,16 +50,20 @@ function extractImageUrl(text: string): string | null {
  * 3. Trims leading and trailing whitespace
  * 4. Truncates to Discord's embed description limit with ellipsis
  * @param body - Raw release notes markdown from the GitHub API
+ * @param locale - Locale of the interaction
+ * @param htmlUrl - GitHub URL for the release
  * @returns Cleaned text ready for an embed description
  */
-function cleanReleaseNotes(body: string): string {
+function cleanReleaseNotes(body: string, locale: string, htmlUrl: string): string {
   let cleaned = body
     .replace(/!\[.*?\]\([^)]*\)/g, "") // Strip markdown image syntax
     .replace(/\n{3,}/g, "\n\n") // Collapse consecutive blank lines
     .trim();
 
   if (cleaned.length > EMBED_DESCRIPTION_LIMIT) {
-    cleaned = `${cleaned.slice(0, EMBED_DESCRIPTION_LIMIT - 3)}...`;
+    const truncationMessage = localizer(locale, "commands.update.truncated_link", { url: htmlUrl });
+    const availableLength = EMBED_DESCRIPTION_LIMIT - truncationMessage.length;
+    cleaned = cleaned.slice(0, availableLength) + truncationMessage;
   }
 
   return cleaned;
@@ -109,19 +113,15 @@ export async function execute(
     const imageUrl = release.body ? extractImageUrl(release.body) : null;
 
     // 4. Clean the release notes for embed display
-    const description = release.body ? cleanReleaseNotes(release.body) : localizer(locale, "commands.update.no_notes");
+    const description = release.body
+      ? cleanReleaseNotes(release.body, locale, release.html_url)
+      : localizer(locale, "commands.update.no_notes");
 
     // 5. Build embed — matches the structure posted by the CI/CD webhook notification
     const embed = new EmbedBuilder()
-      .setTitle(
-        localizer(locale, "commands.update.title", {
-          version: release.tag_name,
-        }),
-      )
       .setDescription(description)
       .setColor(ColorCode.SUCCESS)
       .setTimestamp(new Date(release.created_at))
-      .setURL(release.html_url) // Title becomes a clickable link to the release
       .setFooter({
         text: localizer(locale, "commands.update.footer"),
       });

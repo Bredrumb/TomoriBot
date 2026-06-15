@@ -18,10 +18,9 @@ export function buildPersonaSpritePromptText(
   const lines = [
     `Available sprites for ${botName}:`,
     "",
-    `To use a sprite, ${botName} must start a response line with this exact format:`,
-    `\`${botName} ({sprite name}):\``,
+    `Use sprites to express emotions and identities better. To use a sprite, ${botName} must start a response line with this exact format:`,
+    `\`${botName} ({sprite label}):\``,
     "",
-    "Only use the sprite names listed below. Do not invent new sprite names.",
     `If no listed sprite fits, respond normally as \`${botName}:\`.`,
     "",
     "Valid sprite labels:",

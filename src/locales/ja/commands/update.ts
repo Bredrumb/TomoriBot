@@ -10,5 +10,6 @@ export default {
     fetch_error_description: `GitHubから最新リリース情報を取得できませんでした。しばらくお待ちください。または、[GitHubリリース](https://github.com/Bredrumb/TomoriBot/releases)ページを直接確認してください。`,
     applied_title: `適用済み`,
     applied_description: `このアップデートはすでに適用されています。問題がある場合は、[公式サポートDiscordサーバー](https://discord.gg/bjCfHm9QsB)でご相談ください。`,
+    truncated_link: `\n\n**[...内容が省略されました。すべての変更を表示するにはこのリンクをクリックしてください]({url})**`,
   },
 };

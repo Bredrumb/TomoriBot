@@ -207,6 +207,12 @@ export interface ProviderNativeVideoGenerationRequest {
   prompt: string;
   aspectRatio?: string;
   durationSeconds?: number;
+  /**
+   * Target frames-per-second for the generated video. Optional — most hosted providers
+   * (Google Veo, OpenRouter, Z.ai) do not expose an FPS control and silently ignore this.
+   * Primarily consumed by custom ComfyUI workflows via the `TOMORI_VIDEO_FPS` placeholder.
+   */
+  fps?: number;
   resolution?: ProviderNativeVideoResolution;
   endpointUrl?: string;
   referenceImages?: ProviderNativeVideoReference[];
