@@ -651,7 +651,7 @@ async function buildRuntimeParityContext(
   interaction: ChatInputCommandInteraction,
   tomoriState: TomoriState,
   provider: LiveProvider,
-): Promise<{ contextItems: StructuredContextItem[]; historyOutputTokens: number | null }> {
+): Promise<{ contextItems: StructuredContextItem[]; personaReplyCharLengths: number[] }> {
   const textChannel = interaction.channel;
   if (!textChannel?.isTextBased() || !("messages" in textChannel)) {
     throw new Error("Current channel does not support message history fetch");
@@ -890,20 +890,11 @@ async function buildRuntimeParityContext(
     }
   }
 
-  // Estimate the persona's typical reply size from this channel's own history: average the character
-  // length of the bot/persona (non-user) turns and convert to tokens. Null when the channel has no
-  // persona turns yet, so the caller can omit the history-based output band rather than show a guess.
-  const personaReplyLengths = simplifiedMessages
-    .filter((message) => message.authorType === "persona" && message.content)
-    .map((message) => message.content?.length ?? 0);
-  const historyOutputTokens =
-    personaReplyLengths.length > 0
-      ? charsToTokensText(
-          Math.round(personaReplyLengths.reduce((sum, length) => sum + length, 0) / personaReplyLengths.length),
-        )
-      : null;
+  const personaReplyCharLengths = simplifiedMessages
+    .filter((m) => m.authorType === "persona" && m.content)
+    .map((m) => m.content?.length ?? 0);
 
-  return { contextItems: contextSegments, historyOutputTokens };
+  return { contextItems: contextSegments, personaReplyCharLengths };
 }
 
 async function measureGoogleInputTokens(
@@ -1320,7 +1311,7 @@ async function sendLiveEstimateEmbed(
   interaction: ChatInputCommandInteraction,
   locale: string,
   measurement: LiveCostMeasurement,
-  historyOutputTokens: number | null,
+  sampleOutputTokens: number | null,
 ): Promise<void> {
   const inputCost = calculateCost(
     measurement.inputTokens,
@@ -1329,29 +1320,14 @@ async function sendLiveEstimateEmbed(
     measurement.outputPricePerMillion,
   );
 
+  // Single output band: sample-dialogue average when available, typical as fallback.
   const outputBands = [
-    {
-      titleKey: "commands.tool.estimate.cost.current_output_short_title",
-      outputTokens: EST_OUTPUT_SHORT,
-    },
-    {
-      titleKey: "commands.tool.estimate.cost.current_output_typical_title",
-      outputTokens: EST_OUTPUT_TYPICAL,
-    },
-    {
-      titleKey: "commands.tool.estimate.cost.current_output_long_title",
-      outputTokens: EST_OUTPUT_LONG,
-    },
-    // 4th band: empirical output size derived from this channel's own persona replies. Omitted entirely
-    // when the channel has no persona turns yet, so we never show a "your history" label without history.
-    ...(historyOutputTokens && historyOutputTokens > 0
-      ? [
-          {
-            titleKey: "commands.tool.estimate.cost.current_output_history_title",
-            outputTokens: historyOutputTokens,
-          },
-        ]
-      : []),
+    sampleOutputTokens && sampleOutputTokens > 0
+      ? {
+          titleKey: "commands.tool.estimate.cost.current_output_persona_average_title",
+          outputTokens: sampleOutputTokens,
+        }
+      : { titleKey: "commands.tool.estimate.cost.current_output_typical_title", outputTokens: EST_OUTPUT_TYPICAL },
   ];
 
   const fields = [
@@ -1607,11 +1583,11 @@ export async function execute(
     }
 
     let contextItems: StructuredContextItem[];
-    let historyOutputTokens: number | null = null;
+    let personaReplyCharLengths: number[] = [];
     try {
       const parity = await buildRuntimeParityContext(client, interaction, tomoriState, provider);
-      historyOutputTokens = parity.historyOutputTokens;
       contextItems = await resolveMediaForModel(parity.contextItems, tomoriState);
+      personaReplyCharLengths = parity.personaReplyCharLengths;
     } catch (contextError) {
       await log.error(
         "/tool estimate cost failed to build runtime-parity context",
@@ -1622,9 +1598,19 @@ export async function execute(
       return;
     }
 
+    // Merge sample dialogue out-turns with persona turns from channel history for a combined average.
+    const sampleDialogueCharLengths = (tomoriState.sample_dialogues_out ?? []).map((s) => s.length);
+    const allPersonaReplyLengths = [...sampleDialogueCharLengths, ...personaReplyCharLengths];
+    const sampleOutputTokens =
+      allPersonaReplyLengths.length > 0
+        ? charsToTokensText(
+            Math.round(allPersonaReplyLengths.reduce((sum, l) => sum + l, 0) / allPersonaReplyLengths.length),
+          )
+        : null;
+
     try {
       const measurement = await liveTokenCounters[provider](tomoriState, decryptedApiKey, contextItems);
-      await sendLiveEstimateEmbed(interaction, locale, measurement, historyOutputTokens);
+      await sendLiveEstimateEmbed(interaction, locale, measurement, sampleOutputTokens);
     } catch (countError) {
       await log.error(
         "/tool estimate cost live provider token counting failed; reporting live-count unavailability",

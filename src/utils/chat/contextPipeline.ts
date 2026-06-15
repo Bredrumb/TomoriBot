@@ -233,18 +233,20 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // Mirror personal memories: only surface public attributes for personas that have
   // actually spoken in the conversation window (are in syntheticUsers), plus any
   // co-triggered peers responding to the same message right now.
-  const personaNamesInHistory = new Set(
-    Array.from(history.syntheticUsers.values())
-      .filter((u) => u.type === "persona")
-      .map((u) => u.displayName.toLowerCase()),
+  // Use ID-based matching so sprite-decorated display names (e.g. "Tomori (mad)")
+  // don't break detection — syntheticUsers keys are already persona_id strings.
+  const personaIdsInHistory = new Set(
+    Array.from(history.syntheticUsers.entries())
+      .filter(([, u]) => u.type === "persona")
+      .map(([id]) => Number.parseInt(id, 10))
+      .filter((id) => !Number.isNaN(id)),
   );
   const publicPersonaAttributes = turn.allPersonas
     .filter(
       (persona) =>
         typeof persona.persona_id === "number" &&
         persona.persona_id !== effectivePersona.persona_id &&
-        (personaNamesInHistory.has(persona.persona_nickname.toLowerCase()) ||
-          triggeredPersonaIdSet.has(persona.persona_id)),
+        (personaIdsInHistory.has(persona.persona_id) || triggeredPersonaIdSet.has(persona.persona_id)),
     )
     .map((persona) => ({
       personaId: persona.persona_id as number,

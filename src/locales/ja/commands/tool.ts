@@ -18,14 +18,12 @@ export default {
         current_input_title: `計測済み入力トークン（現在のコンテキスト）`,
         current_input_value: `**入力:** {inputTokens} トークン
 **入力コストのみ:** 1トリガーあたり約 {inputCost}`,
-        current_output_short_title: `推定出力: 短め`,
         current_output_typical_title: `推定出力: 標準`,
-        current_output_long_title: `推定出力: 長め`,
-        current_output_history_title: `推定出力: このチャンネルの平均`,
+        current_output_persona_average_title: `推定出力: ペルソナ平均`,
         current_output_band_value: `**出力推定:** {outputTokens} トークン
 **合計推定:** {totalTokens} トークン
 **費用:** 1トリガーあたり約 {costPerMessage}（100トリガーあたり約 {costPer100}）`,
-        current_footer: `入力トークンは、ライブ計測に対応したプロバイダーでのみプロバイダー計測値になります。出力トークンは推定値です。「このチャンネルの平均」バンドは、ここでの直近のペルソナ返信の平均文字数から算出しています。思考トークンが課金対象でも履歴には表示されない推論モデルでは、過小評価になる場合があります。`,
+        current_footer: `入力トークンは、ライブ計測に対応したプロバイダーでのみプロバイダー計測値になります。出力トークンは推定値です。「ペルソナ平均」バンドは、ペルソナのサンプルダイアログ返信とこのチャンネルの直近ペルソナ発言を合算して平均します。どちらも存在しない場合は、標準の推定値にフォールバックします。`,
         no_cost_provider_description: `現在のプロバイダーには費用がありません`,
         unavailable_description: `現在のプロバイダー（**{provider}**）ではライブ費用見積もりを利用できません。`,
         fallback_notice_title: `ライブ計測を利用できません`,

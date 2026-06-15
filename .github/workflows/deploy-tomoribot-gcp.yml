@@ -745,9 +745,12 @@ jobs:
           chunkCount=$(cat discord_chunk_count.txt)
 
           hasImage=false
+          imageFile=""
           if [ -n "$IMAGE_NAME" ]; then
             imageUrl="https://github.com/${{ github.repository }}/raw/release/.github/release/v$VERSION/$IMAGE_NAME"
-            if curl -sL --max-time 30 "$imageUrl" -o "release-post-image.png" && [ -s "release-post-image.png" ]; then
+            # Preserve the real extension (e.g. .webp) so Discord renders the attachment as the post's preview image
+            imageFile="release-post-image.${IMAGE_NAME##*.}"
+            if curl -sL --max-time 30 "$imageUrl" -o "$imageFile" && [ -s "$imageFile" ]; then
               hasImage=true
             fi
           fi
@@ -763,7 +766,7 @@ jobs:
 
           if [ "$hasImage" = true ]; then
             firstPayload=$(jq -n --arg content "$firstChunk" --arg thread_name "$threadTitle" '{content: $content, thread_name: $thread_name}')
-            response=$(curl -s -w "\n%{http_code}" -X POST -F "payload_json=$firstPayload" -F "files[0]=@release-post-image.png" "${discordWebhookUrl}?wait=true")
+            response=$(curl -s -w "\n%{http_code}" -X POST -F "payload_json=$firstPayload" -F "files[0]=@$imageFile" "${discordWebhookUrl}?wait=true")
           else
             firstPayload=$(jq -n --arg content "$firstChunk" --arg thread_name "$threadTitle" '{content: $content, thread_name: $thread_name}')
             response=$(curl -s -w "\n%{http_code}" -X POST -H "Content-Type: application/json" -d "$firstPayload" "${discordWebhookUrl}?wait=true")

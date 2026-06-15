@@ -72,9 +72,17 @@ preset with the same lineage; customized files import as independent copies.
 
 ```bash
 bun run check-seed-catalogs # seed catalog invariants
+bun run check-media-size    # avatar/sprite art must be under 1 MiB (ships to Discord)
 bun run check        # TypeScript strict mode
 bun run lint         # Biome formatting
 ```
+
+Persona avatars and sprites are uploaded to Discord at seed time, so keep each
+image under the `check-media-size` budget (default 1 MiB, `MEDIA_SIZE_LIMIT_BYTES`).
+Run `bun run compress-media` to fix oversized art automatically: it re-encodes
+losslessly and downscales (long-edge cap `MEDIA_MAX_DIMENSION`, default 768px) only
+when lossless alone cannot fit. `bun run vl` rejects oversized files, so run the
+compressor before committing new art.
 
 Then run a local seed against a dev database and verify the preset appears correctly under `/persona`.
 

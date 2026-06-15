@@ -865,14 +865,6 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 - Test changes by chatting, iterate until it feels right
 - Export your persona to back it up or share with other servers!`,
     },
-    updates: {
-      description: `View the latest TomoriBot release notes`,
-      title: `TomoriBot {version} Released!`,
-      no_notes: `No release notes available for this version.`,
-      footer: `Updates may be outdated. Check \`/support discord\` for the latest releases and updates.`,
-      fetch_error_title: `Unable to Fetch Latest Release`,
-      fetch_error_description: `Something went wrong while fetching the latest release information from GitHub. Please try again later or check the [GitHub Releases](https://github.com/Bredrumb/TomoriBot/releases) page directly.`,
-    },
     mcp: {
       description: `Learn how to add and manage MCP tool servers`,
       title: `MCP Server Setup Guide`,

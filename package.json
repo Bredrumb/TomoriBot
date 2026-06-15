@@ -28,6 +28,8 @@
     "prune-locales": "bun run scripts/devtools/pruneLocaleKeys.ts",
     "find-stale-translations": "bun run scripts/devtools/findStaleTranslations.ts",
     "check-limits": "bun run scripts/checks/checkDiscordLimits.ts",
+    "check-media-size": "bun run scripts/checks/checkMediaSize.ts",
+    "compress-media": "bun run scripts/devtools/compressMedia.ts",
     "audit-keys": "bun run scripts/devtools/auditKeyVersions.ts",
     "audit-sql": "bun run scripts/checks/audit_sql.ts",
     "rotate-keys": "bun run scripts/devtools/rotateAllKeys.ts",

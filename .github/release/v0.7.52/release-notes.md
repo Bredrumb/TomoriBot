@@ -1,6 +1,6 @@
 ## Hatsu Public Release Edition
 
-![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.52/public-release-0752.png)
+![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.52/public-release-0752.webp)
 
 ###  [TomoriBot Invite Link](https://discord.com/oauth2/authorize?client_id=841644102059556915)
 

@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import type { ChatInputCommandInteraction, Client, SlashCommandBuilder } from "discord.js";
 import { EmbedBuilder } from "discord.js";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
@@ -26,11 +26,11 @@ interface GitHubRelease {
 }
 
 /**
- * Configure the /help updates subcommand.
+ * Configure the /update root command.
  * Posts the latest TomoriBot release notes as a public embed.
  */
-export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("updates").setDescription(localizer("en-US", "commands.help.updates.description"));
+export const configureCommand = (command: SlashCommandBuilder) =>
+  command.setName("update").setDescription(localizer("en-US", "commands.update.description"));
 
 /**
  * Extracts the first markdown image URL from release notes.
@@ -66,7 +66,7 @@ function cleanReleaseNotes(body: string): string {
 }
 
 /**
- * Execute the /help updates command.
+ * Execute the /update command.
  * Fetches the latest release from GitHub's public API and posts it as a
  * public embed in the current channel — mirroring the Discord webhook
  * notification sent by the CI/CD pipeline on deploy.
@@ -95,8 +95,8 @@ export async function execute(
     // 2. Surface API errors (404 = no releases yet, 429 = rate limited, etc.)
     if (!response.ok) {
       await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.help.updates.fetch_error_title",
-        descriptionKey: "commands.help.updates.fetch_error_description",
+        titleKey: "commands.update.fetch_error_title",
+        descriptionKey: "commands.update.fetch_error_description",
         color: ColorCode.ERROR,
       });
       return;
@@ -109,14 +109,12 @@ export async function execute(
     const imageUrl = release.body ? extractImageUrl(release.body) : null;
 
     // 4. Clean the release notes for embed display
-    const description = release.body
-      ? cleanReleaseNotes(release.body)
-      : localizer(locale, "commands.help.updates.no_notes");
+    const description = release.body ? cleanReleaseNotes(release.body) : localizer(locale, "commands.update.no_notes");
 
     // 5. Build embed — matches the structure posted by the CI/CD webhook notification
     const embed = new EmbedBuilder()
       .setTitle(
-        localizer(locale, "commands.help.updates.title", {
+        localizer(locale, "commands.update.title", {
           version: release.tag_name,
         }),
       )
@@ -125,7 +123,7 @@ export async function execute(
       .setTimestamp(new Date(release.created_at))
       .setURL(release.html_url) // Title becomes a clickable link to the release
       .setFooter({
-        text: localizer(locale, "commands.help.updates.footer"),
+        text: localizer(locale, "commands.update.footer"),
       });
 
     // 6. Attach the release image if one was found in the notes
@@ -133,18 +131,24 @@ export async function execute(
       embed.setImage(imageUrl);
     }
 
-    // 7. Post the embed publicly to the channel
-    await interaction.editReply({ embeds: [embed] });
+    // 7. Build the trailing "already applied" embed
+    const appliedEmbed = new EmbedBuilder()
+      .setTitle(localizer(locale, "commands.update.applied_title"))
+      .setDescription(localizer(locale, "commands.update.applied_description"))
+      .setColor(ColorCode.INFO);
+
+    // 8. Post both embeds publicly to the channel
+    await interaction.editReply({ embeds: [embed, appliedEmbed] });
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
       metadata: {
-        commandName: "/help updates",
+        commandName: "/update",
         guildDiscordId: interaction.guild?.id,
       },
     };
-    await log.error("Error executing /help updates command", error as Error, context);
+    await log.error("Error executing /update command", error as Error, context);
 
     // replyInfoEmbed detects the deferred state and uses editReply automatically
     try {
@@ -154,7 +158,7 @@ export async function execute(
         color: ColorCode.ERROR,
       });
     } catch (replyError) {
-      log.error("Failed to send error reply for /help updates", replyError, context);
+      log.error("Failed to send error reply for /update", replyError, context);
     }
   }
 }

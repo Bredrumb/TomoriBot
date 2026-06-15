@@ -1,6 +1,6 @@
 # v0.7.950 | Mix-and-Matched Edition
   
-![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.950/tomowical.png)
+![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.950/tomowical.webp)
 
 Jo-Ah-Yo! Jo-Ah Yo!
 This major release focuses on making TomoriBot more flexible in using providers with highlights including:

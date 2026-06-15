@@ -1,6 +1,6 @@
 ## Image(de)Generation Edition
 
-![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.67/artboard.png)
+![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.67/artboard.webp)
 
 On the 6th day of Christmas, Tomori sent to me
 > Hey dad can you give me imagegen please?

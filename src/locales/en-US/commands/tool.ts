@@ -18,14 +18,12 @@ export default {
         current_input_title: `Measured Input Tokens (Current Context)`,
         current_input_value: `**Input:** {inputTokens} tokens
 **Input cost only:** ~{inputCost} per trigger`,
-        current_output_short_title: `Estimated Output: Short`,
         current_output_typical_title: `Estimated Output: Typical`,
-        current_output_long_title: `Estimated Output: Long`,
-        current_output_history_title: `Estimated Output: This Channel's Average`,
+        current_output_persona_average_title: `Estimated Output: Persona Average`,
         current_output_band_value: `**Output estimate:** {outputTokens} tokens
 **Total estimate:** {totalTokens} tokens
 **Cost:** ~{costPerMessage} per trigger (~{costPer100} per 100 triggers)`,
-        current_footer: `Input token counts are provider-measured only for providers with live counting support. Output token counts are estimated. The "This Channel's Average" band is derived from the average length of recent persona replies here — it can undercount reasoning/thinking models, whose hidden thinking tokens are billed but never appear in the visible history.`,
+        current_footer: `Input token counts are provider-measured only for providers with live counting support. Output token counts are estimated. The "Persona Average" band combines the persona's sample dialogue replies and recent persona turns in this channel. Falls back to a typical estimate when neither source is available.`,
         no_cost_provider_description: `Current provider does not have costs`,
         unavailable_description: `Live cost estimation is not available for the current provider (**{provider}**).`,
         fallback_notice_title: `Live Counting Unavailable`,

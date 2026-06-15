@@ -878,14 +878,6 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - チャットして変更をテストし、しっくりくるまで繰り返す
 - ペルソナをエクスポートしてバックアップするか、他のサーバーと共有！`,
     },
-    updates: {
-      description: `TomoriBotの最新リリース情報を表示`,
-      title: `TomoriBot {version} リリース！`,
-      no_notes: `このバージョンのリリースノートはありません。`,
-      footer: `更新情報が古い可能性があります。最新のリリースと更新は \`/support discord\` を確認してください。`,
-      fetch_error_title: `最新リリース情報の取得に失敗`,
-      fetch_error_description: `GitHubから最新リリース情報を取得できませんでした。しばらくお待ちください。または、[GitHubリリース](https://github.com/Bredrumb/TomoriBot/releases)ページを直接確認してください。`,
-    },
     mcp: {
       description: `MCPツールサーバーの追加と管理方法を学ぶ`,
       title: `MCPサーバーセットアップガイド`,

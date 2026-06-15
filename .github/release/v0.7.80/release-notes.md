@@ -1,6 +1,6 @@
 ## Multi-Personaz Edition
 
-![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.80/tomoriz.png)
+![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.80/tomoriz.webp)
 
 Hi everyone, Bredthony Rumbtano here, internet's busiest music nerd. Now it is time for a review of the new TomoriBot release, v0.7.80. Feelin' a light smiley ball on this one just from the sheer amount of new features, but I think TomoriBot could've cut some bloat off of here and saved it for a future release... anyways, hope you enjoy this new release and please report any bugs in GitHub or in the support Discord!
 
