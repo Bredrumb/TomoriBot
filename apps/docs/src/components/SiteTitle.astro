@@ -2,6 +2,7 @@
 // Custom SiteTitle that injects /tomoricon.ico from public/ into the nav header.
 // We bypass the standard `logo` config (which requires an importable image module)
 // and reference the .ico directly as a plain <img> URL instead.
+// biome-ignore lint/correctness/noUnusedVariables: Used in Astro template
 const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
 ---
 
