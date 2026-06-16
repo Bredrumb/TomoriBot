@@ -161,6 +161,10 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
         const processedChunk = provider.processChunk(rawChunk);
         appendChunkThoughts(state, processedChunk.thoughts);
+        // Record the OpenRouter serving backend (first non-empty wins) for the thought log.
+        if (processedChunk.servingProvider && !state.servingProvider) {
+          state.servingProvider = processedChunk.servingProvider;
+        }
         if (processedChunk.type === "done" && processedChunk.metadata) {
           terminalDoneMetadata = processedChunk.metadata;
         }

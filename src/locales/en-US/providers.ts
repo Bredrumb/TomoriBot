@@ -36,6 +36,7 @@ export default {
       fetched_content_field: `Fetched Content`,
       footer: `Provider: {provider} | Model: {model}`,
       footer_with_generation_time: `Provider: {provider} | Model: {model} | Generation time: {generation_time}`,
+      provider_with_serving: `{provider} via {serving_provider}`,
     },
     message_interaction: {
       reply_context_author: `Replying to {user}`,

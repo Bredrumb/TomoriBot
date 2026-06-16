@@ -37,7 +37,34 @@ The method also handles two additional responsibilities:
   thought signatures (for example Google/Gemini `part.thought`, `thoughtSummary`, and
   `thoughtSignature` fields), these are extracted into `ThoughtLogEntry[]` on the returned chunk
   so the orchestrator can accumulate them into `state.thoughtSummarySegments` /
-  `state.thoughtRawSegments` independently of visible text.
+  `state.thoughtRawSegments` independently of visible text. For OpenRouter, the upstream serving
+  backend (the chunk-level `provider` field, e.g. `minimax-cn`) is also carried on
+  `ProcessedChunk.servingProvider`, recorded into `state.servingProvider` (first non-empty wins), and
+  rendered in the thought-log footer as `Provider: openrouter via <backend>` — so a backend that
+  bleeds reasoning into content can be identified and pinned/avoided.
+
+- **Leaked reasoning-tag guardrails** — the clean path is the provider (or OpenRouter) returning
+  reasoning in a dedicated field. When a backend instead leaks reasoning into `delta.content`,
+  OpenAI-compatible adapters (`openrouter`, `openaiCompatible`) run two worst-case guards over the
+  text delta: `ThinkBlockContentStripper` (reroutes `<think>…</think>` blocks — including stray
+  closers split across chunks — into `delta.reasoning`) and `ReasoningContentSpillGuard` (catches a
+  *tagless* reasoning tail glued to the first visible delta — e.g. `must do.Hello!`). The spill guard
+  only fires on the first visible content after reasoning, when that content starts lowercase and a
+  sentence boundary is **glued** (no following whitespace) onto an answer-start char (uppercase /
+  caseless letter, emoji, or quote/bracket). A *spaced* boundary is treated as the model's own prose
+  and emitted untouched; the missing space is the fingerprint of a backend concatenating its
+  reasoning buffer onto content with no separator (so `wait. Actually` is two real sentences, but
+  `wait.Actually` is a seam — word count is irrelevant, only the missing space). Dotted code
+  identifiers are protected by an inline-code guard: a boundary preceded by an odd number of
+  backticks (inside a `` `obj.Method` `` span, or a still-open one mid-stream) is left intact, as is
+  code at the very start of content (a leading backtick is not lowercase). Bare, non-backticked
+  identifiers in prose are accepted collateral of the aggressiveness. The **shape** of a think tag is
+  defined once in
+  `src/providers/utils/reasoningTags.ts` and is namespace-aware (`<think>`, `<mm:think>`,
+  `<ns:think>`); the stripper, the Discord-layer `bufferManager`, and the final `cleanLLMOutput`
+  sweep all consume it. Adding a new vendor namespace is a one-line change there. Note: API stop
+  strings (`stopStrings.ts`) are matched literally by the provider, so namespaced close tags must be
+  added per model rule explicitly rather than via the shared pattern.
 
 ## Input
 

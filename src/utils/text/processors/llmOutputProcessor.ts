@@ -1,5 +1,6 @@
 import { log } from "@/utils/misc/logger";
 import { applyUncensorOutputTransforms } from "@/utils/text/uncensor";
+import { REASONING_TAG_GLOBAL_RE } from "@/providers/utils/reasoningTags";
 import { escapeRegExp } from "./regexUtils";
 import { replaceMentionHandles } from "./mentionProcessor";
 
@@ -346,7 +347,7 @@ export function cleanLLMOutput(
     .replace(/(^|\n)-#[ \t]*\n+/g, "$1-# ")
     .replace(/<\|im_end\|>(\s*)$/, "")
     .replace(/<\|file_separator\|>(\s*)$/, "")
-    .replace(/<\/?think>/g, "")
+    .replace(REASONING_TAG_GLOBAL_RE, "")
     .replace(/\*\*<(.*?)>\*\*/g, "<$1>")
     .replace(/\*<(.*?)>\*/g, "<$1>")
     .replace(/<([a-zA-Z0-9_]+)>[\s\S]*?<\/\1>/g, "")

@@ -86,6 +86,8 @@ export interface StreamState {
   prefillMatchFailed: boolean; // Whether prefill matching failed (no stripping)
   thoughtSummarySegments: string[];
   thoughtRawSegments: string[];
+  /** OpenRouter-only: upstream serving provider/endpoint (e.g. "minimax-cn") for thought logs. */
+  servingProvider?: string;
   firstReplyUrl?: string;
   /**
    * Holds orphan punctuation segments (e.g. a lone "..." flushed on its own line)

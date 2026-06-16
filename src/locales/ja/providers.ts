@@ -36,6 +36,7 @@ export default {
       fetched_content_field: `取得コンテンツ`,
       footer: `プロバイダー: {provider} | モデル: {model}`,
       footer_with_generation_time: `プロバイダー: {provider} | モデル: {model} | 生成時間: {generation_time}`,
+      provider_with_serving: `{provider}（{serving_provider}経由）`,
     },
     message_interaction: {
       reply_context_author: `返信先: {user}`,
