@@ -28,6 +28,7 @@ const MAX_CONSECUTIVE_TOOL_ERRORS = parseIntegerEnvFlag(process.env.BOT_MAX_CONS
 const STREAM_SDK_CALL_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120000, 10000);
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
+const TOOL_FAILURE_NOTICE_LIMIT = 1800;
 
 export interface ToolLoopParams {
   context: ChatTurnContext;
@@ -347,6 +348,10 @@ async function executeToolCall(
   }
   log.info(`Function call completed: ${functionName} (${Date.now() - startedAt}ms)`);
 
+  if (!toolResult.success) {
+    await emitFailedToolCallThoughtLog(toolContext, functionName, functionCall.args ?? {}, toolResult);
+  }
+
   // 2. When deliberate-tool-mode admitted the tool via a specific trigger,
   // post a hidden notice (thought-log only) explaining why it fired.
   const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
@@ -394,6 +399,66 @@ async function executeToolCall(
       imageMetadata: toolResult.imageMetadata,
     },
   };
+}
+
+async function emitFailedToolCallThoughtLog(
+  context: ToolContext,
+  functionName: string,
+  args: Record<string, unknown>,
+  toolResult: ToolResult,
+): Promise<void> {
+  const noticeContext: ToolContext = {
+    ...context,
+    suppressProgressNotices: false,
+  };
+
+  await routeHiddenToolNotice(
+    noticeContext,
+    {
+      color: ColorCode.ERROR,
+      titleKey: "genai.thought_log.title",
+      description: buildFailedToolCallDescription(functionName, args, toolResult),
+    },
+    "Failed tool call thought-log notice",
+  );
+}
+
+function buildFailedToolCallDescription(
+  functionName: string,
+  args: Record<string, unknown>,
+  toolResult: ToolResult,
+): string {
+  const reason = toolResult.message || toolResult.error || "Tool execution failed without specific error.";
+  const details = safeStringifyToolFailureDetails({
+    args,
+    data: toolResult.data,
+  });
+  const lines = [`Tool \`${functionName}\` failed.`, `Reason: ${reason}`];
+  if (details) {
+    lines.push("", "Details:", codeBlock(truncateToolFailureNotice(details)));
+  }
+
+  return lines.join("\n");
+}
+
+function safeStringifyToolFailureDetails(value: unknown): string | undefined {
+  try {
+    const json = JSON.stringify(value, null, 2);
+    return json === undefined || json === "{}" ? undefined : json;
+  } catch {
+    return String(value);
+  }
+}
+
+function truncateToolFailureNotice(value: string): string {
+  if (value.length <= TOOL_FAILURE_NOTICE_LIMIT) {
+    return value;
+  }
+  return `${value.slice(0, TOOL_FAILURE_NOTICE_LIMIT - 3)}...`;
+}
+
+function codeBlock(value: string): string {
+  return `\`\`\`json\n${value.replace(/```/g, "`\u200b``")}\n\`\`\``;
 }
 
 function handleEnhancedContextRestart(params: ToolLoopParams, data: unknown): boolean {
