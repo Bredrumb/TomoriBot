@@ -215,6 +215,12 @@ export default defineConfig({
       description: "Developer documentation for TomoriBot",
       // Served from apps/docs/public/tomoricon.ico at the site root as /tomoricon.ico.
       favicon: "/tomoricon.ico",
+      head: [
+        {
+          tag: "meta",
+          attrs: { property: "og:image", content: "https://docs.tomoribot.app/tomoricon.png" },
+        },
+      ],
       customCss: ["/src/styles/custom.css"],
       // SiteTitle override renders /tomoricon.ico directly as a plain <img> in the nav header.
       // The standard `logo` config can't reference public/ files because it generates a Vite

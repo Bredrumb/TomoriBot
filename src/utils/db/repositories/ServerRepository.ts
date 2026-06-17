@@ -1699,9 +1699,12 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Server-scoped tables wiped in preserve-personas mode.
    *
-   * Maintenance rule: when a new table is added with a
-   * `REFERENCES servers(server_id)` FK that is NOT inside the persona subtree
-   * AND is not intentionally preserved (like `server_memories`), add it here.
+   * Maintenance rule: only add a table here if it has a real `server_id`
+   * column referencing `servers(server_id)` AND is not inside the persona
+   * subtree AND is not intentionally preserved (like `server_memories`).
+   * Every entry is wiped with `DELETE FROM <table> WHERE server_id = $1`, so a
+   * table WITHOUT a `server_id` column raises a Postgres
+   * `column "server_id" does not exist` error and aborts the whole transaction.
    *
    * Excluded by design:
    *  - `personas` and the persona subtree (`persona_*` tables) — preserved
@@ -1709,6 +1712,8 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    *  - `error_logs` — uses ON DELETE SET NULL; nuke leaves history intact
    *  - `discord_managed_webhooks` — keyed by `guild_disc_id` (handled separately)
    *  - `documents` — has nullable `persona_id`; serverwide rows handled separately
+   *  - Global seed catalogs (`nai_presets`, `system_prompt_presets`) — shared
+   *    across all servers, have NO `server_id` column; never wipe these.
    */
   private static readonly PRESERVE_MODE_WIPE_TABLES: readonly string[] = [
     // Server config tables
@@ -1746,7 +1751,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     "opt_api_keys",
     "api_key_rotation",
     "saved_provider_configs",
-    "nai_presets",
     // History / triggers / scheduling
     "conditioning_history",
     "reminders",
@@ -1762,7 +1766,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     "openrouter_image_model_registrations",
     "openrouter_video_model_registrations",
     // Misc server-scoped
-    "system_prompt_presets",
     "server_emojis",
     "server_stickers",
     "voice_samples",

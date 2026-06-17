@@ -50,11 +50,15 @@ The method also handles two additional responsibilities:
   closers split across chunks — into `delta.reasoning`) and `ReasoningContentSpillGuard` (catches a
   *tagless* reasoning tail glued to the first visible delta — e.g. `must do.Hello!`). The spill guard
   only fires on the first visible content after reasoning, when that content starts lowercase and a
-  sentence boundary is **glued** (no following whitespace) onto an answer-start char (uppercase /
-  caseless letter, emoji, or quote/bracket). A *spaced* boundary is treated as the model's own prose
-  and emitted untouched; the missing space is the fingerprint of a backend concatenating its
+  sentence boundary is **glued** (no following whitespace). It strips when EITHER the text after the
+  boundary looks like an answer start (uppercase / caseless letter, emoji, or quote/bracket — catches
+  `wait.Actually`) OR the fragment before the boundary is a multi-word clause (catches a casual
+  lowercase reply glued onto a reasoning tail, e.g. `g it out.hey master 👋`, where capitalization is
+  blind because the real reply is also lowercase). A *spaced* boundary is treated as the model's own
+  prose and emitted untouched; the missing space is the fingerprint of a backend concatenating its
   reasoning buffer onto content with no separator (so `wait. Actually` is two real sentences, but
-  `wait.Actually` is a seam — word count is irrelevant, only the missing space). Dotted code
+  `wait.Actually` is a seam). A single-word fragment glued to a lowercase continuation is left alone.
+  Dotted code
   identifiers are protected by an inline-code guard: a boundary preceded by an odd number of
   backticks (inside a `` `obj.Method` `` span, or a still-open one mid-stream) is left intact, as is
   code at the very start of content (a leading backtick is not lowercase). Bare, non-backticked

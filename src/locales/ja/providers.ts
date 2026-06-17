@@ -127,6 +127,9 @@ export default {
       temperature_top_p_conflict_message: `Anthropic は Temperature と Top-P を同時に受け付けません。\`/config parameters\` を使って、そのプロバイダーの **Temperature** か **Top P** のどちらかを調整してください。`,
       unknown_default_message: `Anthropicとの通信中に予期しないエラーが発生しました。`,
     },
+    nvidia: {
+      "404_default_message": `リクエストされた NVIDIA NIM モデルが見つかりません。NVIDIAによって非推奨にされた可能性があります。\`/model text\` で別のモデルに切り替えてください。`,
+    },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname}が新しいことを学びました！`,
       server_memory_learned_description: `サーバー記憶を保存しました:
