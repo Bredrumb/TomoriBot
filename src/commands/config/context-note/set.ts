@@ -5,17 +5,19 @@
  *
  * Scopes:
  * - persona: Bound to a specific persona (persona picker shown first)
- * - global:  Server-wide fallback used when the active persona has no note
+ * - channel: Bound to a specific Discord channel (channel option on the slash command)
+ * - global:  Server-wide fallback used when neither the active persona nor the channel has a note
  *
- * At inference, the active persona's note takes priority over the global note.
+ * Persona and channel notes are additive — both are injected when set.
  * Submitting a blank note clears (removes) the stored value.
  */
 
 import type { ButtonInteraction, ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
-import { MessageFlags, TextInputStyle } from "discord.js";
+import { ChannelType, MessageFlags, TextInputStyle } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { configRepository, personaRepository } from "@/utils/db/repositories";
+import { channelContextNoteRepo } from "@/utils/db/repositories/ChannelContextNoteRepository";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -48,9 +50,25 @@ export const configureSubcommand = (subcommand: import("discord.js").SlashComman
             value: "persona",
           },
           {
+            name: localizer("en-US", "commands.config.context-note.set.channel_option"),
+            value: "channel",
+          },
+          {
             name: localizer("en-US", "commands.config.context-note.set.global_option"),
             value: "global",
           },
+        ),
+    )
+    .addChannelOption((option) =>
+      option
+        .setName("channel")
+        .setDescription(localizer("en-US", "commands.config.context-note.set.channel_description"))
+        .setRequired(false)
+        .addChannelTypes(
+          ChannelType.GuildText,
+          ChannelType.GuildAnnouncement,
+          ChannelType.PublicThread,
+          ChannelType.PrivateThread,
         ),
     );
 
@@ -93,15 +111,16 @@ export async function execute(
   }
 
   // 3. Read required scope option
-  const scope = interaction.options.getString("scope", true) as "persona" | "global";
+  const scope = interaction.options.getString("scope", true) as "persona" | "channel" | "global";
 
   // 4. Declare interaction handles outside try-catch for fallback error replies
   let modalHost: ChatInputCommandInteraction | ButtonInteraction = interaction;
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   let selectedPersona: TomoriState | null = null;
+  let selectedChannelDiscId: string | null = null;
 
   try {
-    // 5. Persona scope: show paginated persona picker first
+    // 5a. Persona scope: show paginated persona picker first
     if (scope === "persona") {
       const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
 
@@ -115,8 +134,8 @@ export async function execute(
         return;
       }
 
-      // 5a. Display paginated persona picker; preserveSelectedInteraction=true
-      //     returns the unacknowledged ButtonInteraction so we can show a modal on it.
+      // Display paginated persona picker; preserveSelectedInteraction=true returns
+      // the unacknowledged ButtonInteraction so we can show a modal on it.
       const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
         personas: allPersonas,
         color: ColorCode.INFO,
@@ -128,13 +147,28 @@ export async function execute(
         return;
       }
 
-      // 5b. Hand the ButtonInteraction to promptWithRawModal instead of ChatInputCommandInteraction
+      // Hand the ButtonInteraction to promptWithRawModal instead of ChatInputCommandInteraction
       modalHost = personaSelection.interaction;
       selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
 
       if (!selectedPersona?.persona_id) {
         return;
       }
+    }
+
+    // 5b. Channel scope: read the native channel option from the slash command
+    if (scope === "channel") {
+      const channelOption = interaction.options.getChannel("channel");
+      if (!channelOption) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.config.context-note.set.no_channel_title",
+          descriptionKey: "commands.config.context-note.set.no_channel_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      selectedChannelDiscId = channelOption.id;
     }
 
     // 6. Load existing values for pre-fill
@@ -144,6 +178,13 @@ export async function execute(
     if (scope === "persona" && selectedPersona) {
       existingNote = selectedPersona.context_note;
       existingDepth = selectedPersona.context_note_depth ?? 0;
+    } else if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
+      const existing = await channelContextNoteRepo.getChannelContextNote(
+        tomoriState.server_id,
+        selectedChannelDiscId,
+      );
+      existingNote = existing?.note ?? null;
+      existingDepth = existing?.depth ?? 0;
     } else {
       existingNote = tomoriState.config.context_note;
       existingDepth = tomoriState.config.context_note_depth ?? 0;
@@ -214,26 +255,47 @@ export async function execute(
     const isRemoving = !rawNote;
 
     // 11. Persist to the appropriate table
-    const persisted =
-      scope === "persona" && selectedPersona?.persona_id
-        ? await personaRepository.setContextNote(selectedPersona.persona_id, noteToStore, depthToStore)
-        : await configRepository.updateChatConfig(tomoriState.server_id, {
-            context_note: noteToStore,
-            context_note_depth: depthToStore,
-          });
+    let persisted: boolean;
+
+    if (scope === "persona" && selectedPersona?.persona_id) {
+      persisted = await personaRepository.setContextNote(selectedPersona.persona_id, noteToStore, depthToStore);
+    } else if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
+      if (noteToStore) {
+        persisted = await channelContextNoteRepo.setChannelContextNote(
+          tomoriState.server_id,
+          selectedChannelDiscId,
+          noteToStore,
+          depthToStore,
+        );
+      } else {
+        persisted = await channelContextNoteRepo.deleteChannelContextNote(
+          tomoriState.server_id,
+          selectedChannelDiscId,
+        );
+      }
+    } else {
+      persisted = await configRepository.updateChatConfig(tomoriState.server_id, {
+        context_note: noteToStore,
+        context_note_depth: depthToStore,
+      });
+    }
 
     if (!persisted) {
       throw new Error("Failed to persist context note");
     }
 
-    // 12. Invalidate cache AFTER the successful write
-    invalidateTomoriStateCache(serverId);
+    // 12. Invalidate tomori state cache AFTER the successful write (persona/global scopes)
+    if (scope !== "channel") {
+      invalidateTomoriStateCache(serverId);
+    }
 
     // 13. Reply with scoped success message
     const scopeLabel =
       scope === "persona" && selectedPersona
         ? selectedPersona.persona_nickname
-        : localizer(locale, "commands.config.context-note.set.global_option");
+        : scope === "channel" && selectedChannelDiscId
+          ? `<#${selectedChannelDiscId}>`
+          : localizer(locale, "commands.config.context-note.set.global_option");
 
     if (isRemoving) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -255,7 +317,7 @@ export async function execute(
     }
 
     log.info(
-      `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=${scope}${selectedPersona ? ` persona=${selectedPersona.persona_id}` : ""} depth=${depthToStore}`,
+      `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=${scope}${selectedPersona ? ` persona=${selectedPersona.persona_id}` : ""}${selectedChannelDiscId ? ` channel=${selectedChannelDiscId}` : ""} depth=${depthToStore}`,
     );
   } catch (error) {
     log.error("Failed to set context note:", error as Error);
