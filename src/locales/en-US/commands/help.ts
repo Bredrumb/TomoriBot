@@ -228,7 +228,7 @@ Transcription supports ~100 languages (auto-detected).`,
 - I also keep STM (short-term memory) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal stm\`)
 - Change what I call you using \`/personal nickname\`
 - Use \`/memory\` and \`/persona\` commands to manually add or remove memories and persona data
-- I can use server emojis and stickers more accurately after registration with \`/server initialize expressions\`
+- I can use server emojis and stickers more accurately after registration with \`/server expressions initialize\`
 - Full invisibility is available via \`/personal privacy\` if you want to be completely unseen by me
 - Learn more with \`/help memory\``,
       time_title: `Time Awareness`,
@@ -246,7 +246,7 @@ Transcription supports ~100 languages (auto-detected).`,
       expressions_description: `- I can use your server's custom emojis naturally in conversation (case-insensitive \`:name:\` syntax)
 - I can send stickers as part of my replies
 - I can react to messages with relevant emojis
-- Register emojis and stickers with \`/server initialize expressions\` for higher accuracy`,
+- Register emojis and stickers with \`/server expressions initialize\` for higher accuracy`,
       documents_title: `Document Knowledge Base`,
       documents_description: `- Upload text, PDF, or Markdown files as server knowledge using \`/memory document add\`
 - Extract channel history into searchable knowledge with \`/memory history import\`

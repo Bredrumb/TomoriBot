@@ -1,5 +1,5 @@
 /**
- * /server initialize expressions command
+ * /server expressions initialize command
  *
  * Uses LLM vision with structured output to automatically analyze and classify
  * all custom emojis and stickers in a Discord server, generating emotion keys
@@ -32,12 +32,12 @@ import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
-    .setName("expressions")
-    .setDescription(localizer("en-US", "commands.server.initialize.expressions.description"))
+    .setName("initialize")
+    .setDescription(localizer("en-US", "commands.server.expressions.initialize.description"))
     .addBooleanOption((option) =>
       option
         .setName("overwrite")
-        .setDescription(localizer("en-US", "commands.server.initialize.expressions.overwrite_description"))
+        .setDescription(localizer("en-US", "commands.server.expressions.initialize.overwrite_description"))
         .setRequired(false),
     );
 
@@ -113,7 +113,7 @@ Return results in the specified JSON format.`;
 }
 
 /**
- * Execute the /server initialize expressions command
+ * Execute the /server expressions initialize command
  *
  * @param _client - Discord client instance
  * @param interaction - Command interaction
@@ -197,10 +197,10 @@ export async function execute(
           await interaction.editReply({
             embeds: [
               {
-                title: localizer(locale, "commands.server.initialize.expressions.model_incompatible_title"),
+                title: localizer(locale, "commands.server.expressions.initialize.model_incompatible_title"),
                 description: localizer(
                   locale,
-                  "commands.server.initialize.expressions.model_incompatible_description",
+                  "commands.server.expressions.initialize.model_incompatible_description",
                   {
                     model_name: effectiveModelName,
                     missing_capability: missingCapability,
@@ -215,8 +215,8 @@ export async function execute(
           await interaction.editReply({
             embeds: [
               {
-                title: localizer(locale, "commands.server.initialize.expressions.vision_fallback_title"),
-                description: localizer(locale, "commands.server.initialize.expressions.vision_fallback_description", {
+                title: localizer(locale, "commands.server.expressions.initialize.vision_fallback_title"),
+                description: localizer(locale, "commands.server.expressions.initialize.vision_fallback_description", {
                   chat_model: effectiveModelName,
                   vision_model: visionLlm.llm_codename,
                 }),
@@ -288,8 +288,8 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           {
-            title: localizer(locale, "commands.server.initialize.expressions.already_initialized_title"),
-            description: localizer(locale, "commands.server.initialize.expressions.already_initialized_description"),
+            title: localizer(locale, "commands.server.expressions.initialize.already_initialized_title"),
+            description: localizer(locale, "commands.server.expressions.initialize.already_initialized_description"),
             color: hexToNumber(ColorCode.INFO),
           },
         ],
@@ -388,7 +388,7 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           {
-            description: localizer(locale, "commands.server.initialize.expressions.progress_analyzing_batch", {
+            description: localizer(locale, "commands.server.expressions.initialize.progress_analyzing_batch", {
               batch_number: batchNumber,
               batch_size: images.length,
               remaining,
@@ -481,8 +481,8 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           {
-            title: localizer(locale, "commands.server.initialize.expressions.no_matches_title"),
-            description: localizer(locale, "commands.server.initialize.expressions.no_matches_description"),
+            title: localizer(locale, "commands.server.expressions.initialize.no_matches_title"),
+            description: localizer(locale, "commands.server.expressions.initialize.no_matches_description"),
             color: hexToNumber(ColorCode.WARN),
           },
         ],
@@ -493,8 +493,8 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           {
-            title: localizer(locale, "commands.server.initialize.expressions.partial_success_title"),
-            description: localizer(locale, "commands.server.initialize.expressions.partial_success_description", {
+            title: localizer(locale, "commands.server.expressions.initialize.partial_success_title"),
+            description: localizer(locale, "commands.server.expressions.initialize.partial_success_description", {
               successful: totalProcessed,
               total: grandTotalUninitialized,
               failed,
@@ -508,8 +508,8 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           {
-            title: localizer(locale, "commands.server.initialize.expressions.success_title"),
-            description: localizer(locale, "commands.server.initialize.expressions.success_description", {
+            title: localizer(locale, "commands.server.expressions.initialize.success_title"),
+            description: localizer(locale, "commands.server.expressions.initialize.success_description", {
               emoji_count: totalEmojiProcessed,
               sticker_count: totalStickerProcessed,
               total: totalProcessed,
@@ -527,12 +527,12 @@ export async function execute(
       personaId: tomoriState?.persona_id ?? null,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "server initialize expressions",
+        command: "server expressions initialize",
         guildId: interaction.guild.id,
       },
     };
 
-    await log.error("Error executing /server initialize expressions command", error as Error, context);
+    await log.error("Error executing /server expressions initialize command", error as Error, context);
 
     // 19. Show error message to user
     await interaction.editReply({

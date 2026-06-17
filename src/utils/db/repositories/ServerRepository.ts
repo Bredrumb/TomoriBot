@@ -1694,6 +1694,64 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     return { emojiCount, stickerCount };
   }
 
+  /**
+   * Manually overwrite a single emoji's emotion classification and usage description.
+   * Used by `/server expressions edit`. Unlike {@link initializeExpressions}, this
+   * writes unconditionally (no "still uninitialized" guard) because the invoking user
+   * is deliberately correcting an existing classification.
+   *
+   * @param serverId - Internal server DB ID
+   * @param emojiDiscId - Discord emoji snowflake identifying the row to update
+   * @param emotionKey - New emotion key (must be one of the 28 valid EmotionKey values)
+   * @param description - New usage/description text surfaced to the model
+   * @returns True if a matching emoji row was updated, false otherwise
+   */
+  async updateEmojiExpression(
+    serverId: number,
+    emojiDiscId: string,
+    emotionKey: string,
+    description: string,
+  ): Promise<boolean> {
+    const rows = await sql<Array<{ emoji_disc_id: string }>>`
+      UPDATE server_emojis
+      SET
+        emotion_key = ${emotionKey},
+        emoji_desc  = ${description},
+        updated_at  = CURRENT_TIMESTAMP
+      WHERE server_id = ${serverId} AND emoji_disc_id = ${emojiDiscId}
+      RETURNING emoji_disc_id
+    `;
+    return rows.length > 0;
+  }
+
+  /**
+   * Manually overwrite a single sticker's emotion classification and usage description.
+   * Sibling of {@link updateEmojiExpression} for the server_stickers table.
+   *
+   * @param serverId - Internal server DB ID
+   * @param stickerDiscId - Discord sticker snowflake identifying the row to update
+   * @param emotionKey - New emotion key (must be one of the 28 valid EmotionKey values)
+   * @param description - New usage/description text surfaced to the model
+   * @returns True if a matching sticker row was updated, false otherwise
+   */
+  async updateStickerExpression(
+    serverId: number,
+    stickerDiscId: string,
+    emotionKey: string,
+    description: string,
+  ): Promise<boolean> {
+    const rows = await sql<Array<{ sticker_disc_id: string }>>`
+      UPDATE server_stickers
+      SET
+        emotion_key  = ${emotionKey},
+        sticker_desc = ${description},
+        updated_at   = CURRENT_TIMESTAMP
+      WHERE server_id = ${serverId} AND sticker_disc_id = ${stickerDiscId}
+      RETURNING sticker_disc_id
+    `;
+    return rows.length > 0;
+  }
+
   // ── Nuke (full or persona-preserving wipe) ───────────────────────────────────
 
   /**
