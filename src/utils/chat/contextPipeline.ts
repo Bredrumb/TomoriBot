@@ -36,6 +36,7 @@ import {
   buildReplyReferenceContextAnnotation,
   createReactionContextBudgetState,
   findReplyContextTargetInMessage,
+  insertAtDialogueDepth,
   insertBeforeLatestDialoguePair,
   appendInjectedContextItems,
   mergeForcedMentions,
@@ -306,6 +307,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     lowerPriorityTailDirectives: contextBuild.lowerPriorityTailDirectives,
     tailDirectives: contextBuild.tailDirectives,
     uncensorDirective: contextBuild.uncensorDirective,
+    nudgeItem: contextBuild.nudgeItem,
+    nudgeInjectionDepth: contextBuild.nudgeInjectionDepth,
     messageIdMap,
   });
 
@@ -931,6 +934,8 @@ function appendTailDirectives(args: {
   lowerPriorityTailDirectives: string[];
   tailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: ChatTurnContext["contextItems"][number];
+  nudgeInjectionDepth?: number;
   messageIdMap?: MessageIdMap;
 }): ChatTurnContext["contextItems"] {
   const incoming = args.turn.lockedTurn.admission.incoming;
@@ -1038,6 +1043,13 @@ function appendTailDirectives(args: {
   const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriority);
   if (lowerPriorityTailMessage) {
     insertBeforeLatestDialoguePair(contextItems, lowerPriorityTailMessage);
+  }
+
+  // Inject the unified STM nudge at its configured dialogue depth (0 = tail). Done
+  // here — after dialogue history is assembled — so depth is measured against real
+  // conversation turns regardless of native vs. preset assembly.
+  if (args.nudgeItem) {
+    insertAtDialogueDepth(contextItems, args.nudgeItem, args.nudgeInjectionDepth ?? 0);
   }
 
   const combinedTailMessage = buildCombinedTailDirectiveMessage(tail);

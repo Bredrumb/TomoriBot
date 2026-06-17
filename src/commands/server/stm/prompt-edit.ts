@@ -1,9 +1,9 @@
 /**
  * Command: /server stm prompt-edit
- * Exposes the three user-customizable STM prompt strings (README decision 7):
+ * Exposes the two user-customizable STM prompt strings (README decision 7):
  *   - tool description  → what the update-STM tool advertises to the model
- *   - create-nudge      → injected when no STM exists yet but enough crude turns accrued
- *   - update-nudge      → injected (cadence-gated) to prompt a refresh of existing STM
+ *   - nudge             → the unified cadence-gated prompt that asks the model to
+ *                         create (no STM yet) or refresh (existing STM) its memory
  *
  * Each field is an OVERRIDE: leaving a box empty stores NULL, which makes the runtime
  * fall back to the systemPrompts.ts seed default for that field. Stored overrides flow
@@ -27,10 +27,11 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
+import { SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
+import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortTermMemoryTool";
 
 const MODAL_CUSTOM_ID = "server_stm_prompt_edit_modal";
 const TOOL_DESCRIPTION_ID = "stm_tool_description";
-const CREATE_NUDGE_ID = "stm_create_nudge";
 const UPDATE_NUDGE_ID = "stm_update_nudge";
 const PROMPT_MAX_LENGTH = 4000; // Discord text input character limit
 
@@ -80,11 +81,13 @@ export async function execute(
       return;
     }
 
-    // 3. Load any existing overrides to prefill the modal. We prefill ONLY with a stored
-    //    override (never the seed default) — that keeps "empty box == reset to default".
+    // 3. Load any existing overrides to prefill the modal. Each field shows the effective
+    //    content — the stored override if one exists, or the seed default otherwise — so
+    //    the operator always sees what is currently active. Clearing a field and submitting
+    //    still resets it to the seed default (empty → null in step 6).
     const existing = await shortTermMemoryRepository.getStmConfig(tomoriState.server_id);
 
-    // 4. Show the modal — three optional Paragraph inputs. Do NOT deferReply first
+    // 4. Show the modal — two optional Paragraph inputs. Do NOT deferReply first
     //    (Pattern 3); arg 4 auto-defers the submit interaction.
     const modalResult = await promptWithRawModal(
       interaction,
@@ -101,17 +104,7 @@ export async function execute(
             placeholder: "commands.server.stm.prompt-edit.reset_placeholder",
             required: false,
             maxLength: PROMPT_MAX_LENGTH,
-            value: existing?.tool_description_override || undefined,
-          },
-          {
-            customId: CREATE_NUDGE_ID,
-            style: TextInputStyle.Paragraph,
-            labelKey: "commands.server.stm.prompt-edit.create_nudge_label",
-            descriptionKey: "commands.server.stm.prompt-edit.create_nudge_description",
-            placeholder: "commands.server.stm.prompt-edit.reset_placeholder",
-            required: false,
-            maxLength: PROMPT_MAX_LENGTH,
-            value: existing?.create_nudge_override || undefined,
+            value: existing?.tool_description_override ?? DEFAULT_STM_TOOL_DESCRIPTION,
           },
           {
             customId: UPDATE_NUDGE_ID,
@@ -121,7 +114,7 @@ export async function execute(
             placeholder: "commands.server.stm.prompt-edit.reset_placeholder",
             required: false,
             maxLength: PROMPT_MAX_LENGTH,
-            value: existing?.update_nudge_override || undefined,
+            value: existing?.update_nudge_override ?? SEED_SUMMARY_UPDATE_HINT,
           },
         ],
       },
@@ -142,12 +135,10 @@ export async function execute(
 
     // 6. Build the patch. Empty (after trim) → null = reset to seed default; non-empty → override.
     const toolDescription = modalResult.values?.[TOOL_DESCRIPTION_ID]?.trim() || null;
-    const createNudge = modalResult.values?.[CREATE_NUDGE_ID]?.trim() || null;
     const updateNudge = modalResult.values?.[UPDATE_NUDGE_ID]?.trim() || null;
 
     const patch: Partial<Omit<ServerStmConfigRow, "server_id">> = {
       tool_description_override: toolDescription,
-      create_nudge_override: createNudge,
       update_nudge_override: updateNudge,
     };
 
@@ -167,13 +158,13 @@ export async function execute(
     //    each turn by memories.ts; they are not held in any cache.
 
     // 9. Report which fields are now custom vs. using the seed default.
-    const customCount = [toolDescription, createNudge, updateNudge].filter((value) => value !== null).length;
+    const customCount = [toolDescription, updateNudge].filter((value) => value !== null).length;
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.server.stm.prompt-edit.success_title",
       descriptionKey: "commands.server.stm.prompt-edit.success_description",
       descriptionVars: {
         custom_count: customCount.toString(),
-        default_count: (3 - customCount).toString(),
+        default_count: (2 - customCount).toString(),
       },
       color: ColorCode.SUCCESS,
       flags: MessageFlags.Ephemeral,

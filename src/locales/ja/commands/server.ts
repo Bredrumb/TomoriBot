@@ -60,27 +60,31 @@ export default {
         more_cleared: `- ...他 {count} 件`,
       },
       parameters: {
-        description: `STMの更新頻度・表示モード・生メッセージ数を調整します。`,
-        "refresh-cadence_description": `更新を促すまでのターン数（1＝毎ターン）。大きいほど促しは少なくなります。`,
-        "render-mode_description": `構造化メモリの表示方法：生のやり取りを置き換えるか、両方を併記するか。`,
-        "crude-messages_description": `要約表示に反映する直近の生メッセージ数。`,
+        description: `STMの更新頻度・表示モード・生メッセージ数・促しの挿入位置を調整します。`,
+        "refresh-cadence_description": `更新を促すまでのボットのターン数（1＝毎ターン）。デフォルト：5。`,
+        "render-mode_description": `生のやり取りを要約で置き換えるか、両方を表示するか。デフォルト：置き換え。`,
+        "crude-messages_description": `コンテキストに残す直近の生（要約前の）メッセージ数。デフォルト：6。`,
+        "nudge-depth_description": `促しの位置：0＝末尾、N＝下からN番目の発言の前。デフォルト：2。`,
         supersede_option: `置き換え（カテゴリで生のやり取りを置換）`,
         crude_summary_option: `生＋要約（両方を併記）`,
-        summary_description: `更新頻度：**{refresh_cadence}** ターン
+        summary_description: `更新頻度：**{refresh_cadence}**
 表示モード：**{render_mode}**
-生メッセージ数：**{crude_messages}**`,
+生メッセージ数：**{crude_messages}**
+促しの挿入位置：**{nudge_depth}**`,
+        refresh_cadence_1: `毎ターン`,
+        refresh_cadence_x: `{count} ターン毎`,
+        nudge_depth_tail: `末尾（全会話の後）`,
+        nudge_depth_x: `下から {count} 発言前`,
         unchanged_title: `現在のSTMパラメータ`,
         success_title: `STMパラメータを更新しました`,
       },
       "prompt-edit": {
-        description: `STMツールの説明文と、作成・更新の促し文をカスタマイズします。`,
+        description: `STMツールの説明文と、統合された促し文をカスタマイズします。`,
         modal_title: `STMプロンプトを編集`,
         tool_description_label: `ツール説明`,
         tool_description_description: `STM更新ツールがモデルに提示する説明文。{short_term_memory_tool} マクロを使用可。`,
-        create_nudge_label: `作成の促し`,
-        create_nudge_description: `STMがまだ無い時に挿入されます。{short_term_memory_tool} マクロを使用可。`,
-        update_nudge_label: `更新の促し`,
-        update_nudge_description: `既存STMの更新を促すために挿入されます。{short_term_memory_tool} マクロを使用可。`,
+        update_nudge_label: `メモリの促し`,
+        update_nudge_description: `STMの作成・更新を促すために挿入されます。{short_term_memory_tool} マクロを使用可。`,
         reset_placeholder: `空欄にすると組み込みのデフォルトに戻します。`,
         success_title: `STMプロンプトを更新しました`,
         success_description: `**{custom_count}** 件のプロンプトがカスタム設定、**{default_count}** 件がデフォルトを使用します。

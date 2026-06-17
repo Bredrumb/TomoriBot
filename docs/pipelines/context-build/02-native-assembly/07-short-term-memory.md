@@ -15,15 +15,14 @@ Surface two kinds of short-term memory to the LLM:
    blocks) from other channels in the same server (or cross-server if the
    user opted in).
 2. **Same-channel memory** — the running summary or category block for the
-   current channel (if one exists), plus an explicit tool-usage hint
-   (update-nudge) for the `update_short_term_memory` tool, gated by the
-   cadence counter.
+   current channel (if one exists).
 
-The contributor *also* emits a lower-priority tail directive
-(`createPromptText`) when no same-channel summary/categories exist yet but
-the conversation has accumulated enough crude messages — telling the LLM to
-*create* a short-term memory after responding. The create-nudge is **not**
-cadence-gated.
+Separately, the contributor emits a single **unified nudge** (`nudgeItem`)
+for the `update_short_term_memory` tool, gated by the cadence counter. The
+same nudge covers BOTH cases — "no STM yet, please create one" and "STM
+exists, please refresh it" — so there is no longer a distinct create vs.
+update nudge. The nudge is returned out-of-band (not inside `memoryItems`)
+so the pipeline can inject it at a configurable dialogue depth.
 
 ## Categories
 
@@ -56,29 +55,47 @@ The render mode is set per-server via `/server stm parameters` and stored in
 
 A `turnsSinceRefresh` counter on each live STM row tracks
 bot-participation cycles (not raw inbound messages). The counter is
-incremented by `incrementStmTurnCounter()` in post-turn effects after each
-STM write.
+incremented unconditionally by `incrementStmTurnCounter()` in post-turn
+effects after each bot turn — it advances whether or not the bot actually
+created/updated an STM — and is reset to `0` only when the bot calls
+`update_short_term_memory` (`resetStmTurnCounter()`).
 
-- **Update-nudge** — only fires when
-  `turnsSinceRefresh >= refreshCadence` (from `stmConfig`, default `1`).
-  This prevents the LLM from being nudged to update STM every single turn
-  when the cadence is set higher.
-- **Create-nudge** — is **not** cadence-gated. It fires whenever crude
-  messages reach the threshold and no summary/categories exist yet.
+- **Unified nudge** — fires when `turnsSinceRefresh >= refreshCadence`
+  (from `stmConfig`, default `5`). The same gate applies to both the
+  create case (no STM yet) and the update case (existing STM). Because the
+  counter keeps climbing until the bot uses the tool, the nudge re-appears
+  every turn once due and only clears after a successful STM write.
 
-When `turnsSinceRefresh` is undefined (new or legacy rows), it defaults to
-`refreshCadence`, preserving backwards-compatible "always nudge" behavior.
+When `turnsSinceRefresh` is undefined (channel with no STM row at all), it
+defaults to `0`, so a fresh channel is not nudged until the bot has
+participated in `refreshCadence` turns.
+
+## Nudge injection depth
+
+The nudge is injected positionally by the chat pipeline
+(`insertAtDialogueDepth` in `contextAnnotations.ts`) at
+`server_stm_configs.nudge_injection_depth`. Depth counts individual dialogue
+TURNS from the bottom (a user turn and a bot turn are separate turns, **not**
+pairs):
+
+- `0` — tail, after every dialogue turn (literal last position)
+- `1` — before the final turn
+- `2` — before the latest user/bot pair (**default**; mirrors the legacy
+  create-nudge placement)
+- `N` — before the Nth turn from the bottom (clamps to the earliest dialogue
+  turn when fewer than N exist, rather than jumping to tail)
+
+Only `DIALOGUE_HISTORY` items are counted; `DIALOGUE_SAMPLE` example
+dialogues are excluded from the walk.
 
 ## Nudge / prompt customization
 
-Three overridable prompt strings per server, stored in
-`server_stm_configs`:
+Two overridable prompt strings per server, stored in `server_stm_configs`:
 
 | Field | Purpose |
 |---|---|
 | `tool_description_override` | Custom description for the `update_short_term_memory` tool schema |
-| `create_nudge_override` | Custom text for the create-nudge tail directive |
-| `update_nudge_override` | Custom text for the update-nudge context item |
+| `update_nudge_override` | Custom text for the unified create/update nudge |
 
 All overrides go through `sanitizeUnknownTemplatePlaceholders` after macro
 expansion via `toolPromptMacroResolver.expand(...)`. In category mode,
@@ -126,7 +143,8 @@ Substantial — see signature in `memories.ts:190-203`. Notable:
 ```ts
 {
   memoryItems: StructuredContextItem[];   // 0..N items appended to contextItems
-  createPromptText?: string;              // optional lower-priority tail directive
+  nudgeItem?: StructuredContextItem;      // unified create/update nudge (out-of-band)
+  nudgeInjectionDepth: number;            // dialogue depth for nudge injection (default 2)
 }
 ```
 
@@ -134,10 +152,11 @@ Tagged `KNOWLEDGE_SHORT_TERM_MEMORY` on every emitted item. `role: "user"`
 (not `system`) so they're interleaved with conversation flow rather than
 sitting in the system header.
 
-The native builder appends `memoryItems` to `contextItems` and pushes
-`createPromptText` (if present) onto `lowerPriorityTailDirectives`. The
-chat pipeline's per-turn stage 01 inserts the lower-priority directive
-before the latest dialogue pair.
+The native builder appends `memoryItems` to `contextItems` and forwards
+`nudgeItem` + `nudgeInjectionDepth` (through `BuildContextResult`, preserved
+across preset reassembly) to the chat pipeline's `appendTailDirectives`,
+which calls `insertAtDialogueDepth` to splice the nudge in at the configured
+depth after dialogue history is assembled.
 
 ## Side effects
 
@@ -168,31 +187,29 @@ before the latest dialogue pair.
 
 After this stage runs:
 
-- Returns `{ memoryItems: [], createPromptText: undefined }` on any
-  unhandled error (logged, not thrown).
+- Returns `{ memoryItems: [], nudgeInjectionDepth: 0 }` on any unhandled
+  error (logged, not thrown).
 - Other-channel memories are sorted by `lastUpdated` DESC and capped at
-  `MAX_OTHER_CHANNEL_MEMORIES` (default 3).
-- The same-channel summary/category item *and* the tool-update hint are
-  emitted as separate `KNOWLEDGE_SHORT_TERM_MEMORY` items so preset
-  reassembly can slot them together.
-- The tool-hint is suppressed when: `llm.has_tools` is false,
+  `MAX_OTHER_CHANNEL_MEMORIES` (default 3). Crude messages rendered in the
+  Mode B additive blocks and the no-summary fallback listing are capped to
+  the most recent `crude_message_count` (from `stmConfig`, falling back to
+  `DEFAULT_CRUDE_MESSAGE_COUNT`).
+- The same-channel summary/category item is emitted in `memoryItems`; the
+  unified nudge is returned separately in `nudgeItem` for positional
+  injection.
+- The nudge is suppressed when: `llm.has_tools` is false,
   `llm_provider === "novelai"`, or `explicitLongTermMemoryIntent` is true
   (the user is asking for long-term action, the STM hint would compete).
-- The update-nudge is additionally gated by cadence:
-  `turnsSinceRefresh >= refreshCadence` must be true.
-- `createPromptText` (the create-nudge tail directive) is emitted only
-  when: there's no same-channel summary/categories, the channel has
-  `>= crudeMessageCount` messages cached (from `stmConfig`, falling back
-  to `MIN_MESSAGES_FOR_SUMMARY`), and STM-tool is available. The
-  create-nudge is **not** cadence-gated.
-- In category mode, both create-nudge and update-nudge texts include
-  the resolved `{category_labels}` list.
+- The nudge is gated by cadence: `turnsSinceRefresh >= refreshCadence` must
+  be true, for both the create and update cases.
+- In category mode, the nudge text includes the resolved `{category_labels}`
+  list.
 
 ## Configuration
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `SHORT_TERM_MEMORY_MIN_MESSAGES_FOR_SUMMARY` | `6` | Fallback threshold for emitting the create-nudge tail directive |
+| `SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT` | `6` | Fallback crude-message render depth when a server has no `crude_message_count` set |
 | `SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS` | `3` | Cap on other-channel memory items |
 | `SHORT_TERM_MEMORY_TTL_HOURS` | `12` | TTL for crude conversation entries in cache |
 | `SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS` | `24` | TTL for summary entries in cache |
@@ -202,14 +219,14 @@ After this stage runs:
 | `STM_JANITOR_RETENTION_DAYS` | `90` | Days before orphaned STM rows are purged |
 
 > [!NOTE]
-> `STM_REFRESH_CADENCE_DEFAULT` is declared in `.env.optional.example` but
-> not wired to source code — the default cadence of `1` is hardcoded in
-> both the migration and the runtime fallback.
+> The default cadence of `5` and the default `nudge_injection_depth` of `2`
+> are set in migration 035 and mirrored as runtime fallbacks in
+> `memories.ts`.
 
 | Source | Field | Effect |
 |---|---|---|
-| `server_stm_configs` | `refresh_cadence`, `render_mode`, `crude_message_count` | Cadence gating, render behavior, create-nudge threshold |
-| `server_stm_configs` | `tool_description_override`, `create_nudge_override`, `update_nudge_override` | Prompt customization |
+| `server_stm_configs` | `refresh_cadence`, `render_mode`, `crude_message_count`, `nudge_injection_depth` | Cadence gating, render behavior, crude render cap, nudge position |
+| `server_stm_configs` | `tool_description_override`, `update_nudge_override` | Prompt customization |
 | `stm_categories` | `label`, `description`, `position` | Dynamic category schema |
 | `tomoriConfig` | `private_channel_ids`, `stm_privacy_bypass` | STM privacy filtering |
 | `userRow` | `shortterm_cache_crossserver_opt_in` | Cross-server memory folding |
@@ -218,10 +235,11 @@ After this stage runs:
 
 | Command | Purpose |
 |---|---|
-| `/server stm parameters` | Configure cadence, render mode, crude message count |
-| `/server stm prompt-edit` | Set tool description, create-nudge, and update-nudge overrides |
+| `/server stm parameters` | Configure cadence, render mode, crude message count, nudge depth |
+| `/server stm prompt-edit` | Set tool description and the unified nudge override |
 | `/server stm categories-edit` | Define category labels and descriptions |
 | `/persona stm edit` | Hand-edit live STM for a persona in the current channel |
+| `/help stm` | In-Discord guide to the STM customization surface |
 
 ## Extension points
 

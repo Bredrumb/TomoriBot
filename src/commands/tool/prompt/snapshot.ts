@@ -131,6 +131,37 @@ function insertBeforeLatestDialoguePair(
   contextSegments.splice(insertAt, 0, injectedItem);
 }
 
+// Local mirror of contextAnnotations.insertAtDialogueDepth so the snapshot reflects
+// the live STM nudge positioning. depth=0 → tail; depth=N → before the Nth dialogue
+// item from the bottom (clamps to earliest dialogue turn when fewer than N exist).
+function insertAtDialogueDepth(
+  contextSegments: StructuredContextItem[],
+  nudge: StructuredContextItem,
+  depth: number,
+): void {
+  if (depth <= 0) {
+    contextSegments.push(nudge);
+    return;
+  }
+  let found = 0;
+  let lastFoundIndex = -1;
+  for (let i = contextSegments.length - 1; i >= 0; i--) {
+    if (contextSegments[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
+      found++;
+      lastFoundIndex = i;
+      if (found === depth) {
+        contextSegments.splice(i, 0, nudge);
+        return;
+      }
+    }
+  }
+  if (lastFoundIndex !== -1) {
+    contextSegments.splice(lastFoundIndex, 0, nudge);
+  } else {
+    contextSegments.push(nudge);
+  }
+}
+
 function isSnapshotAudioAttachment(contentType: string | null | undefined): boolean {
   return Boolean(contentType?.startsWith("audio/"));
 }
@@ -799,6 +830,11 @@ export async function execute(
 
     const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriorityTailDirectives);
     if (lowerPriorityTailMessage) insertBeforeLatestDialoguePair(contextItems, lowerPriorityTailMessage);
+
+    // Mirror the live pipeline: inject the unified STM nudge at its configured depth.
+    if (contextBuild.nudgeItem) {
+      insertAtDialogueDepth(contextItems, contextBuild.nudgeItem, contextBuild.nudgeInjectionDepth ?? 0);
+    }
 
     const combinedTailMessage = buildCombinedTailDirectiveMessage([...contextBuild.tailDirectives]);
     if (combinedTailMessage) contextItems.push(combinedTailMessage);

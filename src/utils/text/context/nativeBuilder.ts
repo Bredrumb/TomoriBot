@@ -21,6 +21,10 @@ export type NativeBuildContextResult = {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
+  nudgeItem?: StructuredContextItem;
+  /** Dialogue depth at which to inject `nudgeItem` (0 = tail). */
+  nudgeInjectionDepth?: number;
 };
 
 /**
@@ -67,7 +71,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   const contextItems: StructuredContextItem[] = [];
   const tailDirectives: string[] = [];
   const lowerPriorityTailDirectives: string[] = [];
-  let sameChannelMemoryDirective: string | undefined;
+  let nudgeItem: StructuredContextItem | undefined;
+  let nudgeInjectionDepth = 2;
   let uncensorDirective: string | undefined;
   const botName = tomoriNickname;
   const impersonatedMember =
@@ -251,7 +256,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   try {
     const actualTriggeringUserId = impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
     if (actualTriggeringUserId) {
-      const { memoryItems, createPromptText } = await buildShortTermMemoryContext({
+      const stmResult = await buildShortTermMemoryContext({
         triggeringUserId: actualTriggeringUserId,
         currentChannelId: channelId,
         currentServerId: guildId,
@@ -266,8 +271,9 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
         currentParentChannelId: parentChannelId,
         convertMentions,
       });
-      contextItems.push(...memoryItems);
-      sameChannelMemoryDirective = createPromptText;
+      contextItems.push(...stmResult.memoryItems);
+      nudgeItem = stmResult.nudgeItem;
+      nudgeInjectionDepth = stmResult.nudgeInjectionDepth;
     }
   } catch (error) {
     log.warn("Failed to build short-term memory context", error);
@@ -322,10 +328,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       `Imitate ${impersonatedIdentityName || "User"}, start your message with ${impersonatedIdentityName || "User"}:`,
     );
   }
-  if (sameChannelMemoryDirective) {
-    lowerPriorityTailDirectives.push(sameChannelMemoryDirective);
-  }
-
   const uncensorInjectionText = buildUncensorInjectionText({
     injectionEnabled: tomoriConfig.uncensor_injection_enabled,
     unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
@@ -339,7 +341,14 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   }
 
   log.info(`Built ${contextItems.length} structured context items for guild ${guildId}.`);
-  return { contextItems, tailDirectives, lowerPriorityTailDirectives, uncensorDirective };
+  return {
+    contextItems,
+    tailDirectives,
+    lowerPriorityTailDirectives,
+    uncensorDirective,
+    nudgeItem,
+    nudgeInjectionDepth,
+  };
 }
 
 async function appendOptionalItem(

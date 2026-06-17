@@ -77,11 +77,15 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
 }): {
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
 } {
   return {
     contextItems: output.contextItems.map(resolveRandomChoiceMacrosInContextItem),
@@ -89,6 +93,8 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
     lowerPriorityTailDirectives: output.lowerPriorityTailDirectives.map(resolveRandomChoiceMacros),
     uncensorDirective:
       output.uncensorDirective !== undefined ? resolveRandomChoiceMacros(output.uncensorDirective) : undefined,
+    nudgeItem: output.nudgeItem ? resolveRandomChoiceMacrosInContextItem(output.nudgeItem) : undefined,
+    nudgeInjectionDepth: output.nudgeInjectionDepth,
   };
 }
 

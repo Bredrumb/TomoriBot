@@ -334,6 +334,8 @@ export async function reassembleWithPreset(
     tailDirectives: string[];
     lowerPriorityTailDirectives: string[];
     uncensorDirective?: string;
+    nudgeItem?: StructuredContextItem;
+    nudgeInjectionDepth?: number;
   },
   presetData: CachedPresetData,
   macroParams: PresetMacroParams,
@@ -343,6 +345,8 @@ export async function reassembleWithPreset(
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
 }> {
   const { nodes } = presetData;
 
@@ -568,11 +572,14 @@ export async function reassembleWithPreset(
   );
 
   // ── Step 7: Return in the same format ──
-  // Tail directives and uncensor directive pass through unchanged
+  // Tail directives, uncensor directive, and the out-of-band STM nudge pass through
+  // unchanged — the nudge is injected positionally downstream, after assembly.
   return {
     contextItems,
     tailDirectives: nativeOutput.tailDirectives,
     lowerPriorityTailDirectives: nativeOutput.lowerPriorityTailDirectives,
     uncensorDirective: nativeOutput.uncensorDirective,
+    nudgeItem: nativeOutput.nudgeItem,
+    nudgeInjectionDepth: nativeOutput.nudgeInjectionDepth,
   };
 }

@@ -71,8 +71,10 @@ the response was non-empty:
 - After storing the short-term memory entries, advances the STM cadence
   counter via `incrementStmTurnCounter()`. The counter tracks
   bot-participation cycles (not raw inbound messages) and is scoped to the
-  live STM row — server-shared in guilds, user-scoped in DMs. The counter
-  value gates the update-nudge in the context-build STM stage.
+  live STM row — server-shared in guilds, user-scoped in DMs. It increments
+  unconditionally (whether or not an STM was written this turn) and is reset
+  to `0` only when the bot calls `update_short_term_memory`. The counter
+  value gates the unified create/update nudge in the context-build STM stage.
 - Failures are logged but don't propagate.
 
 ### 5. `emitThoughtLog`

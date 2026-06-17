@@ -49,10 +49,13 @@ const SUMMARY_PARAMETERS: ToolParameterSchema = {
   required: ["summary"],
 };
 
+/** Default tool description used both at runtime and as the modal prefill fallback. */
+export const DEFAULT_STM_TOOL_DESCRIPTION =
+  "Update your short-term working memory for the current story or conversation. Use this to remember important context from this ongoing conversation that you might need later, but don't need to store permanently. Do NOT use this when a user explicitly asks you to remember/save/store something for future conversations; use update_long_term_memory or create_long_term_memory for that.";
+
 export class UpdateShortTermMemoryTool extends BaseTool {
   name = "update_short_term_memory";
-  description =
-    "Update your short-term working memory for the current story or conversation. Use this to remember important context from this ongoing conversation that you might need later, but don't need to store permanently. Do NOT use this when a user explicitly asks you to remember/save/store something for future conversations; use update_long_term_memory or create_long_term_memory for that.";
+  description = DEFAULT_STM_TOOL_DESCRIPTION;
   category = "memory" as const;
 
   parameters: ToolParameterSchema = SUMMARY_PARAMETERS;

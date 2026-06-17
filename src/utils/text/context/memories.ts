@@ -6,6 +6,7 @@ import {
   getShortTermMemoriesForUser,
   getShortTermMemoryForServerChannel,
   getShortTermMemoryForUserChannel,
+  preWarmStmEntry,
 } from "@/utils/cache/shortTermMemoryCache";
 import { log } from "@/utils/misc/logger";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -18,36 +19,31 @@ import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemo
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 
-const MIN_MESSAGES_FOR_SUMMARY = Number.parseInt(process.env.SHORT_TERM_MEMORY_MIN_MESSAGES_FOR_SUMMARY || "6", 10);
+// Default render depth for crude messages (Mode B additive blocks + no-summary
+// fallback listing). Also the fallback when a server has no crude_message_count set.
+const DEFAULT_CRUDE_MESSAGE_COUNT = Number.parseInt(
+  process.env.SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT || "6",
+  10,
+);
 const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3", 10);
 
 // ── Default seed strings ──────────────────────────────────────────────────────
-// Single-summary (fallback) seeds are byte-identical to pre-category behavior.
+// The single unified nudge (migration 035) covers BOTH cases — "no STM yet, please
+// create one" and "STM exists, please refresh it" — with one cadence-gated prompt.
 // Category-mode seeds reference {category_labels}, substituted before sanitization.
+// `_FALLBACK` variants are byte-stable literals used when no macro resolver is wired.
 
-const SEED_SUMMARY_UPDATE_HINT =
-  "[System: HINT: Use the {short_term_memory_tool} tool to update this information AFTER you respond if the conversation has greatly changed its topic. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
+export const SEED_SUMMARY_UPDATE_HINT =
+  "[System: HINT: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
 
 const SEED_SUMMARY_UPDATE_HINT_FALLBACK =
-  "[System: HINT: Use the update_short_term_memory tool to update this information AFTER you respond if the conversation has greatly changed its topic. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
-
-const SEED_SUMMARY_CREATE_NUDGE =
-  "You currently do not have short term memory saved for this conversation. Use the {short_term_memory_tool} tool to create a short term memory about the current story or conversation's topic AFTER you respond in order to help you cross-reference this in different channels. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead. Do NOT mention out loud that you are going to create a short term memory, always use the tool silently.";
-
-const SEED_SUMMARY_CREATE_NUDGE_FALLBACK =
-  "You currently do not have short term memory saved for this conversation. Use the update_short_term_memory tool to create a short term memory about the current story or conversation's topic AFTER you respond in order to help you cross-reference this in different channels. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead. Do NOT mention out loud that you are going to create a short term memory, always use the tool silently.";
+  "[System: HINT: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
 
 const SEED_CATEGORY_UPDATE_HINT =
-  "[System: HINT: Use the {short_term_memory_tool} tool AFTER you respond to update your short-term memory for this conversation. Update any fields that have changed: {category_labels}. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
+  "[System: HINT: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
 
 const SEED_CATEGORY_UPDATE_HINT_FALLBACK =
-  "[System: HINT: Use the update_short_term_memory tool AFTER you respond to update your short-term memory for this conversation. Update any fields that have changed: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
-
-const SEED_CATEGORY_CREATE_NUDGE =
-  "You currently do not have short term memory saved for this conversation. Use the {short_term_memory_tool} tool AFTER you respond to fill in your short-term memory fields: {category_labels}. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead. Do NOT mention out loud that you are going to create a short term memory, always use the tool silently.";
-
-const SEED_CATEGORY_CREATE_NUDGE_FALLBACK =
-  "You currently do not have short term memory saved for this conversation. Use the update_short_term_memory tool AFTER you respond to fill in your short-term memory fields: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead. Do NOT mention out loud that you are going to create a short term memory, always use the tool silently.";
+  "[System: HINT: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -203,10 +199,11 @@ export async function buildShortTermMemoryContext(params: {
   convertMentions: MentionConverter;
 }): Promise<{
   memoryItems: StructuredContextItem[];
-  createPromptText?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth: number;
 }> {
   const memoryItems: StructuredContextItem[] = [];
-  let createPromptText: string | undefined;
+  let nudgeItem: StructuredContextItem | undefined;
 
   const expandPromptToolText = (macroText: string, fallbackText: string) =>
     params.toolPromptMacroResolver ? params.toolPromptMacroResolver.expand(macroText) : Promise.resolve(fallbackText);
@@ -221,12 +218,13 @@ export async function buildShortTermMemoryContext(params: {
         ])
       : [null, []];
 
-    // Resolved config values (fall back to backward-compatible defaults)
-    const refreshCadence = stmConfig?.refresh_cadence ?? 1;
+    // Resolved config values (fall back to sensible defaults)
+    const refreshCadence = stmConfig?.refresh_cadence ?? 5;
     const renderMode = stmConfig?.render_mode ?? "supersede";
-    const crudeMessageCount = stmConfig?.crude_message_count ?? MIN_MESSAGES_FOR_SUMMARY;
-    const createNudgeOverride = stmConfig?.create_nudge_override ?? null;
+    const crudeMessageCount = stmConfig?.crude_message_count ?? DEFAULT_CRUDE_MESSAGE_COUNT;
     const updateNudgeOverride = stmConfig?.update_nudge_override ?? null;
+    // 0 = inject the nudge at the dialogue tail; N = before the Nth dialogue turn from the bottom.
+    const nudgeInjectionDepth = stmConfig?.nudge_injection_depth ?? 2;
 
     // Category mode: any configuration other than the single default "summary" category.
     // An empty list (no rows resolved, e.g. no server) is NOT category mode — it must
@@ -316,7 +314,8 @@ export async function buildShortTermMemoryContext(params: {
                 ? `[System: Recent raw messages with ${params.triggererName} in ${channelReference}:\n`
                 : `[System: ${params.botName}'s recent raw messages with ${params.triggererName} in ${channelReference}:\n`;
             let crudeText = crudePrefix;
-            for (const msg of memory.messages) {
+            // Cap the rendered crude turns to the configured depth (most recent N).
+            for (const msg of memory.messages.slice(-crudeMessageCount)) {
               const speaker =
                 msg.speakerName ||
                 (msg.role === "user" ? (isSameServerSharedMemory ? "Someone" : params.triggererName) : params.botName);
@@ -337,7 +336,8 @@ export async function buildShortTermMemoryContext(params: {
                 ? `[System: Recent raw messages with ${params.triggererName} in ${channelReference}:\n`
                 : `[System: ${params.botName}'s recent raw messages with ${params.triggererName} in ${channelReference}:\n`;
             let crudeText = crudePrefix;
-            for (const msg of memory.messages) {
+            // Cap the rendered crude turns to the configured depth (most recent N).
+            for (const msg of memory.messages.slice(-crudeMessageCount)) {
               const speaker =
                 msg.speakerName ||
                 (msg.role === "user" ? (isSameServerSharedMemory ? "Someone" : params.triggererName) : params.botName);
@@ -346,9 +346,9 @@ export async function buildShortTermMemoryContext(params: {
             otherChannelText += `${crudeText}]\n\n`;
           }
         } else {
-          // No summary or categories — fall back to crude turn listing
+          // No summary or categories — fall back to crude turn listing (capped to depth).
           otherChannelText += memoryPrefix;
-          for (const msg of memory.messages) {
+          for (const msg of memory.messages.slice(-crudeMessageCount)) {
             const speaker =
               msg.speakerName ||
               (msg.role === "user" ? (isSameServerSharedMemory ? "Someone" : params.triggererName) : params.botName);
@@ -384,6 +384,14 @@ export async function buildShortTermMemoryContext(params: {
       const isStmToolAvailable =
         params.tomoriState.llm.llm_provider !== "novelai" && !params.explicitLongTermMemoryIntent;
 
+      // Ensure the cache is warm before the synchronous read below.
+      // On the first turn after a bot restart the in-memory cache is cold; without
+      // this await the sync getter would return undefined and miss the persisted
+      // summary/categories for the entire turn.
+      await (params.currentServerId === "DM"
+        ? preWarmStmEntry("user", params.triggeringUserId, params.currentChannelId, params.tomoriState?.persona_id)
+        : preWarmStmEntry("server", params.currentServerId, params.currentChannelId, params.tomoriState?.persona_id));
+
       const sameChannelMemory =
         params.currentServerId === "DM"
           ? getShortTermMemoryForUserChannel(
@@ -397,8 +405,11 @@ export async function buildShortTermMemoryContext(params: {
               params.tomoriState?.persona_id,
             );
 
-      // Determine cadence: default undefined → treat as ready to nudge (preserves today's behavior)
-      const turnsSinceRefresh = sameChannelMemory?.turnsSinceRefresh ?? refreshCadence;
+      // Unified cadence counter (migration 035). A channel with no prior STM starts
+      // at 0 and increments once per bot-participation turn, so the nudge first fires
+      // after exactly `refreshCadence` turns — for BOTH the create case (no STM yet)
+      // and each subsequent update case (existing STM refresh).
+      const turnsSinceRefresh = sameChannelMemory?.turnsSinceRefresh ?? 0;
       const isNudgeDue = turnsSinceRefresh >= refreshCadence;
 
       // Determine what content is in the same-channel memory
@@ -443,83 +454,53 @@ export async function buildShortTermMemoryContext(params: {
           ],
           metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
         });
+      }
 
-        // 3b. Update-nudge (cadence-gated)
-        if (isStmToolAvailable && isNudgeDue) {
-          let rawHintText: string;
-          let rawHintFallback: string;
-
-          if (isCategoryMode) {
-            rawHintText = (updateNudgeOverride ?? SEED_CATEGORY_UPDATE_HINT).replace(
-              "{category_labels}",
-              categoryLabelList,
-            );
-            rawHintFallback = (updateNudgeOverride ?? SEED_CATEGORY_UPDATE_HINT_FALLBACK).replace(
-              "{category_labels}",
-              categoryLabelList,
-            );
-          } else {
-            rawHintText = updateNudgeOverride ?? SEED_SUMMARY_UPDATE_HINT;
-            rawHintFallback = updateNudgeOverride ?? SEED_SUMMARY_UPDATE_HINT_FALLBACK;
-          }
-
-          const hintText = sanitizeUnknownTemplatePlaceholders(
-            await expandPromptToolText(rawHintText, rawHintFallback),
-          );
-
-          memoryItems.push({
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: await params.convertMentions(
-                  hintText,
-                  params.client,
-                  params.currentServerId,
-                  params.triggererName,
-                  params.botName,
-                  params.personalMemoriesEnabled,
-                ),
-              },
-            ],
-            metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
-          });
-        }
-      } else if (isStmToolAvailable && sameChannelMemory && sameChannelMemory.messages.length >= crudeMessageCount) {
-        // 3c. Create-nudge: no STM yet but enough crude turns have accumulated
-        let rawCreateText: string;
-        let rawCreateFallback: string;
+      // 3b. Unified nudge (cadence-gated) — covers BOTH the create case (no STM yet)
+      //     and the update case (refresh existing STM). It is NOT pushed into
+      //     memoryItems; it is returned separately so the caller can inject it at the
+      //     configured dialogue depth (highest-signal tail position by default).
+      if (isStmToolAvailable && isNudgeDue) {
+        let rawHintText: string;
+        let rawHintFallback: string;
 
         if (isCategoryMode) {
-          rawCreateText = (createNudgeOverride ?? SEED_CATEGORY_CREATE_NUDGE).replace(
+          rawHintText = (updateNudgeOverride ?? SEED_CATEGORY_UPDATE_HINT).replace(
             "{category_labels}",
             categoryLabelList,
           );
-          rawCreateFallback = (createNudgeOverride ?? SEED_CATEGORY_CREATE_NUDGE_FALLBACK).replace(
+          rawHintFallback = (updateNudgeOverride ?? SEED_CATEGORY_UPDATE_HINT_FALLBACK).replace(
             "{category_labels}",
             categoryLabelList,
           );
         } else {
-          rawCreateText = createNudgeOverride ?? SEED_SUMMARY_CREATE_NUDGE;
-          rawCreateFallback = createNudgeOverride ?? SEED_SUMMARY_CREATE_NUDGE_FALLBACK;
+          rawHintText = updateNudgeOverride ?? SEED_SUMMARY_UPDATE_HINT;
+          rawHintFallback = updateNudgeOverride ?? SEED_SUMMARY_UPDATE_HINT_FALLBACK;
         }
 
-        const createText = sanitizeUnknownTemplatePlaceholders(
-          await expandPromptToolText(rawCreateText, rawCreateFallback),
-        );
+        const hintText = sanitizeUnknownTemplatePlaceholders(await expandPromptToolText(rawHintText, rawHintFallback));
 
-        createPromptText = await params.convertMentions(
-          createText,
-          params.client,
-          params.currentServerId,
-          params.triggererName,
-          params.botName,
-          params.personalMemoriesEnabled,
-        );
+        nudgeItem = {
+          role: "user",
+          parts: [
+            {
+              type: "text",
+              text: await params.convertMentions(
+                hintText,
+                params.client,
+                params.currentServerId,
+                params.triggererName,
+                params.botName,
+                params.personalMemoriesEnabled,
+              ),
+            },
+          ],
+          metadataTag: ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
+        };
       }
     }
 
-    return { memoryItems, createPromptText };
+    return { memoryItems, nudgeItem, nudgeInjectionDepth };
   } catch (error) {
     await log.error(
       `[buildShortTermMemoryContext] Failed to build short-term memory context - triggeringUserId=${params.triggeringUserId}, currentChannelId=${params.currentChannelId}`,
@@ -529,6 +510,6 @@ export async function buildShortTermMemoryContext(params: {
         metadata: { userDiscId: params.triggeringUserId, currentChannelId: params.currentChannelId },
       },
     );
-    return { memoryItems: [], createPromptText: undefined };
+    return { memoryItems: [], nudgeInjectionDepth: 0 };
   }
 }

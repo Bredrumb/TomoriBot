@@ -2,9 +2,10 @@
  * Command: /server stm parameters
  * Tunes the server-wide STM behavior knobs that govern the refresh nudge and how
  * structured memory renders into context:
- *   - refresh-cadence  → turns between refresh nudges (1 = nudge every turn, today's behavior)
+ *   - refresh-cadence  → bot turns between refresh nudges (default 5)
  *   - render-mode      → "supersede" (Mode A, default) or "crude_summary" (Mode B)
- *   - crude-messages   → how many recent crude messages factor into summary rendering
+ *   - crude-messages   → how many recent crude messages render into crude context
+ *   - nudge-depth      → dialogue depth at which the nudge is injected (0 = tail)
  *
  * All options are optional; only the ones supplied are written. The effective
  * (post-write) settings are echoed back so the operator sees the merged result.
@@ -30,6 +31,8 @@ const MIN_REFRESH_CADENCE = 1;
 const MAX_REFRESH_CADENCE = 100;
 const MIN_CRUDE_MESSAGES = 1;
 const MAX_CRUDE_MESSAGES = 50;
+const MIN_NUDGE_DEPTH = 0;
+const MAX_NUDGE_DEPTH = 20;
 
 // Render-mode option values map 1:1 to the server_stm_configs.render_mode enum.
 const RENDER_MODE_SUPERSEDE = "supersede";
@@ -88,6 +91,14 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setMinValue(MIN_CRUDE_MESSAGES)
         .setMaxValue(MAX_CRUDE_MESSAGES)
         .setRequired(false),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("nudge-depth")
+        .setDescription(localizer("en-US", "commands.server.stm.parameters.nudge-depth_description"))
+        .setMinValue(MIN_NUDGE_DEPTH)
+        .setMaxValue(MAX_NUDGE_DEPTH)
+        .setRequired(false),
     );
 
 /**
@@ -114,10 +125,11 @@ export async function execute(
     return;
   }
 
-  // 2. Read the three optional knobs up-front (none required).
+  // 2. Read the optional knobs up-front (none required).
   const refreshCadence = interaction.options.getInteger("refresh-cadence");
   const renderMode = interaction.options.getString("render-mode");
   const crudeMessages = interaction.options.getInteger("crude-messages");
+  const nudgeDepth = interaction.options.getInteger("nudge-depth");
 
   let tomoriState: Awaited<ReturnType<typeof getCachedTomoriState>> = null;
   try {
@@ -141,6 +153,7 @@ export async function execute(
     if (refreshCadence !== null) patch.refresh_cadence = refreshCadence;
     if (renderMode !== null) patch.render_mode = renderMode as ServerStmConfigRow["render_mode"];
     if (crudeMessages !== null) patch.crude_message_count = crudeMessages;
+    if (nudgeDepth !== null) patch.nudge_injection_depth = nudgeDepth;
 
     // 6. Nothing supplied → just show the current effective settings (no write).
     if (Object.keys(patch).length === 0) {
@@ -211,17 +224,32 @@ async function replyEffectiveSettings(
   titleKey: string,
 ): Promise<void> {
   // Mirror the runtime fallbacks used by memories.ts so the echo matches reality.
-  const effectiveCadence = config?.refresh_cadence ?? 1;
+  const effectiveCadence = config?.refresh_cadence ?? 5;
   const effectiveMode: ServerStmConfigRow["render_mode"] = config?.render_mode ?? RENDER_MODE_SUPERSEDE;
   const effectiveCrude = config?.crude_message_count ?? 6;
+  const effectiveNudgeDepth = config?.nudge_injection_depth ?? 2;
+
+  const cadenceStr =
+    effectiveCadence === 1
+      ? localizer(locale, "commands.server.stm.parameters.refresh_cadence_1")
+      : localizer(locale, "commands.server.stm.parameters.refresh_cadence_x", { count: effectiveCadence.toString() });
+
+  // depth 0 is the default "tail" position — show a friendly label for it.
+  const nudgeDepthStr =
+    effectiveNudgeDepth === 0
+      ? localizer(locale, "commands.server.stm.parameters.nudge_depth_tail")
+      : localizer(locale, "commands.server.stm.parameters.nudge_depth_x", {
+          count: effectiveNudgeDepth.toString(),
+        });
 
   await replyInfoEmbed(interaction, locale, {
     titleKey,
     descriptionKey: "commands.server.stm.parameters.summary_description",
     descriptionVars: {
-      refresh_cadence: effectiveCadence.toString(),
+      refresh_cadence: cadenceStr,
       render_mode: renderModeLabel(locale, effectiveMode),
       crude_messages: effectiveCrude.toString(),
+      nudge_depth: nudgeDepthStr,
     },
     color: ColorCode.SUCCESS,
   });

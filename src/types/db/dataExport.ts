@@ -263,8 +263,8 @@ export const serverStmConfigExportSchema = z.object({
       render_mode: z.enum(["supersede", "crude_summary"]),
       crude_message_count: z.number().int(),
       tool_description_override: z.string().nullable(),
-      create_nudge_override: z.string().nullable(),
       update_nudge_override: z.string().nullable(),
+      nudge_injection_depth: z.number().int().optional(),
     })
     .nullable()
     .optional(),

@@ -784,12 +784,16 @@ export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
 
 export const serverStmConfigSchema = z.object({
   server_id: z.number().int(),
-  refresh_cadence: z.number().int().default(1),
+  refresh_cadence: z.number().int().default(5),
   render_mode: z.enum(["supersede", "crude_summary"]).default("supersede"),
-  crude_message_count: z.number().int().default(10),
+  crude_message_count: z.number().int().default(6),
   tool_description_override: z.string().nullable().optional(),
-  create_nudge_override: z.string().nullable().optional(),
+  // Unified nudge override (merged create+update, migration 035). NULL → seed default.
   update_nudge_override: z.string().nullable().optional(),
+  // Positional injection depth for the nudge, counted in dialogue TURNS from the
+  // bottom (not pairs): 0 = tail, 1 = before the final turn, 2 = before the latest
+  // pair, N = before the Nth turn (migration 035, default 2).
+  nudge_injection_depth: z.number().int().default(2),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

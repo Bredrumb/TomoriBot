@@ -117,8 +117,8 @@ const stats: CacheStats = {
   expirations: 0,
 };
 
-// Keys currently being hydrated from DB — prevents duplicate concurrent reads.
-const pendingHydrations = new Set<string>();
+// In-flight DB hydrations keyed by cache key — prevents duplicate reads and allows awaiting.
+const pendingHydrations = new Map<string, Promise<void>>();
 
 // Functional unique-index conflict target used in all short_term_memories upserts.
 const STM_CONFLICT = `(scope_kind, COALESCE(server_disc_id, ''), COALESCE(user_disc_id, ''), channel_disc_id, COALESCE(persona_id, 0))`;
@@ -490,10 +490,9 @@ function getShortTermMemoryByKey(key: string): ShortTermMemoryEntry | undefined 
     if (!pendingHydrations.has(key)) {
       const parsed = parseStmKey(key);
       if (parsed) {
-        pendingHydrations.add(key);
         const serverDiscId = parsed.scopeKind === "server" ? parsed.discId : null;
         const userDiscId = parsed.scopeKind === "user" ? parsed.discId : null;
-        void hydrateEntryFromDb(
+        const promise = hydrateEntryFromDb(
           key,
           parsed.scopeKind,
           serverDiscId,
@@ -501,6 +500,7 @@ function getShortTermMemoryByKey(key: string): ShortTermMemoryEntry | undefined 
           parsed.channelDiscId,
           parsed.personaId,
         ).finally(() => pendingHydrations.delete(key));
+        pendingHydrations.set(key, promise);
       }
     }
     return undefined;
@@ -515,6 +515,50 @@ function getShortTermMemoryByKey(key: string): ShortTermMemoryEntry | undefined 
 
   stats.hits++;
   return entry;
+}
+
+/**
+ * Ensures the cache entry for a channel is populated before a synchronous read.
+ * Call this (with await) before `getShortTermMemoryForServerChannel` or
+ * `getShortTermMemoryForUserChannel` so the first post-restart turn sees the
+ * persisted summary/categories instead of an empty cache.
+ *
+ * No-ops when the entry is already warm. If a background hydration is already
+ * in flight (triggered by a concurrent sync read), awaits that same promise
+ * rather than launching a second DB query.
+ *
+ * @param scopeKind - "server" for guild channels, "user" for DMs
+ * @param discId    - Server snowflake (server scope) or user snowflake (user scope)
+ * @param channelId - Channel snowflake
+ * @param personaId - Optional persona ID for persona-scoped memory
+ */
+export async function preWarmStmEntry(
+  scopeKind: "server" | "user",
+  discId: string,
+  channelId: string,
+  personaId?: number | null,
+): Promise<void> {
+  const key =
+    scopeKind === "server"
+      ? getServerCacheKey(discId, channelId, personaId)
+      : getUserCacheKey(discId, channelId, personaId);
+
+  if (cache.has(key)) return;
+
+  // Reuse an in-flight hydration rather than launching a second DB query
+  const inflight = pendingHydrations.get(key);
+  if (inflight) {
+    await inflight;
+    return;
+  }
+
+  const serverDiscId = scopeKind === "server" ? discId : null;
+  const userDiscId = scopeKind === "user" ? discId : null;
+  const promise = hydrateEntryFromDb(key, scopeKind, serverDiscId, userDiscId, channelId, personaId ?? null).finally(
+    () => pendingHydrations.delete(key),
+  );
+  pendingHydrations.set(key, promise);
+  await promise;
 }
 
 function updateSummaryForKey(

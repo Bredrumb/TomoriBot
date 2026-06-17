@@ -60,27 +60,31 @@ export default {
         more_cleared: `- ...and {count} more`,
       },
       parameters: {
-        description: `Tune the STM refresh cadence, render mode, and crude-message count.`,
-        "refresh-cadence_description": `Turns between refresh nudges (1 = every turn). Higher means the bot is reminded less often.`,
-        "render-mode_description": `How structured memory renders: supersede crude turns, or show both additively.`,
-        "crude-messages_description": `How many recent crude messages factor into summary rendering.`,
+        description: `Tune the STM refresh cadence, render mode, crude-message count, and nudge depth.`,
+        "refresh-cadence_description": `Bot turns between refresh nudges (1 = every turn). Default: 5.`,
+        "render-mode_description": `Replace raw turns with the summary, or show both. Default: Supersede.`,
+        "crude-messages_description": `How many recent raw (unsummarized) messages to keep in context. Default: 6.`,
+        "nudge-depth_description": `Nudge position: 0 = tail, N = before Nth dialogue turn from bottom. Default: 2.`,
         supersede_option: `Supersede (categories replace crude turns)`,
         crude_summary_option: `Crude + summary (show both additively)`,
-        summary_description: `Refresh cadence: **{refresh_cadence}** turn(s)
+        summary_description: `Refresh cadence: **{refresh_cadence}**
 Render mode: **{render_mode}**
-Crude messages: **{crude_messages}**`,
+Crude messages: **{crude_messages}**
+Nudge depth: **{nudge_depth}**`,
+        refresh_cadence_1: `Every Turn`,
+        refresh_cadence_x: `Every {count} Turns`,
+        nudge_depth_tail: `Tail (after all dialogue)`,
+        nudge_depth_x: `Before {count} turns from bottom`,
         unchanged_title: `Current STM Parameters`,
         success_title: `STM Parameters Updated`,
       },
       "prompt-edit": {
-        description: `Customize the STM tool description and the create/update refresh nudges.`,
+        description: `Customize the STM tool description and the unified refresh nudge.`,
         modal_title: `Edit STM Prompts`,
         tool_description_label: `Tool Description`,
         tool_description_description: `What the update-STM tool advertises to the model. (Supports {short_term_memory_tool})`,
-        create_nudge_label: `Create Nudge`,
-        create_nudge_description: `Injected when no STM exists. (Supports {short_term_memory_tool})`,
-        update_nudge_label: `Update Nudge`,
-        update_nudge_description: `Injected to prompt a refresh. (Supports {short_term_memory_tool})`,
+        update_nudge_label: `Memory Nudge`,
+        update_nudge_description: `Injected to prompt creating or refreshing STM. (Supports {short_term_memory_tool})`,
         reset_placeholder: `Leave empty to reset to the built-in default.`,
         success_title: `STM Prompts Updated`,
         success_description: `**{custom_count}** prompt(s) now use a custom override; **{default_count}** use the built-in default.

@@ -446,13 +446,22 @@ function checkInsertCounts(dbWrite: string, tableName: string): void {
   });
 }
 
+// Export keys that are produced as nested objects/arrays by a dedicated repository
+// (ShortTermMemoryRepository.toExportShape) rather than flat SQL column SELECTs and a
+// per-table column export schema. They are still emitted by ExportRepository and
+// restored by ImportRepository (both verified below), so only the flat-column SELECT
+// alias and per-table composition rules are exempted for them.
+const REPOSITORY_SOURCED_EXPORT_KEYS = new Set(["stm_config", "stm_categories"]);
+
 function checkExportImportMappings(
   exportKeys: Set<string>,
   dataExportContent: string,
   dataImportContent: string,
 ): void {
   for (const key of exportKeys) {
-    if (!dataExportContent.match(new RegExp(`\\bas\\s+${key}\\b`, "i"))) {
+    // Repository-sourced nested exports have no `as <key>` SQL alias; skip that rule
+    // only (the emit + import-restore rules below still apply).
+    if (!REPOSITORY_SOURCED_EXPORT_KEYS.has(key) && !dataExportContent.match(new RegExp(`\\bas\\s+${key}\\b`, "i"))) {
       addIssue(
         "server-config-export",
         `serverConfigExportSchema includes ${key}, but ExportRepository.ts does not SELECT it`,
@@ -671,6 +680,9 @@ function checkServerConfigExportComposition(
   }
 
   for (const key of composedExportKeys) {
+    // STM customization is composed from serverStmConfigExportSchema as nested
+    // objects, not flat per-table columns, so it is exempt from this rule.
+    if (REPOSITORY_SOURCED_EXPORT_KEYS.has(key)) continue;
     if (!composedFromSlices.has(key)) {
       addIssue(
         "server-config-export-composition",

@@ -106,6 +106,10 @@ export type BuildContextResult = {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
+  nudgeItem?: StructuredContextItem;
+  /** Dialogue depth at which to inject `nudgeItem` (0 = tail). */
+  nudgeInjectionDepth?: number;
   /** Populated map of opaque keys -> real Discord message IDs. */
   messageIdMap: MessageIdMap;
 };
