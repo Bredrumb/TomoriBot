@@ -168,6 +168,30 @@ async function upsertStmSummary(
 }
 
 /**
+ * Nulls the summary column on an existing scope row.
+ * Used by summary-mode clear to durably remove the summary so it doesn't
+ * resurrect on the next cache miss via hydrateEntryFromDb.
+ */
+async function clearStmSummary(
+  scopeKind: "server" | "user",
+  serverDiscId: string | null,
+  userDiscId: string | null,
+  channelDiscId: string,
+  personaId: number | null,
+): Promise<void> {
+  await sql.unsafe(
+    `UPDATE short_term_memories
+     SET summary = NULL
+     WHERE scope_kind = $1
+       AND COALESCE(server_disc_id, '') = COALESCE($2, '')
+       AND COALESCE(user_disc_id, '')   = COALESCE($3, '')
+       AND channel_disc_id = $4
+       AND COALESCE(persona_id, 0) = COALESCE($5, 0)`,
+    [scopeKind, serverDiscId, userDiscId, channelDiscId, personaId],
+  );
+}
+
+/**
  * Upserts the categories JSONB field for a scope row; inserts the row if absent.
  */
 async function upsertStmCategories(
@@ -873,6 +897,48 @@ export function invalidateShortTermMemory(
       error,
       {
         errorType: "CACHE_INVALIDATION_ERROR",
+        metadata: { userDiscId: userId, channelId },
+      },
+    );
+  }
+}
+
+/**
+ * Durably clear a short-term memory summary — evicts cache AND nulls the
+ * summary column in the DB so the cleared state survives cache misses.
+ *
+ * @param userId - Discord user ID
+ * @param channelId - Discord channel ID
+ * @param personaId - Optional persona ID for persona-scoped memory
+ * @param serverId - Optional Discord server ID (omit or "DM" for DMs)
+ */
+export function clearShortTermMemorySummary(
+  userId: string,
+  channelId: string,
+  personaId?: number | null,
+  serverId?: string,
+): void {
+  try {
+    // 1. Evict in-memory cache entries (identical to invalidateShortTermMemory)
+    invalidateShortTermMemory(userId, channelId, personaId, serverId);
+
+    // 2. Persist the clear to the DB so hydrateEntryFromDb won't resurrect the old summary
+    const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
+    const resolvedPersonaId = personaId ?? null;
+    void clearStmSummary("user", serverDiscId, userId, channelId, resolvedPersonaId).catch((err) =>
+      log.warn("[shortTermMemoryCache] Failed to clear STM summary in DB (user scope)", { error: err }),
+    );
+    if (serverDiscId) {
+      void clearStmSummary("server", serverDiscId, null, channelId, resolvedPersonaId).catch((err) =>
+        log.warn("[shortTermMemoryCache] Failed to clear STM summary in DB (server scope)", { error: err }),
+      );
+    }
+  } catch (error) {
+    log.error(
+      `[shortTermMemoryCache] Failed to clear short-term memory summary - userId=${userId}, channelId=${channelId}`,
+      error,
+      {
+        errorType: "CACHE_CLEAR_ERROR",
         metadata: { userDiscId: userId, channelId },
       },
     );

@@ -34,6 +34,7 @@ import { log } from "../../utils/misc/logger";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
+import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 
 /** Single-summary fallback parameters — byte-identical to the pre-category schema. */
 const SUMMARY_PARAMETERS: ToolParameterSchema = {
@@ -124,13 +125,19 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     // Build slug→label map (deterministic, collision-safe)
     const slugMap = buildSlugMap(categories);
 
+    // Initialize macro resolver for custom descriptions
+    const macroResolver = createToolPromptMacroResolver({
+      provider: context.provider,
+      stateForContext: context.state,
+    });
+
     // One optional string property per category
     const properties: Record<string, ToolStringParameterSchema> = {};
     for (const [slug, label] of slugMap) {
       const cat = categories.find((c) => c.label === label);
       properties[slug] = {
         type: "string",
-        description: cat?.description ?? label,
+        description: sanitizeUnknownTemplatePlaceholders(await macroResolver.expand(cat?.description ?? label)),
       };
     }
 
@@ -140,8 +147,12 @@ export class UpdateShortTermMemoryTool extends BaseTool {
       required: [], // all fields are optional — the model fills whichever are relevant
     };
 
-    // Use per-server description override when provided
-    const toolDescription = stmConfig?.tool_description_override ?? this.description;
+    // Use per-server description override when provided; expand macros and sanitize
+    // so stray {placeholder} patterns don't leak unsanitized into the tool schema.
+    const rawDescription = stmConfig?.tool_description_override
+      ? stmConfig.tool_description_override
+      : this.description;
+    const toolDescription = sanitizeUnknownTemplatePlaceholders(await macroResolver.expand(rawDescription));
 
     // Return a variant that closes over slugMap in its execute()
     return Object.create(this, {

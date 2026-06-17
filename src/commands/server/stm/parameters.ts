@@ -213,7 +213,7 @@ async function replyEffectiveSettings(
   // Mirror the runtime fallbacks used by memories.ts so the echo matches reality.
   const effectiveCadence = config?.refresh_cadence ?? 1;
   const effectiveMode: ServerStmConfigRow["render_mode"] = config?.render_mode ?? RENDER_MODE_SUPERSEDE;
-  const effectiveCrude = config?.crude_message_count ?? 10;
+  const effectiveCrude = config?.crude_message_count ?? 6;
 
   await replyInfoEmbed(interaction, locale, {
     titleKey,

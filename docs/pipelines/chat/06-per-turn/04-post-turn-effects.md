@@ -68,6 +68,11 @@ the response was non-empty:
   responding persona).
 - Calls `storeShortTermMemory(...)` once per unique persona ID (or once with
   `null` if no persona IDs are known).
+- After storing the short-term memory entries, advances the STM cadence
+  counter via `incrementStmTurnCounter()`. The counter tracks
+  bot-participation cycles (not raw inbound messages) and is scoped to the
+  live STM row — server-shared in guilds, user-scoped in DMs. The counter
+  value gates the update-nudge in the context-build STM stage.
 - Failures are logged but don't propagate.
 
 ### 5. `emitThoughtLog`
@@ -106,6 +111,8 @@ After this stage runs:
   this channel — used by the next turn's persona-rotation logic.
 - Short-term memory entries are scoped per-persona-ID (so each persona has
   its own conversational continuity in the cache).
+- The STM cadence counter (`turnsSinceRefresh`) advances once per
+  bot-participation cycle after each STM write.
 - A pending boomerang from this turn is consumed exactly once.
 - Recursive re-entries (empty-response retry, boomerang) are *scheduled*
   with the appropriate flags (`skipLock=true` for retry,

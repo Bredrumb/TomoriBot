@@ -228,8 +228,12 @@ export async function buildShortTermMemoryContext(params: {
     const createNudgeOverride = stmConfig?.create_nudge_override ?? null;
     const updateNudgeOverride = stmConfig?.update_nudge_override ?? null;
 
-    // Category mode: any configuration other than the single default "summary" category
-    const isCategoryMode = !(stmCategoryRows.length === 1 && stmCategoryRows[0].label.toLowerCase() === "summary");
+    // Category mode: any configuration other than the single default "summary" category.
+    // An empty list (no rows resolved, e.g. no server) is NOT category mode — it must
+    // collapse to the backward-compatible summary path, not render empty labeled sections.
+    const isCategoryMode =
+      stmCategoryRows.length > 0 &&
+      !(stmCategoryRows.length === 1 && stmCategoryRows[0].label.toLowerCase() === "summary");
     const slugMap = isCategoryMode ? buildSlugMap(stmCategoryRows) : null;
     const categoryLabelList = isCategoryMode ? stmCategoryRows.map((r) => r.label).join(", ") : "";
 

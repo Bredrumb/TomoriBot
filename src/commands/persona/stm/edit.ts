@@ -40,9 +40,9 @@ import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, shortTermMemoryRepository } from "@/utils/db/repositories";
 import {
+  clearShortTermMemorySummary,
   getShortTermMemoryForServerChannel,
   getShortTermMemoryForUserChannel,
-  invalidateShortTermMemory,
   updateShortTermMemoryCategories,
   updateShortTermMemorySummary,
   type ShortTermMemoryEntry,
@@ -134,7 +134,8 @@ export async function execute(
     // 3. Load the server's ordered category definitions ONCE — shared by every picker pass.
     //    getStmCategories always returns at least the default `summary` category.
     const categoryRows = await shortTermMemoryRepository.getStmCategories(tomoriState.server_id);
-    const isCategoryMode = !(categoryRows.length === 1 && categoryRows[0].label.toLowerCase() === "summary");
+    const isCategoryMode =
+      categoryRows.length > 0 && !(categoryRows.length === 1 && categoryRows[0].label.toLowerCase() === "summary");
     const slugMap = buildSlugMap(categoryRows);
 
     // buildSlugMap iterates categoryRows in order, so the i-th slug pairs with the i-th row —
@@ -386,8 +387,6 @@ async function persistStmEdit(args: {
     return;
   }
 
-  // Empty summary submit → clear the live scope entry from cache so it stops rendering
-  // immediately. The durable row is left to be overwritten by the next STM update or the
-  // janitor; there is no dedicated "clear summary only" write path.
-  invalidateShortTermMemory(userId, channelId, args.personaId, guildId);
+  // Empty summary submit → durably clear the summary from both cache and DB.
+  clearShortTermMemorySummary(userId, channelId, args.personaId, guildId);
 }
