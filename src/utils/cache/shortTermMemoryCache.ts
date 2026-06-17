@@ -18,6 +18,8 @@
  * - Cross-model compatible: Summaries created by any model work for all models
  */
 
+import { sql } from "@/utils/db/client";
+import type { ShortTermMemoryRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 
 /**
@@ -40,6 +42,15 @@ export interface ShortTermMemoryEntry {
 
   /** Optional tool-generated summary (replaces crude conversation when present) */
   summary?: string;
+
+  /** Structured memory categories for category-mode STM (slug → value map) */
+  categories?: Record<string, string>;
+
+  /** Turns elapsed since the last STM refresh (used for cadence-gated nudges) */
+  turnsSinceRefresh?: number;
+
+  /** Monotonic turn counter at the time of the last refresh */
+  lastRefreshedTurn?: number;
 
   /** Discord server ID (or "DM" for direct messages) */
   serverId: string;
@@ -79,6 +90,7 @@ interface CacheStats {
 
 // Environment variables for configuration
 const CRUDE_CONVERSATION_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_TTL_HOURS || "12", 10);
+export const STM_MAX_CATEGORIES = Number.parseInt(process.env.STM_MAX_CATEGORIES || "5", 10);
 const SUMMARY_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS || "24", 10);
 const MAX_SUMMARY_LENGTH = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH || "1500", 10);
 const MAX_MESSAGES_PER_CHANNEL = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL || "10", 10);
@@ -104,6 +116,168 @@ const stats: CacheStats = {
   invalidations: 0,
   expirations: 0,
 };
+
+// Keys currently being hydrated from DB — prevents duplicate concurrent reads.
+const pendingHydrations = new Set<string>();
+
+// Functional unique-index conflict target used in all short_term_memories upserts.
+const STM_CONFLICT = `(scope_kind, COALESCE(server_disc_id, ''), COALESCE(user_disc_id, ''), channel_disc_id, COALESCE(persona_id, 0))`;
+
+/**
+ * Ensures a short_term_memories row exists for the given scope identity.
+ * Does NOT overwrite existing categories, summary, or counters — safe to call
+ * on every conversation turn to guarantee the row is present before later updates.
+ */
+async function ensureStmRow(
+  scopeKind: "server" | "user",
+  serverDiscId: string | null,
+  userDiscId: string | null,
+  channelDiscId: string,
+  personaId: number | null,
+  personaLineageId: number | null,
+): Promise<void> {
+  await sql.unsafe(
+    `INSERT INTO short_term_memories
+       (scope_kind, server_disc_id, user_disc_id, channel_disc_id, persona_id, persona_lineage_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT ${STM_CONFLICT} DO NOTHING`,
+    [scopeKind, serverDiscId, userDiscId, channelDiscId, personaId, personaLineageId],
+  );
+}
+
+/**
+ * Upserts the summary field for a scope row; inserts the row if absent.
+ */
+async function upsertStmSummary(
+  scopeKind: "server" | "user",
+  serverDiscId: string | null,
+  userDiscId: string | null,
+  channelDiscId: string,
+  personaId: number | null,
+  personaLineageId: number | null,
+  summary: string,
+): Promise<void> {
+  await sql.unsafe(
+    `INSERT INTO short_term_memories
+       (scope_kind, server_disc_id, user_disc_id, channel_disc_id, persona_id, persona_lineage_id, summary)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT ${STM_CONFLICT}
+     DO UPDATE SET summary = EXCLUDED.summary`,
+    [scopeKind, serverDiscId, userDiscId, channelDiscId, personaId, personaLineageId, summary],
+  );
+}
+
+/**
+ * Upserts the categories JSONB field for a scope row; inserts the row if absent.
+ */
+async function upsertStmCategories(
+  scopeKind: "server" | "user",
+  serverDiscId: string | null,
+  userDiscId: string | null,
+  channelDiscId: string,
+  personaId: number | null,
+  personaLineageId: number | null,
+  categories: Record<string, string>,
+): Promise<void> {
+  await sql.unsafe(
+    `INSERT INTO short_term_memories
+       (scope_kind, server_disc_id, user_disc_id, channel_disc_id, persona_id, persona_lineage_id, categories)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::JSONB)
+     ON CONFLICT ${STM_CONFLICT}
+     DO UPDATE SET categories = EXCLUDED.categories`,
+    [scopeKind, serverDiscId, userDiscId, channelDiscId, personaId, personaLineageId, JSON.stringify(categories)],
+  );
+}
+
+/**
+ * Atomically increments turns_since_refresh on a scope row (insert-or-increment).
+ */
+async function incrementStmCounter(
+  scopeKind: "server" | "user",
+  serverDiscId: string | null,
+  userDiscId: string | null,
+  channelDiscId: string,
+  personaId: number | null,
+  personaLineageId: number | null,
+): Promise<void> {
+  await sql.unsafe(
+    `INSERT INTO short_term_memories
+       (scope_kind, server_disc_id, user_disc_id, channel_disc_id, persona_id, persona_lineage_id, turns_since_refresh)
+     VALUES ($1, $2, $3, $4, $5, $6, 1)
+     ON CONFLICT ${STM_CONFLICT}
+     DO UPDATE SET turns_since_refresh = short_term_memories.turns_since_refresh + 1`,
+    [scopeKind, serverDiscId, userDiscId, channelDiscId, personaId, personaLineageId],
+  );
+}
+
+/**
+ * Resets turns_since_refresh to 0 and advances last_refreshed_turn by 1.
+ */
+async function resetStmCounter(
+  scopeKind: "server" | "user",
+  serverDiscId: string | null,
+  userDiscId: string | null,
+  channelDiscId: string,
+  personaId: number | null,
+  personaLineageId: number | null,
+): Promise<void> {
+  await sql.unsafe(
+    `INSERT INTO short_term_memories
+       (scope_kind, server_disc_id, user_disc_id, channel_disc_id, persona_id, persona_lineage_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT ${STM_CONFLICT}
+     DO UPDATE SET
+       turns_since_refresh = 0,
+       last_refreshed_turn = short_term_memories.last_refreshed_turn + 1`,
+    [scopeKind, serverDiscId, userDiscId, channelDiscId, personaId, personaLineageId],
+  );
+}
+
+/**
+ * Reads a single short_term_memories row from DB and warms the in-memory cache.
+ * Only writes to cache if the key is still absent after the async round-trip.
+ */
+async function hydrateEntryFromDb(
+  key: string,
+  scopeKind: "server" | "user",
+  serverDiscId: string | null,
+  userDiscId: string | null,
+  channelDiscId: string,
+  personaId: number | null,
+): Promise<void> {
+  try {
+    const rows = await sql.unsafe<ShortTermMemoryRow[]>(
+      `SELECT * FROM short_term_memories
+       WHERE scope_kind = $1
+         AND COALESCE(server_disc_id, '') = COALESCE($2, '')
+         AND COALESCE(user_disc_id, '')   = COALESCE($3, '')
+         AND channel_disc_id = $4
+         AND COALESCE(persona_id, 0) = COALESCE($5, 0)
+       LIMIT 1`,
+      [scopeKind, serverDiscId, userDiscId, channelDiscId, personaId],
+    );
+
+    const row = rows[0];
+    // Only warm the cache if another path hasn't already populated this key
+    if (row && !cache.has(key)) {
+      const hasCategories = Object.keys(row.categories).length > 0;
+      cache.set(key, {
+        messages: [],
+        summary: row.summary ?? undefined,
+        categories: hasCategories ? row.categories : undefined,
+        turnsSinceRefresh: row.turns_since_refresh,
+        lastRefreshedTurn: row.last_refreshed_turn,
+        serverId: row.server_disc_id ?? "DM",
+        channelId: row.channel_disc_id,
+        personaId: row.persona_id ?? null,
+        personaLineageId: row.persona_lineage_id ?? null,
+        lastUpdated: row.updated_at ? row.updated_at.getTime() : Date.now(),
+      });
+    }
+  } catch (error) {
+    log.warn("[shortTermMemoryCache] Background DB hydration failed", { key, error });
+  }
+}
 
 /**
  * Generate cache key for a user in a channel, optionally scoped to a persona
@@ -195,6 +369,9 @@ function storeMemoryEntry(
   const entry: ShortTermMemoryEntry = {
     messages,
     summary: existing?.summary,
+    categories: existing?.categories,
+    turnsSinceRefresh: existing?.turnsSinceRefresh,
+    lastRefreshedTurn: existing?.lastRefreshedTurn,
     serverId,
     serverName,
     channelId,
@@ -248,11 +425,60 @@ function collectMemories(
   return memories;
 }
 
+/**
+ * Parses a cache key back into its scope identity components.
+ * Returns null for unrecognised key formats.
+ */
+function parseStmKey(key: string): {
+  scopeKind: "server" | "user";
+  discId: string;
+  channelDiscId: string;
+  personaId: number | null;
+} | null {
+  const userMatch = /^shortterm:user:([^:]+):([^:]+)(?::(\d+))?$/.exec(key);
+  if (userMatch) {
+    return {
+      scopeKind: "user",
+      discId: userMatch[1],
+      channelDiscId: userMatch[2],
+      personaId: userMatch[3] !== undefined ? Number(userMatch[3]) : null,
+    };
+  }
+  const serverMatch = /^shortterm:server:([^:]+):([^:]+)(?::(\d+))?$/.exec(key);
+  if (serverMatch) {
+    return {
+      scopeKind: "server",
+      discId: serverMatch[1],
+      channelDiscId: serverMatch[2],
+      personaId: serverMatch[3] !== undefined ? Number(serverMatch[3]) : null,
+    };
+  }
+  return null;
+}
+
 function getShortTermMemoryByKey(key: string): ShortTermMemoryEntry | undefined {
   const entry = cache.get(key);
 
   if (!entry) {
     stats.misses++;
+    // Trigger a one-shot background DB hydration on miss so categories/summary
+    // are available on the next request after a bot restart.
+    if (!pendingHydrations.has(key)) {
+      const parsed = parseStmKey(key);
+      if (parsed) {
+        pendingHydrations.add(key);
+        const serverDiscId = parsed.scopeKind === "server" ? parsed.discId : null;
+        const userDiscId = parsed.scopeKind === "user" ? parsed.discId : null;
+        void hydrateEntryFromDb(
+          key,
+          parsed.scopeKind,
+          serverDiscId,
+          userDiscId,
+          parsed.channelDiscId,
+          parsed.personaId,
+        ).finally(() => pendingHydrations.delete(key));
+      }
+    }
     return undefined;
   }
 
@@ -299,6 +525,7 @@ function updateSummaryForKey(
   }
 
   cache.set(key, existing);
+  // (categories, turnsSinceRefresh, lastRefreshedTurn preserved automatically since we mutate existing)
 }
 
 /**
@@ -339,7 +566,10 @@ export function storeShortTermMemory(
     }
 
     const limitedMessages = messages.slice(-MAX_MESSAGES_PER_CHANNEL);
+    const resolvedPersonaId = personaId ?? null;
+    const resolvedLineageId = personaLineageId ?? null;
 
+    // 1. Write to in-memory cache for both scopes
     storeMemoryEntry(
       getUserCacheKey(userId, channelId, personaId),
       channelId,
@@ -363,6 +593,17 @@ export function storeShortTermMemory(
         personaId,
         personaLineageId,
         parentChannelId,
+      );
+    }
+
+    // 2. Ensure durable rows exist (fire-and-forget; DO NOTHING on conflict to preserve categories/summary)
+    const serverDiscId = serverId !== "DM" ? serverId : null;
+    void ensureStmRow("user", serverDiscId, userId, channelId, resolvedPersonaId, resolvedLineageId).catch((err) =>
+      log.warn("[shortTermMemoryCache] Failed to persist user STM row", { error: err }),
+    );
+    if (serverId !== "DM") {
+      void ensureStmRow("server", serverId, null, channelId, resolvedPersonaId, resolvedLineageId).catch((err) =>
+        log.warn("[shortTermMemoryCache] Failed to persist server STM row", { error: err }),
       );
     }
   } catch (error) {
@@ -535,7 +776,10 @@ export function updateShortTermMemorySummary(
     }
 
     const truncatedSummary = summary.length > MAX_SUMMARY_LENGTH ? summary.slice(0, MAX_SUMMARY_LENGTH) : summary;
+    const resolvedPersonaId = personaId ?? null;
+    const resolvedLineageId = personaLineageId ?? null;
 
+    // 1. Update in-memory cache
     updateSummaryForKey(
       getUserCacheKey(userId, channelId, personaId),
       truncatedSummary,
@@ -560,6 +804,29 @@ export function updateShortTermMemorySummary(
         personaLineageId,
         parentChannelId,
       );
+    }
+
+    // 2. Persist to DB after successful cache update (CLAUDE.md rule 5)
+    const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
+    void upsertStmSummary(
+      "user",
+      serverDiscId,
+      userId,
+      channelId,
+      resolvedPersonaId,
+      resolvedLineageId,
+      truncatedSummary,
+    ).catch((err) => log.warn("[shortTermMemoryCache] Failed to persist STM summary (user scope)", { error: err }));
+    if (serverId && serverId !== "DM") {
+      void upsertStmSummary(
+        "server",
+        serverId,
+        null,
+        channelId,
+        resolvedPersonaId,
+        resolvedLineageId,
+        truncatedSummary,
+      ).catch((err) => log.warn("[shortTermMemoryCache] Failed to persist STM summary (server scope)", { error: err }));
     }
   } catch (error) {
     log.error(
@@ -763,4 +1030,187 @@ export function getShortTermMemoryCacheStats(): CacheStats & {
     size: cache.size,
     hitRate,
   };
+}
+
+/**
+ * Update category values for STM entries (both user and server scope).
+ * Writes through to the durable short_term_memories DB row after updating cache.
+ *
+ * @param userId - Discord user ID
+ * @param channelId - Discord channel ID
+ * @param categories - Map of category slug → value
+ * @param serverId - Discord server ID (or "DM")
+ * @param serverName - Optional server name
+ * @param channelName - Optional channel name
+ * @param personaId - Optional persona ID for persona-scoped memory
+ * @param personaLineageId - Optional persona lineage ID
+ * @param parentChannelId - Optional parent channel ID (thread privacy)
+ */
+export async function updateShortTermMemoryCategories(
+  userId: string,
+  channelId: string,
+  categories: Record<string, string>,
+  serverId?: string,
+  serverName?: string,
+  channelName?: string,
+  personaId?: number | null,
+  personaLineageId?: number | null,
+  parentChannelId?: string | null,
+): Promise<void> {
+  try {
+    if (!userId || !channelId) {
+      log.warn(
+        `[shortTermMemoryCache] Invalid parameters for updateShortTermMemoryCategories - userId=${!!userId}, channelId=${!!channelId}`,
+      );
+      return;
+    }
+
+    const resolvedPersonaId = personaId ?? null;
+    const resolvedLineageId = personaLineageId ?? null;
+
+    // 1. Update in-memory cache for both scopes
+    const userKey = getUserCacheKey(userId, channelId, personaId);
+    let userEntry = cache.get(userKey);
+    if (!userEntry) {
+      userEntry = {
+        messages: [],
+        serverId: serverId ?? "unknown",
+        serverName,
+        channelId,
+        parentChannelId,
+        channelName,
+        personaId,
+        personaLineageId,
+        lastUpdated: Date.now(),
+      };
+    }
+    userEntry.categories = categories;
+    userEntry.lastUpdated = Date.now();
+    cache.set(userKey, userEntry);
+
+    if (serverId && serverId !== "DM") {
+      const serverKey = getServerCacheKey(serverId, channelId, personaId);
+      let serverEntry = cache.get(serverKey);
+      if (!serverEntry) {
+        serverEntry = {
+          messages: [],
+          serverId,
+          serverName,
+          channelId,
+          parentChannelId,
+          channelName,
+          personaId,
+          personaLineageId,
+          lastUpdated: Date.now(),
+        };
+      }
+      serverEntry.categories = categories;
+      serverEntry.lastUpdated = Date.now();
+      cache.set(serverKey, serverEntry);
+    }
+
+    // 2. Persist to DB after cache is updated (CLAUDE.md rule 5)
+    const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
+    await upsertStmCategories(
+      "user",
+      serverDiscId,
+      userId,
+      channelId,
+      resolvedPersonaId,
+      resolvedLineageId,
+      categories,
+    );
+    if (serverId && serverId !== "DM") {
+      await upsertStmCategories("server", serverId, null, channelId, resolvedPersonaId, resolvedLineageId, categories);
+    }
+  } catch (error) {
+    log.error(
+      `[shortTermMemoryCache] Failed to update STM categories - userId=${userId}, channelId=${channelId}`,
+      error,
+      {
+        errorType: "CACHE_UPDATE_ERROR",
+        metadata: { userDiscId: userId, channelId },
+      },
+    );
+  }
+}
+
+/**
+ * Increment the turn counter on the live scope row after a bot-participation cycle.
+ * In guilds the live scope is server-shared (pass serverId, userId=null).
+ * In DMs the live scope is user-scoped (pass userId, serverId=null).
+ *
+ * @param channelId - Discord channel ID
+ * @param serverId - Discord server ID for guild scope; null for DM
+ * @param userId - Discord user ID for DM scope; null for guild
+ * @param personaId - Optional persona ID
+ */
+export async function incrementStmTurnCounter(
+  channelId: string,
+  serverId: string | null,
+  userId: string | null,
+  personaId?: number | null,
+): Promise<void> {
+  try {
+    if (!serverId && !userId) return;
+    const resolvedPersonaId = personaId ?? null;
+    const scopeKind = serverId ? "server" : "user";
+    const cacheKey = serverId
+      ? getServerCacheKey(serverId, channelId, personaId)
+      : getUserCacheKey(userId ?? "", channelId, personaId);
+
+    // 1. Increment in-memory entry if present
+    const entry = cache.get(cacheKey);
+    if (entry) {
+      entry.turnsSinceRefresh = (entry.turnsSinceRefresh ?? 0) + 1;
+    }
+
+    // 2. Persist increment to DB
+    await incrementStmCounter(scopeKind, serverId, userId, channelId, resolvedPersonaId, null);
+  } catch (error) {
+    log.error("[shortTermMemoryCache] Failed to increment STM turn counter", error, {
+      errorType: "CACHE_UPDATE_ERROR",
+      metadata: { channelId, serverId, userId },
+    });
+  }
+}
+
+/**
+ * Reset the turn counter on the live scope row after a successful STM refresh.
+ * Advances last_refreshed_turn monotonically so callers can track refresh epochs.
+ *
+ * @param channelId - Discord channel ID
+ * @param serverId - Discord server ID for guild scope; null for DM
+ * @param userId - Discord user ID for DM scope; null for guild
+ * @param personaId - Optional persona ID
+ */
+export async function resetStmTurnCounter(
+  channelId: string,
+  serverId: string | null,
+  userId: string | null,
+  personaId?: number | null,
+): Promise<void> {
+  try {
+    if (!serverId && !userId) return;
+    const resolvedPersonaId = personaId ?? null;
+    const scopeKind = serverId ? "server" : "user";
+    const cacheKey = serverId
+      ? getServerCacheKey(serverId, channelId, personaId)
+      : getUserCacheKey(userId ?? "", channelId, personaId);
+
+    // 1. Reset in-memory entry if present
+    const entry = cache.get(cacheKey);
+    if (entry) {
+      entry.lastRefreshedTurn = (entry.lastRefreshedTurn ?? 0) + 1;
+      entry.turnsSinceRefresh = 0;
+    }
+
+    // 2. Persist reset to DB
+    await resetStmCounter(scopeKind, serverId, userId, channelId, resolvedPersonaId, null);
+  } catch (error) {
+    log.error("[shortTermMemoryCache] Failed to reset STM turn counter", error, {
+      errorType: "CACHE_UPDATE_ERROR",
+      metadata: { channelId, serverId, userId },
+    });
+  }
 }

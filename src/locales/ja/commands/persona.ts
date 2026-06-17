@@ -213,6 +213,17 @@ export default {
         description: `ペルソナプロンプトを削除します。`,
       },
     },
+    stm: {
+      description: `ペルソナの短期記憶を管理します。`,
+      edit: {
+        description: `このチャンネルにおけるペルソナの短期記憶を手動で編集します。`,
+        no_permission_title: `サーバー管理権限が必要です`,
+        no_permission_description: `ペルソナの短期記憶を編集するには **サーバー管理** 権限が必要です。`,
+        modal_title: `短期記憶を編集`,
+        success_title: `短期記憶を更新しました`,
+        success_description: `このチャンネルの **{persona_name}** の短期記憶を更新しました。`,
+      },
+    },
     "sample-dialogue": {
       description: `私がどのように応答すべきかの例として、ユーザー/ボットの対話ペアを追加します。`,
       add: {

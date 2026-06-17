@@ -59,6 +59,57 @@ export default {
         no_summary: `No summary`,
         more_cleared: `- ...and {count} more`,
       },
+      parameters: {
+        description: `Tune the STM refresh cadence, render mode, and crude-message count.`,
+        "refresh-cadence_description": `Turns between refresh nudges (1 = every turn). Higher means the bot is reminded less often.`,
+        "render-mode_description": `How structured memory renders: supersede crude turns, or show both additively.`,
+        "crude-messages_description": `How many recent crude messages factor into summary rendering.`,
+        supersede_option: `Supersede (categories replace crude turns)`,
+        crude_summary_option: `Crude + summary (show both additively)`,
+        summary_description: `Refresh cadence: **{refresh_cadence}** turn(s)
+Render mode: **{render_mode}**
+Crude messages: **{crude_messages}**`,
+        unchanged_title: `Current STM Parameters`,
+        success_title: `STM Parameters Updated`,
+      },
+      "prompt-edit": {
+        description: `Customize the STM tool description and the create/update refresh nudges.`,
+        modal_title: `Edit STM Prompts`,
+        tool_description_label: `Tool Description`,
+        tool_description_description: `What the update-STM tool advertises to the model. Leave empty to use the default.`,
+        create_nudge_label: `Create Nudge`,
+        create_nudge_description: `Injected when no STM exists yet but enough turns have passed. Leave empty for the default.`,
+        update_nudge_label: `Update Nudge`,
+        update_nudge_description: `Injected to prompt a refresh of existing STM. Leave empty for the default.`,
+        reset_placeholder: `Leave empty to reset to the built-in default.`,
+        success_title: `STM Prompts Updated`,
+        success_description: `**{custom_count}** prompt(s) now use a custom override; **{default_count}** use the built-in default.
+\`{...}\` macros are supported; unknown \`{placeholders}\` are sanitized at injection time.`,
+      },
+      "categories-edit": {
+        description: `Define up to 5 labeled STM categories the bot fills via tool calls.`,
+        modal_title: `Edit STM Categories`,
+        slot_1_label: `Category 1`,
+        slot_2_label: `Category 2`,
+        slot_3_label: `Category 3`,
+        slot_4_label: `Category 4`,
+        slot_5_label: `Category 5`,
+        slot_instructions: `One category per box as "Label: Description" (e.g. "Goals: The party's current objectives"). Empty boxes are skipped; clear all to restore the default summary.`,
+        slot_placeholder: `Label: Description`,
+        invalid_format_title: `Invalid Category Format`,
+        invalid_format_description: `This entry is missing a colon — use "Label: Description":
+{line}`,
+        invalid_category_title: `Invalid Category`,
+        invalid_category_description: `Each category needs a usable label and a non-empty description:
+{line}`,
+        duplicate_title: `Duplicate Category`,
+        duplicate_description: `The label **{label}** maps to the same field as another category. Use distinct labels.`,
+        reset_title: `STM Categories Reset`,
+        reset_description: `All categories were cleared, so the default \`summary\` category was restored.`,
+        success_title: `STM Categories Updated`,
+        success_description: `**{count}** categor(y/ies) are now configured:
+{categories}`,
+      },
     },
     "private-channels": {
       description: `Manage private channels where STMs are isolated and thought logs are suppressed`,

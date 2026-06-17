@@ -780,6 +780,61 @@ export const serverMemoryConfigSchema = z.object({
 });
 export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
 
+// ── STM customization (migration 034) ────────────────────────────────────────
+
+export const serverStmConfigSchema = z.object({
+  server_id: z.number().int(),
+  refresh_cadence: z.number().int().default(1),
+  render_mode: z.enum(["supersede", "crude_summary"]).default("supersede"),
+  crude_message_count: z.number().int().default(10),
+  tool_description_override: z.string().nullable().optional(),
+  create_nudge_override: z.string().nullable().optional(),
+  update_nudge_override: z.string().nullable().optional(),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerStmConfigRow = z.infer<typeof serverStmConfigSchema>;
+
+export const stmCategorySchema = z.object({
+  stm_category_id: z.number().int().optional(),
+  server_id: z.number().int(),
+  position: z.number().int().min(0).max(4),
+  label: z.string(),
+  description: z.string(),
+});
+export type StmCategoryRow = z.infer<typeof stmCategorySchema>;
+
+function normalizeStmCategories(value: unknown): Record<string, string> {
+  if (value === null || value === undefined) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed))
+        return parsed as Record<string, string>;
+    } catch {
+      return {};
+    }
+  }
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, string>;
+  return {};
+}
+
+export const shortTermMemoryRowSchema = z.object({
+  stm_id: z.number().int().optional(),
+  server_disc_id: z.string().nullable().optional(),
+  user_disc_id: z.string().nullable().optional(),
+  channel_disc_id: z.string(),
+  persona_id: z.number().int().nullable().optional(),
+  persona_lineage_id: z.number().int().nullable().optional(),
+  scope_kind: z.enum(["server", "user"]),
+  categories: z.preprocess(normalizeStmCategories, z.record(z.string(), z.string()).default({})),
+  summary: z.string().nullable().optional(),
+  turns_since_refresh: z.number().int().default(0),
+  last_refreshed_turn: z.number().int().default(0),
+  updated_at: z.date().optional(),
+});
+export type ShortTermMemoryRow = z.infer<typeof shortTermMemoryRowSchema>;
+
 /**
  * Assembled view over the 13 split server config tables (Phase 6 / Stage B).
  * Replaces the previous monolithic `tomori_configs` row shape.

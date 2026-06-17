@@ -1,5 +1,5 @@
 import { PrivacyLevel } from "@/types/db/schema";
-import { storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
+import { incrementStmTurnCounter, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
@@ -175,6 +175,14 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
         personaId,
         response?.personaLineageId ?? null,
         context.channel.isThread() ? context.channel.parentId : null,
+      );
+      // Advance the cadence counter on the live scope row (server-shared in guild, user in DM).
+      // This fires once per bot-participation cycle — not per raw inbound message.
+      void incrementStmTurnCounter(
+        context.channel.id,
+        context.isDMChannel ? null : context.serverDiscId,
+        context.isDMChannel ? context.userDiscId : null,
+        personaId,
       );
     }
   } catch (error) {

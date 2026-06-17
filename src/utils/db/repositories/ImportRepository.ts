@@ -24,6 +24,7 @@ import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { configRepository } from "@/utils/db/repositories/ConfigRepository";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import type { ServerChatConfigRow, ServerNoticeEmbedsConfigRow } from "@/types/db/schema";
 
 export type ImportFileType =
@@ -234,7 +235,10 @@ export class ImportRepository {
         return { success: false, error: "commands.data.import.error_no_server_data" };
       }
 
-      const configFields = Object.keys(config);
+      // STM customization travels as nested keys (stm_config / stm_categories) that are
+      // restored via shortTermMemoryRepository.fromExportShape, NOT the dynamic flat-config
+      // SQL writer — so exclude them from the column-name allowlist validation below.
+      const configFields = Object.keys(config).filter((f) => f !== "stm_config" && f !== "stm_categories");
       try {
         validateTomoriConfigFields(configFields);
       } catch (error) {
@@ -439,6 +443,15 @@ export class ImportRepository {
 
         config.welcome_prompt !== undefined
           ? configRepository.updateWelcomeConfig(serverId, { welcome_prompt: config.welcome_prompt })
+          : Promise.resolve(true),
+
+        // STM customization (config + categories) restores via the repository's export
+        // shape, which upserts server_stm_configs and replace-alls stm_categories.
+        config.stm_config !== undefined || config.stm_categories !== undefined
+          ? shortTermMemoryRepository.fromExportShape(serverDiscId, {
+              stm_config: config.stm_config ?? null,
+              stm_categories: config.stm_categories ?? [],
+            })
           : Promise.resolve(true),
       ]);
 

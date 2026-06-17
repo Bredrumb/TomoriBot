@@ -59,6 +59,57 @@ export default {
         no_summary: `要約なし`,
         more_cleared: `- ...他 {count} 件`,
       },
+      parameters: {
+        description: `STMの更新頻度・表示モード・生メッセージ数を調整します。`,
+        "refresh-cadence_description": `更新を促すまでのターン数（1＝毎ターン）。大きいほど促しは少なくなります。`,
+        "render-mode_description": `構造化メモリの表示方法：生のやり取りを置き換えるか、両方を併記するか。`,
+        "crude-messages_description": `要約表示に反映する直近の生メッセージ数。`,
+        supersede_option: `置き換え（カテゴリで生のやり取りを置換）`,
+        crude_summary_option: `生＋要約（両方を併記）`,
+        summary_description: `更新頻度：**{refresh_cadence}** ターン
+表示モード：**{render_mode}**
+生メッセージ数：**{crude_messages}**`,
+        unchanged_title: `現在のSTMパラメータ`,
+        success_title: `STMパラメータを更新しました`,
+      },
+      "prompt-edit": {
+        description: `STMツールの説明文と、作成・更新の促し文をカスタマイズします。`,
+        modal_title: `STMプロンプトを編集`,
+        tool_description_label: `ツール説明`,
+        tool_description_description: `STM更新ツールがモデルに提示する説明文。空欄でデフォルトを使用します。`,
+        create_nudge_label: `作成の促し`,
+        create_nudge_description: `STMがまだ無く、十分なターンが経過したときに挿入されます。空欄でデフォルトを使用します。`,
+        update_nudge_label: `更新の促し`,
+        update_nudge_description: `既存STMの更新を促すために挿入されます。空欄でデフォルトを使用します。`,
+        reset_placeholder: `空欄にすると組み込みのデフォルトに戻します。`,
+        success_title: `STMプロンプトを更新しました`,
+        success_description: `**{custom_count}** 件のプロンプトがカスタム設定、**{default_count}** 件がデフォルトを使用します。
+\`{...}\` マクロに対応しています。未知の \`{placeholders}\` は挿入時に除去されます。`,
+      },
+      "categories-edit": {
+        description: `ボットがツール呼び出しで埋める最大5つのSTMカテゴリを定義します。`,
+        modal_title: `STMカテゴリを編集`,
+        slot_1_label: `カテゴリ 1`,
+        slot_2_label: `カテゴリ 2`,
+        slot_3_label: `カテゴリ 3`,
+        slot_4_label: `カテゴリ 4`,
+        slot_5_label: `カテゴリ 5`,
+        slot_instructions: `1つの枠につき「ラベル: 説明」形式で入力（例：「目標: パーティの現在の目的」）。空欄は無視され、すべて空欄にすると既定の要約に戻ります。`,
+        slot_placeholder: `ラベル: 説明`,
+        invalid_format_title: `カテゴリ形式が不正です`,
+        invalid_format_description: `この入力にはコロンがありません。「ラベル: 説明」の形式で入力してください：
+{line}`,
+        invalid_category_title: `カテゴリが不正です`,
+        invalid_category_description: `各カテゴリには有効なラベルと空でない説明が必要です：
+{line}`,
+        duplicate_title: `カテゴリが重複しています`,
+        duplicate_description: `ラベル **{label}** は別のカテゴリと同じフィールドになります。異なるラベルを使用してください。`,
+        reset_title: `STMカテゴリをリセットしました`,
+        reset_description: `すべてのカテゴリが削除されたため、既定の \`summary\` カテゴリを復元しました。`,
+        success_title: `STMカテゴリを更新しました`,
+        success_description: `現在 **{count}** 件のカテゴリが設定されています：
+{categories}`,
+      },
     },
     "private-channels": {
       description: `STMを隔離し、思考ログを抑制するプライベートチャンネルを管理します`,

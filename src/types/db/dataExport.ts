@@ -250,6 +250,36 @@ export const serverWelcomeConfigExportSchema = z.object({
 });
 
 /**
+ * Portable STM customization export fields (server_stm_configs + stm_categories).
+ * Unlike the flat split-config tables, STM travels as a nested config object plus an
+ * ordered categories array — these mirror ShortTermMemoryRepository's export shape.
+ * Both keys are optional so exports predating STM customization still validate.
+ * Per-channel durable STM *state* is intentionally NOT exported (design decision 8).
+ */
+export const serverStmConfigExportSchema = z.object({
+  stm_config: z
+    .object({
+      refresh_cadence: z.number().int(),
+      render_mode: z.enum(["supersede", "crude_summary"]),
+      crude_message_count: z.number().int(),
+      tool_description_override: z.string().nullable(),
+      create_nudge_override: z.string().nullable(),
+      update_nudge_override: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
+  stm_categories: z
+    .array(
+      z.object({
+        position: z.number().int().min(0).max(4),
+        label: z.string(),
+        description: z.string(),
+      }),
+    )
+    .optional(),
+});
+
+/**
  * Server configuration export schema.
  * Flat JSON shape is preserved for existing export/import file compatibility,
  * but the schema is now composed by split config-table ownership.
@@ -267,7 +297,8 @@ export const serverConfigExportSchema = serverModelConfigExportSchema
   .merge(serverNovelaiImagegenConfigExportSchema)
   .merge(serverByokConfigExportSchema)
   .merge(serverMemoryConfigExportSchema)
-  .merge(serverWelcomeConfigExportSchema);
+  .merge(serverWelcomeConfigExportSchema)
+  .merge(serverStmConfigExportSchema);
 
 export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
 

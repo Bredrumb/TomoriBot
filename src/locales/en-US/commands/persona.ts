@@ -213,6 +213,17 @@ Click **Confirm** to edit it.`,
         description: `Remove a persona prompt.`,
       },
     },
+    stm: {
+      description: `Manage a persona's short-term memory.`,
+      edit: {
+        description: `Hand-edit a persona's short-term memory for this channel.`,
+        no_permission_title: `Manage Server Required`,
+        no_permission_description: `You need the **Manage Server** permission to edit a persona's short-term memory.`,
+        modal_title: `Edit Short-Term Memory`,
+        success_title: `Short-Term Memory Updated`,
+        success_description: `Updated the short-term memory for **{persona_name}** in this channel.`,
+      },
+    },
     "sample-dialogue": {
       description: `Add a sample user/bot dialogue pair to as an example for how I should respond.`,
       add: {

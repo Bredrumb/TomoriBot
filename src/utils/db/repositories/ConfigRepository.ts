@@ -26,6 +26,7 @@ import type {
   ServerNovelaiImagegenConfigRow,
   ServerByokConfigRow,
   ServerMemoryConfigRow,
+  ServerStmConfigRow,
   PersonaAutochRuntimeStateRow,
 } from "@/types/db/schema";
 import { assembledServerConfigSchema, personaAutochRuntimeStateSchema, naiPresetSchema } from "@/types/db/schema";
@@ -877,6 +878,10 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   async updateMemoryConfig(serverId: number, patch: Partial<ServerMemoryConfigRow>): Promise<boolean> {
     return this.executeUpdate("server_memory_configs", serverId, patch);
+  }
+
+  async updateStmConfig(serverId: number, patch: Partial<ServerStmConfigRow>): Promise<boolean> {
+    return this.executeUpdate("server_stm_configs", serverId, patch);
   }
 
   async updateWelcomeConfig(

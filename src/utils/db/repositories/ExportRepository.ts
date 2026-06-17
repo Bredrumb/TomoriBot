@@ -20,6 +20,7 @@ import {
   type PersonalityExportResult,
   type MemoryItem,
 } from "@/types/db/dataExport";
+import { shortTermMemoryRepository } from "./ShortTermMemoryRepository";
 
 /**
  * ExportRepository — owns all data export operations.
@@ -330,6 +331,10 @@ export class ExportRepository {
       // 5. Sanitize memories for safe JSON export
       const sanitizedServerMemories = this.sanitizeMemoryItems(rawServerMemories, "server memories");
 
+      // 5b. Pull STM customization config (cadence, render mode, prompt overrides, categories).
+      //     Per-channel STM state is intentionally excluded (design decision 8).
+      const stmExport = await shortTermMemoryRepository.toExportShape(serverDiscId);
+
       // 6. Build export object
       const exportData: ServerExport = {
         version: EXPORT_VERSION,
@@ -404,6 +409,9 @@ export class ExportRepository {
             memory_tagging_enabled: configData.memory_tagging_enabled,
             channel_memory_enabled: configData.channel_memory_enabled,
             welcome_prompt: configData.welcome_prompt ?? null,
+            // STM customization (nested config object + ordered categories array).
+            stm_config: stmExport?.stm_config ?? null,
+            stm_categories: stmExport?.stm_categories ?? [],
           },
           server_memories: sanitizedServerMemories,
         },

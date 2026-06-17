@@ -1,15 +1,21 @@
 /**
  * ShortTermMemoryRepository — manages in-conversation short-term working memory.
  *
- * Short-term memory is currently stored in-process (shortTermMemoryCache) and
- * is not persisted to the database. This repository wraps the cache layer so
- * callers are insulated from that detail — when a DB-backed STM table ships
- * in a future phase, only this file changes (per OD-R-2).
+ * Architecture (post migration 034):
+ *   - Per-channel durable state (categories, summary, turn counters) lives in
+ *     `short_term_memories` and is kept hot by shortTermMemoryCache.ts via
+ *     read-through / write-through. State methods here delegate to the cache.
+ *   - Per-server configuration (cadence, render mode, prompt overrides) lives in
+ *     `server_stm_configs` and `stm_categories`. Those are managed directly by
+ *     this repository since the cache layer has no config awareness.
  *
- * Export contract: toExportShape / fromExportShape are required by IRepository
- * and consumed by the Phase 6 (#16.7) export pipeline composition. Since STM
- * is ephemeral by design, both are no-ops that return null / false.
+ * Export contract: toExportShape / fromExportShape export STM *config only*
+ * (cadence, render mode, prompt overrides, category definitions). Per-channel
+ * durable state is volatile and excluded from exports per design decision 8.
  */
+import { sql } from "@/utils/db/client";
+import type { ServerStmConfigRow, StmCategoryRow } from "@/types/db/schema";
+import { serverStmConfigSchema, stmCategorySchema } from "@/types/db/schema";
 import {
   storeShortTermMemory,
   getShortTermMemoriesForUser,
@@ -18,19 +24,40 @@ import {
   getShortTermMemoryForServerChannel,
   getShortTermMemoryForChannel,
   updateShortTermMemorySummary,
+  updateShortTermMemoryCategories,
+  incrementStmTurnCounter,
+  resetStmTurnCounter,
   invalidateShortTermMemory,
   clearShortTermMemoryForChannel,
   clearShortTermMemoryForServerChannel,
   clearShortTermMemoryForUser,
   type ShortTermMemoryEntry,
 } from "@/utils/cache/shortTermMemoryCache";
+import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-/** STM is ephemeral — no portable export shape exists yet. */
-export type ShortTermMemoryExportShape = Record<string, never>;
+/**
+ * Exported shape for STM config (config only — per-channel state is excluded).
+ * Consumed by the Phase 6 export pipeline and `/server config export`.
+ */
+export type ShortTermMemoryExportShape = {
+  stm_config: {
+    refresh_cadence: number;
+    render_mode: "supersede" | "crude_summary";
+    crude_message_count: number;
+    tool_description_override: string | null;
+    create_nudge_override: string | null;
+    update_nudge_override: string | null;
+  } | null;
+  stm_categories: Array<{
+    position: number;
+    label: string;
+    description: string;
+  }>;
+};
 
 export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
+  // ── cache-delegating reads ─────────────────────────────────────────────────
 
   /**
    * Returns all active short-term memory entries for a user across channels.
@@ -73,8 +100,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   /**
    * Returns the best available STM entry for a channel (user-scoped preferred,
    * falls back to server-scoped).
-   *
-   * @param args - Forwarded to getShortTermMemoryForChannel
    */
   getForChannel(
     ...args: Parameters<typeof getShortTermMemoryForChannel>
@@ -82,22 +107,17 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     return getShortTermMemoryForChannel(...args);
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
+  // ── cache-delegating writes ────────────────────────────────────────────────
 
   /**
-   * Stores a new short-term memory entry.
-   *
-   * @param args - Forwarded to storeShortTermMemory
+   * Stores a new short-term memory entry (also fires a durable DB upsert).
    */
   store(...args: Parameters<typeof storeShortTermMemory>): ReturnType<typeof storeShortTermMemory> {
     return storeShortTermMemory(...args);
   }
 
   /**
-   * Updates the summary text of an existing STM entry identified by
-   * userCacheKey + serverCacheKey + channelId.
-   *
-   * @param args - Forwarded to updateShortTermMemorySummary
+   * Updates the summary text of an existing STM entry (also fires a durable DB upsert).
    */
   updateSummary(
     ...args: Parameters<typeof updateShortTermMemorySummary>
@@ -105,60 +125,277 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     return updateShortTermMemorySummary(...args);
   }
 
-  // ── invalidation ───────────────────────────────────────────────────────────
+  /**
+   * Updates the categories map for an STM entry (writes through to DB).
+   */
+  updateCategories(
+    ...args: Parameters<typeof updateShortTermMemoryCategories>
+  ): ReturnType<typeof updateShortTermMemoryCategories> {
+    return updateShortTermMemoryCategories(...args);
+  }
 
   /**
-   * Invalidates (expires) a short-term memory entry by its cache key.
-   *
-   * @param args - Forwarded to invalidateShortTermMemory
+   * Increments the turn counter on the live scope row.
+   */
+  incrementTurnCounter(
+    ...args: Parameters<typeof incrementStmTurnCounter>
+  ): ReturnType<typeof incrementStmTurnCounter> {
+    return incrementStmTurnCounter(...args);
+  }
+
+  /**
+   * Resets the turn counter after a successful STM refresh.
+   */
+  resetTurnCounter(...args: Parameters<typeof resetStmTurnCounter>): ReturnType<typeof resetStmTurnCounter> {
+    return resetStmTurnCounter(...args);
+  }
+
+  // ── cache-delegating invalidation ─────────────────────────────────────────
+
+  /**
+   * Invalidates (evicts from cache) a short-term memory entry.
    */
   invalidate(...args: Parameters<typeof invalidateShortTermMemory>): void {
     invalidateShortTermMemory(...args);
   }
 
   /**
-   * Clears all STM entries for a channel.
-   *
-   * @param channelId - Discord channel snowflake
+   * Clears all STM cache entries for a channel.
    */
   clearForChannel(channelId: string): void {
     clearShortTermMemoryForChannel(channelId);
   }
 
   /**
-   * Clears STM entries scoped to a server + channel pair.
-   *
-   * @param args - Forwarded to clearShortTermMemoryForServerChannel
+   * Clears the cache entry scoped to a server + channel pair.
    */
   clearForServerChannel(...args: Parameters<typeof clearShortTermMemoryForServerChannel>): void {
     clearShortTermMemoryForServerChannel(...args);
   }
 
   /**
-   * Clears all STM entries for a user across all channels.
-   *
-   * @param userId - Discord user snowflake
+   * Clears all STM cache entries for a user across all channels.
    */
   clearForUser(userId: string): void {
     clearShortTermMemoryForUser(userId);
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
+  // ── config DB reads ────────────────────────────────────────────────────────
 
   /**
-   * Short-term memory is ephemeral — nothing to export.
-   * Returns null always.
+   * Loads the STM config row for a server. Returns null when not yet set up.
+   *
+   * @param serverId - Internal server DB ID
    */
-  async toExportShape(_ownerId: string | number): Promise<ShortTermMemoryExportShape | null> {
-    return null;
+  async getStmConfig(serverId: number): Promise<ServerStmConfigRow | null> {
+    try {
+      const [row] = await sql`SELECT * FROM server_stm_configs WHERE server_id = ${serverId}`;
+      if (!row) return null;
+      const parsed = serverStmConfigSchema.safeParse(row);
+      return parsed.success ? parsed.data : null;
+    } catch (error) {
+      log.error(`[STMRepo] Failed to load server_stm_configs for server ${serverId}`, error);
+      return null;
+    }
   }
 
   /**
-   * Short-term memory is ephemeral — nothing to import.
-   * Returns false always.
+   * Loads the ordered category definitions for a server.
+   * Returns the default 'summary' category when the server has none yet.
+   *
+   * @param serverId - Internal server DB ID
    */
-  async fromExportShape(_ownerId: string | number, _data: ShortTermMemoryExportShape): Promise<boolean> {
-    return false;
+  async getStmCategories(serverId: number): Promise<StmCategoryRow[]> {
+    try {
+      const rows = await sql`
+        SELECT * FROM stm_categories
+        WHERE server_id = ${serverId}
+        ORDER BY position ASC
+      `;
+
+      const categories: StmCategoryRow[] = [];
+      for (const row of rows) {
+        const parsed = stmCategorySchema.safeParse(row);
+        if (parsed.success) categories.push(parsed.data);
+      }
+
+      if (categories.length === 0) {
+        // Fallback: return the implicit default so callers never get an empty list
+        return [
+          {
+            server_id: serverId,
+            position: 0,
+            label: "summary",
+            description: "A running summary of recent events, topics, and context from this conversation.",
+          },
+        ];
+      }
+
+      return categories;
+    } catch (error) {
+      log.error(`[STMRepo] Failed to load stm_categories for server ${serverId}`, error);
+      return [
+        {
+          server_id: serverId,
+          position: 0,
+          label: "summary",
+          description: "A running summary of recent events, topics, and context from this conversation.",
+        },
+      ];
+    }
+  }
+
+  // ── config DB writes ───────────────────────────────────────────────────────
+
+  /**
+   * Upserts the STM config row for a server (insert on first save, update thereafter).
+   * Returns true on success.
+   *
+   * @param serverId - Internal server DB ID
+   * @param patch    - Partial config fields to write
+   */
+  async upsertStmConfig(serverId: number, patch: Partial<Omit<ServerStmConfigRow, "server_id">>): Promise<boolean> {
+    // Allowlist guards against column-name injection when building dynamic SQL.
+    const ALLOWED_STM_CONFIG_COLS = new Set<string>([
+      "refresh_cadence",
+      "render_mode",
+      "crude_message_count",
+      "tool_description_override",
+      "create_nudge_override",
+      "update_nudge_override",
+    ]);
+
+    const entries = Object.entries(patch).filter(([k, v]) => v !== undefined && ALLOWED_STM_CONFIG_COLS.has(k));
+    if (entries.length === 0) return false;
+
+    try {
+      const cols = ["server_id", ...entries.map(([k]) => k)];
+      const vals: unknown[] = [serverId, ...entries.map(([, v]) => v)];
+      const setClause = entries.map(([k], i) => `${k} = $${i + 2}`).join(", ");
+      const colList = cols.join(", ");
+      const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
+
+      await sql.unsafe(
+        `INSERT INTO server_stm_configs (${colList})
+         VALUES (${placeholders})
+         ON CONFLICT (server_id)
+         DO UPDATE SET ${setClause}`,
+        vals,
+      );
+      return true;
+    } catch (error) {
+      log.error(`[STMRepo] Failed to upsert server_stm_configs for server ${serverId}`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Replaces all category definitions for a server atomically.
+   * Deletes existing rows, then inserts new ones inside a transaction.
+   * Returns true on success.
+   *
+   * @param serverId   - Internal server DB ID
+   * @param categories - Ordered array of category definitions (max 5)
+   */
+  async upsertStmCategories(
+    serverId: number,
+    categories: Array<{ position: number; label: string; description: string }>,
+  ): Promise<boolean> {
+    try {
+      await sql.begin(async (tx) => {
+        await tx`DELETE FROM stm_categories WHERE server_id = ${serverId}`;
+        for (const cat of categories) {
+          await tx`
+            INSERT INTO stm_categories (server_id, position, label, description)
+            VALUES (${serverId}, ${cat.position}, ${cat.label}, ${cat.description})
+          `;
+        }
+      });
+      return true;
+    } catch (error) {
+      log.error(`[STMRepo] Failed to upsert stm_categories for server ${serverId}`, error);
+      return false;
+    }
+  }
+
+  // ── IRepository contract ───────────────────────────────────────────────────
+
+  /**
+   * Exports STM config (cadence, render mode, prompt overrides, category definitions)
+   * for a server identified by its Discord snowflake.
+   * Per-channel durable state is intentionally excluded (design decision 8).
+   *
+   * @param ownerId - Internal server DB ID or Discord server snowflake
+   */
+  async toExportShape(ownerId: string | number): Promise<ShortTermMemoryExportShape | null> {
+    try {
+      const serverDiscId = String(ownerId);
+
+      // Resolve internal server_id from Discord snowflake
+      const [serverRow] = await sql`SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId}`;
+      if (!serverRow) return null;
+      const serverId = serverRow.server_id as number;
+
+      const [config, categories] = await Promise.all([this.getStmConfig(serverId), this.getStmCategories(serverId)]);
+
+      return {
+        stm_config: config
+          ? {
+              refresh_cadence: config.refresh_cadence,
+              render_mode: config.render_mode,
+              crude_message_count: config.crude_message_count,
+              tool_description_override: config.tool_description_override ?? null,
+              create_nudge_override: config.create_nudge_override ?? null,
+              update_nudge_override: config.update_nudge_override ?? null,
+            }
+          : null,
+        stm_categories: categories.map((c) => ({
+          position: c.position,
+          label: c.label,
+          description: c.description,
+        })),
+      };
+    } catch (error) {
+      log.error("[STMRepo] toExportShape failed", error);
+      return null;
+    }
+  }
+
+  /**
+   * Restores STM config for a server from a previously exported shape.
+   * Per-channel state is intentionally skipped (design decision 8).
+   *
+   * @param ownerId - Internal server DB ID or Discord server snowflake
+   * @param data    - Previously exported ShortTermMemoryExportShape
+   */
+  async fromExportShape(ownerId: string | number, data: ShortTermMemoryExportShape): Promise<boolean> {
+    try {
+      const serverDiscId = String(ownerId);
+      const [serverRow] = await sql`SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId}`;
+      if (!serverRow) {
+        log.error(`[STMRepo] fromExportShape: server ${serverDiscId} not found`);
+        return false;
+      }
+      const serverId = serverRow.server_id as number;
+
+      const writes: Promise<boolean>[] = [];
+
+      if (data.stm_config) {
+        writes.push(this.upsertStmConfig(serverId, data.stm_config));
+      }
+
+      if (data.stm_categories.length > 0) {
+        writes.push(this.upsertStmCategories(serverId, data.stm_categories));
+      }
+
+      if (writes.length === 0) return true;
+
+      const results = await Promise.all(writes);
+      return results.every(Boolean);
+    } catch (error) {
+      log.error("[STMRepo] fromExportShape failed", error);
+      return false;
+    }
   }
 }
 
