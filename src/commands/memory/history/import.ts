@@ -15,15 +15,17 @@
 import type {
   ChatInputCommandInteraction,
   ButtonInteraction,
+  ModalSubmitInteraction,
   Client,
   SlashCommandSubcommandBuilder,
   TextBasedChannel,
 } from "discord.js";
-import { MessageFlags, EmbedBuilder } from "discord.js";
+import { MessageFlags, EmbedBuilder, TextInputStyle } from "discord.js";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { llmModelRepo, personaRepository, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
@@ -32,7 +34,12 @@ import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter"
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import { fetchHistoryUntilMarker } from "@/utils/discord/historyFetcher";
 import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
-import { buildExtractionSystemPrompt, buildExtractionUserPrompt } from "@/utils/documents/historyExtractionPrompt";
+import {
+  buildExtractionUserPrompt,
+  EXTRACTION_CONVERSATION_SYSTEM_PROMPT,
+  EXTRACTION_ROLEPLAY_SYSTEM_PROMPT,
+  type ExtractionPromptMode,
+} from "@/utils/documents/historyExtractionPrompt";
 import type { HistoryMemoryEntry } from "@/providers/utils/historyExtractionSchema";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -99,7 +106,63 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setDescription(localizer("en-US", "commands.memory.history.import.channels_description"))
         .setRequired(false)
         .setMaxLength(200),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("prompt")
+        .setDescription(localizer("en-US", "commands.memory.history.import.prompt_description"))
+        .setRequired(false)
+        .addChoices(
+          {
+            name: localizer("en-US", "commands.memory.history.import.prompt_choice_conversation"),
+            value: "conversation",
+          },
+          {
+            name: localizer("en-US", "commands.memory.history.import.prompt_choice_roleplay"),
+            value: "roleplay",
+          },
+        ),
     );
+
+const EXTRACTION_PROMPT_MODAL_ID = "memory_history_import_prompt_modal";
+const EXTRACTION_PROMPT_FIELD_ID = "system_prompt";
+
+/**
+ * Shows a modal pre-filled with the chosen system prompt template, lets the user edit it,
+ * and returns the submit interaction and final system prompt string.
+ */
+async function promptForExtractionSystem(
+  host: ChatInputCommandInteraction | ButtonInteraction,
+  locale: string,
+  mode: ExtractionPromptMode,
+): Promise<{ submitInteraction: ModalSubmitInteraction; systemPrompt: string } | null> {
+  const defaultPrompt = mode === "roleplay" ? EXTRACTION_ROLEPLAY_SYSTEM_PROMPT : EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
+
+  const modalResult = await promptWithRawModal(
+    host,
+    locale,
+    {
+      modalCustomId: EXTRACTION_PROMPT_MODAL_ID,
+      modalTitleKey: "commands.memory.history.import.prompt_modal_title",
+      components: [
+        {
+          customId: EXTRACTION_PROMPT_FIELD_ID,
+          style: TextInputStyle.Paragraph,
+          labelKey: "commands.memory.history.import.prompt_modal_label",
+          placeholder: "commands.memory.history.import.prompt_modal_placeholder",
+          required: false,
+          maxLength: 4000,
+          value: defaultPrompt,
+        },
+      ],
+    },
+    MessageFlags.Ephemeral,
+  );
+
+  if (modalResult.outcome !== "submit" || !modalResult.interaction) return null;
+  const systemPrompt = modalResult.values?.[EXTRACTION_PROMPT_FIELD_ID]?.trim() || defaultPrompt;
+  return { submitInteraction: modalResult.interaction, systemPrompt };
+}
 
 /**
  * Splits an array of formatted message lines into windows of the configured size.
@@ -133,9 +196,9 @@ async function extractWindow(
   provider: string,
   model: string,
   apiKey: string,
+  systemPrompt: string,
   endpointUrl?: string,
 ): Promise<HistoryMemoryEntry[]> {
-  const systemPrompt = buildExtractionSystemPrompt();
   const userPrompt = buildExtractionUserPrompt(windowText, previousRestatements);
   return await extractHistoryWindowForProvider({
     providerName: provider,
@@ -162,7 +225,8 @@ async function runExtractionPipeline(params: {
   model: string;
   apiKey: string;
   endpointUrl?: string;
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction;
+  systemPrompt: string;
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
   locale: string;
   serverId: string;
   allPersonas: TomoriState[];
@@ -170,7 +234,7 @@ async function runExtractionPipeline(params: {
   entries: HistoryMemoryEntry[];
   formattedResult: ReturnType<typeof formatMessagesForExtraction>;
 } | null> {
-  const { channel, provider, model, apiKey, endpointUrl, replyInteraction, locale } = params;
+  const { channel, provider, model, apiKey, endpointUrl, systemPrompt, replyInteraction, locale } = params;
 
   // 1. Update progress: fetching messages
   await replyInteraction.editReply({
@@ -233,7 +297,7 @@ async function runExtractionPipeline(params: {
       ],
     });
 
-    const windowEntries = await extractWindow(windows[i], previousRestatements, provider, model, apiKey, endpointUrl);
+    const windowEntries = await extractWindow(windows[i], previousRestatements, provider, model, apiKey, systemPrompt, endpointUrl);
 
     allEntries.push(...windowEntries);
 
@@ -277,7 +341,7 @@ async function storeExtractedFacts(params: {
   apiKey: string;
   scopeLabel: string;
   channelTags: string[];
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction;
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
   locale: string;
   guildId: string;
 }): Promise<{ documentId: number; chunkCount: number } | null> {
@@ -415,6 +479,7 @@ export async function execute(
 
   let tomoriState: TomoriState | null = null;
   let personaSelectionInteraction: ButtonInteraction | null = null;
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
 
   try {
     // 2. Check RAG is enabled
@@ -570,6 +635,8 @@ export async function execute(
     const scope: HistoryScope =
       scopeInput === "automatic" ? "automatic" : scopeInput === "global" ? "global" : "persona";
     const channelsInput = interaction.options.getString("channels");
+    const promptModeInput = interaction.options.getString("prompt");
+    const promptMode: ExtractionPromptMode = promptModeInput === "roleplay" ? "roleplay" : "conversation";
     const channelTags: string[] = channelsInput
       ? channelsInput
           .split(",")
@@ -637,14 +704,18 @@ export async function execute(
         persona_name: selectedPersona.persona_nickname,
       });
 
-      // Defer the button interaction for long processing
-      await personaSelectionInteraction.deferReply({
-        flags: MessageFlags.Ephemeral,
-      });
+      // Show system prompt modal on the button interaction
+      const promptModalResult = await promptForExtractionSystem(personaSelectionInteraction, locale, promptMode);
+      if (!promptModalResult) return;
+      modalSubmitInteraction = promptModalResult.submitInteraction;
+      const personaSystemPrompt = promptModalResult.systemPrompt;
+
+      // Defer the modal submit interaction for long processing
+      await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
       // Check duplicate name
       if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, targetPersonaId, nameInput)) {
-        await personaSelectionInteraction.editReply({
+        await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
               .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
@@ -665,7 +736,8 @@ export async function execute(
         model,
         apiKey: textCreds.apiKey,
         endpointUrl,
-        replyInteraction: personaSelectionInteraction,
+        systemPrompt: personaSystemPrompt,
+        replyInteraction: modalSubmitInteraction,
         locale,
         serverId: guildId,
         allPersonas,
@@ -686,14 +758,14 @@ export async function execute(
         apiKey: embeddingCreds.apiKey,
         scopeLabel,
         channelTags,
-        replyInteraction: personaSelectionInteraction,
+        replyInteraction: modalSubmitInteraction,
         locale,
         guildId,
       });
       if (!storeResult) return;
 
       // Success reply
-      await personaSelectionInteraction.editReply({
+      await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
@@ -713,16 +785,22 @@ export async function execute(
     }
 
     // ====================================================================
-    // SCOPE: GLOBAL — Pattern 2 (Defer Required)
+    // SCOPE: GLOBAL — Show prompt modal, then defer modal submit interaction
     // ====================================================================
     if (scope === "global") {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
+
+      // Show system prompt modal on the slash command interaction
+      const promptModalResult = await promptForExtractionSystem(interaction, locale, promptMode);
+      if (!promptModalResult) return;
+      modalSubmitInteraction = promptModalResult.submitInteraction;
+      const globalSystemPrompt = promptModalResult.systemPrompt;
+
+      await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
       // Check duplicate name (serverwide scope = persona_id IS NULL)
       if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
-        await interaction.editReply({
+        await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
               .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
@@ -743,7 +821,8 @@ export async function execute(
         model,
         apiKey: textCreds.apiKey,
         endpointUrl,
-        replyInteraction: interaction,
+        systemPrompt: globalSystemPrompt,
+        replyInteraction: modalSubmitInteraction,
         locale,
         serverId: guildId,
         allPersonas,
@@ -764,14 +843,14 @@ export async function execute(
         apiKey: embeddingCreds.apiKey,
         scopeLabel,
         channelTags,
-        replyInteraction: interaction,
+        replyInteraction: modalSubmitInteraction,
         locale,
         guildId,
       });
       if (!storeResult) return;
 
       // Success reply
-      await interaction.editReply({
+      await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
@@ -791,10 +870,15 @@ export async function execute(
     }
 
     // ====================================================================
-    // SCOPE: AUTOMATIC — Pattern 2 (Defer Required)
+    // SCOPE: AUTOMATIC — Show prompt modal, then defer modal submit interaction
     // Detect personas from webhook authors, create per-persona documents
     // ====================================================================
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const autoPromptModalResult = await promptForExtractionSystem(interaction, locale, promptMode);
+    if (!autoPromptModalResult) return;
+    modalSubmitInteraction = autoPromptModalResult.submitInteraction;
+    const autoSystemPrompt = autoPromptModalResult.systemPrompt;
+
+    await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // Run extraction pipeline (extracts facts + detects personas)
     const pipelineResult = await runExtractionPipeline({
@@ -804,7 +888,8 @@ export async function execute(
       model,
       apiKey: textCreds.apiKey,
       endpointUrl,
-      replyInteraction: interaction,
+      systemPrompt: autoSystemPrompt,
+      replyInteraction: modalSubmitInteraction,
       locale,
       serverId: guildId,
       allPersonas,
@@ -820,7 +905,7 @@ export async function execute(
 
       // Check duplicate name in global scope
       if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
-        await interaction.editReply({
+        await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
               .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
@@ -846,13 +931,13 @@ export async function execute(
         apiKey: embeddingCreds.apiKey,
         scopeLabel,
         channelTags,
-        replyInteraction: interaction,
+        replyInteraction: modalSubmitInteraction,
         locale,
         guildId,
       });
       if (!storeResult) return;
 
-      await interaction.editReply({
+      await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
@@ -898,7 +983,7 @@ export async function execute(
         apiKey: embeddingCreds.apiKey,
         scopeLabel,
         channelTags,
-        replyInteraction: interaction,
+        replyInteraction: modalSubmitInteraction,
         locale,
         guildId,
       });
@@ -915,7 +1000,7 @@ export async function execute(
     }
 
     // Final success reply
-    await interaction.editReply({
+    await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
@@ -944,11 +1029,13 @@ export async function execute(
     await log.error("Error in /memory history import command", error, context);
 
     const errorReplyTarget =
-      personaSelectionInteraction && (personaSelectionInteraction.deferred || personaSelectionInteraction.replied)
-        ? personaSelectionInteraction
-        : interaction.deferred || interaction.replied
-          ? interaction
-          : null;
+      modalSubmitInteraction && (modalSubmitInteraction.deferred || modalSubmitInteraction.replied)
+        ? modalSubmitInteraction
+        : personaSelectionInteraction && (personaSelectionInteraction.deferred || personaSelectionInteraction.replied)
+          ? personaSelectionInteraction
+          : interaction.deferred || interaction.replied
+            ? interaction
+            : null;
 
     if (errorReplyTarget) {
       await replyInfoEmbed(errorReplyTarget, locale, {

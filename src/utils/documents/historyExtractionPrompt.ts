@@ -5,15 +5,9 @@
  * precise vector retrieval.
  */
 
-/**
- * Builds the system prompt for the extraction LLM.
- * Instructs the model to act as an information extraction assistant
- * producing atomic, self-contained memory entries.
- *
- * @returns The system instruction string
- */
-export function buildExtractionSystemPrompt(): string {
-  return `You are a professional information extraction assistant. Your task is to extract atomic, self-contained facts from a conversation log. Each extracted fact must:
+export type ExtractionPromptMode = "conversation" | "roleplay";
+
+export const EXTRACTION_CONVERSATION_SYSTEM_PROMPT = `You are a professional information extraction assistant. Your task is to extract atomic, self-contained facts from a conversation log. Each extracted fact must:
 
 1. Be a COMPLETE, standalone statement that makes sense without any surrounding context.
 2. Replace ALL pronouns (he, she, they, it, etc.) with the actual names or identifiers they refer to.
@@ -27,6 +21,16 @@ IMPORTANT GUIDELINES:
 - For roleplay or fictional conversations, treat character actions and dialogue as facts about those characters.
 - If a fact contradicts an earlier fact, extract BOTH (the system will handle versioning).
 - Each fact should be retrievable independently via keyword search.`;
+
+export const EXTRACTION_ROLEPLAY_SYSTEM_PROMPT =
+  `NOTE: This is a default testing prompt. Modify it in the modal to suit your roleplay extraction needs.\n\n` +
+  EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
+
+/**
+ * Returns the default system prompt for the given extraction mode.
+ */
+export function getDefaultExtractionSystemPrompt(mode: ExtractionPromptMode): string {
+  return mode === "roleplay" ? EXTRACTION_ROLEPLAY_SYSTEM_PROMPT : EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
 }
 
 /**
