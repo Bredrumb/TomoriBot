@@ -265,7 +265,11 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
 
   try {
     const actualTriggeringUserId = impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
-    if (actualTriggeringUserId) {
+    // Per-server master switch (migration 037): when STM is disabled, skip the entire
+    // build so NONE of the three injections are produced — same-channel content block,
+    // cadence nudge, AND other-channel recall (the latter isn't gated by has_tools, so
+    // this caller-level gate is the only spot that suppresses all of them).
+    if (actualTriggeringUserId && tomoriConfig.short_term_memory_enabled !== false) {
       const stmResult = await buildShortTermMemoryContext({
         triggeringUserId: actualTriggeringUserId,
         currentChannelId: channelId,

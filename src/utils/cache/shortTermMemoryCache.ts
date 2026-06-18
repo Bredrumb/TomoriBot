@@ -19,7 +19,7 @@
  */
 
 import { sql } from "@/utils/db/client";
-import type { ShortTermMemoryRow } from "@/types/db/schema";
+import { normalizeStmCategories, type ShortTermMemoryRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 
 /**
@@ -119,6 +119,12 @@ const stats: CacheStats = {
 
 // In-flight DB hydrations keyed by cache key — prevents duplicate reads and allows awaiting.
 const pendingHydrations = new Map<string, Promise<void>>();
+
+// Servers/users whose full STM row set has been bulk-loaded from the DB this process.
+// After the one-shot bulk warm, every live STM write updates the cache directly, so we
+// never need to re-query — this guards against re-running the bulk SELECT each turn.
+const bulkWarmedServers = new Set<string>();
+const bulkWarmedUsers = new Set<string>();
 
 // Functional unique-index conflict target used in all short_term_memories upserts.
 const STM_CONFLICT = `(scope_kind, COALESCE(server_disc_id, ''), COALESCE(user_disc_id, ''), channel_disc_id, COALESCE(persona_id, 0))`;
@@ -282,25 +288,41 @@ async function hydrateEntryFromDb(
     );
 
     const row = rows[0];
-    // Only warm the cache if another path hasn't already populated this key
-    if (row && !cache.has(key)) {
-      const hasCategories = Object.keys(row.categories).length > 0;
-      cache.set(key, {
-        messages: [],
-        summary: row.summary ?? undefined,
-        categories: hasCategories ? row.categories : undefined,
-        turnsSinceRefresh: row.turns_since_refresh,
-        lastRefreshedTurn: row.last_refreshed_turn,
-        serverId: row.server_disc_id ?? "DM",
-        channelId: row.channel_disc_id,
-        personaId: row.persona_id ?? null,
-        personaLineageId: row.persona_lineage_id ?? null,
-        lastUpdated: row.updated_at ? row.updated_at.getTime() : Date.now(),
-      });
-    }
+    if (row) warmRowIntoCache(key, row);
   } catch (error) {
     log.warn("[shortTermMemoryCache] Background DB hydration failed", { key, error });
   }
+}
+
+/**
+ * Writes a persisted STM row into the in-memory cache under the given key, unless the
+ * key is already warm (a live write wins over stale DB state). Shared by the single-key
+ * hydration and the bulk warmers.
+ *
+ * @param key - Cache key (built via getServerCacheKey / getUserCacheKey)
+ * @param row - Raw row from `SELECT * FROM short_term_memories`
+ */
+function warmRowIntoCache(key: string, row: ShortTermMemoryRow): void {
+  // Only warm if another path hasn't already populated this key.
+  if (cache.has(key)) return;
+  // `sql.unsafe` returns the JSONB `categories` column as a raw JSON string (it bypasses
+  // the zod row schema that would normally parse it), so normalize it back to an object.
+  // Without this, `Object.keys`/`Object.entries` would enumerate the string
+  // character-by-character downstream and corrupt rendering.
+  const normalizedCategories = normalizeStmCategories(row.categories);
+  const hasCategories = Object.keys(normalizedCategories).length > 0;
+  cache.set(key, {
+    messages: [],
+    summary: row.summary ?? undefined,
+    categories: hasCategories ? normalizedCategories : undefined,
+    turnsSinceRefresh: row.turns_since_refresh,
+    lastRefreshedTurn: row.last_refreshed_turn,
+    serverId: row.server_disc_id ?? "DM",
+    channelId: row.channel_disc_id,
+    personaId: row.persona_id ?? null,
+    personaLineageId: row.persona_lineage_id ?? null,
+    lastUpdated: row.updated_at ? row.updated_at.getTime() : Date.now(),
+  });
 }
 
 /**
@@ -558,6 +580,85 @@ export async function preWarmStmEntry(
     () => pendingHydrations.delete(key),
   );
   pendingHydrations.set(key, promise);
+  await promise;
+}
+
+/**
+ * Bulk-warms every persisted server-scoped STM row for a guild into the cache in a single
+ * query. Call this (with await) before the synchronous `getShortTermMemoriesForServer`
+ * read so cross-channel recall is available on the FIRST turn after a restart instead of
+ * the second — the single-key pre-warm only covers the current channel, but cross-channel
+ * recall needs every channel's row.
+ *
+ * One-shot per server per process: once warmed, live STM writes keep the cache current,
+ * so we never re-query. Concurrent callers share the in-flight promise.
+ *
+ * @param serverDiscId - Guild snowflake
+ */
+export async function preWarmServerStmEntries(serverDiscId: string): Promise<void> {
+  if (!serverDiscId || serverDiscId === "DM" || bulkWarmedServers.has(serverDiscId)) return;
+
+  // Sentinel key (real channel keys are numeric snowflakes, so no collision) used only
+  // to dedupe the in-flight bulk query inside the existing pendingHydrations map.
+  const inflightKey = `${SERVER_CACHE_PREFIX}:${serverDiscId}:__bulk__`;
+  const inflight = pendingHydrations.get(inflightKey);
+  if (inflight) {
+    await inflight;
+    return;
+  }
+
+  const promise = (async () => {
+    try {
+      const rows = await sql.unsafe<ShortTermMemoryRow[]>(
+        "SELECT * FROM short_term_memories WHERE scope_kind = 'server' AND server_disc_id = $1",
+        [serverDiscId],
+      );
+      for (const row of rows) {
+        warmRowIntoCache(getServerCacheKey(serverDiscId, row.channel_disc_id, row.persona_id), row);
+      }
+      bulkWarmedServers.add(serverDiscId);
+    } catch (error) {
+      log.warn("[shortTermMemoryCache] Bulk server STM warm failed", { serverDiscId, error });
+    }
+  })().finally(() => pendingHydrations.delete(inflightKey));
+
+  pendingHydrations.set(inflightKey, promise);
+  await promise;
+}
+
+/**
+ * Bulk-warms every persisted user-scoped STM row for a user into the cache in a single
+ * query. Used for DM recall and cross-server folding. Same one-shot semantics as
+ * {@link preWarmServerStmEntries}.
+ *
+ * @param userDiscId - User snowflake
+ */
+export async function preWarmUserStmEntries(userDiscId: string): Promise<void> {
+  if (!userDiscId || bulkWarmedUsers.has(userDiscId)) return;
+
+  const inflightKey = `${USER_CACHE_PREFIX}:${userDiscId}:__bulk__`;
+  const inflight = pendingHydrations.get(inflightKey);
+  if (inflight) {
+    await inflight;
+    return;
+  }
+
+  const promise = (async () => {
+    try {
+      const rows = await sql.unsafe<ShortTermMemoryRow[]>(
+        "SELECT * FROM short_term_memories WHERE scope_kind = 'user' AND user_disc_id = $1",
+        [userDiscId],
+      );
+      for (const row of rows) {
+        warmRowIntoCache(getUserCacheKey(userDiscId, row.channel_disc_id, row.persona_id), row);
+      }
+      bulkWarmedUsers.add(userDiscId);
+    } catch (error) {
+      log.warn("[shortTermMemoryCache] Bulk user STM warm failed", { userDiscId, error });
+    }
+  })().finally(() => pendingHydrations.delete(inflightKey));
+
+  pendingHydrations.set(inflightKey, promise);
   await promise;
 }
 

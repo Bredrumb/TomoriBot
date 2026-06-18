@@ -322,6 +322,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       field_user_byok_disabled: `Disabled. User-triggered messages can still fall back to the server provider. Toggle with {toggle_command}.`,
       field_tool_use: `Tool Use`,
       field_prompt_snapshot: `Prompt Snapshot`,
+      field_short_term_memory: `Short-Term Memory`,
       field_stm_privacy_bypass: `STM Privacy Bypass`,
       field_voice_messages: `Voice Messages`,
       field_voice_transcript_mode: `Voice Transcript Chat Mode`,

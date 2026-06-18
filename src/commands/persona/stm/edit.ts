@@ -43,6 +43,7 @@ import {
   clearShortTermMemorySummary,
   getShortTermMemoryForServerChannel,
   getShortTermMemoryForUserChannel,
+  preWarmStmEntry,
   updateShortTermMemoryCategories,
   updateShortTermMemorySummary,
   type ShortTermMemoryEntry,
@@ -189,12 +190,22 @@ export async function execute(
       const personaId = selectedPersona.persona_id;
       const personaLineageId = selectedPersona.persona_lineage_id ?? null;
 
-      // 5. Resolve the LIVE durable STM row for this channel + persona in the injected scope.
+      // 5. Pre-warm the cache from the durable DB before the synchronous read. The STM cache
+      //    hydrates lazily (a cold miss fills only on the NEXT read), so on a cold boot the
+      //    modal would otherwise prefill EMPTY — and an empty submit would silently wipe the
+      //    persisted row. Awaiting the one-shot hydration makes the prefill reflect the DB.
+      if (interaction.guild) {
+        await preWarmStmEntry("server", interaction.guild.id, channelId, personaId);
+      } else {
+        await preWarmStmEntry("user", interaction.user.id, channelId, personaId);
+      }
+
+      // 6. Resolve the LIVE durable STM row for this channel + persona in the injected scope.
       const liveEntry: ShortTermMemoryEntry | undefined = interaction.guild
         ? getShortTermMemoryForServerChannel(interaction.guild.id, channelId, personaId)
         : getShortTermMemoryForUserChannel(interaction.user.id, channelId, personaId);
 
-      // 6. Build one prefilled input per category (or a single `summary` input in summary mode).
+      // 7. Build one prefilled input per category (or a single `summary` input in summary mode).
       const inputs = buildCategoryInputs(slugMap, slugDescriptions, liveEntry, isCategoryMode);
 
       const modalResult = await promptWithRawModal(personaSelectionInteraction, locale, {
@@ -221,7 +232,7 @@ export async function execute(
         return;
       }
 
-      // 7. Persist the edit through the same path the STM tool uses for this mode.
+      // 8. Persist the edit through the same path the STM tool uses for this mode.
       await persistStmEdit({
         inputs,
         values: modalResult.values,
@@ -240,7 +251,7 @@ export async function execute(
         `Edited STM for persona ${personaId} in channel ${channelId} (${isCategoryMode ? "category" : "summary"} mode) by ${userData.user_disc_id}`,
       );
 
-      // 8. Refresh the picker in place so the admin can edit another persona.
+      // 9. Refresh the picker in place so the admin can edit another persona.
       await acknowledgeModalSubmitForRefresh(modalSubmitInteraction);
       await replyComponentsV2Status(
         interaction,
@@ -309,7 +320,9 @@ function buildCategoryInputs(
         customId: `${CATEGORY_INPUT_PREFIX}${slug}`,
         // Category labels are user-defined runtime data, not locale keys; localizer()
         // returns the string unchanged on a miss, so the raw label renders as the input label.
-        labelKey: label.slice(0, DISCORD_LABEL_MAX),
+        // Capitalize the first letter for display only (e.g. `summary` → "Summary"); the
+        // stored slug/label and the injected prompt keep their original casing.
+        labelKey: capitalizeFirst(label).slice(0, DISCORD_LABEL_MAX),
         // The description is shown as the placeholder. promptWithRawModal only localizes
         // placeholders that start with "commands."; a plain description renders verbatim.
         placeholder: description ? description.slice(0, DISCORD_PLACEHOLDER_MAX) : undefined,
@@ -389,4 +402,12 @@ async function persistStmEdit(args: {
 
   // Empty summary submit → durably clear the summary from both cache and DB.
   clearShortTermMemorySummary(userId, channelId, args.personaId, guildId);
+}
+
+/**
+ * Uppercases the first character of a label for display, leaving the rest untouched.
+ * @param value - The raw category label
+ */
+function capitalizeFirst(value: string): string {
+  return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }

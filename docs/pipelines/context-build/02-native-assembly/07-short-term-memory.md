@@ -271,8 +271,25 @@ After this stage runs:
 | `/server stm parameters` | Configure cadence, render mode, crude message count, nudge depth, content depth |
 | `/server stm prompt-edit` | Set tool description and the unified nudge override |
 | `/server stm categories-edit` | Define category labels and descriptions |
-| `/persona stm edit` | Hand-edit live STM for a persona in the current channel |
+| `/persona stm edit` | Hand-edit live STM for a persona in the current channel (Manage Server) |
+| `/persona stm view` | Read-only inspect the live STM for a persona in the current channel (open to all members) |
+| `/capabilities manage` | Master on/off switch ("Short-Term Memory") for the whole STM subsystem |
 | `/help stm` | In-Discord guide to the STM customization surface |
+
+> **Disabling STM:** the `short_term_memory_enabled` capability flag
+> (`server_capabilities_configs`, migration 037, default `true`) is the master switch.
+> When off, two gates fire: (1) `UpdateShortTermMemoryTool.isAvailableForContext` returns
+> `false` so the tool is never offered, and (2) `nativeBuilder.ts` skips the
+> `buildShortTermMemoryContext` call entirely, so the same-channel block, the cadence
+> nudge, AND other-channel recall are all suppressed (other-channel recall is otherwise
+> ungated by `has_tools`, so the caller-level gate is the only spot that catches it).
+> Stored `short_term_memories` rows are NOT deleted; the `/server stm …` and
+> `/persona stm …` commands stay fully usable so admins can pre-configure while it's off.
+
+> **Scope note:** both `/persona stm edit` and `/persona stm view` resolve the exact row
+> that gets injected — the **server-shared** row (`serverId, channelId, personaId`) in a
+> guild, or the **user-scoped** row (`userId, channelId, personaId`) in a DM. There is no
+> per-user STM inside a guild, so every member sees/edits the same shared blob.
 
 ## Extension points
 

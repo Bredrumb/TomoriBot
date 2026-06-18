@@ -667,6 +667,9 @@ export const serverCapabilitiesConfigSchema = z.object({
   voice_message_enabled: z.boolean().default(true),
   user_blocking_enabled: z.boolean().default(true),
   tool_use_enabled: z.boolean().default(true),
+  // Master switch for the short-term memory subsystem (tool + context injection).
+  // Default true keeps existing servers unchanged; see migration 037.
+  short_term_memory_enabled: z.boolean().default(true),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -814,7 +817,7 @@ export const stmCategorySchema = z.object({
 });
 export type StmCategoryRow = z.infer<typeof stmCategorySchema>;
 
-function normalizeStmCategories(value: unknown): Record<string, string> {
+export function normalizeStmCategories(value: unknown): Record<string, string> {
   if (value === null || value === undefined) return {};
   if (typeof value === "string") {
     try {

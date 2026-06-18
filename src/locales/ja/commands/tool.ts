@@ -322,6 +322,7 @@ export default {
       field_user_byok_disabled: `無効。個人プロバイダーがない場合でもユーザー発言はサーバープロバイダーにフォールバックできます。{toggle_command} で切り替えられます。`,
       field_tool_use: `ツール使用`,
       field_prompt_snapshot: `プロンプトスナップショット`,
+      field_short_term_memory: `短期記憶`,
       field_stm_privacy_bypass: `STMプライバシーバイパス`,
       field_voice_messages: `音声メッセージ`,
       field_voice_transcript_mode: `音声文字起こしチャットモード`,

@@ -6,7 +6,9 @@ import {
   getShortTermMemoriesForUser,
   getShortTermMemoryForServerChannel,
   getShortTermMemoryForUserChannel,
+  preWarmServerStmEntries,
   preWarmStmEntry,
+  preWarmUserStmEntries,
 } from "@/utils/cache/shortTermMemoryCache";
 import { log } from "@/utils/misc/logger";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -247,6 +249,20 @@ export async function buildShortTermMemoryContext(params: {
     // 2. Cross-channel / cross-server other-channel memories
     const userRow = await getCachedUserRow(params.triggeringUserId);
     const crossServerOptIn = userRow?.shortterm_cache_crossserver_opt_in ?? false;
+
+    // Bulk-warm cross-channel STM from the DB BEFORE the synchronous reads below, so
+    // other-channel recall is available on the FIRST turn after a restart (cold cache)
+    // rather than the second. The same-channel pre-warm (section 3) only covers the
+    // current channel; cross-channel recall needs every channel's persisted row. Awaited
+    // and one-shot per scope per process, so it costs a single query once after a restart.
+    if (params.currentServerId === "DM") {
+      await preWarmUserStmEntries(params.triggeringUserId);
+    } else {
+      await preWarmServerStmEntries(params.currentServerId);
+      if (crossServerOptIn) {
+        await preWarmUserStmEntries(params.triggeringUserId);
+      }
+    }
 
     const personaLineageId = params.tomoriState?.persona_lineage_id;
     let otherChannelMemories =

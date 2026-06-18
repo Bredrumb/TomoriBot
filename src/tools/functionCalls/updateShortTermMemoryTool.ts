@@ -84,6 +84,14 @@ export class UpdateShortTermMemoryTool extends BaseTool {
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
     if (!this.isAvailableFor(provider)) return false;
 
+    // Per-server master switch (migration 037): when STM is disabled, do not offer the
+    // tool at all. Only `false` blocks — an undefined config (e.g. no context) is treated
+    // as enabled so default/backward-compatible behavior is preserved.
+    if (context?.tomoriState?.config?.short_term_memory_enabled === false) {
+      log.info("UpdateShortTermMemoryTool: Disabled for this server — short_term_memory_enabled is off");
+      return false;
+    }
+
     if (context?.streamContext?.explicitLongTermMemoryIntent) {
       log.info("UpdateShortTermMemoryTool: Disabled for this turn — explicit long-term memory intent detected");
       return false;
@@ -179,6 +187,16 @@ export class UpdateShortTermMemoryTool extends BaseTool {
    * when the server is not in single-summary (fallback) mode.
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+    // Defense-in-depth: the registry dispatches by name regardless of availability, so
+    // re-check the per-server master switch here (migration 037).
+    if (context.tomoriState?.config?.short_term_memory_enabled === false) {
+      log.info("[updateShortTermMemoryTool] Execution blocked — short-term memory disabled for this server");
+      return {
+        success: false,
+        message: "Short-term memory is disabled for this server.",
+      };
+    }
+
     if (context.streamContext?.explicitLongTermMemoryIntent) {
       log.info("[updateShortTermMemoryTool] Execution blocked — explicit long-term memory intent detected");
       return {
@@ -339,6 +357,12 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     context: ToolContext,
     slugMap: Map<string, string>,
   ): Promise<ToolResult> {
+    // Defense-in-depth master-switch guard (migration 037), mirroring execute().
+    if (context.tomoriState?.config?.short_term_memory_enabled === false) {
+      log.info("[updateShortTermMemoryTool] [category] Blocked — short-term memory disabled for this server");
+      return { success: false, message: "Short-term memory is disabled for this server." };
+    }
+
     if (context.streamContext?.explicitLongTermMemoryIntent) {
       log.info("[updateShortTermMemoryTool] [category] Blocked — explicit long-term memory intent");
       return {

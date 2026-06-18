@@ -168,6 +168,7 @@ export const serverCapabilitiesConfigExportSchema = z.object({
   thread_creation_enabled: z.boolean().optional(),
   user_blocking_enabled: z.boolean().optional(),
   tool_use_enabled: z.boolean().optional(),
+  short_term_memory_enabled: z.boolean().optional(),
 });
 
 /** Portable server_notice_embeds_configs export fields. */

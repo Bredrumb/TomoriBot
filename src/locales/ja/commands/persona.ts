@@ -223,6 +223,15 @@ export default {
         success_title: `短期記憶を更新しました`,
         success_description: `このチャンネルの **{persona_name}** の短期記憶を更新しました。`,
       },
+      view: {
+        description: `このチャンネルにおけるペルソナの短期記憶を閲覧します（読み取り専用）。`,
+        title: `短期記憶`,
+        display: `{content}`,
+        scope_guild: `このチャンネルに注入されるサーバー共有の記憶を表示しています。`,
+        scope_dm: `この会話に注入されるあなた個人の記憶を表示しています。`,
+        empty_body: `*このチャンネルにはまだ短期記憶が保存されていません。*`,
+        truncated: `*…Discordの表示上限に合わせて省略されました。*`,
+      },
     },
     "sample-dialogue": {
       description: `私がどのように応答すべきかの例として、ユーザー/ボットの対話ペアを追加します。`,

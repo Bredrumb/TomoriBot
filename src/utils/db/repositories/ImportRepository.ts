@@ -311,6 +311,9 @@ export class ImportRepository {
           user_blocking_enabled: config.user_blocking_enabled,
         }),
         ...(config.tool_use_enabled !== undefined && { tool_use_enabled: config.tool_use_enabled }),
+        ...(config.short_term_memory_enabled !== undefined && {
+          short_term_memory_enabled: config.short_term_memory_enabled,
+        }),
       };
 
       // server_notice_embeds_configs: tool notice key suppressions
