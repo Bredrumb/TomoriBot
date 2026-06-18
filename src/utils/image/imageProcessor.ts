@@ -78,9 +78,6 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
 
     // If dimensions are within limits, the file is just a dense format (e.g. BMP) — pass through
     if (longestSide <= IMAGE_CONTEXT_MAX_DIMENSION) {
-      log.info(
-        `Image ${width}x${height} (${(rawSize / 1024 / 1024).toFixed(1)} MB) is within dimension limit, passing through`,
-      );
       return { data: buffer.toString("base64"), mimeType: finalMimeType };
     }
 
@@ -94,11 +91,6 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
       })
       .jpeg({ quality: IMAGE_CONTEXT_JPEG_QUALITY })
       .toBuffer();
-
-    const optimizedSize = optimizedBuffer.byteLength;
-    log.info(
-      `Optimized image for LLM context: ${width}x${height} (${(rawSize / 1024 / 1024).toFixed(1)} MB) → ${IMAGE_CONTEXT_MAX_DIMENSION}px max (${(optimizedSize / 1024).toFixed(0)} KB)`,
-    );
 
     return {
       data: optimizedBuffer.toString("base64"),
@@ -152,10 +144,6 @@ export async function optimizeImageBuffer(buffer: Buffer, sourceMimeType: string
       .jpeg({ quality: IMAGE_CONTEXT_JPEG_QUALITY })
       .toBuffer();
 
-    log.info(
-      `Optimized image buffer: ${width}x${height} (${(rawSize / 1024 / 1024).toFixed(1)} MB) → ${IMAGE_CONTEXT_MAX_DIMENSION}px max (${(optimizedBuffer.byteLength / 1024).toFixed(0)} KB)`,
-    );
-
     return {
       data: optimizedBuffer.toString("base64"),
       mimeType: "image/jpeg",
@@ -205,8 +193,6 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
       throw new Error("Unable to read image dimensions");
     }
 
-    log.info(`Processing image: ${metadata.width}x${metadata.height} (${metadata.format})`);
-
     // 2. Determine the size of the square (use the smaller dimension)
     const squareSize = Math.min(metadata.width, metadata.height);
 
@@ -214,8 +200,6 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
     // For a 1920x1080 image, we want to extract a 1080x1080 square from the center
     const left = Math.floor((metadata.width - squareSize) / 2);
     const top = Math.floor((metadata.height - squareSize) / 2);
-
-    log.info(`Cropping to ${squareSize}x${squareSize} square (offset: ${left}x${top})`);
 
     // 4. Extract the square region and convert to PNG
     const croppedBuffer = await sharp(buffer)
@@ -227,8 +211,6 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
       })
       .png() // Convert to PNG format for consistency
       .toBuffer();
-
-    log.info(`Image successfully cropped to square (${croppedBuffer.length} bytes)`);
 
     return croppedBuffer;
   } catch (error) {
@@ -254,7 +236,6 @@ export async function resizeImage(buffer: Buffer, targetWidth: number): Promise<
       .png()
       .toBuffer();
 
-    log.info(`Image resized to ${targetWidth}px width`);
     return resizedBuffer;
   } catch (error) {
     log.error("Failed to resize image:", error);
@@ -292,10 +273,6 @@ export async function normalizeNaiReferenceImage(buffer: Buffer): Promise<Buffer
       .png()
       .toBuffer();
 
-    log.info(
-      `[NAI] Normalized reference image ${metadata.width}x${metadata.height} -> ${canvas.width}x${canvas.height} with black padding`,
-    );
-
     return normalizedBuffer;
   } catch (error) {
     log.error("Failed to normalize NovelAI reference image:", error);
@@ -314,7 +291,7 @@ export async function normalizeNaiReferenceImage(buffer: Buffer): Promise<Buffer
 export async function convertToPNG(buffer: Buffer): Promise<Buffer> {
   try {
     const pngBuffer = await sharp(buffer).png().toBuffer();
-    log.info("Image converted to PNG format");
+
     return pngBuffer;
   } catch (error) {
     log.error("Failed to convert image to PNG:", error);

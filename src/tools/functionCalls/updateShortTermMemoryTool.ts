@@ -147,7 +147,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     const dynamicParameters: ToolParameterSchema = {
       type: "object",
       properties,
-      required: [], // all fields are optional — the model fills whichever are relevant
+      required: [...slugMap.keys()],
     };
 
     // Use per-server description override when provided; expand macros and sanitize
@@ -171,8 +171,12 @@ export class UpdateShortTermMemoryTool extends BaseTool {
   }
 
   /**
-   * Execute the tool in single-summary (fallback) mode.
-   * Called for the default `summary` category configuration.
+   * Execute the tool, routing to category mode if the server has custom categories.
+   *
+   * The registry always executes the base tool by name — the assembled variant's
+   * execute override is only used for schema building, never for dispatch. So we
+   * detect category mode here at execution time and self-route to _executeCategoryMode
+   * when the server is not in single-summary (fallback) mode.
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     if (context.streamContext?.explicitLongTermMemoryIntent) {
@@ -190,6 +194,17 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         success: false,
         message: "Short-term memory was already updated this turn.",
       };
+    }
+
+    // Route to category mode when the server has custom categories configured.
+    const numericServerId = context.tomoriState?.server_id;
+    if (Number.isFinite(numericServerId) && numericServerId != null) {
+      const categories = await shortTermMemoryRepository.getStmCategories(numericServerId);
+      const isSummaryFallback = categories.length === 1 && categories[0].label.toLowerCase() === "summary";
+      if (!isSummaryFallback && categories.length > 0) {
+        const slugMap = buildSlugMap(categories);
+        return this._executeCategoryMode(args, context, slugMap);
+      }
     }
 
     log.info(`[updateShortTermMemoryTool] Tool called - userId=${context.userId}, channelId=${context.channel?.id}`);

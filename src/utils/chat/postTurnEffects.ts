@@ -7,7 +7,11 @@ import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
 import { localizer } from "@/utils/text/localizer";
 import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
 import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
-import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/utils/chat/contextAnnotations";
+import {
+  buildSpeakerGuardRetryDirective,
+  mergeInjectedContextItems,
+  stripInjectedContextAnnotations,
+} from "@/utils/chat/contextAnnotations";
 import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import type { ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
@@ -144,15 +148,18 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
       .filter((message) => message.authorType === "user" || message.authorType === "persona")
       .map((message) => ({
         role: message.authorType === "user" ? ("user" as const) : ("model" as const),
-        content: normalizeCustomEmojisForLlm(message.content || ""),
+        // Strip turn-ephemeral [System: …] annotations (reply refs, metadata, reactions,
+        // media notices) so durable STM holds clean conversational text only.
+        content: stripInjectedContextAnnotations(normalizeCustomEmojisForLlm(message.content || "")),
         timestamp: Date.now(),
         speakerName: message.authorType === "persona" ? message.personaName || message.authorName : message.authorName,
-      }));
+      }))
+      .filter((message) => message.content.length > 0);
 
     for (const response of result.personaResponses) {
       messagesToStore.push({
         role: "model",
-        content: normalizeCustomEmojisForLlm(response.text),
+        content: stripInjectedContextAnnotations(normalizeCustomEmojisForLlm(response.text)),
         timestamp: Date.now(),
         speakerName: response.personaName,
       });

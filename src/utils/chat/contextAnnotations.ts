@@ -630,3 +630,39 @@ function formatReactionUserLabel(
 export function formatInlineSystemContent(content: string | null | undefined): string {
   return content?.replace(/\s+/g, " ").trim() || "[System: No text content was included]";
 }
+
+// Turn-ephemeral `[System: …]` annotations the context builder injects into message
+// text. They carry per-turn `ref_N` handles and message/channel IDs that are minted
+// fresh each turn (see buildReplyReferenceContextAnnotation / buildRecentMessageMetadataAnnotation
+// / buildReactionContextAnnotation and the provider media notices). Persisting them
+// verbatim into durable stores (e.g. short-term memory) leaves stale handles that a
+// later turn re-renders against a different messageIdMap — risking mis-targeted
+// manage_message / interact_with_recent_message actions. Strip them before storing.
+const INJECTED_CONTEXT_ANNOTATION_PATTERNS: RegExp[] = [
+  // Reply-reference annotation AND media/GIF notices: "[System: This message (ID: …) …]"
+  /\[System: This message \(ID: [^)]*\)[^\]]*\]/g,
+  // Recent-message metadata: "[System: Message metadata: ref=… | …]"
+  /\[System: Message metadata:[^\]]*\]/g,
+  // Reaction context: "[System: Reactions on this message: …]"
+  /\[System: Reactions on this message:[^\]]*\]/g,
+];
+
+/**
+ * Removes injected, turn-ephemeral `[System: …]` annotations from message text so the
+ * clean conversational content can be persisted (e.g. into short-term memory) without
+ * stale per-turn `ref_N` handles or IDs leaking into future turns.
+ *
+ * @param content - Raw message text that may carry injected context annotations.
+ * @returns The text with known injected annotations removed and blank lines collapsed.
+ */
+export function stripInjectedContextAnnotations(content: string): string {
+  let cleaned = content;
+  for (const pattern of INJECTED_CONTEXT_ANNOTATION_PATTERNS) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+  // Collapse trailing whitespace and blank lines left behind by removed annotations.
+  return cleaned
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}

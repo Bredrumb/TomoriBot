@@ -683,7 +683,11 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
       prompts_description: `Customize two prompt strings:
 - **Tool description**: what my STM tool advertises to the model.
 - **Memory nudge**: the unified create/update hint text.
-Leave a box empty to reset it to the built-in default. \`{...}\` macros are supported; unknown placeholders are stripped automatically.`,
+Leave a box empty to reset it to the built-in default. Key \`{...}\` macros you can use:
+- \`{short_term_memory_tool}\` → the STM tool name
+- \`{memory_tool}\` / \`{memory_update_tool}\` → long-term memory tool names
+- \`{category_labels}\` → your configured category labels *(nudge only, category mode)*
+Unknown placeholders are stripped automatically.`,
       manage_title: `Managing & Scoping`,
       manage_description: `- {stmManage}: review and clear active server-shared STM entries.
 - {stmPrivacyBypass}: control whether private-channel STM can surface in other channels.

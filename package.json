@@ -13,6 +13,8 @@
     "watch": "bun build ./src/index.ts --outdir dist --target node --watch",
     "purge-commands": "bun run scripts/devtools/purgeCommands.ts",
     "check-migrations": "bun run scripts/db/check-migrations.ts",
+    "migrate": "bun run scripts/db/migrate.ts",
+    "migrate:down": "bun run scripts/db/migrate-down.ts",
     "check-seed-catalogs": "bun run scripts/checks/checkSeedCatalogs.ts",
     "nuke-db": "bun run scripts/devtools/nukeDb.ts",
     "backup": "bun run scripts/devtools/backupData.ts --backup",

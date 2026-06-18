@@ -34,16 +34,16 @@ const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(process.env.SHORT_TERM_MEMORY
 // `_FALLBACK` variants are byte-stable literals used when no macro resolver is wired.
 
 export const SEED_SUMMARY_UPDATE_HINT =
-  "[System: HINT: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
+  "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
 
 const SEED_SUMMARY_UPDATE_HINT_FALLBACK =
-  "[System: HINT: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
+  "[System: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory for this conversation. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
 
-const SEED_CATEGORY_UPDATE_HINT =
-  "[System: HINT: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
+export const SEED_CATEGORY_UPDATE_HINT =
+  "[System: Use the {short_term_memory_tool} tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use {short_term_memory_tool} when a user explicitly asks you to remember/save/store something for future conversations; use {memory_tool} or {memory_update_tool} instead.]";
 
 const SEED_CATEGORY_UPDATE_HINT_FALLBACK =
-  "[System: HINT: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
+  "[System: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
 
 // ─────────────────────────────────────────────────────────────────────────────
 

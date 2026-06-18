@@ -27,7 +27,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
+import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
 import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortTermMemoryTool";
 
 const MODAL_CUSTOM_ID = "server_stm_prompt_edit_modal";
@@ -81,11 +81,19 @@ export async function execute(
       return;
     }
 
-    // 3. Load any existing overrides to prefill the modal. Each field shows the effective
-    //    content — the stored override if one exists, or the seed default otherwise — so
-    //    the operator always sees what is currently active. Clearing a field and submitting
-    //    still resets it to the seed default (empty → null in step 6).
-    const existing = await shortTermMemoryRepository.getStmConfig(tomoriState.server_id);
+    // 3. Load any existing overrides and category definitions to prefill the modal. Each
+    //    field shows the effective content — the stored override if one exists, or the seed
+    //    default otherwise — so the operator always sees what is currently active. The nudge
+    //    seed is mode-aware: category mode prefills SEED_CATEGORY_UPDATE_HINT (which
+    //    contains {category_labels}) so the macro is visible and editable. Clearing a field
+    //    and submitting still resets it to the seed default (empty → null in step 6).
+    const [existing, categoryRows] = await Promise.all([
+      shortTermMemoryRepository.getStmConfig(tomoriState.server_id),
+      shortTermMemoryRepository.getStmCategories(tomoriState.server_id),
+    ]);
+
+    const isCategoryMode =
+      categoryRows.length > 0 && !(categoryRows.length === 1 && categoryRows[0].label.toLowerCase() === "summary");
 
     // 4. Show the modal — two optional Paragraph inputs. Do NOT deferReply first
     //    (Pattern 3); arg 4 auto-defers the submit interaction.
@@ -114,7 +122,9 @@ export async function execute(
             placeholder: "commands.server.stm.prompt-edit.reset_placeholder",
             required: false,
             maxLength: PROMPT_MAX_LENGTH,
-            value: existing?.update_nudge_override ?? SEED_SUMMARY_UPDATE_HINT,
+            value:
+              existing?.update_nudge_override ??
+              (isCategoryMode ? SEED_CATEGORY_UPDATE_HINT : SEED_SUMMARY_UPDATE_HINT),
           },
         ],
       },
