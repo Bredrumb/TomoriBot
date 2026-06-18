@@ -88,6 +88,32 @@ pairs):
 Only `DIALOGUE_HISTORY` items are counted; `DIALOGUE_SAMPLE` example
 dialogues are excluded from the walk.
 
+## STM content block injection depth
+
+By default the same/other-channel STM memory **content block** (`memoryItems`)
+is pushed inline near the top of context (above sample dialogues and dialogue
+history) as ambient knowledge — and, under a SillyTavern preset, flushed at the
+`chatHistory`/`dialogueExamples` anchor. `server_stm_configs.content_injection_depth`
+optionally moves that block to a dialogue depth instead, reusing the same
+`insertAtDialogueDepth` walk as the nudge:
+
+- `-1` — **default**: keep the block anchored near the top (legacy behavior); the
+  block stays inline in `contextItems` and is NOT deferred.
+- `0` — tail (the "last dialogue item"), after every dialogue turn.
+- `N` — before the Nth dialogue turn from the bottom (same clamp semantics as the
+  nudge).
+
+When `content_injection_depth >= 0`, the builder withholds `memoryItems` from
+`contextItems` and returns them out-of-band (`memoryInjectionItems` +
+`memoryInjectionDepth`) so the pipeline can splice them positionally **after**
+dialogue assembly — identical plumbing to the nudge, and correct under both native
+and preset assembly.
+
+**Content block vs. nudge ordering:** the pipeline injects the content block
+*first*, then the nudge. When both depths are equal, each is spliced before the
+same Nth dialogue turn, so the block (inserted first, in order) ends up directly
+above the later-inserted nudge — i.e. the nudge always sits just below the block.
+
 ## Nudge / prompt customization
 
 Two overridable prompt strings per server, stored in `server_stm_configs`:
@@ -142,11 +168,17 @@ Substantial — see signature in `memories.ts:190-203`. Notable:
 
 ```ts
 {
-  memoryItems: StructuredContextItem[];   // 0..N items appended to contextItems
+  memoryItems: StructuredContextItem[];   // 0..N STM content items
   nudgeItem?: StructuredContextItem;      // unified create/update nudge (out-of-band)
   nudgeInjectionDepth: number;            // dialogue depth for nudge injection (default 2)
+  memoryInjectionDepth: number;           // content-block depth (-1 = inline/anchored)
 }
 ```
+
+`memoryInjectionDepth` tells the native builder where to place `memoryItems`: at
+`-1` they are pushed inline into `contextItems` (anchored, legacy); at `>= 0` they
+are forwarded out-of-band (`memoryInjectionItems` on the build result) for
+positional injection by the pipeline.
 
 Tagged `KNOWLEDGE_SHORT_TERM_MEMORY` on every emitted item. `role: "user"`
 (not `system`) so they're interleaved with conversation flow rather than
@@ -221,11 +253,12 @@ After this stage runs:
 > [!NOTE]
 > The default cadence of `5` and the default `nudge_injection_depth` of `2`
 > are set in migration 035 and mirrored as runtime fallbacks in
-> `memories.ts`.
+> `memories.ts`. The default `content_injection_depth` of `-1` (inline/anchored)
+> is added in migration 036 and mirrored the same way.
 
 | Source | Field | Effect |
 |---|---|---|
-| `server_stm_configs` | `refresh_cadence`, `render_mode`, `crude_message_count`, `nudge_injection_depth` | Cadence gating, render behavior, crude render cap, nudge position |
+| `server_stm_configs` | `refresh_cadence`, `render_mode`, `crude_message_count`, `nudge_injection_depth`, `content_injection_depth` | Cadence gating, render behavior, crude render cap, nudge position, content-block position |
 | `server_stm_configs` | `tool_description_override`, `update_nudge_override` | Prompt customization |
 | `stm_categories` | `label`, `description`, `position` | Dynamic category schema |
 | `tomoriConfig` | `private_channel_ids`, `stm_privacy_bypass` | STM privacy filtering |
@@ -235,7 +268,7 @@ After this stage runs:
 
 | Command | Purpose |
 |---|---|
-| `/server stm parameters` | Configure cadence, render mode, crude message count, nudge depth |
+| `/server stm parameters` | Configure cadence, render mode, crude message count, nudge depth, content depth |
 | `/server stm prompt-edit` | Set tool description and the unified nudge override |
 | `/server stm categories-edit` | Define category labels and descriptions |
 | `/persona stm edit` | Hand-edit live STM for a persona in the current channel |

@@ -831,6 +831,18 @@ export async function execute(
     const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriorityTailDirectives);
     if (lowerPriorityTailMessage) insertBeforeLatestDialoguePair(contextItems, lowerPriorityTailMessage);
 
+    // Mirror the live pipeline: inject the deferred STM content block at its depth
+    // (only when content depth >= 0), before the nudge so the snapshot ordering matches.
+    if (
+      contextBuild.memoryInjectionItems &&
+      contextBuild.memoryInjectionItems.length > 0 &&
+      (contextBuild.memoryInjectionDepth ?? -1) >= 0
+    ) {
+      for (const memoryItem of contextBuild.memoryInjectionItems) {
+        insertAtDialogueDepth(contextItems, memoryItem, contextBuild.memoryInjectionDepth ?? 0);
+      }
+    }
+
     // Mirror the live pipeline: inject the unified STM nudge at its configured depth.
     if (contextBuild.nudgeItem) {
       insertAtDialogueDepth(contextItems, contextBuild.nudgeItem, contextBuild.nudgeInjectionDepth ?? 0);

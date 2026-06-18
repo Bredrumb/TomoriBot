@@ -336,6 +336,8 @@ export async function reassembleWithPreset(
     uncensorDirective?: string;
     nudgeItem?: StructuredContextItem;
     nudgeInjectionDepth?: number;
+    memoryInjectionItems?: StructuredContextItem[];
+    memoryInjectionDepth?: number;
   },
   presetData: CachedPresetData,
   macroParams: PresetMacroParams,
@@ -347,6 +349,8 @@ export async function reassembleWithPreset(
   uncensorDirective?: string;
   nudgeItem?: StructuredContextItem;
   nudgeInjectionDepth?: number;
+  memoryInjectionItems?: StructuredContextItem[];
+  memoryInjectionDepth?: number;
 }> {
   const { nodes } = presetData;
 
@@ -572,8 +576,9 @@ export async function reassembleWithPreset(
   );
 
   // ── Step 7: Return in the same format ──
-  // Tail directives, uncensor directive, and the out-of-band STM nudge pass through
-  // unchanged — the nudge is injected positionally downstream, after assembly.
+  // Tail directives, uncensor directive, and the out-of-band STM nudge + deferred STM
+  // content block pass through unchanged — both are injected positionally downstream,
+  // after assembly, so preset reassembly never re-anchors them.
   return {
     contextItems,
     tailDirectives: nativeOutput.tailDirectives,
@@ -581,5 +586,7 @@ export async function reassembleWithPreset(
     uncensorDirective: nativeOutput.uncensorDirective,
     nudgeItem: nativeOutput.nudgeItem,
     nudgeInjectionDepth: nativeOutput.nudgeInjectionDepth,
+    memoryInjectionItems: nativeOutput.memoryInjectionItems,
+    memoryInjectionDepth: nativeOutput.memoryInjectionDepth,
   };
 }

@@ -60,21 +60,26 @@ export default {
         more_cleared: `- ...他 {count} 件`,
       },
       parameters: {
-        description: `STMの更新頻度・表示モード・生メッセージ数・促しの挿入位置を調整します。`,
+        description: `STMの更新頻度・表示モード・生メッセージ数・促しの挿入位置・記憶ブロックの挿入位置を調整します。`,
         "refresh-cadence_description": `更新を促すまでのボットのターン数（1＝毎ターン）。デフォルト：5。`,
         "render-mode_description": `生のやり取りを要約で置き換えるか、両方を表示するか。デフォルト：置き換え。`,
         "crude-messages_description": `コンテキストに残す直近の生（要約前の）メッセージ数。デフォルト：6。`,
         "nudge-depth_description": `促しの位置：0＝末尾、N＝下からN番目の発言の前。デフォルト：2。`,
+        "content-depth_description": `記憶ブロックの位置：-1＝上部（デフォルト）、0＝末尾、N＝下からN番目の発言の前。`,
         supersede_option: `置き換え（カテゴリで生のやり取りを置換）`,
         crude_summary_option: `生＋要約（両方を併記）`,
         summary_description: `更新頻度：**{refresh_cadence}**
 表示モード：**{render_mode}**
 生メッセージ数：**{crude_messages}**
-促しの挿入位置：**{nudge_depth}**`,
+促しの挿入位置：**{nudge_depth}**
+記憶ブロックの挿入位置：**{content_depth}**`,
         refresh_cadence_1: `毎ターン`,
         refresh_cadence_x: `{count} ターン毎`,
         nudge_depth_tail: `末尾（全会話の後）`,
         nudge_depth_x: `下から {count} 発言前`,
+        content_depth_default: `上部（知識として固定）`,
+        content_depth_tail: `末尾（全会話の後）`,
+        content_depth_x: `下から {count} 発言前`,
         unchanged_title: `現在のSTMパラメータ`,
         success_title: `STMパラメータを更新しました`,
       },

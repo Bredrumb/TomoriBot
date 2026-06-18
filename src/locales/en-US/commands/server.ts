@@ -60,21 +60,26 @@ export default {
         more_cleared: `- ...and {count} more`,
       },
       parameters: {
-        description: `Tune the STM refresh cadence, render mode, crude-message count, and nudge depth.`,
+        description: `Tune the STM refresh cadence, render mode, crude-message count, nudge depth, and content depth.`,
         "refresh-cadence_description": `Bot turns between refresh nudges (1 = every turn). Default: 5.`,
         "render-mode_description": `Replace raw turns with the summary, or show both. Default: Supersede.`,
         "crude-messages_description": `How many recent raw (unsummarized) messages to keep in context. Default: 6.`,
         "nudge-depth_description": `Nudge position: 0 = tail, N = before Nth dialogue turn from bottom. Default: 2.`,
+        "content-depth_description": `Memory block position: -1 = top (default), 0 = tail, N = before Nth dialogue turn from bottom.`,
         supersede_option: `Supersede (categories replace crude turns)`,
         crude_summary_option: `Crude + summary (show both additively)`,
         summary_description: `Refresh cadence: **{refresh_cadence}**
 Render mode: **{render_mode}**
 Crude messages: **{crude_messages}**
-Nudge depth: **{nudge_depth}**`,
+Nudge depth: **{nudge_depth}**
+Content depth: **{content_depth}**`,
         refresh_cadence_1: `Every Turn`,
         refresh_cadence_x: `Every {count} Turns`,
         nudge_depth_tail: `Tail (after all dialogue)`,
         nudge_depth_x: `Before {count} turns from bottom`,
+        content_depth_default: `Top (anchored as knowledge)`,
+        content_depth_tail: `Tail (after all dialogue)`,
+        content_depth_x: `Before {count} turns from bottom`,
         unchanged_title: `Current STM Parameters`,
         success_title: `STM Parameters Updated`,
       },

@@ -201,6 +201,12 @@ export async function buildShortTermMemoryContext(params: {
   memoryItems: StructuredContextItem[];
   nudgeItem?: StructuredContextItem;
   nudgeInjectionDepth: number;
+  /**
+   * Where the caller should place `memoryItems`. -1 = keep them anchored near the
+   * top as ambient knowledge (legacy default); >= 0 = defer to positional injection
+   * at this dialogue depth (counted in turns from the bottom, like the nudge).
+   */
+  memoryInjectionDepth: number;
 }> {
   const memoryItems: StructuredContextItem[] = [];
   let nudgeItem: StructuredContextItem | undefined;
@@ -225,6 +231,9 @@ export async function buildShortTermMemoryContext(params: {
     const updateNudgeOverride = stmConfig?.update_nudge_override ?? null;
     // 0 = inject the nudge at the dialogue tail; N = before the Nth dialogue turn from the bottom.
     const nudgeInjectionDepth = stmConfig?.nudge_injection_depth ?? 2;
+    // -1 = keep the STM content block anchored near the top (legacy default); >= 0 =
+    // defer it to positional injection at this dialogue depth (same walk as the nudge).
+    const memoryInjectionDepth = stmConfig?.content_injection_depth ?? -1;
 
     // Category mode: any configuration other than the single default "summary" category.
     // An empty list (no rows resolved, e.g. no server) is NOT category mode — it must
@@ -500,7 +509,7 @@ export async function buildShortTermMemoryContext(params: {
       }
     }
 
-    return { memoryItems, nudgeItem, nudgeInjectionDepth };
+    return { memoryItems, nudgeItem, nudgeInjectionDepth, memoryInjectionDepth };
   } catch (error) {
     await log.error(
       `[buildShortTermMemoryContext] Failed to build short-term memory context - triggeringUserId=${params.triggeringUserId}, currentChannelId=${params.currentChannelId}`,
@@ -510,6 +519,6 @@ export async function buildShortTermMemoryContext(params: {
         metadata: { userDiscId: params.triggeringUserId, currentChannelId: params.currentChannelId },
       },
     );
-    return { memoryItems: [], nudgeInjectionDepth: 0 };
+    return { memoryItems: [], nudgeInjectionDepth: 0, memoryInjectionDepth: -1 };
   }
 }

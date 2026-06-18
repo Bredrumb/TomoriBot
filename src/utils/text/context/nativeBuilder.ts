@@ -25,6 +25,14 @@ export type NativeBuildContextResult = {
   nudgeItem?: StructuredContextItem;
   /** Dialogue depth at which to inject `nudgeItem` (0 = tail). */
   nudgeInjectionDepth?: number;
+  /**
+   * STM content block deferred for positional injection. Populated only when the
+   * server set a content depth >= 0; when -1 (default) the block is pushed inline
+   * into `contextItems` here and this stays undefined.
+   */
+  memoryInjectionItems?: StructuredContextItem[];
+  /** Dialogue depth at which to inject `memoryInjectionItems` (0 = tail). */
+  memoryInjectionDepth?: number;
 };
 
 /**
@@ -73,6 +81,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   const lowerPriorityTailDirectives: string[] = [];
   let nudgeItem: StructuredContextItem | undefined;
   let nudgeInjectionDepth = 2;
+  let memoryInjectionItems: StructuredContextItem[] | undefined;
+  let memoryInjectionDepth = -1;
   let uncensorDirective: string | undefined;
   const botName = tomoriNickname;
   const impersonatedMember =
@@ -271,9 +281,19 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
         currentParentChannelId: parentChannelId,
         convertMentions,
       });
-      contextItems.push(...stmResult.memoryItems);
       nudgeItem = stmResult.nudgeItem;
       nudgeInjectionDepth = stmResult.nudgeInjectionDepth;
+      memoryInjectionDepth = stmResult.memoryInjectionDepth;
+      if (memoryInjectionDepth >= 0) {
+        // Depth >= 0: defer the block out-of-band so it can be spliced at a dialogue
+        // depth downstream (after history is assembled), the same way the nudge is.
+        // Keeping it OUT of contextItems also means preset reassembly won't anchor it
+        // at the chatHistory flush point — the positional injection owns placement.
+        memoryInjectionItems = stmResult.memoryItems;
+      } else {
+        // Default (-1): anchor the block near the top as ambient knowledge (legacy).
+        contextItems.push(...stmResult.memoryItems);
+      }
     }
   } catch (error) {
     log.warn("Failed to build short-term memory context", error);
@@ -348,6 +368,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     uncensorDirective,
     nudgeItem,
     nudgeInjectionDepth,
+    memoryInjectionItems,
+    memoryInjectionDepth,
   };
 }
 

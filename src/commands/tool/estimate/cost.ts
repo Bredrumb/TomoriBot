@@ -966,6 +966,18 @@ async function buildRuntimeParityContext(
     insertBeforeLatestDialoguePair(contextSegments, lowerPriorityTailMessage);
   }
 
+  // Mirror the live pipeline: count the deferred STM content block at its depth (only
+  // when content depth >= 0), placed before the nudge so token positioning matches.
+  if (
+    contextBuild.memoryInjectionItems &&
+    contextBuild.memoryInjectionItems.length > 0 &&
+    (contextBuild.memoryInjectionDepth ?? -1) >= 0
+  ) {
+    for (const memoryItem of contextBuild.memoryInjectionItems) {
+      insertAtDialogueDepth(contextSegments, memoryItem, contextBuild.memoryInjectionDepth ?? 0);
+    }
+  }
+
   // Mirror the live pipeline: count the unified STM nudge at its configured depth.
   if (contextBuild.nudgeItem) {
     insertAtDialogueDepth(contextSegments, contextBuild.nudgeItem, contextBuild.nudgeInjectionDepth ?? 0);

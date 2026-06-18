@@ -674,7 +674,8 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - **Refresh cadence**: how many of my turns pass between refresh nudges (default **5**).
 - **Render mode**: how the summary and the raw messages combine. *Supersede* (the summary replaces the raw messages) or *Crude + summary* (show both).
 - **Crude messages**: how many recent raw (unsummarized) messages to keep in context (default **6**).
-- **Nudge depth**: where the refresh nudge sits in the conversation (0 = very bottom; 2 = just above the latest exchange, the default).`,
+- **Nudge depth**: where the refresh nudge sits in the conversation (0 = very bottom; 2 = just above the latest exchange, the default).
+- **Content depth**: where my memory block sits (-1 = up top as background knowledge, the default; 0 = very bottom; N = before the Nth turn from the bottom). At the same depth as the nudge, my memory block sits just above it.`,
       nudge_title: `How the Refresh Nudge Works`,
       nudge_description: `While a conversation is going I get a quiet system hint to create or update my STM, but only once every *cadence* turns, so I'm not nagged every message. The counter advances each time I respond (whether or not I saved anything) and resets only when I actually use my STM tool. If I keep ignoring it, the nudge stays due until I act.`,
       categories_title: `Categories ({stmCategoriesEdit})`,

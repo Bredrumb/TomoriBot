@@ -48,6 +48,7 @@ export type ShortTermMemoryExportShape = {
     tool_description_override: string | null;
     update_nudge_override: string | null;
     nudge_injection_depth?: number;
+    content_injection_depth?: number;
   } | null;
   stm_categories: Array<{
     position: number;
@@ -263,6 +264,7 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
       "tool_description_override",
       "update_nudge_override",
       "nudge_injection_depth",
+      "content_injection_depth",
     ]);
 
     const entries = Object.entries(patch).filter(([k, v]) => v !== undefined && ALLOWED_STM_CONFIG_COLS.has(k));
@@ -347,6 +349,7 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
               tool_description_override: config.tool_description_override ?? null,
               update_nudge_override: config.update_nudge_override ?? null,
               nudge_injection_depth: config.nudge_injection_depth,
+              content_injection_depth: config.content_injection_depth,
             }
           : null,
         stm_categories: categories.map((c) => ({

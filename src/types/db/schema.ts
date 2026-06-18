@@ -794,6 +794,12 @@ export const serverStmConfigSchema = z.object({
   // bottom (not pairs): 0 = tail, 1 = before the final turn, 2 = before the latest
   // pair, N = before the Nth turn (migration 035, default 2).
   nudge_injection_depth: z.number().int().default(2),
+  // Positional injection depth for the STM content block (same/other-channel memory),
+  // counted in dialogue TURNS from the bottom like nudge_injection_depth, with an extra
+  // sentinel: -1 = default (keep the block anchored near the top as ambient knowledge,
+  // legacy behavior), 0 = tail (last dialogue item), N = before the Nth turn
+  // (migration 036, default -1). At equal depths the nudge lands just below the block.
+  content_injection_depth: z.number().int().default(-1),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

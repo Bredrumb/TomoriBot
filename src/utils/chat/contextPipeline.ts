@@ -309,6 +309,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     uncensorDirective: contextBuild.uncensorDirective,
     nudgeItem: contextBuild.nudgeItem,
     nudgeInjectionDepth: contextBuild.nudgeInjectionDepth,
+    memoryInjectionItems: contextBuild.memoryInjectionItems,
+    memoryInjectionDepth: contextBuild.memoryInjectionDepth,
     messageIdMap,
   });
 
@@ -936,6 +938,8 @@ function appendTailDirectives(args: {
   uncensorDirective?: string;
   nudgeItem?: ChatTurnContext["contextItems"][number];
   nudgeInjectionDepth?: number;
+  memoryInjectionItems?: ChatTurnContext["contextItems"];
+  memoryInjectionDepth?: number;
   messageIdMap?: MessageIdMap;
 }): ChatTurnContext["contextItems"] {
   const incoming = args.turn.lockedTurn.admission.incoming;
@@ -1043,6 +1047,17 @@ function appendTailDirectives(args: {
   const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriority);
   if (lowerPriorityTailMessage) {
     insertBeforeLatestDialoguePair(contextItems, lowerPriorityTailMessage);
+  }
+
+  // Inject the deferred STM content block at its configured dialogue depth (only when
+  // the server opted into positional placement; depth -1 keeps it inline upstream).
+  // Done BEFORE the nudge so that at equal depths the nudge lands just below the block:
+  // each item is spliced before the same Nth dialogue turn, and the block (inserted
+  // first, in order) ends up above the later-inserted nudge.
+  if (args.memoryInjectionItems && args.memoryInjectionItems.length > 0 && (args.memoryInjectionDepth ?? -1) >= 0) {
+    for (const memoryItem of args.memoryInjectionItems) {
+      insertAtDialogueDepth(contextItems, memoryItem, args.memoryInjectionDepth ?? 0);
+    }
   }
 
   // Inject the unified STM nudge at its configured dialogue depth (0 = tail). Done

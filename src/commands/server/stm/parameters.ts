@@ -33,6 +33,10 @@ const MIN_CRUDE_MESSAGES = 1;
 const MAX_CRUDE_MESSAGES = 50;
 const MIN_NUDGE_DEPTH = 0;
 const MAX_NUDGE_DEPTH = 20;
+// Content-block depth allows -1 (sentinel: keep the block anchored near the top,
+// legacy behavior). 0 = tail (last dialogue item); N = before the Nth turn from bottom.
+const MIN_CONTENT_DEPTH = -1;
+const MAX_CONTENT_DEPTH = 20;
 
 // Render-mode option values map 1:1 to the server_stm_configs.render_mode enum.
 const RENDER_MODE_SUPERSEDE = "supersede";
@@ -99,6 +103,14 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setMinValue(MIN_NUDGE_DEPTH)
         .setMaxValue(MAX_NUDGE_DEPTH)
         .setRequired(false),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("content-depth")
+        .setDescription(localizer("en-US", "commands.server.stm.parameters.content-depth_description"))
+        .setMinValue(MIN_CONTENT_DEPTH)
+        .setMaxValue(MAX_CONTENT_DEPTH)
+        .setRequired(false),
     );
 
 /**
@@ -130,6 +142,7 @@ export async function execute(
   const renderMode = interaction.options.getString("render-mode");
   const crudeMessages = interaction.options.getInteger("crude-messages");
   const nudgeDepth = interaction.options.getInteger("nudge-depth");
+  const contentDepth = interaction.options.getInteger("content-depth");
 
   let tomoriState: Awaited<ReturnType<typeof getCachedTomoriState>> = null;
   try {
@@ -154,6 +167,7 @@ export async function execute(
     if (renderMode !== null) patch.render_mode = renderMode as ServerStmConfigRow["render_mode"];
     if (crudeMessages !== null) patch.crude_message_count = crudeMessages;
     if (nudgeDepth !== null) patch.nudge_injection_depth = nudgeDepth;
+    if (contentDepth !== null) patch.content_injection_depth = contentDepth;
 
     // 6. Nothing supplied → just show the current effective settings (no write).
     if (Object.keys(patch).length === 0) {
@@ -228,6 +242,7 @@ async function replyEffectiveSettings(
   const effectiveMode: ServerStmConfigRow["render_mode"] = config?.render_mode ?? RENDER_MODE_SUPERSEDE;
   const effectiveCrude = config?.crude_message_count ?? 6;
   const effectiveNudgeDepth = config?.nudge_injection_depth ?? 2;
+  const effectiveContentDepth = config?.content_injection_depth ?? -1;
 
   const cadenceStr =
     effectiveCadence === 1
@@ -242,6 +257,16 @@ async function replyEffectiveSettings(
           count: effectiveNudgeDepth.toString(),
         });
 
+  // content depth has two friendly endpoints: -1 = anchored default, 0 = tail.
+  const contentDepthStr =
+    effectiveContentDepth < 0
+      ? localizer(locale, "commands.server.stm.parameters.content_depth_default")
+      : effectiveContentDepth === 0
+        ? localizer(locale, "commands.server.stm.parameters.content_depth_tail")
+        : localizer(locale, "commands.server.stm.parameters.content_depth_x", {
+            count: effectiveContentDepth.toString(),
+          });
+
   await replyInfoEmbed(interaction, locale, {
     titleKey,
     descriptionKey: "commands.server.stm.parameters.summary_description",
@@ -250,6 +275,7 @@ async function replyEffectiveSettings(
       render_mode: renderModeLabel(locale, effectiveMode),
       crude_messages: effectiveCrude.toString(),
       nudge_depth: nudgeDepthStr,
+      content_depth: contentDepthStr,
     },
     color: ColorCode.SUCCESS,
   });

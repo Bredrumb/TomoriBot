@@ -265,6 +265,7 @@ export const serverStmConfigExportSchema = z.object({
       tool_description_override: z.string().nullable(),
       update_nudge_override: z.string().nullable(),
       nudge_injection_depth: z.number().int().optional(),
+      content_injection_depth: z.number().int().optional(),
     })
     .nullable()
     .optional(),
