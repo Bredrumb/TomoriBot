@@ -2941,13 +2941,14 @@ CREATE TRIGGER update_channel_prompt_overrides_timestamp
 
 CREATE TABLE IF NOT EXISTS server_stm_configs (
   server_id                 INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
-  refresh_cadence           INT         NOT NULL DEFAULT 1,
+  refresh_cadence           INT         NOT NULL DEFAULT 5,
   render_mode               TEXT        NOT NULL DEFAULT 'supersede'
                                           CHECK (render_mode IN ('supersede', 'crude_summary')),
   crude_message_count       INT         NOT NULL DEFAULT 6,
   tool_description_override TEXT,
-  create_nudge_override     TEXT,
   update_nudge_override     TEXT,
+  nudge_injection_depth     INT         NOT NULL DEFAULT 2,
+  content_injection_depth   INT         NOT NULL DEFAULT -1,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
