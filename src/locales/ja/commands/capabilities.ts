@@ -38,7 +38,7 @@ export default {
       hiderespondembed_desc: `/bot respond の成功埋め込みを非表示`,
       hideimpersonationembeds_desc: `なりすまし通知を非表示`,
       voicemessage_desc: `ElevenLabs TTSボイスメッセージを送信`,
-      shorttermmemory_desc: `進行中の会話の文脈を記憶して活用する`,
+      shorttermmemory_desc: `ボットの自動記憶＆促し。オフでも手動編集(/persona stm edit)と生メッセージは表示`,
       select_placeholder: `有効にする機能を選択...`,
       checkbox_label_continued: `機能（続き）`,
       select_embed_title: `機能の設定`,

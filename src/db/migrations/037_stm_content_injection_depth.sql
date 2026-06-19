@@ -1,4 +1,4 @@
--- Migration 036: Add STM content-block injection depth.
+-- Migration 037: Add STM content-block injection depth.
 --
 -- content_injection_depth controls WHERE the same/other-channel STM memory block
 -- ("content block") is placed in the assembled context, mirroring the existing

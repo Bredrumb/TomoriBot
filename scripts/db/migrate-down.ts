@@ -57,7 +57,7 @@ const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
 
 interface MigrationFile {
   version: number;
-  /** Stem without extension, e.g. "034_stm_customization". The schema_migrations key. */
+  /** Stem without extension, e.g. "035_stm_customization". The schema_migrations key. */
   name: string;
   /** Absolute path to the paired NNN_description.down.sql rollback file. */
   downPath: string;
@@ -144,7 +144,7 @@ function parseArgs(): { lastCount?: number; fromVersion?: number; confirmed: boo
     return { lastCount: count, confirmed };
   }
 
-  // Positional version or full name stem (e.g. "034" or "034_stm_customization").
+  // Positional version or full name stem (e.g. "035" or "035_stm_customization").
   const positional = argv.find((a) => !a.startsWith("-"));
   if (!positional) {
     log.error("Provide a target version (e.g. 034) or --last[=N]. See script header for usage.");

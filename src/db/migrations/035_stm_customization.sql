@@ -1,4 +1,4 @@
--- Migration 034: STM Customization — durable categories + per-server config.
+-- Migration 035: STM Customization — durable categories + per-server config.
 --
 -- Adds three tables:
 --   server_stm_configs:   per-server refresh cadence, render mode, prompt overrides

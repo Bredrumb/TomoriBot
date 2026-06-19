@@ -44,7 +44,7 @@ const CATEGORY_INPUT_MAX_LENGTH = 1000;
 // Discord modals allow at most 5 action-row components; the STM cap is also 5.
 const MAX_CATEGORY_SLOTS = Math.min(STM_MAX_CATEGORIES, 5);
 
-// Mirrors the migration 034 seed + ShortTermMemoryRepository.getStmCategories fallback so
+// Mirrors the migration 035 seed + ShortTermMemoryRepository.getStmCategories fallback so
 // the restored default is byte-identical to a never-configured server.
 const DEFAULT_SUMMARY_LABEL = "summary";
 const DEFAULT_SUMMARY_DESCRIPTION = "A running summary of recent events, topics, and context from this conversation.";

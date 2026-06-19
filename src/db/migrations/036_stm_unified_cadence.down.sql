@@ -1,4 +1,4 @@
--- Down-migration 035: restore create_nudge_override, drop nudge_injection_depth,
+-- Down-migration 036: restore create_nudge_override, drop nudge_injection_depth,
 -- revert refresh_cadence default to 1. (Existing per-row cadence values are left as-is.)
 
 ALTER TABLE server_stm_configs

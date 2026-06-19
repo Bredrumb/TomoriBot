@@ -1,4 +1,4 @@
--- Migration 037: Short-term memory capability toggle.
+-- Migration 038: Short-term memory capability toggle.
 --
 -- Adds a per-server on/off switch for the entire short-term memory subsystem,
 -- surfaced in `/capabilities manage` alongside the other feature toggles.

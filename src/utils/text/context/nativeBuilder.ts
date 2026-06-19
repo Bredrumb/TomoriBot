@@ -265,11 +265,13 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
 
   try {
     const actualTriggeringUserId = impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
-    // Per-server master switch (migration 037): when STM is disabled, skip the entire
-    // build so NONE of the three injections are produced — same-channel content block,
-    // cadence nudge, AND other-channel recall (the latter isn't gated by has_tools, so
-    // this caller-level gate is the only spot that suppresses all of them).
-    if (actualTriggeringUserId && tomoriConfig.short_term_memory_enabled !== false) {
+    // Per-server master switch (migration 038): when STM is disabled we no longer skip the
+    // whole build. "Off" means the bot stops AUTO-managing STM (the write tool and the
+    // cadence nudge are suppressed) — but existing STM content STILL surfaces so admins can
+    // curate it by hand via `/persona stm edit` and crude messages remain visible. The
+    // nudge suppression now lives inside buildShortTermMemoryContext (gated on the same
+    // switch), and the write tool gates itself in updateShortTermMemoryTool.
+    if (actualTriggeringUserId) {
       const stmResult = await buildShortTermMemoryContext({
         triggeringUserId: actualTriggeringUserId,
         currentChannelId: channelId,

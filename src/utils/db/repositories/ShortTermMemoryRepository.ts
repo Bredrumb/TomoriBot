@@ -1,7 +1,7 @@
 /**
  * ShortTermMemoryRepository — manages in-conversation short-term working memory.
  *
- * Architecture (post migration 034):
+ * Architecture (post migration 035):
  *   - Per-channel durable state (categories, summary, turn counters) lives in
  *     `short_term_memories` and is kept hot by shortTermMemoryCache.ts via
  *     read-through / write-through. State methods here delegate to the cache.

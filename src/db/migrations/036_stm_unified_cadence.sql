@@ -1,4 +1,4 @@
--- Migration 035: Unify STM nudge cadence — default 5, nudge depth, drop create_nudge_override.
+-- Migration 036: Unify STM nudge cadence — default 5, nudge depth, drop create_nudge_override.
 --
 -- crude_message_count is kept (now correctly used to cap crude-message render depth).
 -- create_nudge_override is dropped (merged into update_nudge_override).

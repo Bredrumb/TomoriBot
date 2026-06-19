@@ -178,7 +178,7 @@ export async function execute(
 
     // 7. Upsert the config. We use the repository upsert (INSERT … ON CONFLICT) rather
     //    than ConfigRepository.updateStmConfig (UPDATE-only) because servers created
-    //    after migration 034 have no server_stm_configs row yet — an UPDATE would no-op.
+    //    after migration 035 have no server_stm_configs row yet — an UPDATE would no-op.
     const saved = await shortTermMemoryRepository.upsertStmConfig(tomoriState.server_id, patch);
     if (!saved) {
       await replyInfoEmbed(interaction, locale, {

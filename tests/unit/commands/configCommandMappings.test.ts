@@ -24,6 +24,7 @@ const disabledCapabilitiesManageState: CapabilitiesManageConfigState = {
   videogen_enabled: false,
   voice_message_enabled: false,
   user_blocking_enabled: false,
+  short_term_memory_enabled: false,
 };
 
 const enabledCapabilitiesManageState: CapabilitiesManageConfigState = {
@@ -38,6 +39,7 @@ const enabledCapabilitiesManageState: CapabilitiesManageConfigState = {
   videogen_enabled: true,
   voice_message_enabled: true,
   user_blocking_enabled: true,
+  short_term_memory_enabled: true,
 };
 
 const disabledServerMemberPermissionsState: ServerMemberPermissionsCommandConfigState = {

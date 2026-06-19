@@ -2678,6 +2678,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   voice_message_enabled  BOOLEAN NOT NULL DEFAULT true,
   user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
+  short_term_memory_enabled BOOLEAN NOT NULL DEFAULT true,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -2933,7 +2934,7 @@ CREATE TRIGGER update_channel_prompt_overrides_timestamp
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================================
--- STM CUSTOMIZATION (migration 034)
+-- STM CUSTOMIZATION (migration 035)
 -- Durable per-server STM config, ordered category definitions, and per-scope
 -- durable state rows. The in-process cache is write-through over short_term_memories.
 -- ============================================================================

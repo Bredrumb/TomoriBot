@@ -30,7 +30,7 @@ const DEFAULT_CRUDE_MESSAGE_COUNT = Number.parseInt(
 const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3", 10);
 
 // ── Default seed strings ──────────────────────────────────────────────────────
-// The single unified nudge (migration 035) covers BOTH cases — "no STM yet, please
+// The single unified nudge (migration 036) covers BOTH cases — "no STM yet, please
 // create one" and "STM exists, please refresh it" — with one cadence-gated prompt.
 // Category-mode seeds reference {category_labels}, substituted before sanitization.
 // `_FALLBACK` variants are byte-stable literals used when no macro resolver is wired.
@@ -406,8 +406,17 @@ export async function buildShortTermMemoryContext(params: {
 
     // 3. Same-channel memory (live injected scope)
     if (params.tomoriState?.llm?.has_tools) {
+      // The cadence nudge prompts the bot to CALL the STM write tool, so it must track
+      // the same conditions that decide whether the tool is offered (see
+      // updateShortTermMemoryTool.isAvailableForContext). When the per-server master
+      // switch (migration 038) is off, the tool is suppressed — so we suppress the nudge
+      // too. Crucially this only gates the nudge: the memory content blocks above and
+      // below still render, so manually-curated STM (`/persona stm edit`) and crude
+      // messages keep surfacing even with STM "off".
       const isStmToolAvailable =
-        params.tomoriState.llm.llm_provider !== "novelai" && !params.explicitLongTermMemoryIntent;
+        params.tomoriState.llm.llm_provider !== "novelai" &&
+        !params.explicitLongTermMemoryIntent &&
+        params.tomoriState.config?.short_term_memory_enabled !== false;
 
       // Ensure the cache is warm before the synchronous read below.
       // On the first turn after a bot restart the in-memory cache is cold; without
@@ -430,7 +439,7 @@ export async function buildShortTermMemoryContext(params: {
               params.tomoriState?.persona_id,
             );
 
-      // Unified cadence counter (migration 035). A channel with no prior STM starts
+      // Unified cadence counter (migration 036). A channel with no prior STM starts
       // at 0 and increments once per bot-participation turn, so the nudge first fires
       // after exactly `refreshCadence` turns — for BOTH the create case (no STM yet)
       // and each subsequent update case (existing STM refresh).

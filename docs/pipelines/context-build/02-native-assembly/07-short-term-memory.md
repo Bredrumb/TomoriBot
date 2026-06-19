@@ -252,9 +252,9 @@ After this stage runs:
 
 > [!NOTE]
 > The default cadence of `5` and the default `nudge_injection_depth` of `2`
-> are set in migration 035 and mirrored as runtime fallbacks in
+> are set in migration 036 and mirrored as runtime fallbacks in
 > `memories.ts`. The default `content_injection_depth` of `-1` (inline/anchored)
-> is added in migration 036 and mirrored the same way.
+> is added in migration 037 and mirrored the same way.
 
 | Source | Field | Effect |
 |---|---|---|
@@ -273,18 +273,21 @@ After this stage runs:
 | `/server stm categories-edit` | Define category labels and descriptions |
 | `/persona stm edit` | Hand-edit live STM for a persona in the current channel (Manage Server) |
 | `/persona stm view` | Read-only inspect the live STM for a persona in the current channel (open to all members) |
-| `/capabilities manage` | Master on/off switch ("Short-Term Memory") for the whole STM subsystem |
+| `/capabilities manage` | "Short-Term Memory" toggle — turns OFF the bot's automatic STM management (write tool + cadence nudge) while leaving STM content visible |
 | `/help stm` | In-Discord guide to the STM customization surface |
 
 > **Disabling STM:** the `short_term_memory_enabled` capability flag
-> (`server_capabilities_configs`, migration 037, default `true`) is the master switch.
-> When off, two gates fire: (1) `UpdateShortTermMemoryTool.isAvailableForContext` returns
-> `false` so the tool is never offered, and (2) `nativeBuilder.ts` skips the
-> `buildShortTermMemoryContext` call entirely, so the same-channel block, the cadence
-> nudge, AND other-channel recall are all suppressed (other-channel recall is otherwise
-> ungated by `has_tools`, so the caller-level gate is the only spot that catches it).
-> Stored `short_term_memories` rows are NOT deleted; the `/server stm …` and
-> `/persona stm …` commands stay fully usable so admins can pre-configure while it's off.
+> (`server_capabilities_configs`, migration 038, default `true`) controls the bot's
+> *automatic* STM management — not whether STM appears at all. When off, two gates fire:
+> (1) `UpdateShortTermMemoryTool.isAvailableForContext` returns `false` so the write tool
+> is never offered, and (2) the cadence nudge is suppressed inside
+> `buildShortTermMemoryContext` — `isStmToolAvailable` now folds in the same flag, so the
+> nudge tracks the tool. **Memory content still renders:** `nativeBuilder.ts` always calls
+> `buildShortTermMemoryContext`, so the same-channel block and other-channel recall keep
+> surfacing. This lets admins curate STM by hand via `/persona stm edit` (and keep crude
+> messages visible) with the bot's auto-updates and nudges turned off. Stored
+> `short_term_memories` rows are NOT deleted; the `/server stm …` and `/persona stm …`
+> commands stay fully usable.
 
 > **Scope note:** both `/persona stm edit` and `/persona stm view` resolve the exact row
 > that gets injected — the **server-shared** row (`serverId, channelId, personaId`) in a

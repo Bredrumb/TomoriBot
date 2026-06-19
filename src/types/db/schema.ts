@@ -668,7 +668,7 @@ export const serverCapabilitiesConfigSchema = z.object({
   user_blocking_enabled: z.boolean().default(true),
   tool_use_enabled: z.boolean().default(true),
   // Master switch for the short-term memory subsystem (tool + context injection).
-  // Default true keeps existing servers unchanged; see migration 037.
+  // Default true keeps existing servers unchanged; see migration 038.
   short_term_memory_enabled: z.boolean().default(true),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -783,7 +783,7 @@ export const serverMemoryConfigSchema = z.object({
 });
 export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
 
-// ── STM customization (migration 034) ────────────────────────────────────────
+// ── STM customization (migration 035) ────────────────────────────────────────
 
 export const serverStmConfigSchema = z.object({
   server_id: z.number().int(),
@@ -791,17 +791,17 @@ export const serverStmConfigSchema = z.object({
   render_mode: z.enum(["supersede", "crude_summary"]).default("supersede"),
   crude_message_count: z.number().int().default(6),
   tool_description_override: z.string().nullable().optional(),
-  // Unified nudge override (merged create+update, migration 035). NULL → seed default.
+  // Unified nudge override (merged create+update, migration 036). NULL → seed default.
   update_nudge_override: z.string().nullable().optional(),
   // Positional injection depth for the nudge, counted in dialogue TURNS from the
   // bottom (not pairs): 0 = tail, 1 = before the final turn, 2 = before the latest
-  // pair, N = before the Nth turn (migration 035, default 2).
+  // pair, N = before the Nth turn (migration 036, default 2).
   nudge_injection_depth: z.number().int().default(2),
   // Positional injection depth for the STM content block (same/other-channel memory),
   // counted in dialogue TURNS from the bottom like nudge_injection_depth, with an extra
   // sentinel: -1 = default (keep the block anchored near the top as ambient knowledge,
   // legacy behavior), 0 = tail (last dialogue item), N = before the Nth turn
-  // (migration 036, default -1). At equal depths the nudge lands just below the block.
+  // (migration 037, default -1). At equal depths the nudge lands just below the block.
   content_injection_depth: z.number().int().default(-1),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),

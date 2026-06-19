@@ -38,7 +38,7 @@ export default {
       hiderespondembed_desc: `Hide /bot respond success embed`,
       hideimpersonationembeds_desc: `Hide persona impersonation notices`,
       voicemessage_desc: `Send ElevenLabs TTS voice messages`,
-      shorttermmemory_desc: `Remember and use ongoing conversation context`,
+      shorttermmemory_desc: `Bot's auto-memory + nudges. When off, manual /persona stm edit & crude msgs still show`,
       select_placeholder: `Select capabilities to enable...`,
       checkbox_label_continued: `Capabilities (Continued)`,
       select_embed_title: `Configure Capabilities`,

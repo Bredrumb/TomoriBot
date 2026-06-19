@@ -84,7 +84,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
     if (!this.isAvailableFor(provider)) return false;
 
-    // Per-server master switch (migration 037): when STM is disabled, do not offer the
+    // Per-server master switch (migration 038): when STM is disabled, do not offer the
     // tool at all. Only `false` blocks — an undefined config (e.g. no context) is treated
     // as enabled so default/backward-compatible behavior is preserved.
     if (context?.tomoriState?.config?.short_term_memory_enabled === false) {
@@ -188,7 +188,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     // Defense-in-depth: the registry dispatches by name regardless of availability, so
-    // re-check the per-server master switch here (migration 037).
+    // re-check the per-server master switch here (migration 038).
     if (context.tomoriState?.config?.short_term_memory_enabled === false) {
       log.info("[updateShortTermMemoryTool] Execution blocked — short-term memory disabled for this server");
       return {
@@ -357,7 +357,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     context: ToolContext,
     slugMap: Map<string, string>,
   ): Promise<ToolResult> {
-    // Defense-in-depth master-switch guard (migration 037), mirroring execute().
+    // Defense-in-depth master-switch guard (migration 038), mirroring execute().
     if (context.tomoriState?.config?.short_term_memory_enabled === false) {
       log.info("[updateShortTermMemoryTool] [category] Blocked — short-term memory disabled for this server");
       return { success: false, message: "Short-term memory is disabled for this server." };
