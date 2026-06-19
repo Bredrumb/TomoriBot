@@ -1,5 +1,11 @@
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
-import { userRepository } from "@/utils/db/repositories";
+// Import the singleton directly from its defining module rather than the
+// repositories barrel: the barrel re-exports every repository, so importing it
+// here pulled all of them (and their transitive graph) into the user-cache
+// module and routed cycles through `repositories/index.ts`. The direct import
+// yields the same singleton (`UserRepository.ts` defines it) and narrows the
+// remaining cycle to the value-safe UserRepository <-> userCache pair.
+import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { log } from "../misc/logger";
 
 /**

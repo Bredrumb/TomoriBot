@@ -47,6 +47,16 @@ export type CommandExecutionMap = Map<string, Map<string, CommandExecuteFunction
  */
 export type CommandCooldownMap = Map<string, number>;
 
+/**
+ * Result shape produced by {@link loadCommandData}: the Discord registration
+ * payload plus the runtime execution/cooldown lookup maps.
+ */
+export type LoadCommandDataResult = {
+  registrationData: ApplicationCommandData[];
+  executionMap: CommandExecutionMap;
+  cooldownMap: CommandCooldownMap;
+};
+
 export type LoadedCommandModule = {
   configureSubcommand?: (subcommand: SlashCommandSubcommandBuilder) => SlashCommandSubcommandBuilder;
   configureCommand?: (command: SlashCommandBuilder) => RootCommandBuilder;
@@ -376,11 +386,55 @@ export async function isCommandModuleEnabledForRegistration(
  * Loads all command modules, builds registration data and command maps
  * @returns Object containing command data for registration and execution maps
  */
-export async function loadCommandData(): Promise<{
-  registrationData: ApplicationCommandData[];
-  executionMap: CommandExecutionMap;
-  cooldownMap: CommandCooldownMap;
-}> {
+/**
+ * Single-flight cache for the in-progress (or completed) command load.
+ *
+ * Both the startup registration path (`clientReady/01_registercommands.ts`)
+ * and the lazy first-interaction path (`interactionCreate/handleCommands.ts`)
+ * call `loadCommandData()`. Without this guard those two callers could run
+ * `loadCommandDataUncached()` concurrently, each independently `await import()`-ing
+ * the same command modules. Because ES module evaluation interleaves across
+ * `await` points, the second loader could observe a command module that the
+ * first had begun but not finished evaluating, reading an export binding while
+ * it was still in its Temporal Dead Zone — surfacing as
+ * "Cannot access 'configureSubcommand' before initialization" and silently
+ * skipping that command. Memoizing the promise makes every caller await one
+ * shared evaluation, eliminating the race.
+ */
+let cachedCommandDataPromise: Promise<LoadCommandDataResult> | null = null;
+
+/**
+ * Loads and caches all command data behind a single shared promise.
+ *
+ * Concurrent callers receive the same in-flight promise; later callers receive
+ * the already-resolved result. A catastrophic load (empty execution map) or a
+ * rejection is NOT cached, so a subsequent call can retry instead of locking the
+ * bot into a permanently "dead" command state.
+ *
+ * @returns The registration payload and runtime execution/cooldown maps.
+ */
+export function loadCommandData(): Promise<LoadCommandDataResult> {
+  if (!cachedCommandDataPromise) {
+    cachedCommandDataPromise = loadCommandDataUncached()
+      .then((result) => {
+        // 1. An empty execution map means the load failed catastrophically
+        //    (see the catch block in loadCommandDataUncached). Drop the cached
+        //    promise so the next caller re-attempts a full load.
+        if (result.executionMap.size === 0) {
+          cachedCommandDataPromise = null;
+        }
+        return result;
+      })
+      .catch((error) => {
+        // 2. Never persist a rejected load — allow retries.
+        cachedCommandDataPromise = null;
+        throw error;
+      });
+  }
+  return cachedCommandDataPromise;
+}
+
+async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
   // Initialize our maps
   const executionMap: CommandExecutionMap = new Map();
   const cooldownMap: CommandCooldownMap = new Map();

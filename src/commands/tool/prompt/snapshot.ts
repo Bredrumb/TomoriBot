@@ -13,6 +13,7 @@ import {
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
+import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
@@ -447,6 +448,9 @@ export async function execute(
     // live pipeline would inject for this channel (append/replace). Mirrors contextPipeline.ts.
     const channelPromptOverride = await getCachedChannelPrompt(selectedPersona.server_id, interaction.channelId);
 
+    // Resolve any per-channel context note so the snapshot reflects the additive injection.
+    const channelContextNote = await getCachedChannelContextNote(selectedPersona.server_id, interaction.channelId);
+
     let effectivePersona = selectedPersona;
     if (effectiveLlm !== selectedPersona.llm) {
       effectivePersona = { ...selectedPersona, llm: effectiveLlm };
@@ -807,6 +811,7 @@ export async function execute(
       publicPersonaAttributes,
       tomoriConfig: effectivePersona.config,
       channelPromptOverride,
+      channelContextNote,
       personaPrompt: selectedPersona.persona_prompt ?? null,
       personaLineageId: selectedPersona.persona_lineage_id,
       isDMChannel,

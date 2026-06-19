@@ -21,7 +21,12 @@ import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { keyManager } from "@/utils/security/keyManager";
-import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
+// Import the constant directly from its leaf module rather than the
+// `contextBuilder` barrel: the barrel also re-exports `buildContext`, whose
+// transitive graph (tools, webhooks, providers, tomoriStateCache) would
+// otherwise be pulled into the repositories barrel and create deep import
+// cycles. See docs/subsystems/command-system.md (single-flight loading).
+import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
