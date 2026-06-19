@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+// Captured BEFORE the `mock.module` calls below run. Static imports are
+// evaluated at link time, ahead of any top-level statement, so this binds the
+// REAL deliberateToolMode module; we re-register it in afterAll to undo the
+// simplified stub for files loaded later in the monolithic run.
+import * as realDeliberateToolMode from "@/utils/tools/deliberateToolMode";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ChatTurnContext } from "@/utils/chat/types";
 import type { TomoriState } from "@/types/db/schema";
@@ -72,60 +77,15 @@ mock.module("@/utils/provider/providerInfoRegistry", () => ({
   },
 }));
 
-mock.module("@/utils/tools/deliberateToolMode", () => ({
-  getDeliberateToolAllowedNames: (
-    content: string | null | undefined,
-    customTriggers?: Record<string, Array<string | { type: "literal" | "regex"; value: string }>> | null,
-  ) => {
-    const text = content ?? "";
-    const allowedNames: string[] = [];
-    const toolNamesByTriggerKey: Record<string, string[]> = {
-      image: ["generate_image"],
-      reminder: ["create_task", "update_task"],
-    };
-    if (/\b(search|look\s+up|latest|today|current|news)\b/i.test(text)) {
-      allowedNames.push("web_search");
-    }
-    if (
-      /\b(?:edit|update|change|modify|reschedule|move|delay|postpone|cancel|delete|remove|clear|stop)\b.{0,100}\b(?:reminder|timer|alarm|task|scheduled\s+task|task\s+reminder)\b/i.test(
-        text,
-      )
-    ) {
-      allowedNames.push("update_task");
-    }
-
-    for (const [triggerKey, triggers] of Object.entries(customTriggers ?? {})) {
-      const toolNames = toolNamesByTriggerKey[triggerKey] ?? [triggerKey];
-      if (
-        triggers.some((trigger) => {
-          if (typeof trigger === "string") return trigger === "^" || text.toLowerCase().includes(trigger.toLowerCase());
-          return trigger.type === "regex"
-            ? new RegExp(trigger.value, "i").test(text)
-            : text.toLowerCase().includes(trigger.value.toLowerCase());
-        })
-      ) {
-        allowedNames.push(...toolNames);
-      }
-    }
-
-    return [...new Set(allowedNames)];
-  },
-  applyDeliberateToolAllowlist: <T extends { name: string }>(params: {
-    builtInTools: T[];
-    mcpFunctionNames: string[];
-    allowedToolNames?: string[] | null;
-  }) => {
-    if (!params.allowedToolNames?.length) {
-      return { builtInTools: params.builtInTools, mcpFunctionNames: params.mcpFunctionNames };
-    }
-    const allowed = new Set(params.allowedToolNames);
-    return {
-      builtInTools: params.builtInTools.filter((tool) => allowed.has(tool.name)),
-      mcpFunctionNames: params.mcpFunctionNames.filter((name) => allowed.has(name)),
-    };
-  },
-  retainSuccessfulToolAffordance: () => undefined,
-}));
+// Pass through to the REAL deliberateToolMode (captured at link time above).
+// toolLoop.ts never calls these functions — it reads deliberate-mode data from
+// `context` — so the loop tests don't need a behavioral stub here; the mock
+// exists only to satisfy transitive linking. Returning the real exports keeps
+// the mock harmless if it leaks into a later file in the monolithic `bun test`
+// (e.g. deliberateToolMode.test.ts, which asserts the real behavior). Spreading
+// a statically-captured namespace is safe — unlike `await import()` inside a
+// factory, it was evaluated before any mock.module call took effect.
+mock.module("@/utils/tools/deliberateToolMode", () => ({ ...realDeliberateToolMode }));
 
 mock.module("@/utils/chat/channelQueue", () => ({
   channelLocks: new Map(),
