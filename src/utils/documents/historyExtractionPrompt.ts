@@ -54,17 +54,15 @@ export function buildExtractionUserPrompt(formattedMessages: string, previousRes
   }
 
   // 2. Add the conversation to extract from
-  prompt += `Extract all meaningful atomic facts from this conversation log. Output a JSON object with a "memories" array.\n\n`;
+  prompt += `Extract information from this conversation log. Output a JSON object with a "memories" array.\n\n`;
   prompt += `--- CONVERSATION LOG ---\n${formattedMessages}\n--- END LOG ---\n\n`;
 
   // 3. Add extraction requirements
   prompt += `Requirements:
-- Complete coverage: extract every meaningful piece of information
 - No pronouns: replace "he", "she", "they", "it" with actual names
 - Absolute timestamps: use ISO 8601 format when timestamps are available
 - Skip trivial chat: ignore simple greetings, acknowledgments, or filler
-- Self-contained: each fact must make sense completely on its own
-- For roleplay/fiction: extract character actions, dialogue, and plot points as facts about those characters`;
+- Self-contained: each item must make sense completely on its own`;
 
   return prompt;
 }
