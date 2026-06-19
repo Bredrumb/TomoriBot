@@ -71,6 +71,13 @@ export interface BuildContextParams {
    * system prompt's content. Persona prompt and persona attributes are never affected.
    */
   channelPromptOverride?: { prompt: string; mode: import("@/types/db/schema").ChannelPromptMode } | null;
+  /**
+   * Per-channel context note resolved at the call site (null when none).
+   * Injected into the dialogue history at the given depth alongside any active
+   * persona-scoped note (additive). The global note from server_chat_configs is
+   * only used when neither persona nor channel has one set.
+   */
+  channelContextNote?: { note: string; depth: number } | null;
   personaPrompt?: string | null;
   personaLineageId?: number;
   isDMChannel?: boolean;
