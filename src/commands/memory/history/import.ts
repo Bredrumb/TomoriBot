@@ -156,7 +156,6 @@ async function promptForExtractionSystem(
         },
       ],
     },
-    MessageFlags.Ephemeral,
   );
 
   if (modalResult.outcome !== "submit" || !modalResult.interaction) return null;
