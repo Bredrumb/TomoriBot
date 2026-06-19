@@ -535,6 +535,19 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * @param personaId   - Null = server-wide scope; non-null = per-persona scope
    * @returns Deleted document_name or null when not found
    */
+  async loadDocumentChunks(
+    documentId: number,
+    serverId: number,
+  ): Promise<Array<{ chunk_index: number; content: string }>> {
+    return await sql<Array<{ chunk_index: number; content: string }>>`
+      SELECT chunk_index, content
+      FROM document_chunks
+      WHERE document_id = ${documentId}
+        AND server_id = ${serverId}
+      ORDER BY chunk_index ASC
+    `;
+  }
+
   async removeDocument(documentId: number, serverId: number, personaId: number | null): Promise<string | null> {
     const rows =
       personaId === null
