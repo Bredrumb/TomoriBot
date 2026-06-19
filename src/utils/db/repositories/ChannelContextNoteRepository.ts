@@ -6,10 +6,7 @@
  * Per-channel data is server-local and transient (not exported per-server),
  * so this repository implements no IRepository interface.
  */
-import {
-  invalidateChannelContextNoteCache,
-  type ChannelContextNote,
-} from "@/utils/cache/channelContextNoteCacheStore";
+import { invalidateChannelContextNoteCache, type ChannelContextNote } from "@/utils/cache/channelContextNoteCacheStore";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
@@ -49,12 +46,7 @@ export class ChannelContextNoteRepository {
    * @param note          - The context note text
    * @param depth         - Injection depth (0 = closest to reply, max 100)
    */
-  async setChannelContextNote(
-    serverId: number,
-    channelDiscId: string,
-    note: string,
-    depth: number,
-  ): Promise<boolean> {
+  async setChannelContextNote(serverId: number, channelDiscId: string, note: string, depth: number): Promise<boolean> {
     try {
       await sql`
         INSERT INTO channel_context_notes (server_id, channel_disc_id, context_note, context_note_depth)

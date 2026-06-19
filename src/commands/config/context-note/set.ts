@@ -16,8 +16,7 @@ import type { ButtonInteraction, ChatInputCommandInteraction, Client, ModalSubmi
 import { ChannelType, MessageFlags, TextInputStyle } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { configRepository, personaRepository } from "@/utils/db/repositories";
-import { channelContextNoteRepo } from "@/utils/db/repositories/ChannelContextNoteRepository";
+import { channelContextNoteRepo, configRepository, personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -179,10 +178,7 @@ export async function execute(
       existingNote = selectedPersona.context_note;
       existingDepth = selectedPersona.context_note_depth ?? 0;
     } else if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
-      const existing = await channelContextNoteRepo.getChannelContextNote(
-        tomoriState.server_id,
-        selectedChannelDiscId,
-      );
+      const existing = await channelContextNoteRepo.getChannelContextNote(tomoriState.server_id, selectedChannelDiscId);
       existingNote = existing?.note ?? null;
       existingDepth = existing?.depth ?? 0;
     } else {
@@ -268,10 +264,7 @@ export async function execute(
           depthToStore,
         );
       } else {
-        persisted = await channelContextNoteRepo.deleteChannelContextNote(
-          tomoriState.server_id,
-          selectedChannelDiscId,
-        );
+        persisted = await channelContextNoteRepo.deleteChannelContextNote(tomoriState.server_id, selectedChannelDiscId);
       }
     } else {
       persisted = await configRepository.updateChatConfig(tomoriState.server_id, {
