@@ -42,7 +42,6 @@ import {
 } from "@/utils/documents/historyExtractionPrompt";
 import type { HistoryMemoryEntry } from "@/providers/utils/historyExtractionSchema";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
-import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { extractHistoryWindowForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
@@ -122,6 +121,14 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
             value: "roleplay",
           },
         ),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("limit")
+        .setDescription(localizer("en-US", "commands.memory.history.import.limit_description"))
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(1000),
     );
 
 const EXTRACTION_PROMPT_MODAL_ID = "memory_history_import_prompt_modal";
@@ -636,6 +643,7 @@ export async function execute(
     const channelsInput = interaction.options.getString("channels");
     const promptModeInput = interaction.options.getString("prompt");
     const promptMode: ExtractionPromptMode = promptModeInput === "roleplay" ? "roleplay" : "conversation";
+    const messageFetchLimit = interaction.options.getInteger("limit") ?? 1000;
     const channelTags: string[] = channelsInput
       ? channelsInput
           .split(",")
@@ -656,7 +664,6 @@ export async function execute(
     const provider = tomoriState.llm.llm_provider.toLowerCase();
     const model = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
     const endpointUrl = tomoriState.config.custom_endpoint_url ?? undefined;
-    const messageFetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
 
     // Load all personas for formatting and detection
     const allPersonas = await personaRepository.loadAllForServer(guildId);

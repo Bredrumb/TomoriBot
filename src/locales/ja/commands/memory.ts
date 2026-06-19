@@ -49,6 +49,7 @@ export default {
         scope_choice_automatic: `自動`,
         scope_choice_global: `グローバル`,
         channels_description: `任意：特定チャンネルのみに制限（カンマ区切り、例: #general,#bot-chat）。空白の場合は全チャンネルで利用可能。`,
+        limit_description: `取得するメッセージ数（1〜1000）。デフォルトは1000。`,
         prompt_description: `抽出AIのシステムプロンプトテンプレート（会話またはロールプレイ）。実行前にプロンプトを編集できます。`,
         prompt_choice_conversation: `会話`,
         prompt_choice_roleplay: `ロールプレイ`,

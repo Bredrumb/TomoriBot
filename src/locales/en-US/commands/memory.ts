@@ -49,6 +49,7 @@ export default {
         scope_choice_automatic: `Automatic`,
         scope_choice_global: `Global`,
         channels_description: `Restrict to specific channels (comma-separated, e.g. #general,#news). Blank = all channels.`,
+        limit_description: `Number of messages to fetch (1–1000). Defaults to 1000.`,
         prompt_description: `Editable system prompt template for the extraction AI (conversation or roleplay).`,
         prompt_choice_conversation: `Conversation`,
         prompt_choice_roleplay: `Roleplay`,
