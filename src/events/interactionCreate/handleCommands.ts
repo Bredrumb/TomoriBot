@@ -71,21 +71,45 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
   const initialLocale = interaction.locale ?? interaction.guildLocale ?? "en-US";
 
   try {
-    // 1. Load command data on first run if cache is empty
+    // 1. Load command data on first run if cache is empty.
+    //    loadCommandData() is single-flight: if startup registration is still
+    //    loading, this awaits that same shared evaluation instead of racing a
+    //    second concurrent load (which previously caused command modules to be
+    //    skipped via a Temporal Dead Zone error, leaving the bot "dead").
     if (!executionMap || !cooldownMap) {
       log.info("Initializing command execution maps...");
       const loadedData = await loadCommandData();
-      executionMap = loadedData.executionMap;
-      cooldownMap = loadedData.cooldownMap;
 
-      // Use our existing cooldown values if none were provided from commands
-      if (cooldownMap.size === 0) {
-        for (const [category, duration] of COOLDOWN_MAP.entries()) {
-          cooldownMap.set(category, duration);
+      // Only commit the maps to the module-level cache when the load actually
+      // produced commands. An empty execution map signals a catastrophic load
+      // failure; caching it would permanently brick every command, so we leave
+      // the cache empty and let a subsequent interaction retry the load.
+      if (loadedData.executionMap.size > 0) {
+        executionMap = loadedData.executionMap;
+        cooldownMap = loadedData.cooldownMap;
+
+        // Use our existing cooldown values if none were provided from commands
+        if (cooldownMap.size === 0) {
+          for (const [category, duration] of COOLDOWN_MAP.entries()) {
+            cooldownMap.set(category, duration);
+          }
         }
-      }
 
-      log.success("Command execution maps initialized.");
+        log.success("Command execution maps initialized.");
+      } else {
+        log.warn("Command load produced no commands; will retry on next interaction.");
+        await replyInfoEmbed(
+          interaction,
+          initialLocale,
+          {
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          },
+          MessageFlags.Ephemeral,
+        );
+        return;
+      }
     }
 
     // 2. Get command, group, and subcommand names
