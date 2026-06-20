@@ -28,12 +28,17 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { llmModelRepo, personaRepository, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import { fetchHistoryUntilMarker } from "@/utils/discord/historyFetcher";
 import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
+import {
+  createDocumentRecord,
+  appendDocumentChunks,
+  finalizeDocumentContent,
+} from "@/utils/documents/documentService";
 import {
   buildExtractionUserPrompt,
   EXTRACTION_CONVERSATION_SYSTEM_PROMPT,
@@ -64,6 +69,13 @@ const HISTORY_EXTRACTION_WINDOW_SIZE = Number.parseInt(process.env.HISTORY_EXTRA
 const DEDUP_CONTEXT_COUNT = 3;
 
 type HistoryScope = "persona" | "automatic" | "global";
+
+/** Target document for incremental per-window chunk writes */
+interface WriteTarget {
+  documentId: number;
+  dbServerId: number;
+  personaId: number | null;
+}
 
 /**
  * Configures the /memory history import subcommand options.
@@ -172,29 +184,17 @@ async function promptForExtractionSystem(
 
 /**
  * Splits an array of formatted message lines into windows of the configured size.
- *
- * @param lines - Array of formatted message lines
- * @param windowSize - Maximum lines per window
- * @returns Array of joined-text windows
  */
 function splitIntoWindows(lines: string[], windowSize: number): string[] {
   const windows: string[] = [];
   for (let i = 0; i < lines.length; i += windowSize) {
-    const windowLines = lines.slice(i, i + windowSize);
-    windows.push(windowLines.join("\n"));
+    windows.push(lines.slice(i, i + windowSize).join("\n"));
   }
   return windows;
 }
 
 /**
- * Runs the LLM extraction for a single text window using the server's configured provider.
- *
- * @param windowText - Formatted message text for this window
- * @param previousRestatements - Dedup context from previous window
- * @param provider - LLM provider name (google, openrouter)
- * @param model - LLM model codename
- * @param apiKey - Decrypted API key
- * @returns Array of extracted memory entries, or empty array on failure
+ * Runs the LLM extraction for a single text window.
  */
 async function extractWindow(
   windowText: string,
@@ -219,30 +219,17 @@ async function extractWindow(
 }
 
 /**
- * Shared processing pipeline for all scopes.
- * Fetches messages, extracts facts, generates embeddings, and stores documents.
- *
- * @returns Object with extracted data or null on failure (error already replied)
+ * Fetches and formats channel messages, updating progress and returning early on failure.
  */
-async function runExtractionPipeline(params: {
+async function fetchAndFormatMessages(params: {
   channel: TextBasedChannel;
   messageFetchLimit: number;
-  provider: string;
-  model: string;
-  apiKey: string;
-  endpointUrl?: string;
-  systemPrompt: string;
+  allPersonas: TomoriState[];
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
   locale: string;
-  serverId: string;
-  allPersonas: TomoriState[];
-}): Promise<{
-  entries: HistoryMemoryEntry[];
-  formattedResult: ReturnType<typeof formatMessagesForExtraction>;
-} | null> {
-  const { channel, provider, model, apiKey, endpointUrl, systemPrompt, replyInteraction, locale } = params;
+}): Promise<{ formattedResult: ReturnType<typeof formatMessagesForExtraction> } | null> {
+  const { channel, messageFetchLimit, allPersonas, replyInteraction, locale } = params;
 
-  // 1. Update progress: fetching messages
   await replyInteraction.editReply({
     embeds: [
       new EmbedBuilder()
@@ -251,8 +238,7 @@ async function runExtractionPipeline(params: {
     ],
   });
 
-  // 2. Fetch messages
-  const fetchResult = await fetchHistoryUntilMarker(channel, params.messageFetchLimit);
+  const fetchResult = await fetchHistoryUntilMarker(channel, messageFetchLimit);
   if (fetchResult.messages.length === 0) {
     await replyInteraction.editReply({
       embeds: [
@@ -265,8 +251,7 @@ async function runExtractionPipeline(params: {
     return null;
   }
 
-  // 3. Format messages for extraction
-  const formattedResult = formatMessagesForExtraction(fetchResult.messages, params.allPersonas);
+  const formattedResult = formatMessagesForExtraction(fetchResult.messages, allPersonas);
   if (formattedResult.messageCount === 0) {
     await replyInteraction.editReply({
       embeds: [
@@ -279,103 +264,42 @@ async function runExtractionPipeline(params: {
     return null;
   }
 
-  // 4. Split into extraction windows
-  const messageLines = formattedResult.text.split("\n");
-  const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
+  return { formattedResult };
+}
 
-  // 5. Extract facts from each window
-  const allEntries: HistoryMemoryEntry[] = [];
-  let previousRestatements: string[] = [];
+/**
+ * Checks document count limit and duplicate name, then creates the document record.
+ * Returns the new document_id or null (error already replied).
+ */
+async function createDocumentForImport(params: {
+  documentName: string;
+  serverId: number;
+  personaId: number | null;
+  uploaderUserId: number | null;
+  channelTags: string[];
+  scopeLabel: string;
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+  locale: string;
+}): Promise<number | null> {
+  const { documentName, serverId, personaId, uploaderUserId, channelTags, scopeLabel, replyInteraction, locale } =
+    params;
 
-  for (let i = 0; i < windows.length; i++) {
-    // Update progress
+  const memoryLimits = getMemoryLimits();
+
+  if (await serverMemoryRepository.documentExistsByName(serverId, personaId, documentName)) {
     await replyInteraction.editReply({
       embeds: [
         new EmbedBuilder()
+          .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
           .setDescription(
-            localizer(locale, "commands.memory.history.import.progress_extracting", {
-              message_count: formattedResult.messageCount.toString(),
-              current: (i + 1).toString(),
-              total: windows.length.toString(),
-            }),
+            localizer(locale, "commands.memory.history.import.duplicate_description", { name: documentName }),
           )
-          .setColor(ColorCode.INFO),
-      ],
-    });
-
-    const windowEntries = await extractWindow(windows[i], previousRestatements, provider, model, apiKey, systemPrompt, endpointUrl);
-
-    allEntries.push(...windowEntries);
-
-    // Update dedup context for next window
-    if (windowEntries.length > 0) {
-      previousRestatements = windowEntries.slice(-DEDUP_CONTEXT_COUNT).map((e) => e.lossless_restatement);
-    }
-  }
-
-  // 6. Check if any facts were extracted
-  if (allEntries.length === 0) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.no_facts_extracted_title"))
-          .setDescription(localizer(locale, "commands.memory.history.import.no_facts_extracted_description"))
           .setColor(ColorCode.ERROR),
       ],
     });
     return null;
   }
 
-  return { entries: allEntries, formattedResult };
-}
-
-/**
- * Stores extracted facts as a document with embedded chunks.
- *
- * @returns Object with documentId and chunkCount, or null on limit errors (already replied)
- */
-async function storeExtractedFacts(params: {
-  entries: HistoryMemoryEntry[];
-  documentName: string;
-  serverId: number;
-  personaId: number | null;
-  uploaderUserId: number | null;
-  embeddingModelId: number;
-  embeddingFamily: string;
-  embeddingProvider: string;
-  embeddingCodename: string;
-  apiKey: string;
-  scopeLabel: string;
-  channelTags: string[];
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
-  locale: string;
-  guildId: string;
-}): Promise<{ documentId: number; chunkCount: number } | null> {
-  const {
-    entries,
-    documentName,
-    serverId,
-    personaId,
-    uploaderUserId,
-    embeddingModelId,
-    embeddingFamily,
-    embeddingProvider,
-    embeddingCodename,
-    apiKey,
-    scopeLabel,
-    channelTags,
-    replyInteraction,
-    locale,
-    guildId,
-  } = params;
-
-  const memoryLimits = getMemoryLimits();
-
-  // 1. Build chunks from lossless_restatement fields
-  const chunks = entries.map((e) => e.lossless_restatement);
-  const textContent = chunks.join("\n\n");
-
-  // 2. Check document count limit
   const docCount = await serverMemoryRepository.countDocumentsScoped(serverId, personaId);
   if (docCount >= memoryLimits.maxDocumentsPerServer) {
     await replyInteraction.editReply({
@@ -395,71 +319,133 @@ async function storeExtractedFacts(params: {
     return null;
   }
 
-  // 3. Check chunk count limit
-  const currentChunkCount = await serverMemoryRepository.countChunksScoped(serverId, personaId);
-  if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
+  return await createDocumentRecord({
+    serverId,
+    personaId,
+    uploaderUserId,
+    documentName,
+    sourceType: "history",
+    channelTags,
+  });
+}
+
+/**
+ * Runs incremental LLM extraction over message windows, embedding and persisting each
+ * window's facts immediately after extraction to avoid interaction token timeouts.
+ *
+ * @returns Total fact count and joined chunk text for document finalization, or null
+ *          if no facts were extracted (error already replied, caller should clean up documents).
+ */
+async function runIncrementalExtraction(params: {
+  formattedResult: ReturnType<typeof formatMessagesForExtraction>;
+  provider: string;
+  model: string;
+  apiKey: string;
+  endpointUrl?: string;
+  systemPrompt: string;
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+  locale: string;
+  writeTargets: WriteTarget[];
+  embeddingModelId: number;
+  embeddingFamily: string;
+  embeddingProvider: string;
+  embeddingCodename: string;
+  embeddingApiKey: string;
+}): Promise<{ totalFactCount: number; allChunkText: string } | null> {
+  const {
+    formattedResult,
+    provider,
+    model,
+    apiKey,
+    endpointUrl,
+    systemPrompt,
+    replyInteraction,
+    locale,
+    writeTargets,
+    embeddingModelId,
+    embeddingFamily,
+    embeddingProvider,
+    embeddingCodename,
+    embeddingApiKey,
+  } = params;
+
+  const messageLines = formattedResult.text.split("\n");
+  const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
+  const allChunks: string[] = [];
+  let previousRestatements: string[] = [];
+  const chunkStartIndex = new Map<number, number>();
+  for (const t of writeTargets) chunkStartIndex.set(t.documentId, 0);
+
+  for (let i = 0; i < windows.length; i++) {
     await replyInteraction.editReply({
       embeds: [
         new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.server_chunk_limit_title"))
           .setDescription(
-            localizer(locale, "commands.memory.history.import.server_chunk_limit_description", {
-              max_chunks: memoryLimits.maxDocumentChunksPerServer.toString(),
-              scope: scopeLabel,
+            localizer(locale, "commands.memory.history.import.progress_extracting", {
+              message_count: formattedResult.messageCount.toString(),
+              current: (i + 1).toString(),
+              total: windows.length.toString(),
             }),
           )
+          .setColor(ColorCode.INFO),
+      ],
+    });
+
+    const windowEntries = await extractWindow(
+      windows[i],
+      previousRestatements,
+      provider,
+      model,
+      apiKey,
+      systemPrompt,
+      endpointUrl,
+    );
+
+    if (windowEntries.length > 0) {
+      const windowChunks = windowEntries.map((e) => e.lossless_restatement);
+      allChunks.push(...windowChunks);
+
+      const embeddings = await generateEmbeddingsBatched({
+        provider: embeddingProvider,
+        apiKey: embeddingApiKey,
+        model: embeddingCodename,
+        modelId: embeddingModelId,
+        inputs: windowChunks,
+        taskType: (await providerSupportsEmbeddingTaskType(embeddingProvider)) ? "RETRIEVAL_DOCUMENT" : undefined,
+        batchSize: 16,
+      });
+
+      for (const target of writeTargets) {
+        const startIdx = chunkStartIndex.get(target.documentId) ?? 0;
+        await appendDocumentChunks({
+          documentId: target.documentId,
+          serverId: target.dbServerId,
+          embeddingModelId,
+          embeddingFamily,
+          startIndex: startIdx,
+          chunks: windowChunks,
+          embeddings,
+        });
+        chunkStartIndex.set(target.documentId, startIdx + windowChunks.length);
+      }
+
+      previousRestatements = windowEntries.slice(-DEDUP_CONTEXT_COUNT).map((e) => e.lossless_restatement);
+    }
+  }
+
+  if (allChunks.length === 0) {
+    await replyInteraction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle(localizer(locale, "commands.memory.history.import.no_facts_extracted_title"))
+          .setDescription(localizer(locale, "commands.memory.history.import.no_facts_extracted_description"))
           .setColor(ColorCode.ERROR),
       ],
     });
     return null;
   }
 
-  // 4. Update progress: embedding
-  await replyInteraction.editReply({
-    embeds: [
-      new EmbedBuilder()
-        .setDescription(
-          localizer(locale, "commands.memory.history.import.progress_embedding", {
-            fact_count: chunks.length.toString(),
-          }),
-        )
-        .setColor(ColorCode.INFO),
-    ],
-  });
-
-  // 5. Generate embeddings
-  const embeddings = await generateEmbeddingsBatched({
-    provider: embeddingProvider,
-    apiKey,
-    model: embeddingCodename,
-    modelId: embeddingModelId,
-    inputs: chunks,
-    taskType: (await providerSupportsEmbeddingTaskType(embeddingProvider)) ? "RETRIEVAL_DOCUMENT" : undefined,
-    batchSize: 16,
-  });
-
-  // 6. Insert document with chunks
-  const documentId = await ragRepository.insertWithChunks({
-    serverId,
-    personaId,
-    uploaderUserId,
-    documentName,
-    fileName: null,
-    mimeType: null,
-    fileSizeBytes: null,
-    textContent,
-    chunks,
-    embeddings,
-    embeddingModelId,
-    embeddingFamily,
-    sourceType: "history",
-    channelTags,
-  });
-
-  // 7. Invalidate cache
-  invalidateTomoriStateCache(guildId);
-
-  return { documentId, chunkCount: chunks.length };
+  return { totalFactCount: allChunks.length, allChunkText: allChunks.join("\n\n") };
 }
 
 /**
@@ -472,7 +458,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -488,7 +473,6 @@ export async function execute(
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
 
   try {
-    // 2. Check RAG is enabled
     if (!isRagAvailable()) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.memory.history.import.rag_disabled_title",
@@ -499,7 +483,6 @@ export async function execute(
       return;
     }
 
-    // 3. Check memory guard
     const memCheck = memoryGuard.checkMemory();
     if (memCheck.status === "critical") {
       await interaction.reply({
@@ -514,7 +497,6 @@ export async function execute(
       return;
     }
 
-    // 4. Reserve document quota
     const quotaReserve = reserveDocumentQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
@@ -528,7 +510,6 @@ export async function execute(
       return;
     }
 
-    // 5. Check ManageGuild permission
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
@@ -540,7 +521,6 @@ export async function execute(
       return;
     }
 
-    // 6. Load server's Tomori state
     const guildId = interaction.guild?.id ?? interaction.user.id;
     tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
@@ -555,7 +535,6 @@ export async function execute(
     const overlayResult = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
     tomoriState = overlayResult.tomoriState;
 
-    // 7. Check model supports structured output
     if (!tomoriState.llm.supports_structoutput) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.memory.history.import.model_incompatible_title",
@@ -576,7 +555,6 @@ export async function execute(
       return;
     }
 
-    // 8. Validate embedding model
     let textCreds: ResolvedCredentials;
     let embeddingCreds: ResolvedCredentials;
     try {
@@ -635,7 +613,6 @@ export async function execute(
       return;
     }
 
-    // 9. Get command options
     const nameInput = interaction.options.getString("name", true).trim();
     const scopeInput = interaction.options.getString("scope");
     const scope: HistoryScope =
@@ -660,16 +637,23 @@ export async function execute(
           .map((c) => `#${c}`)
       : [];
 
-    // 10. Decrypt API key
     const provider = tomoriState.llm.llm_provider.toLowerCase();
     const model = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
     const endpointUrl = tomoriState.config.custom_endpoint_url ?? undefined;
 
-    // Load all personas for formatting and detection
     const allPersonas = await personaRepository.loadAllForServer(guildId);
 
+    // Shared embedding params passed to runIncrementalExtraction
+    const embeddingParams = {
+      embeddingModelId,
+      embeddingFamily: embeddingModel.model_family,
+      embeddingProvider: embeddingModel.provider as string,
+      embeddingCodename: embeddingModel.codename,
+      embeddingApiKey: embeddingCreds.apiKey,
+    };
+
     // ====================================================================
-    // SCOPE: PERSONA — Pattern 4 → Pattern 2 hybrid (persona selector first)
+    // SCOPE: PERSONA
     // ====================================================================
     if (scope === "persona") {
       if (allPersonas.length === 0) {
@@ -682,7 +666,6 @@ export async function execute(
         return;
       }
 
-      // Show persona selector (acknowledges interaction)
       const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
         personas: allPersonas,
         color: ColorCode.INFO,
@@ -710,34 +693,36 @@ export async function execute(
         persona_name: selectedPersona.persona_nickname,
       });
 
-      // Show system prompt modal on the button interaction
       const promptModalResult = await promptForExtractionSystem(personaSelectionInteraction, locale, promptMode);
       if (!promptModalResult) return;
       modalSubmitInteraction = promptModalResult.submitInteraction;
       const personaSystemPrompt = promptModalResult.systemPrompt;
 
-      // Defer the modal submit interaction for long processing
       await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-      // Check duplicate name
-      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, targetPersonaId, nameInput)) {
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
-              .setDescription(
-                localizer(locale, "commands.memory.history.import.duplicate_description", { name: nameInput }),
-              )
-              .setColor(ColorCode.ERROR),
-          ],
-        });
-        return;
-      }
-
-      // Run extraction pipeline
-      const pipelineResult = await runExtractionPipeline({
+      const fetchResult = await fetchAndFormatMessages({
         channel: interaction.channel,
         messageFetchLimit,
+        allPersonas,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+      });
+      if (!fetchResult) return;
+
+      const documentId = await createDocumentForImport({
+        documentName: nameInput,
+        serverId: tomoriState.server_id,
+        personaId: targetPersonaId,
+        uploaderUserId: userData.user_id ?? null,
+        channelTags,
+        scopeLabel,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+      });
+      if (documentId === null) return;
+
+      const extractResult = await runIncrementalExtraction({
+        formattedResult: fetchResult.formattedResult,
         provider,
         model,
         apiKey: textCreds.apiKey,
@@ -745,42 +730,28 @@ export async function execute(
         systemPrompt: personaSystemPrompt,
         replyInteraction: modalSubmitInteraction,
         locale,
-        serverId: guildId,
-        allPersonas,
+        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: targetPersonaId }],
+        ...embeddingParams,
       });
-      if (!pipelineResult) return;
 
-      // Store facts
-      const storeResult = await storeExtractedFacts({
-        entries: pipelineResult.entries,
-        documentName: nameInput,
-        serverId: tomoriState.server_id,
-        personaId: targetPersonaId,
-        uploaderUserId: userData.user_id ?? null,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        embeddingProvider: embeddingModel.provider as string,
-        embeddingCodename: embeddingModel.codename,
-        apiKey: embeddingCreds.apiKey,
-        scopeLabel,
-        channelTags,
-        replyInteraction: modalSubmitInteraction,
-        locale,
-        guildId,
-      });
-      if (!storeResult) return;
+      if (!extractResult) {
+        await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, targetPersonaId);
+        return;
+      }
 
-      // Success reply
+      await finalizeDocumentContent(documentId, extractResult.allChunkText);
+      invalidateTomoriStateCache(guildId);
+
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
             .setDescription(
               localizer(locale, "commands.memory.history.import.success_description", {
-                fact_count: pipelineResult.entries.length.toString(),
-                message_count: pipelineResult.formattedResult.messageCount.toString(),
+                fact_count: extractResult.totalFactCount.toString(),
+                message_count: fetchResult.formattedResult.messageCount.toString(),
                 name: nameInput,
-                chunk_count: storeResult.chunkCount.toString(),
+                chunk_count: extractResult.totalFactCount.toString(),
                 scope: scopeLabel,
               }),
             )
@@ -791,12 +762,11 @@ export async function execute(
     }
 
     // ====================================================================
-    // SCOPE: GLOBAL — Show prompt modal, then defer modal submit interaction
+    // SCOPE: GLOBAL
     // ====================================================================
     if (scope === "global") {
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
-      // Show system prompt modal on the slash command interaction
       const promptModalResult = await promptForExtractionSystem(interaction, locale, promptMode);
       if (!promptModalResult) return;
       modalSubmitInteraction = promptModalResult.submitInteraction;
@@ -804,25 +774,29 @@ export async function execute(
 
       await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-      // Check duplicate name (serverwide scope = persona_id IS NULL)
-      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
-              .setDescription(
-                localizer(locale, "commands.memory.history.import.duplicate_description", { name: nameInput }),
-              )
-              .setColor(ColorCode.ERROR),
-          ],
-        });
-        return;
-      }
-
-      // Run extraction pipeline
-      const pipelineResult = await runExtractionPipeline({
+      const fetchResult = await fetchAndFormatMessages({
         channel: interaction.channel,
         messageFetchLimit,
+        allPersonas,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+      });
+      if (!fetchResult) return;
+
+      const documentId = await createDocumentForImport({
+        documentName: nameInput,
+        serverId: tomoriState.server_id,
+        personaId: null,
+        uploaderUserId: userData.user_id ?? null,
+        channelTags,
+        scopeLabel,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+      });
+      if (documentId === null) return;
+
+      const extractResult = await runIncrementalExtraction({
+        formattedResult: fetchResult.formattedResult,
         provider,
         model,
         apiKey: textCreds.apiKey,
@@ -830,42 +804,28 @@ export async function execute(
         systemPrompt: globalSystemPrompt,
         replyInteraction: modalSubmitInteraction,
         locale,
-        serverId: guildId,
-        allPersonas,
+        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: null }],
+        ...embeddingParams,
       });
-      if (!pipelineResult) return;
 
-      // Store facts
-      const storeResult = await storeExtractedFacts({
-        entries: pipelineResult.entries,
-        documentName: nameInput,
-        serverId: tomoriState.server_id,
-        personaId: null,
-        uploaderUserId: userData.user_id ?? null,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        embeddingProvider: embeddingModel.provider as string,
-        embeddingCodename: embeddingModel.codename,
-        apiKey: embeddingCreds.apiKey,
-        scopeLabel,
-        channelTags,
-        replyInteraction: modalSubmitInteraction,
-        locale,
-        guildId,
-      });
-      if (!storeResult) return;
+      if (!extractResult) {
+        await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, null);
+        return;
+      }
 
-      // Success reply
+      await finalizeDocumentContent(documentId, extractResult.allChunkText);
+      invalidateTomoriStateCache(guildId);
+
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
             .setDescription(
               localizer(locale, "commands.memory.history.import.success_description", {
-                fact_count: pipelineResult.entries.length.toString(),
-                message_count: pipelineResult.formattedResult.messageCount.toString(),
+                fact_count: extractResult.totalFactCount.toString(),
+                message_count: fetchResult.formattedResult.messageCount.toString(),
                 name: nameInput,
-                chunk_count: storeResult.chunkCount.toString(),
+                chunk_count: extractResult.totalFactCount.toString(),
                 scope: scopeLabel,
               }),
             )
@@ -876,8 +836,9 @@ export async function execute(
     }
 
     // ====================================================================
-    // SCOPE: AUTOMATIC — Show prompt modal, then defer modal submit interaction
+    // SCOPE: AUTOMATIC
     // Detect personas from webhook authors, create per-persona documents
+    // before extraction starts so chunks are written incrementally.
     // ====================================================================
     const autoPromptModalResult = await promptForExtractionSystem(interaction, locale, promptMode);
     if (!autoPromptModalResult) return;
@@ -886,62 +847,54 @@ export async function execute(
 
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Run extraction pipeline (extracts facts + detects personas)
-    const pipelineResult = await runExtractionPipeline({
+    const fetchResult = await fetchAndFormatMessages({
       channel: interaction.channel,
       messageFetchLimit,
-      provider,
-      model,
-      apiKey: textCreds.apiKey,
-      endpointUrl,
-      systemPrompt: autoSystemPrompt,
+      allPersonas,
       replyInteraction: modalSubmitInteraction,
       locale,
-      serverId: guildId,
-      allPersonas,
     });
-    if (!pipelineResult) return;
+    if (!fetchResult) return;
 
-    const { entries, formattedResult } = pipelineResult;
+    const { formattedResult } = fetchResult;
     const detectedTomoriIds = formattedResult.detectedPersonaTomoriIds;
 
-    // If no personas detected, fallback to global
     if (detectedTomoriIds.length === 0) {
+      // No personas detected — fall back to global scope
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
-      // Check duplicate name in global scope
-      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
-              .setDescription(
-                localizer(locale, "commands.memory.history.import.duplicate_description", { name: nameInput }),
-              )
-              .setColor(ColorCode.ERROR),
-          ],
-        });
-        return;
-      }
-
-      const storeResult = await storeExtractedFacts({
-        entries,
+      const documentId = await createDocumentForImport({
         documentName: nameInput,
         serverId: tomoriState.server_id,
         personaId: null,
         uploaderUserId: userData.user_id ?? null,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        embeddingProvider: embeddingModel.provider as string,
-        embeddingCodename: embeddingModel.codename,
-        apiKey: embeddingCreds.apiKey,
-        scopeLabel,
         channelTags,
+        scopeLabel,
         replyInteraction: modalSubmitInteraction,
         locale,
-        guildId,
       });
-      if (!storeResult) return;
+      if (documentId === null) return;
+
+      const extractResult = await runIncrementalExtraction({
+        formattedResult,
+        provider,
+        model,
+        apiKey: textCreds.apiKey,
+        endpointUrl,
+        systemPrompt: autoSystemPrompt,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: null }],
+        ...embeddingParams,
+      });
+
+      if (!extractResult) {
+        await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, null);
+        return;
+      }
+
+      await finalizeDocumentContent(documentId, extractResult.allChunkText);
+      invalidateTomoriStateCache(guildId);
 
       await modalSubmitInteraction.editReply({
         embeds: [
@@ -958,63 +911,100 @@ export async function execute(
       return;
     }
 
-    // Create per-persona documents
-    const personaResults: string[] = [];
+    // Create per-persona document records before extraction starts
+    const memoryLimits = getMemoryLimits();
+    const personaTargets: Array<{ target: WriteTarget; personaNickname: string; docName: string }> = [];
 
     for (const personaId of detectedTomoriIds) {
       const persona = allPersonas.find((p) => p.persona_id === personaId);
       if (!persona) continue;
 
       const docName = `${nameInput} (${persona.persona_nickname})`;
-      const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
-        persona_name: persona.persona_nickname,
-      });
 
-      // Check duplicate name for this persona
       if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, personaId, docName)) {
         log.warn(`Skipping duplicate document "${docName}" for persona ${personaId} during automatic scope`);
         continue;
       }
 
-      const storeResult = await storeExtractedFacts({
-        entries,
-        documentName: docName,
+      const docCount = await serverMemoryRepository.countDocumentsScoped(tomoriState.server_id, personaId);
+      if (docCount >= memoryLimits.maxDocumentsPerServer) {
+        log.warn(`Document limit exceeded for persona ${personaId}, skipping`);
+        continue;
+      }
+
+      const documentId = await createDocumentRecord({
         serverId: tomoriState.server_id,
         personaId,
         uploaderUserId: userData.user_id ?? null,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        embeddingProvider: embeddingModel.provider as string,
-        embeddingCodename: embeddingModel.codename,
-        apiKey: embeddingCreds.apiKey,
-        scopeLabel,
+        documentName: docName,
+        sourceType: "history",
         channelTags,
-        replyInteraction: modalSubmitInteraction,
-        locale,
-        guildId,
       });
 
-      if (storeResult) {
-        personaResults.push(
-          localizer(locale, "commands.memory.history.import.success_automatic_persona_line", {
-            persona_name: persona.persona_nickname,
-            doc_name: docName,
-            chunk_count: storeResult.chunkCount.toString(),
-          }),
-        );
+      personaTargets.push({
+        target: { documentId, dbServerId: tomoriState.server_id, personaId },
+        personaNickname: persona.persona_nickname,
+        docName,
+      });
+    }
+
+    if (personaTargets.length === 0) {
+      await modalSubmitInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
+            .setDescription(
+              localizer(locale, "commands.memory.history.import.duplicate_description", { name: nameInput }),
+            )
+            .setColor(ColorCode.ERROR),
+        ],
+      });
+      return;
+    }
+
+    // Run extraction once, writing each window's chunks to all persona documents
+    const extractResult = await runIncrementalExtraction({
+      formattedResult,
+      provider,
+      model,
+      apiKey: textCreds.apiKey,
+      endpointUrl,
+      systemPrompt: autoSystemPrompt,
+      replyInteraction: modalSubmitInteraction,
+      locale,
+      writeTargets: personaTargets.map((pt) => pt.target),
+      ...embeddingParams,
+    });
+
+    for (const { target } of personaTargets) {
+      if (!extractResult) {
+        await serverMemoryRepository.removeDocument(target.documentId, tomoriState.server_id, target.personaId);
+      } else {
+        await finalizeDocumentContent(target.documentId, extractResult.allChunkText);
       }
     }
 
-    // Final success reply
+    if (!extractResult) return;
+
+    invalidateTomoriStateCache(guildId);
+
+    const personaResultLines = personaTargets.map(({ personaNickname, docName }) =>
+      localizer(locale, "commands.memory.history.import.success_automatic_persona_line", {
+        persona_name: personaNickname,
+        doc_name: docName,
+        chunk_count: extractResult.totalFactCount.toString(),
+      }),
+    );
+
     await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
           .setDescription(
             localizer(locale, "commands.memory.history.import.success_automatic_description", {
-              fact_count: entries.length.toString(),
+              fact_count: extractResult.totalFactCount.toString(),
               message_count: formattedResult.messageCount.toString(),
-              persona_list: personaResults.join("\n"),
+              persona_list: personaResultLines.join("\n"),
             }),
           )
           .setColor(ColorCode.SUCCESS),

@@ -56,6 +56,74 @@ function toPgTextArray(values: string[]): string {
   return `{${values.map((v) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")}}`;
 }
 
+/**
+ * Creates a document record without chunks. Use with appendDocumentChunks for
+ * incremental writes across long-running extraction pipelines.
+ */
+export async function createDocumentRecord(params: {
+  serverId: number;
+  personaId: number | null;
+  uploaderUserId: number | null;
+  documentName: string;
+  sourceType?: string;
+  channelTags?: string[];
+}): Promise<number> {
+  const { serverId, personaId, uploaderUserId, documentName, sourceType = "upload", channelTags = [] } = params;
+  const [row] = await sql`
+    INSERT INTO documents (
+      server_id, persona_id, uploader_user_id, document_name,
+      file_name, mime_type, file_size_bytes, text_content, source_type, channel_tags
+    ) VALUES (
+      ${serverId}, ${personaId}, ${uploaderUserId}, ${documentName},
+      NULL, NULL, NULL, '', ${sourceType}, ${toPgTextArray(channelTags)}::text[]
+    )
+    RETURNING document_id
+  `;
+  if (!row?.document_id) throw new Error("Failed to insert document row");
+  return Number(row.document_id);
+}
+
+/**
+ * Appends a batch of chunks (with embeddings) to an existing document starting
+ * at the given chunk index.
+ */
+export async function appendDocumentChunks(params: {
+  documentId: number;
+  serverId: number;
+  embeddingModelId: number;
+  embeddingFamily: string;
+  startIndex: number;
+  chunks: string[];
+  embeddings: number[][];
+}): Promise<void> {
+  const { documentId, serverId, embeddingModelId, embeddingFamily, startIndex, chunks, embeddings } = params;
+  if (chunks.length !== embeddings.length) {
+    throw new Error(`Chunk/embedding count mismatch: ${chunks.length} vs ${embeddings.length}`);
+  }
+  await sql.transaction(async (tx) => {
+    for (let i = 0; i < chunks.length; i++) {
+      const embeddingVector = formatVector(embeddings[i]);
+      await tx`
+        INSERT INTO document_chunks (
+          document_id, server_id, embedding_model_id, embedding_family,
+          chunk_index, content, embedding
+        ) VALUES (
+          ${documentId}, ${serverId}, ${embeddingModelId}, ${embeddingFamily},
+          ${startIndex + i}, ${chunks[i]}, ${embeddingVector}::vector
+        )
+      `;
+    }
+  });
+}
+
+/**
+ * Sets the text_content column on a document after all chunks have been appended.
+ * Required for reembedServerDocuments to work correctly on history imports.
+ */
+export async function finalizeDocumentContent(documentId: number, textContent: string): Promise<void> {
+  await sql`UPDATE documents SET text_content = ${textContent} WHERE document_id = ${documentId}`;
+}
+
 export async function insertDocumentWithChunks(params: {
   serverId: number;
   personaId: number | null;
