@@ -124,6 +124,23 @@ export async function finalizeDocumentContent(documentId: number, textContent: s
   await sql`UPDATE documents SET text_content = ${textContent} WHERE document_id = ${documentId}`;
 }
 
+/**
+ * Rebuilds a document's text_content column from its current chunks (ordered by
+ * chunk_index, joined by blank lines). Call this after any edit/delete that
+ * mutates chunk content so reembedServerDocuments stays consistent with the
+ * stored chunk set.
+ */
+export async function rebuildDocumentTextContent(documentId: number): Promise<void> {
+  const rows = await sql<Array<{ content: string }>>`
+    SELECT content
+    FROM document_chunks
+    WHERE document_id = ${documentId}
+    ORDER BY chunk_index ASC
+  `;
+  const joined = rows.map((r) => r.content).join("\n\n");
+  await sql`UPDATE documents SET text_content = ${joined} WHERE document_id = ${documentId}`;
+}
+
 export async function insertDocumentWithChunks(params: {
   serverId: number;
   personaId: number | null;
