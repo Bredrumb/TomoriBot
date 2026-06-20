@@ -17,6 +17,7 @@ import type {
   ButtonInteraction,
   ModalSubmitInteraction,
   Client,
+  Message,
   SlashCommandSubcommandBuilder,
   TextBasedChannel,
 } from "discord.js";
@@ -32,7 +33,7 @@ import { llmModelRepo, personaRepository, serverMemoryRepository } from "@/utils
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
-import { fetchHistoryUntilMarker } from "@/utils/discord/historyFetcher";
+import { fetchHistoryAfter } from "@/utils/discord/historyFetcher";
 import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
 import {
   createDocumentRecord,
@@ -78,6 +79,50 @@ interface WriteTarget {
 }
 
 /**
+ * Builds the localized footer appended to every terminal embed: range timestamps,
+ * last-processed message ID, jump link, and channel-end status.
+ */
+function buildFooter(params: {
+  firstMessage: Message;
+  lastMessage: Message;
+  reachedEnd: boolean;
+  guildId: string | null;
+  channelId: string;
+  locale: string;
+}): string {
+  const { firstMessage, lastMessage, reachedEnd, guildId, channelId, locale } = params;
+  const jumpLink = `https://discord.com/channels/${guildId ?? "@me"}/${channelId}/${lastMessage.id}`;
+  const endStatusKey = reachedEnd
+    ? "commands.memory.history.import.end_status_reached_end"
+    : "commands.memory.history.import.end_status_more_available";
+  return localizer(locale, "commands.memory.history.import.success_footer", {
+    first_unix: Math.floor(firstMessage.createdTimestamp / 1000).toString(),
+    last_unix: Math.floor(lastMessage.createdTimestamp / 1000).toString(),
+    last_message_id: lastMessage.id,
+    jump_link: jumpLink,
+    end_status: localizer(locale, endStatusKey),
+  });
+}
+
+/** Shows the "no facts extracted from this batch" embed with the pagination footer. */
+async function showNoFactsExtractedEmbed(
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  locale: string,
+  footer: string,
+): Promise<void> {
+  await replyInteraction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setTitle(localizer(locale, "commands.memory.history.import.no_facts_extracted_title"))
+        .setDescription(
+          `${localizer(locale, "commands.memory.history.import.no_facts_extracted_description")}\n\n${footer}`,
+        )
+        .setColor(ColorCode.WARN),
+    ],
+  });
+}
+
+/**
  * Configures the /memory history import subcommand options.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -113,6 +158,14 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     )
     .addStringOption((option) =>
       option
+        .setName("start_message_id")
+        .setDescription(localizer("en-US", "commands.memory.history.import.start_message_id_description"))
+        .setRequired(true)
+        .setMinLength(15)
+        .setMaxLength(25),
+    )
+    .addStringOption((option) =>
+      option
         .setName("channels")
         .setDescription(localizer("en-US", "commands.memory.history.import.channels_description"))
         .setRequired(false)
@@ -139,8 +192,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setName("limit")
         .setDescription(localizer("en-US", "commands.memory.history.import.limit_description"))
         .setRequired(false)
-        .setMinValue(1)
-        .setMaxValue(1000),
+        .setMinValue(50)
+        .setMaxValue(100),
     );
 
 const EXTRACTION_PROMPT_MODAL_ID = "memory_history_import_prompt_modal";
@@ -219,16 +272,25 @@ async function extractWindow(
 }
 
 /**
- * Fetches and formats channel messages, updating progress and returning early on failure.
+ * Fetches messages after a starting anchor and formats them for extraction.
+ * Returns null only when the raw fetch yields zero messages (channel-end reached);
+ * otherwise returns the formatted result alongside batch boundary metadata so the
+ * caller can build the pagination footer and handle empty-after-filtering cases.
  */
 async function fetchAndFormatMessages(params: {
   channel: TextBasedChannel;
-  messageFetchLimit: number;
+  startMessageId: string;
+  limit: number;
   allPersonas: TomoriState[];
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
   locale: string;
-}): Promise<{ formattedResult: ReturnType<typeof formatMessagesForExtraction> } | null> {
-  const { channel, messageFetchLimit, allPersonas, replyInteraction, locale } = params;
+}): Promise<{
+  formattedResult: ReturnType<typeof formatMessagesForExtraction>;
+  firstMessage: Message;
+  lastMessage: Message;
+  reachedEnd: boolean;
+} | null> {
+  const { channel, startMessageId, limit, allPersonas, replyInteraction, locale } = params;
 
   await replyInteraction.editReply({
     embeds: [
@@ -238,33 +300,27 @@ async function fetchAndFormatMessages(params: {
     ],
   });
 
-  const fetchResult = await fetchHistoryUntilMarker(channel, messageFetchLimit);
+  const fetchResult = await fetchHistoryAfter(channel, startMessageId, limit);
   if (fetchResult.messages.length === 0) {
     await replyInteraction.editReply({
       embeds: [
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.memory.history.import.no_messages_title"))
           .setDescription(localizer(locale, "commands.memory.history.import.no_messages_description"))
-          .setColor(ColorCode.ERROR),
+          .setColor(ColorCode.WARN),
       ],
     });
     return null;
   }
 
   const formattedResult = formatMessagesForExtraction(fetchResult.messages, allPersonas);
-  if (formattedResult.messageCount === 0) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.no_messages_title"))
-          .setDescription(localizer(locale, "commands.memory.history.import.no_messages_description"))
-          .setColor(ColorCode.ERROR),
-      ],
-    });
-    return null;
-  }
 
-  return { formattedResult };
+  return {
+    formattedResult,
+    firstMessage: fetchResult.messages[0],
+    lastMessage: fetchResult.messages[fetchResult.messages.length - 1],
+    reachedEnd: fetchResult.reachedEnd,
+  };
 }
 
 /**
@@ -434,14 +490,6 @@ async function runIncrementalExtraction(params: {
   }
 
   if (allChunks.length === 0) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.no_facts_extracted_title"))
-          .setDescription(localizer(locale, "commands.memory.history.import.no_facts_extracted_description"))
-          .setColor(ColorCode.ERROR),
-      ],
-    });
     return null;
   }
 
@@ -617,10 +665,26 @@ export async function execute(
     const scopeInput = interaction.options.getString("scope");
     const scope: HistoryScope =
       scopeInput === "automatic" ? "automatic" : scopeInput === "global" ? "global" : "persona";
+    const startMessageId = interaction.options.getString("start_message_id", true).trim();
     const channelsInput = interaction.options.getString("channels");
     const promptModeInput = interaction.options.getString("prompt");
     const promptMode: ExtractionPromptMode = promptModeInput === "roleplay" ? "roleplay" : "conversation";
-    const messageFetchLimit = interaction.options.getInteger("limit") ?? 1000;
+    const messageFetchLimit = interaction.options.getInteger("limit") ?? 100;
+
+    // Validate the start message ID exists in this channel before doing any further setup,
+    // so users with a typo get immediate feedback instead of sitting through the persona/modal flow.
+    try {
+      await interaction.channel.messages.fetch(startMessageId);
+    } catch {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.memory.history.import.invalid_start_id_title",
+        descriptionKey: "commands.memory.history.import.invalid_start_id_description",
+        descriptionVars: { start_message_id: startMessageId },
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
     const channelTags: string[] = channelsInput
       ? channelsInput
           .split(",")
@@ -702,12 +766,36 @@ export async function execute(
 
       const fetchResult = await fetchAndFormatMessages({
         channel: interaction.channel,
-        messageFetchLimit,
+        startMessageId,
+        limit: messageFetchLimit,
         allPersonas,
         replyInteraction: modalSubmitInteraction,
         locale,
       });
       if (!fetchResult) return;
+
+      const footer = buildFooter({
+        firstMessage: fetchResult.firstMessage,
+        lastMessage: fetchResult.lastMessage,
+        reachedEnd: fetchResult.reachedEnd,
+        guildId: interaction.guild?.id ?? null,
+        channelId: interaction.channel.id,
+        locale,
+      });
+
+      if (fetchResult.formattedResult.messageCount === 0) {
+        await modalSubmitInteraction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(localizer(locale, "commands.memory.history.import.no_extractable_content_title"))
+              .setDescription(
+                `${localizer(locale, "commands.memory.history.import.no_extractable_content_description")}\n\n${footer}`,
+              )
+              .setColor(ColorCode.WARN),
+          ],
+        });
+        return;
+      }
 
       const documentId = await createDocumentForImport({
         documentName: nameInput,
@@ -736,6 +824,7 @@ export async function execute(
 
       if (!extractResult) {
         await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, targetPersonaId);
+        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
         return;
       }
 
@@ -747,13 +836,13 @@ export async function execute(
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
             .setDescription(
-              localizer(locale, "commands.memory.history.import.success_description", {
+              `${localizer(locale, "commands.memory.history.import.success_description", {
                 fact_count: extractResult.totalFactCount.toString(),
                 message_count: fetchResult.formattedResult.messageCount.toString(),
                 name: nameInput,
                 chunk_count: extractResult.totalFactCount.toString(),
                 scope: scopeLabel,
-              }),
+              })}\n\n${footer}`,
             )
             .setColor(ColorCode.SUCCESS),
         ],
@@ -776,12 +865,36 @@ export async function execute(
 
       const fetchResult = await fetchAndFormatMessages({
         channel: interaction.channel,
-        messageFetchLimit,
+        startMessageId,
+        limit: messageFetchLimit,
         allPersonas,
         replyInteraction: modalSubmitInteraction,
         locale,
       });
       if (!fetchResult) return;
+
+      const footer = buildFooter({
+        firstMessage: fetchResult.firstMessage,
+        lastMessage: fetchResult.lastMessage,
+        reachedEnd: fetchResult.reachedEnd,
+        guildId: interaction.guild?.id ?? null,
+        channelId: interaction.channel.id,
+        locale,
+      });
+
+      if (fetchResult.formattedResult.messageCount === 0) {
+        await modalSubmitInteraction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(localizer(locale, "commands.memory.history.import.no_extractable_content_title"))
+              .setDescription(
+                `${localizer(locale, "commands.memory.history.import.no_extractable_content_description")}\n\n${footer}`,
+              )
+              .setColor(ColorCode.WARN),
+          ],
+        });
+        return;
+      }
 
       const documentId = await createDocumentForImport({
         documentName: nameInput,
@@ -810,6 +923,7 @@ export async function execute(
 
       if (!extractResult) {
         await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, null);
+        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
         return;
       }
 
@@ -821,13 +935,13 @@ export async function execute(
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
             .setDescription(
-              localizer(locale, "commands.memory.history.import.success_description", {
+              `${localizer(locale, "commands.memory.history.import.success_description", {
                 fact_count: extractResult.totalFactCount.toString(),
                 message_count: fetchResult.formattedResult.messageCount.toString(),
                 name: nameInput,
                 chunk_count: extractResult.totalFactCount.toString(),
                 scope: scopeLabel,
-              }),
+              })}\n\n${footer}`,
             )
             .setColor(ColorCode.SUCCESS),
         ],
@@ -849,7 +963,8 @@ export async function execute(
 
     const fetchResult = await fetchAndFormatMessages({
       channel: interaction.channel,
-      messageFetchLimit,
+      startMessageId,
+      limit: messageFetchLimit,
       allPersonas,
       replyInteraction: modalSubmitInteraction,
       locale,
@@ -858,6 +973,29 @@ export async function execute(
 
     const { formattedResult } = fetchResult;
     const detectedTomoriIds = formattedResult.detectedPersonaTomoriIds;
+
+    const footer = buildFooter({
+      firstMessage: fetchResult.firstMessage,
+      lastMessage: fetchResult.lastMessage,
+      reachedEnd: fetchResult.reachedEnd,
+      guildId: interaction.guild?.id ?? null,
+      channelId: interaction.channel.id,
+      locale,
+    });
+
+    if (formattedResult.messageCount === 0) {
+      await modalSubmitInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.memory.history.import.no_extractable_content_title"))
+            .setDescription(
+              `${localizer(locale, "commands.memory.history.import.no_extractable_content_description")}\n\n${footer}`,
+            )
+            .setColor(ColorCode.WARN),
+        ],
+      });
+      return;
+    }
 
     if (detectedTomoriIds.length === 0) {
       // No personas detected — fall back to global scope
@@ -890,6 +1028,7 @@ export async function execute(
 
       if (!extractResult) {
         await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, null);
+        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
         return;
       }
 
@@ -901,9 +1040,9 @@ export async function execute(
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
             .setDescription(
-              localizer(locale, "commands.memory.history.import.success_automatic_global_fallback", {
+              `${localizer(locale, "commands.memory.history.import.success_automatic_global_fallback", {
                 name: nameInput,
-              }),
+              })}\n\n${footer}`,
             )
             .setColor(ColorCode.SUCCESS),
         ],
@@ -984,7 +1123,10 @@ export async function execute(
       }
     }
 
-    if (!extractResult) return;
+    if (!extractResult) {
+      await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
+      return;
+    }
 
     invalidateTomoriStateCache(guildId);
 
@@ -1001,11 +1143,11 @@ export async function execute(
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
           .setDescription(
-            localizer(locale, "commands.memory.history.import.success_automatic_description", {
+            `${localizer(locale, "commands.memory.history.import.success_automatic_description", {
               fact_count: extractResult.totalFactCount.toString(),
               message_count: formattedResult.messageCount.toString(),
               persona_list: personaResultLines.join("\n"),
-            }),
+            })}\n\n${footer}`,
           )
           .setColor(ColorCode.SUCCESS),
       ],
