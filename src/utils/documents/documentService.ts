@@ -275,63 +275,83 @@ export async function retrieveRelevantDocumentChunks(params: {
   }
 
   const queryVector = formatVector(queryEmbeddings[0]);
+  // Cast a wide net so RRF has enough candidates from each ranked list to merge well.
+  const candidateLimit = maxResults * 4;
 
   const channelFilter =
     channelName != null
-      ? sql`AND (array_length(d.channel_tags, 1) IS NULL OR ${`#${channelName.toLowerCase()}`} = ANY(d.channel_tags))`
+      ? sql`AND (array_length(d.channel_tags, 1) IS NULL OR ${"#" + channelName.toLowerCase()} = ANY(d.channel_tags))`
       : sql``;
 
-  const rows =
+  const personaFilter =
     personaId === null || personaId === undefined
-      ? await sql<
-          Array<{
-            document_id: number;
-            document_name: string;
-            chunk_index: number;
-            content: string;
-            distance: number | string;
-          }>
-        >`
-					SELECT dc.document_id,
-					       d.document_name,
-					       dc.chunk_index,
-					       dc.content,
-					       (dc.embedding <=> ${queryVector}::vector) AS distance
-					FROM document_chunks dc
-					JOIN documents d ON d.document_id = dc.document_id
-					WHERE dc.server_id = ${serverId}
-					  AND dc.embedding_family = ${embeddingModel.model_family}
-					  AND d.persona_id IS NULL
-					  ${channelFilter}
-					ORDER BY dc.embedding <=> ${queryVector}::vector
-					LIMIT ${maxResults}
-				`
-      : await sql<
-          Array<{
-            document_id: number;
-            document_name: string;
-            chunk_index: number;
-            content: string;
-            distance: number | string;
-          }>
-        >`
-					SELECT dc.document_id,
-					       d.document_name,
-					       dc.chunk_index,
-					       dc.content,
-					       (dc.embedding <=> ${queryVector}::vector) AS distance
-					FROM document_chunks dc
-					JOIN documents d ON d.document_id = dc.document_id
-					WHERE dc.server_id = ${serverId}
-					  AND dc.embedding_family = ${embeddingModel.model_family}
-					  AND (
-						d.persona_id = ${personaId}
-						OR d.persona_id IS NULL
-					  )
-					  ${channelFilter}
-					ORDER BY dc.embedding <=> ${queryVector}::vector
-					LIMIT ${maxResults}
-				`;
+      ? sql`AND d.persona_id IS NULL`
+      : sql`AND (d.persona_id = ${personaId} OR d.persona_id IS NULL)`;
+
+  // Hybrid retrieval: vector similarity + full-text search merged via Reciprocal Rank Fusion.
+  //
+  // RRF score = Σ 1/(k + rank_i) for each ranked list a chunk appears in (k=60 is standard).
+  // Chunks that score well in both lists rank higher than single-list results, which is
+  // especially effective for proper-noun-heavy content where embeddings can miss exact name
+  // matches. fts_candidates is a no-op when plainto_tsquery returns an empty tsquery
+  // (all stop words), so pure vector ranking applies transparently as the fallback.
+  const rows = await sql<
+    Array<{
+      document_id: number;
+      document_name: string;
+      chunk_index: number;
+      content: string;
+      distance: number | string;
+    }>
+  >`
+    WITH fts_q AS (
+      SELECT plainto_tsquery('english', ${query}::text) AS q
+    ),
+    vector_candidates AS (
+      SELECT dc.document_chunk_id,
+             ROW_NUMBER() OVER (ORDER BY dc.embedding <=> ${queryVector}::vector) AS rnk
+      FROM document_chunks dc
+      JOIN documents d ON d.document_id = dc.document_id
+      WHERE dc.server_id = ${serverId}
+        AND dc.embedding_family = ${embeddingModel.model_family}
+        ${personaFilter}
+        ${channelFilter}
+      ORDER BY dc.embedding <=> ${queryVector}::vector
+      LIMIT ${candidateLimit}
+    ),
+    fts_candidates AS (
+      SELECT dc.document_chunk_id,
+             ROW_NUMBER() OVER (ORDER BY ts_rank(dc.tsv, fts_q.q) DESC) AS rnk
+      FROM document_chunks dc
+      JOIN documents d ON d.document_id = dc.document_id
+      CROSS JOIN fts_q
+      WHERE dc.server_id = ${serverId}
+        AND dc.embedding_family = ${embeddingModel.model_family}
+        ${personaFilter}
+        ${channelFilter}
+        AND dc.tsv IS NOT NULL
+        AND fts_q.q::text != ''
+        AND dc.tsv @@ fts_q.q
+      ORDER BY ts_rank(dc.tsv, fts_q.q) DESC
+      LIMIT ${candidateLimit}
+    ),
+    rrf_merged AS (
+      SELECT document_chunk_id, SUM(1.0 / (60.0 + rnk)) AS rrf_score
+      FROM (
+        SELECT document_chunk_id, rnk FROM vector_candidates
+        UNION ALL
+        SELECT document_chunk_id, rnk FROM fts_candidates
+      ) combined
+      GROUP BY document_chunk_id
+    )
+    SELECT dc.document_id, d.document_name, dc.chunk_index, dc.content,
+           (dc.embedding <=> ${queryVector}::vector) AS distance
+    FROM rrf_merged r
+    JOIN document_chunks dc ON dc.document_chunk_id = r.document_chunk_id
+    JOIN documents d ON d.document_id = dc.document_id
+    ORDER BY r.rrf_score DESC
+    LIMIT ${maxResults}
+  `;
 
   const results: RetrievedDocumentChunk[] = [];
   for (const row of rows) {
