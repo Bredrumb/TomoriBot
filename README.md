@@ -113,26 +113,26 @@ If you're enjoying TomoriBot, please consider giving her a ⭐ on GitHub or supp
 
 TomoriBot supports a wide range of LLM providers, image generation APIs, voice services, and search tools out of the box. This includes popular providers like Google Gemini, OpenRouter, Anthropic, NovelAI, Nvidia, Deepseek, and more. 
 
-**[Read the full list of Supported Providers here](docs/wiki/supported-providers.md)**
+**[Read the full list of Supported Providers here](https://docs.tomoribot.app/wiki/supported-providers/)**
 
 ## Local & Self-Hosted Endpoints
 
 Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch Docker sidecars.
 
-**[Read the Local & Self-Hosted Endpoints guide here](docs/wiki/local-endpoints.md)**
+**[Read the Local & Self-Hosted Endpoints guide here](https://docs.tomoribot.app/wiki/local-endpoints/)**
 
 ## Security & Threat Models
 
 TomoriBot employs encryption and security best practices to keep data and API keys completely safe (as well as your wallet through configurable per-member/server rate limits), giving you full control and privacy when self-hosting:
 
-**[Read the full Security & Threat Models guide here](docs/wiki/threat-models.md)**
+**[Read the full Security & Threat Models guide here](https://docs.tomoribot.app/wiki/threat-models/)**
 
 
 ## Tool Macros for Prompt Customization
 
 TomoriBot comes with a variety of built-in tools (such as web search, memory management, image generation, cross-channel messaging, and more), which you can directly refer to in your prompts with macros:
 
-**[Read the complete Built-In Tool Reference here](docs/wiki/built-in-tools.md)**
+**[Read the complete Built-In Tool Reference here](https://docs.tomoribot.app/wiki/built-in-tools/)**
 
 ### Sample Prompts with Tools
 
@@ -476,9 +476,9 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 See the guides below for full setup details:
 
-- **[SearXNG Web Search Sidecar](docs/guides/setup-searxng.md)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
-- **[Crawl4AI Sidecar](docs/guides/setup-crawl4ai.md)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
-- **[Local Grafana Monitoring](docs/guides/local-monitoring.md)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
+- **[SearXNG Web Search Sidecar](https://docs.tomoribot.app/user-guides/setup-searxng/)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
+- **[Crawl4AI Sidecar](https://docs.tomoribot.app/user-guides/setup-crawl4ai/)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[Local Grafana Monitoring](https://docs.tomoribot.app/user-guides/local-monitoring/)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
 
 > **Using `bun run dev` instead of Docker Compose?** Use `bun launch --searxng --crawl4ai` — it handles the Docker container lifecycle for you automatically. See the [Optional Sidecars](#optional-sidecars-bun-launch) section above.
 

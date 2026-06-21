@@ -204,7 +204,8 @@ const sidebar = [
   buildSidebarSection("pipelines"),
   buildSidebarSection("subsystems"),
   buildSidebarSection("integrations"),
-  buildSidebarSection("guides"),
+  buildSidebarSection("contributor-guides"),
+  buildSidebarSection("user-guides"),
 ];
 
 export default defineConfig({

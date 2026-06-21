@@ -83,6 +83,7 @@ export default {
       notice_reference_line: `Reference: {message_url}`,
       notice_reference_count_line: `Using {count} reference image(s).`,
       generating_footer: `This may take 1-3 minutes.`,
+      generated_after_seconds_line: `Generated in {seconds} seconds`,
     },
     document: {
       reading_title: `📄 Reading File Contents...`,

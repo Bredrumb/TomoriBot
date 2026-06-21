@@ -9,10 +9,10 @@ go to `pipelines/` for the authoritative per-stage reference.
 
 High-level orientation: what TomoriBot is, how it starts up, and how data is modelled.
 
-- [`architecture/README.md`](./architecture/)
-- [`architecture/getting-started.md`](./architecture/getting-started)
-- [`architecture/architecture.md`](./architecture/architecture)
-- [`architecture/entry-point.md`](./architecture/entry-point)
+- [`architecture/README.md`](./architecture/) — introduction + architecture overview
+- [`architecture/entry-point.md`](./architecture/entry-point) — startup and initialization flow
+
+> Local dev setup moved to [`contributor-guides/getting-started.md`](./contributor-guides/getting-started).
 
 ## Pipelines
 
@@ -52,7 +52,8 @@ rather than sequenced stages.
 
 ## Integrations
 
-- [`integrations/matrix-bridge.md`](./integrations/matrix-bridge)
+- Matrix:
+  - [`integrations/matrix/bridge.md`](./integrations/matrix/bridge)
 - Discord platform capabilities:
   - [`integrations/discord/message-components-v2.md`](./integrations/discord/message-components-v2)
   - [`integrations/discord/modal-input-components.md`](./integrations/discord/modal-input-components)
@@ -68,27 +69,39 @@ rather than sequenced stages.
   - [`integrations/voice/tts/`](./integrations/voice/tts/)
   - [`integrations/voice/stt/`](./integrations/voice/stt/)
 
-## Guides
+## Contributor Guides
 
-Start at [`guides/development-tasks.md`](./guides/development-tasks) for the task index and coding conventions.
+Code-contribution guides — for extending or modifying the bot with the source open.
+Start at [`contributor-guides/development-tasks.md`](./contributor-guides/development-tasks)
+for the task index and coding conventions, and
+[`contributor-guides/getting-started.md`](./contributor-guides/getting-started) for local dev setup.
 
 Per-task guides:
 
-- [`guides/adding-slash-command.md`](./guides/adding-slash-command)
-- [`guides/adding-event-handler.md`](./guides/adding-event-handler)
-- [`guides/adding-builtin-tool.md`](./guides/adding-builtin-tool)
-- [`guides/adding-db-column.md`](./guides/adding-db-column)
-- [`guides/adding-locale.md`](./guides/adding-locale)
-- [`guides/adding-new-provider.md`](./guides/adding-new-provider)
-- [`guides/adding-feature-flag-tool.md`](./guides/adding-feature-flag-tool)
-- [`guides/adding-persona-preset.md`](./guides/adding-persona-preset)
+- [`contributor-guides/adding-slash-command.md`](./contributor-guides/adding-slash-command)
+- [`contributor-guides/adding-event-handler.md`](./contributor-guides/adding-event-handler)
+- [`contributor-guides/adding-builtin-tool.md`](./contributor-guides/adding-builtin-tool)
+- [`contributor-guides/adding-feature-flag-tool.md`](./contributor-guides/adding-feature-flag-tool)
+- [`contributor-guides/adding-db-column.md`](./contributor-guides/adding-db-column)
+- [`contributor-guides/adding-new-provider.md`](./contributor-guides/adding-new-provider)
+- [`contributor-guides/adding-locale.md`](./contributor-guides/adding-locale)
+- [`contributor-guides/adding-persona-preset.md`](./contributor-guides/adding-persona-preset)
 
-Other guides:
+Testing your changes:
 
-- [`guides/local-grafana-setup.md`](./guides/local-grafana-setup)
-- [`guides/testing-db-changes.md`](./guides/testing-db-changes)
-- [`guides/testing-chat-changes.md`](./guides/testing-chat-changes)
-- [`guides/safe-migration.md`](./guides/safe-migration)
+- [`contributor-guides/testing-db-changes.md`](./contributor-guides/testing-db-changes)
+- [`contributor-guides/testing-chat-changes.md`](./contributor-guides/testing-chat-changes)
+
+## User Guides
+
+Self-hosting and operation guides — for running your own instance, no source required.
+
+- [`user-guides/setup-searxng.md`](./user-guides/setup-searxng)
+- [`user-guides/setup-crawl4ai.md`](./user-guides/setup-crawl4ai)
+- [`user-guides/setup-chatmock.md`](./user-guides/setup-chatmock)
+- [`user-guides/local-monitoring.md`](./user-guides/local-monitoring)
+- [`user-guides/local-grafana-setup.md`](./user-guides/local-grafana-setup)
+- [`user-guides/safe-migration.md`](./user-guides/safe-migration)
 
 ## Wiki
 
