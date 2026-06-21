@@ -10,12 +10,25 @@ on:
     #   - "src/**/*.js"
     #   - "src/**/*.jsx"
 
+# Only one review per PR at a time — a new push cancels any in-flight review
+# so we never stack two runs for the same PR.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-review:
     # pull_request_target runs in base repo context, so the base repo's
     # GITHUB_TOKEN and secrets are available even for fork PRs. Safe here because
     # we never checkout and execute the fork's code — Claude reads the diff via
     # the GitHub API only.
+    #
+    # Draft guard: skip opened/synchronize/reopened while the PR is still a
+    # draft, and allow ready_for_review (which only fires on draft → ready
+    # transitions) so the first review happens exactly once regardless of
+    # whether the PR was created as a draft or not.
+    if: >-
+      github.event.pull_request.draft == false
 
     runs-on: ubuntu-latest
     # Scoped to the minimum the reviewer needs: read the diff, write the review.
