@@ -7,11 +7,12 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import {
   buildServerTabs,
   buildSubtitle,
+  DEFAULT_TIMEFRAME,
   renderStatsDashboard,
   resolveWindowFrom,
   type Timeframe,
   TIMEFRAME_VALUES,
-} from "./statsShared";
+} from "@/utils/stats/statsDashboard";
 
 /**
  * Configures the /stats server subcommand: server-wide usage stats for the chosen
@@ -27,7 +28,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
       option
         .setName("timeframe")
         .setDescription(localizer("en-US", "commands.stats.server.timeframe_description"))
-        .setRequired(true)
+        .setRequired(false)
         .addChoices(
           ...TIMEFRAME_VALUES.map((value) => ({ name: localizer("en-US", `commands.choices.${value}`), value })),
         ),
@@ -73,7 +74,7 @@ export async function execute(
     }
 
     // 3. Resolve timeframe → window floor and build the dashboard.
-    const timeframe = interaction.options.getString("timeframe", true) as Timeframe;
+    const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const from = resolveWindowFrom(timeframe);
     const subtitle = buildSubtitle(locale, timeframe);
 
@@ -81,6 +82,7 @@ export async function execute(
       locale,
       serverId,
       guildId: guild.id,
+      timeframe,
       from,
       subtitle: `${guild.name} • ${subtitle}`,
     });

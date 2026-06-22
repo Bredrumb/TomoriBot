@@ -134,6 +134,20 @@ export interface MetricKeyEntry {
   count: number;
 }
 
+/** Per-model estimated token + cost rollup (tokens_in/tokens_out joined to llms pricing). */
+export interface ModelCostEntry {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+}
+
+/** One emotion category's summed expression count (emoji + sticker, by emotion_key). */
+export interface EmotionEntry {
+  emotion: string;
+  count: number;
+}
+
 /** One user's summed count for a metric, with the Discord id for name resolution. */
 export interface TopUserEntry {
   userId: number;
@@ -865,6 +879,259 @@ export class StatRepository implements IRepository<null> {
     } catch (error) {
       log.error(`StatRepository.getPersonalMemoryCount: failed for user ${args.userId}`, error);
       return 0;
+    }
+  }
+
+  /**
+   * Top personas on a server by messages received (message_sent grouped by lineage),
+   * highest first. message_sent is persona-scoped and daily-bucketed, so this is
+   * windowable — it powers the server "Most Popular Personas" leaderboard row.
+   *
+   * @param args - serverId (required), optional time window and result limit.
+   */
+  async getServerPersonaMessages(
+    args: { serverId: number; limit?: number } & StatWindow,
+  ): Promise<PersonaAffinityEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const limit = args.limit ?? 5;
+      const rows = await sql<{ persona_lineage_id: number | string; total: number | string }[]>`
+        SELECT persona_lineage_id, SUM(count) AS total
+        FROM stat_counters
+        WHERE metric = 'message_sent'
+          AND server_id = ${args.serverId}
+          AND bucket >= ${from}::date
+        GROUP BY persona_lineage_id
+        ORDER BY total DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({ lineageId: Number(r.persona_lineage_id), count: Number(r.total) }));
+    } catch (error) {
+      log.error(`StatRepository.getServerPersonaMessages: failed for server ${args.serverId}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Per-persona personal-memory counts for one user (personal_memories grouped by
+   * lineage), highest first. personal_memories is not daily-bucketed (it has no
+   * created-date stat grain here), so this is intentionally all-time only — it
+   * powers the personal "Memories by Persona" list.
+   *
+   * @param args - userId (required) and optional result limit.
+   */
+  async getPersonalMemoryByPersona(args: { userId: number; limit?: number }): Promise<PersonaAffinityEntry[]> {
+    try {
+      const limit = args.limit ?? 5;
+      const rows = await sql<{ persona_lineage_id: number | string; total: number | string }[]>`
+        SELECT persona_lineage_id, COUNT(*) AS total
+        FROM personal_memories
+        WHERE user_id = ${args.userId}
+        GROUP BY persona_lineage_id
+        ORDER BY total DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({ lineageId: Number(r.persona_lineage_id), count: Number(r.total) }));
+    } catch (error) {
+      log.error(`StatRepository.getPersonalMemoryByPersona: failed for user ${args.userId}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Count of personal memories held under a persona lineage (across all users).
+   * personal_memories has no server_id, so this is global per lineage — consistent
+   * with lineage being the cross-server identity anchor. Powers the persona
+   * "Memories Saved" overview field. All-time only (not bucketed).
+   */
+  async getPersonaMemoryCount(args: { lineageId: number }): Promise<number> {
+    try {
+      const [row] = await sql`
+        SELECT COUNT(*) AS total FROM personal_memories WHERE persona_lineage_id = ${args.lineageId}
+      `;
+      return Number(row?.total ?? 0);
+    } catch (error) {
+      log.error(`StatRepository.getPersonaMemoryCount: failed for lineage ${args.lineageId}`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Top users by personal-memory count ("most remembered people"), joined to users
+   * for the Discord id. With a lineageId this is "people this persona remembers
+   * most"; a serverId restricts the result to users active on that server (via
+   * stat_counters), since personal_memories itself is not server-scoped. All-time
+   * only (personal_memories is not bucketed).
+   *
+   * @param args - optional serverId / lineageId filters and result limit.
+   */
+  async getTopUsersByMemory(args: { serverId?: number; lineageId?: number; limit?: number }): Promise<TopUserEntry[]> {
+    try {
+      const limit = args.limit ?? 5;
+      const rows = await sql<{ user_id: number | string; user_disc_id: string; total: number | string }[]>`
+        SELECT pm.user_id, u.user_disc_id, COUNT(*) AS total
+        FROM personal_memories pm
+        JOIN users u ON u.user_id = pm.user_id
+        WHERE (${args.lineageId ?? null}::bigint IS NULL OR pm.persona_lineage_id = ${args.lineageId ?? null})
+          AND (${args.serverId ?? null}::int IS NULL OR pm.user_id IN (
+            SELECT DISTINCT user_id FROM stat_counters WHERE server_id = ${args.serverId ?? null}
+          ))
+        GROUP BY pm.user_id, u.user_disc_id
+        ORDER BY total DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({
+        userId: Number(r.user_id),
+        userDiscId: String(r.user_disc_id),
+        count: Number(r.total),
+      }));
+    } catch (error) {
+      log.error("StatRepository.getTopUsersByMemory: failed", error);
+      return [];
+    }
+  }
+
+  /**
+   * Top users by reward/punishment count for a scope ("most rewarded/punished by"),
+   * from conditioning_history joined to users. Narrow by serverId / lineageId. All-
+   * time only — conditioning_history is a lifetime counter, not daily-bucketed.
+   *
+   * @param args - conditioning type (required), optional serverId / lineageId, limit.
+   */
+  async getConditioningTopUsers(args: {
+    serverId?: number;
+    lineageId?: number;
+    type: "reward" | "punish";
+    limit?: number;
+  }): Promise<TopUserEntry[]> {
+    try {
+      const limit = args.limit ?? 5;
+      const rows = await sql<{ user_id: number | string; user_disc_id: string; total: number | string }[]>`
+        SELECT ch.user_id, u.user_disc_id, COALESCE(SUM(ch.count), 0) AS total
+        FROM conditioning_history ch
+        JOIN users u ON u.user_id = ch.user_id
+        WHERE ch.conditioning_type = ${args.type}
+          AND (${args.serverId ?? null}::int IS NULL OR ch.server_id = ${args.serverId ?? null})
+          AND (${args.lineageId ?? null}::bigint IS NULL OR ch.persona_lineage_id = ${args.lineageId ?? null})
+        GROUP BY ch.user_id, u.user_disc_id
+        ORDER BY total DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({
+        userId: Number(r.user_id),
+        userDiscId: String(r.user_disc_id),
+        count: Number(r.total),
+      }));
+    } catch (error) {
+      log.error("StatRepository.getConditioningTopUsers: failed", error);
+      return [];
+    }
+  }
+
+  /**
+   * Per-model estimated token usage + cost, highest total-tokens first. Aggregates the
+   * tokens_in / tokens_out metrics (both keyed by model id) and joins llms pricing so
+   * each row carries input tokens, output tokens, and the per-direction cost — the
+   * richer "31,386 in / 155 out / $0.0000" model rows. Models with no pricing row
+   * (free / OpenRouter-dynamic) contribute 0 cost. Narrow by userId / serverId /
+   * lineageId; omit a filter to aggregate over it.
+   *
+   * @param args - optional scope filters, window, and result limit.
+   */
+  async getModelCostBreakdown(
+    args: { userId?: number; serverId?: number; lineageId?: number; limit?: number } & StatWindow,
+  ): Promise<ModelCostEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const limit = args.limit ?? 5;
+      const rows = await sql<
+        { model: string; in_tokens: number | string; out_tokens: number | string; cost: number | string }[]
+      >`
+        SELECT sc.metric_key AS model,
+          COALESCE(SUM(CASE WHEN sc.metric = 'tokens_in'  THEN sc.count ELSE 0 END), 0) AS in_tokens,
+          COALESCE(SUM(CASE WHEN sc.metric = 'tokens_out' THEN sc.count ELSE 0 END), 0) AS out_tokens,
+          COALESCE(SUM(
+            sc.count
+            * CASE sc.metric
+                WHEN 'tokens_in'  THEN COALESCE(l.input_price_per_million, 0)
+                WHEN 'tokens_out' THEN COALESCE(l.output_price_per_million, 0)
+                ELSE 0
+              END
+            / 1000000.0
+          ), 0) AS cost
+        FROM stat_counters sc
+        LEFT JOIN llms l ON l.llm_codename = sc.metric_key
+        WHERE sc.metric IN ('tokens_in', 'tokens_out')
+          AND (${args.userId ?? null}::int IS NULL OR sc.user_id = ${args.userId ?? null})
+          AND (${args.serverId ?? null}::int IS NULL OR sc.server_id = ${args.serverId ?? null})
+          AND (${args.lineageId ?? null}::bigint IS NULL OR sc.persona_lineage_id = ${args.lineageId ?? null})
+          AND sc.bucket >= ${from}::date
+        GROUP BY sc.metric_key
+        ORDER BY (
+          COALESCE(SUM(CASE WHEN sc.metric = 'tokens_in'  THEN sc.count ELSE 0 END), 0)
+          + COALESCE(SUM(CASE WHEN sc.metric = 'tokens_out' THEN sc.count ELSE 0 END), 0)
+        ) DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({
+        model: String(r.model),
+        inputTokens: Number(r.in_tokens),
+        outputTokens: Number(r.out_tokens),
+        cost: Number(r.cost),
+      }));
+    } catch (error) {
+      log.error("StatRepository.getModelCostBreakdown: failed", error);
+      return [];
+    }
+  }
+
+  /**
+   * Top emotion categories expressed, highest first. Joins the emoji_used / sticker_used
+   * metrics to the per-server emotion_key classification on server_emojis / server_stickers
+   * (set by `/server emojis|stickers initialize`) and sums both streams by emotion. Emojis
+   * and stickers not yet classified (NULL emotion_key) are excluded. Narrow by userId /
+   * serverId / lineageId; the join keys on each row's own server_id so the personal "global"
+   * scope correctly resolves emotions across every server.
+   *
+   * @param args - optional scope filters, window, and result limit.
+   */
+  async getEmotionBreakdown(
+    args: { userId?: number; serverId?: number; lineageId?: number; limit?: number } & StatWindow,
+  ): Promise<EmotionEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const limit = args.limit ?? 5;
+      const userId = args.userId ?? null;
+      const serverId = args.serverId ?? null;
+      const lineageId = args.lineageId ?? null;
+      const rows = await sql<{ emotion_key: string; total: number | string }[]>`
+        SELECT emotion_key, SUM(cnt) AS total FROM (
+          SELECT se.emotion_key AS emotion_key, sc.count AS cnt
+          FROM stat_counters sc
+          JOIN server_emojis se ON se.server_id = sc.server_id AND se.emoji_name = sc.metric_key
+          WHERE sc.metric = 'emoji_used' AND se.emotion_key IS NOT NULL
+            AND (${userId}::int IS NULL OR sc.user_id = ${userId})
+            AND (${serverId}::int IS NULL OR sc.server_id = ${serverId})
+            AND (${lineageId}::bigint IS NULL OR sc.persona_lineage_id = ${lineageId})
+            AND sc.bucket >= ${from}::date
+          UNION ALL
+          SELECT ss.emotion_key AS emotion_key, sc.count AS cnt
+          FROM stat_counters sc
+          JOIN server_stickers ss ON ss.server_id = sc.server_id AND ss.sticker_name = sc.metric_key
+          WHERE sc.metric = 'sticker_used' AND ss.emotion_key IS NOT NULL
+            AND (${userId}::int IS NULL OR sc.user_id = ${userId})
+            AND (${serverId}::int IS NULL OR sc.server_id = ${serverId})
+            AND (${lineageId}::bigint IS NULL OR sc.persona_lineage_id = ${lineageId})
+            AND sc.bucket >= ${from}::date
+        ) sub
+        GROUP BY emotion_key
+        ORDER BY total DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({ emotion: String(r.emotion_key), count: Number(r.total) }));
+    } catch (error) {
+      log.error("StatRepository.getEmotionBreakdown: failed", error);
+      return [];
     }
   }
 

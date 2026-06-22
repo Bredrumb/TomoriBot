@@ -7,12 +7,13 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import {
   buildPersonalTabs,
   buildSubtitle,
+  DEFAULT_TIMEFRAME,
   renderStatsDashboard,
   resolveWindowFrom,
   type StatsScope,
   type Timeframe,
   TIMEFRAME_VALUES,
-} from "./statsShared";
+} from "@/utils/stats/statsDashboard";
 
 /**
  * Configures the /stats personal subcommand: the invoking user's own usage stats,
@@ -24,15 +25,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand
     .setName("personal")
     .setDescription(localizer("en-US", "commands.stats.personal.description"))
-    .addStringOption((option) =>
-      option
-        .setName("timeframe")
-        .setDescription(localizer("en-US", "commands.stats.personal.timeframe_description"))
-        .setRequired(true)
-        .addChoices(
-          ...TIMEFRAME_VALUES.map((value) => ({ name: localizer("en-US", `commands.choices.${value}`), value })),
-        ),
-    )
+    // Required option first: Discord rejects a required option placed after an optional one.
     .addStringOption((option) =>
       option
         .setName("scope")
@@ -41,6 +34,16 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .addChoices(
           { name: localizer("en-US", "commands.choices.this_server"), value: "this_server" },
           { name: localizer("en-US", "commands.choices.global"), value: "global" },
+        ),
+    )
+    // Optional timeframe — defaults to all-time when omitted.
+    .addStringOption((option) =>
+      option
+        .setName("timeframe")
+        .setDescription(localizer("en-US", "commands.stats.personal.timeframe_description"))
+        .setRequired(false)
+        .addChoices(
+          ...TIMEFRAME_VALUES.map((value) => ({ name: localizer("en-US", `commands.choices.${value}`), value })),
         ),
     );
 
@@ -85,7 +88,7 @@ export async function execute(
     }
 
     // 3. Resolve options: timeframe → window floor, scope → optional server filter.
-    const timeframe = interaction.options.getString("timeframe", true) as Timeframe;
+    const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const scope = interaction.options.getString("scope", true) as StatsScope;
     const from = resolveWindowFrom(timeframe);
     const scopeServerId = scope === "this_server" ? serverId : undefined;
@@ -102,6 +105,7 @@ export async function execute(
       userDiscId: userData.user_disc_id,
       serverId,
       guildId: guild.id,
+      timeframe,
       from,
       scopeServerId,
       subtitle,

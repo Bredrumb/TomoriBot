@@ -8,11 +8,12 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import {
   buildPersonaTabs,
   buildSubtitle,
+  DEFAULT_TIMEFRAME,
   renderStatsDashboard,
   resolveWindowFrom,
   type Timeframe,
   TIMEFRAME_VALUES,
-} from "./statsShared";
+} from "@/utils/stats/statsDashboard";
 
 /**
  * Configures the /stats persona subcommand: pick a persona, then view that
@@ -28,7 +29,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
       option
         .setName("timeframe")
         .setDescription(localizer("en-US", "commands.stats.persona.timeframe_description"))
-        .setRequired(true)
+        .setRequired(false)
         .addChoices(
           ...TIMEFRAME_VALUES.map((value) => ({ name: localizer("en-US", `commands.choices.${value}`), value })),
         ),
@@ -80,7 +81,7 @@ export async function execute(
       return;
     }
 
-    const timeframe = interaction.options.getString("timeframe", true) as Timeframe;
+    const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const from = resolveWindowFrom(timeframe);
 
     // 2. Show the persona picker (ephemeral), preserving the selected button so the
@@ -111,6 +112,7 @@ export async function execute(
       guildId: guild.id,
       lineageId,
       personaName: selected.persona_nickname,
+      timeframe,
       from,
       subtitle: `${selected.persona_nickname} • ${subtitle}`,
     });
