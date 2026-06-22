@@ -128,6 +128,25 @@ export interface ModelUsageEntry {
   count: number;
 }
 
+/** One metric_key's summed count (emoji/sticker/sprite/tool/command breakdowns). */
+export interface MetricKeyEntry {
+  key: string;
+  count: number;
+}
+
+/** One user's summed count for a metric, with the Discord id for name resolution. */
+export interface TopUserEntry {
+  userId: number;
+  userDiscId: string;
+  count: number;
+}
+
+/** Estimated input/output token totals for a scope (see tokens_in / tokens_out). */
+export interface TokenTotals {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 /** Hour-of-day (0–23) and weekday (0=Sun–6=Sat) activity histograms. */
 export interface ActivityHistogram {
   byHour: Record<number, number>;
@@ -151,6 +170,13 @@ export interface GenerationTotals {
 
 /** Read-existing reward/punishment totals (conditioning_history). */
 export interface ConditioningTotals {
+  rewards: number;
+  punishments: number;
+}
+
+/** Per-persona reward/punishment totals (conditioning_history), one row per lineage. */
+export interface ConditioningPersonaEntry {
+  lineageId: number;
   rewards: number;
   punishments: number;
 }
@@ -514,15 +540,18 @@ export class StatRepository implements IRepository<null> {
    * Hour-of-day and weekday activity histograms for a user, from the active_hour
    * metric (hour rides metric_key; weekday is derived from the bucket DATE).
    */
-  async getActivityHistogram(args: { userId: number } & StatWindow): Promise<ActivityHistogram> {
+  async getActivityHistogram(args: { userId: number; serverId?: number } & StatWindow): Promise<ActivityHistogram> {
     const byHour: Record<number, number> = {};
     const byWeekday: Record<number, number> = {};
     try {
       const from = windowFloor(args.from);
+      const serverId = args.serverId ?? null;
       const hourRows = await sql`
         SELECT metric_key, SUM(count) AS total
         FROM stat_counters
-        WHERE metric = 'active_hour' AND user_id = ${args.userId} AND bucket >= ${from}::date
+        WHERE metric = 'active_hour' AND user_id = ${args.userId}
+          AND (${serverId}::int IS NULL OR server_id = ${serverId})
+          AND bucket >= ${from}::date
         GROUP BY metric_key
       `;
       for (const r of hourRows) {
@@ -533,7 +562,9 @@ export class StatRepository implements IRepository<null> {
       const dowRows = await sql`
         SELECT EXTRACT(DOW FROM bucket)::int AS dow, SUM(count) AS total
         FROM stat_counters
-        WHERE metric = 'active_hour' AND user_id = ${args.userId} AND bucket >= ${from}::date
+        WHERE metric = 'active_hour' AND user_id = ${args.userId}
+          AND (${serverId}::int IS NULL OR server_id = ${serverId})
+          AND bucket >= ${from}::date
         GROUP BY dow
       `;
       for (const r of dowRows) {
@@ -550,12 +581,14 @@ export class StatRepository implements IRepository<null> {
    * set of distinct active bucket dates. "Current" counts back from today or
    * yesterday (so the streak is not considered broken before the day ends).
    */
-  async getStreak(args: { userId: number }): Promise<StreakInfo> {
+  async getStreak(args: { userId: number; serverId?: number }): Promise<StreakInfo> {
     try {
+      const serverId = args.serverId ?? null;
       const rows = await sql<{ bucket: string | Date }[]>`
         SELECT DISTINCT bucket
         FROM stat_counters
         WHERE user_id = ${args.userId}
+          AND (${serverId}::int IS NULL OR server_id = ${serverId})
         ORDER BY bucket DESC
       `;
       const days = rows.map((r) =>
@@ -596,6 +629,119 @@ export class StatRepository implements IRepository<null> {
     } catch (error) {
       log.error(`StatRepository.getStreak: failed for user ${args.userId}`, error);
       return { currentStreak: 0, longestStreak: 0, lastActiveDate: null };
+    }
+  }
+
+  /**
+   * Generic metric_key breakdown (highest first) for any keyed metric — emoji_used,
+   * sticker_used, sprite_shown, tool_used, command_used, model_used. Scope narrows by
+   * any combination of userId / serverId / lineageId; omit a filter to aggregate over it.
+   *
+   * @param args - metric (required), optional scope filters, window, and limit.
+   */
+  async getMetricKeyBreakdown(
+    args: { metric: StatMetric; userId?: number; serverId?: number; lineageId?: number; limit?: number } & StatWindow,
+  ): Promise<MetricKeyEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const limit = args.limit ?? 10;
+      const rows = await sql<{ metric_key: string; total: number | string }[]>`
+        SELECT metric_key, SUM(count) AS total
+        FROM stat_counters
+        WHERE metric = ${args.metric}
+          AND (${args.userId ?? null}::int IS NULL OR user_id = ${args.userId ?? null})
+          AND (${args.serverId ?? null}::int IS NULL OR server_id = ${args.serverId ?? null})
+          AND (${args.lineageId ?? null}::bigint IS NULL OR persona_lineage_id = ${args.lineageId ?? null})
+          AND bucket >= ${from}::date
+        GROUP BY metric_key
+        ORDER BY total DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({ key: String(r.metric_key), count: Number(r.total) }));
+    } catch (error) {
+      log.error(`StatRepository.getMetricKeyBreakdown: failed for ${args.metric}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Summed total of one metric across a scope (e.g. all message_sent for a user).
+   * Scope narrows by any combination of userId / serverId / lineageId.
+   *
+   * @param args - metric (required), optional scope filters, and window.
+   */
+  async getMetricTotal(
+    args: { metric: StatMetric; userId?: number; serverId?: number; lineageId?: number } & StatWindow,
+  ): Promise<number> {
+    try {
+      const from = windowFloor(args.from);
+      const [row] = await sql`
+        SELECT COALESCE(SUM(count), 0) AS total
+        FROM stat_counters
+        WHERE metric = ${args.metric}
+          AND (${args.userId ?? null}::int IS NULL OR user_id = ${args.userId ?? null})
+          AND (${args.serverId ?? null}::int IS NULL OR server_id = ${args.serverId ?? null})
+          AND (${args.lineageId ?? null}::bigint IS NULL OR persona_lineage_id = ${args.lineageId ?? null})
+          AND bucket >= ${from}::date
+      `;
+      return Number(row?.total ?? 0);
+    } catch (error) {
+      log.error(`StatRepository.getMetricTotal: failed for ${args.metric}`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Estimated input/output token totals for a scope (the character-estimated
+   * tokens_in / tokens_out metrics). Pairs with getEstimatedCost for the cost row.
+   *
+   * @param args - optional scope filters and window.
+   */
+  async getTokenTotals(
+    args: { userId?: number; serverId?: number; lineageId?: number } & StatWindow,
+  ): Promise<TokenTotals> {
+    const [inputTokens, outputTokens] = await Promise.all([
+      this.getMetricTotal({ ...args, metric: "tokens_in" }),
+      this.getMetricTotal({ ...args, metric: "tokens_out" }),
+    ]);
+    return { inputTokens, outputTokens };
+  }
+
+  /**
+   * Top users on a server by a metric (default message_sent), highest first, joined to
+   * `users` for the Discord id so the caller can resolve display names. With a lineageId
+   * this is "the persona's top people" (the /stats persona "favorite person" read); without
+   * it, the server leaderboard.
+   *
+   * @param args - serverId (required), optional lineageId / metric / limit, and window.
+   */
+  async getTopUsers(
+    args: { serverId: number; lineageId?: number; metric?: StatMetric; limit?: number } & StatWindow,
+  ): Promise<TopUserEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const metric = args.metric ?? "message_sent";
+      const limit = args.limit ?? 5;
+      const rows = await sql<{ user_id: number | string; user_disc_id: string; total: number | string }[]>`
+        SELECT sc.user_id, u.user_disc_id, SUM(sc.count) AS total
+        FROM stat_counters sc
+        JOIN users u ON u.user_id = sc.user_id
+        WHERE sc.metric = ${metric}
+          AND sc.server_id = ${args.serverId}
+          AND (${args.lineageId ?? null}::bigint IS NULL OR sc.persona_lineage_id = ${args.lineageId ?? null})
+          AND sc.bucket >= ${from}::date
+        GROUP BY sc.user_id, u.user_disc_id
+        ORDER BY total DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({
+        userId: Number(r.user_id),
+        userDiscId: String(r.user_disc_id),
+        count: Number(r.total),
+      }));
+    } catch (error) {
+      log.error(`StatRepository.getTopUsers: failed for server ${args.serverId}`, error);
+      return [];
     }
   }
 
@@ -665,6 +811,60 @@ export class StatRepository implements IRepository<null> {
     } catch (error) {
       log.error("StatRepository.getConditioningTotals: failed", error);
       return { rewards: 0, punishments: 0 };
+    }
+  }
+
+  /**
+   * Per-persona reward/punishment totals (conditioning_history), for "Most Rewarded /
+   * Most Punished Personas". NOTE: conditioning_history counts are lifetime per
+   * (action, reason, user, persona) tuple — not daily-bucketed — so this is all-time
+   * and intentionally not windowed. Narrow by serverId / userId / lineageId.
+   */
+  async getConditioningPersonaBreakdown(args: {
+    serverId?: number;
+    userId?: number;
+    lineageId?: number;
+  }): Promise<ConditioningPersonaEntry[]> {
+    try {
+      const rows = await sql<
+        { persona_lineage_id: number | string; conditioning_type: string; total: number | string }[]
+      >`
+        SELECT persona_lineage_id, conditioning_type, COALESCE(SUM(count), 0) AS total
+        FROM conditioning_history
+        WHERE (${args.serverId ?? null}::int IS NULL OR server_id = ${args.serverId ?? null})
+          AND (${args.userId ?? null}::int IS NULL OR user_id = ${args.userId ?? null})
+          AND (${args.lineageId ?? null}::bigint IS NULL OR persona_lineage_id = ${args.lineageId ?? null})
+        GROUP BY persona_lineage_id, conditioning_type
+      `;
+      const byLineage = new Map<number, ConditioningPersonaEntry>();
+      for (const r of rows) {
+        const lineageId = Number(r.persona_lineage_id);
+        const entry = byLineage.get(lineageId) ?? { lineageId, rewards: 0, punishments: 0 };
+        if (r.conditioning_type === "reward") entry.rewards = Number(r.total);
+        else if (r.conditioning_type === "punish") entry.punishments = Number(r.total);
+        byLineage.set(lineageId, entry);
+      }
+      return [...byLineage.values()];
+    } catch (error) {
+      log.error("StatRepository.getConditioningPersonaBreakdown: failed", error);
+      return [];
+    }
+  }
+
+  /**
+   * Count of long-term personal memories a user has saved. personal_memories is
+   * user+lineage scoped (no server_id), so this is global per user regardless of the
+   * /stats scope toggle. Read-existing (not a stat_counters metric).
+   */
+  async getPersonalMemoryCount(args: { userId: number }): Promise<number> {
+    try {
+      const [row] = await sql`
+        SELECT COUNT(*) AS total FROM personal_memories WHERE user_id = ${args.userId}
+      `;
+      return Number(row?.total ?? 0);
+    } catch (error) {
+      log.error(`StatRepository.getPersonalMemoryCount: failed for user ${args.userId}`, error);
+      return 0;
     }
   }
 

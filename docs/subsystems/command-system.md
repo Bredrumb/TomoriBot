@@ -133,6 +133,7 @@ handler.
 - `server`
 - `speech`
 - `st-preset`
+- `stats`
 - `support`
 - `tool`
 
@@ -140,7 +141,7 @@ handler.
 
 Defined in `commandLoader.ts`:
 
-- Guild-only categories: `server`, `conditioning`
+- Guild-only categories: `server`, `conditioning`, `stats`
 - Manage Guild required by default: `config`, `server`
 
 ## Localization Strategy for Command Metadata
@@ -419,6 +420,9 @@ Rules:
 - `scheduled-task`: edit, remove
 - `conditioning`: manage, reward(headpat/hug/kiss/tickle), punish(spank/pinch/bite/squeeze)
 - `tool`: ping, status, refresh, compact, comment
+- `stats`: personal(scope toggle), persona(picker), server — each takes a required `timeframe`
+
+`/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes a required `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`); `personal` adds a `scope` choice (`This Server` / `All Servers`). The result is a **public, invoker-controlled tabbed dashboard** (`src/commands/stats/statsShared.ts`): a row of named category buttons swaps which stat embed is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (`STATS_DASHBOARD_TIMEOUT_MS`, default 5 min). `/stats persona` first opens the standard `replyPaginatedPersonaChoicesV2` picker, then renders the dashboard publicly from the selected button interaction. Token and cost figures are character-based estimates (surfaced as such in the footer). Timeframe windows use the daily-bucket floor, so `Today` is the current UTC day, not a rolling 24h.
 
 `/server auto-trigger` is channel-scoped and uses one shared cycle across its configured channels. Threshold `0` enables always-reply in those channels. Positive values use either a fixed trigger (`min = max`) or a shared inclusive random range (`min-max`), rerolling after each successful auto-trigger. The cycle only advances on qualifying real user-like messages; TomoriBot and alter webhook self-messages do not advance or consume the auto-trigger counter. Removing a channel disables auto-trigger behavior for that channel. `/server auto-trigger channels` can also target a single channel and assign one persona to that room's auto-trigger fallback instead of always using the main persona.
 
