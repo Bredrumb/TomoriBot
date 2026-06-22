@@ -478,12 +478,23 @@ export async function buildPersonalTabs(args: {
   let memoriesSaved = 0;
   let memoryByPersona: PersonaAffinityEntry[] = [];
   let conditioningByPersona: ConditioningPersonaEntry[] = [];
+  let conditioning = { rewards: 0, punishments: 0 };
+  let generations: GenerationTotals = { textGenerations: 0, imageGenerations: 0, videoGenerations: 0 };
   if (isAllTime) {
-    [memoriesSaved, memoryByPersona, conditioningByPersona] = await Promise.all([
+    [memoriesSaved, memoryByPersona, conditioningByPersona, conditioning] = await Promise.all([
       statRepository.getPersonalMemoryCount({ userId }),
       statRepository.getPersonalMemoryByPersona({ userId, limit: 5 }),
       statRepository.getConditioningPersonaBreakdown({ userId, serverId: scopeServerId }),
+      statRepository.getConditioningTotals({ userId, serverId: scopeServerId }),
     ]);
+    // Generations live in the per-server quota tables (no lineage / no cross-server
+    // rollup), so they are only meaningful for the this-server scope.
+    if (scopeServerId !== undefined) {
+      generations = await statRepository.getGenerationTotals({
+        serverId: scopeServerId,
+        userDiscId: args.userDiscId,
+      });
+    }
   }
 
   const unitMemories = localizer(locale, "commands.stats.units.memories_saved");
@@ -510,7 +521,7 @@ export async function buildPersonalTabs(args: {
 
   // ── Overview (the most interesting stats, duped freely into detail tabs). ──
   const overviewFields: StatField[] = [
-    statField("commands.stats.fields.messages", fmtInt(messages)),
+    statField("commands.stats.fields.messages_personal", fmtInt(messages)),
     statField("commands.stats.fields.commands", fmtInt(commands)),
     statField("commands.stats.fields.favorite_persona_short", favoritePersonaName),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
@@ -537,7 +548,18 @@ export async function buildPersonalTabs(args: {
     );
   }
   if (isAllTime) {
-    overviewFields.push(statField("commands.stats.fields.memories_saved", fmtInt(memoriesSaved)));
+    overviewFields.push(
+      statField("commands.stats.fields.personal_memories", fmtInt(memoriesSaved)),
+      statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards)),
+      statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
+    );
+    // Generations only render for the this-server scope (quota tables are per-server).
+    if (scopeServerId !== undefined) {
+      overviewFields.push(
+        statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
+        statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
+      );
+    }
   }
 
   // ── Personas tab. ──
@@ -616,7 +638,7 @@ export async function buildPersonalTabs(args: {
       id: "expression",
       labelKey: "commands.stats.tabs.expression_label",
       page: page("commands.stats.tabs.expression_title", subtitle, [
-        statField("commands.stats.fields.top_emotions", emotionList(locale, emotions), false),
+        statField("commands.stats.fields.top_emotions_caused", emotionList(locale, emotions), false),
         statField(
           "commands.stats.fields.top_emoji_received",
           rankedList(
@@ -664,11 +686,12 @@ export async function buildPersonaTabs(args: {
   const scope = { serverId, lineageId, from };
 
   // 1. Always-available reads (windowable).
-  const [messages, topUsers, modelCost, tokens, emoji, stickers, sprites, emotions] = await Promise.all([
+  const [messages, topUsers, modelCost, tokens, cost, emoji, stickers, sprites, emotions] = await Promise.all([
     statRepository.getMetricTotal({ metric: "message_sent", ...scope }),
     statRepository.getTopUsers({ serverId, lineageId, from, limit: 5 }),
     statRepository.getModelCostBreakdown({ serverId, lineageId, from, limit: 5 }),
     statRepository.getTokenTotals(scope),
+    statRepository.getEstimatedCost({ serverId, lineageId, from }),
     statRepository.getMetricKeyBreakdown({ metric: "emoji_used", ...scope, limit: 5 }),
     statRepository.getMetricKeyBreakdown({ metric: "sticker_used", ...scope, limit: 5 }),
     statRepository.getMetricKeyBreakdown({ metric: "sprite_shown", ...scope, limit: 5 }),
@@ -677,14 +700,19 @@ export async function buildPersonaTabs(args: {
 
   // 2. All-time-only reads (conditioning + memories are not daily-bucketed).
   let conditioning = { rewards: 0, punishments: 0 };
-  let memoryCount = 0;
+  let personalMemoryCount = 0;
+  let serverMemoryCount = 0;
   let rewardedBy: TopUserEntry[] = [];
   let punishedBy: TopUserEntry[] = [];
   let remembered: TopUserEntry[] = [];
   if (isAllTime) {
-    [conditioning, memoryCount, rewardedBy, punishedBy, remembered] = await Promise.all([
+    [conditioning, personalMemoryCount, serverMemoryCount, rewardedBy, punishedBy, remembered] = await Promise.all([
       statRepository.getConditioningTotals({ serverId, lineageId }),
+      // People this persona has personal memories about (global per lineage — personal
+      // memories carry no server_id).
       statRepository.getPersonaMemoryCount({ lineageId }),
+      // Shared facts this persona knows about THIS server.
+      statRepository.getServerMemoryCount({ serverId, lineageId }),
       statRepository.getConditioningTopUsers({ serverId, lineageId, type: "reward", limit: 5 }),
       statRepository.getConditioningTopUsers({ serverId, lineageId, type: "punish", limit: 5 }),
       statRepository.getTopUsersByMemory({ serverId, lineageId, limit: 5 }),
@@ -696,17 +724,18 @@ export async function buildPersonaTabs(args: {
   const unitRewards = localizer(locale, "commands.stats.units.rewards");
   const unitPunishments = localizer(locale, "commands.stats.units.punishments");
 
-  // ── Overview. ──
+  // ── Overview (mirrors the personal/server core: messages, cost, memories,
+  //    rewards/punishments; raw token volume lives in the Models tab). ──
   const overviewFields: StatField[] = [
-    statField("commands.stats.fields.messages", fmtInt(messages)),
-    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
-    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
+    statField("commands.stats.fields.messages_persona", fmtInt(messages)),
+    statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
   if (isAllTime) {
     overviewFields.push(
-      statField("commands.stats.fields.memories_saved", fmtInt(memoryCount)),
-      statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards)),
-      statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
+      statField("commands.stats.fields.personal_memories", fmtInt(personalMemoryCount)),
+      statField("commands.stats.fields.server_memories", fmtInt(serverMemoryCount)),
+      statField("commands.stats.fields.rewards_received", fmtInt(conditioning.rewards)),
+      statField("commands.stats.fields.punishments_received", fmtInt(conditioning.punishments)),
     );
   }
 
@@ -770,6 +799,9 @@ export async function buildPersonaTabs(args: {
       labelKey: "commands.stats.tabs.models_label",
       page: page("commands.stats.tabs.models_title", subtitle, [
         statField("commands.stats.fields.top_models", modelCostList(locale, modelCost), false),
+        statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
+        statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
+        statField("commands.stats.fields.est_cost", fmtUsd(cost)),
       ]),
     },
     {
@@ -857,11 +889,17 @@ export async function buildServerTabs(args: {
   let conditioning = { rewards: 0, punishments: 0 };
   let generations: GenerationTotals = { textGenerations: 0, imageGenerations: 0, videoGenerations: 0 };
   let memorableMembers: TopUserEntry[] = [];
+  let serverMemoryCount = 0;
+  let memberMemoryCount = 0;
   if (isAllTime) {
-    [conditioning, generations, memorableMembers] = await Promise.all([
+    [conditioning, generations, memorableMembers, serverMemoryCount, memberMemoryCount] = await Promise.all([
       statRepository.getConditioningTotals({ serverId }),
       statRepository.getGenerationTotals({ serverId }),
       statRepository.getTopUsersByMemory({ serverId, limit: 5 }),
+      // Server-scoped shared facts (exact) vs. members' personal memories (approximate,
+      // cross-server) — kept as separate rows since they are different kinds of memory.
+      statRepository.getServerMemoryCount({ serverId }),
+      statRepository.getMemberMemoryCount({ serverId }),
     ]);
   }
 
@@ -869,7 +907,8 @@ export async function buildServerTabs(args: {
   const unitReceived = localizer(locale, "commands.stats.units.messages_received");
   const unitMemories = localizer(locale, "commands.stats.units.memories_saved");
 
-  // ── Overview. ──
+  // ── Overview (shared core; Images/Videos are server-only — quota tables carry no
+  //    persona lineage, so they cannot appear on the persona view). ──
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages", fmtInt(messages)),
     statField("commands.stats.fields.commands", fmtInt(commands)),
@@ -877,10 +916,12 @@ export async function buildServerTabs(args: {
   ];
   if (isAllTime) {
     overviewFields.push(
-      statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
-      statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
+      statField("commands.stats.fields.server_memories", fmtInt(serverMemoryCount)),
+      statField("commands.stats.fields.member_memories", fmtInt(memberMemoryCount)),
       statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards)),
       statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
+      statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
+      statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
     );
   }
 

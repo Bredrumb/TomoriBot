@@ -519,9 +519,11 @@ export class StatRepository implements IRepository<null> {
    * `tokens_out`), so cost applies the correct per-direction rate exactly —
    * input tokens × input price + output tokens × output price — rather than a
    * blended average. Models with no pricing row (e.g. free / OpenRouter-dynamic)
-   * contribute 0. Provide at least one of userId / serverId.
+   * contribute 0. Narrow by any combination of userId / serverId / lineageId.
    */
-  async getEstimatedCost(args: { userId?: number; serverId?: number } & StatWindow): Promise<number> {
+  async getEstimatedCost(
+    args: { userId?: number; serverId?: number; lineageId?: number } & StatWindow,
+  ): Promise<number> {
     try {
       const from = windowFloor(args.from);
       const [row] = await sql`
@@ -541,6 +543,7 @@ export class StatRepository implements IRepository<null> {
         WHERE sc.metric IN ('tokens_in', 'tokens_out')
           AND (${args.userId ?? null}::int IS NULL OR sc.user_id = ${args.userId ?? null})
           AND (${args.serverId ?? null}::int IS NULL OR sc.server_id = ${args.serverId ?? null})
+          AND (${args.lineageId ?? null}::bigint IS NULL OR sc.persona_lineage_id = ${args.lineageId ?? null})
           AND sc.bucket >= ${from}::date
       `;
       return Number(row?.cost ?? 0);
@@ -1132,6 +1135,49 @@ export class StatRepository implements IRepository<null> {
     } catch (error) {
       log.error("StatRepository.getEmotionBreakdown: failed", error);
       return [];
+    }
+  }
+
+  /**
+   * Count of server-scoped shared memories (`server_memories`) for a server, optionally
+   * narrowed to one persona lineage. Exact and genuinely server-scoped — unlike
+   * `personal_memories`, which has no `server_id`. Powers the "Server Memories" row on
+   * both the server and persona Overviews. All-time only (memory tables are not bucketed).
+   *
+   * @param args - serverId (required) and optional lineageId filter.
+   */
+  async getServerMemoryCount(args: { serverId: number; lineageId?: number }): Promise<number> {
+    try {
+      const [row] = await sql`
+        SELECT COUNT(*) AS total FROM server_memories
+        WHERE server_id = ${args.serverId}
+          AND (${args.lineageId ?? null}::bigint IS NULL OR persona_lineage_id = ${args.lineageId ?? null})
+      `;
+      return Number(row?.total ?? 0);
+    } catch (error) {
+      log.error(`StatRepository.getServerMemoryCount: failed for server ${args.serverId}`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Approximate count of members' personal memories: the `personal_memories` of users
+   * active on the server (joined via stat_counters, since personal_memories has no
+   * server_id). APPROXIMATE by nature — a member's personal memory bank spans every
+   * server they share with the bot, so this is "memories about this server's members",
+   * not "memories created here". Powers the server Overview "Member Memories" row.
+   * All-time only.
+   */
+  async getMemberMemoryCount(args: { serverId: number }): Promise<number> {
+    try {
+      const [row] = await sql`
+        SELECT COUNT(*) AS total FROM personal_memories
+        WHERE user_id IN (SELECT DISTINCT user_id FROM stat_counters WHERE server_id = ${args.serverId})
+      `;
+      return Number(row?.total ?? 0);
+    } catch (error) {
+      log.error(`StatRepository.getMemberMemoryCount: failed for server ${args.serverId}`, error);
+      return 0;
     }
   }
 
