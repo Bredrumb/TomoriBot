@@ -38,6 +38,7 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repositor
 | `ServerScheduleRepository` | Reminder + random-trigger scheduling |
 | `ShortTermMemoryRepository` | Short-term per-channel/user conversation memory |
 | `SpeechRepository` | Speech (TTS/STT) server configuration |
+| `StatRepository` | Buffered usage-stat counters + read/aggregation (`stat_counters`) |
 | `ToolRepository` | Tool configurations and API key status |
 | `UserRepository` | User registration, privacy, personalization, spotlight |
 | `WhitelistRepository` | Channel, persona, and role whitelist rules |
@@ -325,6 +326,27 @@ Two runtime-state tables hold high-frequency telemetry that does not belong in i
 | `persona_autoch_runtime_state` | `personas(persona_id)` | `autoch_counter`, `autoch_next_target` | migration 015 |
 
 **`persona_autoch_runtime_state`** — FK column is `persona_id` (same pattern as `server_auto_trigger_persona_overrides`). Mutated on every message processed by the autochat tick via UPSERT (`ConfigRepository.incrementTomoriCounter`). ON DELETE CASCADE ensures runtime cleanup is atomic with persona deletion. New personas auto-initialize on first UPSERT; the state is also loaded during `PersonaRepository.loadTomoriState` and batch-loaded by `loadAllPersonasForServer`. `TomoriState.autoch_counter` and `TomoriState.autoch_next_target` are sourced from this table, not from `personas`.
+
+### Stat tracking (usage telemetry, migration 035)
+
+`stat_counters` is high-frequency usage telemetry and shares the runtime-state class: it cascades on its FKs and is **excluded from export** (same drift-checker exemption list as the `*_runtime_state` tables, even though its name omits the `_runtime_state` suffix because it is a per-day counter table, not a single-row state row). Owned by `StatRepository`. See `plans/stat-tracking.md` for the full design.
+
+It is a **long/narrow, pre-aggregated counter table** — one row per `(server_id, user_id, persona_lineage_id, metric, metric_key, bucket)`, incremented by additive UPSERT, never an event log. A day of N events for one tuple is one row with `count = N`.
+
+| Column | Notes |
+|---|---|
+| `server_id` / `user_id` | NOT NULL FKs (`ON DELETE CASCADE`). `user_id` is the internal users id, never the Discord snowflake. |
+| `persona_lineage_id` | `BIGINT NOT NULL DEFAULT 0`. Cross-server persona anchor (mirrors `personal_memories` / `conditioning_history`). `0` sentinel = persona-agnostic metric. |
+| `metric` / `metric_key` | Metric name + sub-key (command name, model id, hour, or `''`). Catalog: `src/constants/statMetrics.ts`. |
+| `bucket` | Plain `DATE` (daily grain). Weeks/months/all-time compose via `SUM`; a future downsampling job needs no schema change. |
+| `count` | `BIGINT` generic accumulator — events add 1, token metrics add the token delta. |
+
+Key behaviors:
+
+- **Buffered writes.** `StatRepository.recordStat(...)` accumulates deltas in an in-memory `Map` keyed by the PK tuple; `flush()` drains them as one additive UPSERT per distinct tuple (`count = count + EXCLUDED.count`). Flush triggers: interval (`STAT_FLUSH_INTERVAL_MS`), size cap (`STAT_FLUSH_MAX_BUFFER`), and graceful shutdown (`statRepository.shutdown()` from the SIGINT/SIGTERM handler). A hard crash loses only the unflushed buffer — accepted tradeoff for aggregate telemetry. Kill switch: `STAT_TRACKING_ENABLED`.
+- **No mutating-column indexes.** Secondary indexes cover only the stable dimension columns; `count` / `last_at` are never indexed so hot counter rows keep Postgres HOT updates. "Top N" is sorted at read time.
+- **Reads** (`getFavoritePersona`, `getTopCommands` / `getUnusedCommands`, `getModelBreakdown`, `getEstimatedCost`, `getActivityHistogram`, `getStreak`) are windowed by `bucket >= from` + `SUM` and hit the DB directly (no read cache in Phase 1). Read-existing wrappers (`getGenerationTotals`, `getConditioningTotals`) aggregate the quota / `conditioning_history` tables instead of double-tracking.
+- **Instrumented chokepoints (Phase 1):** `command_used` (command dispatch), `message_sent` / `active_hour` / `model_used` (post-turn effects), `tool_used` (single tool-dispatch chokepoint; per-tool breakdown via `metric_key`). Reserved in the catalog but not yet emitted: `tokens_in` / `tokens_out` (provider `StreamResult` does not surface usage — needs provider plumbing; tracked per direction so cost applies input vs output price exactly), `emoji_used` / `sprite_shown` (deep hot-path text/stream sites).
 
 ## Migration System (Phase 6+)
 

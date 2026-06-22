@@ -326,6 +326,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     locale: turn.lockedTurn.admission.locale,
     serverDiscId: turn.serverDiscId,
     userDiscId: turn.userDiscId,
+    triggererUserId: turn.userRow.user_id,
     isDMChannel: turn.isDMChannel,
     isFromQueue: incoming.isFromQueue,
     isStopResponse: !!incoming.isStopResponse,

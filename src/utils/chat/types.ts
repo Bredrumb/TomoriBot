@@ -201,6 +201,8 @@ export interface ChatTurnContext {
   locale: string;
   serverDiscId: string;
   userDiscId: string;
+  /** Internal users FK of the triggerer, resolved once at turn planning (no per-turn lookup). */
+  triggererUserId: number | undefined;
   isDMChannel: boolean;
   isFromQueue: boolean;
   isStopResponse: boolean;

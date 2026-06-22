@@ -10,6 +10,7 @@ import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
 import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/utils/chat/contextAnnotations";
 import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
+import { statRepository } from "@/utils/db/repositories";
 import type { ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 
 const MAX_EMPTY_RESPONSE_RETRIES = 2;
@@ -25,6 +26,61 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   await writeShortTermMemory(context, result);
   await emitThoughtLog(context, result);
   scheduleBoomerangFollowUp(context);
+  // Fire-and-forget so stat tracking never adds latency to the response path.
+  void recordUsageStats(context, result);
+}
+
+/**
+ * Records per-turn usage stats (message_sent, active_hour, model_used) at the
+ * single post-turn chokepoint. Only counts turns that actually produced a
+ * persona response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
+ *
+ * NOTE: tokens_in / tokens_out are intentionally not recorded here in Phase 1 —
+ * the provider StreamResult does not surface token usage, so accurate per-
+ * direction token counting needs provider-level plumbing (a follow-up). The data
+ * layer already supports both metrics (StatRepository.recordStat / getEstimatedCost).
+ *
+ * @param context - The completed turn's context (model + persona + server scope).
+ * @param result  - The turn result; personaResponses carry the responding lineages.
+ */
+async function recordUsageStats(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  // 1. Only count turns that produced a real persona response, and not DMs.
+  if (result.personaResponses.length === 0 || context.isDMChannel) return;
+  const serverId = context.tomoriState.server_id;
+  if (!serverId) return;
+
+  try {
+    // 2. Triggerer's internal users FK — resolved once at turn planning and
+    //    carried on the context, so stat recording needs no per-turn DB lookup.
+    const userId = context.triggererUserId;
+    if (!userId) return;
+
+    const hour = String(new Date().getUTCHours());
+    const modelCodename = context.tomoriState.llm.llm_codename;
+    const primaryLineage = context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0;
+
+    // 3. Once per turn: the model used and the active hour-of-day, keyed to the
+    //    answering persona. (active_hour is summed across lineages at read time,
+    //    so recording it once per turn keeps the hour histogram un-inflated.)
+    statRepository.recordStat({
+      serverId,
+      userId,
+      lineageId: primaryLineage,
+      metric: "model_used",
+      metricKey: modelCodename,
+    });
+    statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "active_hour", metricKey: hour });
+
+    // 4. Per distinct responding persona lineage: one message exchanged. This is
+    //    what drives favorite-persona affinity (who the user talks to most).
+    const lineages = new Set<number>();
+    for (const response of result.personaResponses) lineages.add(response.personaLineageId ?? primaryLineage);
+    for (const lineageId of lineages) {
+      statRepository.recordStat({ serverId, userId, lineageId, metric: "message_sent" });
+    }
+  } catch (error) {
+    log.warn("Failed to record usage stats for turn", error);
+  }
 }
 
 async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

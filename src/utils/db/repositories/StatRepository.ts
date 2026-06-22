@@ -1,0 +1,683 @@
+/**
+ * StatRepository — write path + flush buffer for the `stat_counters` telemetry
+ * table (plans/stat-tracking.md, Phase 1).
+ *
+ * Increments do NOT hit the DB directly. `recordStat` accumulates deltas into an
+ * in-memory buffer keyed by the same tuple as the table PK, so a buffer entry
+ * maps 1:1 to one additive UPSERT. The buffer is drained by `flush()`, triggered
+ * on an interval, when it grows past a size cap, and on graceful shutdown.
+ *
+ * Crash window (documented tradeoff, plan §4): anything still buffered at a hard
+ * crash is lost. For aggregate usage telemetry this is acceptable — graceful
+ * shutdown covers the normal restart case.
+ *
+ * Export contract: stat_counters is high-frequency runtime telemetry and is not
+ * exportable (it is on the drift-checker export-exemption list). toExportShape
+ * returns null; IRepository is implemented as a no-op stub.
+ *
+ * Read/aggregation methods (§6) live on this same class, below the write path,
+ * and read straight from the DB (no read cache in Phase 1).
+ */
+import type { StatMetric } from "@/constants/statMetrics";
+import { PERSONA_AGNOSTIC_METRICS } from "@/constants/statMetrics";
+import { sql } from "@/utils/db/client";
+import { log } from "@/utils/misc/logger";
+import type { SQL } from "bun";
+import type { IRepository } from "./IRepository";
+
+// ── Env knobs (CLAUDE.md rule #6 — documented in .env.optional.example) ───────
+
+/**
+ * Reads a non-negative integer env var, falling back to a default when unset or
+ * malformed. Mirrors the readIntEnv pattern used by the preset avatar reconciler.
+ */
+function readIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+/** Master kill switch — set false to disable all stat recording (write side). */
+const STAT_TRACKING_ENABLED = (process.env.STAT_TRACKING_ENABLED?.trim().toLowerCase() ?? "true") !== "false";
+/** Interval between automatic buffer flushes. */
+const FLUSH_INTERVAL_MS = readIntEnv("STAT_FLUSH_INTERVAL_MS", 5000);
+/** Buffer entry count that forces an immediate flush before the next interval. */
+const FLUSH_MAX_BUFFER = readIntEnv("STAT_FLUSH_MAX_BUFFER", 1000);
+
+/** Delimiter for buffer keys — unit separator, never present in metric data. */
+const KEY_DELIMITER = "\x1f";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+/** Input accepted by recordStat. lineageId/metricKey/delta have sensible defaults. */
+export interface RecordStatInput {
+  /** Internal servers FK (never the Discord snowflake). */
+  serverId: number;
+  /** Internal users FK (never the Discord snowflake). */
+  userId: number;
+  /** Persona lineage anchor. Omit (or 0) for persona-agnostic metrics. */
+  lineageId?: number;
+  /** Metric name from the catalog. */
+  metric: StatMetric;
+  /** Sub-key (command name, model id, hour, …). Defaults to "" for scalar metrics. */
+  metricKey?: string;
+  /** Amount to add. Defaults to 1 (event count); pass token delta for token metrics. */
+  delta?: number;
+}
+
+/** One accumulated buffer entry — maps 1:1 to a single additive UPSERT. */
+interface StatBufferEntry {
+  serverId: number;
+  userId: number;
+  lineageId: number;
+  metric: StatMetric;
+  metricKey: string;
+  bucket: string; // YYYY-MM-DD
+  delta: number;
+  firstAt: Date;
+  lastAt: Date;
+}
+
+/** UTC YYYY-MM-DD for the current day — the daily bucket grain. */
+function currentBucketDate(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+/** All-time floor for windowed `bucket >= from` queries (avoids branching SQL). */
+const ALL_TIME_FLOOR = "0001-01-01";
+
+/** Normalizes a window `from` (Date | YYYY-MM-DD | undefined) to a date string. */
+function windowFloor(from?: Date | string): string {
+  if (!from) return ALL_TIME_FLOOR;
+  if (from instanceof Date) return from.toISOString().split("T")[0];
+  return from;
+}
+
+// ── Read/aggregation result shapes (§6) ───────────────────────────────────────
+
+/** Optional time window: rows with `bucket >= from` (omit for all-time). */
+export interface StatWindow {
+  from?: Date | string;
+}
+
+/** One persona's message share for a user, ordered by count desc. */
+export interface PersonaAffinityEntry {
+  lineageId: number;
+  count: number;
+}
+
+/** Favorite persona plus loyalty (top persona share of all messages). */
+export interface FavoritePersona {
+  lineageId: number;
+  count: number;
+  totalCount: number;
+  /** count / totalCount as a 0–100 percentage (0 when no data). */
+  loyaltyPct: number;
+}
+
+/** One command's usage count. */
+export interface CommandUsageEntry {
+  command: string;
+  count: number;
+}
+
+/** One model's usage count (model_used) — favorite/diversity reads. */
+export interface ModelUsageEntry {
+  model: string;
+  count: number;
+}
+
+/** Hour-of-day (0–23) and weekday (0=Sun–6=Sat) activity histograms. */
+export interface ActivityHistogram {
+  byHour: Record<number, number>;
+  byWeekday: Record<number, number>;
+}
+
+/** Streak info derived from distinct active bucket dates. */
+export interface StreakInfo {
+  currentStreak: number;
+  longestStreak: number;
+  /** Most recent active day (YYYY-MM-DD) or null when never active. */
+  lastActiveDate: string | null;
+}
+
+/** Read-existing generation totals (quota counter tables). */
+export interface GenerationTotals {
+  textGenerations: number;
+  imageGenerations: number;
+  videoGenerations: number;
+}
+
+/** Read-existing reward/punishment totals (conditioning_history). */
+export interface ConditioningTotals {
+  rewards: number;
+  punishments: number;
+}
+
+export class StatRepository implements IRepository<null> {
+  /** Accumulated, not-yet-flushed deltas keyed by the table PK tuple. */
+  private buffer = new Map<string, StatBufferEntry>();
+  /** Interval handle for the periodic flush (unref'd so it never blocks exit). */
+  private flushTimer: ReturnType<typeof setInterval> | null = null;
+  /** Guards against overlapping flushes (interval firing during a slow flush). */
+  private flushing = false;
+
+  /**
+   * Builds the buffer key from the PK tuple so a buffer entry collapses to one
+   * UPSERT. Persona-agnostic metrics are normalized to lineage 0 here so callers
+   * cannot accidentally split a persona-agnostic metric across lineages.
+   */
+  private bufferKey(entry: {
+    serverId: number;
+    userId: number;
+    lineageId: number;
+    metric: StatMetric;
+    metricKey: string;
+    bucket: string;
+  }): string {
+    return [entry.serverId, entry.userId, entry.lineageId, entry.metric, entry.metricKey, entry.bucket].join(
+      KEY_DELIMITER,
+    );
+  }
+
+  /**
+   * Buffers a usage increment. Never throws and never awaits the DB — it only
+   * mutates the in-memory buffer and (re)arms the flush timer / size-cap flush.
+   * Safe to call from any hot path. No-ops when stat tracking is disabled or the
+   * required ids are missing (e.g. a command run outside a guild has no server).
+   *
+   * @param input - Scope, metric, optional metric key, and delta (default 1).
+   */
+  recordStat(input: RecordStatInput): void {
+    if (!STAT_TRACKING_ENABLED) return;
+
+    const { serverId, userId, metric } = input;
+    // 1. Guard required scope: server + user are NOT NULL FKs. A missing id
+    //    (e.g. a DM command with no server) is silently skipped, not an error.
+    if (!Number.isInteger(serverId) || !Number.isInteger(userId)) return;
+
+    const delta = input.delta ?? 1;
+    if (delta === 0) return;
+
+    // 2. Persona-agnostic metrics always key on the lineage-0 sentinel.
+    const lineageId = PERSONA_AGNOSTIC_METRICS.has(metric) ? 0 : (input.lineageId ?? 0);
+    const metricKey = input.metricKey ?? "";
+    const bucket = currentBucketDate();
+    const now = new Date();
+
+    // 3. Accumulate into the existing buffer entry, or create a new one.
+    const key = this.bufferKey({ serverId, userId, lineageId, metric, metricKey, bucket });
+    const existing = this.buffer.get(key);
+    if (existing) {
+      existing.delta += delta;
+      existing.lastAt = now;
+    } else {
+      this.buffer.set(key, {
+        serverId,
+        userId,
+        lineageId,
+        metric,
+        metricKey,
+        bucket,
+        delta,
+        firstAt: now,
+        lastAt: now,
+      });
+    }
+
+    // 4. Flush triggers: size cap (fire-and-forget) or arm the interval timer.
+    if (this.buffer.size >= FLUSH_MAX_BUFFER) {
+      void this.flush();
+    } else {
+      this.ensureFlushTimer();
+    }
+  }
+
+  /**
+   * Arms the periodic flush timer if it is not already running. The timer is
+   * unref'd so a pending flush never keeps the process (or a test runner) alive.
+   */
+  private ensureFlushTimer(): void {
+    if (this.flushTimer || FLUSH_INTERVAL_MS <= 0) return;
+    this.flushTimer = setInterval(() => {
+      void this.flush();
+    }, FLUSH_INTERVAL_MS);
+    // Bun/Node: don't let the flush interval hold the event loop open.
+    this.flushTimer.unref?.();
+  }
+
+  /** Stops the periodic flush timer (used on shutdown / when buffer drains). */
+  private clearFlushTimer(): void {
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer);
+      this.flushTimer = null;
+    }
+  }
+
+  /**
+   * Drains the buffer to the DB as additive UPSERTs in a single transaction.
+   * The buffer is swapped out first so concurrent recordStat calls accumulate
+   * into a fresh buffer while this flush is in flight. On failure the drained
+   * deltas are merged back so they are retried on the next flush (no silent loss
+   * outside the documented crash window).
+   */
+  async flush(): Promise<void> {
+    // 1. Skip if nothing to do or a flush is already running.
+    if (this.flushing || this.buffer.size === 0) return;
+    this.flushing = true;
+
+    // 2. Atomically take ownership of the current buffer contents.
+    const draining = this.buffer;
+    this.buffer = new Map();
+    const entries = Array.from(draining.values());
+
+    try {
+      // 3. One transaction, one additive UPSERT per distinct tuple. The buffer
+      //    already collapsed same-tuple increments, so this is the minimum
+      //    statement count. count += EXCLUDED.count (the buffered delta, not 1).
+      await sql.begin(async (tx: SQL) => {
+        for (const e of entries) {
+          await tx`
+            INSERT INTO stat_counters
+              (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
+            VALUES
+              (${e.serverId}, ${e.userId}, ${e.lineageId}, ${e.metric}, ${e.metricKey}, ${e.bucket}::date,
+               ${e.delta}, ${e.firstAt}, ${e.lastAt})
+            ON CONFLICT (server_id, user_id, persona_lineage_id, metric, metric_key, bucket)
+            DO UPDATE SET
+              count    = stat_counters.count + EXCLUDED.count,
+              first_at = LEAST(stat_counters.first_at, EXCLUDED.first_at),
+              last_at  = GREATEST(stat_counters.last_at, EXCLUDED.last_at)
+          `;
+        }
+      });
+    } catch (error) {
+      // 4. Re-merge drained deltas back into the live buffer for retry.
+      for (const e of entries) {
+        const key = this.bufferKey(e);
+        const existing = this.buffer.get(key);
+        if (existing) {
+          existing.delta += e.delta;
+          existing.firstAt = e.firstAt < existing.firstAt ? e.firstAt : existing.firstAt;
+          existing.lastAt = e.lastAt > existing.lastAt ? e.lastAt : existing.lastAt;
+        } else {
+          this.buffer.set(key, e);
+        }
+      }
+      log.error(`StatRepository.flush: failed to persist ${entries.length} buffered stat entries (will retry)`, error);
+    } finally {
+      this.flushing = false;
+      // 5. Stop the timer once the buffer is empty; recordStat re-arms it.
+      if (this.buffer.size === 0) this.clearFlushTimer();
+    }
+  }
+
+  /**
+   * Graceful-shutdown drain: stop the timer and flush whatever remains so a
+   * normal restart loses nothing. Call from the process shutdown path.
+   */
+  async shutdown(): Promise<void> {
+    this.clearFlushTimer();
+    await this.flush();
+  }
+
+  /** Current buffered entry count — used by tests and diagnostics. */
+  get bufferedEntryCount(): number {
+    return this.buffer.size;
+  }
+
+  // ── Read / aggregation layer (§6) ──────────────────────────────────────────
+  // NOTE: reads hit the DB directly (no read cache in Phase 1). Buffered, not-yet
+  // -flushed increments are not visible until the next flush — acceptable for the
+  // low-frequency /stats reads this layer feeds; callers needing exactness can
+  // await flush() first. All windowing is `bucket >= from` + SUM, never finer.
+
+  /**
+   * Per-persona message share for a user, highest first. Powers favorite-persona
+   * and loyalty reads.
+   *
+   * @param args - userId, optional serverId filter, optional time window.
+   */
+  async getPersonaAffinity(args: { userId: number; serverId?: number } & StatWindow): Promise<PersonaAffinityEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const rows = await sql<{ persona_lineage_id: number | string; total: number | string }[]>`
+        SELECT persona_lineage_id, SUM(count) AS total
+        FROM stat_counters
+        WHERE metric = 'message_sent'
+          AND user_id = ${args.userId}
+          AND (${args.serverId ?? null}::int IS NULL OR server_id = ${args.serverId ?? null})
+          AND bucket >= ${from}::date
+        GROUP BY persona_lineage_id
+        ORDER BY total DESC
+      `;
+      return rows.map((r) => ({ lineageId: Number(r.persona_lineage_id), count: Number(r.total) }));
+    } catch (error) {
+      log.error(`StatRepository.getPersonaAffinity: failed for user ${args.userId}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Favorite persona for a user plus loyalty % (top persona's share of all the
+   * user's messages). Returns null when the user has no message stats.
+   */
+  async getFavoritePersona(args: { userId: number; serverId?: number } & StatWindow): Promise<FavoritePersona | null> {
+    const affinity = await this.getPersonaAffinity(args);
+    if (affinity.length === 0) return null;
+    const totalCount = affinity.reduce((sum, a) => sum + a.count, 0);
+    const top = affinity[0];
+    return {
+      lineageId: top.lineageId,
+      count: top.count,
+      totalCount,
+      loyaltyPct: totalCount > 0 ? (top.count / totalCount) * 100 : 0,
+    };
+  }
+
+  /**
+   * "First met" timestamp for a user + persona lineage (earliest first_at across
+   * all metrics). Returns null when there is no data.
+   */
+  async getPersonaAnniversary(args: { userId: number; lineageId: number }): Promise<Date | null> {
+    try {
+      const [row] = await sql`
+        SELECT MIN(first_at) AS first_at
+        FROM stat_counters
+        WHERE user_id = ${args.userId} AND persona_lineage_id = ${args.lineageId}
+      `;
+      return row?.first_at ? new Date(row.first_at as string) : null;
+    } catch (error) {
+      log.error(`StatRepository.getPersonaAnniversary: failed for user ${args.userId}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Most-used commands on a server, highest first. command_used is persona-
+   * agnostic so this aggregates across the lineage-0 sentinel rows.
+   *
+   * @param args - serverId, optional time window, optional result limit.
+   */
+  async getTopCommands(args: { serverId: number; limit?: number } & StatWindow): Promise<CommandUsageEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const limit = args.limit ?? 25;
+      const rows = await sql<{ metric_key: string; total: number | string }[]>`
+        SELECT metric_key, SUM(count) AS total
+        FROM stat_counters
+        WHERE metric = 'command_used'
+          AND server_id = ${args.serverId}
+          AND bucket >= ${from}::date
+        GROUP BY metric_key
+        ORDER BY total DESC
+        LIMIT ${limit}
+      `;
+      return rows.map((r) => ({ command: String(r.metric_key), count: Number(r.total) }));
+    } catch (error) {
+      log.error(`StatRepository.getTopCommands: failed for server ${args.serverId}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns the subset of `allCommands` that have NO usage rows on the server —
+   * the underused/never-used set. Zero-count commands have no row, so they must
+   * come from the command registry (passed in by the caller), not the table.
+   *
+   * @param allCommands - Full command-name list from the command registry.
+   * @param args        - serverId and optional time window.
+   */
+  async getUnusedCommands(allCommands: string[], args: { serverId: number } & StatWindow): Promise<string[]> {
+    try {
+      const from = windowFloor(args.from);
+      const rows = await sql<{ metric_key: string }[]>`
+        SELECT DISTINCT metric_key
+        FROM stat_counters
+        WHERE metric = 'command_used'
+          AND server_id = ${args.serverId}
+          AND bucket >= ${from}::date
+      `;
+      const used = new Set(rows.map((r) => String(r.metric_key)));
+      return allCommands.filter((cmd) => !used.has(cmd));
+    } catch (error) {
+      log.error(`StatRepository.getUnusedCommands: failed for server ${args.serverId}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Model usage breakdown (model_used) for a user or server, highest first.
+   * Powers favorite model/provider and model-diversity reads. Provide at least
+   * one of userId / serverId.
+   */
+  async getModelBreakdown(args: { userId?: number; serverId?: number } & StatWindow): Promise<ModelUsageEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const rows = await sql<{ metric_key: string; total: number | string }[]>`
+        SELECT metric_key, SUM(count) AS total
+        FROM stat_counters
+        WHERE metric = 'model_used'
+          AND (${args.userId ?? null}::int IS NULL OR user_id = ${args.userId ?? null})
+          AND (${args.serverId ?? null}::int IS NULL OR server_id = ${args.serverId ?? null})
+          AND bucket >= ${from}::date
+        GROUP BY metric_key
+        ORDER BY total DESC
+      `;
+      return rows.map((r) => ({ model: String(r.metric_key), count: Number(r.total) }));
+    } catch (error) {
+      log.error("StatRepository.getModelBreakdown: failed", error);
+      return [];
+    }
+  }
+
+  /**
+   * Estimated lifetime cost (USD) from token counts, joined to llms pricing.
+   *
+   * Input and output tokens are tracked as separate metrics (`tokens_in` /
+   * `tokens_out`), so cost applies the correct per-direction rate exactly —
+   * input tokens × input price + output tokens × output price — rather than a
+   * blended average. Models with no pricing row (e.g. free / OpenRouter-dynamic)
+   * contribute 0. Provide at least one of userId / serverId.
+   */
+  async getEstimatedCost(args: { userId?: number; serverId?: number } & StatWindow): Promise<number> {
+    try {
+      const from = windowFloor(args.from);
+      const [row] = await sql`
+        SELECT COALESCE(
+          SUM(
+            sc.count
+            * CASE sc.metric
+                WHEN 'tokens_in'  THEN COALESCE(l.input_price_per_million, 0)
+                WHEN 'tokens_out' THEN COALESCE(l.output_price_per_million, 0)
+                ELSE 0
+              END
+            / 1000000.0
+          ), 0
+        ) AS cost
+        FROM stat_counters sc
+        LEFT JOIN llms l ON l.llm_codename = sc.metric_key
+        WHERE sc.metric IN ('tokens_in', 'tokens_out')
+          AND (${args.userId ?? null}::int IS NULL OR sc.user_id = ${args.userId ?? null})
+          AND (${args.serverId ?? null}::int IS NULL OR sc.server_id = ${args.serverId ?? null})
+          AND sc.bucket >= ${from}::date
+      `;
+      return Number(row?.cost ?? 0);
+    } catch (error) {
+      log.error("StatRepository.getEstimatedCost: failed", error);
+      return 0;
+    }
+  }
+
+  /**
+   * Hour-of-day and weekday activity histograms for a user, from the active_hour
+   * metric (hour rides metric_key; weekday is derived from the bucket DATE).
+   */
+  async getActivityHistogram(args: { userId: number } & StatWindow): Promise<ActivityHistogram> {
+    const byHour: Record<number, number> = {};
+    const byWeekday: Record<number, number> = {};
+    try {
+      const from = windowFloor(args.from);
+      const hourRows = await sql`
+        SELECT metric_key, SUM(count) AS total
+        FROM stat_counters
+        WHERE metric = 'active_hour' AND user_id = ${args.userId} AND bucket >= ${from}::date
+        GROUP BY metric_key
+      `;
+      for (const r of hourRows) {
+        const hour = Number.parseInt(String(r.metric_key), 10);
+        if (Number.isInteger(hour)) byHour[hour] = Number(r.total);
+      }
+
+      const dowRows = await sql`
+        SELECT EXTRACT(DOW FROM bucket)::int AS dow, SUM(count) AS total
+        FROM stat_counters
+        WHERE metric = 'active_hour' AND user_id = ${args.userId} AND bucket >= ${from}::date
+        GROUP BY dow
+      `;
+      for (const r of dowRows) {
+        byWeekday[Number(r.dow)] = Number(r.total);
+      }
+    } catch (error) {
+      log.error(`StatRepository.getActivityHistogram: failed for user ${args.userId}`, error);
+    }
+    return { byHour, byWeekday };
+  }
+
+  /**
+   * Current and longest activity streaks (in days) for a user, derived from the
+   * set of distinct active bucket dates. "Current" counts back from today or
+   * yesterday (so the streak is not considered broken before the day ends).
+   */
+  async getStreak(args: { userId: number }): Promise<StreakInfo> {
+    try {
+      const rows = await sql<{ bucket: string | Date }[]>`
+        SELECT DISTINCT bucket
+        FROM stat_counters
+        WHERE user_id = ${args.userId}
+        ORDER BY bucket DESC
+      `;
+      const days = rows.map((r) =>
+        new Date(
+          `${(r.bucket instanceof Date ? r.bucket.toISOString() : String(r.bucket)).split("T")[0]}T00:00:00Z`,
+        ).getTime(),
+      );
+      if (days.length === 0) return { currentStreak: 0, longestStreak: 0, lastActiveDate: null };
+
+      const DAY_MS = 86_400_000;
+      const lastActiveDate = new Date(days[0]).toISOString().split("T")[0];
+
+      // 1. Longest streak: walk descending dates, counting consecutive days.
+      let longest = 1;
+      let run = 1;
+      for (let i = 1; i < days.length; i++) {
+        const gap = days[i - 1] - days[i];
+        if (gap === DAY_MS) {
+          run++;
+          longest = Math.max(longest, run);
+        } else if (gap > DAY_MS) {
+          run = 1;
+        }
+      }
+
+      // 2. Current streak: only counts if the most recent day is today/yesterday.
+      const todayMs = new Date(`${currentBucketDate()}T00:00:00Z`).getTime();
+      let current = 0;
+      if (todayMs - days[0] <= DAY_MS) {
+        current = 1;
+        for (let i = 1; i < days.length; i++) {
+          if (days[i - 1] - days[i] === DAY_MS) current++;
+          else break;
+        }
+      }
+
+      return { currentStreak: current, longestStreak: longest, lastActiveDate };
+    } catch (error) {
+      log.error(`StatRepository.getStreak: failed for user ${args.userId}`, error);
+      return { currentStreak: 0, longestStreak: 0, lastActiveDate: null };
+    }
+  }
+
+  // ── Read-existing wrappers (no new writes; aggregate existing tables) ───────
+
+  /**
+   * Generation totals from the existing quota counter tables. NOTE: text_quotas
+   * only accumulates when a text quota is configured (see QuotaRepository), so
+   * textGenerations under-counts on servers with no text quota; image/video
+   * always count. Per-user totals require the Discord id (quotas key on it).
+   *
+   * @param args - serverId and optional userDiscId (snowflake) filter.
+   */
+  async getGenerationTotals(args: { serverId: number; userDiscId?: string }): Promise<GenerationTotals> {
+    try {
+      const userDisc = args.userDiscId ?? null;
+      const [text] = await sql`
+        SELECT COALESCE(SUM(usage_count), 0) AS total FROM text_quotas
+        WHERE server_id = ${args.serverId}
+          AND (${userDisc}::text IS NULL OR user_disc_id = ${userDisc})
+      `;
+      const [image] = await sql`
+        SELECT COALESCE(SUM(usage_count), 0) AS total FROM image_quotas
+        WHERE server_id = ${args.serverId}
+          AND (${userDisc}::text IS NULL OR user_disc_id = ${userDisc})
+      `;
+      const [video] = await sql`
+        SELECT COALESCE(SUM(usage_count), 0) AS total FROM video_quotas
+        WHERE server_id = ${args.serverId}
+          AND (${userDisc}::text IS NULL OR user_disc_id = ${userDisc})
+      `;
+      return {
+        textGenerations: Number(text?.total ?? 0),
+        imageGenerations: Number(image?.total ?? 0),
+        videoGenerations: Number(video?.total ?? 0),
+      };
+    } catch (error) {
+      log.error(`StatRepository.getGenerationTotals: failed for server ${args.serverId}`, error);
+      return { textGenerations: 0, imageGenerations: 0, videoGenerations: 0 };
+    }
+  }
+
+  /**
+   * Reward/punishment totals from conditioning_history (keyed on the internal
+   * user_id). Any combination of serverId / lineageId / userId narrows the scope.
+   */
+  async getConditioningTotals(args: {
+    serverId?: number;
+    lineageId?: number;
+    userId?: number;
+  }): Promise<ConditioningTotals> {
+    try {
+      const rows = await sql`
+        SELECT conditioning_type, COALESCE(SUM(count), 0) AS total
+        FROM conditioning_history
+        WHERE (${args.serverId ?? null}::int IS NULL OR server_id = ${args.serverId ?? null})
+          AND (${args.lineageId ?? null}::bigint IS NULL OR persona_lineage_id = ${args.lineageId ?? null})
+          AND (${args.userId ?? null}::int IS NULL OR user_id = ${args.userId ?? null})
+        GROUP BY conditioning_type
+      `;
+      const totals: ConditioningTotals = { rewards: 0, punishments: 0 };
+      for (const r of rows) {
+        if (r.conditioning_type === "reward") totals.rewards = Number(r.total);
+        else if (r.conditioning_type === "punish") totals.punishments = Number(r.total);
+      }
+      return totals;
+    } catch (error) {
+      log.error("StatRepository.getConditioningTotals: failed", error);
+      return { rewards: 0, punishments: 0 };
+    }
+  }
+
+  // ── IRepository stub (telemetry is never exported) ─────────────────────────
+
+  async toExportShape(_ownerId: string | number): Promise<null> {
+    return null;
+  }
+
+  async fromExportShape(_ownerId: string | number, _data: null): Promise<boolean> {
+    return true;
+  }
+}
+
+/** Singleton instance — import this in callers and chokepoints. */
+export const statRepository = new StatRepository();

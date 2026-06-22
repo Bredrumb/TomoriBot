@@ -1,6 +1,7 @@
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
+import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
@@ -346,6 +347,32 @@ async function executeToolCall(
     );
   }
   log.info(`Function call completed: ${functionName} (${Date.now() - startedAt}ms)`);
+
+  // Record tool usage at the single tool-dispatch chokepoint (covers every
+  // built-in / REST / MCP tool). metric_key is the tool name, so per-tool
+  // breakdowns (web search, sticker, memory, reminder, …) fall out for free.
+  // Only successful, non-blocked calls count. Fire-and-forget so stat tracking
+  // never adds latency; DMs are skipped (server_id is a NOT NULL FK).
+  if (toolResult.success && !isBlockedByDeliberateAllowlist && !params.context.isDMChannel) {
+    const serverId = params.tomoriState.server_id;
+    const userId = params.context.triggererUserId;
+    if (serverId && userId) {
+      const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
+      // userId is carried on the context (resolved once at turn planning), so no
+      // per-tool-call DB lookup — recordStat just buffers in memory.
+      try {
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId,
+          metric: "tool_used",
+          metricKey: functionName,
+        });
+      } catch (statError) {
+        log.warn(`Failed to record tool_used stat for ${functionName}: ${statError}`);
+      }
+    }
+  }
 
   // 2. When deliberate-tool-mode admitted the tool via a specific trigger,
   // post a hidden notice (thought-log only) explaining why it fired.
