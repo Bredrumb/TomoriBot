@@ -11,7 +11,16 @@ import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/ut
 import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
+import { charsToTokensText, estimateContextItemsTokens } from "@/utils/text/tokenEstimate";
 import type { ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+
+/**
+ * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`).
+ * Only resolved tags appear in the final persona text (cleanLLMOutput converts a
+ * successful `:name:` shortcode into this form), so counting these is exactly the
+ * "successful server-emoji resolve" signal the stat plan calls for. Capture 1 = name.
+ */
+const RESOLVED_CUSTOM_EMOJI_RE = /<a?:([A-Za-z0-9_~]+):\d+>/g;
 
 const MAX_EMPTY_RESPONSE_RETRIES = 2;
 const EMPTY_RESPONSE_RETRY_DELAY_MS = 1000;
@@ -31,14 +40,17 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
 }
 
 /**
- * Records per-turn usage stats (message_sent, active_hour, model_used) at the
- * single post-turn chokepoint. Only counts turns that actually produced a
- * persona response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
+ * Records per-turn usage stats at the single post-turn chokepoint:
+ * message_sent, active_hour, model_used, tokens_in/tokens_out (estimated),
+ * emoji_used, and sprite_shown. Only counts turns that actually produced a persona
+ * response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
  *
- * NOTE: tokens_in / tokens_out are intentionally not recorded here in Phase 1 —
- * the provider StreamResult does not surface token usage, so accurate per-
- * direction token counting needs provider-level plumbing (a follow-up). The data
- * layer already supports both metrics (StatRepository.recordStat / getEstimatedCost).
+ * Tokens are CHARACTER-ESTIMATED (the "Track A" fallback shared with
+ * `/tool estimate cost`): no provider StreamResult surfaces real usage yet, so
+ * input is estimated from the built context and output from the response text.
+ * This over-counts dense languages (e.g. Japanese) and is for rough stats / cost
+ * estimates only, never billing truth. A future per-provider real-usage port can
+ * replace the estimate without changing the metric shape (getEstimatedCost stays).
  *
  * @param context - The completed turn's context (model + persona + server scope).
  * @param result  - The turn result; personaResponses carry the responding lineages.
@@ -71,12 +83,83 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     });
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "active_hour", metricKey: hour });
 
-    // 4. Per distinct responding persona lineage: one message exchanged. This is
-    //    what drives favorite-persona affinity (who the user talks to most).
+    // 4. Per responding persona: one message exchanged (drives favorite-persona
+    //    affinity), plus that persona's emoji usage and output-token volume — all
+    //    persona-scoped, so keyed to the response's own lineage.
     const lineages = new Set<number>();
-    for (const response of result.personaResponses) lineages.add(response.personaLineageId ?? primaryLineage);
+    let outputTokens = 0;
+    for (const response of result.personaResponses) {
+      const lineageId = response.personaLineageId ?? primaryLineage;
+      lineages.add(lineageId);
+
+      // 4a. Output token volume (character-estimated) for this response.
+      if (response.text) outputTokens += charsToTokensText(response.text.length);
+
+      // 4b. Successful custom-emoji uses in the final text, one increment per
+      //     occurrence. Pre-aggregated per name so repeats collapse to one UPSERT.
+      const emojiCounts = new Map<string, number>();
+      for (const match of response.text.matchAll(RESOLVED_CUSTOM_EMOJI_RE)) {
+        const name = match[1];
+        emojiCounts.set(name, (emojiCounts.get(name) ?? 0) + 1);
+      }
+      for (const [name, count] of emojiCounts) {
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId,
+          metric: "emoji_used",
+          metricKey: name,
+          delta: count,
+        });
+      }
+    }
     for (const lineageId of lineages) {
       statRepository.recordStat({ serverId, userId, lineageId, metric: "message_sent" });
+    }
+
+    // 5. Estimated token volume keyed by model id. Input is the built context (one
+    //    estimate per turn, attributed to the answering persona); output is summed
+    //    across persona responses. Cost is derived at read time from catalog pricing
+    //    (getEstimatedCost), so input vs output rate applies exactly per direction.
+    const inputTokens = estimateContextItemsTokens(context.contextItems);
+    if (inputTokens > 0) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "tokens_in",
+        metricKey: modelCodename,
+        delta: inputTokens,
+      });
+    }
+    if (outputTokens > 0) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "tokens_out",
+        metricKey: modelCodename,
+        delta: outputTokens,
+      });
+    }
+
+    // 6. Sprite deliveries surfaced from the stream (one entry per delivered sprite
+    //    message). Sprites are the answering persona's own, so key on primaryLineage.
+    const spriteCounts = new Map<string, number>();
+    for (const stream of result.streamResults) {
+      for (const spriteName of stream.spritesShown ?? []) {
+        spriteCounts.set(spriteName, (spriteCounts.get(spriteName) ?? 0) + 1);
+      }
+    }
+    for (const [spriteName, count] of spriteCounts) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "sprite_shown",
+        metricKey: spriteName,
+        delta: count,
+      });
     }
   } catch (error) {
     log.warn("Failed to record usage stats for turn", error);

@@ -316,6 +316,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
             accumulatedText: state.accumulatedText,
             detailsContent: state.detailsSegments.length > 0 ? state.detailsSegments.join("\n\n") : undefined,
             thoughtLog: buildThoughtLogPayload(state, Date.now() - metrics.startTime),
+            spritesShown: state.spritesShown.length > 0 ? [...state.spritesShown] : undefined,
           };
         }
         break;
@@ -424,6 +425,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       detailsContent: state.detailsSegments.length > 0 ? state.detailsSegments.join("\n\n") : undefined,
       thoughtLog: buildThoughtLogPayload(state, metrics.endTime - metrics.startTime),
       data: terminalDoneMetadata,
+      spritesShown: state.spritesShown.length > 0 ? [...state.spritesShown] : undefined,
     };
   }
 

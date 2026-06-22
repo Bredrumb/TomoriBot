@@ -368,6 +368,24 @@ async function executeToolCall(
           metric: "tool_used",
           metricKey: functionName,
         });
+
+        // Per-sticker breakdown: when the sticker tool resolves a sticker, also
+        // record `sticker_used` keyed by the canonical resolved name (from the tool
+        // result, not the model's fuzzy input). tool_used already counts the call;
+        // this adds the "favorite sticker" dimension that mirrors emoji_used. The
+        // tool name must match StickerTool.name.
+        if (functionName === "select_sticker_for_response") {
+          const stickerData = toolResult.data as { status?: string; sticker_name?: string } | undefined;
+          if (stickerData?.status === "sticker_selected_successfully" && stickerData.sticker_name) {
+            statRepository.recordStat({
+              serverId,
+              userId,
+              lineageId,
+              metric: "sticker_used",
+              metricKey: stickerData.sticker_name,
+            });
+          }
+        }
       } catch (statError) {
         log.warn(`Failed to record tool_used stat for ${functionName}: ${statError}`);
       }

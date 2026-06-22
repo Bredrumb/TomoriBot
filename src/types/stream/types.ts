@@ -116,6 +116,12 @@ export interface StreamState {
    * Discord renders each avatar instead of grouping them under the first.
    */
   spriteGroupParity?: boolean;
+  /**
+   * Sprite labels delivered during this stream, in render order (one entry per
+   * delivered sprite message, repeats kept). Drained into StreamResult.spritesShown
+   * so the post-turn stat recorder can count `sprite_shown` with full user scope.
+   */
+  spritesShown: string[];
 }
 
 /**
@@ -297,6 +303,7 @@ export function createDefaultStreamState(): StreamState {
     activeRenderModifier: undefined,
     lastDeliveredSpriteKey: undefined,
     spriteGroupParity: false,
+    spritesShown: [],
   };
 }
 
