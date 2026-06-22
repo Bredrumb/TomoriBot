@@ -202,7 +202,8 @@ export class ImportRepository {
           privacy_level = COALESCE(${importData.privacy_level ?? null}, users.privacy_level),
           personal_dtm = COALESCE(${importData.personal_dtm ?? null}, users.personal_dtm),
           personal_deliberate_tool_mode = COALESCE(${importData.personal_deliberate_tool_mode ?? null}, users.personal_deliberate_tool_mode),
-          shortterm_cache_crossserver_opt_in = COALESCE(${importData.shortterm_cache_crossserver_opt_in ?? null}, users.shortterm_cache_crossserver_opt_in)
+          shortterm_cache_crossserver_opt_in = COALESCE(${importData.shortterm_cache_crossserver_opt_in ?? null}, users.shortterm_cache_crossserver_opt_in),
+          timezone_offset = COALESCE(${importData.timezone_offset ?? null}, users.timezone_offset)
         RETURNING user_id
       `;
 
@@ -219,6 +220,7 @@ export class ImportRepository {
       if (importData.personal_dtm !== undefined) fieldsCount++;
       if (importData.personal_deliberate_tool_mode !== undefined) fieldsCount++;
       if (importData.shortterm_cache_crossserver_opt_in !== undefined) fieldsCount++;
+      if (importData.timezone_offset !== undefined) fieldsCount++;
 
       return { success: true, itemsImported: { configFieldsCount: fieldsCount } };
     } catch (error) {

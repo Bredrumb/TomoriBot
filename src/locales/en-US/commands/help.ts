@@ -232,7 +232,7 @@ Transcription supports ~100 languages (auto-detected).`,
 - Full invisibility is available via \`/personal privacy\` if you want to be completely unseen by me
 - Learn more with \`/help memory\``,
       time_title: `Time Awareness`,
-      time_description: `- I know what time it currently is in the server (via \`/config timezone\`)
+      time_description: `- I know what time it currently is in the server (via \`/server timezone\`)
 - I can set up reminders for you (try asking me to remind you about something!)
 - Recurrent reminders and tasks are supported and are persona-specific, just tell me to do something`,
       alter_title: `Alter Personas`,
@@ -845,7 +845,7 @@ API Keys:
 
 Personalization:
 - {configRename} - Change what I refer to myself as
-- {configTimezone} - Set timezone for time-aware responses and reminders
+- {configTimezone} - Set server timezone for time-aware responses and reminders
 - {configPermissions} - Toggle my features on/off (including image generation)
 - {configUncensors} - Configure uncensored output options
 - {personalPrivacy} - Control your visibility to me (full invisibility option available)

@@ -20,6 +20,7 @@ type UserConversationEntry = {
   displayName: string;
   detailLines: string[];
   imageAppearanceTags?: string[];
+  personalTimezoneOffset?: number | null;
   isBot: boolean;
   mentionAliases: string[];
   primaryAlias: string | null;
@@ -232,6 +233,7 @@ export async function buildUsersInConversationContextItem(params: {
       imageAppearanceTags: !params.isUserImpersonation
         ? normalizeImageAppearanceTags(userRow.physical_appearance_tags)
         : undefined,
+      personalTimezoneOffset: !params.isUserImpersonation ? (userRow.timezone_offset ?? null) : undefined,
       isBot: false,
       mentionAliases: Array.from(aliasSet),
       primaryAlias,
@@ -532,6 +534,9 @@ function renderUserEntries(
 
     if (entry.imageAppearanceTags && entry.imageAppearanceTags.length > 0) {
       text += `- ${entry.displayName}'s Physical Appearance: ${entry.imageAppearanceTags.join(", ")}\n`;
+    }
+    if (entry.personalTimezoneOffset != null) {
+      text += `- ${entry.displayName}'s timezone: ${formatUTCOffset(entry.personalTimezoneOffset)} (their local time: ${getCurrentTimeWithOffset(entry.personalTimezoneOffset)})\n`;
     }
     for (const line of entry.detailLines) text += `${line}\n`;
     text += "\n";
