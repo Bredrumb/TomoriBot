@@ -1529,7 +1529,13 @@ CREATE TABLE IF NOT EXISTS reminders (
   user_nickname TEXT NOT NULL,                         -- Target user's nickname for display
   reminder_purpose TEXT NOT NULL,                      -- What the reminder is for
   reminder_time TIMESTAMP WITH TIME ZONE NOT NULL,     -- When to trigger the reminder
-  repetition_interval_hours INTEGER,                   -- Optional: repeat interval in hours for recurring reminders
+  repetition_interval_hours INTEGER,                   -- Legacy: repeat interval in hours for recurring reminders
+  repetition_interval_minutes INTEGER,                 -- Optional: repeat interval in minutes for recurring reminders
+  repeat_remaining_count INTEGER,                      -- Optional: finite recurring reminders delete at 0
+  repeat_until_time TIMESTAMP WITH TIME ZONE,           -- Optional: finite recurring reminders stop after this time
+  daily_window_start_minutes INTEGER,                   -- Optional: local minutes after midnight for daily recurring window
+  daily_window_end_minutes INTEGER,                     -- Optional: local minutes after midnight for daily recurring window
+  daily_window_timezone_offset DOUBLE PRECISION,        -- Timezone offset used for local daily recurring window
   self_reminder BOOLEAN DEFAULT false,                 -- Optional: reminder targets the bot itself
   created_by_user_id INT,                              -- User who created this reminder (nullable - set to NULL if user deleted)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1542,6 +1548,16 @@ CREATE TABLE IF NOT EXISTS reminders (
 SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 -- Recurring reminders: optional repeat interval in hours (January 2026)
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
+-- Recurring reminders: optional repeat interval in minutes (June 2026)
+SELECT add_column_if_not_exists('reminders', 'repetition_interval_minutes', 'INTEGER');
+-- Finite recurring reminders: remaining trigger count (June 2026)
+SELECT add_column_if_not_exists('reminders', 'repeat_remaining_count', 'INTEGER');
+-- Finite recurring reminders: optional cutoff time (June 2026)
+SELECT add_column_if_not_exists('reminders', 'repeat_until_time', 'TIMESTAMP WITH TIME ZONE');
+-- Daily recurring reminder windows (June 2026)
+SELECT add_column_if_not_exists('reminders', 'daily_window_start_minutes', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'daily_window_end_minutes', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'daily_window_timezone_offset', 'DOUBLE PRECISION');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
 DO $$
@@ -2936,4 +2952,30 @@ CREATE INDEX IF NOT EXISTS idx_channel_prompt_overrides_server ON channel_prompt
 DROP TRIGGER IF EXISTS update_channel_prompt_overrides_timestamp ON channel_prompt_overrides;
 CREATE TRIGGER update_channel_prompt_overrides_timestamp
     BEFORE UPDATE ON channel_prompt_overrides
+    FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================================
+-- Per-channel context notes (migration 034)
+-- When a row exists for a channel, its note is injected into the dialogue
+-- history at the configured depth alongside any persona-scoped note (additive).
+-- The global note from server_chat_configs is only used when neither persona
+-- nor channel has one. Per-channel data is server-local and never exported.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS channel_context_notes (
+    server_id           INT  NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+    channel_disc_id     TEXT NOT NULL,
+    context_note        TEXT NOT NULL,
+    context_note_depth  INT  NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (server_id, channel_disc_id)
+);
+
+-- Index for fast per-server channel context note lookups
+CREATE INDEX IF NOT EXISTS idx_channel_context_notes_server ON channel_context_notes(server_id);
+
+-- updated_at trigger for channel_context_notes (DROP first for idempotency)
+DROP TRIGGER IF EXISTS update_channel_context_notes_timestamp ON channel_context_notes;
+CREATE TRIGGER update_channel_context_notes_timestamp
+    BEFORE UPDATE ON channel_context_notes
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();

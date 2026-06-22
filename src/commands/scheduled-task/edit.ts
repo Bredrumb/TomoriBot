@@ -21,7 +21,7 @@ import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { serverScheduleRepository } from "@/utils/db/repositories";
 import { isBridgeUserId } from "@/utils/bridges";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
-import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
+import { formatTimeWithOffset, formatUTCOffset, parseTimeWithOffset } from "@/utils/text/timezoneHelper";
 import type { SelectOption } from "@/types/discord/modal";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import type { ReminderSelectionRow } from "@/utils/db/repositories";
@@ -32,6 +32,7 @@ const REMINDER_SELECT_ID = "reminder_select";
 const PURPOSE_INPUT_ID = "reminder_purpose_input";
 const TIME_INPUT_ID = "reminder_time_input";
 const INTERVAL_INPUT_ID = "reminder_interval_input";
+const REPEAT_LIMIT_INPUT_ID = "reminder_repeat_limit_input";
 const REMINDER_FOR_ME_ID = "reminder_for_me_checkbox";
 const REMINDER_PURPOSE_MAX_LENGTH = 4000;
 
@@ -84,6 +85,11 @@ function localDatePartsToUtcDate(
 function formatTimeInput(date: Date, offsetHours: number): string {
   const parts = getLocalDateParts(date, offsetHours);
   return `${parts.hour.toString().padStart(2, "0")}:${parts.minute.toString().padStart(2, "0")}`;
+}
+
+function formatDateTimeInput(date: Date, offsetHours: number): string {
+  const parts = getLocalDateParts(date, offsetHours);
+  return `${parts.year.toString().padStart(4, "0")}-${parts.month.toString().padStart(2, "0")}-${parts.day.toString().padStart(2, "0")}_${parts.hour.toString().padStart(2, "0")}:${parts.minute.toString().padStart(2, "0")}`;
 }
 
 function parseTimeOfDay(input: string): ParsedTimeOfDay | null {
@@ -142,7 +148,7 @@ function buildEditedReminderTime(currentReminderTime: Date, timeInput: string, o
   return editedTime;
 }
 
-function parseIntervalHours(input: string): number | null {
+function parseIntervalMinutes(input: string): number | null {
   const trimmed = input.trim();
   if (!/^\d+$/.test(trimmed)) {
     return null;
@@ -150,6 +156,98 @@ function parseIntervalHours(input: string): number | null {
 
   const interval = Number.parseInt(trimmed, 10);
   return Number.isSafeInteger(interval) ? interval : null;
+}
+
+type ParsedRepeatLimit = {
+  repeatRemainingCount: number | null;
+  repeatUntilTime: Date | null;
+};
+
+function formatRepeatLimitInput(reminder: ReminderSelectionRow, offsetHours: number): string {
+  if (typeof reminder.repeat_remaining_count === "number" && reminder.repeat_remaining_count >= 1) {
+    return `count:${reminder.repeat_remaining_count}`;
+  }
+  if (reminder.repeat_until_time instanceof Date) {
+    return `until:${formatDateTimeInput(reminder.repeat_until_time, offsetHours)}`;
+  }
+  return "";
+}
+
+function normalizeAbsoluteTimeInput(input: string): string {
+  let normalized = input.trim();
+  normalized = normalized.replace(/^(\d{4})\/(\d{2})\/(\d{2})/, "$1-$2-$3");
+  normalized = normalized.replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/, "$1_$2");
+  return normalized;
+}
+
+function parseRepeatLimitInput(
+  input: string,
+  nextReminderTime: Date,
+  offsetHours: number,
+): ParsedRepeatLimit | "preserve" | null {
+  const trimmed = input.trim();
+  if (!trimmed) return "preserve";
+  if (/^(?:0|none|clear|indefinite)$/i.test(trimmed)) {
+    return { repeatRemainingCount: null, repeatUntilTime: null };
+  }
+
+  const countMatch = trimmed.match(/^(?:count:?)?\s*(\d+)$/i);
+  if (countMatch) {
+    const count = Number.parseInt(countMatch[1], 10);
+    return count >= 1 ? { repeatRemainingCount: count, repeatUntilTime: null } : null;
+  }
+
+  const rawUntil = trimmed.replace(/^until:?\s*/i, "");
+  const timeOfDay = parseTimeOfDay(rawUntil);
+  if (timeOfDay) {
+    const nextParts = getLocalDateParts(nextReminderTime, offsetHours);
+    let repeatUntilTime = localDatePartsToUtcDate(
+      {
+        year: nextParts.year,
+        month: nextParts.month,
+        day: nextParts.day + (timeOfDay.addDay ? 1 : 0),
+        hour: timeOfDay.hour,
+        minute: timeOfDay.minute,
+      },
+      offsetHours,
+    );
+    while (repeatUntilTime.getTime() < nextReminderTime.getTime()) {
+      repeatUntilTime = new Date(repeatUntilTime.getTime() + 24 * 60 * 60 * 1000);
+    }
+    return { repeatRemainingCount: null, repeatUntilTime };
+  }
+
+  const absoluteRepeatUntilTime = parseTimeWithOffset(normalizeAbsoluteTimeInput(rawUntil), offsetHours);
+  if (!absoluteRepeatUntilTime || absoluteRepeatUntilTime.getTime() < nextReminderTime.getTime()) {
+    return null;
+  }
+
+  return { repeatRemainingCount: null, repeatUntilTime: absoluteRepeatUntilTime };
+}
+
+function getReminderRepeatMinutes(reminder: ReminderSelectionRow): number {
+  if (typeof reminder.repetition_interval_minutes === "number" && reminder.repetition_interval_minutes >= 1) {
+    return reminder.repetition_interval_minutes;
+  }
+  if (typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1) {
+    return reminder.repetition_interval_hours * 60;
+  }
+  return 0;
+}
+
+function formatIntervalText(minutes: number): string {
+  if (minutes < 1) return "0 minutes";
+  if (minutes % 60 === 0) {
+    return `${minutes / 60}h`;
+  }
+  return `${minutes}m`;
+}
+
+function formatReminderRepeatText(minutes: number, locale: string): string {
+  if (minutes < 1) return "";
+  return localizer(locale, "commands.scheduled-task.edit.select_repeat_text", {
+    interval: formatIntervalText(minutes),
+  });
 }
 
 function formatReminderDetails(
@@ -160,7 +258,7 @@ function formatReminderDetails(
 ): {
   reminder_purpose: string;
   reminder_time: string;
-  repetition_interval_hours: string;
+  repetition_interval_text: string;
   reminder_type: string;
   target_user: string;
   target_channel: string;
@@ -172,15 +270,12 @@ function formatReminderDetails(
     hour: "2-digit",
     minute: "2-digit",
   });
-  const repetitionInterval =
-    typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-      ? `${reminder.repetition_interval_hours}`
-      : "0";
+  const repeatMinutes = getReminderRepeatMinutes(reminder);
 
   return {
     reminder_purpose: formatReminderPreview(reminder.reminder_purpose, 240),
     reminder_time: `${reminderTime} (${formatUTCOffset(timezoneOffset)})`,
-    repetition_interval_hours: repetitionInterval,
+    repetition_interval_text: formatIntervalText(repeatMinutes),
     reminder_type: reminder.self_reminder
       ? localizer(locale, "commands.scheduled-task.edit.type_task")
       : localizer(locale, "commands.scheduled-task.edit.type_reminder"),
@@ -195,7 +290,8 @@ async function performReminderEdit(
   reminderToEdit: ReminderSelectionRow,
   newPurpose: string,
   newReminderTime: Date,
-  newIntervalHours: number,
+  newIntervalMinutes: number,
+  newRepeatLimit: ParsedRepeatLimit,
   isReminderForInvoker: boolean,
   client: Client,
   tomoriState: TomoriState,
@@ -219,13 +315,20 @@ async function performReminderEdit(
   const targetUserNickname = isReminderForInvoker
     ? userData.user_nickname
     : (tomoriState.persona_nickname ?? client.user?.username ?? "Tomori");
+  const isRecurring = newIntervalMinutes > 0;
 
   const updatedReminder = await serverScheduleRepository.updateReminder({
     reminder_id: reminderToEdit.reminder_id,
     server_id: tomoriState.server_id,
     reminder_purpose: newPurpose,
     reminder_time: newReminderTime,
-    repetition_interval_hours: newIntervalHours > 0 ? newIntervalHours : null,
+    repetition_interval_hours: newIntervalMinutes > 0 && newIntervalMinutes % 60 === 0 ? newIntervalMinutes / 60 : null,
+    repetition_interval_minutes: newIntervalMinutes > 0 ? newIntervalMinutes : null,
+    repeat_remaining_count: isRecurring ? newRepeatLimit.repeatRemainingCount : null,
+    repeat_until_time: isRecurring ? newRepeatLimit.repeatUntilTime : null,
+    daily_window_start_minutes: isRecurring ? (reminderToEdit.daily_window_start_minutes ?? null) : null,
+    daily_window_end_minutes: isRecurring ? (reminderToEdit.daily_window_end_minutes ?? null) : null,
+    daily_window_timezone_offset: isRecurring ? (reminderToEdit.daily_window_timezone_offset ?? null) : null,
     self_reminder: !isReminderForInvoker,
     user_discord_id: targetUserId,
     user_nickname: targetUserNickname,
@@ -320,12 +423,7 @@ export async function execute(
         hour: "2-digit",
         minute: "2-digit",
       });
-      const repeatText =
-        typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-          ? localizer(locale, "commands.scheduled-task.edit.select_repeat_text", {
-              hours: reminder.repetition_interval_hours,
-            })
-          : "";
+      const repeatText = formatReminderRepeatText(getReminderRepeatMinutes(reminder), locale);
       const typeText = reminder.self_reminder
         ? localizer(locale, "commands.scheduled-task.edit.select_type_task")
         : localizer(locale, "commands.scheduled-task.edit.select_type_reminder", {
@@ -451,7 +549,17 @@ export async function execute(
           style: TextInputStyle.Short,
           required: true,
           maxLength: 6,
-          value: (selectedReminder.repetition_interval_hours ?? 0).toString(),
+          value: getReminderRepeatMinutes(selectedReminder).toString(),
+        },
+        {
+          customId: REPEAT_LIMIT_INPUT_ID,
+          labelKey: "commands.scheduled-task.edit.repeat_limit_input_label",
+          descriptionKey: "commands.scheduled-task.edit.repeat_limit_input_description",
+          placeholder: "commands.scheduled-task.edit.repeat_limit_input_placeholder",
+          style: TextInputStyle.Short,
+          required: false,
+          maxLength: 32,
+          value: formatRepeatLimitInput(selectedReminder, timezoneOffset),
         },
         {
           kind: "checkbox",
@@ -478,6 +586,7 @@ export async function execute(
     const editedPurpose = editModalResult.values?.[PURPOSE_INPUT_ID]?.trim() ?? "";
     const editedTimeInput = editModalResult.values?.[TIME_INPUT_ID]?.trim() ?? "";
     const editedIntervalInput = editModalResult.values?.[INTERVAL_INPUT_ID]?.trim() ?? "";
+    const editedRepeatLimitInput = editModalResult.values?.[REPEAT_LIMIT_INPUT_ID]?.trim() ?? "";
     const editedReminderForInvoker = editModalResult.values?.[REMINDER_FOR_ME_ID] === "true";
 
     if (!editedPurpose) {
@@ -503,8 +612,8 @@ export async function execute(
       return;
     }
 
-    const editedIntervalHours = parseIntervalHours(editedIntervalInput);
-    if (editedIntervalHours === null) {
+    const editedIntervalMinutes = parseIntervalMinutes(editedIntervalInput);
+    if (editedIntervalMinutes === null) {
       await replyInfoEmbed(editModalInteraction, locale, {
         titleKey: "commands.scheduled-task.edit.invalid_interval_title",
         descriptionKey: "commands.scheduled-task.edit.invalid_interval_description",
@@ -513,11 +622,63 @@ export async function execute(
       return;
     }
 
-    const currentIntervalHours = selectedReminder.repetition_interval_hours ?? 0;
+    const currentIntervalMinutes = getReminderRepeatMinutes(selectedReminder);
+    const parsedRepeatLimit = parseRepeatLimitInput(editedRepeatLimitInput, editedReminderTime, timezoneOffset);
+    if (parsedRepeatLimit === null) {
+      await replyInfoEmbed(editModalInteraction, locale, {
+        titleKey: "commands.scheduled-task.edit.invalid_repeat_limit_title",
+        descriptionKey: "commands.scheduled-task.edit.invalid_repeat_limit_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+
+    const editedRepeatLimit =
+      parsedRepeatLimit === "preserve"
+        ? {
+            repeatRemainingCount: selectedReminder.repeat_remaining_count ?? null,
+            repeatUntilTime: selectedReminder.repeat_until_time ?? null,
+          }
+        : parsedRepeatLimit;
+    const explicitlySetsRepeatLimit =
+      parsedRepeatLimit !== "preserve" &&
+      (editedRepeatLimit.repeatRemainingCount !== null || editedRepeatLimit.repeatUntilTime !== null);
+    if (editedIntervalMinutes < 1 && explicitlySetsRepeatLimit) {
+      await replyInfoEmbed(editModalInteraction, locale, {
+        titleKey: "commands.scheduled-task.edit.invalid_repeat_limit_title",
+        descriptionKey: "commands.scheduled-task.edit.invalid_repeat_limit_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+
+    if (
+      editedIntervalMinutes >= 1 &&
+      editedRepeatLimit.repeatUntilTime &&
+      editedRepeatLimit.repeatUntilTime.getTime() < editedReminderTime.getTime()
+    ) {
+      await replyInfoEmbed(editModalInteraction, locale, {
+        titleKey: "commands.scheduled-task.edit.invalid_repeat_limit_title",
+        descriptionKey: "commands.scheduled-task.edit.invalid_repeat_limit_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+
+    const currentRepeatLimitInput = formatRepeatLimitInput(selectedReminder, timezoneOffset);
+    const normalizedEditedRepeatLimitInput =
+      parsedRepeatLimit === "preserve"
+        ? currentRepeatLimitInput
+        : editedRepeatLimit.repeatRemainingCount !== null
+          ? `count:${editedRepeatLimit.repeatRemainingCount}`
+          : editedRepeatLimit.repeatUntilTime
+            ? `until:${formatDateTimeInput(editedRepeatLimit.repeatUntilTime, timezoneOffset)}`
+            : "";
     const noChanges =
       editedPurpose === selectedReminder.reminder_purpose.trim() &&
       editedReminderTime.getTime() === new Date(selectedReminder.reminder_time).getTime() &&
-      editedIntervalHours === currentIntervalHours &&
+      editedIntervalMinutes === currentIntervalMinutes &&
+      normalizedEditedRepeatLimitInput === currentRepeatLimitInput &&
       editedReminderForInvoker === reminderForInvoker;
 
     if (noChanges) {
@@ -534,7 +695,8 @@ export async function execute(
       selectedReminder,
       editedPurpose,
       editedReminderTime,
-      editedIntervalHours,
+      editedIntervalMinutes,
+      editedRepeatLimit,
       editedReminderForInvoker,
       client,
       tomoriState,
@@ -557,7 +719,7 @@ export async function execute(
         hour: "2-digit",
         minute: "2-digit",
       })} (${formatUTCOffset(timezoneOffset)})`,
-      repetition_interval_hours: editedIntervalHours.toString(),
+      repetition_interval_text: formatIntervalText(editedIntervalMinutes),
       reminder_type: editedReminderForInvoker
         ? localizer(locale, "commands.scheduled-task.edit.type_reminder")
         : localizer(locale, "commands.scheduled-task.edit.type_task"),

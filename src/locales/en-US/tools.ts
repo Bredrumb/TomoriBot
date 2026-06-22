@@ -66,7 +66,7 @@ export default {
       block_block_title: `❌ {persona_name} Blocked {user_name} for {duration_hours} hour(s)`,
       block_success_description: `{user_name} cannot trigger {persona_name} and their messages/media are now hidden until {expires_at}.`,
       mute_success_description: `{user_name} cannot trigger {persona_name} until {expires_at}.`,
-      block_footer: `Server managers may remove this with /server user-blacklist remove.`,
+      block_footer: `Server managers may remove this with /server user-blacklist remove. Disable blocking through /capabilities manage`,
       unmute_success_title: `🔊 {persona_name} Unmuted {user_name}`,
       unblock_success_title: `✅ {persona_name} Unblocked {user_name}`,
       unblock_success_description: `Removed the active {block_type} for {user_name} from {persona_name}.`,
@@ -83,6 +83,7 @@ export default {
       notice_reference_line: `Reference: {message_url}`,
       notice_reference_count_line: `Using {count} reference image(s).`,
       generating_footer: `This may take 1-3 minutes.`,
+      generated_after_seconds_line: `Generated in {seconds} seconds`,
     },
     document: {
       reading_title: `📄 Reading File Contents...`,

@@ -19,6 +19,22 @@ Flow:
 
 `commandLoader.ts` is an ESM-only loader. It uses async directory reads while building slash-command registration data and dynamically imports command modules so command files can use top-level await. Do not add `require`, `module.exports`, or synchronous directory traversal to command discovery.
 
+### Single-flight loading (race protection)
+
+`loadCommandData()` is called from two places: the startup registration path (`clientReady/01_registercommands.ts`) and the lazy first-interaction path (`interactionCreate/handleCommands.ts`). It is memoized behind a single shared promise (`cachedCommandDataPromise`) so both callers await **one** evaluation.
+
+This guards against a startup race: if an interaction arrives while registration is still loading, a second concurrent `loadCommandData()` would independently `await import()` the same command modules. Because ES module evaluation interleaves across `await` points, the second loader could read an export binding (e.g. `configureSubcommand`) while the module was still in its Temporal Dead Zone, throwing `Cannot access 'configureSubcommand' before initialization` and silently skipping that command — leaving the bot "dead" for those commands until restart.
+
+The memoized promise is **not** cached when a load fails catastrophically (empty execution map) or rejects, so a later interaction can retry instead of locking in a broken state. `handleCommands.ts` likewise only commits its module-level maps when the load produced commands. New callers must use the exported `loadCommandData()`, never the private `loadCommandDataUncached()`.
+
+### Import hygiene (keep the loaded graph shallow)
+
+The race above is only *possible* because a command module's static import graph can be large and cyclic. Most command files import the repositories barrel (`@/utils/db/repositories`), so any heavy dependency reachable from that barrel is pulled into every command load.
+
+Rule: **data-layer modules (repositories, caches) must not import high-level subsystems** (context building, tools, webhooks, providers). Import shared leaf constants directly from their owning leaf module, not from a barrel that also re-exports heavy code. Example: `ServerRepository.ts` imports `DEFAULT_SYSTEM_PROMPT` from `@/utils/text/context/templates` (a leaf), **not** from `@/utils/text/contextBuilder` (a barrel that also re-exports `buildContext` and its tool/webhook/provider graph). That single edge previously routed the entire runtime subsystem into the repositories barrel.
+
+Run `bunx madge --circular --extensions ts --ts-config tsconfig.json src` to audit cycles. Remaining cycles are expected to be either type-only (`import type`, erased at runtime), localized repository↔cache↔barrel cycles, or self-contained subsystem-internal cycles (Matrix bridge, chat pipeline) — none should route the repositories barrel into context/tool/webhook code.
+
 ## Discord UI Helper Layout
 
 Command files import Discord UI helpers from responsibility-owned modules:
@@ -424,7 +440,7 @@ Any command that performs AI work the invoking user triggers must overlay that u
 
 The one deliberate exception is `/model embedding`, which re-embeds **server-wide** documents under server credentials (`resolveCapabilityCredentials(serverId, "embedding")` with no `userId`). This is bulk maintenance of a pre-existing server resource rather than a fresh user action, so it intentionally stays on server credentials.
 
-Forward-looking command rewrite guidance (naming conventions, checklist-style settings pattern, migration map) is now part of `docs/guides/adding-slash-command.md`. The runtime loader and current implementation still use the existing `src/commands/` structure.
+Forward-looking command rewrite guidance (naming conventions, checklist-style settings pattern, migration map) is now part of `docs/contributor-guides/adding-slash-command.md`. The runtime loader and current implementation still use the existing `src/commands/` structure.
 
 ## Adding a New Command
 

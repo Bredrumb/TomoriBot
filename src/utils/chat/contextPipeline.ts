@@ -23,6 +23,7 @@ import {
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
+import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
 import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
@@ -297,6 +298,12 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     ? await getCachedChannelPrompt(effectivePersona.server_id, channel.id)
     : null;
 
+  // Resolve any per-channel context note. Additive alongside the persona-scoped note;
+  // global note is only used when neither is set.
+  const channelContextNote = effectivePersona.server_id
+    ? await getCachedChannelContextNote(effectivePersona.server_id, channel.id)
+    : null;
+
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
     serverName: turn.serverName,
@@ -319,6 +326,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     publicPersonaAttributes,
     tomoriConfig: effectivePersona.config,
     channelPromptOverride,
+    channelContextNote,
     personaPrompt: effectivePersona.persona_prompt ?? null,
     personaLineageId: effectivePersona.persona_lineage_id,
     isDMChannel: turn.isDMChannel,

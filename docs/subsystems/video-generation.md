@@ -33,6 +33,8 @@ This mirrors the image-generation architecture, but all provider implementations
 
 The user-facing `video_generation` tool notice now mirrors the image notice format: it includes the active video model codename, a trimmed copy of the raw tool-call prompt, optional reference-image usage, and a separate timing line. System-added prompt material is not shown.
 
+The delivered video message also mirrors the image delivery format. `GenerateVideoTool.sendGeneratedVideo` wraps the MP4 in a Components V2 payload (`utils/discord/generatedVideoMessage.ts` → `buildGeneratedVideoComponentsV2Payload`): a `MediaGallery` item holds the `attachment://` video so Discord renders its inline player, and a `TextDisplay` footer shows a localized "Generated in Xs" line (`tools.video.generated_after_seconds_line`) below it. The timer is measured from `execute()` start to the send call. Each send path (persona webhook, then bot message) falls back to a plain attachment-only message if Components V2 is rejected; that fallback keeps the native inline player but drops the timing footer. Media Gallery is used rather than a plain `content` caption because message content always renders *above* attachments, whereas the footer should sit below the video to match generated images.
+
 ## Providers
 
 Provider routing is resolved through `utils/provider/providerInfoRegistry.ts`.

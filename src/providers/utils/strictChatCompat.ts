@@ -169,7 +169,11 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
     if (current.role === next.role && !hasToolMetadata(current) && !hasToolMetadata(next)) {
       const combined = [...normalizeToParts(current.content), ...normalizeToParts(next.content)];
       // Preserve any extra keys on the run's first message while overriding content.
-      current = { ...current, content: combined };
+      const allText = combined.every((part) => part.type === "text");
+      current = {
+        ...current,
+        content: allText ? combined.map((part) => String(part.text)).join("\n") : combined,
+      };
     } else {
       merged.push(current);
       current = next;

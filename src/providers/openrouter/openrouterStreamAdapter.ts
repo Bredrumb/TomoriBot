@@ -200,6 +200,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   private readonly reasoningContentSpillGuard = new ReasoningContentSpillGuard("OpenRouter");
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
+  // Upstream backend OpenRouter routed to (e.g. "minimax-cn"); surfaced in thought logs.
+  private servingProvider?: string;
   private speakerGuardEnabled = false;
   private speakerGuardAllowedSourceNames: string[] = [];
 
@@ -419,6 +421,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     this.reasoningDetailsAccumulator = [];
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
+    this.servingProvider = undefined;
     const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
     this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
       botName,
@@ -1562,6 +1565,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   processChunk(chunk: RawStreamChunk): ProcessedChunk {
     const openrouterChunk = chunk.data as OpenrouterStreamChunk;
 
+    // Capture the upstream serving backend (OpenRouter routes the request to an endpoint
+    // such as "minimax-cn" / "DeepInfra"). It rides on the top-level `provider` field and
+    // can appear on any chunk; persist the first non-empty value so the thought log can
+    // attribute reasoning leaks to the specific backend that produced them.
+    if (typeof openrouterChunk.provider === "string" && openrouterChunk.provider.trim().length > 0) {
+      this.servingProvider ??= openrouterChunk.provider.trim();
+    }
+
     // Handle errors first (both pre-stream and mid-stream errors)
     if ("error" in openrouterChunk && openrouterChunk.error) {
       const providerErrorCandidate = openrouterChunk.error as ProviderError;
@@ -1972,6 +1983,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         type: "text",
         content: choice.delta.content,
         thoughts: thoughts.length > 0 ? thoughts : undefined,
+        servingProvider: this.servingProvider,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       };
     }
@@ -1981,6 +1993,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       type: "text",
       content: "",
       thoughts: thoughts.length > 0 ? thoughts : undefined,
+      servingProvider: this.servingProvider,
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     };
   }

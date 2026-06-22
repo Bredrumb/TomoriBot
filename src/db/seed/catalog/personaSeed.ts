@@ -112,11 +112,26 @@ export function validatePersonas(): string[] {
 }
 
 export function buildPersonaSeedStatements(): string[] {
-  const values = rowsOf()
+  const rows = rowsOf();
+
+  const backfillValues = rows
+    .map((preset) => `  (${str(preset.name)}, CAST(${preset.lineageId} AS BIGINT))`)
+    .join(",\n");
+
+  const backfillStatement = `UPDATE persona_presets
+SET preset_lineage_id = seed.lineage_id
+FROM (VALUES
+${backfillValues}
+) AS seed(name, lineage_id)
+WHERE persona_presets.persona_preset_name = seed.name
+  AND persona_presets.preset_lineage_id IS NULL;`;
+
+  const values = rows
     .map((preset) => `  (${renderPersonaTuple(preset)})`)
     .join(",\n");
 
   return [
+    backfillStatement,
     `INSERT INTO persona_presets (${PERSONA_COLUMNS})\nVALUES\n${values}\n${PERSONA_ON_CONFLICT}`,
     OFFICIAL_ATTRIBUTE_FLAGS_UPDATE,
   ];

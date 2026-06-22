@@ -36,6 +36,7 @@ export default {
       fetched_content_field: `取得コンテンツ`,
       footer: `プロバイダー: {provider} | モデル: {model}`,
       footer_with_generation_time: `プロバイダー: {provider} | モデル: {model} | 生成時間: {generation_time}`,
+      provider_with_serving: `{provider}（{serving_provider}経由）`,
     },
     message_interaction: {
       reply_context_author: `返信先: {user}`,
@@ -125,6 +126,9 @@ export default {
       "503_default_message": `Anthropicは現在利用できないか、過負荷状態です。`,
       temperature_top_p_conflict_message: `Anthropic は Temperature と Top-P を同時に受け付けません。\`/config parameters\` を使って、そのプロバイダーの **Temperature** か **Top P** のどちらかを調整してください。`,
       unknown_default_message: `Anthropicとの通信中に予期しないエラーが発生しました。`,
+    },
+    nvidia: {
+      "404_default_message": `リクエストされた NVIDIA NIM モデルが見つかりません。NVIDIAによって非推奨にされた可能性があります。\`/model text\` で別のモデルに切り替えてください。`,
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname}が新しいことを学びました！`,

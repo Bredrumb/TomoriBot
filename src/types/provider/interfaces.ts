@@ -80,6 +80,8 @@ export interface ThoughtLogPayload {
   firstReplyUrl?: string;
   /** Total provider streaming time represented by this thought log, in milliseconds. */
   generationDurationMs?: number;
+  /** OpenRouter-only: upstream serving backend (e.g. "minimax-cn"), shown in the footer. */
+  servingProvider?: string;
 }
 
 /**

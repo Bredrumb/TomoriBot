@@ -4,6 +4,11 @@ import { type ChunkProcessingResult, DISCORD_STREAMING_CONSTANTS, type StreamSta
 import { log } from "@/utils/misc/logger";
 import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
 import { hasTrailingIncompleteMarkdownTable } from "@/utils/text/markdownTable";
+import {
+  endsWithReasoningTagPrefix,
+  findReasoningTagClose,
+  findReasoningTagOpen,
+} from "@/providers/utils/reasoningTags";
 
 function shouldDelayTrailingPeriodFlush(buffer: string, periodMatch: RegExpExecArray): boolean {
   const periodEndIndex = periodMatch.index + periodMatch[0].length;
@@ -55,41 +60,43 @@ export function drainThinkBlocksFromBuffer(state: StreamState): void {
         state.buffer = "";
       }
 
-      const closeIdx = state.thinkBlockBuffer.indexOf("</think>");
-      if (closeIdx === -1) {
+      const closeMatch = findReasoningTagClose(state.thinkBlockBuffer);
+      if (!closeMatch) {
         break;
       }
 
-      const thinkContent = state.thinkBlockBuffer.slice(0, closeIdx).trim();
+      const thinkContent = state.thinkBlockBuffer.slice(0, closeMatch.index).trim();
       if (thinkContent) {
         state.thoughtRawSegments.push(thinkContent);
         log.info(`Stream: Captured ${thinkContent.length} chars of think block content for thought log`);
       }
 
-      const afterClose = state.thinkBlockBuffer.slice(closeIdx + "</think>".length);
+      const afterClose = state.thinkBlockBuffer.slice(closeMatch.index + closeMatch.length);
       state.thinkBlockBuffer = "";
       state.isInsideThinkBlock = false;
       state.buffer += afterClose;
     } else {
-      const openIdx = state.buffer.indexOf("<think>");
-      const closeIdx = state.buffer.indexOf("</think>");
+      const openMatch = findReasoningTagOpen(state.buffer);
+      const closeMatch = findReasoningTagClose(state.buffer);
+      const openIdx = openMatch?.index ?? -1;
+      const closeIdx = closeMatch?.index ?? -1;
 
-      if (closeIdx !== -1 && (openIdx === -1 || closeIdx < openIdx)) {
+      if (closeMatch && closeIdx !== -1 && (openIdx === -1 || closeIdx < openIdx)) {
         const thinkContent = state.buffer.slice(0, closeIdx).trim();
         if (thinkContent) {
           state.thoughtRawSegments.push(thinkContent);
           log.info(`Stream: Captured ${thinkContent.length} chars before stray </think> for thought log`);
         }
 
-        state.buffer = state.buffer.slice(closeIdx + "</think>".length);
+        state.buffer = state.buffer.slice(closeMatch.index + closeMatch.length);
         continue;
       }
 
-      if (openIdx === -1) {
+      if (!openMatch || openIdx === -1) {
         break;
       }
 
-      state.thinkBlockBuffer = state.buffer.slice(openIdx + "<think>".length);
+      state.thinkBlockBuffer = state.buffer.slice(openMatch.index + openMatch.length);
       state.buffer = state.buffer.slice(0, openIdx);
       state.isInsideThinkBlock = true;
     }
@@ -188,20 +195,11 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
     return true;
   }
 
-  const THINK_OPEN = "<think>";
-  for (let len = THINK_OPEN.length - 1; len >= 1; len--) {
-    if (buffer.endsWith(THINK_OPEN.slice(0, len))) {
-      log.info("Stream: Buffer ends with partial <think> tag prefix");
-      return true;
-    }
-  }
-
-  const THINK_CLOSE = "</think>";
-  for (let len = THINK_CLOSE.length - 1; len >= 1; len--) {
-    if (buffer.endsWith(THINK_CLOSE.slice(0, len))) {
-      log.info("Stream: Buffer ends with partial </think> tag prefix");
-      return true;
-    }
+  // Hold the buffer when it ends mid think tag (incl. namespaced variants like
+  // `<mm:think>`) so a split marker is not flushed as visible text.
+  if (endsWithReasoningTagPrefix(buffer)) {
+    log.info("Stream: Buffer ends with partial think tag prefix");
+    return true;
   }
 
   if (/<details(?:\s[^>]*)?$/.test(buffer)) {

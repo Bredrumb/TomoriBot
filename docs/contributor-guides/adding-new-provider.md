@@ -741,7 +741,7 @@ If you want another agent to implement this in one pass, give it this bounded sc
 Recommended handoff prompt:
 
 ```text
-Implement Phase 1 and Phase 2 from the OpenAI-Compatible Providers section in docs/guides/adding-new-provider.md, then implement only the bounded DeepSeek MVP from the same guide.
+Implement Phase 1 and Phase 2 from the OpenAI-Compatible Providers section in docs/contributor-guides/adding-new-provider.md, then implement only the bounded DeepSeek MVP from the same guide.
 
 Constraints:
 - preserve current custom-provider behavior

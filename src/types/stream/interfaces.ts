@@ -38,6 +38,8 @@ export interface ProcessedChunk {
   functionCall?: FunctionCall;
   error?: ProviderError;
   thoughts?: ThoughtLogEntry[];
+  /** OpenRouter-only: the upstream backend that served this chunk (e.g. "minimax-cn"). */
+  servingProvider?: string;
   metadata?: Record<string, unknown>;
 }
 

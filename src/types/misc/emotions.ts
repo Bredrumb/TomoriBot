@@ -77,6 +77,31 @@ export const getAllEmotionKeys = (): string[] => {
 };
 
 /**
+ * Emotion keys intentionally excluded from the manual `/server expressions edit`
+ * picker. The full 28-key taxonomy is retained everywhere else (AI classification,
+ * storage, any future classifier) — these three are simply hidden from the manual
+ * dropdown so it fits within Discord's 25-option string-select limit. Each was chosen
+ * because it is rare in actual emoji/sticker art and folds cleanly into a neighbor:
+ *   - grief       → sadness
+ *   - remorse     → embarrassment / sadness
+ *   - realization → surprise / curiosity
+ */
+export const MANUAL_EDIT_EXCLUDED_EMOTIONS: readonly EmotionKey[] = [
+  EmotionKey.GRIEF,
+  EmotionKey.REMORSE,
+  EmotionKey.REALIZATION,
+];
+
+/**
+ * Get the curated 25-emotion subset offered in the manual expression-edit select menu.
+ * Derived from the full taxonomy minus {@link MANUAL_EDIT_EXCLUDED_EMOTIONS} so it stays
+ * in sync if the enum changes. Order follows the EmotionKey declaration order.
+ */
+export const getManualEditEmotionKeys = (): string[] => {
+  return getAllEmotionKeys().filter((key) => !MANUAL_EDIT_EXCLUDED_EMOTIONS.includes(key as EmotionKey));
+};
+
+/**
  * Validate if a string is a valid emotion key
  */
 export const isValidEmotionKey = (key: string): key is EmotionKey => {

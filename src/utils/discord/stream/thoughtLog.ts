@@ -41,6 +41,7 @@ export function buildThoughtLogPayload(
     raw: raw || undefined,
     firstReplyUrl: state.firstReplyUrl,
     generationDurationMs: normalizedDurationMs,
+    servingProvider: state.servingProvider,
   };
 }
 

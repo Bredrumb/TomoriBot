@@ -33,6 +33,7 @@ export async function appendDialogueHistoryContext(params: {
   botName: string;
   tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null;
+  channelContextNote?: { note: string; depth: number } | null;
   mediaContextWindow?: number;
   includeTimestamps: boolean;
   isUserImpersonation: boolean;
@@ -57,15 +58,29 @@ export async function appendDialogueHistoryContext(params: {
     mediaWindowCutoff,
   );
 
-  const effectiveContextNote =
-    params.tomoriState?.context_note?.trim() || params.tomoriConfig.context_note?.trim() || null;
-  const effectiveContextNoteDepth = effectiveContextNote
-    ? params.tomoriState?.context_note?.trim()
-      ? (params.tomoriState.context_note_depth ?? 0)
-      : (params.tomoriConfig.context_note_depth ?? 0)
-    : 0;
-  const contextNoteTargetIndex = effectiveContextNote ? Math.max(0, totalMessages - effectiveContextNoteDepth) : -1;
-  let contextNoteEmitted = false;
+  // Build the ordered list of active context notes.
+  // Persona and channel notes are additive (both injected when set).
+  // Global note is a fallback used only when neither persona nor channel has one.
+  const personaNoteText = params.tomoriState?.context_note?.trim() || null;
+  const channelNoteText = params.channelContextNote?.note?.trim() || null;
+
+  const activeNotes: Array<{ text: string; targetIndex: number; emitted: boolean }> = [];
+
+  if (personaNoteText) {
+    const depth = params.tomoriState?.context_note_depth ?? 0;
+    activeNotes.push({ text: personaNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
+  }
+  if (channelNoteText) {
+    const depth = params.channelContextNote?.depth ?? 0;
+    activeNotes.push({ text: channelNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
+  }
+  if (activeNotes.length === 0) {
+    const globalNoteText = params.tomoriConfig.context_note?.trim() || null;
+    if (globalNoteText) {
+      const depth = params.tomoriConfig.context_note_depth ?? 0;
+      activeNotes.push({ text: globalNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
+    }
+  }
 
   const botNameLower = params.botName.toLowerCase();
   for (const [index, msg] of params.simplifiedMessageHistory.entries()) {
@@ -82,15 +97,17 @@ export async function appendDialogueHistoryContext(params: {
       type: msg.authorType,
     };
 
-    if (!contextNoteEmitted && effectiveContextNote && index === contextNoteTargetIndex) {
-      pushDialogueHistoryContextItem(
-        params.contextItems,
-        "user",
-        [{ type: "text", text: `[System: ${effectiveContextNote}]` }],
-        "context_note_injection",
-        ContextItemTag.CONTEXT_NOTE_INJECTION,
-      );
-      contextNoteEmitted = true;
+    for (const note of activeNotes) {
+      if (!note.emitted && index === note.targetIndex) {
+        pushDialogueHistoryContextItem(
+          params.contextItems,
+          "user",
+          [{ type: "text", text: `[System: ${note.text}]` }],
+          "context_note_injection",
+          ContextItemTag.CONTEXT_NOTE_INJECTION,
+        );
+        note.emitted = true;
+      }
     }
 
     const parts: ContextPart[] = [];
@@ -147,14 +164,16 @@ export async function appendDialogueHistoryContext(params: {
     }
   }
 
-  if (!contextNoteEmitted && effectiveContextNote) {
-    pushDialogueHistoryContextItem(
-      params.contextItems,
-      "user",
-      [{ type: "text", text: `[System: ${effectiveContextNote}]` }],
-      "context_note_injection",
-      ContextItemTag.CONTEXT_NOTE_INJECTION,
-    );
+  for (const note of activeNotes) {
+    if (!note.emitted) {
+      pushDialogueHistoryContextItem(
+        params.contextItems,
+        "user",
+        [{ type: "text", text: `[System: ${note.text}]` }],
+        "context_note_injection",
+        ContextItemTag.CONTEXT_NOTE_INJECTION,
+      );
+    }
   }
 }
 

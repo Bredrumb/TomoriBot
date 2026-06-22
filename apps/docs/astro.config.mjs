@@ -204,7 +204,8 @@ const sidebar = [
   buildSidebarSection("pipelines"),
   buildSidebarSection("subsystems"),
   buildSidebarSection("integrations"),
-  buildSidebarSection("guides"),
+  buildSidebarSection("contributor-guides"),
+  buildSidebarSection("user-guides"),
 ];
 
 export default defineConfig({
@@ -213,10 +214,31 @@ export default defineConfig({
     starlight({
       title: "TomoriBot",
       description: "Developer documentation for TomoriBot",
+      // Served from apps/docs/public/favicon.ico at the site root as /favicon.ico.
+      favicon: "/favicon.ico",
+      head: [
+        {
+          tag: "meta",
+          attrs: { property: "og:image", content: "https://docs.tomoribot.app/tomoricon.png" },
+        },
+        {
+          tag: "link",
+          attrs: { rel: "icon", type: "image/png", href: "/tomoricon.png", sizes: "256x256" },
+        },
+        {
+          tag: "link",
+          attrs: { rel: "apple-touch-icon", href: "/tomoricon.png" },
+        },
+      ],
       customCss: ["/src/styles/custom.css"],
-      social: {
-        github: "https://github.com/Bredrumb/TomoriBot",
+      // SiteTitle override renders /favicon.ico directly as a plain <img> in the nav header.
+      // The standard `logo` config can't reference public/ files because it generates a Vite
+      // import that expects an Astro image object { src, width, height }, not a URL string.
+      components: {
+        SiteTitle: "./src/components/SiteTitle.astro",
       },
+      // Starlight v0.33.0+ expects an array of link items instead of a keyed object.
+      social: [{ icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" }],
       sidebar,
     }),
   ],

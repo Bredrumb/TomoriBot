@@ -49,4 +49,55 @@ describe("ThinkBlockContentStripper", () => {
       changed: true,
     });
   });
+
+  it("captures a namespaced stray close tag (MiniMax <mm:think>) from a single delta", () => {
+    // Regression: OpenRouter separated MiniMax reasoning into delta.reasoning but
+    // leaked the closing boundary "s either.</mm:think>" into delta.content.
+    const stripper = new ThinkBlockContentStripper({ loggerName: "test" });
+    stripper.reset();
+
+    expect(stripper.strip("s either.</mm:think>Yes indeed I have!")).toEqual({
+      visibleText: "Yes indeed I have!",
+      thoughtText: "s either.",
+      changed: true,
+    });
+  });
+
+  it("strips a full namespaced think block", () => {
+    const stripper = new ThinkBlockContentStripper({ loggerName: "test" });
+    stripper.reset();
+
+    expect(stripper.strip("<mm:think>plotting the reply</mm:think>Hello!")).toEqual({
+      visibleText: "Hello!",
+      thoughtText: "plotting the reply",
+      changed: true,
+    });
+  });
+
+  it("captures a namespaced close tag split across chunks", () => {
+    const stripper = new ThinkBlockContentStripper({ loggerName: "test" });
+    stripper.reset();
+
+    expect(stripper.strip("<mm:think>hidden</mm:thi")).toEqual({
+      visibleText: "",
+      thoughtText: "hidden",
+      changed: true,
+    });
+    expect(stripper.strip("nk>Visible reply")).toEqual({
+      visibleText: "Visible reply",
+      thoughtText: "",
+      changed: true,
+    });
+  });
+
+  it("leaves a non-think namespaced tag visible", () => {
+    const stripper = new ThinkBlockContentStripper({ loggerName: "test" });
+    stripper.reset();
+
+    expect(stripper.strip("draw <svg:rect> here")).toEqual({
+      visibleText: "draw <svg:rect> here",
+      thoughtText: "",
+      changed: false,
+    });
+  });
 });

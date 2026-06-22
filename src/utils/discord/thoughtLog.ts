@@ -73,7 +73,14 @@ function buildThoughtLogEmbeds(args: {
     attributionLine?.trim(),
   ].filter((line): line is string => Boolean(line?.trim()));
   const description = descriptionLines.join("\n").slice(0, EMBED_DESCRIPTION_LIMIT);
-  const provider = tomoriState.llm.llm_provider;
+  // For OpenRouter, the upstream serving backend (e.g. "minimax-cn") is appended so admins
+  // can identify a backend that bled reasoning into content and pin/avoid it.
+  const provider = thoughtLog.servingProvider
+    ? localizer(locale, "genai.thought_log.provider_with_serving", {
+        provider: tomoriState.llm.llm_provider,
+        serving_provider: thoughtLog.servingProvider,
+      })
+    : tomoriState.llm.llm_provider;
   const model = getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name);
   const hasThinkingContent = Boolean(
     normalizeThoughtLogText(thoughtLog.summary) || normalizeThoughtLogText(thoughtLog.raw),
@@ -221,6 +228,7 @@ export function mergeThoughtLogPayload(
     fetchedContent,
     firstReplyUrl,
     generationDurationMs,
+    servingProvider: base?.servingProvider || next?.servingProvider,
   };
 }
 

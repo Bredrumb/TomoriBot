@@ -20,11 +20,11 @@ on:
         type: boolean
         default: false
 
-# OIDC permissions for AWS authentication
+# Least-privilege default token: OIDC for AWS role assumption + read-only repo
+# contents for checkout. Jobs that need more (e.g. create-release) elevate locally.
 permissions:
   id-token: write
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   # SECRETS VALIDATION
@@ -33,6 +33,15 @@ jobs:
     if: vars.ACTIVE_PROVIDER == 'aws'
     steps:
       - name: Validate deployment infrastructure secrets
+        # Secrets are mapped to env vars (not interpolated into the script body) so a
+        # value containing shell metacharacters can never break or inject into the test.
+        env:
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REPOSITORY_NAME: ${{ secrets.ECR_REPOSITORY_NAME }}
+          RDS_MASTER_PASSWORD: ${{ secrets.RDS_MASTER_PASSWORD }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           echo "=========================================="
           echo "Validating GitHub Secrets (Infrastructure Only)"
@@ -47,15 +56,15 @@ jobs:
 
           # Infrastructure secrets required for deployment
           echo "Checking infrastructure secrets..."
-          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then missing_secrets+=("AWS_ROLE_ARN"); fi
-          if [ -z "${{ secrets.AWS_REGION }}" ]; then missing_secrets+=("AWS_REGION"); fi
-          if [ -z "${{ secrets.ECR_REPOSITORY_NAME }}" ]; then missing_secrets+=("ECR_REPOSITORY_NAME"); fi
-          if [ -z "${{ secrets.RDS_MASTER_PASSWORD }}" ]; then missing_secrets+=("RDS_MASTER_PASSWORD"); fi
-          if [ -z "${{ secrets.PAT_TOKEN }}" ]; then missing_secrets+=("PAT_TOKEN"); fi
+          if [ -z "$AWS_ROLE_ARN" ]; then missing_secrets+=("AWS_ROLE_ARN"); fi
+          if [ -z "$AWS_REGION" ]; then missing_secrets+=("AWS_REGION"); fi
+          if [ -z "$ECR_REPOSITORY_NAME" ]; then missing_secrets+=("ECR_REPOSITORY_NAME"); fi
+          if [ -z "$RDS_MASTER_PASSWORD" ]; then missing_secrets+=("RDS_MASTER_PASSWORD"); fi
+          if [ -z "$PAT_TOKEN" ]; then missing_secrets+=("PAT_TOKEN"); fi
 
           # Optional secrets
           optional_secrets=()
-          if [ -z "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then optional_secrets+=("DISCORD_WEBHOOK_URL"); fi
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then optional_secrets+=("DISCORD_WEBHOOK_URL"); fi
 
           if [ ${#missing_secrets[@]} -gt 0 ]; then
             echo ""
@@ -792,6 +801,9 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [verify-ecs-deployment, check-release-assets]
     if: needs.verify-ecs-deployment.outputs.deployment-status == 'success' && needs.check-release-assets.outputs.has-assets == 'true'
+    # Release creation publishes a GitHub Release; the default token needs write here.
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -876,6 +888,7 @@ jobs:
           VERSION: ${{ needs.check-release-assets.outputs.version }}
           IMAGE_NAME: ${{ steps.release-notes.outputs.image-name }}
           MENTION_ROLE_ID: ${{ secrets.RELEASE_DISCORD_MENTION_ROLE_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           if [ "$STATUS" == "success" ]; then
             statusLabel="✅ Deployed successfully"
@@ -913,7 +926,7 @@ jobs:
             fi
           fi
 
-          discordWebhookUrl="${{ secrets.DISCORD_WEBHOOK_URL }}"
+          discordWebhookUrl="${DISCORD_WEBHOOK_URL}"
           if [ -z "$discordWebhookUrl" ]; then
             echo "DISCORD_WEBHOOK_URL not configured — skipping Discord notification"
             exit 0

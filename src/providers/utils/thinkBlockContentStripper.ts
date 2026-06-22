@@ -1,7 +1,9 @@
 import { log } from "@/utils/misc/logger";
-
-const THINK_OPEN = "<think>";
-const THINK_CLOSE = "</think>";
+import {
+  findReasoningTagClose,
+  findReasoningTagOpen,
+  findTrailingReasoningTagPrefix,
+} from "@/providers/utils/reasoningTags";
 
 type PendingBoundaryKind = "outside-close" | "outside-open" | "inside-close";
 
@@ -67,22 +69,25 @@ export class ThinkBlockContentStripper {
 
     while (cursor < input.length) {
       if (!this.insideThinkBlock) {
-        const startIdx = input.indexOf(THINK_OPEN, cursor);
-        const endIdx = input.indexOf(THINK_CLOSE, cursor);
+        const openMatch = findReasoningTagOpen(input, cursor);
+        const closeMatch = findReasoningTagClose(input, cursor);
+        const startIdx = openMatch?.index ?? -1;
+        const endIdx = closeMatch?.index ?? -1;
 
         if (startIdx === -1 && endIdx === -1) {
           const remaining = input.slice(cursor);
-          const partialClose = findTrailingMarkerPrefix(remaining, [THINK_CLOSE]);
-          if (partialClose) {
+          const partial = findTrailingReasoningTagPrefix(remaining);
+          if (partial?.kind === "close") {
+            // Possible closing tag split across chunks: hold the whole remainder
+            // so any preceding text routes to thoughts once the close arrives.
             this.pendingBoundaryText = remaining;
             this.pendingBoundaryKind = "outside-close";
             break;
           }
 
-          const partialOpen = findTrailingMarkerPrefix(remaining, [THINK_OPEN]);
-          if (partialOpen) {
-            visibleText += remaining.slice(0, partialOpen.index);
-            this.pendingBoundaryText = remaining.slice(partialOpen.index);
+          if (partial?.kind === "open") {
+            visibleText += remaining.slice(0, partial.index);
+            this.pendingBoundaryText = remaining.slice(partial.index);
             this.pendingBoundaryKind = "outside-open";
             break;
           }
@@ -91,21 +96,22 @@ export class ThinkBlockContentStripper {
           break;
         }
 
-        if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
+        if (closeMatch && endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
           captureThought(input.slice(cursor, endIdx));
-          cursor = endIdx + THINK_CLOSE.length;
+          cursor = closeMatch.index + closeMatch.length;
           continue;
         }
 
-        if (startIdx !== -1) {
+        if (openMatch && startIdx !== -1) {
           visibleText += input.slice(cursor, startIdx);
           this.insideThinkBlock = true;
           this.hasCapturedThoughtInCurrentBlock = false;
-          cursor = startIdx + THINK_OPEN.length;
+          cursor = openMatch.index + openMatch.length;
         }
       } else {
         const remaining = input.slice(cursor);
-        const endIdx = input.indexOf(THINK_CLOSE, cursor);
+        const closeMatch = findReasoningTagClose(input, cursor);
+        const endIdx = closeMatch?.index ?? -1;
         const personaMatch = this.personaSpeakerLabelRegex?.exec(remaining) ?? null;
         const personaCloseAbsIdx = personaMatch !== null ? cursor + personaMatch.index : -1;
         const thoughtBeforePersona =
@@ -118,11 +124,11 @@ export class ThinkBlockContentStripper {
         const usePersonaCloser =
           personaCloserActive && personaCloseAbsIdx !== -1 && (endIdx === -1 || personaCloseAbsIdx < endIdx);
 
-        if (useExplicitCloser) {
+        if (useExplicitCloser && closeMatch) {
           captureThought(input.slice(cursor, endIdx));
           this.insideThinkBlock = false;
           this.hasCapturedThoughtInCurrentBlock = false;
-          cursor = endIdx + THINK_CLOSE.length;
+          cursor = closeMatch.index + closeMatch.length;
           continue;
         }
 
@@ -135,10 +141,10 @@ export class ThinkBlockContentStripper {
           continue;
         }
 
-        const partialClose = findTrailingMarkerPrefix(remaining, [THINK_CLOSE]);
-        if (partialClose) {
-          captureThought(remaining.slice(0, partialClose.index));
-          this.pendingBoundaryText = remaining.slice(partialClose.index);
+        const partial = findTrailingReasoningTagPrefix(remaining);
+        if (partial?.kind === "close") {
+          captureThought(remaining.slice(0, partial.index));
+          this.pendingBoundaryText = remaining.slice(partial.index);
           this.pendingBoundaryKind = "inside-close";
           break;
         }
@@ -180,8 +186,8 @@ export class ThinkBlockContentStripper {
     }
 
     if (pendingBoundaryKind === "outside-close") {
-      const partialClose = findTrailingMarkerPrefix(pendingBoundaryText, [THINK_CLOSE]);
-      const thoughtText = partialClose ? pendingBoundaryText.slice(0, partialClose.index) : pendingBoundaryText;
+      const partial = findTrailingReasoningTagPrefix(pendingBoundaryText);
+      const thoughtText = partial ? pendingBoundaryText.slice(0, partial.index) : pendingBoundaryText;
       return {
         visibleText: "",
         thoughtText: this.options.captureThoughts === false ? "" : thoughtText,
@@ -190,9 +196,9 @@ export class ThinkBlockContentStripper {
     }
 
     if (pendingBoundaryKind === "outside-open") {
-      const partialOpen = findTrailingMarkerPrefix(pendingBoundaryText, [THINK_OPEN]);
+      const partial = findTrailingReasoningTagPrefix(pendingBoundaryText);
       return {
-        visibleText: partialOpen ? pendingBoundaryText.slice(0, partialOpen.index) : pendingBoundaryText,
+        visibleText: partial ? pendingBoundaryText.slice(0, partial.index) : pendingBoundaryText,
         thoughtText: "",
         changed: true,
       };
@@ -204,28 +210,4 @@ export class ThinkBlockContentStripper {
       changed: true,
     };
   }
-}
-
-function findTrailingMarkerPrefix(text: string, markers: readonly string[]): { index: number; marker: string } | null {
-  let bestMatch: { index: number; marker: string; length: number } | null = null;
-
-  for (const marker of markers) {
-    for (let length = marker.length - 1; length >= 1; length--) {
-      const prefix = marker.slice(0, length);
-      if (!text.endsWith(prefix)) {
-        continue;
-      }
-
-      if (!bestMatch || length > bestMatch.length) {
-        bestMatch = {
-          index: text.length - length,
-          marker,
-          length,
-        };
-      }
-      break;
-    }
-  }
-
-  return bestMatch ? { index: bestMatch.index, marker: bestMatch.marker } : null;
 }

@@ -258,7 +258,7 @@ Do not silently ignore the feature without documenting the decision.
 
 See also:
 
-- [`../guides/adding-new-provider.md`](../guides/adding-new-provider)
+- [`../contributor-guides/adding-new-provider.md`](../contributor-guides/adding-new-provider)
 
 ## Official Source Links
 

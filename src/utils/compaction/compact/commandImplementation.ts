@@ -686,7 +686,7 @@ function setupAddToDocsCollector(params: {
     const embeddingModelId =
       getResolvedCapabilityModelId(embeddingCreds, "embedding") ?? tomoriState.config.embedding_model_id;
     const embeddingModel = embeddingModelId ? await llmModelRepo.loadEmbeddingModelById(embeddingModelId) : null;
-    if (!embeddingModel || !embeddingModel.embedding_model_id) {
+    if (!embeddingModel?.embedding_model_id) {
       await replyInfoEmbed(submitInteraction, locale, {
         titleKey: "commands.tool.compact.add_to_docs_no_embedding_title",
         descriptionKey: "commands.tool.compact.add_to_docs_no_embedding_description",
