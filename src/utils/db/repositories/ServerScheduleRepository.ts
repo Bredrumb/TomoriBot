@@ -50,6 +50,12 @@ export type ReminderSelectionRow = {
   reminder_purpose: string;
   reminder_time: Date;
   repetition_interval_hours: number | null;
+  repetition_interval_minutes: number | null;
+  repeat_remaining_count: number | null;
+  repeat_until_time: Date | null;
+  daily_window_start_minutes: number | null;
+  daily_window_end_minutes: number | null;
+  daily_window_timezone_offset: number | null;
   self_reminder: boolean | null;
   channel_disc_id: string;
   created_by_user_id: number | null;
@@ -163,6 +169,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     reminder_purpose: string;
     reminder_time: Date;
     repetition_interval_hours?: number | null;
+    repetition_interval_minutes?: number | null;
+    repeat_remaining_count?: number | null;
+    repeat_until_time?: Date | null;
+    daily_window_start_minutes?: number | null;
+    daily_window_end_minutes?: number | null;
+    daily_window_timezone_offset?: number | null;
     self_reminder?: boolean | null;
     created_by_user_id: number | null;
     persona_id?: number | null;
@@ -176,8 +188,13 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
    * @param reminderId      - Reminder DB ID
    * @param nextReminderTime - New fire time
    */
-  async rescheduleReminder(reminderId: number, nextReminderTime: Date): Promise<ReminderRow | null> {
-    return this.sqlRescheduleReminder(reminderId, nextReminderTime);
+  async rescheduleReminder(
+    reminderId: number,
+    nextReminderTime: Date,
+    repeatRemainingCount?: number | null,
+    repeatUntilTime?: Date | null,
+  ): Promise<ReminderRow | null> {
+    return this.sqlRescheduleReminder(reminderId, nextReminderTime, repeatRemainingCount, repeatUntilTime);
   }
 
   /**
@@ -190,6 +207,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     reminder_purpose: string;
     reminder_time: Date;
     repetition_interval_hours: number | null;
+    repetition_interval_minutes?: number | null;
+    repeat_remaining_count?: number | null;
+    repeat_until_time?: Date | null;
+    daily_window_start_minutes?: number | null;
+    daily_window_end_minutes?: number | null;
+    daily_window_timezone_offset?: number | null;
     self_reminder: boolean;
     user_discord_id: string;
     user_nickname: string;
@@ -208,6 +231,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     reminder_purpose: string;
     reminder_time: Date;
     repetition_interval_hours: number | null;
+    repetition_interval_minutes?: number | null;
+    repeat_remaining_count?: number | null;
+    repeat_until_time?: Date | null;
+    daily_window_start_minutes?: number | null;
+    daily_window_end_minutes?: number | null;
+    daily_window_timezone_offset?: number | null;
     actor: ReminderMutationActor;
   }): Promise<ReminderScopedMutationResult> {
     return this.sqlUpdateReminderCoreForRequester(reminderData);
@@ -517,6 +546,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
             r.reminder_purpose,
             r.reminder_time,
             r.repetition_interval_hours,
+            r.repetition_interval_minutes,
+            r.repeat_remaining_count,
+            r.repeat_until_time,
+            r.daily_window_start_minutes,
+            r.daily_window_end_minutes,
+            r.daily_window_timezone_offset,
             r.self_reminder,
             r.channel_disc_id,
             r.created_by_user_id,
@@ -539,6 +574,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
           r.reminder_purpose,
           r.reminder_time,
           r.repetition_interval_hours,
+          r.repetition_interval_minutes,
+          r.repeat_remaining_count,
+          r.repeat_until_time,
+          r.daily_window_start_minutes,
+          r.daily_window_end_minutes,
+          r.daily_window_timezone_offset,
           r.self_reminder,
           r.channel_disc_id,
           r.created_by_user_id,
@@ -568,6 +609,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     reminder_purpose: string;
     reminder_time: Date;
     repetition_interval_hours?: number | null;
+    repetition_interval_minutes?: number | null;
+    repeat_remaining_count?: number | null;
+    repeat_until_time?: Date | null;
+    daily_window_start_minutes?: number | null;
+    daily_window_end_minutes?: number | null;
+    daily_window_timezone_offset?: number | null;
     self_reminder?: boolean | null;
     created_by_user_id: number | null;
     persona_id?: number | null;
@@ -587,6 +634,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
           reminder_purpose,
           reminder_time,
           repetition_interval_hours,
+          repetition_interval_minutes,
+          repeat_remaining_count,
+          repeat_until_time,
+          daily_window_start_minutes,
+          daily_window_end_minutes,
+          daily_window_timezone_offset,
           self_reminder,
           created_by_user_id,
           persona_id
@@ -598,6 +651,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
           ${reminderData.reminder_purpose},
           ${reminderData.reminder_time},
           ${reminderData.repetition_interval_hours ?? null},
+          ${reminderData.repetition_interval_minutes ?? null},
+          ${reminderData.repeat_remaining_count ?? null},
+          ${reminderData.repeat_until_time ?? null},
+          ${reminderData.daily_window_start_minutes ?? null},
+          ${reminderData.daily_window_end_minutes ?? null},
+          ${reminderData.daily_window_timezone_offset ?? null},
           ${reminderData.self_reminder ?? false},
           ${reminderData.created_by_user_id},
           ${reminderData.persona_id ?? null}
@@ -654,11 +713,18 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     }
   }
 
-  private async sqlRescheduleReminder(reminderId: number, nextReminderTime: Date): Promise<ReminderRow | null> {
+  private async sqlRescheduleReminder(
+    reminderId: number,
+    nextReminderTime: Date,
+    repeatRemainingCount?: number | null,
+    repeatUntilTime?: Date | null,
+  ): Promise<ReminderRow | null> {
     try {
       const [updatedReminder] = await sql`
         UPDATE reminders
         SET reminder_time = ${nextReminderTime},
+            repeat_remaining_count = ${repeatRemainingCount ?? null},
+            repeat_until_time = ${repeatUntilTime ?? null},
             updated_at = CURRENT_TIMESTAMP
         WHERE reminder_id = ${reminderId}
         RETURNING *
@@ -709,6 +775,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     reminder_purpose: string;
     reminder_time: Date;
     repetition_interval_hours: number | null;
+    repetition_interval_minutes?: number | null;
+    repeat_remaining_count?: number | null;
+    repeat_until_time?: Date | null;
+    daily_window_start_minutes?: number | null;
+    daily_window_end_minutes?: number | null;
+    daily_window_timezone_offset?: number | null;
     self_reminder: boolean;
     user_discord_id: string;
     user_nickname: string;
@@ -722,6 +794,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
           reminder_purpose = ${reminderData.reminder_purpose},
           reminder_time = ${reminderData.reminder_time},
           repetition_interval_hours = ${reminderData.repetition_interval_hours},
+          repetition_interval_minutes = ${reminderData.repetition_interval_minutes ?? null},
+          repeat_remaining_count = ${reminderData.repeat_remaining_count ?? null},
+          repeat_until_time = ${reminderData.repeat_until_time ?? null},
+          daily_window_start_minutes = ${reminderData.daily_window_start_minutes ?? null},
+          daily_window_end_minutes = ${reminderData.daily_window_end_minutes ?? null},
+          daily_window_timezone_offset = ${reminderData.daily_window_timezone_offset ?? null},
           self_reminder = ${reminderData.self_reminder},
           user_discord_id = ${reminderData.user_discord_id},
           user_nickname = ${reminderData.user_nickname},
@@ -797,6 +875,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     reminder_purpose: string;
     reminder_time: Date;
     repetition_interval_hours: number | null;
+    repetition_interval_minutes?: number | null;
+    repeat_remaining_count?: number | null;
+    repeat_until_time?: Date | null;
+    daily_window_start_minutes?: number | null;
+    daily_window_end_minutes?: number | null;
+    daily_window_timezone_offset?: number | null;
     actor: ReminderMutationActor;
   }): Promise<ReminderScopedMutationResult> {
     const requesterUserId = reminderData.actor.requester_user_id ?? -1;
@@ -810,6 +894,12 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
           reminder_purpose = ${reminderData.reminder_purpose},
           reminder_time = ${reminderData.reminder_time},
           repetition_interval_hours = ${reminderData.repetition_interval_hours},
+          repetition_interval_minutes = ${reminderData.repetition_interval_minutes ?? null},
+          repeat_remaining_count = ${reminderData.repeat_remaining_count ?? null},
+          repeat_until_time = ${reminderData.repeat_until_time ?? null},
+          daily_window_start_minutes = ${reminderData.daily_window_start_minutes ?? null},
+          daily_window_end_minutes = ${reminderData.daily_window_end_minutes ?? null},
+          daily_window_timezone_offset = ${reminderData.daily_window_timezone_offset ?? null},
           updated_at = CURRENT_TIMESTAMP
         WHERE reminder_id = ${reminderData.reminder_id}
           AND server_id = ${reminderData.server_id}

@@ -1529,7 +1529,13 @@ CREATE TABLE IF NOT EXISTS reminders (
   user_nickname TEXT NOT NULL,                         -- Target user's nickname for display
   reminder_purpose TEXT NOT NULL,                      -- What the reminder is for
   reminder_time TIMESTAMP WITH TIME ZONE NOT NULL,     -- When to trigger the reminder
-  repetition_interval_hours INTEGER,                   -- Optional: repeat interval in hours for recurring reminders
+  repetition_interval_hours INTEGER,                   -- Legacy: repeat interval in hours for recurring reminders
+  repetition_interval_minutes INTEGER,                 -- Optional: repeat interval in minutes for recurring reminders
+  repeat_remaining_count INTEGER,                      -- Optional: finite recurring reminders delete at 0
+  repeat_until_time TIMESTAMP WITH TIME ZONE,           -- Optional: finite recurring reminders stop after this time
+  daily_window_start_minutes INTEGER,                   -- Optional: local minutes after midnight for daily recurring window
+  daily_window_end_minutes INTEGER,                     -- Optional: local minutes after midnight for daily recurring window
+  daily_window_timezone_offset DOUBLE PRECISION,        -- Timezone offset used for local daily recurring window
   self_reminder BOOLEAN DEFAULT false,                 -- Optional: reminder targets the bot itself
   created_by_user_id INT,                              -- User who created this reminder (nullable - set to NULL if user deleted)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1542,6 +1548,16 @@ CREATE TABLE IF NOT EXISTS reminders (
 SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 -- Recurring reminders: optional repeat interval in hours (January 2026)
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
+-- Recurring reminders: optional repeat interval in minutes (June 2026)
+SELECT add_column_if_not_exists('reminders', 'repetition_interval_minutes', 'INTEGER');
+-- Finite recurring reminders: remaining trigger count (June 2026)
+SELECT add_column_if_not_exists('reminders', 'repeat_remaining_count', 'INTEGER');
+-- Finite recurring reminders: optional cutoff time (June 2026)
+SELECT add_column_if_not_exists('reminders', 'repeat_until_time', 'TIMESTAMP WITH TIME ZONE');
+-- Daily recurring reminder windows (June 2026)
+SELECT add_column_if_not_exists('reminders', 'daily_window_start_minutes', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'daily_window_end_minutes', 'INTEGER');
+SELECT add_column_if_not_exists('reminders', 'daily_window_timezone_offset', 'DOUBLE PRECISION');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
 DO $$

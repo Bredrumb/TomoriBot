@@ -26,6 +26,12 @@ import { isBridgeUserId } from "@/utils/bridges";
 const MODAL_CUSTOM_ID = "scheduled_task_remove_modal";
 const REMINDER_SELECT_ID = "reminder_select";
 
+function formatIntervalText(minutes: number): string {
+  if (minutes <= 0) return "0 minutes";
+  if (minutes % 60 === 0) return `${minutes / 60}h`;
+  return `${minutes}m`;
+}
+
 /**
  * @param reminderToRemove - Reminder data to remove
  * @param replyInteraction - Interaction to reply to
@@ -141,10 +147,16 @@ export async function execute(
       });
       const channelName =
         interaction.guild?.channels.cache.get(reminder.channel_disc_id)?.name ?? reminder.channel_disc_id;
+      const repeatMinutes =
+        typeof reminder.repetition_interval_minutes === "number" && reminder.repetition_interval_minutes >= 1
+          ? reminder.repetition_interval_minutes
+          : typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
+            ? reminder.repetition_interval_hours * 60
+            : 0;
       const repeatText =
-        typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
+        repeatMinutes >= 1
           ? localizer(locale, "commands.scheduled-task.remove.select_repeat_text", {
-              hours: reminder.repetition_interval_hours,
+              interval: formatIntervalText(repeatMinutes),
             })
           : "";
       // For Matrix-originated reminders (created_by_user_id = null, user_discord_id

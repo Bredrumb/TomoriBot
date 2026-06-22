@@ -25,6 +25,31 @@ type RelativeTimeKey = keyof typeof RELATIVE_TIME_MULTIPLIERS_MS;
 
 const RELATIVE_TIME_KEYS = Object.keys(RELATIVE_TIME_MULTIPLIERS_MS) as RelativeTimeKey[];
 
+function parseDailyWindowTime(input: string): number | null {
+  const trimmed = input.trim().toLowerCase();
+  const amPmMatch = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  const twentyFourHourMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+
+  let hour: number;
+  let minute: number;
+  if (amPmMatch) {
+    hour = Number.parseInt(amPmMatch[1], 10);
+    minute = amPmMatch[2] ? Number.parseInt(amPmMatch[2], 10) : 0;
+    if (hour < 1 || hour > 12) return null;
+    hour = amPmMatch[3] === "am" ? (hour === 12 ? 0 : hour) : hour === 12 ? 12 : hour + 12;
+  } else if (twentyFourHourMatch) {
+    hour = Number.parseInt(twentyFourHourMatch[1], 10);
+    minute = Number.parseInt(twentyFourHourMatch[2], 10);
+  } else {
+    return null;
+  }
+
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+  return hour * 60 + minute;
+}
+
 export type UpdateTaskActor = {
   requesterUserId?: number;
   requesterDiscordId?: string;
@@ -40,6 +65,14 @@ export type UpdateTaskArgumentParseResult =
       newReminderTime?: Date;
       hasRepetitionIntervalUpdate: boolean;
       repetitionIntervalHours?: number | null;
+      repetitionIntervalMinutes?: number | null;
+      hasRepeatLimitUpdate: boolean;
+      repeatRemainingCount?: number | null;
+      repeatUntilTime?: Date | null;
+      hasDailyWindowUpdate: boolean;
+      dailyWindowStartMinutes?: number | null;
+      dailyWindowEndMinutes?: number | null;
+      dailyWindowTimezoneOffset?: number | null;
     }
   | {
       ok: false;
@@ -93,6 +126,8 @@ export function parseUpdateTaskArguments(
       newPurpose,
       isDeleteRequested,
       hasRepetitionIntervalUpdate: false,
+      hasRepeatLimitUpdate: false,
+      hasDailyWindowUpdate: false,
     };
   }
 
@@ -151,6 +186,7 @@ export function parseUpdateTaskArguments(
 
   let hasRepetitionIntervalUpdate = false;
   let repetitionIntervalHours: number | null | undefined;
+  let repetitionIntervalMinutes: number | null | undefined;
   if (hasProvidedArg(args, "repetition_interval_hours")) {
     const repetitionIntervalHoursArg = args.repetition_interval_hours;
     if (
@@ -166,7 +202,165 @@ export function parseUpdateTaskArguments(
     }
 
     hasRepetitionIntervalUpdate = true;
-    repetitionIntervalHours = repetitionIntervalHoursArg > 0 ? repetitionIntervalHoursArg : null;
+    repetitionIntervalMinutes = repetitionIntervalHoursArg > 0 ? repetitionIntervalHoursArg * 60 : null;
+    repetitionIntervalHours = repetitionIntervalMinutes !== null ? repetitionIntervalMinutes / 60 : null;
+  }
+
+  if (hasProvidedArg(args, "repetition_interval_minutes")) {
+    const repetitionIntervalMinutesArg = args.repetition_interval_minutes;
+    if (
+      typeof repetitionIntervalMinutesArg !== "number" ||
+      !Number.isSafeInteger(repetitionIntervalMinutesArg) ||
+      repetitionIntervalMinutesArg < 0
+    ) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "The 'repetition_interval_minutes' argument must be 0 or an integer greater than or equal to 1.",
+      };
+    }
+
+    if (hasRepetitionIntervalUpdate && (repetitionIntervalMinutes ?? 0) > 0 && repetitionIntervalMinutesArg > 0) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "Use either 'repetition_interval_minutes' or 'repetition_interval_hours', not both.",
+      };
+    }
+
+    hasRepetitionIntervalUpdate = true;
+    repetitionIntervalMinutes =
+      repetitionIntervalMinutesArg > 0 ? repetitionIntervalMinutesArg : (repetitionIntervalMinutes ?? null);
+    repetitionIntervalHours =
+      repetitionIntervalMinutes !== null && repetitionIntervalMinutes % 60 === 0 ? repetitionIntervalMinutes / 60 : null;
+  }
+
+  let hasRepeatLimitUpdate = false;
+  let repeatRemainingCount: number | null | undefined;
+  let repeatUntilTime: Date | null | undefined;
+
+  if (args.clear_repeat_limit === true) {
+    if (hasProvidedArg(args, "repeat_count") || hasProvidedArg(args, "repeat_until_time")) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "Use 'clear_repeat_limit' by itself, not with 'repeat_count' or 'repeat_until_time'.",
+      };
+    }
+
+    hasRepeatLimitUpdate = true;
+    repeatRemainingCount = null;
+    repeatUntilTime = null;
+  }
+
+  if (hasProvidedArg(args, "repeat_count")) {
+    const repeatCountArg = args.repeat_count;
+    if (typeof repeatCountArg !== "number" || !Number.isSafeInteger(repeatCountArg) || repeatCountArg < 1) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "The 'repeat_count' argument must be an integer greater than or equal to 1.",
+      };
+    }
+    if (hasRepeatLimitUpdate && repeatUntilTime !== null) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "Use either 'repeat_count' or 'repeat_until_time', not both.",
+      };
+    }
+    hasRepeatLimitUpdate = true;
+    repeatRemainingCount = repeatCountArg;
+    repeatUntilTime = null;
+  }
+
+  if (hasProvidedArg(args, "repeat_until_time")) {
+    const repeatUntilTimeArg = args.repeat_until_time;
+    if (typeof repeatUntilTimeArg !== "string" || !repeatUntilTimeArg.trim()) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "The 'repeat_until_time' argument must be a non-empty string when provided.",
+      };
+    }
+    if (hasRepeatLimitUpdate && repeatRemainingCount !== null) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "Use either 'repeat_count' or 'repeat_until_time', not both.",
+      };
+    }
+
+    const normalizedRepeatUntilTime = normalizeReminderTimeInput(repeatUntilTimeArg);
+    const parsedRepeatUntilTime = parseTimeWithOffset(normalizedRepeatUntilTime, timezoneOffset);
+    if (!parsedRepeatUntilTime) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_time",
+        reason: `Invalid repeat-until time format: '${repeatUntilTimeArg}'. Expected YYYY-MM-DD_HH:MM format in ${formatUTCOffset(timezoneOffset)}.`,
+      };
+    }
+
+    hasRepeatLimitUpdate = true;
+    repeatRemainingCount = null;
+    repeatUntilTime = parsedRepeatUntilTime;
+  }
+
+  let hasDailyWindowUpdate = false;
+  let dailyWindowStartMinutes: number | null | undefined;
+  let dailyWindowEndMinutes: number | null | undefined;
+  let dailyWindowTimezoneOffset: number | null | undefined;
+
+  if (args.clear_daily_window === true) {
+    hasDailyWindowUpdate = true;
+    dailyWindowStartMinutes = null;
+    dailyWindowEndMinutes = null;
+    dailyWindowTimezoneOffset = null;
+  }
+
+  const hasDailyWindowStart = hasProvidedArg(args, "daily_window_start_time");
+  const hasDailyWindowEnd = hasProvidedArg(args, "daily_window_end_time");
+  if (args.clear_daily_window === true && (hasDailyWindowStart || hasDailyWindowEnd)) {
+    return {
+      ok: false,
+      status: "task_update_failed_invalid_args",
+      reason: "Use 'clear_daily_window' by itself, not with daily window start/end times.",
+    };
+  }
+
+  if (hasDailyWindowStart || hasDailyWindowEnd) {
+    if (!hasDailyWindowStart || !hasDailyWindowEnd) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "Both 'daily_window_start_time' and 'daily_window_end_time' must be provided together.",
+      };
+    }
+
+    const dailyWindowStartArg = args.daily_window_start_time;
+    const dailyWindowEndArg = args.daily_window_end_time;
+    if (typeof dailyWindowStartArg !== "string" || typeof dailyWindowEndArg !== "string") {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "Daily window times must be strings such as '05:00' or '10PM'.",
+      };
+    }
+
+    const parsedStart = parseDailyWindowTime(dailyWindowStartArg);
+    const parsedEnd = parseDailyWindowTime(dailyWindowEndArg);
+    if (parsedStart === null || parsedEnd === null || parsedEnd <= parsedStart) {
+      return {
+        ok: false,
+        status: "task_update_failed_invalid_args",
+        reason: "Daily window times must be valid same-day times, and the end time must be after the start time.",
+      };
+    }
+
+    hasDailyWindowUpdate = true;
+    dailyWindowStartMinutes = parsedStart;
+    dailyWindowEndMinutes = parsedEnd;
+    dailyWindowTimezoneOffset = timezoneOffset;
   }
 
   return {
@@ -177,6 +371,14 @@ export function parseUpdateTaskArguments(
     newReminderTime,
     hasRepetitionIntervalUpdate,
     repetitionIntervalHours,
+    repetitionIntervalMinutes,
+    hasRepeatLimitUpdate,
+    repeatRemainingCount,
+    repeatUntilTime,
+    hasDailyWindowUpdate,
+    dailyWindowStartMinutes,
+    dailyWindowEndMinutes,
+    dailyWindowTimezoneOffset,
   };
 }
 
@@ -234,10 +436,16 @@ function formatReminderTime(reminderTime: Date, timezoneOffset: number): string 
   })} (${formatUTCOffset(timezoneOffset)})`;
 }
 
-function formatRepeatText(locale: string, repetitionIntervalHours: number | null | undefined): string {
-  if (typeof repetitionIntervalHours === "number" && repetitionIntervalHours >= 1) {
+function formatRepeatText(locale: string, repetitionIntervalMinutes: number | null | undefined): string {
+  if (typeof repetitionIntervalMinutes === "number" && repetitionIntervalMinutes >= 1) {
+    if (repetitionIntervalMinutes % 60 !== 0) {
+      return localizer(locale, "reminders.task_update_repeat_minutes", {
+        repetition_interval_minutes: repetitionIntervalMinutes,
+      });
+    }
+
     return localizer(locale, "reminders.task_update_repeat_hours", {
-      repetition_interval_hours: repetitionIntervalHours,
+      repetition_interval_hours: repetitionIntervalMinutes / 60,
     });
   }
 
@@ -247,7 +455,7 @@ function formatRepeatText(locale: string, repetitionIntervalHours: number | null
 export class UpdateTaskTool extends BaseTool {
   name = "update_task";
   description =
-    "Replace or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead. You may optionally reschedule it with reminder_time in YYYY-MM-DD_HH:MM using the server timezone, or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. If no time is provided, keep the existing trigger time. You may optionally set repetition_interval_hours to 0 for one-time, or 1+ for recurring; if omitted, keep the existing repeat interval. Do not use this to change target user, target channel, or whether it is a self task.";
+    "Replace, reschedule, or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead. You may reschedule it with reminder_time in YYYY-MM-DD_HH:MM using the server timezone, or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. You may change recurrence with repetition_interval_minutes or repetition_interval_hours. You may change finite limits with repeat_count, repeat_until_time, or clear_repeat_limit. You may change daily active windows with daily_window_start_time/daily_window_end_time or clear_daily_window. Do not use this to change target user, target channel, or whether it is a self task.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -289,7 +497,40 @@ export class UpdateTaskTool extends BaseTool {
       repetition_interval_hours: {
         type: "number",
         description:
-          "OPTIONAL: Set to 0 for a one-time task/reminder, or 1+ to make it recurring. If omitted, the existing repeat interval is preserved.",
+          "OPTIONAL: Set to 0 for a one-time task/reminder, or 1+ to make it recur every X hours. If omitted, the existing repeat interval is preserved.",
+      },
+      repetition_interval_minutes: {
+        type: "number",
+        description:
+          "OPTIONAL: Set to 0 for a one-time task/reminder, or 1+ to make it recur every X minutes. Use this for sub-hour schedules.",
+      },
+      repeat_until_time: {
+        type: "string",
+        description:
+          "OPTIONAL: Replace the finite recurring cutoff time in YYYY-MM-DD_HH:MM format using the server timezone. The task will auto-delete after the final run at or before this time.",
+      },
+      repeat_count: {
+        type: "number",
+        description:
+          "OPTIONAL: Replace the finite remaining run count. Must be 1 or greater and requires a recurring repeat interval to be active.",
+      },
+      clear_repeat_limit: {
+        type: "boolean",
+        description: "OPTIONAL: Set true to clear repeat_count and repeat_until_time, making the recurring task indefinite.",
+      },
+      daily_window_start_time: {
+        type: "string",
+        description:
+          "OPTIONAL: Replace the local daily active window start time, such as '05:00' or '5AM'. Must be used with daily_window_end_time.",
+      },
+      daily_window_end_time: {
+        type: "string",
+        description:
+          "OPTIONAL: Replace the local daily active window end time, such as '22:00' or '10PM'. Must be used with daily_window_start_time.",
+      },
+      clear_daily_window: {
+        type: "boolean",
+        description: "OPTIONAL: Set true to clear the daily active window so the recurring task can run at any time.",
       },
     },
     required: ["reminder_id", "reminder_purpose"],
@@ -432,6 +673,93 @@ export class UpdateTaskTool extends BaseTool {
     const finalRepetitionIntervalHours = parsedArgs.hasRepetitionIntervalUpdate
       ? (parsedArgs.repetitionIntervalHours ?? null)
       : (existingReminder.repetition_interval_hours ?? null);
+    const finalRepetitionIntervalMinutes = parsedArgs.hasRepetitionIntervalUpdate
+      ? (parsedArgs.repetitionIntervalMinutes ?? null)
+      : (existingReminder.repetition_interval_minutes ??
+        (typeof existingReminder.repetition_interval_hours === "number"
+          ? existingReminder.repetition_interval_hours * 60
+          : null));
+
+    const finalIsRecurring = finalRepetitionIntervalMinutes !== null && finalRepetitionIntervalMinutes >= 1;
+    const isSettingRepeatLimit =
+      parsedArgs.hasRepeatLimitUpdate &&
+      (typeof parsedArgs.repeatRemainingCount === "number" || parsedArgs.repeatUntilTime instanceof Date);
+    const isSettingDailyWindow =
+      parsedArgs.hasDailyWindowUpdate &&
+      (typeof parsedArgs.dailyWindowStartMinutes === "number" ||
+        typeof parsedArgs.dailyWindowEndMinutes === "number" ||
+        typeof parsedArgs.dailyWindowTimezoneOffset === "number");
+    if (!finalIsRecurring && (isSettingRepeatLimit || isSettingDailyWindow)) {
+      return buildFailureResult(
+        "task_update_failed_invalid_args",
+        "Repeat limits and daily windows can only be used with a recurring repeat interval.",
+      );
+    }
+
+    let finalRepeatRemainingCount = parsedArgs.hasRepeatLimitUpdate
+      ? (parsedArgs.repeatRemainingCount ?? null)
+      : (existingReminder.repeat_remaining_count ?? null);
+    let finalRepeatUntilTime = parsedArgs.hasRepeatLimitUpdate
+      ? (parsedArgs.repeatUntilTime ?? null)
+      : (existingReminder.repeat_until_time ?? null);
+
+    let finalDailyWindowStartMinutes = parsedArgs.hasDailyWindowUpdate
+      ? (parsedArgs.dailyWindowStartMinutes ?? null)
+      : (existingReminder.daily_window_start_minutes ?? null);
+    let finalDailyWindowEndMinutes = parsedArgs.hasDailyWindowUpdate
+      ? (parsedArgs.dailyWindowEndMinutes ?? null)
+      : (existingReminder.daily_window_end_minutes ?? null);
+    let finalDailyWindowTimezoneOffset = parsedArgs.hasDailyWindowUpdate
+      ? (parsedArgs.dailyWindowTimezoneOffset ?? null)
+      : (existingReminder.daily_window_timezone_offset ?? null);
+
+    if (!finalIsRecurring) {
+      finalRepeatRemainingCount = null;
+      finalRepeatUntilTime = null;
+      finalDailyWindowStartMinutes = null;
+      finalDailyWindowEndMinutes = null;
+      finalDailyWindowTimezoneOffset = null;
+    }
+
+    if (finalRepeatUntilTime && finalRepeatUntilTime.getTime() < finalReminderTime.getTime()) {
+      return buildFailureResult(
+        "task_update_failed_invalid_time",
+        "The repeat-until time must be at or after the next trigger time.",
+      );
+    }
+
+    const hasAnyDailyWindowField =
+      finalDailyWindowStartMinutes !== null ||
+      finalDailyWindowEndMinutes !== null ||
+      finalDailyWindowTimezoneOffset !== null;
+    const hasCompleteDailyWindow =
+      typeof finalDailyWindowStartMinutes === "number" &&
+      typeof finalDailyWindowEndMinutes === "number" &&
+      typeof finalDailyWindowTimezoneOffset === "number";
+    if (hasAnyDailyWindowField && !hasCompleteDailyWindow) {
+      return buildFailureResult(
+        "task_update_failed_invalid_args",
+        "Daily window data is incomplete. Set both start and end times, or clear the daily window.",
+      );
+    }
+
+    if (hasCompleteDailyWindow) {
+      const windowStartMinutes = finalDailyWindowStartMinutes as number;
+      const windowEndMinutes = finalDailyWindowEndMinutes as number;
+
+      if (
+        windowStartMinutes < 0 ||
+        windowStartMinutes > 1439 ||
+        windowEndMinutes < 0 ||
+        windowEndMinutes > 1439 ||
+        windowEndMinutes <= windowStartMinutes
+      ) {
+        return buildFailureResult(
+          "task_update_failed_invalid_args",
+          "Daily window times must be valid same-day times, and the end time must be after the start time.",
+        );
+      }
+    }
 
     const updateResult = await serverScheduleRepository.updateReminderCoreForRequester({
       reminder_id: parsedArgs.reminderId,
@@ -439,6 +767,12 @@ export class UpdateTaskTool extends BaseTool {
       reminder_purpose: parsedArgs.newPurpose,
       reminder_time: finalReminderTime,
       repetition_interval_hours: finalRepetitionIntervalHours,
+      repetition_interval_minutes: finalRepetitionIntervalMinutes,
+      repeat_remaining_count: finalRepeatRemainingCount,
+      repeat_until_time: finalRepeatUntilTime,
+      daily_window_start_minutes: finalDailyWindowStartMinutes,
+      daily_window_end_minutes: finalDailyWindowEndMinutes,
+      daily_window_timezone_offset: finalDailyWindowTimezoneOffset,
       actor: {
         requester_user_id: actor.requesterUserId,
         requester_discord_id: actor.requesterDiscordId,
@@ -463,7 +797,7 @@ export class UpdateTaskTool extends BaseTool {
       context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
     const reminderPurposeText = truncateReminderPurpose(parsedArgs.newPurpose);
     const reminderTimeText = formatReminderTime(finalReminderTime, timezoneOffset);
-    const repeatText = formatRepeatText(context.locale, finalRepetitionIntervalHours);
+    const repeatText = formatRepeatText(context.locale, finalRepetitionIntervalMinutes);
 
     // Attach a "Show Full Task" button when the new purpose was truncated.
     await sendTaskEmbedWithExpand(
@@ -501,6 +835,12 @@ export class UpdateTaskTool extends BaseTool {
         reminder_purpose: parsedArgs.newPurpose,
         reminder_time: finalReminderTime.toISOString(),
         repetition_interval_hours: finalRepetitionIntervalHours,
+        repetition_interval_minutes: finalRepetitionIntervalMinutes,
+        repeat_remaining_count: finalRepeatRemainingCount,
+        repeat_until_time: finalRepeatUntilTime?.toISOString() ?? null,
+        daily_window_start_minutes: finalDailyWindowStartMinutes,
+        daily_window_end_minutes: finalDailyWindowEndMinutes,
+        daily_window_timezone_offset: finalDailyWindowTimezoneOffset,
         self_reminder: existingReminder.self_reminder ?? false,
         target_user: existingReminder.user_nickname,
         target_channel_id: existingReminder.channel_disc_id,

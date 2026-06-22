@@ -1226,7 +1226,13 @@ export const reminderSchema = z.object({
   user_nickname: z.string(), // Target user's nickname for display
   reminder_purpose: z.string(), // What the reminder is for
   reminder_time: z.date(), // When to trigger the reminder (TIMESTAMP WITH TIME ZONE)
-  repetition_interval_hours: z.number().int().nullable().optional(), // Optional: repeat interval in hours
+  repetition_interval_hours: z.number().int().nullable().optional(), // Legacy: repeat interval in hours
+  repetition_interval_minutes: z.number().int().nullable().optional(), // Optional: repeat interval in minutes
+  repeat_remaining_count: z.number().int().nullable().optional(), // Optional: finite recurring reminders delete at 0
+  repeat_until_time: z.date().nullable().optional(), // Optional: finite recurring reminders stop after this time
+  daily_window_start_minutes: z.number().int().nullable().optional(), // Optional: local minutes after midnight
+  daily_window_end_minutes: z.number().int().nullable().optional(), // Optional: local minutes after midnight
+  daily_window_timezone_offset: z.number().nullable().optional(), // Timezone offset used for local daily window
   self_reminder: z.boolean().nullable().optional(), // Optional: reminder targets the bot itself
   created_by_user_id: z.number().nullable(), // Who requested the reminder (nullable - set to NULL if user deleted)
   persona_id: z.number().nullable().optional(), // Persona that created the reminder (nullable - fallback to main)
