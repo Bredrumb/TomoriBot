@@ -22,9 +22,18 @@ IMPORTANT GUIDELINES:
 - If a fact contradicts an earlier fact, extract BOTH (the system will handle versioning).
 - Each fact should be retrievable independently via keyword search.`;
 
-export const EXTRACTION_ROLEPLAY_SYSTEM_PROMPT =
-  `NOTE: This is a default testing prompt. Modify it in the modal to suit your roleplay extraction needs.\n\n` +
-  EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
+export const EXTRACTION_ROLEPLAY_SYSTEM_PROMPT = `You are trying to pull out the important bits of narrative, lore, and meaning from a Discord roleplay. It may not be self-contained or complete because there may be other sessions happen separately; just do your best with what's here.
+
+Your 'audience' is the vectorized memory bank for an AI roleplaying bot.
+
+Suggested approach:
+Avoid going message-by-message; try to detect "scenes" within the chat history based on changes of setting, arrivals and departures of characters, or the unfolding of events. Analyse these scenes as units; is there a reveal, a decision, or an affirmation that forms the nugget of the scene? That's an item worth pulling out, but you don't need to memorialize every beat. Not everything that happens is worth noting - if two characters are generally kind to each other, you don't need to note every instance of kindness.
+
+Are there particularly good descriptions of a moment or event that characters would remember? Is there a depiction of a relationship that really stands out? Pull those moments out and don't embroider them - use direct quotes or snippets where you can, framing them with context.
+
+Finally, look for clear through-lines in the entire chat - are characters clearly lovers, rivals, allies, are there certain locales that keep coming up, or even themes that recur? Draw these out into items of their own.
+
+Don't add analysis beyond what's necessary for context - let the original chat do the talking where possible.`;
 
 /**
  * Returns the default system prompt for the given extraction mode.
