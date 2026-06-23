@@ -167,6 +167,16 @@ export interface ActivityHistogram {
   byWeekday: Record<number, number>;
 }
 
+/**
+ * 2-D joint weekday×hour activity grid (the heatmap). Keyed `dow → hour → count`
+ * (dow 0=Sun–6=Sat, hour 0–23) and always fully populated (every cell present,
+ * 0 when no activity) so consumers can index any cell without a presence check.
+ * Unlike {@link ActivityHistogram}'s two independent 1-D marginals, this is the
+ * joint distribution, so a timezone shift must rotate the (weekday, hour) pair
+ * together (see getActivityHeatmap).
+ */
+export type ActivityHeatmap = Record<number, Record<number, number>>;
+
 /** Streak info derived from distinct active bucket dates. */
 export interface StreakInfo {
   currentStreak: number;
@@ -591,6 +601,77 @@ export class StatRepository implements IRepository<null> {
       log.error(`StatRepository.getActivityHistogram: failed for user ${args.userId}`, error);
     }
     return { byHour, byWeekday };
+  }
+
+  /**
+   * 2-D joint weekday×hour activity heatmap for a user, from the active_hour metric
+   * (hour rides metric_key; weekday derives from the bucket DATE). This is the
+   * JOINT distribution (count per weekday×hour cell), distinct from
+   * getActivityHistogram's two independent 1-D marginals, which is why a heatmap
+   * needs its own read.
+   *
+   * Timezone correctness (the trap): for the personal scope a per-user hour offset
+   * can roll past midnight and CHANGE the weekday, so the two axes CANNOT be shifted
+   * independently. Each cell is collapsed to a single week-hour index
+   * `wh = dow*24 + hour` (0–167), the offset (in hours) is added, taken mod 168, then
+   * re-split into (dow, hour). Pass offsetHours for the personal scope (sourced from
+   * `users.timezone_offset`, the same source the histogram's peak-hour read uses);
+   * omit it for server/persona scope, which use server wall-clock like the rest of
+   * the dashboard.
+   *
+   * Returns RAW joint counts — per-weekday-occurrence normalization is a presentation
+   * concern handled by the card layer, not here.
+   *
+   * @param args - userId (required), optional serverId filter, optional personal
+   *   timezone offsetHours, and optional time window.
+   */
+  async getActivityHeatmap(
+    args: { userId: number; serverId?: number; offsetHours?: number | null } & StatWindow,
+  ): Promise<ActivityHeatmap> {
+    // 1. Pre-populate a full 7×24 grid of zeros so every cell is always present.
+    const grid: ActivityHeatmap = {};
+    for (let dow = 0; dow < 7; dow++) {
+      grid[dow] = {};
+      for (let hour = 0; hour < 24; hour++) grid[dow][hour] = 0;
+    }
+
+    try {
+      const from = windowFloor(args.from);
+      const serverId = args.serverId ?? null;
+      // 2. Raw joint aggregate in server wall-clock: weekday from the bucket date,
+      //    hour from metric_key, summed per (weekday, hour) cell.
+      const rows = await sql<{ dow: number | string; hour: string; total: number | string }[]>`
+        SELECT EXTRACT(DOW FROM bucket)::int AS dow, metric_key AS hour, SUM(count) AS total
+        FROM stat_counters
+        WHERE metric = 'active_hour' AND user_id = ${args.userId}
+          AND (${serverId}::int IS NULL OR server_id = ${serverId})
+          AND bucket >= ${from}::date
+        GROUP BY dow, hour
+      `;
+
+      // 3. Normalize the offset into whole hours (0 when unset / server scope).
+      const offset = Math.trunc(args.offsetHours ?? 0);
+
+      for (const r of rows) {
+        const dow = Number(r.dow);
+        const hour = Number.parseInt(String(r.hour), 10);
+        // 4. Skip malformed hour keys (active_hour is always 0–23, but be safe).
+        if (!Number.isInteger(dow) || !Number.isInteger(hour) || hour < 0 || hour > 23) continue;
+        const total = Number(r.total);
+
+        // 5. Rotate the (weekday, hour) pair TOGETHER via the week-hour index so a
+        //    midnight-crossing offset moves the weekday correctly. The rotation is a
+        //    bijection on 0–167, so no two raw cells collide into one shifted cell.
+        const wh = dow * 24 + hour;
+        const shifted = (((wh + offset) % 168) + 168) % 168;
+        const newDow = Math.floor(shifted / 24);
+        const newHour = shifted % 24;
+        grid[newDow][newHour] += total;
+      }
+    } catch (error) {
+      log.error(`StatRepository.getActivityHeatmap: failed for user ${args.userId}`, error);
+    }
+    return grid;
   }
 
   /**

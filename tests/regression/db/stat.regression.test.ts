@@ -300,6 +300,57 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(weekdayTotal).toBe(6);
   });
 
+  it("getActivityHeatmap returns the correct 2-D joint weekday×hour grid", async () => {
+    // Fixed calendar dates with known weekdays (EXTRACT(DOW): 0=Sun..6=Sat):
+    //   2024-01-01 = Monday (dow 1), 2024-01-08 = Monday (dow 1), 2024-01-02 = Tuesday (dow 2).
+    await testSql`
+      INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+      VALUES
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '14', '2024-01-01'::date, 3),
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '14', '2024-01-08'::date, 2),
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '9',  '2024-01-02'::date, 1)
+    `;
+    const grid = await statRepository.getActivityHeatmap({ userId: refs.userId });
+    // The two Mondays at 14:00 sum into one joint cell; Tuesday 09:00 is its own.
+    expect(grid[1][14]).toBe(5);
+    expect(grid[2][9]).toBe(1);
+    // Grid is fully populated — untouched cells are present and zero.
+    expect(grid[0][0]).toBe(0);
+    expect(grid[6][23]).toBe(0);
+    // Total across every cell equals the seeded total (no rows lost/duplicated).
+    const total = Object.values(grid).reduce((sum, row) => sum + Object.values(row).reduce((a, b) => a + b, 0), 0);
+    expect(total).toBe(6);
+  });
+
+  it("getActivityHeatmap timezone offset crossing midnight rolls into the previous weekday's cell", async () => {
+    // Seed Tuesday (2024-01-02 = dow 2) at 01:00 UTC. With a UTC-2 personal offset
+    // the local time is 23:00 MONDAY — the hour roll must move the weekday too.
+    await testSql`
+      INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+      VALUES
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '1', '2024-01-02'::date, 4)
+    `;
+    const grid = await statRepository.getActivityHeatmap({ userId: refs.userId, offsetHours: -2 });
+    // wh = 2*24 + 1 = 49; (49 - 2) mod 168 = 47 → dow 1 (Mon), hour 23.
+    expect(grid[1][23]).toBe(4);
+    // The original server-wall-clock cell (Tue 01:00) is now empty.
+    expect(grid[2][1]).toBe(0);
+  });
+
+  it("getActivityHeatmap timezone offset wraps across the week boundary", async () => {
+    // Sunday (2024-01-07 = dow 0) at 00:00 UTC with a UTC-1 offset is 23:00 SATURDAY
+    // of the prior week — the week-hour index must wrap mod 168 (0 → 167).
+    await testSql`
+      INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+      VALUES
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '0', '2024-01-07'::date, 7)
+    `;
+    const grid = await statRepository.getActivityHeatmap({ userId: refs.userId, offsetHours: -1 });
+    // wh = 0; (0 - 1 + 168) mod 168 = 167 → dow 6 (Sat), hour 23.
+    expect(grid[6][23]).toBe(7);
+    expect(grid[0][0]).toBe(0);
+  });
+
   it("getStreak derives current/longest from distinct active bucket dates", async () => {
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)

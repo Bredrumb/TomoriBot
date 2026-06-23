@@ -45,3 +45,13 @@ dist/
 # Temporary files
 tmp/
 temp/
+
+# Stat infographic fonts: ship only the static instances actually loaded by the
+# renderer; the source variable font is kept in-repo for provenance but is dead
+# weight (~9.5 MB) in the image and is never loaded (satori cannot parse its fvar).
+assets/fonts/*-VF.ttf
+
+# Phase 3 chunk-1 render-spike artifacts (throwaway dev tooling / outputs).
+.spike-output/
+.spike-output-docker/
+docker/Dockerfile.spike
