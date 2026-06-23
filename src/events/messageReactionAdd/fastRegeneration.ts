@@ -1,6 +1,5 @@
 import type { Client, MessageReaction, User } from "discord.js";
 import { getCachedMainPersona } from "@/utils/cache/tomoriStateCache";
-import { killChannelGeneration } from "@/utils/chat/channelKill";
 import { deletePersonaTurnAndMaybeRegenerate } from "@/utils/discord/deletePersonaTurn";
 import {
   consumeFastRegenerationEntry,
@@ -122,8 +121,6 @@ export default async function fastRegeneration(
   }
 
   if (actionEmoji === FAST_REGENERATION_EMOJI) {
-    killChannelGeneration(message.channelId, user.id, "[fastRegeneration] Regen reaction clearing active/queued work");
-
     const result = await deletePersonaTurnAndMaybeRegenerate({
       client,
       guild: message.guild,
