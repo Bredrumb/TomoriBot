@@ -106,5 +106,16 @@ export default {
       tokens_in_short: `入力`,
       tokens_out_short: `出力`,
     },
+
+    // インフォグラフィックカード専用ラベル（テキストダッシュボードでは使用しない）。
+    infographic: {
+      personal_title: `活動まとめ`,
+      first_met: `初めて会った日`,
+      loyalty: `忠誠度`,
+      activity: `アクティビティ`,
+      signature: `シグネチャー`,
+      naughty_nice: `おしおき／ごほうび`,
+      no_data: `まだ統計がありません`,
+    },
   },
 };

@@ -1,9 +1,10 @@
 nul
 temp_*
 .venv*
-# Throwaway output from the /stats infographic render spike (scripts/devtools/statsRenderSpike.ts)
+# Throwaway output from the /stats infographic render harnesses (scripts/devtools/)
 .spike-output/
 .spike-output-docker/
+.card-output/
 .env.test
 *.backup
 .tmp

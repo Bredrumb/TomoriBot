@@ -106,5 +106,16 @@ export default {
       tokens_in_short: `in`,
       tokens_out_short: `out`,
     },
+
+    // Labels used only on the rendered infographic cards (not the text dashboard).
+    infographic: {
+      personal_title: `Wrapped`,
+      first_met: `First Met`,
+      loyalty: `Loyalty`,
+      activity: `Activity`,
+      signature: `Signature`,
+      naughty_nice: `Naughty / Nice`,
+      no_data: `No stats yet`,
+    },
   },
 };
