@@ -1,3 +1,7 @@
+---
+title: Stats Infographic
+---
+
 # Stats Infographic Subsystem
 
 `/stats generate` renders one of three shareable PNG image cards using a **satori → resvg** pipeline.

@@ -258,41 +258,43 @@ export async function execute(
   const apiKey = videoCreds.apiKey;
   const executionProvider = videoCreds.provider;
 
-  // 7. Check video quota before showing modal
-  const quotaCheck = await checkVideoQuota(tomoriState.server_id, interaction.user.id);
-  if (!quotaCheck.allowed) {
-    const descriptionVars: Record<string, string> = {};
+  // 7. Check video quota before showing modal (personal-provider users bypass quota)
+  if (videoCreds.source === "server") {
+    const quotaCheck = await checkVideoQuota(tomoriState.server_id, interaction.user.id);
+    if (!quotaCheck.allowed) {
+      const descriptionVars: Record<string, string> = {};
 
-    if (quotaCheck.resetTime) {
-      const now = new Date();
-      const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+      if (quotaCheck.resetTime) {
+        const now = new Date();
+        const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
 
-      if (hoursUntilReset < 24) {
-        descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_hours", {
-          hours: hoursUntilReset.toString(),
-        });
-      } else {
-        const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-        descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_days", {
-          days: daysUntilReset.toString(),
-        });
+        if (hoursUntilReset < 24) {
+          descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_hours", {
+            hours: hoursUntilReset.toString(),
+          });
+        } else {
+          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+          descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_days", {
+            days: daysUntilReset.toString(),
+          });
+        }
       }
-    }
 
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: "commands.generate.video.quota_exceeded_title",
-      descriptionKey:
-        quotaCheck.reason === "user_quota_exceeded"
-          ? "commands.generate.video.user_quota_exceeded_description"
-          : quotaCheck.reason === "serverwide_quota_exceeded"
-            ? "commands.generate.video.serverwide_quota_exceeded_description"
-            : "commands.generate.video.quota_exceeded_description",
-      descriptionVars,
-      footerKey: "commands.generate.video.quota_exceeded_footer",
-      color: ColorCode.ERROR,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.generate.video.quota_exceeded_title",
+        descriptionKey:
+          quotaCheck.reason === "user_quota_exceeded"
+            ? "commands.generate.video.user_quota_exceeded_description"
+            : quotaCheck.reason === "serverwide_quota_exceeded"
+              ? "commands.generate.video.serverwide_quota_exceeded_description"
+              : "commands.generate.video.quota_exceeded_description",
+        descriptionVars,
+        footerKey: "commands.generate.video.quota_exceeded_footer",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
   }
 
   let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
@@ -593,8 +595,10 @@ export async function execute(
       files: [attachment],
     });
 
-    // 17. Increment quota
-    await incrementVideoQuota(tomoriState.server_id, interaction.user.id);
+    // 17. Increment quota (server providers only)
+    if (videoCreds.source === "server") {
+      await incrementVideoQuota(tomoriState.server_id, interaction.user.id);
+    }
     // Record generation stat (stat_counters is separate from quota enforcement)
     if (userData.user_id) {
       statRepository.recordStat({

@@ -6,16 +6,15 @@
  *
  * Output:
  *   assets/img/tomoricon.ico        — replaces the bloated single-size ICO
- *   assets/img/tomoricon.png        — optimized 256x256 PNG
  *   apps/docs/public/favicon.ico    — copy served by the docs site
- *   apps/docs/public/tomoricon.png  — copy served by the docs site
+ *   apps/docs/public/tomoricon.png  — optimized 256x256 PNG for docs
  */
 
 import sharp from "sharp";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const SOURCE = resolve(import.meta.dir, "../assets/img/original.png");
+const SOURCE = resolve(import.meta.dir, "../assets/img/tomoricon.png");
 const SIZES = [16, 32, 48, 256];
 
 // 1. Resize source to each target size as a compressed PNG buffer.
@@ -68,7 +67,6 @@ const png256 = await sharp(SOURCE)
 // 4. Write outputs.
 const outputs: [string, Buffer][] = [
   ["assets/img/tomoricon.ico", ico],
-  ["assets/img/tomoricon.png", png256],
   ["apps/docs/public/favicon.ico", ico],
   ["apps/docs/public/tomoricon.png", png256],
 ];
