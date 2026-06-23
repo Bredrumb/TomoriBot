@@ -17,7 +17,7 @@ import {
 } from "discord.js";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { personaRepository, llmModelRepo } from "@/utils/db/repositories";
+import { personaRepository, llmModelRepo, statRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import { safeReply } from "@/utils/discord/safeReply";
 import type { UserRow } from "../../types/db/schema";
@@ -595,6 +595,15 @@ export async function execute(
 
     // 17. Increment quota
     await incrementVideoQuota(tomoriState.server_id, interaction.user.id);
+    // Record generation stat (stat_counters is separate from quota enforcement)
+    if (userData.user_id) {
+      statRepository.recordStat({
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        lineageId: tomoriState.persona_lineage_id ?? 0,
+        metric: "video_generated",
+      });
+    }
     log.success(`Video generated in ${elapsedSec}s via ${displayModelName}`);
   } catch (error) {
     log.error("Video generation command failed:", error as Error);

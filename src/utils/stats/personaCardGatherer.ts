@@ -16,15 +16,10 @@ import type { Guild } from "discord.js";
 import type { TopUserEntry } from "@/utils/db/repositories/StatRepository";
 import { statRepository } from "@/utils/db/repositories";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { safeDownload } from "@/utils/security/safeDownload";
 import { log } from "@/utils/misc/logger";
+import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import type { PersonaCardData, ResolvedUserEntry } from "@/utils/stats/statsInfographic";
-
-// ── Avatar fetch constants (same as personalCardGatherer) ─────────────────────
-
-const AVATAR_MAX_SIZE_MB = 4;
-const AVATAR_TIMEOUT_MS = 8_000;
 
 // ── Display-name resolution ───────────────────────────────────────────────────
 
@@ -59,29 +54,6 @@ async function resolveDisplayNames(guild: Guild, entries: TopUserEntry[]): Promi
       count: e.count,
     })),
   );
-}
-
-// ── Avatar fetch helper (copied from personalCardGatherer) ────────────────────
-
-/**
- * Fetches a persona avatar from a URL and returns a base64 data URI. Returns
- * null on any failure so the renderer falls back to the initial-letter placeholder.
- *
- * @param avatarUrl - HTTP(S) URL of the avatar image.
- */
-async function fetchAvatarDataUri(avatarUrl: string): Promise<string | null> {
-  try {
-    const result = await safeDownload(avatarUrl, {
-      maxSizeMB: AVATAR_MAX_SIZE_MB,
-      timeoutMs: AVATAR_TIMEOUT_MS,
-    });
-    if (!result.success || !result.buffer) return null;
-    const mimeType = result.contentType ?? "image/png";
-    return `data:${mimeType};base64,${result.buffer.toString("base64")}`;
-  } catch (error) {
-    log.warn(`personaCardGatherer: avatar fetch failed for ${avatarUrl}`, error as Error);
-    return null;
-  }
 }
 
 // ── Args type ─────────────────────────────────────────────────────────────────
@@ -163,7 +135,7 @@ export async function gatherPersonaCardData(args: GatherPersonaCardArgs): Promis
       personaName = match.persona_nickname;
       const avatarUrl = match.webhook_avatar_url ?? null;
       if (avatarUrl) {
-        personaAvatarDataUri = await fetchAvatarDataUri(avatarUrl);
+        personaAvatarDataUri = await loadStoredPersonaAvatarDataUri(avatarUrl);
       }
     }
   } catch (error) {

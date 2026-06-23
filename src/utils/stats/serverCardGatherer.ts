@@ -130,8 +130,11 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     statRepository.getEstimatedCost({ serverId, ...windowArg }),
   ]);
 
-  // ── 2. Generation totals (all-time only — quota tables are not bucketed) ──────
-  const generationTotals = timeframe === "all_time" ? await statRepository.getGenerationTotals({ serverId }) : null;
+  // ── 2. Generation totals (stat_counters — supports time-window filtering) ──────
+  const generationTotals = await statRepository.getGenerationTotals({
+    serverId,
+    from: windowFrom ?? undefined,
+  });
 
   // ── 3. Resolve top chatter display names ─────────────────────────────────────
   const topChatters = await resolveDisplayNames(guild, rawTopChatters);

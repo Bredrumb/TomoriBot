@@ -199,18 +199,20 @@ function formatPeakWeekday(locale: string, byWeekday: Record<number, number>): s
 // ── Field / page model ──────────────────────────────────────────────────────────
 
 /**
- * One dashboard field. `inline` scalars (a single computed value) are merged into a
- * compact block; non-inline fields (ranked lists) get their own labelled section.
+ * One dashboard field. Inline scalars are merged into a compact block; non-inline
+ * fields (ranked lists) get their own labelled section; separators flush the scalar
+ * buffer and insert a visual divider between field groups.
  */
-interface StatField {
-  nameKey: string;
-  value: string;
-  inline: boolean;
-}
+type StatField = { kind: "stat"; nameKey: string; value: string; inline: boolean } | { kind: "separator" };
 
 /** A single-line scalar stat field (localized name + computed value). */
 function statField(nameKey: string, value: string, inline = true): StatField {
-  return { nameKey, value: value || "(None)", inline };
+  return { kind: "stat", nameKey, value: value || "(None)", inline };
+}
+
+/** A visual section divider: flushes the scalar buffer and inserts a separator. */
+function sepField(): StatField {
+  return { kind: "separator" };
 }
 
 /** The resolved content of one tab (title + subtitle + ordered fields + footer). */
@@ -301,6 +303,11 @@ function buildTabContainer(
     }
   };
   for (const field of tabPage.fields) {
+    if (field.kind === "separator") {
+      flushScalars();
+      components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
+      continue;
+    }
     if (field.inline) {
       scalarBuffer.push(`**${localizer(locale, field.nameKey)}:** ${field.value}`);
     } else {
@@ -487,17 +494,19 @@ export async function buildPersonalTabs(args: {
       statRepository.getConditioningPersonaBreakdown({ userId, serverId: scopeServerId }),
       statRepository.getConditioningTotals({ userId, serverId: scopeServerId }),
     ]);
-    // Generations live in the per-server quota tables (no lineage / no cross-server
-    // rollup), so they are only meaningful for the this-server scope.
-    if (scopeServerId !== undefined) {
-      generations = await statRepository.getGenerationTotals({
-        serverId: scopeServerId,
-        userDiscId: args.userDiscId,
-      });
-    }
+  }
+  // Generations use stat_counters (windowed) — no longer restricted to all_time.
+  // Server scope guard remains: cross-server rollup is not meaningful for generations.
+  if (scopeServerId !== undefined) {
+    generations = await statRepository.getGenerationTotals({
+      serverId: scopeServerId,
+      userId,
+      from: args.from,
+    });
   }
 
   const unitMemories = localizer(locale, "commands.stats.units.memories_saved");
+  const unitReplies = localizer(locale, "commands.stats.units.replies_received");
 
   // Overview shows just the persona name; the Personas tab keeps the loyalty %.
   const favoritePersonaName =
@@ -519,48 +528,67 @@ export async function buildPersonalTabs(args: {
     .slice(0, 5)
     .map((c) => ({ label: lineageLabel(locale, names, c.lineageId), count: c.punishments }));
 
+  // Top model by cost is the best available proxy for "favorite" without an extra read.
+  const favoriteModel = modelCost[0]?.model ?? localizer(locale, "commands.stats.empty");
+
   // ── Overview (the most interesting stats, duped freely into detail tabs). ──
+  // Group 1: trigger count + persona identity + favorite model.
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages_personal", fmtInt(messages)),
-    statField("commands.stats.fields.commands", fmtInt(commands)),
     statField("commands.stats.fields.favorite_persona_short", favoritePersonaName),
+    statField("commands.stats.fields.favorite_model", favoriteModel),
+    // Group 2: token volume + estimated cost.
+    sepField(),
+    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
+    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
-  if (!isToday && streak) {
-    overviewFields.push(
-      statField(
-        "commands.stats.fields.current_streak",
-        localizer(locale, "commands.stats.days", { count: streak.currentStreak }),
-      ),
-      statField(
-        "commands.stats.fields.longest_streak",
-        localizer(locale, "commands.stats.days", { count: streak.longestStreak }),
-      ),
-    );
+  // Group 3: activity patterns — meaningless for a single day.
+  if (!isToday) {
+    const hasActivity = streak !== null || histogram !== null;
+    if (hasActivity) {
+      overviewFields.push(sepField());
+      if (streak) {
+        overviewFields.push(
+          statField(
+            "commands.stats.fields.current_streak",
+            localizer(locale, "commands.stats.days", { count: streak.currentStreak }),
+          ),
+          statField(
+            "commands.stats.fields.longest_streak",
+            localizer(locale, "commands.stats.days", { count: streak.longestStreak }),
+          ),
+        );
+      }
+      if (histogram) {
+        overviewFields.push(
+          statField(
+            "commands.stats.fields.peak_hour",
+            formatPeakHour(locale, peakKey(histogram.byHour), args.timezoneOffset),
+          ),
+          statField("commands.stats.fields.peak_weekday", formatPeakWeekday(locale, histogram.byWeekday)),
+        );
+      }
+    }
   }
-  if (!isToday && histogram) {
-    overviewFields.push(
-      statField(
-        "commands.stats.fields.peak_hour",
-        formatPeakHour(locale, peakKey(histogram.byHour), args.timezoneOffset),
-      ),
-      statField("commands.stats.fields.peak_weekday", formatPeakWeekday(locale, histogram.byWeekday)),
-    );
-  }
+  // Group 4: all-time-only aggregates (memories + conditioning are not daily-bucketed).
   if (isAllTime) {
     overviewFields.push(
+      sepField(),
       statField("commands.stats.fields.personal_memories", fmtInt(memoriesSaved)),
       statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards)),
       statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
     );
-    // Generations only render for the this-server scope (quota tables are per-server).
-    if (scopeServerId !== undefined) {
-      overviewFields.push(
-        statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
-        statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
-      );
-    }
   }
+  // Group 5: generation counts + commands. Windowed via stat_counters — always visible.
+  if (scopeServerId !== undefined) {
+    overviewFields.push(
+      sepField(),
+      statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
+      statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
+    );
+  }
+  overviewFields.push(statField("commands.stats.fields.commands", fmtInt(commands)));
 
   // ── Personas tab. ──
   const personaFields: StatField[] = [
@@ -570,6 +598,7 @@ export async function buildPersonalTabs(args: {
       rankedList(
         locale,
         affinity.slice(0, 5).map((a) => ({ label: lineageLabel(locale, names, a.lineageId), count: a.count })),
+        unitReplies,
       ),
       false,
     ),
@@ -728,12 +757,18 @@ export async function buildPersonaTabs(args: {
   //    rewards/punishments; raw token volume lives in the Models tab). ──
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages_persona", fmtInt(messages)),
+    // Token/cost group separated from the reply count above.
+    sepField(),
+    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
+    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
   if (isAllTime) {
     overviewFields.push(
-      statField("commands.stats.fields.personal_memories", fmtInt(personalMemoryCount)),
-      statField("commands.stats.fields.server_memories", fmtInt(serverMemoryCount)),
+      sepField(),
+      // Use *_created keys here — these are memories the persona authored, not owned.
+      statField("commands.stats.fields.personal_memories_created", fmtInt(personalMemoryCount)),
+      statField("commands.stats.fields.server_memories_created", fmtInt(serverMemoryCount)),
       statField("commands.stats.fields.rewards_received", fmtInt(conditioning.rewards)),
       statField("commands.stats.fields.punishments_received", fmtInt(conditioning.punishments)),
     );
@@ -869,6 +904,7 @@ export async function buildServerTabs(args: {
     sprites,
     popularPersonas,
     emotions,
+    generations,
   ] = await Promise.all([
     statRepository.getMetricTotal({ metric: "message_sent", ...scope }),
     statRepository.getMetricTotal({ metric: "command_used", ...scope }),
@@ -883,18 +919,17 @@ export async function buildServerTabs(args: {
     statRepository.getMetricKeyBreakdown({ metric: "sprite_shown", ...scope, limit: 5 }),
     statRepository.getServerPersonaMessages({ serverId, from, limit: 5 }),
     statRepository.getEmotionBreakdown({ serverId, from, limit: 5 }),
+    statRepository.getGenerationTotals({ serverId, from }),
   ]);
 
-  // 2. All-time-only reads (conditioning, generations from quota tables, memories).
+  // 2. All-time-only reads (conditioning + memories are not daily-bucketed).
   let conditioning = { rewards: 0, punishments: 0 };
-  let generations: GenerationTotals = { textGenerations: 0, imageGenerations: 0, videoGenerations: 0 };
   let memorableMembers: TopUserEntry[] = [];
   let serverMemoryCount = 0;
   let memberMemoryCount = 0;
   if (isAllTime) {
-    [conditioning, generations, memorableMembers, serverMemoryCount, memberMemoryCount] = await Promise.all([
+    [conditioning, memorableMembers, serverMemoryCount, memberMemoryCount] = await Promise.all([
       statRepository.getConditioningTotals({ serverId }),
-      statRepository.getGenerationTotals({ serverId }),
       statRepository.getTopUsersByMemory({ serverId, limit: 5 }),
       // Server-scoped shared facts (exact) vs. members' personal memories (approximate,
       // cross-server) — kept as separate rows since they are different kinds of memory.
@@ -907,23 +942,42 @@ export async function buildServerTabs(args: {
   const unitReceived = localizer(locale, "commands.stats.units.messages_received");
   const unitMemories = localizer(locale, "commands.stats.units.memories_saved");
 
+  // Derived scalars for overview: top persona + top model by cost.
+  const mostPopularPersonaName = popularPersonas[0]
+    ? lineageLabel(locale, names, popularPersonas[0].lineageId)
+    : localizer(locale, "commands.stats.empty");
+  const mostPopularModel = modelCost[0]?.model ?? localizer(locale, "commands.stats.empty");
+
   // ── Overview (shared core; Images/Videos are server-only — quota tables carry no
   //    persona lineage, so they cannot appear on the persona view). ──
+  // Group 1: trigger count + top persona + top model.
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages", fmtInt(messages)),
-    statField("commands.stats.fields.commands", fmtInt(commands)),
+    statField("commands.stats.fields.most_popular_persona", mostPopularPersonaName),
+    statField("commands.stats.fields.most_popular_model", mostPopularModel),
+    // Group 2: token volume + estimated cost.
+    sepField(),
+    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
+    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
+  // Group 3: all-time-only aggregates (memories + conditioning not daily-bucketed).
   if (isAllTime) {
     overviewFields.push(
+      sepField(),
       statField("commands.stats.fields.server_memories", fmtInt(serverMemoryCount)),
       statField("commands.stats.fields.member_memories", fmtInt(memberMemoryCount)),
       statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards)),
       statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
-      statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
-      statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
     );
   }
+  // Group 4: generation counts + commands. Windowed via stat_counters — always visible.
+  overviewFields.push(
+    sepField(),
+    statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
+    statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
+    statField("commands.stats.fields.commands", fmtInt(commands)),
+  );
 
   // ── Leaderboard tab. ──
   const leaderboardFields: StatField[] = [

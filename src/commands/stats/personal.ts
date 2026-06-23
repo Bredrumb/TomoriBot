@@ -6,7 +6,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
   buildPersonalTabs,
-  buildSubtitle,
   DEFAULT_TIMEFRAME,
   renderStatsDashboard,
   resolveWindowFrom,
@@ -92,11 +91,12 @@ export async function execute(
     const scope = interaction.options.getString("scope", true) as StatsScope;
     const from = resolveWindowFrom(timeframe);
     const scopeServerId = scope === "this_server" ? serverId : undefined;
-    const subtitle = buildSubtitle(
+    const timeframeLabel = localizer(locale, `commands.choices.${timeframe}`);
+    const scopeLabel = localizer(
       locale,
-      timeframe,
       scope === "this_server" ? "commands.choices.this_server" : "commands.choices.global",
     );
+    const subtitle = `${interaction.user.displayName} • **${timeframeLabel}** (${scopeLabel})`;
 
     // 4. Build the tabs and render the invoker-controlled tabbed dashboard.
     const tabs = await buildPersonalTabs({

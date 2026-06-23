@@ -16,22 +16,18 @@
  *   conditioning gated per the same rules as the Phase 2 text dashboard.
  * - TIMEZONE: personal scope passes `users.timezone_offset` as `offsetHours`
  *   to `getActivityHeatmap` so the week-hour rotation happens at the repo layer.
- * - AVATARS: the favorite persona's `webhook_avatar_url` is fetched (via
- *   safeDownload) and base64-encoded for the card's embedded `<img>` data URI.
+ * - AVATARS: the favorite persona's `webhook_avatar_url` is resolved via
+ *   `loadStoredPersonaAvatarDataUri` (handles both local dev paths and remote
+ *   HTTP(S) URLs) and base64-encoded for the card's embedded `<img>` data URI.
  *   Fetch failure is graceful — returns null so the renderer shows a placeholder.
  */
 import type { ActivityHeatmap, MetricKeyEntry } from "@/utils/db/repositories/StatRepository";
 import { statRepository } from "@/utils/db/repositories";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { safeDownload } from "@/utils/security/safeDownload";
 import { log } from "@/utils/misc/logger";
+import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import type { PersonalCardData, PersonalHeatmapData } from "@/utils/stats/statsInfographic";
-
-// ── Avatar fetch constants ─────────────────────────────────────────────────────
-
-const AVATAR_MAX_SIZE_MB = 4;
-const AVATAR_TIMEOUT_MS = 8_000;
 
 // ── Normalization helpers ──────────────────────────────────────────────────────
 
@@ -149,30 +145,6 @@ export function shouldShowConditioning(timeframe: Timeframe): boolean {
   return timeframe === "all_time";
 }
 
-// ── Avatar fetch helper ────────────────────────────────────────────────────────
-
-/**
- * Fetches a persona avatar from a URL and returns a base64 data URI suitable for
- * embedding in a satori `<img>` element. Returns null on any failure so the
- * renderer can fall back to a placeholder without crashing.
- *
- * @param avatarUrl - HTTP(S) URL of the avatar image.
- */
-async function fetchAvatarDataUri(avatarUrl: string): Promise<string | null> {
-  try {
-    const result = await safeDownload(avatarUrl, {
-      maxSizeMB: AVATAR_MAX_SIZE_MB,
-      timeoutMs: AVATAR_TIMEOUT_MS,
-    });
-    if (!result.success || !result.buffer) return null;
-    const mimeType = result.contentType ?? "image/png";
-    return `data:${mimeType};base64,${result.buffer.toString("base64")}`;
-  } catch (error) {
-    log.warn(`personalCardGatherer: avatar fetch failed for ${avatarUrl}`, error as Error);
-    return null;
-  }
-}
-
 // ── Main gather function ───────────────────────────────────────────────────────
 
 /** Arguments for `gatherPersonalCardData`. */
@@ -279,7 +251,7 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
         // webhook_avatar_url is the persona's current displayed avatar URL
         const avatarUrl = match.webhook_avatar_url ?? null;
         if (avatarUrl) {
-          favoritePersonaAvatarDataUri = await fetchAvatarDataUri(avatarUrl);
+          favoritePersonaAvatarDataUri = await loadStoredPersonaAvatarDataUri(avatarUrl);
         }
       }
     } catch (error) {

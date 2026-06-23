@@ -26,6 +26,7 @@ import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema }
 import { sql } from "../../utils/db/client";
 import { decryptApiKey } from "../../utils/security/crypto";
 import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
+import { statRepository } from "@/utils/db/repositories";
 import { extractImagesFromMessage } from "../../utils/image/imageExtractor";
 import { segmentImage } from "../../utils/image/segmentationService";
 import { resolveNaiImageParams, type EffectiveNaiImageParams } from "@/utils/image/naiImageParams";
@@ -1303,6 +1304,15 @@ export class GenerateImageNaiTool extends BaseTool {
       // 8. Increment quota after successful generation (server providers only)
       if (creds.source === "server") {
         await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      }
+      // Record generation stat for all providers (stat_counters is separate from quota enforcement)
+      if (context.internalUserId) {
+        statRepository.recordStat({
+          serverId: context.tomoriState.server_id,
+          userId: context.internalUserId,
+          lineageId: context.tomoriState.persona_lineage_id ?? 0,
+          metric: "image_generated",
+        });
       }
 
       // Build success message with remaining quota info

@@ -846,40 +846,19 @@ export class StatRepository implements IRepository<null> {
   // ── Read-existing wrappers (no new writes; aggregate existing tables) ───────
 
   /**
-   * Generation totals from the existing quota counter tables. NOTE: text_quotas
-   * only accumulates when a text quota is configured (see QuotaRepository), so
-   * textGenerations under-counts on servers with no text quota; image/video
-   * always count. Per-user totals require the Discord id (quotas key on it).
+   * Generation totals from stat_counters. Supports time-window filtering via `from`.
+   * All three generation types are keyed on internal userId (not Discord snowflake),
+   * so per-user filtering requires the internal user FK, not the Discord id.
    *
-   * @param args - serverId and optional userDiscId (snowflake) filter.
+   * @param args - serverId, optional internal userId filter, and optional from date.
    */
-  async getGenerationTotals(args: { serverId: number; userDiscId?: string }): Promise<GenerationTotals> {
-    try {
-      const userDisc = args.userDiscId ?? null;
-      const [text] = await sql`
-        SELECT COALESCE(SUM(usage_count), 0) AS total FROM text_quotas
-        WHERE server_id = ${args.serverId}
-          AND (${userDisc}::text IS NULL OR user_disc_id = ${userDisc})
-      `;
-      const [image] = await sql`
-        SELECT COALESCE(SUM(usage_count), 0) AS total FROM image_quotas
-        WHERE server_id = ${args.serverId}
-          AND (${userDisc}::text IS NULL OR user_disc_id = ${userDisc})
-      `;
-      const [video] = await sql`
-        SELECT COALESCE(SUM(usage_count), 0) AS total FROM video_quotas
-        WHERE server_id = ${args.serverId}
-          AND (${userDisc}::text IS NULL OR user_disc_id = ${userDisc})
-      `;
-      return {
-        textGenerations: Number(text?.total ?? 0),
-        imageGenerations: Number(image?.total ?? 0),
-        videoGenerations: Number(video?.total ?? 0),
-      };
-    } catch (error) {
-      log.error(`StatRepository.getGenerationTotals: failed for server ${args.serverId}`, error);
-      return { textGenerations: 0, imageGenerations: 0, videoGenerations: 0 };
-    }
+  async getGenerationTotals(args: { serverId: number; userId?: number; from?: string }): Promise<GenerationTotals> {
+    const [textGenerations, imageGenerations, videoGenerations] = await Promise.all([
+      this.getMetricTotal({ metric: "text_generated", serverId: args.serverId, userId: args.userId, from: args.from }),
+      this.getMetricTotal({ metric: "image_generated", serverId: args.serverId, userId: args.userId, from: args.from }),
+      this.getMetricTotal({ metric: "video_generated", serverId: args.serverId, userId: args.userId, from: args.from }),
+    ]);
+    return { textGenerations, imageGenerations, videoGenerations };
   }
 
   /**

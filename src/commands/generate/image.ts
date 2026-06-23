@@ -18,7 +18,7 @@ import {
 import { GoogleGenAI } from "@google/genai";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { personaRepository, llmModelRepo } from "@/utils/db/repositories";
+import { personaRepository, llmModelRepo, statRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
@@ -672,6 +672,15 @@ export async function execute(
 
     // 19.5. Increment quota after successful generation
     await incrementImageQuota(tomoriState.server_id, interaction.user.id);
+    // Record generation stat (stat_counters is separate from quota enforcement)
+    if (userData.user_id) {
+      statRepository.recordStat({
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        lineageId: tomoriState.persona_lineage_id ?? 0,
+        metric: "image_generated",
+      });
+    }
 
     // 20. Build success embed
     const successEmbed = new EmbedBuilder()

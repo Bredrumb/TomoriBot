@@ -13,11 +13,14 @@
  *   - tokens_in     → model id / codename (count accumulates input token deltas, not 1)
  *   - tokens_out    → model id / codename (count accumulates output token deltas, not 1)
  *   - tool_used     → tool name
- *   - sprite_shown  → sprite name
- *   - emoji_used    → emoji name
- *   - sticker_used  → sticker name/id
- *   - active_hour   → hour-of-day "0".."23"
- *   - (all others)  → "" (scalar event counter)
+ *   - sprite_shown      → sprite name
+ *   - emoji_used        → emoji name
+ *   - sticker_used      → sticker name/id
+ *   - active_hour       → hour-of-day "0".."23"
+ *   - text_generated    → "" (one per completed chat turn)
+ *   - image_generated   → "" (one per successfully sent image)
+ *   - video_generated   → "" (one per successfully sent video)
+ *   - (all others)      → "" (scalar event counter)
  */
 export const STAT_METRICS = [
   "message_sent",
@@ -33,6 +36,9 @@ export const STAT_METRICS = [
   "emoji_used",
   "sticker_used",
   "active_hour",
+  "text_generated",
+  "image_generated",
+  "video_generated",
 ] as const;
 
 /** Union of all valid `stat_counters.metric` values. */

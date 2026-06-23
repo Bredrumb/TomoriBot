@@ -18,6 +18,7 @@ import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "@/utils/quota/imageQuotaManager";
+import { statRepository } from "@/utils/db/repositories";
 import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
 import { resolveNaiDiffusionModel } from "@/utils/image/naiDiffusionModels";
 import { normalizeNaiReferenceImage } from "@/utils/image/imageProcessor";
@@ -328,6 +329,15 @@ export async function execute(
 
     const generationTimeSeconds = ((performance.now() - startTime) / 1000).toFixed(1);
     await incrementImageQuota(tomoriState.server_id, interaction.user.id);
+    // Record generation stat (stat_counters is separate from quota enforcement)
+    if (userData.user_id) {
+      statRepository.recordStat({
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        lineageId: tomoriState.persona_lineage_id ?? 0,
+        metric: "image_generated",
+      });
+    }
 
     const filename = `nai_generated_${Date.now()}.png`;
     const attachment = new AttachmentBuilder(imageBuffer, {

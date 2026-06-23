@@ -1,8 +1,14 @@
-import type { ButtonInteraction, ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import {
+  MessageFlags,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+  type Client,
+  type SlashCommandSubcommandBuilder,
+} from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
-import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { buildNoticeContainer, replyInfoEmbed } from "@/utils/discord/ui/interactionCore";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -101,7 +107,19 @@ export async function execute(
     if (!selected) return;
     const lineageId = selected.persona_lineage_id ?? 0;
 
-    // 4. Render the dashboard publicly from the selected button interaction.
+    // 4. Collapse the ephemeral picker to a compact confirmation so the bulky
+    //    persona card disappears before the public dashboard appears.
+    await interaction.editReply({
+      components: buildNoticeContainer({
+        locale,
+        color: ColorCode.SUCCESS,
+        titleKey: "commands.stats.persona.chosen_title",
+        titleVars: { name: selected.persona_nickname },
+      }),
+      flags: MessageFlags.IsComponentsV2,
+    });
+
+    // 5. Render the dashboard publicly from the selected button interaction.
     const button = result.interaction as ButtonInteraction;
     await button.deferReply();
 

@@ -116,6 +116,8 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     for (const lineageId of lineages) {
       statRepository.recordStat({ serverId, userId, lineageId, metric: "message_sent" });
     }
+    // 4c. One text_generated increment per completed turn (persona-scoped to the answering persona).
+    statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "text_generated" });
 
     // 5. Estimated token volume keyed by model id. Input is the built context (one
     //    estimate per turn, attributed to the answering persona); output is summed
