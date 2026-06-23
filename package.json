@@ -1,6 +1,6 @@
 {
   "name": "tomoribot",
-  "version": "0.7.9973",
+  "version": "0.7.9976",
   "description": "Customizable AI Assistant Discord Bot",
   "main": "./src/index.ts",
   "type": "module",
@@ -85,7 +85,7 @@
     "profane-words": "^2.1.0",
     "sharp": "^0.34.5",
     "turndown": "^7.2.4",
-    "undici": "^6.24.1",
+    "undici": "^6.27.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -112,7 +112,8 @@
     "axios": "^1.16.1",
     "hono": "$hono",
     "@hono/node-server": "1.19.13",
-    "undici": "^6.24.0",
+    "undici": "^6.27.0",
+    "js-yaml": "^4.2.0",
     "brace-expansion": ">=5.0.6",
     "fast-xml-parser": ">=5.7.0",
     "postcss": ">=8.5.10",

@@ -20,7 +20,7 @@ This document outlines the threat model for TomoriBot using the STRIDE framework
 Related reference:
 - `docs/subsystems/security.md`
 - `docs/pipelines/tool-loop/` (tool-loop pipeline reference)
-- `docs/integrations/matrix-bridge.md`
+- `docs/integrations/matrix/bridge.md`
 - `docs/integrations/voice/README.md`
 
 ---

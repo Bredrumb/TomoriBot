@@ -83,6 +83,7 @@ export default {
       notice_reference_line: `参照元: {message_url}`,
       notice_reference_count_line: `参照画像を {count} 枚使用しています。`,
       generating_footer: `1〜3分ほどかかる場合があります。`,
+      generated_after_seconds_line: `{seconds}秒で生成しました。`,
     },
     document: {
       reading_title: `📄 ドキュメントを読み取り中...`,

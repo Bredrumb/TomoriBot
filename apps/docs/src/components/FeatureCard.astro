@@ -1,0 +1,57 @@
+---
+// TEMPORARY demo component for the card-layout comparison page (/card-demo/).
+// Option 3 from the docs plan: a custom "marketing" card that shows a real
+// image/screenshot (Starlight's built-in <Card> only supports named icons).
+// Delete this file along with src/pages/card-demo.astro when done evaluating.
+interface Props {
+  title: string;
+  img: string;
+  href?: string;
+}
+const { title, img, href } = Astro.props;
+const Tag = href ? "a" : "div";
+---
+
+<Tag class="feature-card" href={href}>
+  <img src={img} alt={title} loading="lazy" />
+  <div class="feature-card__body">
+    <h3 class="feature-card__title">{title}</h3>
+    <p class="feature-card__text"><slot /></p>
+  </div>
+</Tag>
+
+<style>
+  .feature-card {
+    display: block;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: var(--sl-color-black);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .feature-card:hover {
+    border-color: var(--sl-color-accent);
+    transform: translateY(-3px);
+  }
+  .feature-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+  .feature-card__body {
+    padding: 1rem;
+  }
+  .feature-card__title {
+    margin: 0 0 0.35rem;
+    font-size: var(--sl-text-h4);
+    line-height: 1.2;
+  }
+  .feature-card__text {
+    margin: 0;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+</style>

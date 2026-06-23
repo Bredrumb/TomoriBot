@@ -11,9 +11,22 @@ export const NVIDIA_STRUCTURED_OUTPUT_MODELS = new Set([
   "deepseek-ai/deepseek-v3.2",
   "qwen/qwen3.5-397b-a17b",
   "z.ai/glm-4.7",
+  "minimaxai/minimax-m3",
+  "moonshotai/kimi-k2.6",
+  "nvidia/nemotron-3-ultra-550b-a55b",
 ]);
 
 export const NVIDIA_STRUCTURED_OUTPUT_VISION_MODELS = new Set(["qwen/qwen3.5-397b-a17b"]);
+
+/**
+ * Models that require extended-thinking parameters injected at request time.
+ * These receive `reasoning_budget` and `chat_template_kwargs: { enable_thinking: true }`
+ * in addition to the standard chat-completion body.
+ */
+export const NVIDIA_THINKING_MODELS = new Set(["nvidia/nemotron-3-ultra-550b-a55b"]);
+
+/** Default reasoning budget (tokens) for Nemotron-style thinking-enabled models. */
+export const NVIDIA_THINKING_BUDGET_TOKENS = 16384;
 
 export const NVIDIA_IMAGE_ASPECT_RATIO_MAP: Record<string, string> = {
   "1:1": "1:1",

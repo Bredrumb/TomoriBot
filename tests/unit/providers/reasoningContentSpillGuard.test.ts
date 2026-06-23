@@ -131,6 +131,20 @@ describe("ReasoningContentSpillGuard", () => {
     });
   });
 
+  it("strips a multi-word reasoning tail glued to a LOWERCASE casual reply", () => {
+    const guard = new ReasoningContentSpillGuard("test");
+    guard.reset();
+    guard.observeReasoning("Let me go with figurin");
+
+    // "figurin" + "g it out" was split across the channel; the real reply "hey master 👋…"
+    // starts lowercase, so the multi-word fragment is the only signal that it is a spill.
+    expect(guard.filterContent("g it out.hey master 👋 what's up?")).toEqual({
+      content: "hey master 👋 what's up?",
+      spilledThought: "g it out.",
+      changed: true,
+    });
+  });
+
   it("leaves a spaced boundary (the model writing two real sentences) untouched", () => {
     const guard = new ReasoningContentSpillGuard("test");
     guard.reset();

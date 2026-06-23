@@ -3,6 +3,7 @@ import { errorLogRepository } from "./ErrorLogRepository";
 import { mcpRepository } from "./McpRepository";
 import { quotaRepository } from "./QuotaRepository";
 import { speechRepository } from "./SpeechRepository";
+import { channelContextNoteRepo } from "./ChannelContextNoteRepository";
 import { channelPromptRepo } from "./ChannelPromptRepository";
 import { cooldownRepository } from "./CooldownRepository";
 import { conditioningMemoryRepository } from "./ConditioningMemoryRepository";
@@ -32,6 +33,7 @@ export {
   mcpRepository,
   quotaRepository,
   speechRepository,
+  channelContextNoteRepo,
   channelPromptRepo,
   conditioningMemoryRepository,
   cooldownRepository,

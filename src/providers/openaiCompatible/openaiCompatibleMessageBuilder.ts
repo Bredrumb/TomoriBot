@@ -126,7 +126,8 @@ export async function buildOpenAICompatibleMessages(
       continue;
     }
 
-    const content = contentParts.length === 1 && contentParts[0].type === "text" ? contentParts[0].text : contentParts;
+    const allText = contentParts.every((part) => part.type === "text");
+    const content = allText ? contentParts.map((part) => String(part.text)).join("\n") : contentParts;
 
     messages.push({
       role,
@@ -229,9 +230,12 @@ export async function buildOpenAICompatibleMessages(
       }
 
       if (responseParts.length > 0) {
+        const allText = responseParts.every((part) => part.type === "text");
+        const content = allText ? responseParts.map((part) => String(part.text)).join("\n") : responseParts;
+
         messages.push({
           role: "user",
-          content: responseParts,
+          content,
         });
       }
     }

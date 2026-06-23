@@ -127,6 +127,9 @@ The selected model requires allowing data for paid model training, but your Open
       temperature_top_p_conflict_message: `Anthropic rejected this request because both Temperature and Top-P were sent. Use \`/config parameters\` and adjust either **Temperature** or **Top P** for that provider.`,
       unknown_default_message: `An unexpected error occurred while communicating with Anthropic.`,
     },
+    nvidia: {
+      "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA. Try switching models with \`/model text\`.`,
+    },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname} Learned Something New!`,
       server_memory_learned_description: `A server memory has been saved:

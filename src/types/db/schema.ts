@@ -903,6 +903,22 @@ export const channelPromptOverrideSchema = z.object({
 });
 export type ChannelPromptOverrideRow = z.infer<typeof channelPromptOverrideSchema>;
 
+/**
+ * Schema for per-channel context note entries (migration 034).
+ * When a row exists for a channel, its note is injected into the dialogue
+ * history at the configured depth alongside any persona-scoped note (additive).
+ * The global note from server_chat_configs is only used when neither applies.
+ */
+export const channelContextNoteSchema = z.object({
+  server_id: z.number(),
+  channel_disc_id: z.string(),
+  context_note: z.string(),
+  context_note_depth: z.number().int().min(0).max(100).default(0),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ChannelContextNoteRow = z.infer<typeof channelContextNoteSchema>;
+
 export const tomoriPresetSchema = z.object({
   persona_preset_id: z.number(),
   persona_preset_name: z.string(),
