@@ -5,7 +5,10 @@
  * precise vector retrieval.
  */
 
-export type ExtractionPromptMode = "conversation" | "roleplay";
+import type { RetrievedDocumentChunk } from "./documentService";
+import { formatRetrievedChunksForPrompt } from "./documentService";
+
+export type ExtractionPromptMode = "conversation" | "roleplay" | "in_character";
 
 export const EXTRACTION_CONVERSATION_SYSTEM_PROMPT = `You are a professional information extraction assistant. Your task is to extract atomic, self-contained facts from a conversation log. Each extracted fact must:
 
@@ -36,10 +39,108 @@ Finally, look for clear through-lines in the entire chat - are characters clearl
 Don't add analysis beyond what's necessary for context - let the original chat do the talking where possible.`;
 
 /**
+ * In-character extraction framing template. Shown in the modal pre-filled with
+ * {persona_nickname} already substituted, then runtime context blocks (attributes,
+ * existing memories, retrieved document chunks) are appended after submit. The
+ * user can edit the framing freely without losing the dynamic context — those
+ * blocks are always appended by composeInCharacterSystemPrompt.
+ */
+export const EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT = `You are {persona_nickname}. The conversation log you're about to read is happening in your world — read it as yourself, not as a neutral observer.
+
+Below this framing you'll find:
+- Who you are (your prompt, your attributes)
+- Memories you already hold
+- Excerpts from knowledge documents you've already absorbed
+
+From the conversation log, extract NEW memories — the moments YOU would notice and want to remember. Use your own voice. Let your character shape what you choose to record and how you describe it. Don't dryly summarize; write as though these are your own recollections.
+
+Skip what wouldn't stick with you. Don't restate what you already remember — the existing memories are shown only so you avoid duplicating them. If something contradicts what you remember, extract it anyway; the system handles versioning.
+
+Each extracted memory should still stand on its own (someone reading just that one line should grasp what happened), but the voice and what you choose to record are entirely yours.`;
+
+/**
  * Returns the default system prompt for the given extraction mode.
+ * For in_character mode, callers must substitute {persona_nickname} themselves
+ * before display (or pass through composeInCharacterSystemPrompt).
  */
 export function getDefaultExtractionSystemPrompt(mode: ExtractionPromptMode): string {
+  if (mode === "in_character") return EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT;
   return mode === "roleplay" ? EXTRACTION_ROLEPLAY_SYSTEM_PROMPT : EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
+}
+
+/**
+ * Substitutes {persona_nickname} in the in-character framing template.
+ * Used before displaying the modal so the user sees the persona's name baked in.
+ */
+export function substituteInCharacterFraming(template: string, personaNickname: string): string {
+  return template.replace(/\{persona_nickname\}/g, personaNickname);
+}
+
+/**
+ * Composes the full in-character system prompt by appending dynamic context
+ * blocks to the (possibly user-edited) framing template. Blocks are appended
+ * in a fixed order regardless of framing edits so the LLM always receives the
+ * persona's context.
+ *
+ * @param params.framingTemplate - The (possibly edited) framing text from the modal
+ * @param params.personaNickname - Persona display name
+ * @param params.personaPrompt - The persona's stored character prompt (may be null)
+ * @param params.attributes - Persona attribute list (may be empty)
+ * @param params.existingMemoryLines - Pre-formatted server memory bullet lines (channel-filtered)
+ * @param params.retrievedChunks - Document chunks retrieved via per-window RAG (may be empty)
+ */
+export function composeInCharacterSystemPrompt(params: {
+  framingTemplate: string;
+  personaNickname: string;
+  personaPrompt: string | null;
+  attributes: string[];
+  existingMemoryLines: string[];
+  retrievedChunks: RetrievedDocumentChunk[];
+}): string {
+  const { framingTemplate, personaNickname, personaPrompt, attributes, existingMemoryLines, retrievedChunks } = params;
+
+  const sections: string[] = [framingTemplate.trim()];
+
+  // Identity block — persona prompt and attributes are who the bot IS.
+  const identityLines: string[] = [`\n---\n## Who you are: ${personaNickname}`];
+  if (personaPrompt?.trim()) {
+    identityLines.push("", personaPrompt.trim());
+  }
+  if (attributes.length > 0) {
+    identityLines.push("", "### Your attributes:");
+    for (const attr of attributes) {
+      const trimmed = attr.trim();
+      if (trimmed) identityLines.push(`- ${trimmed}`);
+    }
+  }
+  sections.push(identityLines.join("\n"));
+
+  // Existing memories block — what the persona already knows, so it can avoid duplicating.
+  if (existingMemoryLines.length > 0) {
+    const memoryBlock = [
+      "\n---",
+      `## Things ${personaNickname} already remembers`,
+      "(Do not re-extract these. They're shown only for awareness.)",
+      "",
+      ...existingMemoryLines.map((line) => `- ${line}`),
+    ].join("\n");
+    sections.push(memoryBlock);
+  }
+
+  // Retrieved document chunks — relevant excerpts from prior knowledge.
+  const chunksFormatted = formatRetrievedChunksForPrompt(retrievedChunks);
+  if (chunksFormatted) {
+    const chunkBlock = [
+      "\n---",
+      `## Relevant excerpts from ${personaNickname}'s knowledge documents`,
+      "(For awareness only — do not re-extract.)",
+      "",
+      chunksFormatted,
+    ].join("\n");
+    sections.push(chunkBlock);
+  }
+
+  return sections.join("\n");
 }
 
 /**

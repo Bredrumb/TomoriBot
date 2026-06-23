@@ -42,12 +42,18 @@ import {
 } from "@/utils/documents/documentService";
 import {
   buildExtractionUserPrompt,
+  composeInCharacterSystemPrompt,
   EXTRACTION_CONVERSATION_SYSTEM_PROMPT,
+  EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT,
   EXTRACTION_ROLEPLAY_SYSTEM_PROMPT,
+  substituteInCharacterFraming,
   type ExtractionPromptMode,
 } from "@/utils/documents/historyExtractionPrompt";
+import { ragRepository } from "@/utils/db/repositories";
+import type { RetrievedDocumentChunk } from "@/utils/documents/documentService";
 import type { HistoryMemoryEntry } from "@/providers/utils/historyExtractionSchema";
-import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
+import type { EmbeddingModelRow, ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
+import { sql } from "@/utils/db/client";
 import { extractHistoryWindowForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
@@ -68,6 +74,15 @@ const HISTORY_EXTRACTION_WINDOW_SIZE = Number.parseInt(process.env.HISTORY_EXTRA
 
 /** Number of previous restatements to pass as dedup context between windows */
 const DEDUP_CONTEXT_COUNT = 3;
+
+/** Max retrieved document chunks injected into the in-character system prompt per window */
+const HISTORY_INCHARACTER_RAG_MAX_RESULTS = (() => {
+  const parsed = Number.parseInt(process.env.HISTORY_INCHARACTER_RAG_MAX_RESULTS || "16", 10);
+  return Number.isFinite(parsed) ? Math.max(1, parsed) : 16;
+})();
+
+/** Minimum similarity score for chunks pulled into in-character context (loose; we're seeding awareness) */
+const HISTORY_INCHARACTER_RAG_MIN_SIMILARITY = 0.3;
 
 type HistoryScope = "persona" | "automatic" | "global";
 
@@ -102,6 +117,96 @@ function buildFooter(params: {
     jump_link: jumpLink,
     end_status: localizer(locale, endStatusKey),
   });
+}
+
+/**
+ * Loads existing server memories for a persona, filtered by channel tags.
+ * Untagged memories (no `#tag` entries) are always included; tagged memories must
+ * match at least one of the provided filter tags. Tag quotes are stripped before
+ * comparison (server_memories tags are stored with surrounding quotes).
+ *
+ * @param serverId Internal server id
+ * @param personaLineageId Persona lineage id (cross-version persona identity)
+ * @param filterChannelTags Channel tag names without `#` prefix (e.g. ["general", "dev"])
+ */
+async function loadInCharacterMemoryLines(
+  serverId: number,
+  personaLineageId: number | null,
+  filterChannelTags: string[],
+): Promise<string[]> {
+  if (personaLineageId == null) return [];
+
+  const rows = await sql<Array<{ content: string; tags: string[] | null }>>`
+    SELECT content, tags
+    FROM server_memories
+    WHERE server_id = ${serverId}
+      AND persona_lineage_id = ${personaLineageId}
+    ORDER BY created_at DESC
+  `;
+
+  const lowerFilter = filterChannelTags.map((t) => t.toLowerCase());
+
+  return rows
+    .filter((row) => {
+      const normalized = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
+      const channelTags = normalized.filter((t) => t.startsWith("#"));
+      if (channelTags.length === 0) return true;
+      if (lowerFilter.length === 0) return true;
+      return channelTags.some((t) => lowerFilter.includes(t.slice(1).toLowerCase()));
+    })
+    .map((row) => row.content.trim())
+    .filter((content) => content.length > 0);
+}
+
+/**
+ * Retrieves document chunks relevant to a query, looping over multiple channel
+ * filter tags and merging results. Each tag-filtered call returns chunks from
+ * documents tagged with that channel (plus untagged documents). Results are
+ * deduped by (document_id, chunk_index) and the highest-similarity copy is kept.
+ *
+ * NB: this makes one embedding round-trip per tag. With 16-results × 3 tags,
+ * that's 3 embedding calls per extraction window. The user opted into "luxury".
+ */
+async function retrieveInCharacterChunks(params: {
+  serverId: number;
+  personaId: number | null;
+  query: string;
+  embeddingModel: EmbeddingModelRow;
+  embeddingApiKey: string;
+  filterChannelTags: string[];
+  maxResults: number;
+}): Promise<RetrievedDocumentChunk[]> {
+  const { serverId, personaId, query, embeddingModel, embeddingApiKey, filterChannelTags, maxResults } = params;
+
+  if (!query.trim()) return [];
+
+  const tagsToQuery = filterChannelTags.length > 0 ? filterChannelTags : [null];
+  const merged = new Map<string, RetrievedDocumentChunk>();
+
+  for (const tag of tagsToQuery) {
+    const chunks = await ragRepository.retrieveRelevantChunks({
+      serverId,
+      personaId,
+      query,
+      embeddingModel,
+      apiKey: embeddingApiKey,
+      maxResults,
+      minSimilarity: HISTORY_INCHARACTER_RAG_MIN_SIMILARITY,
+      channelName: tag,
+    });
+
+    for (const chunk of chunks) {
+      const key = `${chunk.document_id}:${chunk.chunk_index}`;
+      const existing = merged.get(key);
+      if (!existing || chunk.similarity > existing.similarity) {
+        merged.set(key, chunk);
+      }
+    }
+  }
+
+  return Array.from(merged.values())
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, maxResults);
 }
 
 /** Shows the "no facts extracted from this batch" embed with the pagination footer. */
@@ -185,6 +290,10 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
             name: localizer("en-US", "commands.memory.history.import.prompt_choice_roleplay"),
             value: "roleplay",
           },
+          {
+            name: localizer("en-US", "commands.memory.history.import.prompt_choice_in_character"),
+            value: "in_character",
+          },
         ),
     )
     .addIntegerOption((option) =>
@@ -201,14 +310,28 @@ const EXTRACTION_PROMPT_FIELD_ID = "system_prompt";
 
 /**
  * Shows a modal pre-filled with the chosen system prompt template, lets the user edit it,
- * and returns the submit interaction and final system prompt string.
+ * and returns the submit interaction and final system prompt string. For in_character
+ * mode the framing template is shown with {persona_nickname} already substituted; the
+ * runtime context blocks (attributes, memories, retrieved chunks) are NOT shown in the
+ * modal and are appended later by composeInCharacterSystemPrompt.
  */
 async function promptForExtractionSystem(
   host: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
   mode: ExtractionPromptMode,
+  personaForInCharacter?: TomoriState | null,
 ): Promise<{ submitInteraction: ModalSubmitInteraction; systemPrompt: string } | null> {
-  const defaultPrompt = mode === "roleplay" ? EXTRACTION_ROLEPLAY_SYSTEM_PROMPT : EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
+  let defaultPrompt: string;
+  if (mode === "in_character") {
+    defaultPrompt = substituteInCharacterFraming(
+      EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT,
+      personaForInCharacter?.persona_nickname ?? "",
+    );
+  } else if (mode === "roleplay") {
+    defaultPrompt = EXTRACTION_ROLEPLAY_SYSTEM_PROMPT;
+  } else {
+    defaultPrompt = EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
+  }
 
   const modalResult = await promptWithRawModal(
     host,
@@ -398,7 +521,8 @@ async function runIncrementalExtraction(params: {
   model: string;
   apiKey: string;
   endpointUrl?: string;
-  systemPrompt: string;
+  /** Composes the system prompt for a given window. For static prompts (conversation/roleplay) this returns a constant; for in_character it does per-window RAG. */
+  composeSystemPrompt: (windowText: string, windowIndex: number) => Promise<string>;
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
   locale: string;
   writeTargets: WriteTarget[];
@@ -414,7 +538,7 @@ async function runIncrementalExtraction(params: {
     model,
     apiKey,
     endpointUrl,
-    systemPrompt,
+    composeSystemPrompt,
     replyInteraction,
     locale,
     writeTargets,
@@ -447,13 +571,14 @@ async function runIncrementalExtraction(params: {
       ],
     });
 
+    const composedSystemPrompt = await composeSystemPrompt(windows[i], i);
     const windowEntries = await extractWindow(
       windows[i],
       previousRestatements,
       provider,
       model,
       apiKey,
-      systemPrompt,
+      composedSystemPrompt,
       endpointUrl,
     );
 
@@ -668,8 +793,25 @@ export async function execute(
     const startMessageId = interaction.options.getString("start_message_id", true).trim();
     const channelsInput = interaction.options.getString("channels");
     const promptModeInput = interaction.options.getString("prompt");
-    const promptMode: ExtractionPromptMode = promptModeInput === "roleplay" ? "roleplay" : "conversation";
+    const promptMode: ExtractionPromptMode =
+      promptModeInput === "roleplay"
+        ? "roleplay"
+        : promptModeInput === "in_character"
+          ? "in_character"
+          : "conversation";
     const messageFetchLimit = interaction.options.getInteger("limit") ?? 100;
+
+    // In-character extraction requires a single persona's identity to do its job —
+    // reject global/automatic combinations rather than silently degrading.
+    if (promptMode === "in_character" && scope !== "persona") {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.memory.history.import.in_character_scope_invalid_title",
+        descriptionKey: "commands.memory.history.import.in_character_scope_invalid_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
 
     // Validate the start message ID exists in this channel before doing any further setup,
     // so users with a typo get immediate feedback instead of sitting through the persona/modal flow.
@@ -757,7 +899,12 @@ export async function execute(
         persona_name: selectedPersona.persona_nickname,
       });
 
-      const promptModalResult = await promptForExtractionSystem(personaSelectionInteraction, locale, promptMode);
+      const promptModalResult = await promptForExtractionSystem(
+        personaSelectionInteraction,
+        locale,
+        promptMode,
+        selectedPersona,
+      );
       if (!promptModalResult) return;
       modalSubmitInteraction = promptModalResult.submitInteraction;
       const personaSystemPrompt = promptModalResult.systemPrompt;
@@ -773,6 +920,50 @@ export async function execute(
         locale,
       });
       if (!fetchResult) return;
+
+      // For in-character mode, precompute the channel-filtered existing memories once.
+      // The retrieval-and-compose closure handles per-window RAG below.
+      const inCharacterFilterTags =
+        channelTags.length > 0
+          ? channelTags.map((t) => t.replace(/^#/, ""))
+          : interaction.channel && "name" in interaction.channel && interaction.channel.name
+            ? [interaction.channel.name.toLowerCase()]
+            : [];
+
+      // Capture into a const so TypeScript can narrow inside the async closure below.
+      const personaServerId = tomoriState.server_id;
+
+      const inCharacterExistingMemories =
+        promptMode === "in_character"
+          ? await loadInCharacterMemoryLines(
+              personaServerId,
+              selectedPersona.persona_lineage_id ?? null,
+              inCharacterFilterTags,
+            )
+          : [];
+
+      const composeSystemPrompt =
+        promptMode === "in_character"
+          ? async (windowText: string): Promise<string> => {
+              const retrievedChunks = await retrieveInCharacterChunks({
+                serverId: personaServerId,
+                personaId: targetPersonaId,
+                query: windowText,
+                embeddingModel,
+                embeddingApiKey: embeddingCreds.apiKey,
+                filterChannelTags: inCharacterFilterTags,
+                maxResults: HISTORY_INCHARACTER_RAG_MAX_RESULTS,
+              });
+              return composeInCharacterSystemPrompt({
+                framingTemplate: personaSystemPrompt,
+                personaNickname: selectedPersona.persona_nickname,
+                personaPrompt: selectedPersona.persona_prompt ?? null,
+                attributes: selectedPersona.attribute_list ?? [],
+                existingMemoryLines: inCharacterExistingMemories,
+                retrievedChunks,
+              });
+            }
+          : async (): Promise<string> => personaSystemPrompt;
 
       const footer = buildFooter({
         firstMessage: fetchResult.firstMessage,
@@ -815,7 +1006,7 @@ export async function execute(
         model,
         apiKey: textCreds.apiKey,
         endpointUrl,
-        systemPrompt: personaSystemPrompt,
+        composeSystemPrompt,
         replyInteraction: modalSubmitInteraction,
         locale,
         writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: targetPersonaId }],
@@ -914,7 +1105,7 @@ export async function execute(
         model,
         apiKey: textCreds.apiKey,
         endpointUrl,
-        systemPrompt: globalSystemPrompt,
+        composeSystemPrompt: async () => globalSystemPrompt,
         replyInteraction: modalSubmitInteraction,
         locale,
         writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: null }],
@@ -1019,7 +1210,7 @@ export async function execute(
         model,
         apiKey: textCreds.apiKey,
         endpointUrl,
-        systemPrompt: autoSystemPrompt,
+        composeSystemPrompt: async () => autoSystemPrompt,
         replyInteraction: modalSubmitInteraction,
         locale,
         writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: null }],
@@ -1108,7 +1299,7 @@ export async function execute(
       model,
       apiKey: textCreds.apiKey,
       endpointUrl,
-      systemPrompt: autoSystemPrompt,
+      composeSystemPrompt: async () => autoSystemPrompt,
       replyInteraction: modalSubmitInteraction,
       locale,
       writeTargets: personaTargets.map((pt) => pt.target),
