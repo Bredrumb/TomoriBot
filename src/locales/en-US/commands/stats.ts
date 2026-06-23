@@ -107,6 +107,9 @@ export default {
       tokens_out_short: `out`,
     },
 
+    // Standalone "days" unit used by the streak block on cards (no leading number).
+    days_unit: `days`,
+
     // Labels used only on the rendered infographic cards (not the text dashboard).
     infographic: {
       personal_title: `Wrapped`,
@@ -116,6 +119,47 @@ export default {
       signature: `Signature`,
       naughty_nice: `Naughty / Nice`,
       no_data: `No stats yet`,
+      // Persona card labels
+      persona_title: `Persona Card`,
+      memories_saved: `Memories`,
+      server_rank: `Server Rank`,
+      rank_prefix: `#`,
+      people_i_remember: `People I Remember Most`,
+      most_rewarded_by: `Most Rewarded By`,
+      most_punished_by: `Most Punished By`,
+      vibe_check: `Vibe`,
+      sprites_label: `Sprites`,
+      emoji_label: `Emoji`,
+      stickers_label: `Stickers`,
+      tools_label: `Tools`,
+      // Server card labels
+      server_title: `Server in Review`,
+      top_chatters: `Top Chatters`,
+      top_personas: `Top Personas`,
+      collective_stats: `Collective Activity`,
+      text_generations: `Texts`,
+      image_generations: `Images`,
+      video_generations: `Videos`,
+      peak_hour: `Peak Hour`,
+      most_loved: `Most Loved`,
+      top_commands: `Top Commands`,
+    },
+
+    // /stats generate subcommand strings
+    generate: {
+      description: `Generate a shareable stats image card.`,
+      type_description: `The type of card to generate.`,
+      timeframe_description: `The time window to summarize.`,
+      scope_description: `Count this server only, or across all servers. Only applies to Personal.`,
+      personal_option: `Personal Wrapped`,
+      persona_option: `Persona Card`,
+      server_option: `Server Review`,
+      privacy_title: `Stats Unavailable`,
+      privacy_description: `Personal stats cards are not available for fully-private users.`,
+      picker_title: `Pick a Persona`,
+      picker_description: `Select a persona to generate a stats card for.`,
+      no_personas_title: `No Personas`,
+      no_personas_description: `This server has no personas to generate a stats card for yet.`,
     },
   },
 };

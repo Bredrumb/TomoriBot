@@ -44,6 +44,7 @@ rather than sequenced stages.
 - [`subsystems/caching.md`](./subsystems/caching)
 - [`subsystems/cooldowns.md`](./subsystems/cooldowns)
 - [`subsystems/video-generation.md`](./subsystems/video-generation)
+- [`subsystems/stats-infographic.md`](./subsystems/stats-infographic) — `/stats generate` PNG card pipeline (satori→resvg, gather/render split, Donut/Podium primitives, env config)
 - [`subsystems/thinking-level.md`](./subsystems/thinking-level)
 - [`subsystems/logit-bias.md`](./subsystems/logit-bias)
 - [`subsystems/strict-chat-completion.md`](./subsystems/strict-chat-completion) — role-alternation / prefix-completion toggles + always-on media relocation
