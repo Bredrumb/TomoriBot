@@ -498,6 +498,24 @@ async function createDocumentForImport(params: {
     return null;
   }
 
+  const currentChunkCount = await serverMemoryRepository.countChunksScoped(serverId, personaId);
+  if (currentChunkCount >= memoryLimits.maxDocumentChunksPerServer) {
+    await replyInteraction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle(localizer(locale, "commands.memory.history.import.server_chunk_limit_title"))
+          .setDescription(
+            localizer(locale, "commands.memory.history.import.server_chunk_limit_description", {
+              scope: scopeLabel,
+              max_chunks: memoryLimits.maxDocumentChunksPerServer.toString(),
+            }),
+          )
+          .setColor(ColorCode.ERROR),
+      ],
+    });
+    return null;
+  }
+
   return await createDocumentRecord({
     serverId,
     personaId,
@@ -549,12 +567,18 @@ async function runIncrementalExtraction(params: {
     embeddingApiKey,
   } = params;
 
+  const memoryLimits = getMemoryLimits();
   const messageLines = formattedResult.text.split("\n");
   const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
   const allChunks: string[] = [];
   let previousRestatements: string[] = [];
   const chunkStartIndex = new Map<number, number>();
   for (const t of writeTargets) chunkStartIndex.set(t.documentId, 0);
+
+  const baselineChunkCounts = new Map<number, number>();
+  for (const t of writeTargets) {
+    baselineChunkCounts.set(t.documentId, await serverMemoryRepository.countChunksScoped(t.dbServerId, t.personaId));
+  }
 
   for (let i = 0; i < windows.length; i++) {
     await replyInteraction.editReply({
@@ -584,6 +608,16 @@ async function runIncrementalExtraction(params: {
 
     if (windowEntries.length > 0) {
       const windowChunks = windowEntries.map((e) => e.lossless_restatement);
+
+      const wouldExceedLimit = writeTargets.some((t) => {
+        const baseline = baselineChunkCounts.get(t.documentId) ?? 0;
+        return baseline + allChunks.length + windowChunks.length > memoryLimits.maxDocumentChunksPerServer;
+      });
+      if (wouldExceedLimit) {
+        log.warn(`Chunk limit reached during history import; stopping after ${allChunks.length} chunks`);
+        break;
+      }
+
       allChunks.push(...windowChunks);
 
       const embeddings = await generateEmbeddingsBatched({
@@ -1259,6 +1293,12 @@ export async function execute(
       const docCount = await serverMemoryRepository.countDocumentsScoped(tomoriState.server_id, personaId);
       if (docCount >= memoryLimits.maxDocumentsPerServer) {
         log.warn(`Document limit exceeded for persona ${personaId}, skipping`);
+        continue;
+      }
+
+      const chunkCount = await serverMemoryRepository.countChunksScoped(tomoriState.server_id, personaId);
+      if (chunkCount >= memoryLimits.maxDocumentChunksPerServer) {
+        log.warn(`Chunk limit exceeded for persona ${personaId}, skipping`);
         continue;
       }
 
