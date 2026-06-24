@@ -2,7 +2,13 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
 import type { PersonaCardData } from "@/utils/stats/statsInfographic";
-import { buildDonutSvg, CARD_W, getPersonaCardHeight, renderPersonaCard } from "@/utils/stats/statsInfographic";
+import {
+  buildDonutSvg,
+  CARD_W,
+  DEFAULT_PERSONAL_CARD_PALETTE,
+  getPersonaCardHeight,
+  renderPersonaCard,
+} from "@/utils/stats/statsInfographic";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
 beforeAll(async () => {
@@ -16,10 +22,12 @@ const SAMPLE_EN: PersonaCardData = {
   userAvatarDataUri: null,
   personaName: "Tomori",
   personaAvatarDataUri: null,
+  tomoriconDataUri: null,
+  palette: DEFAULT_PERSONAL_CARD_PALETTE,
+  userPalette: DEFAULT_PERSONAL_CARD_PALETTE,
   inputTokens: 31_386,
   outputTokens: 4_820,
   totalTriggers: 867,
-  sharePct: 70.3,
   estimatedCost: 0.0317,
   memoryCount: 112,
   conditioning: { rewards: 15, punishments: 3 },
@@ -60,6 +68,12 @@ describe("renderPersonaCard PNG", () => {
     const japanese = await renderCardToPng(renderPersonaCard(SAMPLE_JA), CARD_W, getPersonaCardHeight(SAMPLE_JA));
     expect(english.byteLength).toBeGreaterThan(1000);
     expect(japanese.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("produces a shorter PNG when the all-time memory row is absent", async () => {
+    const timeWindow = { ...SAMPLE_EN, timeframe: "week" as const, memoryCount: null };
+    const png = await renderCardToPng(renderPersonaCard(timeWindow), CARD_W, getPersonaCardHeight(timeWindow));
+    expect(png.byteLength).toBeGreaterThan(1000);
   });
 
   it("shortens time-window cards when the all-time memory tile is absent", () => {

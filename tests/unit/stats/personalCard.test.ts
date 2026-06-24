@@ -2,6 +2,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import sharp from "sharp";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
+import { loadTomoriconDataUri } from "@/utils/stats/cardColor";
 import { extractPersonalCardPalette } from "@/utils/stats/personalCardGatherer";
 import type { PersonalCardData } from "@/utils/stats/statsInfographic";
 import {
@@ -31,7 +32,6 @@ const SAMPLE_EN: PersonalCardData = {
     { name: "Lilya", avatarDataUri: null, totalTokens: 14_851, estimatedCost: 0.0011 },
   ],
   favoriteModelName: "gemini-1.5-pro",
-  heroVariant: 0,
 };
 
 const SAMPLE_JA: PersonalCardData = {
@@ -77,6 +77,27 @@ describe("extractPersonalCardPalette", () => {
   });
 });
 
+describe("loadTomoriconDataUri", () => {
+  it("uses the requested color for opaque stamp pixels", async () => {
+    const tinted = await loadTomoriconDataUri("#2f6259");
+    expect(tinted).not.toBeNull();
+    if (!tinted) throw new Error("Tinted Tomoricon was unavailable");
+
+    const encoded = tinted.slice(tinted.indexOf(",") + 1);
+    const { data, info } = await sharp(Buffer.from(encoded, "base64"))
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const opaqueOffset = Array.from({ length: data.length / info.channels }, (_, pixel) => pixel * info.channels).find(
+      (offset) => data[offset + 3] === 255,
+    );
+
+    expect(opaqueOffset).toBeDefined();
+    if (opaqueOffset === undefined) throw new Error("Tinted Tomoricon had no opaque pixels");
+    expect([...data.subarray(opaqueOffset, opaqueOffset + 3)]).toEqual([47, 98, 89]);
+  });
+});
+
 describe("renderPersonalCard PNG", () => {
   it("renders a 9:16 PNG with the expected dimensions", async () => {
     const height = getPersonalCardHeight(SAMPLE_EN);
@@ -92,12 +113,4 @@ describe("renderPersonalCard PNG", () => {
     const png = await renderCardToPng(renderPersonalCard(SAMPLE_JA), CARD_W, getPersonalCardHeight(SAMPLE_JA));
     expect(png.byteLength).toBeGreaterThan(1000);
   });
-
-  it("renders every decorative hero variant", async () => {
-    for (const heroVariant of [0, 1, 2, 3, 4] as const) {
-      const card = { ...SAMPLE_EN, heroVariant };
-      const png = await renderCardToPng(renderPersonalCard(card), CARD_W, getPersonalCardHeight(card));
-      expect(png.byteLength).toBeGreaterThan(1000);
-    }
-  }, 30_000);
 });

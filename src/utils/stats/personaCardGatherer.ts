@@ -8,6 +8,7 @@ import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { statRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
+import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import type { BreakdownSegment, EmojiIcon, PersonaCardData } from "@/utils/stats/statsInfographic";
 
@@ -25,13 +26,15 @@ export interface GatherPersonaCardArgs {
 
 async function resolveEmojiIcons(guild: Guild, entries: Array<{ key: string; count: number }>): Promise<EmojiIcon[]> {
   return Promise.all(
-    entries.map(async (entry) => {
-      const emoji = guild.emojis.cache.find((candidate) => candidate.name === entry.key);
-      const imageDataUri = emoji
-        ? await loadStoredPersonaAvatarDataUri(emoji.imageURL({ extension: "png", size: 64 }))
-        : null;
-      return { name: entry.key, imageDataUri };
-    }),
+    [...entries]
+      .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key))
+      .map(async (entry) => {
+        const emoji = guild.emojis.cache.find((candidate) => candidate.name === entry.key);
+        const imageDataUri = emoji
+          ? await loadStoredPersonaAvatarDataUri(emoji.imageURL({ extension: "png", size: 64 }))
+          : null;
+        return { name: entry.key, imageDataUri };
+      }),
   );
 }
 
@@ -51,7 +54,6 @@ export async function gatherPersonaCardData(args: GatherPersonaCardArgs): Promis
   const [
     tokenTotals,
     totalTriggers,
-    totalUserTriggers,
     estimatedCost,
     conditioning,
     emojiEntries,
@@ -61,7 +63,6 @@ export async function gatherPersonaCardData(args: GatherPersonaCardArgs): Promis
   ] = await Promise.all([
     statRepository.getTokenTotals({ userId, serverId, lineageId, ...windowArg }),
     statRepository.getMetricTotal({ metric: "message_sent", userId, serverId, lineageId, ...windowArg }),
-    statRepository.getMetricTotal({ metric: "message_sent", userId, serverId, ...windowArg }),
     statRepository.getEstimatedCost({ userId, serverId, lineageId, ...windowArg }),
     statRepository.getConditioningTotals({ userId, serverId, lineageId }),
     statRepository.getMetricKeyBreakdown({ metric: "emoji_used", userId, serverId, lineageId, limit: 5, ...windowArg }),
@@ -102,6 +103,12 @@ export async function gatherPersonaCardData(args: GatherPersonaCardArgs): Promis
     favoriteEmojis = emojiEntries.map((entry) => ({ name: entry.key, imageDataUri: null }));
   }
 
+  const [palette, userPalette] = await Promise.all([
+    extractCardPalette(personaAvatarDataUri ?? userAvatarDataUri ?? null),
+    extractCardPalette(userAvatarDataUri),
+  ]);
+  const tomoriconDataUri = await loadTomoriconDataUri(palette.ink);
+
   return {
     locale,
     timeframe,
@@ -109,10 +116,12 @@ export async function gatherPersonaCardData(args: GatherPersonaCardArgs): Promis
     userAvatarDataUri,
     personaName,
     personaAvatarDataUri,
+    tomoriconDataUri,
+    palette,
+    userPalette,
     inputTokens: tokenTotals.inputTokens,
     outputTokens: tokenTotals.outputTokens,
     totalTriggers,
-    sharePct: totalUserTriggers > 0 ? (totalTriggers / totalUserTriggers) * 100 : 0,
     estimatedCost,
     memoryCount,
     conditioning: { rewards: conditioning.rewards, punishments: conditioning.punishments },

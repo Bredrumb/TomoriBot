@@ -2,10 +2,10 @@
  * Renders representative EN and JA stats cards without a database or
  * Discord connection. Usage: bun run scripts/devtools/renderPersonalCardHarness.ts [outputDir]
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
-import type { PersonaCardData, PersonalCardData, ServerCardData } from "@/utils/stats/statsInfographic";
+import type { PersonaCardData, PersonalCardData, PersonalCardPalette, ServerCardData } from "@/utils/stats/statsInfographic";
 import {
   CARD_W,
   DEFAULT_PERSONAL_CARD_PALETTE,
@@ -16,9 +16,21 @@ import {
   renderPersonaCard,
   renderServerCard,
 } from "@/utils/stats/statsInfographic";
+import { loadTomoriconDataUri } from "@/utils/stats/cardColor";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
-const TOMORICON_DATA_URI = `data:image/png;base64,${readFileSync(resolve("assets/img/tomoricon-mono-dark.png")).toString("base64")}`;
+const TOMORICON_DATA_URI = await loadTomoriconDataUri(DEFAULT_PERSONAL_CARD_PALETTE.ink);
+
+/** Distinct user palette so the Persona Affinity harness makes palette ownership visible. */
+const USER_CARD_PALETTE: PersonalCardPalette = {
+  background: "#f7f3f0",
+  surface: "#eee3dc",
+  ink: "#2c201b",
+  muted: "#604f48",
+  accent: "#a7442b",
+  accentSecondary: "#744b8f",
+  border: "#d6bfb3",
+};
 
 const PERSONAL_EN: PersonalCardData = {
   locale: "en-US",
@@ -36,7 +48,6 @@ const PERSONAL_EN: PersonalCardData = {
     { name: "Mutsumi", avatarDataUri: null, totalTokens: 10_892, estimatedCost: 0.003 },
   ],
   favoriteModelName: "gemini-1.5-pro",
-  heroVariant: 0,
 };
 
 const PERSONAL_JA: PersonalCardData = {
@@ -56,10 +67,12 @@ const PERSONA_EN: PersonaCardData = {
   userAvatarDataUri: null,
   personaName: "Tomori",
   personaAvatarDataUri: null,
+  tomoriconDataUri: TOMORICON_DATA_URI,
+  palette: DEFAULT_PERSONAL_CARD_PALETTE,
+  userPalette: USER_CARD_PALETTE,
   inputTokens: 31_386,
   outputTokens: 4_820,
   totalTriggers: 867,
-  sharePct: 70.3,
   estimatedCost: 0.0213,
   memoryCount: 112,
   conditioning: { rewards: 27, punishments: 5 },
@@ -113,7 +126,6 @@ const SERVER_EN: ServerCardData = {
   totalTokens: 96_618,
   estimatedCost: 4.27,
   totalTriggers: 8_230,
-  heroVariant: 0,
 };
 
 const SERVER_JA: ServerCardData = {

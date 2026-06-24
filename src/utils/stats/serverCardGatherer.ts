@@ -16,12 +16,7 @@ import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
-import {
-  chooseHeroVariant,
-  extractAvatarAccentColor,
-  extractCardPalette,
-  loadTomoriconDataUri,
-} from "@/utils/stats/cardColor";
+import { extractAvatarAccentColor, extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
 import type {
   PersonIcon,
   ServerCardData,
@@ -82,10 +77,9 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     }
   }
   const palette = await extractCardPalette(serverIconDataUri);
-  const heroVariant = chooseHeroVariant();
   const tomoriconDataUri = await loadTomoriconDataUri(palette.ink);
 
-  // 3. Top personas (vertical bars) — names + avatars from cache, bar tint from avatar.
+  // 3. Top personas (horizontal bars) — names + avatars from cache, bar tint from avatar.
   let topPersonas: ServerPersonaBar[] = [];
   try {
     const personas = await getCachedAllPersonas(guildDiscId);
@@ -141,6 +135,5 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     totalTokens: tokenTotals.inputTokens + tokenTotals.outputTokens,
     estimatedCost,
     totalTriggers,
-    heroVariant,
   };
 }

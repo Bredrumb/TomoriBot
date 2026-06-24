@@ -25,10 +25,13 @@ Height is content-aware:
 - Personal Wrapped is a `9:16` portrait card (`1080×1920`). It gives the top
   favorite persona avatar visual priority, limits the ranked list to five
   text-only entries, and retains only total tokens and total spend.
-- Persona Affinity is `1080×1100` for all-time cards and shorter when the
-  all-time-only memory tile is absent.
-- Server Leaderboard is a fixed `9:16` portrait card (`1080×2010`) that mirrors
-  the Personal Wrapped share format. The no-data card is shorter (`1080×900`).
+- Persona Affinity is a `1080×1920` content-led portrait card for all-time data.
+  Time-window cards omit the all-time-only long-term-memory row and use a shorter
+  `1080×1800` frame; a no-data card is `1080×860`.
+- Server Leaderboard is a content-aware portrait card: its height grows with the
+  number of ranked persona (≤5), member (≤3), and model (≤3) rows via
+  `getServerCardHeight`, so small servers stay compact and full ones never clip.
+  The no-data card is `1080×980`.
 
 - Personal Wrapped: a dominant #1 favorite-persona avatar, truncated vertical
   user name, up to five ranked personas with per-persona token/cost totals,
@@ -38,20 +41,24 @@ usable hue supplies the background and contrast-safe text color, while a
 distinct saturated hue supplies the accent layers. The Tomoricon stamp is tinted
 to the same contrast-safe text color. It falls back to a neutral palette if that
 image is unavailable or undecodable.
-- Persona Affinity: the invoking user and picked persona, scoped token/cost/trigger
-  totals, all-time memory count, reward/punishment count, emoji icons, and emotion/
-  tool donut charts. Memory count is hidden outside the all-time view.
-- Server Leaderboard: a left rail with the server icon and vertically-set server
-  name; a hero vertical bar chart of the top five personas by total tokens (avatar
-  capped, bar tinted to the persona avatar's accent, with a tokens-over-cost
-  fraction inscribed); a "Most Active Members" horizontal bar chart of the top
-  three members by triggers (avatar + name at the bar tip, bar tinted to the
-  member avatar's accent); a "Top Models" horizontal bar chart of the top three
-  models by tokens processed (no icon — model name at the tip, with
-  `{tokens} | {cost}` inscribed in the bar); and the server-wide total tokens and
-  total spend. Its light-mode palette is derived
-  from the server icon, mirroring how Personal Wrapped derives its palette from
-  the #1 persona avatar.
+- Persona Affinity: a centered, large stacked user/persona avatar pairing, then
+  three scoped aggregate values (input tokens, output tokens, total spent),
+  individual long-term-memory, reward/punishment, and favorite-emoji rows, and
+  larger emotion/tool donut-chart rows with raw legend counts. The card frame
+  and emotion chart use the selected persona's light-mode palette (falling back
+  to the invoking user's avatar), while the tool chart uses a separately sampled
+  palette from the invoking user's avatar. Long-term memory is hidden outside
+  the all-time view.
+- Server Leaderboard: a top header row (server icon + name + timeframe subtitle)
+  followed by three consistent horizontal bar charts — "Top Personas" (≤5, by
+  total tokens; `{tokens} | {cost}` inside, persona avatar + name at the tip, bar
+  tinted to the persona avatar's accent), "Most Active Members" (≤3, by triggers;
+  `{count} triggers made` inside, member avatar + name at the tip, bar tinted to
+  the member avatar's accent), and "Top Models" (≤3, by total tokens;
+  `{tokens} | {cost}` inside, model name at the tip — no avatar, bar uses
+  `palette.accentSecondary`); then the server-wide total tokens and total spend.
+  Its light-mode palette is derived from the server icon, mirroring how Personal
+  Wrapped derives its palette from the #1 persona avatar.
 
 `tokens_in` and `tokens_out` are daily counters. Per-persona costs are calculated
 in one grouped query, applying the matched model's input/output pricing to each
@@ -94,9 +101,10 @@ text dashboard instead.
 
 The palette + image helpers live in the shared gather-layer module
 `cardColor.ts` (`extractCardPalette`, `extractAvatarAccentColor`,
-`loadTomoriconDataUri`, `chooseHeroVariant`). Personal Wrapped feeds it the #1
-persona avatar; Server Leaderboard feeds it the server icon. The renderer never
-imports it — it stays pure. `personalCardGatherer.ts` re-exports
+`loadTomoriconDataUri`). Personal Wrapped feeds it the #1 persona avatar; Persona
+Affinity feeds it the selected persona avatar (or the invoking user's avatar when
+that is unavailable); Server Leaderboard feeds it the server icon. The renderer
+never imports it — it stays pure. `personalCardGatherer.ts` re-exports
 `extractPersonalCardPalette` as a backward-compatible alias of
 `extractCardPalette`.
 
@@ -114,33 +122,56 @@ The gatherer tints the monochrome PNG stamp to `palette.ink`; retain the
 high-resolution PNG rather than substituting the lower-resolution `.ico`. SVG is
 appropriate only when the original vector artwork is available.
 
-Five palette-colored hero decoration variants are chosen randomly **in the
-gatherer**, then stored on `PersonalCardData.heroVariant`. Keep randomness out of
-the renderer so a given data object always produces the same VNode and remains
-unit-testable. New variations must stay behind the avatar, use only palette
-colors, and avoid adding small text or semantic content.
+Personal Wrapped's hero is a **three-layer stacked-card silhouette** that floats
+directly on the card background (no surface panel or border): three squares, each
+the same size as the #1 avatar, staggered up-left — `palette.accent` (back) →
+`palette.accentSecondary` (mid) → the avatar (front). The stagger goes up-left
+because the avatar is anchored bottom-right and bleeds off, keeping the stack
+clear of the lower zones.
+
+The randomized `PersonalHeroDecor` hero-variant background has been **retired** —
+no card uses it. Personal Wrapped now uses the deterministic stacked-square hero
+above; Server Leaderboard uses no decorative backdrop. There is no `heroVariant`
+field on any card data struct.
 
 ### Server Leaderboard: bar layout
 
-The Server card reuses the Personal Wrapped frame (left identity rail + hero box
-+ bottom-aligned totals/signature) but its body is three bar charts:
+The Server card is a header row + three uniform horizontal bar charts (Top
+Personas, Most Active Members, Top Models) over bottom-aligned totals/signature.
+Every bar uses the same `ServerBarRow`:
 
 - **Bar tints come from the gatherer.** `extractAvatarAccentColor` distils one
   vivid hue per persona/member avatar (`ServerPersonaBar.accent`,
   `ServerMemberBar.accent`); the renderer fills each bar with it and picks
   black/white in-bar text via `readableInkOn` (WCAG luminance). Models have no
   avatar, so their bars use `palette.accentSecondary`.
-- **Bars are proportional, not floored.** Both the vertical persona bars and the
-  horizontal member/model bars size as `min + share × (ceiling − min)` where
-  `share = value / leaderValue`. Do **not** revert to `max(min, share × track)`:
-  that flattens every entry below the floor (#2 and #3 collapse to the same
-  size). The floor only guarantees the inscribed value text fits the shortest bar.
-- **Persona bars merge with their avatar** (the bar is absolutely-overlapped by
-  the avatar so they read as one shape) and are captioned by a shared baseline
-  name row, so caption alignment is independent of bar height.
-- Personal Wrapped and Server Leaderboard both push the aggregate
-  `Total Tokens` / `Total Spent` block and the Tomoricon signature to the card
-  bottom with a flex spacer, for a consistent share-card silhouette.
+- **Bars use the leader as the full-width reference.** Each width starts at
+  `share × track`, where `share = value / leaderValue`; rank #1 therefore fills
+  all available track space. A row keeps its full in-bar label when that fits.
+  Otherwise it drops the `tokens` / `triggers made` unit and grows only to the
+  compact-label floor. The floor is a last resort, not part of the percentage
+  calculation. Model bars use the wider `SERVER_MODEL_TRACK_W` because their tip
+  is a name rather than an avatar.
+- **Avatar-tipped bars** (personas, members) share the `ServerBarTip` helper:
+  the persona/member avatar + truncated name sits at the bar's end. Model bars
+  show just the model name at the tip.
+- **Content-aware height** (`getServerCardHeight`) sums fixed section-height
+  constants (`SERVER_HEADER_H`, `SERVER_BLOCK_TITLE_H`, `SERVER_BAR_ROW_H` ×
+  rows, `SERVER_TOTALS_H`, `SERVER_FOOTER_H`) plus padding; a flex spacer before
+  the totals absorbs any rounding slack and bottom-aligns the totals/signature.
+
+### Persona Affinity: centered affinity layout
+
+Persona Affinity deliberately does **not** reuse the left identity rail or
+offset square hero from the other cards. It starts with the large, stacked user
+and persona avatars and a centered `{user} X {persona}` label. The rest of the
+card is ordered as a three-column token/cost block, individual statistic rows,
+then two larger donut-chart rows: emotions left-aligned and tools right-aligned.
+Keep the metrics as rows rather than compact tiles, include the raw count next
+to each emotion/tool legend item, use the persona palette for emotions and the
+user palette for tools, and retain the palette-tinted Tomoricon plus footer
+label at the bottom; the chart segment alone is not enough information at
+Discord preview size.
 
 ### Contributor checklist
 
@@ -186,7 +217,12 @@ Personal cards refuse fully-private users (`PrivacyLevel.FULL`) before deferring
 
 ## Persona picker flow
 
-For `type=persona`, the command shows an ephemeral picker via `replyPaginatedPersonaChoicesV2` with `preserveSelectedInteraction: true`. The PNG reply is sent from the returned `ButtonInteraction` (not the original slash command interaction) to avoid double-acknowledging Discord.
+For `type=persona`, the command shows an ephemeral picker via
+`replyPaginatedPersonaChoicesV2` with `preserveSelectedInteraction: true`.
+After a selection, it consumes that picker with the same localized
+`{persona} has been selected` notice used by `/stats persona`; the PNG reply is
+then sent from the returned `ButtonInteraction` (not the original slash command
+interaction) to avoid double-acknowledging Discord.
 
 ## Env config
 

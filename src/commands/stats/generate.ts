@@ -1,10 +1,11 @@
-import { AttachmentBuilder } from "discord.js";
+import { AttachmentBuilder, MessageFlags } from "discord.js";
 import type { ButtonInteraction, ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { buildNoticeContainer } from "@/utils/discord/ui/interactionCore";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -75,7 +76,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  *
  * Flow by card type:
  * - personal: privacy gate → deferReply → gather → render → editReply with PNG.
- * - persona:  show picker (ephemeral) → button.deferReply() → gather → render → PNG.
+ * - persona:  show picker → consume it with a selection notice → button.deferReply() → gather → render → PNG.
  * - server:   deferReply → gather → render → editReply with PNG.
  *
  * @param _client     - Discord client instance (unused; required by the command interface)
@@ -259,11 +260,23 @@ async function executePersonaCard(
   const lineageId = selected.persona_lineage_id ?? 0;
   const button = result.interaction as ButtonInteraction;
 
-  // 4. Acknowledge from the button interaction (the original slash command
-  //    interaction was already replied to ephemerally by the picker).
+  // 4. Consume the ephemeral picker before the card is generated. This mirrors
+  //    /stats persona and keeps the original picker from remaining interactive.
+  await interaction.editReply({
+    components: buildNoticeContainer({
+      locale,
+      color: ColorCode.SUCCESS,
+      titleKey: "commands.stats.persona.chosen_title",
+      titleVars: { name: selected.persona_nickname },
+    }),
+    flags: MessageFlags.IsComponentsV2,
+  });
+
+  // 5. Acknowledge from the button interaction. The original slash command
+  //    interaction was already consumed by the ephemeral picker notice.
   await button.deferReply();
 
-  // 5. Gather + render + send.
+  // 6. Gather + render + send.
   const data = await gatherPersonaCardData({
     serverId,
     guildDiscId: guild.id,

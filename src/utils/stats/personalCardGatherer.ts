@@ -21,7 +21,7 @@ import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
-import { chooseHeroVariant, extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
+import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
 import {
   DEFAULT_PERSONAL_CARD_PALETTE,
   type PersonalCardData,
@@ -104,7 +104,6 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
 
   const leadingAvatarDataUri = favoritePersonas[0]?.avatarDataUri ?? null;
   const palette = await extractCardPalette(leadingAvatarDataUri);
-  const heroVariant = chooseHeroVariant();
   // TEMPORARY: emitted at the always-visible metric level so production card
   // generation can confirm whether the leading avatar supplied the palette.
   log.metric("stats.personal_card_palette", {
@@ -114,7 +113,6 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
     palette_accent_secondary: palette.accentSecondary,
     palette_background: palette.background,
     palette_ink: palette.ink,
-    hero_variant: heroVariant,
   });
   return {
     locale,
@@ -128,6 +126,5 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
     estimatedCost,
     favoritePersonas,
     favoriteModelName: modelBreakdown[0] ? prettifyModelCodename(modelBreakdown[0].model) : null,
-    heroVariant,
   };
 }

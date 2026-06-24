@@ -5,9 +5,9 @@ import type { ServerCardData } from "@/utils/stats/statsInfographic";
 import {
   CARD_W,
   DEFAULT_PERSONAL_CARD_PALETTE,
+  getServerBarLayout,
   getServerCardHeight,
   renderServerCard,
-  SERVER_CARD_H,
 } from "@/utils/stats/statsInfographic";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
@@ -37,7 +37,6 @@ const SAMPLE_EN: ServerCardData = {
   totalTokens: 96_618,
   estimatedCost: 4.27,
   totalTriggers: 8_230,
-  heroVariant: 0,
 };
 
 const SAMPLE_JA: ServerCardData = {
@@ -64,6 +63,18 @@ describe("renderServerCard", () => {
   });
 });
 
+describe("getServerBarLayout", () => {
+  it("uses the leader-relative width until the compact label requires a floor", () => {
+    expect(getServerBarLayout(1, 600, "1 | $1", "1")).toEqual({ width: 600, insideText: "1 | $1" });
+    expect(getServerBarLayout(0.5, 600, "1 | $1", "1")).toEqual({ width: 300, insideText: "1 | $1" });
+
+    const compact = getServerBarLayout(24_160 / 77_900, 600, "24,160 tokens | $0.0147", "24,160 | $0.0147");
+    expect(compact.insideText).toBe("24,160 | $0.0147");
+    expect(compact.width).toBeGreaterThan(Math.round(600 * (24_160 / 77_900)));
+    expect(compact.width).toBeLessThan(600);
+  });
+});
+
 describe("renderServerCard PNG", () => {
   it("produces non-empty English and Japanese PNGs", async () => {
     const english = await renderCardToPng(renderServerCard(SAMPLE_EN), CARD_W, getServerCardHeight(SAMPLE_EN));
@@ -72,8 +83,8 @@ describe("renderServerCard PNG", () => {
     expect(japanese.byteLength).toBeGreaterThan(1000);
   });
 
-  it("uses the fixed portrait frame for populated cards and a shorter no-data card", () => {
-    expect(getServerCardHeight(SAMPLE_EN)).toBe(SERVER_CARD_H);
-    expect(getServerCardHeight({ ...SAMPLE_EN, totalTriggers: 0 })).toBeLessThan(SERVER_CARD_H);
+  it("grows with ranked rows and uses a shorter no-data card", () => {
+    expect(getServerCardHeight(SAMPLE_EN)).toBeGreaterThan(getServerCardHeight(SAMPLE_JA));
+    expect(getServerCardHeight({ ...SAMPLE_EN, totalTriggers: 0 })).toBeLessThan(getServerCardHeight(SAMPLE_EN));
   });
 }, 30_000);

@@ -58,14 +58,9 @@ function scaled(value: number): number {
   return Math.max(1, Math.round(value * CARD_SCALE));
 }
 
-/**
- * Cards deliberately use different heights: Personal Wrapped is a tall
- * portrait share card, while leaderboard cards grow with their ranked rows.
- */
+/** Cards deliberately use different heights for their share-card layouts. */
 export const PERSONAL_CARD_H = scaled(1920);
-export const PERSONA_CARD_H = scaled(1100);
-/** Server Leaderboard mirrors the Personal Wrapped 9:16 portrait share format. */
-export const SERVER_CARD_H = scaled(2010);
+export const PERSONA_CARD_H = scaled(1920);
 /** @deprecated Use the card-specific height helpers instead. */
 export const CARD_H = PERSONAL_CARD_H;
 
@@ -86,10 +81,6 @@ export const CARD_THEME = {
   fontFamily: "Noto Sans JP",
 } as const;
 
-const PAD = scaled(56);
-const CONTENT_W = CARD_W - PAD * 2;
-const PIE_COLORS = [CARD_THEME.red, CARD_THEME.magenta, CARD_THEME.cyan, CARD_THEME.teal] as const;
-
 function formatInt(value: number): string {
   return Math.round(value).toLocaleString("en-US");
 }
@@ -100,250 +91,6 @@ function formatCost(value: number): string {
 
 function timeframeLabel(locale: string, timeframe: Timeframe): string {
   return localizer(locale, `commands.choices.${timeframe}`);
-}
-
-function Divider(): VNode {
-  return <div style={{ display: "flex", width: "100%", height: scaled(1), backgroundColor: CARD_THEME.border }} />;
-}
-
-function CardFrame(props: Record<string, unknown> & { children?: unknown; height: number }): VNode {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        boxSizing: "border-box",
-        width: CARD_W,
-        height: props.height,
-        padding: PAD,
-        backgroundColor: CARD_THEME.bg,
-        color: CARD_THEME.text,
-        fontFamily: CARD_THEME.fontFamily,
-      }}
-    >
-      {props.children}
-    </div>
-  );
-}
-
-function Section(props: Record<string, unknown> & { title?: string; children?: unknown; compact?: boolean }): VNode {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        paddingTop: scaled(props.compact ? 16 : 22),
-        paddingBottom: scaled(props.compact ? 16 : 22),
-      }}
-    >
-      {props.title ? (
-        <div
-          style={{
-            display: "flex",
-            marginBottom: scaled(14),
-            color: CARD_THEME.teal,
-            fontFamily: CARD_THEME.fontFamily,
-            fontSize: scaled(28),
-            fontWeight: 700,
-            letterSpacing: 0,
-          }}
-        >
-          {props.title}
-        </div>
-      ) : null}
-      {props.children}
-    </div>
-  );
-}
-
-function Avatar(
-  props: Record<string, unknown> & { name: string; dataUri: string | null; size?: number; accent?: string },
-): VNode {
-  const size = props.size ?? scaled(64);
-  const initials = props.name.trim().slice(0, 1).toUpperCase() || "?";
-  return (
-    <div
-      style={{
-        display: "flex",
-        width: size,
-        height: size,
-        flexShrink: 0,
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-        borderRadius: "50%",
-        border: `${scaled(2)}px solid ${props.accent ?? CARD_THEME.red}`,
-        backgroundColor: CARD_THEME.surfaceAlt,
-        color: CARD_THEME.text,
-        fontFamily: CARD_THEME.fontFamily,
-        fontSize: Math.max(scaled(22), Math.round(size * 0.36)),
-        fontWeight: 700,
-      }}
-    >
-      {props.dataUri ? (
-        <img
-          src={props.dataUri}
-          alt=""
-          width={size}
-          height={size}
-          style={{ display: "flex", width: size, height: size, objectFit: "cover" }}
-        />
-      ) : (
-        initials
-      )}
-    </div>
-  );
-}
-
-function AvatarStack(
-  props: Record<string, unknown> & {
-    first: { name: string; dataUri: string | null };
-    second: { name: string; dataUri: string | null };
-  },
-): VNode {
-  return (
-    <div style={{ display: "flex", flexDirection: "row", width: scaled(150), alignItems: "center" }}>
-      <Avatar name={props.first.name} dataUri={props.first.dataUri} size={scaled(88)} accent={CARD_THEME.cyan} />
-      <div style={{ display: "flex", marginLeft: -scaled(30) }}>
-        <Avatar name={props.second.name} dataUri={props.second.dataUri} size={scaled(88)} accent={CARD_THEME.magenta} />
-      </div>
-    </div>
-  );
-}
-
-function Header(props: Record<string, unknown> & { title: string; subtitle: string; children?: unknown }): VNode {
-  return (
-    <div
-      style={{
-        display: "flex",
-        width: "100%",
-        minHeight: scaled(124),
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingBottom: scaled(22),
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", maxWidth: CONTENT_W - scaled(390) }}>
-        <div
-          style={{
-            display: "flex",
-            color: CARD_THEME.text,
-            fontFamily: CARD_THEME.fontFamily,
-            fontSize: scaled(58),
-            fontWeight: 700,
-            lineHeight: 1.1,
-          }}
-        >
-          {props.title}
-        </div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: scaled(18) }}>
-        <div
-          style={{
-            display: "flex",
-            maxWidth: scaled(210),
-            color: CARD_THEME.teal,
-            fontFamily: CARD_THEME.fontFamily,
-            fontSize: scaled(25),
-            fontWeight: 700,
-            lineHeight: 1.2,
-            textAlign: "right",
-          }}
-        >
-          {props.subtitle}
-        </div>
-        {props.children}
-      </div>
-    </div>
-  );
-}
-
-function TokenTotals(
-  props: Record<string, unknown> & {
-    inputTokens: number;
-    outputTokens: number;
-    inputLabel: string;
-    outputLabel: string;
-  },
-): VNode {
-  return (
-    <div style={{ display: "flex", flexDirection: "row", width: "100%", alignItems: "baseline", gap: scaled(28) }}>
-      <div style={{ display: "flex", flexDirection: "row", alignItems: "baseline", gap: scaled(12) }}>
-        <div style={{ display: "flex", color: CARD_THEME.textSubtle, fontSize: scaled(25) }}>{props.inputLabel}</div>
-        <div style={{ display: "flex", color: CARD_THEME.cyan, fontSize: scaled(56), fontWeight: 700 }}>
-          {formatInt(props.inputTokens)}
-        </div>
-      </div>
-      <div style={{ display: "flex", width: scaled(1), height: scaled(54), backgroundColor: CARD_THEME.border }} />
-      <div style={{ display: "flex", flexDirection: "row", alignItems: "baseline", gap: scaled(12) }}>
-        <div style={{ display: "flex", color: CARD_THEME.textSubtle, fontSize: scaled(25) }}>{props.outputLabel}</div>
-        <div style={{ display: "flex", color: CARD_THEME.teal, fontSize: scaled(56), fontWeight: 700 }}>
-          {formatInt(props.outputTokens)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Footer(props: Record<string, unknown> & { text: string }): VNode {
-  return (
-    <div style={{ display: "flex", width: "100%", paddingTop: scaled(18) }}>
-      <div style={{ display: "flex", color: CARD_THEME.textSubtle, fontSize: scaled(22), lineHeight: 1.25 }}>
-        {props.text}
-      </div>
-    </div>
-  );
-}
-
-interface MetricTileData {
-  label: string;
-  value: string;
-  color: string;
-  detail?: string;
-}
-
-function MetricTile(props: Record<string, unknown> & MetricTileData & { width: string }): VNode {
-  return (
-    <div
-      style={{
-        display: "flex",
-        width: props.width,
-        minHeight: scaled(112),
-        flexDirection: "column",
-        justifyContent: "space-between",
-        padding: scaled(16),
-        borderRadius: scaled(12),
-        backgroundColor: CARD_THEME.surface,
-      }}
-    >
-      <div style={{ display: "flex", color: CARD_THEME.textMuted, fontSize: scaled(22), lineHeight: 1.2 }}>
-        {props.label}
-      </div>
-      <div style={{ display: "flex", color: props.color, fontSize: scaled(34), fontWeight: 700, lineHeight: 1.15 }}>
-        {props.value}
-      </div>
-      {props.detail ? (
-        <div style={{ display: "flex", color: CARD_THEME.textSubtle, fontSize: scaled(22), lineHeight: 1.15 }}>
-          {props.detail}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function MetricGrid(props: Record<string, unknown> & { items: MetricTileData[] }): VNode {
-  const width = props.items.length === 2 ? "49%" : "32%";
-  return (
-    <div
-      style={{ display: "flex", flexDirection: "row", width: "100%", justifyContent: "space-between", gap: scaled(12) }}
-    >
-      {props.items.map((item) => (
-        <MetricTile key={item.label} {...item} width={width} />
-      ))}
-    </div>
-  );
 }
 
 export interface PersonIcon {
@@ -361,47 +108,6 @@ export interface BreakdownSegment {
   count: number;
 }
 
-function EmojiStrip(props: Record<string, unknown> & { emojis: EmojiIcon[]; empty: string }): VNode {
-  if (props.emojis.length === 0) {
-    return <div style={{ display: "flex", color: CARD_THEME.textSubtle, fontSize: scaled(22) }}>{props.empty}</div>;
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "row", gap: scaled(16), width: "100%" }}>
-      {props.emojis.slice(0, 5).map((emoji) => (
-        <div
-          key={emoji.name}
-          style={{
-            display: "flex",
-            width: scaled(96),
-            height: scaled(96),
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            overflow: "hidden",
-            borderRadius: scaled(8),
-            backgroundColor: CARD_THEME.surfaceAlt,
-          }}
-        >
-          {emoji.imageDataUri ? (
-            <img
-              src={emoji.imageDataUri}
-              alt=""
-              width={scaled(72)}
-              height={scaled(72)}
-              style={{ display: "flex", width: scaled(72), height: scaled(72) }}
-            />
-          ) : (
-            <div style={{ display: "flex", color: CARD_THEME.textMuted, fontSize: scaled(22), textAlign: "center" }}>
-              {emoji.name.slice(0, 8)}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function arcPoint(cx: number, cy: number, radius: number, angle: number): { x: number; y: number } {
   const radians = ((angle - 90) * Math.PI) / 180;
   return { x: cx + radius * Math.cos(radians), y: cy + radius * Math.sin(radians) };
@@ -412,7 +118,7 @@ export function buildDonutSvg(
   segments: Array<{ value: number; color: string }>,
   size = 112,
   thickness = 20,
-  trackColor = CARD_THEME.surfaceAlt,
+  trackColor: string = CARD_THEME.surfaceAlt,
 ): string {
   const total = segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0);
   const radius = (size - thickness) / 2;
@@ -437,69 +143,6 @@ export function buildDonutSvg(
     .join("");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${track}${paths}</svg>`;
-}
-
-function Donut(props: Record<string, unknown> & { segments: BreakdownSegment[]; size?: number }): VNode {
-  const size = props.size ?? scaled(112);
-  const svg = buildDonutSvg(
-    props.segments
-      .slice(0, PIE_COLORS.length)
-      .map((segment, index) => ({ value: segment.count, color: PIE_COLORS[index] })),
-    size,
-    scaled(20),
-  );
-  const dataUri = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
-  return <img src={dataUri} alt="" width={size} height={size} style={{ display: "flex", width: size, height: size }} />;
-}
-
-function BreakdownChart(
-  props: Record<string, unknown> & { title: string; segments: BreakdownSegment[]; empty: string },
-): VNode {
-  const segments = props.segments.slice(0, PIE_COLORS.length);
-  return (
-    <div style={{ display: "flex", flexDirection: "column", width: "48%" }}>
-      <div
-        style={{
-          display: "flex",
-          marginBottom: scaled(14),
-          color: CARD_THEME.textMuted,
-          fontSize: scaled(24),
-          fontWeight: 700,
-        }}
-      >
-        {props.title}
-      </div>
-      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: scaled(16) }}>
-        <Donut segments={segments} size={scaled(158)} />
-        <div style={{ display: "flex", flexDirection: "column", width: scaled(180), gap: scaled(9) }}>
-          {segments.length > 0 ? (
-            segments.map((segment, index) => (
-              <div
-                key={segment.label}
-                style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: scaled(7) }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    width: scaled(12),
-                    height: scaled(12),
-                    flexShrink: 0,
-                    borderRadius: "50%",
-                    backgroundColor: PIE_COLORS[index],
-                  }}
-                />
-                <div style={{ display: "flex", color: CARD_THEME.textMuted, fontSize: scaled(22), lineHeight: 1.15 }}>
-                  {segment.label.slice(0, 18)}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div style={{ display: "flex", color: CARD_THEME.textSubtle, fontSize: scaled(22) }}>{props.empty}</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ── Personal Wrapped ──────────────────────────────────────────────────────────
@@ -530,9 +173,6 @@ export interface PersonalFavoritePersona extends PersonIcon {
   estimatedCost: number;
 }
 
-export type PersonalHeroVariant = 0 | 1 | 2 | 3 | 4;
-export const PERSONAL_HERO_VARIANT_COUNT = 5;
-
 export interface PersonalCardData {
   locale: string;
   timeframe: Timeframe;
@@ -545,7 +185,6 @@ export interface PersonalCardData {
   estimatedCost: number;
   favoritePersonas: PersonalFavoritePersona[];
   favoriteModelName: string | null;
-  heroVariant: PersonalHeroVariant;
 }
 
 function truncateCardText(value: string, maxLength: number): string {
@@ -591,140 +230,6 @@ function PersonalImage(
       ) : (
         initials
       )}
-    </div>
-  );
-}
-
-/** Decorative layers behind the #1 avatar; the gatherer picks one per generated card. */
-function PersonalHeroDecor(
-  props: Record<string, unknown> & { palette: PersonalCardPalette; variant: PersonalHeroVariant },
-): VNode {
-  const layer = (style: Record<string, unknown>): VNode => (
-    <div style={{ display: "flex", position: "absolute", ...style }} />
-  );
-  const { accent, accentSecondary } = props.palette;
-  let layers: VNode[];
-
-  switch (props.variant) {
-    case 1:
-      layers = [
-        layer({
-          width: scaled(470),
-          height: scaled(260),
-          top: -scaled(60),
-          left: -scaled(110),
-          backgroundColor: accentSecondary,
-          opacity: 0.2,
-          transform: "rotate(-14deg)",
-        }),
-        layer({
-          width: scaled(310),
-          height: scaled(310),
-          top: scaled(110),
-          left: scaled(40),
-          borderRadius: "50%",
-          backgroundColor: accent,
-          opacity: 0.2,
-        }),
-      ];
-      break;
-    case 2:
-      layers = [
-        layer({
-          width: scaled(400),
-          height: scaled(400),
-          top: -scaled(150),
-          right: scaled(40),
-          borderRadius: "50%",
-          backgroundColor: accent,
-          opacity: 0.18,
-        }),
-        layer({
-          width: scaled(500),
-          height: scaled(180),
-          bottom: scaled(40),
-          left: -scaled(120),
-          borderRadius: scaled(100),
-          backgroundColor: accentSecondary,
-          opacity: 0.18,
-          transform: "rotate(16deg)",
-        }),
-      ];
-      break;
-    case 3:
-      layers = [
-        layer({
-          width: scaled(190),
-          height: scaled(610),
-          top: -scaled(80),
-          left: scaled(74),
-          borderRadius: scaled(100),
-          backgroundColor: accent,
-          opacity: 0.2,
-          transform: "rotate(20deg)",
-        }),
-        layer({
-          width: scaled(310),
-          height: scaled(310),
-          bottom: -scaled(150),
-          right: scaled(40),
-          borderRadius: scaled(52),
-          backgroundColor: accentSecondary,
-          opacity: 0.2,
-          transform: "rotate(30deg)",
-        }),
-      ];
-      break;
-    case 4:
-      layers = [
-        layer({
-          width: scaled(260),
-          height: scaled(260),
-          top: scaled(54),
-          left: scaled(34),
-          borderRadius: scaled(44),
-          backgroundColor: accentSecondary,
-          opacity: 0.2,
-          transform: "rotate(20deg)",
-        }),
-        layer({
-          width: scaled(310),
-          height: scaled(310),
-          bottom: -scaled(120),
-          left: scaled(120),
-          borderRadius: "50%",
-          backgroundColor: accent,
-          opacity: 0.2,
-        }),
-      ];
-      break;
-    default:
-      layers = [
-        layer({
-          width: scaled(430),
-          height: scaled(430),
-          top: -scaled(150),
-          left: -scaled(100),
-          borderRadius: "50%",
-          backgroundColor: accent,
-          opacity: 0.2,
-        }),
-        layer({
-          width: scaled(330),
-          height: scaled(330),
-          right: scaled(180),
-          bottom: -scaled(150),
-          borderRadius: scaled(64),
-          backgroundColor: accentSecondary,
-          opacity: 0.18,
-          transform: "rotate(28deg)",
-        }),
-      ];
-  }
-
-  return (
-    <div style={{ display: "flex", position: "absolute", top: 0, right: 0, bottom: 0, left: 0, overflow: "hidden" }}>
-      {layers}
     </div>
   );
 }
@@ -956,30 +461,55 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
               position: "relative",
               width: "100%",
               height: scaled(820),
-              overflow: "hidden",
               justifyContent: "flex-end",
               alignItems: "flex-end",
-              borderRadius: scaled(32),
-              border: `${scaled(2)}px solid ${palette.accent}`,
-              backgroundColor: palette.surface,
             }}
           >
-            <PersonalHeroDecor palette={palette} variant={data.heroVariant} />
             <div
               style={{
                 display: "flex",
                 position: "relative",
-                marginRight: -scaled(28),
+                marginRight: scaled(24),
                 marginBottom: -scaled(24),
-                boxShadow: "0 28px 52px rgba(0, 0, 0, 0.22)",
               }}
             >
-              <PersonalImage
-                name={favorite?.name ?? data.username}
-                dataUri={favorite?.avatarDataUri ?? null}
-                size={scaled(760)}
-                palette={palette}
+              {/* Three-layer stacked-card silhouette floating on the card background
+                  (no panel/border), each square the same size as the avatar and
+                  staggered up-left: accent back → secondary-accent mid → avatar front.
+                  Personal-only (it replaces PersonalHeroDecor here), so the Server card
+                  — which still uses the shared decor — is unaffected. */}
+              <div
+                style={{
+                  display: "flex",
+                  position: "absolute",
+                  top: -scaled(80),
+                  left: -scaled(80),
+                  width: scaled(760),
+                  height: scaled(760),
+                  borderRadius: scaled(18),
+                  backgroundColor: palette.accent,
+                }}
               />
+              <div
+                style={{
+                  display: "flex",
+                  position: "absolute",
+                  top: -scaled(40),
+                  left: -scaled(40),
+                  width: scaled(760),
+                  height: scaled(760),
+                  borderRadius: scaled(18),
+                  backgroundColor: palette.accentSecondary,
+                }}
+              />
+              <div style={{ display: "flex", position: "relative", boxShadow: "0 28px 52px rgba(0, 0, 0, 0.22)" }}>
+                <PersonalImage
+                  name={favorite?.name ?? data.username}
+                  dataUri={favorite?.avatarDataUri ?? null}
+                  size={scaled(760)}
+                  palette={palette}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1113,10 +643,12 @@ export interface PersonaCardData {
   userAvatarDataUri: string | null;
   personaName: string;
   personaAvatarDataUri: string | null;
+  tomoriconDataUri: string | null;
+  palette: PersonalCardPalette;
+  userPalette: PersonalCardPalette;
   inputTokens: number;
   outputTokens: number;
   totalTriggers: number;
-  sharePct: number;
   estimatedCost: number;
   memoryCount: number | null;
   conditioning: { rewards: number; punishments: number };
@@ -1125,26 +657,297 @@ export interface PersonaCardData {
   favoriteTools: BreakdownSegment[];
 }
 
-/** Removes the all-time-only memory tile from shorter time-window cards. */
+/** Time-window cards omit the all-time memory row and use a shorter portrait frame. */
 export function getPersonaCardHeight(data: PersonaCardData): number {
-  return data.totalTriggers === 0 ? scaled(820) : data.memoryCount === null ? scaled(1000) : PERSONA_CARD_H;
+  return data.totalTriggers === 0 ? scaled(860) : data.memoryCount === null ? scaled(1800) : PERSONA_CARD_H;
+}
+
+/** Large light-mode avatar used only by the centered Persona Affinity identity block. */
+function PersonaImage(
+  props: Record<string, unknown> & {
+    name: string;
+    dataUri: string | null;
+    size: number;
+    accent: string;
+    palette: PersonalCardPalette;
+  },
+): VNode {
+  const initials = props.name.trim().slice(0, 1).toUpperCase() || "?";
+  return (
+    <div
+      style={{
+        display: "flex",
+        width: props.size,
+        height: props.size,
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+        borderRadius: "50%",
+        border: `${scaled(5)}px solid ${props.accent}`,
+        backgroundColor: props.palette.surface,
+        color: props.palette.ink,
+        fontSize: Math.max(scaled(34), Math.round(props.size * 0.36)),
+        fontWeight: 700,
+      }}
+    >
+      {props.dataUri ? (
+        <img
+          src={props.dataUri}
+          alt=""
+          width={props.size}
+          height={props.size}
+          style={{ display: "flex", width: props.size, height: props.size, objectFit: "cover" }}
+        />
+      ) : (
+        initials
+      )}
+    </div>
+  );
+}
+
+function PersonaAvatarStack(
+  props: Record<string, unknown> & {
+    username: string;
+    userAvatarDataUri: string | null;
+    personaName: string;
+    personaAvatarDataUri: string | null;
+    palette: PersonalCardPalette;
+  },
+): VNode {
+  const size = scaled(290);
+  return (
+    <div style={{ display: "flex", position: "relative", width: scaled(540), height: scaled(330) }}>
+      <div style={{ display: "flex", position: "absolute", top: 0, left: scaled(24) }}>
+        <PersonaImage
+          name={props.username}
+          dataUri={props.userAvatarDataUri}
+          size={size}
+          accent={props.palette.accentSecondary}
+          palette={props.palette}
+        />
+      </div>
+      <div style={{ display: "flex", position: "absolute", right: scaled(24), bottom: 0 }}>
+        <PersonaImage
+          name={props.personaName}
+          dataUri={props.personaAvatarDataUri}
+          size={size}
+          accent={props.palette.accent}
+          palette={props.palette}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PersonaTokenMetric(
+  props: Record<string, unknown> & { label: string; value: string; palette: PersonalCardPalette; bordered?: boolean },
+): VNode {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flex: 1,
+        minHeight: scaled(120),
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingRight: scaled(14),
+        paddingLeft: scaled(14),
+        ...(props.bordered ? { borderLeft: `${scaled(1)}px solid ${props.palette.border}` } : {}),
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          color: props.palette.muted,
+          fontSize: scaled(26),
+          fontWeight: 700,
+          textAlign: "center",
+        }}
+      >
+        {props.label}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          marginTop: scaled(8),
+          color: props.palette.ink,
+          fontSize: scaled(52),
+          fontWeight: 700,
+        }}
+      >
+        {props.value}
+      </div>
+    </div>
+  );
+}
+
+function PersonaDetailRow(
+  props: Record<string, unknown> & { label: string; palette: PersonalCardPalette; children?: unknown },
+): VNode {
+  return (
+    <div
+      style={{
+        display: "flex",
+        width: "100%",
+        minHeight: scaled(106),
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderTop: `${scaled(1)}px solid ${props.palette.border}`,
+      }}
+    >
+      <div style={{ display: "flex", flex: 1, color: props.palette.accent, fontSize: scaled(30), fontWeight: 700 }}>
+        {props.label}
+      </div>
+      <div style={{ display: "flex", maxWidth: "56%", flexShrink: 0, justifyContent: "flex-end" }}>
+        {props.children}
+      </div>
+    </div>
+  );
+}
+
+function PersonaEmojiList(
+  props: Record<string, unknown> & { emojis: EmojiIcon[]; empty: string; palette: PersonalCardPalette },
+): VNode {
+  if (props.emojis.length === 0) {
+    return <div style={{ display: "flex", color: props.palette.muted, fontSize: scaled(26) }}>{props.empty}</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "row", gap: scaled(10), justifyContent: "flex-end" }}>
+      {props.emojis.slice(0, 5).map((emoji) => (
+        <div
+          key={emoji.name}
+          style={{
+            display: "flex",
+            width: scaled(70),
+            height: scaled(70),
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            borderRadius: scaled(14),
+            backgroundColor: props.palette.surface,
+          }}
+        >
+          {emoji.imageDataUri ? (
+            <img
+              src={emoji.imageDataUri}
+              alt=""
+              width={scaled(56)}
+              height={scaled(56)}
+              style={{ display: "flex", width: scaled(56), height: scaled(56), objectFit: "contain" }}
+            />
+          ) : (
+            <div style={{ display: "flex", color: props.palette.muted, fontSize: scaled(18), textAlign: "center" }}>
+              {emoji.name.slice(0, 8)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PersonaBreakdownChart(
+  props: Record<string, unknown> & {
+    title: string;
+    segments: BreakdownSegment[];
+    empty: string;
+    palette: PersonalCardPalette;
+    alignment: "left" | "right";
+  },
+): VNode {
+  const segments = props.segments.slice(0, 4);
+  const colors = [props.palette.accent, props.palette.accentSecondary, props.palette.muted, props.palette.ink];
+  const size = scaled(226);
+  const contentWidth = scaled(760);
+  const svg = buildDonutSvg(
+    segments.map((segment, index) => ({ value: segment.count, color: colors[index] })),
+    size,
+    scaled(30),
+    props.palette.surface,
+  );
+  const dataUri = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+  return (
+    <div
+      style={{
+        display: "flex",
+        width: "100%",
+        flexDirection: "column",
+        alignItems: props.alignment === "left" ? "flex-start" : "flex-end",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          width: contentWidth,
+          marginBottom: scaled(18),
+          color: props.palette.accent,
+          fontSize: scaled(38),
+          fontWeight: 700,
+          justifyContent: props.alignment === "left" ? "flex-start" : "flex-end",
+          textAlign: props.alignment,
+        }}
+      >
+        {props.title}
+      </div>
+      <div
+        style={{ display: "flex", width: contentWidth, flexDirection: "row", alignItems: "center", gap: scaled(26) }}
+      >
+        {props.alignment === "left" ? (
+          <img src={dataUri} alt="" width={size} height={size} style={{ display: "flex", width: size, height: size }} />
+        ) : null}
+        {segments.length > 0 ? (
+          <div style={{ display: "flex", flex: 1, flexDirection: "column", gap: scaled(13) }}>
+            {segments.map((segment, index) => (
+              <div
+                key={segment.label}
+                style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: scaled(8) }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    width: scaled(16),
+                    height: scaled(16),
+                    flexShrink: 0,
+                    borderRadius: "50%",
+                    backgroundColor: colors[index],
+                  }}
+                />
+                <div
+                  style={{
+                    display: "flex",
+                    flex: 1,
+                    color: props.palette.muted,
+                    fontSize: scaled(30),
+                    lineHeight: 1.15,
+                  }}
+                >
+                  {truncateCardText(segment.label, 16)}
+                </div>
+                <div style={{ display: "flex", color: props.palette.ink, fontSize: scaled(30), fontWeight: 700 }}>
+                  {formatInt(segment.count)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: "flex", color: props.palette.muted, fontSize: scaled(30) }}>{props.empty}</div>
+        )}
+        {props.alignment === "right" ? (
+          <img src={dataUri} alt="" width={size} height={size} style={{ display: "flex", width: size, height: size }} />
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export function renderPersonaCard(data: PersonaCardData): VNode {
   const t = {
-    title: localizer(data.locale, "commands.stats.infographic.persona_title"),
-    totalTokens: localizer(data.locale, "commands.stats.infographic.total_tokens"),
     inputTokens: localizer(data.locale, "commands.stats.infographic.input_tokens"),
     outputTokens: localizer(data.locale, "commands.stats.infographic.output_tokens"),
-    share: localizer(data.locale, "commands.stats.infographic.persona_share", {
-      persona: data.personaName,
-      share: data.sharePct.toFixed(1),
-      user: data.username,
-    }),
     totalSpent: localizer(data.locale, "commands.stats.infographic.total_spent"),
-    throughTriggers: localizer(data.locale, "commands.stats.infographic.through_triggers", {
-      count: formatInt(data.totalTriggers),
-    }),
     memories: localizer(data.locale, "commands.stats.infographic.total_memories_owned"),
     conditioning: localizer(data.locale, "commands.stats.infographic.rewards_punishments_made"),
     emojis: localizer(data.locale, "commands.stats.infographic.favorite_emojis"),
@@ -1152,79 +955,168 @@ export function renderPersonaCard(data: PersonaCardData): VNode {
     tools: localizer(data.locale, "commands.stats.infographic.favorite_tools"),
     noData: localizer(data.locale, "commands.stats.infographic.no_data"),
     empty: localizer(data.locale, "commands.stats.empty"),
-    footer: localizer(data.locale, "commands.stats.footer"),
+    footerBrand: localizer(data.locale, "commands.stats.infographic.persona_affinity_footer", {
+      timeframe: timeframeLabel(data.locale, data.timeframe).toUpperCase(),
+    }),
   };
 
   const hasData = data.totalTriggers > 0;
-  const metricItems: MetricTileData[] = [
-    {
-      label: t.totalSpent,
-      value: formatCost(data.estimatedCost),
-      detail: t.throughTriggers,
-      color: CARD_THEME.red,
-    },
-    ...(data.memoryCount !== null
-      ? [{ label: t.memories, value: formatInt(data.memoryCount), color: CARD_THEME.cyan }]
-      : []),
-    {
-      label: t.conditioning,
-      value: `${formatInt(data.conditioning.rewards)} / ${formatInt(data.conditioning.punishments)}`,
-      color: CARD_THEME.teal,
-    },
-  ];
+  const palette = data.palette ?? DEFAULT_PERSONAL_CARD_PALETTE;
+  const userPalette = data.userPalette ?? palette;
   return (
-    <CardFrame height={getPersonaCardHeight(data)}>
-      <Header
-        title={`${data.username} & ${data.personaName}`}
-        subtitle={`${timeframeLabel(data.locale, data.timeframe)} ${t.title}`}
+    <div
+      style={{
+        display: "flex",
+        width: CARD_W,
+        height: getPersonaCardHeight(data),
+        boxSizing: "border-box",
+        overflow: "hidden",
+        flexDirection: "column",
+        paddingTop: scaled(46),
+        paddingRight: scaled(66),
+        paddingBottom: scaled(40),
+        paddingLeft: scaled(66),
+        backgroundColor: palette.background,
+        color: palette.ink,
+        fontFamily: CARD_THEME.fontFamily,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          width: "100%",
+          minHeight: scaled(466),
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingBottom: scaled(28),
+          borderBottom: `${scaled(2)}px solid ${palette.accent}`,
+        }}
       >
-        <AvatarStack
-          first={{ name: data.username, dataUri: data.userAvatarDataUri }}
-          second={{ name: data.personaName, dataUri: data.personaAvatarDataUri }}
+        <PersonaAvatarStack
+          username={data.username}
+          userAvatarDataUri={data.userAvatarDataUri}
+          personaName={data.personaName}
+          personaAvatarDataUri={data.personaAvatarDataUri}
+          palette={palette}
         />
-      </Header>
-      <Divider />
+        <div
+          style={{ display: "flex", marginTop: scaled(18), color: palette.ink, fontSize: scaled(48), fontWeight: 700 }}
+        >
+          {`${truncateCardText(data.username, 16)} X ${truncateCardText(data.personaName, 16)}`}
+        </div>
+      </div>
       {hasData ? (
         <>
-          <Section title={t.totalTokens}>
-            <TokenTotals
-              inputTokens={data.inputTokens}
-              outputTokens={data.outputTokens}
-              inputLabel={t.inputTokens}
-              outputLabel={t.outputTokens}
+          <div
+            style={{
+              display: "flex",
+              width: "100%",
+              paddingTop: scaled(26),
+              paddingBottom: scaled(26),
+              borderBottom: `${scaled(1)}px solid ${palette.border}`,
+            }}
+          >
+            <PersonaTokenMetric label={t.inputTokens} value={formatInt(data.inputTokens)} palette={palette} />
+            <PersonaTokenMetric
+              label={t.outputTokens}
+              value={formatInt(data.outputTokens)}
+              palette={palette}
+              bordered
             />
-          </Section>
-          <Divider />
-          <Section compact>
-            <div style={{ display: "flex", color: CARD_THEME.textMuted, fontSize: scaled(24), lineHeight: 1.25 }}>
-              {t.share}
-            </div>
-          </Section>
-          <Divider />
-          <Section compact>
-            <MetricGrid items={metricItems} />
-          </Section>
-          <Divider />
-          <Section title={t.emojis} compact>
-            <EmojiStrip emojis={data.favoriteEmojis} empty={t.empty} />
-          </Section>
-          <Divider />
-          <Section compact>
-            <div style={{ display: "flex", flexDirection: "row", width: "100%", justifyContent: "space-between" }}>
-              <BreakdownChart title={t.emotions} segments={data.favoriteEmotions} empty={t.empty} />
-              <BreakdownChart title={t.tools} segments={data.favoriteTools} empty={t.empty} />
-            </div>
-          </Section>
+            <PersonaTokenMetric
+              label={t.totalSpent}
+              value={formatCost(data.estimatedCost)}
+              palette={palette}
+              bordered
+            />
+          </div>
+          <div style={{ display: "flex", width: "100%", flexDirection: "column", paddingTop: scaled(8) }}>
+            {data.memoryCount !== null ? (
+              <PersonaDetailRow label={t.memories} palette={palette}>
+                <div style={{ display: "flex", color: palette.ink, fontSize: scaled(42), fontWeight: 700 }}>
+                  {formatInt(data.memoryCount)}
+                </div>
+              </PersonaDetailRow>
+            ) : null}
+            <PersonaDetailRow label={t.conditioning} palette={palette}>
+              <div style={{ display: "flex", color: palette.ink, fontSize: scaled(42), fontWeight: 700 }}>
+                {`${formatInt(data.conditioning.rewards)} / ${formatInt(data.conditioning.punishments)}`}
+              </div>
+            </PersonaDetailRow>
+            <PersonaDetailRow label={t.emojis} palette={palette}>
+              <PersonaEmojiList emojis={data.favoriteEmojis} empty={t.empty} palette={palette} />
+            </PersonaDetailRow>
+          </div>
+          <div style={{ display: "flex", width: "100%", height: scaled(54), flexShrink: 0 }} />
+          <div style={{ display: "flex", width: "100%" }}>
+            <PersonaBreakdownChart
+              title={t.emotions}
+              segments={data.favoriteEmotions}
+              empty={t.empty}
+              palette={palette}
+              alignment="left"
+            />
+          </div>
+          <div style={{ display: "flex", width: "100%", height: scaled(48), flexShrink: 0 }} />
+          <div style={{ display: "flex", width: "100%" }}>
+            <PersonaBreakdownChart
+              title={t.tools}
+              segments={data.favoriteTools}
+              empty={t.empty}
+              palette={userPalette}
+              alignment="right"
+            />
+          </div>
         </>
       ) : (
-        <div
-          style={{ display: "flex", flex: 1, flexDirection: "column", alignItems: "center", justifyContent: "center" }}
-        >
-          <div style={{ display: "flex", color: CARD_THEME.textSubtle, fontSize: scaled(32) }}>{t.noData}</div>
+        <div style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <div style={{ display: "flex", color: palette.muted, fontSize: scaled(36) }}>{t.noData}</div>
         </div>
       )}
-      <Footer text={t.footer} />
-    </CardFrame>
+      <div style={{ display: "flex", flex: 1, minHeight: scaled(20) }} />
+      <div
+        style={{
+          display: "flex",
+          width: "100%",
+          marginTop: scaled(24),
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            width: scaled(86),
+            height: scaled(86),
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {data.tomoriconDataUri ? (
+            <img
+              src={data.tomoriconDataUri}
+              alt=""
+              width={scaled(80)}
+              height={scaled(80)}
+              style={{ display: "flex", width: scaled(80), height: scaled(80), objectFit: "contain" }}
+            />
+          ) : null}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            color: palette.ink,
+            fontSize: scaled(34),
+            fontWeight: 700,
+            letterSpacing: scaled(1),
+          }}
+        >
+          {t.footerBrand}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1268,19 +1160,28 @@ export interface ServerCardData {
   totalTokens: number;
   estimatedCost: number;
   totalTriggers: number;
-  heroVariant: PersonalHeroVariant;
 }
 
-/** Lower-content padding for the Server card; bar tracks are sized against it. */
-const SERVER_LOWER_PAD = scaled(66);
-const SERVER_LOWER_W = CARD_W - SERVER_LOWER_PAD * 2;
-/** Pixels reserved at a member bar's tip for its avatar + name label. */
+/** Server card padding; the shorter top inset keeps the header visually anchored. */
+const SERVER_SIDE_PAD = scaled(66);
+const SERVER_TOP_PAD = scaled(42);
+const SERVER_BOTTOM_PAD = scaled(66);
+const SERVER_LOWER_W = CARD_W - SERVER_SIDE_PAD * 2;
+/** Pixels reserved at an avatar-tipped bar's end for its avatar + name label. */
 const SERVER_BAR_TIP_RESERVE = scaled(360);
 const SERVER_BAR_TRACK_W = SERVER_LOWER_W - SERVER_BAR_TIP_RESERVE;
-const SERVER_BAR_MIN_W = scaled(360);
 /** Model bars need no avatar, so their tip reserve (name only) is smaller. */
 const SERVER_MODEL_TRACK_W = SERVER_LOWER_W - scaled(280);
-const SERVER_MODEL_MIN_W = scaled(380);
+const SERVER_BAR_TEXT_PAD = scaled(24);
+const SERVER_BAR_TEXT_FONT_SIZE = scaled(27);
+
+// Fixed section heights — summed by getServerCardHeight so the content-aware
+// card height stays exact (satori clips/pads to the height we hand it).
+const SERVER_HEADER_H = scaled(112);
+const SERVER_BLOCK_TITLE_H = scaled(74);
+const SERVER_BAR_ROW_H = scaled(98);
+const SERVER_TOTALS_H = scaled(150);
+const SERVER_FOOTER_H = scaled(112);
 
 /**
  * Picks black or white text for legibility on a solid `hex` fill using the WCAG
@@ -1344,183 +1245,106 @@ function AccentAvatar(
   );
 }
 
-/**
- * Vertical bar chart of the top personas by tokens. Bar heights interpolate
- * between a text-fitting floor and the chart ceiling by each persona's share of
- * the leader's tokens, so #2 vs #3 stay visually proportional. Each bar is
- * inscribed with a tokens-over-cost fraction, tucks up behind its persona
- * avatar, and is captioned with the persona name on a shared baseline row.
- */
-function ServerPersonaBars(
-  props: Record<string, unknown> & { personas: ServerPersonaBar[]; palette: PersonalCardPalette; empty: string },
+/** Avatar + name shown at the tip of an avatar-bearing bar (personas, members). */
+function ServerBarTip(
+  props: Record<string, unknown> & {
+    name: string;
+    dataUri: string | null;
+    accent: string;
+    palette: PersonalCardPalette;
+  },
 ): VNode {
-  const { palette } = props;
-  const personas = props.personas.slice(0, 5);
-  const chartHeight = scaled(660);
-  const nameRowHeight = scaled(52);
-  const barsAreaHeight = chartHeight - nameRowHeight;
-  const avatarSize = scaled(104);
-  // The bar rises behind the avatar's lower portion so the two read as one shape.
-  const avatarOverlap = scaled(30);
-  const avatarOverhang = avatarSize - avatarOverlap;
-  const minBarHeight = scaled(112);
-  const maxBarHeight = barsAreaHeight - avatarOverhang - scaled(6);
-  const barRange = Math.max(0, maxBarHeight - minBarHeight);
-  const maxTokens = Math.max(1, ...personas.map((entry) => entry.totalTokens));
-  const columnWidth = scaled(150);
-
-  if (personas.length === 0) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          width: "100%",
-          height: chartHeight,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div style={{ display: "flex", color: palette.muted, fontSize: scaled(36) }}>{props.empty}</div>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ display: "flex", width: "100%", height: chartHeight, flexDirection: "column" }}>
+    <div style={{ display: "flex", flexDirection: "row", alignItems: "center", marginLeft: -scaled(20) }}>
+      <AccentAvatar
+        name={props.name}
+        dataUri={props.dataUri}
+        size={scaled(78)}
+        accent={props.accent}
+        palette={props.palette}
+      />
       <div
         style={{
           display: "flex",
-          width: "100%",
-          height: barsAreaHeight,
-          flexDirection: "row",
-          alignItems: "flex-end",
-          justifyContent: "space-around",
+          marginLeft: scaled(16),
+          color: props.palette.ink,
+          fontSize: scaled(28),
+          fontWeight: 700,
         }}
       >
-        {personas.map((entry) => {
-          // 1. Interpolate floor→ceiling by token share (true proportion, text still fits).
-          const barHeight = Math.round(minBarHeight + (entry.totalTokens / maxTokens) * barRange);
-          const ink = readableInkOn(entry.accent);
-          return (
-            <div
-              key={`${entry.rank}-${entry.name}`}
-              style={{
-                display: "flex",
-                position: "relative",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                width: columnWidth,
-              }}
-            >
-              {/* Bar (in flow): tokens-over-cost fraction pinned to its base. */}
-              <div
-                style={{
-                  display: "flex",
-                  width: scaled(128),
-                  height: barHeight,
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  paddingBottom: scaled(18),
-                  borderTopLeftRadius: scaled(20),
-                  borderTopRightRadius: scaled(20),
-                  backgroundColor: entry.accent,
-                }}
-              >
-                <div style={{ display: "flex", color: ink, fontSize: scaled(26), fontWeight: 700, lineHeight: 1 }}>
-                  {formatInt(entry.totalTokens)}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    width: scaled(78),
-                    height: scaled(2),
-                    marginTop: scaled(7),
-                    marginBottom: scaled(7),
-                    backgroundColor: ink,
-                    opacity: 0.65,
-                  }}
-                />
-                <div style={{ display: "flex", color: ink, fontSize: scaled(24), fontWeight: 700, lineHeight: 1 }}>
-                  {formatCost(entry.estimatedCost)}
-                </div>
-              </div>
-              {/* Avatar (absolute, paints last): overlaps the bar top so they merge. */}
-              <div
-                style={{
-                  display: "flex",
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: barHeight - avatarOverlap,
-                  justifyContent: "center",
-                }}
-              >
-                <AccentAvatar
-                  name={entry.name}
-                  dataUri={entry.avatarDataUri}
-                  size={avatarSize}
-                  accent={entry.accent}
-                  palette={palette}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          width: "100%",
-          height: nameRowHeight,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-around",
-        }}
-      >
-        {personas.map((entry) => (
-          <div
-            key={`${entry.rank}-${entry.name}-label`}
-            style={{
-              display: "flex",
-              width: columnWidth,
-              justifyContent: "center",
-              color: palette.ink,
-              fontSize: scaled(26),
-              fontWeight: 700,
-              lineHeight: 1,
-            }}
-          >
-            {truncateCardText(entry.name, 10)}
-          </div>
-        ))}
+        {truncateCardText(props.name, 14)}
       </div>
     </div>
   );
 }
 
 /**
- * One horizontal bar: a fill sized to `fraction` of the leader, the value typed
- * inside, and an optional `tip` node (avatar + label, or a bare model name) at
- * the bar's end.
+ * Satori exposes no text-measurement API, so use conservative Noto Sans JP
+ * glyph-width estimates when deciding whether an in-bar label will fit.
+ */
+function estimateServerBarTextWidth(text: string): number {
+  const emWidth = Array.from(text).reduce((total, character) => {
+    if (/\s/u.test(character)) return total + 0.35;
+    if (/[.,:;|]/u.test(character)) return total + 0.35;
+    if (/[ilI1]/u.test(character)) return total + 0.42;
+    if (/[MW@#%]/u.test(character)) return total + 0.9;
+    if ((character.codePointAt(0) ?? 0) > 0xff) return total + 1;
+    return total + 0.62;
+  }, 0);
+  return Math.ceil(emWidth * SERVER_BAR_TEXT_FONT_SIZE);
+}
+
+export interface ServerBarLayout {
+  width: number;
+  insideText: string;
+}
+
+/**
+ * Preserves the leader-relative width of each row. A row only grows past that
+ * proportional width when its compact label would not fit; the long label is
+ * used whenever the proportional bar has enough room for it.
+ */
+export function getServerBarLayout(
+  fraction: number,
+  trackWidth: number,
+  fullText: string,
+  compactText: string,
+): ServerBarLayout {
+  const clampedFraction = Math.min(1, Math.max(0, fraction));
+  const proportionalWidth = Math.round(trackWidth * clampedFraction);
+  const fullWidth = estimateServerBarTextWidth(fullText) + SERVER_BAR_TEXT_PAD * 2;
+  if (proportionalWidth >= fullWidth) {
+    return { width: proportionalWidth, insideText: fullText };
+  }
+
+  const compactWidth = estimateServerBarTextWidth(compactText) + SERVER_BAR_TEXT_PAD * 2;
+  return {
+    width: Math.min(trackWidth, Math.max(proportionalWidth, compactWidth)),
+    insideText: compactText,
+  };
+}
+
+/**
+ * One horizontal bar: a fill sized as a share of the leader, with a compact
+ * in-bar label only when the full label cannot fit.
  */
 function ServerBarRow(
   props: Record<string, unknown> & {
     fillColor: string;
-    insideText: string;
+    fullInsideText: string;
+    compactInsideText: string;
     fraction: number;
-    minWidth?: number;
     trackWidth?: number;
     tip?: unknown;
   },
 ): VNode {
-  // Interpolate floor→track by value share so #2 vs #3 stay proportional while
-  // the value text still fits inside the shortest bar (matches the persona bars).
-  const minWidth = props.minWidth ?? SERVER_BAR_MIN_W;
   const trackWidth = props.trackWidth ?? SERVER_BAR_TRACK_W;
-  const fraction = Math.min(1, Math.max(0, props.fraction));
-  const barWidth = Math.round(minWidth + fraction * Math.max(0, trackWidth - minWidth));
+  const { width: barWidth, insideText } = getServerBarLayout(
+    props.fraction,
+    trackWidth,
+    props.fullInsideText,
+    props.compactInsideText,
+  );
   const ink = readableInkOn(props.fillColor);
   return (
     <div
@@ -1542,12 +1366,21 @@ function ServerBarRow(
           flexDirection: "row",
           alignItems: "center",
           paddingLeft: scaled(24),
+          paddingRight: SERVER_BAR_TEXT_PAD,
           borderRadius: scaled(16),
           backgroundColor: props.fillColor,
         }}
       >
-        <div style={{ display: "flex", color: ink, fontSize: scaled(27), fontWeight: 700, whiteSpace: "nowrap" }}>
-          {props.insideText}
+        <div
+          style={{
+            display: "flex",
+            color: ink,
+            fontSize: SERVER_BAR_TEXT_FONT_SIZE,
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {insideText}
         </div>
       </div>
       {props.tip as VNode}
@@ -1555,14 +1388,14 @@ function ServerBarRow(
   );
 }
 
-/** Title rule above each lower-zone block, tinted to the card accent. */
+/** Title row above each bar block, tinted to the card accent (natural height). */
 function ServerBlockTitle(props: Record<string, unknown> & { title: string; palette: PersonalCardPalette }): VNode {
   return (
     <div
       style={{
         display: "flex",
-        marginTop: scaled(18),
-        marginBottom: scaled(8),
+        paddingTop: scaled(22),
+        paddingBottom: scaled(10),
         color: props.palette.accent,
         fontSize: scaled(34),
         fontWeight: 700,
@@ -1573,9 +1406,31 @@ function ServerBlockTitle(props: Record<string, unknown> & { title: string; pale
   );
 }
 
-/** Server Leaderboard keeps a fixed 9:16 frame; only the no-data card is shorter. */
+/** Clamps a block's row count to [1, max]; the floor reserves a row for "empty". */
+function serverBlockRowCount(length: number, max: number): number {
+  return Math.max(1, Math.min(length, max));
+}
+
+/**
+ * Content-aware height: the card grows with its actual persona/member/model rows
+ * (no fixed hero), so small servers stay compact and full ones never clip. The
+ * sum reuses the same section-height constants the renderer pins, keeping it exact.
+ */
 export function getServerCardHeight(data: ServerCardData): number {
-  return data.totalTriggers > 0 ? SERVER_CARD_H : scaled(900);
+  if (data.totalTriggers === 0) return scaled(980);
+  const rows =
+    serverBlockRowCount(data.topPersonas.length, 5) +
+    serverBlockRowCount(data.topMembers.length, 3) +
+    serverBlockRowCount(data.topModels.length, 3);
+  return (
+    SERVER_TOP_PAD +
+    SERVER_BOTTOM_PAD +
+    SERVER_HEADER_H +
+    SERVER_BLOCK_TITLE_H * 3 +
+    rows * SERVER_BAR_ROW_H +
+    SERVER_TOTALS_H +
+    SERVER_FOOTER_H
+  );
 }
 
 export function renderServerCard(data: ServerCardData): VNode {
@@ -1596,10 +1451,22 @@ export function renderServerCard(data: ServerCardData): VNode {
 
   const hasData = data.totalTriggers > 0;
   const palette = data.palette ?? DEFAULT_PERSONAL_CARD_PALETTE;
+  const personas = data.topPersonas.slice(0, 5);
   const members = data.topMembers.slice(0, 3);
   const models = data.topModels.slice(0, 3);
+  const maxPersonaTokens = Math.max(1, ...personas.map((entry) => entry.totalTokens));
   const maxTriggers = Math.max(1, ...members.map((entry) => entry.triggers));
   const maxModelTokens = Math.max(1, ...models.map((entry) => entry.totalTokens));
+  const tokenCostText = (totalTokens: number, cost: number): string =>
+    localizer(data.locale, "commands.stats.infographic.model_tokens_cost", {
+      count: formatInt(totalTokens),
+      cost: formatCost(cost),
+    });
+  const compactTokenCostText = (totalTokens: number, cost: number): string =>
+    localizer(data.locale, "commands.stats.infographic.model_tokens_cost_compact", {
+      count: formatInt(totalTokens),
+      cost: formatCost(cost),
+    });
 
   return (
     <div
@@ -1610,256 +1477,196 @@ export function renderServerCard(data: ServerCardData): VNode {
         boxSizing: "border-box",
         overflow: "hidden",
         flexDirection: "column",
+        paddingTop: SERVER_TOP_PAD,
+        paddingRight: SERVER_SIDE_PAD,
+        paddingBottom: SERVER_BOTTOM_PAD,
+        paddingLeft: SERVER_SIDE_PAD,
         backgroundColor: palette.background,
         color: palette.ink,
         fontFamily: CARD_THEME.fontFamily,
       }}
     >
-      {/* 1. Hero zone: server identity rail + top-persona vertical bar chart. */}
-      <div style={{ display: "flex", width: "100%", height: scaled(860), flexDirection: "row" }}>
-        <div
-          style={{
-            display: "flex",
-            width: scaled(138),
-            flexShrink: 0,
-            position: "relative",
-            flexDirection: "column",
-            alignItems: "center",
-            paddingTop: scaled(34),
-            paddingBottom: scaled(40),
-            borderRight: `${scaled(1)}px solid ${palette.border}`,
-          }}
-        >
-          <PersonalImage
-            name={data.serverName}
-            dataUri={data.serverIconDataUri}
-            size={scaled(78)}
-            palette={palette}
-            rounded
-          />
-          <div
-            style={{
-              display: "flex",
-              position: "absolute",
-              top: scaled(150),
-              left: scaled(108),
-              width: scaled(680),
-              color: palette.ink,
-              fontSize: scaled(58),
-              fontWeight: 700,
-              letterSpacing: scaled(1),
-              transform: "rotate(90deg)",
-              transformOrigin: "top left",
-            }}
-          >
-            {truncateCardText(data.serverName, 18)}
+      {/* 1. Header row: server icon + name + timeframe subtitle. */}
+      <div
+        style={{
+          display: "flex",
+          width: "100%",
+          height: SERVER_HEADER_H,
+          flexShrink: 0,
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <AccentAvatar
+          name={data.serverName}
+          dataUri={data.serverIconDataUri}
+          size={scaled(112)}
+          accent={palette.accent}
+          palette={palette}
+        />
+        <div style={{ display: "flex", flexDirection: "column", marginLeft: scaled(26), flex: 1 }}>
+          <div style={{ display: "flex", color: palette.ink, fontSize: scaled(56), fontWeight: 700, lineHeight: 1.05 }}>
+            {truncateCardText(data.serverName, 22)}
           </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            paddingTop: scaled(42),
-            paddingRight: scaled(42),
-            paddingLeft: scaled(42),
-          }}
-        >
           <div
             style={{
               display: "flex",
-              position: "relative",
-              width: "100%",
-              height: scaled(776),
-              overflow: "hidden",
-              flexDirection: "column",
-              borderRadius: scaled(32),
-              border: `${scaled(2)}px solid ${palette.accent}`,
-              backgroundColor: palette.surface,
-              paddingTop: scaled(30),
-              paddingRight: scaled(26),
-              paddingBottom: scaled(28),
-              paddingLeft: scaled(26),
+              marginTop: scaled(6),
+              color: palette.accent,
+              fontSize: scaled(28),
+              fontWeight: 700,
             }}
           >
-            <PersonalHeroDecor palette={palette} variant={data.heroVariant} />
-            <div
-              style={{
-                display: "flex",
-                position: "relative",
-                marginBottom: scaled(8),
-                color: palette.accent,
-                fontSize: scaled(34),
-                fontWeight: 700,
-              }}
-            >
-              {t.topPersonas}
-            </div>
-            <div style={{ display: "flex", position: "relative", flex: 1, alignItems: "flex-end" }}>
-              <ServerPersonaBars personas={data.topPersonas} palette={palette} empty={t.empty} />
-            </div>
+            {`${timeframeLabel(data.locale, data.timeframe)} ${t.title}`}
           </div>
         </div>
       </div>
 
-      {/* 2. Lower zone: member + model bars, server totals, signature footer. */}
+      {hasData ? (
+        <>
+          {/* 2. Top Personas — horizontal bars (tokens | cost inside, avatar + name at tip). */}
+          <ServerBlockTitle title={t.topPersonas} palette={palette} />
+          {personas.length > 0 ? (
+            personas.map((entry) => (
+              <ServerBarRow
+                key={`${entry.rank}-${entry.name}`}
+                fillColor={entry.accent}
+                fullInsideText={tokenCostText(entry.totalTokens, entry.estimatedCost)}
+                compactInsideText={compactTokenCostText(entry.totalTokens, entry.estimatedCost)}
+                fraction={entry.totalTokens / maxPersonaTokens}
+                tip={
+                  <ServerBarTip
+                    name={entry.name}
+                    dataUri={entry.avatarDataUri}
+                    accent={entry.accent}
+                    palette={palette}
+                  />
+                }
+              />
+            ))
+          ) : (
+            <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
+          )}
+
+          {/* 3. Most Active Members — triggers inside, avatar + name at tip. */}
+          <ServerBlockTitle title={t.mostActiveMembers} palette={palette} />
+          {members.length > 0 ? (
+            members.map((entry) => (
+              <ServerBarRow
+                key={`${entry.rank}-${entry.name}`}
+                fillColor={entry.accent}
+                fullInsideText={`${formatInt(entry.triggers)} ${t.triggerLabel}`}
+                compactInsideText={formatInt(entry.triggers)}
+                fraction={entry.triggers / maxTriggers}
+                tip={
+                  <ServerBarTip
+                    name={entry.name}
+                    dataUri={entry.avatarDataUri}
+                    accent={entry.accent}
+                    palette={palette}
+                  />
+                }
+              />
+            ))
+          ) : (
+            <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
+          )}
+
+          {/* 4. Top Models — tokens | cost inside, model name at tip (no avatar). */}
+          <ServerBlockTitle title={t.topModels} palette={palette} />
+          {models.length > 0 ? (
+            models.map((entry) => (
+              <ServerBarRow
+                key={entry.name}
+                fillColor={palette.accentSecondary}
+                fullInsideText={tokenCostText(entry.totalTokens, entry.estimatedCost)}
+                compactInsideText={compactTokenCostText(entry.totalTokens, entry.estimatedCost)}
+                fraction={entry.totalTokens / maxModelTokens}
+                trackWidth={SERVER_MODEL_TRACK_W}
+                tip={
+                  <div
+                    style={{
+                      display: "flex",
+                      marginLeft: scaled(18),
+                      color: palette.ink,
+                      fontSize: scaled(28),
+                      fontWeight: 700,
+                    }}
+                  >
+                    {truncateCardText(entry.name, 22)}
+                  </div>
+                }
+              />
+            ))
+          ) : (
+            <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
+          )}
+
+          {/* Spacer pushes the server totals + signature to the card bottom. */}
+          <div style={{ display: "flex", flex: 1, minHeight: scaled(16) }} />
+
+          <div
+            style={{
+              display: "flex",
+              width: "100%",
+              paddingTop: scaled(26),
+              flexDirection: "row",
+              justifyContent: "space-between",
+              borderTop: `${scaled(2)}px solid ${palette.accent}`,
+            }}
+          >
+            <PersonalTotal label={t.totalTokens} value={formatInt(data.totalTokens)} palette={palette} />
+            <PersonalTotal label={t.totalSpent} value={formatCost(data.estimatedCost)} palette={palette} />
+          </div>
+        </>
+      ) : (
+        <div
+          style={{ display: "flex", flex: 1, flexDirection: "column", alignItems: "center", justifyContent: "center" }}
+        >
+          <div style={{ display: "flex", color: palette.muted, fontSize: scaled(40) }}>{t.noData}</div>
+        </div>
+      )}
+
       <div
         style={{
           display: "flex",
-          flex: 1,
-          flexDirection: "column",
-          paddingTop: scaled(20),
-          paddingRight: SERVER_LOWER_PAD,
-          paddingBottom: scaled(40),
-          paddingLeft: SERVER_LOWER_PAD,
+          width: "100%",
+          marginTop: scaled(24),
+          flexShrink: 0,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
       >
-        {hasData ? (
-          <>
-            <ServerBlockTitle title={t.mostActiveMembers} palette={palette} />
-            {members.length > 0 ? (
-              members.map((entry) => (
-                <ServerBarRow
-                  key={`${entry.rank}-${entry.name}`}
-                  fillColor={entry.accent}
-                  insideText={`${formatInt(entry.triggers)} ${t.triggerLabel}`}
-                  fraction={entry.triggers / maxTriggers}
-                  tip={
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        marginLeft: -scaled(20),
-                      }}
-                    >
-                      <AccentAvatar
-                        name={entry.name}
-                        dataUri={entry.avatarDataUri}
-                        size={scaled(78)}
-                        accent={entry.accent}
-                        palette={palette}
-                      />
-                      <div
-                        style={{
-                          display: "flex",
-                          marginLeft: scaled(16),
-                          color: palette.ink,
-                          fontSize: scaled(28),
-                          fontWeight: 700,
-                        }}
-                      >
-                        {truncateCardText(entry.name, 14)}
-                      </div>
-                    </div>
-                  }
-                />
-              ))
-            ) : (
-              <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
-            )}
-
-            <ServerBlockTitle title={t.topModels} palette={palette} />
-            {models.length > 0 ? (
-              models.map((entry) => (
-                <ServerBarRow
-                  key={entry.name}
-                  fillColor={palette.accentSecondary}
-                  insideText={localizer(data.locale, "commands.stats.infographic.model_tokens_cost", {
-                    count: formatInt(entry.totalTokens),
-                    cost: formatCost(entry.estimatedCost),
-                  })}
-                  fraction={entry.totalTokens / maxModelTokens}
-                  minWidth={SERVER_MODEL_MIN_W}
-                  trackWidth={SERVER_MODEL_TRACK_W}
-                  tip={
-                    <div
-                      style={{
-                        display: "flex",
-                        marginLeft: scaled(18),
-                        color: palette.ink,
-                        fontSize: scaled(28),
-                        fontWeight: 700,
-                      }}
-                    >
-                      {truncateCardText(entry.name, 22)}
-                    </div>
-                  }
-                />
-              ))
-            ) : (
-              <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
-            )}
-
-            <div style={{ display: "flex", flex: 1, minHeight: scaled(20) }} />
-
-            <div
-              style={{
-                display: "flex",
-                width: "100%",
-                paddingTop: scaled(26),
-                flexDirection: "row",
-                justifyContent: "space-between",
-                borderTop: `${scaled(2)}px solid ${palette.accent}`,
-              }}
-            >
-              <PersonalTotal label={t.totalTokens} value={formatInt(data.totalTokens)} palette={palette} />
-              <PersonalTotal label={t.totalSpent} value={formatCost(data.estimatedCost)} palette={palette} />
-            </div>
-          </>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              flex: 1,
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <div style={{ display: "flex", color: palette.muted, fontSize: scaled(40) }}>{t.noData}</div>
-          </div>
-        )}
-
         <div
           style={{
             display: "flex",
-            width: "100%",
-            marginTop: scaled(24),
-            flexDirection: "row",
+            width: scaled(86),
+            height: scaled(86),
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "center",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              width: scaled(86),
-              height: scaled(86),
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {data.tomoriconDataUri ? (
-              <img
-                src={data.tomoriconDataUri}
-                alt=""
-                width={scaled(80)}
-                height={scaled(80)}
-                style={{ display: "flex", width: scaled(80), height: scaled(80), objectFit: "contain" }}
-              />
-            ) : null}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              color: palette.ink,
-              fontSize: scaled(34),
-              fontWeight: 700,
-              letterSpacing: scaled(1),
-            }}
-          >
-            {t.footerBrand}
-          </div>
+          {data.tomoriconDataUri ? (
+            <img
+              src={data.tomoriconDataUri}
+              alt=""
+              width={scaled(80)}
+              height={scaled(80)}
+              style={{ display: "flex", width: scaled(80), height: scaled(80), objectFit: "contain" }}
+            />
+          ) : null}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            color: palette.ink,
+            fontSize: scaled(34),
+            fontWeight: 700,
+            letterSpacing: scaled(1),
+          }}
+        >
+          {t.footerBrand}
         </div>
       </div>
     </div>

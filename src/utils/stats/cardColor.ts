@@ -7,25 +7,38 @@
  *
  * It centralises:
  * - RGB/HSL math used to derive accessible light-mode palettes.
- * - `extractCardPalette` — samples a hero image (a persona avatar for Personal
- *   Wrapped, the server icon for the Server Leaderboard) into a palette.
+ * - `extractCardPalette` — samples the selected avatar/icon into a palette for
+ *   Personal Wrapped, Persona Affinity, or the Server Leaderboard.
  * - `extractAvatarAccentColor` — distils a single vivid bar-fill color from an
  *   avatar, used to tint each persona/member bar on the Server Leaderboard.
- * - `loadTomoriconDataUri` / `chooseHeroVariant` — shared signature + decoration
- *   helpers so both card gatherers behave identically.
+ * - `loadTomoriconDataUri` — shared monochrome-stamp tinting used by every card.
  */
 import { resolve } from "node:path";
 import sharp from "sharp";
 import { log } from "@/utils/misc/logger";
-import {
-  DEFAULT_PERSONAL_CARD_PALETTE,
-  PERSONAL_HERO_VARIANT_COUNT,
-  type PersonalCardPalette,
-  type PersonalHeroVariant,
-} from "@/utils/stats/statsInfographic";
+import { DEFAULT_PERSONAL_CARD_PALETTE, type PersonalCardPalette } from "@/utils/stats/statsInfographic";
 
 const TOMORICON_MONO_DARK_PATH = resolve("assets/img/tomoricon-mono-dark.png");
 const tomoriconDataUriByColor = new Map<string, string | null>();
+
+function parseHexColor(color: string): { red: number; green: number; blue: number } {
+  const raw = color.trim().replace(/^#/, "");
+  const hex =
+    raw.length === 3
+      ? raw
+          .split("")
+          .map((channel) => `${channel}${channel}`)
+          .join("")
+      : raw;
+  if (!/^[\da-f]{6}$/i.test(hex)) {
+    throw new Error(`Expected a six-digit hex color, received "${color}"`);
+  }
+  return {
+    red: Number.parseInt(hex.slice(0, 2), 16),
+    green: Number.parseInt(hex.slice(2, 4), 16),
+    blue: Number.parseInt(hex.slice(4, 6), 16),
+  };
+}
 
 /**
  * Returns the monochrome Tomoricon stamp tinted to `color`, as a PNG data URI.
@@ -38,7 +51,23 @@ export async function loadTomoriconDataUri(color: string): Promise<string | null
   const cached = tomoriconDataUriByColor.get(color);
   if (cached !== undefined) return cached;
   try {
-    const tintedIcon = await sharp(TOMORICON_MONO_DARK_PATH).ensureAlpha().tint(color).png().toBuffer();
+    const { red, green, blue } = parseHexColor(color);
+    const { data, info } = await sharp(TOMORICON_MONO_DARK_PATH)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const tintedPixels = Buffer.alloc(data.length);
+    for (let index = 0; index < data.length; index += info.channels) {
+      tintedPixels[index] = red;
+      tintedPixels[index + 1] = green;
+      tintedPixels[index + 2] = blue;
+      tintedPixels[index + 3] = data[index + 3];
+    }
+    const tintedIcon = await sharp(tintedPixels, {
+      raw: { width: info.width, height: info.height, channels: info.channels },
+    })
+      .png()
+      .toBuffer();
     const dataUri = `data:image/png;base64,${tintedIcon.toString("base64")}`;
     tomoriconDataUriByColor.set(color, dataUri);
     return dataUri;
@@ -47,11 +76,6 @@ export async function loadTomoriconDataUri(color: string): Promise<string | null
     log.warn("cardColor: Tomoricon stamp could not be loaded", error as Error);
     return null;
   }
-}
-
-/** Decorative-only choice; generated here so the pure renderer stays deterministic per card. */
-export function chooseHeroVariant(): PersonalHeroVariant {
-  return Math.floor(Math.random() * PERSONAL_HERO_VARIANT_COUNT) as PersonalHeroVariant;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -160,7 +184,7 @@ async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBu
  * roles: a base hue (pale surfaces + dark ink) and a distinct saturated accent.
  * Falls back to the neutral default palette if the image is missing/undecodable.
  *
- * @param avatarDataUri - Persona avatar (Personal) or server icon (Server) URI.
+ * @param avatarDataUri - Persona avatar (Personal or Persona Affinity) or server icon URI.
  */
 export async function extractCardPalette(avatarDataUri: string | null): Promise<PersonalCardPalette> {
   if (!avatarDataUri) return DEFAULT_PERSONAL_CARD_PALETTE;
