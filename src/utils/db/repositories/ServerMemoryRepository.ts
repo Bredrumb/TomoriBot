@@ -538,14 +538,27 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   async loadDocumentChunks(
     documentId: number,
     serverId: number,
+    personaId: number | null,
   ): Promise<Array<{ document_chunk_id: number; chunk_index: number; content: string }>> {
-    return await sql<Array<{ document_chunk_id: number; chunk_index: number; content: string }>>`
-      SELECT document_chunk_id, chunk_index, content
-      FROM document_chunks
-      WHERE document_id = ${documentId}
-        AND server_id = ${serverId}
-      ORDER BY chunk_index ASC
-    `;
+    return personaId === null
+      ? await sql<Array<{ document_chunk_id: number; chunk_index: number; content: string }>>`
+          SELECT dc.document_chunk_id, dc.chunk_index, dc.content
+          FROM document_chunks dc
+          JOIN documents d ON d.document_id = dc.document_id
+          WHERE dc.document_id = ${documentId}
+            AND dc.server_id = ${serverId}
+            AND d.persona_id IS NULL
+          ORDER BY dc.chunk_index ASC
+        `
+      : await sql<Array<{ document_chunk_id: number; chunk_index: number; content: string }>>`
+          SELECT dc.document_chunk_id, dc.chunk_index, dc.content
+          FROM document_chunks dc
+          JOIN documents d ON d.document_id = dc.document_id
+          WHERE dc.document_id = ${documentId}
+            AND dc.server_id = ${serverId}
+            AND d.persona_id = ${personaId}
+          ORDER BY dc.chunk_index ASC
+        `;
   }
 
   /**
@@ -556,23 +569,42 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   async updateChunk(params: {
     chunkId: number;
     serverId: number;
+    personaId: number | null;
     content: string;
     embeddingVector: string;
     embeddingModelId: number;
     embeddingFamily: string;
   }): Promise<boolean> {
-    const { chunkId, serverId, content, embeddingVector, embeddingModelId, embeddingFamily } = params;
+    const { chunkId, serverId, personaId, content, embeddingVector, embeddingModelId, embeddingFamily } = params;
     try {
-      const [updated] = await sql`
-        UPDATE document_chunks
-        SET content = ${content},
-            embedding = ${embeddingVector}::vector,
-            embedding_model_id = ${embeddingModelId},
-            embedding_family = ${embeddingFamily}
-        WHERE document_chunk_id = ${chunkId}
-          AND server_id = ${serverId}
-        RETURNING document_chunk_id
-      `;
+      const [updated] =
+        personaId === null
+          ? await sql`
+              UPDATE document_chunks
+              SET content = ${content},
+                  embedding = ${embeddingVector}::vector,
+                  embedding_model_id = ${embeddingModelId},
+                  embedding_family = ${embeddingFamily}
+              FROM documents
+              WHERE document_chunks.document_chunk_id = ${chunkId}
+                AND document_chunks.server_id = ${serverId}
+                AND document_chunks.document_id = documents.document_id
+                AND documents.persona_id IS NULL
+              RETURNING document_chunks.document_chunk_id
+            `
+          : await sql`
+              UPDATE document_chunks
+              SET content = ${content},
+                  embedding = ${embeddingVector}::vector,
+                  embedding_model_id = ${embeddingModelId},
+                  embedding_family = ${embeddingFamily}
+              FROM documents
+              WHERE document_chunks.document_chunk_id = ${chunkId}
+                AND document_chunks.server_id = ${serverId}
+                AND document_chunks.document_id = documents.document_id
+                AND documents.persona_id = ${personaId}
+              RETURNING document_chunks.document_chunk_id
+            `;
       return !!updated;
     } catch (error) {
       log.error(`Error updating chunk ${chunkId}:`, error);
@@ -584,14 +616,28 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Deletes a single chunk by ID. Returns true on success.
    * Leaves a gap in chunk_index; callers should rebuild text_content separately if needed.
    */
-  async deleteChunk(chunkId: number, serverId: number): Promise<boolean> {
+  async deleteChunk(chunkId: number, serverId: number, personaId: number | null): Promise<boolean> {
     try {
-      const [deleted] = await sql`
-        DELETE FROM document_chunks
-        WHERE document_chunk_id = ${chunkId}
-          AND server_id = ${serverId}
-        RETURNING document_chunk_id
-      `;
+      const [deleted] =
+        personaId === null
+          ? await sql`
+              DELETE FROM document_chunks
+              USING documents
+              WHERE document_chunks.document_chunk_id = ${chunkId}
+                AND document_chunks.server_id = ${serverId}
+                AND document_chunks.document_id = documents.document_id
+                AND documents.persona_id IS NULL
+              RETURNING document_chunks.document_chunk_id
+            `
+          : await sql`
+              DELETE FROM document_chunks
+              USING documents
+              WHERE document_chunks.document_chunk_id = ${chunkId}
+                AND document_chunks.server_id = ${serverId}
+                AND document_chunks.document_id = documents.document_id
+                AND documents.persona_id = ${personaId}
+              RETURNING document_chunks.document_chunk_id
+            `;
       return !!deleted;
     } catch (error) {
       log.error(`Error deleting chunk ${chunkId}:`, error);
@@ -606,14 +652,26 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   async loadDocumentMeta(
     documentId: number,
     serverId: number,
+    personaId: number | null,
   ): Promise<{ document_name: string; channel_tags: string[] } | null> {
-    const [row] = await sql<Array<{ document_name: string; channel_tags: string[] | null }>>`
-      SELECT document_name, channel_tags
-      FROM documents
-      WHERE document_id = ${documentId}
-        AND server_id = ${serverId}
-      LIMIT 1
-    `;
+    const [row] =
+      personaId === null
+        ? await sql<Array<{ document_name: string; channel_tags: string[] | null }>>`
+            SELECT document_name, channel_tags
+            FROM documents
+            WHERE document_id = ${documentId}
+              AND server_id = ${serverId}
+              AND persona_id IS NULL
+            LIMIT 1
+          `
+        : await sql<Array<{ document_name: string; channel_tags: string[] | null }>>`
+            SELECT document_name, channel_tags
+            FROM documents
+            WHERE document_id = ${documentId}
+              AND server_id = ${serverId}
+              AND persona_id = ${personaId}
+            LIMIT 1
+          `;
     if (!row) return null;
     return { document_name: row.document_name, channel_tags: row.channel_tags ?? [] };
   }
@@ -621,15 +679,31 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   /**
    * Replaces a document's channel_tags array. Empty array = available in all channels.
    */
-  async updateDocumentChannelTags(documentId: number, serverId: number, channelTags: string[]): Promise<boolean> {
+  async updateDocumentChannelTags(
+    documentId: number,
+    serverId: number,
+    channelTags: string[],
+    personaId: number | null,
+  ): Promise<boolean> {
     try {
-      const [updated] = await sql`
-        UPDATE documents
-        SET channel_tags = ${sql.array(channelTags, "TEXT")}
-        WHERE document_id = ${documentId}
-          AND server_id = ${serverId}
-        RETURNING document_id
-      `;
+      const [updated] =
+        personaId === null
+          ? await sql`
+              UPDATE documents
+              SET channel_tags = ${sql.array(channelTags, "TEXT")}
+              WHERE document_id = ${documentId}
+                AND server_id = ${serverId}
+                AND persona_id IS NULL
+              RETURNING document_id
+            `
+          : await sql`
+              UPDATE documents
+              SET channel_tags = ${sql.array(channelTags, "TEXT")}
+              WHERE document_id = ${documentId}
+                AND server_id = ${serverId}
+                AND persona_id = ${personaId}
+              RETURNING document_id
+            `;
       return !!updated;
     } catch (error) {
       log.error(`Error updating channel_tags for document ${documentId}:`, error);

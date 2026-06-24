@@ -467,8 +467,19 @@ export async function execute(
     const modalSubmitInteraction = modalResult.interaction;
     const selectedId = Number.parseInt(selectedIdStr, 10);
 
+    // Reject any document_id not in the persona-scoped list we already loaded
+    if (!documents.some((doc) => doc.document_id === selectedId)) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "general.errors.invalid_option_title",
+        descriptionKey: "general.errors.invalid_option_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     // Load document meta (for channel_tags pre-fill on edit) and chunks
-    const documentMeta = await serverMemoryRepository.loadDocumentMeta(selectedId, dbServerId);
+    const documentMeta = await serverMemoryRepository.loadDocumentMeta(selectedId, dbServerId, targetPersonaId);
     if (!documentMeta) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.invalid_option_title",
@@ -481,7 +492,7 @@ export async function execute(
     let documentName = documentMeta.document_name;
     let currentChannelTags = documentMeta.channel_tags;
 
-    let chunks: ChunkRow[] = await serverMemoryRepository.loadDocumentChunks(selectedId, dbServerId);
+    let chunks: ChunkRow[] = await serverMemoryRepository.loadDocumentChunks(selectedId, dbServerId, targetPersonaId);
 
     if (chunks.length === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -654,6 +665,7 @@ export async function execute(
           const updated = await serverMemoryRepository.updateChunk({
             chunkId: currentChunk.document_chunk_id,
             serverId: dbServerId,
+            personaId: targetPersonaId,
             content: newContent,
             embeddingVector: regen.embeddingVector,
             embeddingModelId: regen.embeddingModelId,
@@ -676,7 +688,7 @@ export async function execute(
         }
 
         if (tagsChanged) {
-          await serverMemoryRepository.updateDocumentChannelTags(selectedId, dbServerId, newTags);
+          await serverMemoryRepository.updateDocumentChannelTags(selectedId, dbServerId, newTags, targetPersonaId);
           currentChannelTags = newTags;
         }
 
@@ -746,7 +758,7 @@ export async function execute(
         }
 
         const wasLast = chunks.length === 1;
-        const deleted = await serverMemoryRepository.deleteChunk(currentChunk.document_chunk_id, dbServerId);
+        const deleted = await serverMemoryRepository.deleteChunk(currentChunk.document_chunk_id, dbServerId, targetPersonaId);
         if (!deleted) {
           mode = "normal";
           await btnInteraction.update({
