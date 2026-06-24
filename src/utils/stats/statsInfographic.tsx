@@ -1160,6 +1160,8 @@ export interface ServerCardData {
   totalTokens: number;
   estimatedCost: number;
   totalTriggers: number;
+  totalPersonas: number;
+  serverUserCount: number;
 }
 
 /** Server card padding; the shorter top inset keeps the header visually anchored. */
@@ -1445,6 +1447,10 @@ export function renderServerCard(data: ServerCardData): VNode {
     footerBrand: localizer(data.locale, "commands.stats.infographic.server_leaderboard_footer", {
       timeframe: timeframeLabel(data.locale, data.timeframe).toUpperCase(),
     }),
+    subtitle: localizer(data.locale, "commands.stats.infographic.server_subtitle", {
+      personas: data.totalPersonas,
+      members: data.serverUserCount,
+    }),
     noData: localizer(data.locale, "commands.stats.infographic.no_data"),
     empty: localizer(data.locale, "commands.stats.empty"),
   };
@@ -1517,7 +1523,7 @@ export function renderServerCard(data: ServerCardData): VNode {
               fontWeight: 700,
             }}
           >
-            {`${timeframeLabel(data.locale, data.timeframe)} ${t.title}`}
+            {t.subtitle}
           </div>
         </div>
       </div>

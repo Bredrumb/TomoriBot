@@ -12,13 +12,15 @@
  *   tab container is shown (a tabbed view, not item pagination).
  *
  * Timeframe gating (per Eli's feedback): metrics whose underlying data is inherently
- * all-time (rewards/punishments, memories, generations from quota tables) are only
- * surfaced when timeframe = all_time, and span metrics (streaks, peak hour/day) are
- * hidden under the single-day "today" view where they are meaningless. The builders
- * decide this directly so gated reads are never even fired.
+ * all-time (rewards/punishments and memories) are only surfaced when timeframe =
+ * all_time, and span metrics (streaks, peak hour/day) are hidden under the single-day
+ * "today" view where they are meaningless. The builders decide this directly so
+ * gated reads are never even fired. Generation totals are daily telemetry and work
+ * for every timeframe.
  *
- * All token/cost figures are CHARACTER-ESTIMATES (see tokenEstimate / postTurnEffects):
- * rough stats only, surfaced as such in the footer.
+ * Token/cost figures prefer provider-reported usage and fall back to character estimates
+ * when usage is unavailable (see tokenEstimate / postTurnEffects). They remain estimates
+ * because catalog prices can be incomplete or provider-dependent.
  */
 import {
   type AttachmentBuilder,
@@ -482,6 +484,9 @@ export async function buildPersonalTabs(args: {
   subtitle: string;
   timezoneOffset?: number | null;
 }): Promise<StatsTab[]> {
+  // Dashboards are low-frequency reads. Drain telemetry first so the rendered
+  // snapshot includes any successfully buffered work from the current process.
+  await statRepository.flush();
   const { locale, userId, from, scopeServerId, subtitle, timeframe } = args;
   const isAllTime = timeframe === "all_time";
   const isToday = timeframe === "today";
@@ -541,15 +546,13 @@ export async function buildPersonalTabs(args: {
       statRepository.getConditioningTotals({ userId, serverId: scopeServerId }),
     ]);
   }
-  // Generations use stat_counters (windowed) — no longer restricted to all_time.
-  // Server scope guard remains: cross-server rollup is not meaningful for generations.
-  if (scopeServerId !== undefined) {
-    generations = await statRepository.getGenerationTotals({
-      serverId: scopeServerId,
-      userId,
-      from: args.from,
-    });
-  }
+  // Generation telemetry carries the same server/user dimensions as other stats,
+  // so both this-server and global personal scopes are meaningful and windowable.
+  generations = await statRepository.getGenerationTotals({
+    serverId: scopeServerId,
+    userId,
+    from: args.from,
+  });
 
   const unitMemories = localizer(locale, "commands.stats.units.memories_saved");
   const unitReplies = localizer(locale, "commands.stats.units.replies_received");
@@ -629,13 +632,11 @@ export async function buildPersonalTabs(args: {
     );
   }
   // Group 5: generation counts + commands. Windowed via stat_counters — always visible.
-  if (scopeServerId !== undefined) {
-    overviewFields.push(
-      sepField(),
-      statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
-      statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
-    );
-  }
+  overviewFields.push(
+    sepField(),
+    statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
+    statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
+  );
   overviewFields.push(statField("commands.stats.fields.commands", fmtInt(commands)));
 
   // ── Personas tab. ──
@@ -758,6 +759,7 @@ export async function buildPersonaTabs(args: {
   from?: string;
   subtitle: string;
 }): Promise<StatsTab[]> {
+  await statRepository.flush();
   const { locale, serverId, lineageId, from, subtitle, timeframe } = args;
   const isAllTime = timeframe === "all_time";
   const scope = { serverId, lineageId, from };
@@ -932,6 +934,7 @@ export async function buildServerTabs(args: {
   from?: string;
   subtitle: string;
 }): Promise<StatsTab[]> {
+  await statRepository.flush();
   const { locale, serverId, from, subtitle, timeframe } = args;
   const isAllTime = timeframe === "all_time";
   const names = await resolvePersonaNames(args.guildId);
@@ -998,8 +1001,8 @@ export async function buildServerTabs(args: {
     ? prettifyModelCodename(modelCost[0].model)
     : localizer(locale, "commands.stats.empty");
 
-  // ── Overview (shared core; Images/Videos are server-only — quota tables carry no
-  //    persona lineage, so they cannot appear on the persona view). ──
+  // ── Overview (shared core; Images/Videos are deliberately omitted on the
+  // persona view to keep this card focused on conversational affinity). ──
   // Group 1: trigger count + top persona + top model.
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages", fmtInt(messages)),

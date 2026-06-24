@@ -158,6 +158,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         model: config.model,
         messages,
         stream: true,
+        stream_options: { include_usage: true },
       };
       if (!isParamDisabled(disabledParams, "temperature")) {
         requestBody.temperature = config.temperature;
@@ -290,12 +291,28 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       if (!response.ok) {
         responseErrorText = await response.text();
 
-        if (requestBody.stop && this.options.shouldRetryWithoutStop?.(response.status, responseErrorText)) {
+        const retryBody = { ...requestBody };
+        let needsRetry = false;
+
+        if (
+          retryBody.stream_options &&
+          (response.status === 400 || response.status === 422) &&
+          responseErrorText.toLowerCase().includes("stream_options")
+        ) {
+          log.warn(
+            `${this.options.adapterName}: Endpoint rejected stream_options parameter; retrying request without it`,
+          );
+          delete retryBody.stream_options;
+          needsRetry = true;
+        }
+
+        if (retryBody.stop && this.options.shouldRetryWithoutStop?.(response.status, responseErrorText)) {
           log.warn(`${this.options.adapterName}: Endpoint rejected stop parameter; retrying request without stop`);
-
-          const retryBody = { ...requestBody };
           delete retryBody.stop;
+          needsRetry = true;
+        }
 
+        if (needsRetry) {
           response = await fetchImpl(apiUrl, {
             method: "POST",
             headers,

@@ -47,6 +47,7 @@ function toEmotionSegments(entries: Array<{ emotion: string; count: number }>): 
 }
 
 export async function gatherPersonaCardData(args: GatherPersonaCardArgs): Promise<PersonaCardData> {
+  await statRepository.flush();
   const { serverId, guildDiscId, lineageId, userId, username, userAvatarUrl, locale, timeframe, guild } = args;
   const windowFrom = resolveWindowFrom(timeframe);
   const windowArg = windowFrom ? { from: windowFrom } : {};

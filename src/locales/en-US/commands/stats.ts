@@ -122,6 +122,7 @@ export default {
       personal_title: `Wrapped`,
       no_data: `No stats yet`,
       server_title: `Server Leaderboard`,
+      server_subtitle: `{personas} Personas serving {members} Members`,
       total_server_tokens: `Total Server Tokens`,
       input_tokens: `Input Tokens`,
       output_tokens: `Output Tokens`,

@@ -34,31 +34,51 @@ export interface GatherServerCardArgs {
   guild: Guild;
 }
 
-/** Resolves each top user's display name + avatar data URI (graceful on fetch failure). */
-async function resolveHumanIcons(guild: Guild, entries: TopUserEntry[]): Promise<PersonIcon[]> {
-  return Promise.all(
+async function resolveHumanMembers(
+  guild: Guild,
+  entries: TopUserEntry[],
+  limit: number,
+): Promise<Array<{ entry: TopUserEntry; icon: PersonIcon }>> {
+  const resolved = await Promise.all(
     entries.map(async (entry) => {
       try {
         const member = await guild.members.fetch(entry.userDiscId);
+        if (member.user.bot) return null;
         const avatarDataUri = await loadStoredPersonaAvatarDataUri(
           member.displayAvatarURL({ extension: "png", forceStatic: true, size: 128 }),
         );
-        return { name: member.displayName, avatarDataUri };
+        return { entry, icon: { name: member.displayName, avatarDataUri } };
       } catch {
-        return { name: `@${entry.userDiscId.slice(-4)}`, avatarDataUri: null };
+        try {
+          const user = await guild.client.users.fetch(entry.userDiscId);
+          if (user.bot) return null;
+          return { entry, icon: { name: `@${user.username}`, avatarDataUri: null } };
+        } catch {
+          return null;
+        }
       }
     }),
   );
+
+  const humans = [];
+  for (const r of resolved) {
+    if (r !== null) {
+      humans.push(r);
+      if (humans.length >= limit) break;
+    }
+  }
+  return humans;
 }
 
 export async function gatherServerCardData(args: GatherServerCardArgs): Promise<ServerCardData> {
+  await statRepository.flush();
   const { serverId, guildDiscId, serverName, locale, timeframe, guild } = args;
   const windowFrom = resolveWindowFrom(timeframe);
   const windowArg = windowFrom ? { from: windowFrom } : {};
 
   // 1. One grouped query per ranked block — no per-row token/cost lookups.
   const [rawTopMembers, personaTokenCosts, modelCosts, tokenTotals, totalTriggers, estimatedCost] = await Promise.all([
-    statRepository.getTopUsers({ serverId, limit: 3, ...windowArg }),
+    statRepository.getTopUsers({ serverId, limit: 25, ...windowArg }),
     statRepository.getPersonaTokenCostBreakdown({ serverId, limit: 5, ...windowArg }),
     statRepository.getModelCostBreakdown({ serverId, limit: 3, ...windowArg }),
     statRepository.getTokenTotals({ serverId, ...windowArg }),
@@ -81,8 +101,10 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
 
   // 3. Top personas (horizontal bars) — names + avatars from cache, bar tint from avatar.
   let topPersonas: ServerPersonaBar[] = [];
+  let totalPersonas = 0;
   try {
     const personas = await getCachedAllPersonas(guildDiscId);
+    totalPersonas = personas.length;
     topPersonas = await Promise.all(
       personaTokenCosts.map(async (entry, index) => {
         const persona = personas.find((candidate) => candidate.persona_lineage_id === entry.lineageId);
@@ -105,13 +127,13 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
   }
 
   // 4. Most active members (horizontal bars) — avatar + per-avatar bar tint.
-  const memberIcons = await resolveHumanIcons(guild, rawTopMembers);
+  const humanMembers = await resolveHumanMembers(guild, rawTopMembers, 3);
   const topMembers: ServerMemberBar[] = await Promise.all(
-    rawTopMembers.map(async (entry, index) => ({
-      ...memberIcons[index],
+    humanMembers.map(async ({ entry, icon }, index) => ({
+      ...icon,
       rank: index + 1,
       triggers: entry.count,
-      accent: await extractAvatarAccentColor(memberIcons[index].avatarDataUri, palette.accentSecondary),
+      accent: await extractAvatarAccentColor(icon.avatarDataUri, palette.accentSecondary),
     })),
   );
 
@@ -135,5 +157,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     totalTokens: tokenTotals.inputTokens + tokenTotals.outputTokens,
     estimatedCost,
     totalTriggers,
+    totalPersonas,
+    serverUserCount: guild.memberCount,
   };
 }

@@ -3,7 +3,7 @@
  *
  * Covers plan §11: buffered additive UPSERT, per-tuple collapsing, per-user grain,
  * persona-agnostic sentinel, token accumulation + cost read, shutdown drain, the
- * documented crash window, and the read/aggregation + read-existing layers.
+ * documented crash window, and the read/aggregation layer.
  *
  * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
@@ -167,6 +167,30 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await statRepository.shutdown();
     expect(statRepository.bufferedEntryCount).toBe(0);
     expect(await readCount("message_sent", "", lineageA, refs.userId)).toBe(1);
+  });
+
+  it("shutdown waits for an active flush and drains entries buffered while it runs", async () => {
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "message_sent",
+    });
+    const activeFlush = statRepository.flush();
+    // Let flush() swap out its snapshot before recording the next entry.
+    await Promise.resolve();
+
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "message_sent",
+    });
+    await statRepository.shutdown();
+    await activeFlush;
+
+    expect(statRepository.bufferedEntryCount).toBe(0);
+    expect(await readCount("message_sent", "", lineageA, refs.userId)).toBe(2);
   });
 
   it("crash window: unflushed deltas are not yet in the DB (documented tradeoff)", async () => {
@@ -366,16 +390,48 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(streak.lastActiveDate).toBe(dayOffset(0));
   });
 
-  // ── read-existing wrappers ─────────────────────────────────────────────────
+  // ── generation + read-existing aggregation ─────────────────────────────────
 
-  it("getGenerationTotals matches the underlying quota tables", async () => {
-    await testSql`INSERT INTO image_quotas (server_id, user_disc_id, usage_count, quota_date) VALUES (${refs.serverId}, ${FIXTURE_IDS.userDiscId}, 4, CURRENT_DATE)`;
-    await testSql`INSERT INTO video_quotas (server_id, user_disc_id, usage_count, quota_date) VALUES (${refs.serverId}, ${FIXTURE_IDS.userDiscId}, 2, CURRENT_DATE)`;
-    await testSql`INSERT INTO text_quotas  (server_id, user_disc_id, usage_count, quota_date) VALUES (${refs.serverId}, ${FIXTURE_IDS.userDiscId}, 7, CURRENT_DATE)`;
+  it("getGenerationTotals reads canonical stat_counters telemetry with user scope", async () => {
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "text_generated",
+      delta: 7,
+    });
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "image_generated",
+      delta: 4,
+    });
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "video_generated",
+      delta: 2,
+    });
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: altUserId,
+      lineageId: lineageB,
+      metric: "image_generated",
+      delta: 3,
+    });
+    await statRepository.flush();
+
     const totals = await statRepository.getGenerationTotals({ serverId: refs.serverId });
-    expect(totals.imageGenerations).toBe(4);
+    expect(totals.imageGenerations).toBe(7);
     expect(totals.videoGenerations).toBe(2);
     expect(totals.textGenerations).toBe(7);
+
+    const userTotals = await statRepository.getGenerationTotals({ serverId: refs.serverId, userId: refs.userId });
+    expect(userTotals.imageGenerations).toBe(4);
+    expect(userTotals.videoGenerations).toBe(2);
+    expect(userTotals.textGenerations).toBe(7);
   });
 
   it("getConditioningTotals matches conditioning_history reward/punish counts", async () => {

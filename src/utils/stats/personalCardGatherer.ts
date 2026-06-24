@@ -22,11 +22,7 @@ import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
 import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
-import {
-  DEFAULT_PERSONAL_CARD_PALETTE,
-  type PersonalCardData,
-  type PersonalFavoritePersona,
-} from "@/utils/stats/statsInfographic";
+import type { PersonalCardData, PersonalFavoritePersona } from "@/utils/stats/statsInfographic";
 
 /**
  * Samples the leading persona avatar into a high-contrast light-mode palette.
@@ -57,6 +53,9 @@ export interface GatherPersonalCardArgs {
 }
 
 export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Promise<PersonalCardData> {
+  // Card generation is a low-frequency snapshot, so include current-process
+  // telemetry that may still be buffered from a just-completed interaction.
+  await statRepository.flush();
   const { userId, serverId, guildDiscId, username, userAvatarUrl, locale, timeframe } = args;
   const windowFrom = resolveWindowFrom(timeframe);
   const windowArg = windowFrom ? { from: windowFrom } : {};
@@ -104,16 +103,7 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
 
   const leadingAvatarDataUri = favoritePersonas[0]?.avatarDataUri ?? null;
   const palette = await extractCardPalette(leadingAvatarDataUri);
-  // TEMPORARY: emitted at the always-visible metric level so production card
-  // generation can confirm whether the leading avatar supplied the palette.
-  log.metric("stats.personal_card_palette", {
-    palette_source: palette === DEFAULT_PERSONAL_CARD_PALETTE ? "fallback" : "leading_avatar",
-    leading_avatar_loaded: leadingAvatarDataUri ? "true" : "false",
-    palette_accent: palette.accent,
-    palette_accent_secondary: palette.accentSecondary,
-    palette_background: palette.background,
-    palette_ink: palette.ink,
-  });
+
   return {
     locale,
     timeframe,

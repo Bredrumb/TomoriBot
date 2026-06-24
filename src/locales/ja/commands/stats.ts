@@ -122,6 +122,7 @@ export default {
       personal_title: `活動まとめ`,
       no_data: `まだ統計がありません`,
       server_title: `サーバーランキング`,
+      server_subtitle: `{personas} 人のペルソナが {members} 人のメンバーをサポート`,
       total_server_tokens: `サーバーのトークン合計`,
       input_tokens: `入力トークン`,
       output_tokens: `出力トークン`,

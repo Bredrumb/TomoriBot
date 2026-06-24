@@ -1616,7 +1616,7 @@ export class GenerateImageTool extends BaseTool {
       if (creds.source === "server") {
         await incrementImageQuota(context.tomoriState.server_id, userDiscId);
       }
-      // Record generation stat for all providers (stat_counters is separate from quota enforcement)
+      // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
           serverId: context.tomoriState.server_id,

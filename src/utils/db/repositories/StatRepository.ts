@@ -4,7 +4,7 @@
  *
  * Increments do NOT hit the DB directly. `recordStat` accumulates deltas into an
  * in-memory buffer keyed by the same tuple as the table PK, so a buffer entry
- * maps 1:1 to one additive UPSERT. The buffer is drained by `flush()`, triggered
+ * maps 1:1 to one additive bulk UPSERT row. The buffer is drained by `flush()`, triggered
  * on an interval, when it grows past a size cap, and on graceful shutdown.
  *
  * Crash window (documented tradeoff, plan §4): anything still buffered at a hard
@@ -78,6 +78,19 @@ interface StatBufferEntry {
   firstAt: Date;
   lastAt: Date;
 }
+
+/** One bulk-upsert row using the physical stat_counters column names. */
+type StatUpsertRow = Record<PropertyKey, unknown> & {
+  server_id: number;
+  user_id: number;
+  persona_lineage_id: number;
+  metric: StatMetric;
+  metric_key: string;
+  bucket: string;
+  count: number;
+  first_at: Date;
+  last_at: Date;
+};
 
 /** UTC YYYY-MM-DD for the current day — the daily bucket grain. */
 function currentBucketDate(): string {
@@ -193,7 +206,7 @@ export interface StreakInfo {
   lastActiveDate: string | null;
 }
 
-/** Read-existing generation totals (quota counter tables). */
+/** Generation totals from the canonical stat_counters telemetry table. */
 export interface GenerationTotals {
   textGenerations: number;
   imageGenerations: number;
@@ -218,8 +231,8 @@ export class StatRepository implements IRepository<null> {
   private buffer = new Map<string, StatBufferEntry>();
   /** Interval handle for the periodic flush (unref'd so it never blocks exit). */
   private flushTimer: ReturnType<typeof setInterval> | null = null;
-  /** Guards against overlapping flushes (interval firing during a slow flush). */
-  private flushing = false;
+  /** In-flight flush, shared by interval, threshold, read, and shutdown callers. */
+  private flushPromise: Promise<boolean> | null = null;
 
   /**
    * Builds the buffer key from the PK tuple so a buffer entry collapses to one
@@ -314,44 +327,78 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
-   * Drains the buffer to the DB as additive UPSERTs in a single transaction.
-   * The buffer is swapped out first so concurrent recordStat calls accumulate
-   * into a fresh buffer while this flush is in flight. On failure the drained
-   * deltas are merged back so they are retried on the next flush (no silent loss
-   * outside the documented crash window).
+   * Drains the buffer to the DB as one additive bulk UPSERT. Concurrent callers
+   * share the same promise, so shutdown and stats reads both wait for an active
+   * interval flush instead of racing it. New recordStat calls accumulate in a
+   * fresh Map while the snapshot is being written.
+   *
+   * @returns true when the snapshot persisted, false when it was re-buffered.
    */
-  async flush(): Promise<void> {
-    // 1. Skip if nothing to do or a flush is already running.
-    if (this.flushing || this.buffer.size === 0) return;
-    this.flushing = true;
+  flush(): Promise<boolean> {
+    if (this.flushPromise) return this.flushPromise;
+    if (this.buffer.size === 0) return Promise.resolve(true);
 
-    // 2. Atomically take ownership of the current buffer contents.
+    // Defer work one microtask so flushPromise is assigned before the drain can
+    // settle, including when the SQL client rejects synchronously.
+    let promise: Promise<boolean>;
+    promise = Promise.resolve()
+      .then(() => this.flushSnapshot())
+      .finally(() => {
+        if (this.flushPromise === promise) this.flushPromise = null;
+        // A size-cap flush can start before an interval exists. If new entries
+        // arrived while it ran, make sure they still receive a periodic flush.
+        if (this.buffer.size === 0) this.clearFlushTimer();
+        else this.ensureFlushTimer();
+      });
+    this.flushPromise = promise;
+    return promise;
+  }
+
+  /** Persists one atomically-swapped buffer snapshot. Called only by flush(). */
+  private async flushSnapshot(): Promise<boolean> {
+    // 1. Atomically take ownership of the current buffer contents.
     const draining = this.buffer;
     this.buffer = new Map();
     const entries = Array.from(draining.values());
 
     try {
-      // 3. One transaction, one additive UPSERT per distinct tuple. The buffer
-      //    already collapsed same-tuple increments, so this is the minimum
-      //    statement count. count += EXCLUDED.count (the buffered delta, not 1).
+      // 2. One transaction and one multi-row additive UPSERT. The buffer already
+      // collapsed same-tuple increments, so this is the minimum round-trip count.
+      const rows: StatUpsertRow[] = entries.map((entry) => ({
+        server_id: entry.serverId,
+        user_id: entry.userId,
+        persona_lineage_id: entry.lineageId,
+        metric: entry.metric,
+        metric_key: entry.metricKey,
+        bucket: entry.bucket,
+        count: entry.delta,
+        first_at: entry.firstAt,
+        last_at: entry.lastAt,
+      }));
       await sql.begin(async (tx: SQL) => {
-        for (const e of entries) {
-          await tx`
-            INSERT INTO stat_counters
-              (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
-            VALUES
-              (${e.serverId}, ${e.userId}, ${e.lineageId}, ${e.metric}, ${e.metricKey}, ${e.bucket}::date,
-               ${e.delta}, ${e.firstAt}, ${e.lastAt})
-            ON CONFLICT (server_id, user_id, persona_lineage_id, metric, metric_key, bucket)
-            DO UPDATE SET
-              count    = stat_counters.count + EXCLUDED.count,
-              first_at = LEAST(stat_counters.first_at, EXCLUDED.first_at),
-              last_at  = GREATEST(stat_counters.last_at, EXCLUDED.last_at)
-          `;
-        }
+        await tx`
+          INSERT INTO stat_counters ${tx(
+            rows,
+            "server_id",
+            "user_id",
+            "persona_lineage_id",
+            "metric",
+            "metric_key",
+            "bucket",
+            "count",
+            "first_at",
+            "last_at",
+          )}
+          ON CONFLICT (server_id, user_id, persona_lineage_id, metric, metric_key, bucket)
+          DO UPDATE SET
+            count    = stat_counters.count + EXCLUDED.count,
+            first_at = LEAST(stat_counters.first_at, EXCLUDED.first_at),
+            last_at  = GREATEST(stat_counters.last_at, EXCLUDED.last_at)
+        `;
       });
+      return true;
     } catch (error) {
-      // 4. Re-merge drained deltas back into the live buffer for retry.
+      // 3. Re-merge drained deltas back into the live buffer for retry.
       for (const e of entries) {
         const key = this.bufferKey(e);
         const existing = this.buffer.get(key);
@@ -364,20 +411,21 @@ export class StatRepository implements IRepository<null> {
         }
       }
       log.error(`StatRepository.flush: failed to persist ${entries.length} buffered stat entries (will retry)`, error);
-    } finally {
-      this.flushing = false;
-      // 5. Stop the timer once the buffer is empty; recordStat re-arms it.
-      if (this.buffer.size === 0) this.clearFlushTimer();
+      return false;
     }
   }
 
   /**
-   * Graceful-shutdown drain: stop the timer and flush whatever remains so a
-   * normal restart loses nothing. Call from the process shutdown path.
+   * Graceful-shutdown drain: stop the timer, await an in-flight flush, and drain
+   * any entries accumulated while it ran. A failed DB flush is logged and left
+   * buffered rather than retrying forever during process termination.
    */
   async shutdown(): Promise<void> {
     this.clearFlushTimer();
-    await this.flush();
+    while (this.flushPromise || this.buffer.size > 0) {
+      const persisted = await this.flush();
+      if (!persisted) return;
+    }
   }
 
   /** Current buffered entry count — used by tests and diagnostics. */
@@ -386,10 +434,10 @@ export class StatRepository implements IRepository<null> {
   }
 
   // ── Read / aggregation layer (§6) ──────────────────────────────────────────
-  // NOTE: reads hit the DB directly (no read cache in Phase 1). Buffered, not-yet
-  // -flushed increments are not visible until the next flush — acceptable for the
-  // low-frequency /stats reads this layer feeds; callers needing exactness can
-  // await flush() first. All windowing is `bucket >= from` + SUM, never finer.
+  // NOTE: reads hit the DB directly (no read cache in Phase 1). Dashboard and
+  // infographic entry points await flush() before these reads, so user-facing
+  // snapshots include every successfully buffered increment. All windowing is
+  // `bucket >= from` + SUM, never finer.
 
   /**
    * Per-persona message share for a user, highest first. Powers favorite-persona
@@ -952,52 +1000,29 @@ export class StatRepository implements IRepository<null> {
     }
   }
 
-  // ── Read-existing wrappers (no new writes; aggregate existing tables) ───────
-
   /**
-   * Generation totals from the existing quota tables. Supports time-window
-   * filtering via `quota_date`; an optional internal user id joins through the
-   * quota row's Discord id.
+   * Generation totals from canonical telemetry. Quotas enforce limits and are
+   * deliberately not read here: they omit personal-provider generations and may
+   * be disabled or retained for less time than statistics.
    *
-   * @param args - serverId, optional internal userId filter, and optional from date.
+   * @param args - optional server/user/persona scope and optional bucket floor.
    */
-  async getGenerationTotals(args: { serverId: number; userId?: number; from?: string }): Promise<GenerationTotals> {
+  async getGenerationTotals(
+    args: { serverId?: number; userId?: number; lineageId?: number } & StatWindow,
+  ): Promise<GenerationTotals> {
     try {
-      const from = windowFloor(args.from);
-      const userId = args.userId ?? null;
-      const [textRow, imageRow, videoRow] = await Promise.all([
-        sql<{ total: number | string }[]>`
-          SELECT COALESCE(SUM(q.usage_count), 0) AS total
-          FROM text_quotas q
-          LEFT JOIN users u ON u.user_disc_id = q.user_disc_id
-          WHERE q.server_id = ${args.serverId}
-            AND q.quota_date >= ${from}::date
-            AND (${userId}::int IS NULL OR u.user_id = ${userId})
-        `,
-        sql<{ total: number | string }[]>`
-          SELECT COALESCE(SUM(q.usage_count), 0) AS total
-          FROM image_quotas q
-          LEFT JOIN users u ON u.user_disc_id = q.user_disc_id
-          WHERE q.server_id = ${args.serverId}
-            AND q.quota_date >= ${from}::date
-            AND (${userId}::int IS NULL OR u.user_id = ${userId})
-        `,
-        sql<{ total: number | string }[]>`
-          SELECT COALESCE(SUM(q.usage_count), 0) AS total
-          FROM video_quotas q
-          LEFT JOIN users u ON u.user_disc_id = q.user_disc_id
-          WHERE q.server_id = ${args.serverId}
-            AND q.quota_date >= ${from}::date
-            AND (${userId}::int IS NULL OR u.user_id = ${userId})
-        `,
+      const [textGenerations, imageGenerations, videoGenerations] = await Promise.all([
+        this.getMetricTotal({ ...args, metric: "text_generated" }),
+        this.getMetricTotal({ ...args, metric: "image_generated" }),
+        this.getMetricTotal({ ...args, metric: "video_generated" }),
       ]);
       return {
-        textGenerations: Number(textRow[0]?.total ?? 0),
-        imageGenerations: Number(imageRow[0]?.total ?? 0),
-        videoGenerations: Number(videoRow[0]?.total ?? 0),
+        textGenerations,
+        imageGenerations,
+        videoGenerations,
       };
     } catch (error) {
-      log.error(`StatRepository.getGenerationTotals: failed for server ${args.serverId}`, error);
+      log.error("StatRepository.getGenerationTotals: failed", error);
       return { textGenerations: 0, imageGenerations: 0, videoGenerations: 0 };
     }
   }

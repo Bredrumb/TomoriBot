@@ -18,8 +18,8 @@
  *   - sticker_used      → sticker name/id
  *   - active_hour       → hour-of-day "0".."23"
  *   - text_generated    → "" (one per completed chat turn)
- *   - image_generated   → "" (one per successfully sent image)
- *   - video_generated   → "" (one per successfully sent video)
+ *   - image_generated   → "" (one per successful image generation)
+ *   - video_generated   → "" (one per successful video generation)
  *   - (all others)      → "" (scalar event counter)
  */
 export const STAT_METRICS = [

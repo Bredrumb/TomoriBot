@@ -676,7 +676,7 @@ export async function execute(
     if (imageCreds.source === "server") {
       await incrementImageQuota(tomoriState.server_id, interaction.user.id);
     }
-    // Record generation stat (stat_counters is separate from quota enforcement)
+    // Record canonical generation telemetry; quota tables enforce limits only.
     if (userData.user_id) {
       statRepository.recordStat({
         serverId: tomoriState.server_id,
