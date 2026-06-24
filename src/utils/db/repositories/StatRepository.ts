@@ -142,6 +142,14 @@ export interface ModelCostEntry {
   cost: number;
 }
 
+/** Per-persona estimated token + cost rollup for a single user's ranked card. */
+export interface PersonaTokenCostEntry {
+  lineageId: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+}
+
 /** One emotion category's summed expression count (emoji + sticker, by emotion_key). */
 export interface EmotionEntry {
   emotion: string;
@@ -549,7 +557,16 @@ export class StatRepository implements IRepository<null> {
           ), 0
         ) AS cost
         FROM stat_counters sc
-        LEFT JOIN llms l ON l.llm_codename = sc.metric_key
+        -- A codename can exist once per provider. stat_counters stores only the
+        -- codename, so collapse pricing to one conservative row before joining;
+        -- otherwise every matching provider duplicates the token counter row.
+        LEFT JOIN (
+          SELECT llm_codename,
+            MAX(input_price_per_million) AS input_price_per_million,
+            MAX(output_price_per_million) AS output_price_per_million
+          FROM llms
+          GROUP BY llm_codename
+        ) l ON l.llm_codename = sc.metric_key
         WHERE sc.metric IN ('tokens_in', 'tokens_out')
           AND (${args.userId ?? null}::int IS NULL OR sc.user_id = ${args.userId ?? null})
           AND (${args.serverId ?? null}::int IS NULL OR sc.server_id = ${args.serverId ?? null})
@@ -790,6 +807,32 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
+   * Earliest bucket containing a metric in a scope. This lets visual summaries
+   * normalize all-time weekday activity into a representative week.
+   */
+  async getFirstMetricBucket(
+    args: { metric: StatMetric; userId?: number; serverId?: number; lineageId?: number } & StatWindow,
+  ): Promise<string | null> {
+    try {
+      const from = windowFloor(args.from);
+      const [row] = await sql<{ first_bucket: string | Date | null }[]>`
+        SELECT MIN(bucket) AS first_bucket
+        FROM stat_counters
+        WHERE metric = ${args.metric}
+          AND (${args.userId ?? null}::int IS NULL OR user_id = ${args.userId ?? null})
+          AND (${args.serverId ?? null}::int IS NULL OR server_id = ${args.serverId ?? null})
+          AND (${args.lineageId ?? null}::bigint IS NULL OR persona_lineage_id = ${args.lineageId ?? null})
+          AND bucket >= ${from}::date
+      `;
+      if (!row?.first_bucket) return null;
+      return row.first_bucket instanceof Date ? row.first_bucket.toISOString().split("T")[0] : String(row.first_bucket);
+    } catch (error) {
+      log.error(`StatRepository.getFirstMetricBucket: failed for ${args.metric}`, error);
+      return null;
+    }
+  }
+
+  /**
    * Estimated input/output token totals for a scope (the character-estimated
    * tokens_in / tokens_out metrics). Pairs with getEstimatedCost for the cost row.
    *
@@ -803,6 +846,62 @@ export class StatRepository implements IRepository<null> {
       this.getMetricTotal({ ...args, metric: "tokens_out" }),
     ]);
     return { inputTokens, outputTokens };
+  }
+
+  /**
+   * Per-persona token and estimated-cost totals for one user. The Personal
+   * Wrapped card joins these values to the message-ranked affinity list without
+   * issuing separate token/cost queries for each displayed persona.
+   */
+  async getPersonaTokenCostBreakdown(
+    args: { userId: number; serverId?: number } & StatWindow,
+  ): Promise<PersonaTokenCostEntry[]> {
+    try {
+      const from = windowFloor(args.from);
+      const rows = await sql<
+        {
+          persona_lineage_id: number | string;
+          in_tokens: number | string;
+          out_tokens: number | string;
+          cost: number | string;
+        }[]
+      >`
+        SELECT sc.persona_lineage_id,
+          COALESCE(SUM(CASE WHEN sc.metric = 'tokens_in' THEN sc.count ELSE 0 END), 0) AS in_tokens,
+          COALESCE(SUM(CASE WHEN sc.metric = 'tokens_out' THEN sc.count ELSE 0 END), 0) AS out_tokens,
+          COALESCE(SUM(
+            sc.count
+            * CASE sc.metric
+                WHEN 'tokens_in' THEN COALESCE(l.input_price_per_million, 0)
+                WHEN 'tokens_out' THEN COALESCE(l.output_price_per_million, 0)
+                ELSE 0
+              END
+            / 1000000.0
+          ), 0) AS cost
+        FROM stat_counters sc
+        LEFT JOIN (
+          SELECT llm_codename,
+            MAX(input_price_per_million) AS input_price_per_million,
+            MAX(output_price_per_million) AS output_price_per_million
+          FROM llms
+          GROUP BY llm_codename
+        ) l ON l.llm_codename = sc.metric_key
+        WHERE sc.metric IN ('tokens_in', 'tokens_out')
+          AND sc.user_id = ${args.userId}
+          AND (${args.serverId ?? null}::int IS NULL OR sc.server_id = ${args.serverId ?? null})
+          AND sc.bucket >= ${from}::date
+        GROUP BY sc.persona_lineage_id
+      `;
+      return rows.map((row) => ({
+        lineageId: Number(row.persona_lineage_id),
+        inputTokens: Number(row.in_tokens),
+        outputTokens: Number(row.out_tokens),
+        cost: Number(row.cost),
+      }));
+    } catch (error) {
+      log.error(`StatRepository.getPersonaTokenCostBreakdown: failed for user ${args.userId}`, error);
+      return [];
+    }
   }
 
   /**
@@ -846,19 +945,51 @@ export class StatRepository implements IRepository<null> {
   // ── Read-existing wrappers (no new writes; aggregate existing tables) ───────
 
   /**
-   * Generation totals from stat_counters. Supports time-window filtering via `from`.
-   * All three generation types are keyed on internal userId (not Discord snowflake),
-   * so per-user filtering requires the internal user FK, not the Discord id.
+   * Generation totals from the existing quota tables. Supports time-window
+   * filtering via `quota_date`; an optional internal user id joins through the
+   * quota row's Discord id.
    *
    * @param args - serverId, optional internal userId filter, and optional from date.
    */
   async getGenerationTotals(args: { serverId: number; userId?: number; from?: string }): Promise<GenerationTotals> {
-    const [textGenerations, imageGenerations, videoGenerations] = await Promise.all([
-      this.getMetricTotal({ metric: "text_generated", serverId: args.serverId, userId: args.userId, from: args.from }),
-      this.getMetricTotal({ metric: "image_generated", serverId: args.serverId, userId: args.userId, from: args.from }),
-      this.getMetricTotal({ metric: "video_generated", serverId: args.serverId, userId: args.userId, from: args.from }),
-    ]);
-    return { textGenerations, imageGenerations, videoGenerations };
+    try {
+      const from = windowFloor(args.from);
+      const userId = args.userId ?? null;
+      const [textRow, imageRow, videoRow] = await Promise.all([
+        sql<{ total: number | string }[]>`
+          SELECT COALESCE(SUM(q.usage_count), 0) AS total
+          FROM text_quotas q
+          LEFT JOIN users u ON u.user_disc_id = q.user_disc_id
+          WHERE q.server_id = ${args.serverId}
+            AND q.quota_date >= ${from}::date
+            AND (${userId}::int IS NULL OR u.user_id = ${userId})
+        `,
+        sql<{ total: number | string }[]>`
+          SELECT COALESCE(SUM(q.usage_count), 0) AS total
+          FROM image_quotas q
+          LEFT JOIN users u ON u.user_disc_id = q.user_disc_id
+          WHERE q.server_id = ${args.serverId}
+            AND q.quota_date >= ${from}::date
+            AND (${userId}::int IS NULL OR u.user_id = ${userId})
+        `,
+        sql<{ total: number | string }[]>`
+          SELECT COALESCE(SUM(q.usage_count), 0) AS total
+          FROM video_quotas q
+          LEFT JOIN users u ON u.user_disc_id = q.user_disc_id
+          WHERE q.server_id = ${args.serverId}
+            AND q.quota_date >= ${from}::date
+            AND (${userId}::int IS NULL OR u.user_id = ${userId})
+        `,
+      ]);
+      return {
+        textGenerations: Number(textRow[0]?.total ?? 0),
+        imageGenerations: Number(imageRow[0]?.total ?? 0),
+        videoGenerations: Number(videoRow[0]?.total ?? 0),
+      };
+    } catch (error) {
+      log.error(`StatRepository.getGenerationTotals: failed for server ${args.serverId}`, error);
+      return { textGenerations: 0, imageGenerations: 0, videoGenerations: 0 };
+    }
   }
 
   /**
@@ -929,14 +1060,17 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
-   * Count of long-term personal memories a user has saved. personal_memories is
-   * user+lineage scoped (no server_id), so this is global per user regardless of the
-   * /stats scope toggle. Read-existing (not a stat_counters metric).
+   * Count of long-term personal memories a user has saved, optionally narrowed to
+   * one persona lineage. personal_memories has no server_id, so this is always
+   * global for the selected user/persona scope. Read-existing (not a stat metric).
    */
-  async getPersonalMemoryCount(args: { userId: number }): Promise<number> {
+  async getPersonalMemoryCount(args: { userId: number; lineageId?: number }): Promise<number> {
     try {
       const [row] = await sql`
-        SELECT COUNT(*) AS total FROM personal_memories WHERE user_id = ${args.userId}
+        SELECT COUNT(*) AS total
+        FROM personal_memories
+        WHERE user_id = ${args.userId}
+          AND (${args.lineageId ?? null}::bigint IS NULL OR persona_lineage_id = ${args.lineageId ?? null})
       `;
       return Number(row?.total ?? 0);
     } catch (error) {
@@ -1123,7 +1257,13 @@ export class StatRepository implements IRepository<null> {
             / 1000000.0
           ), 0) AS cost
         FROM stat_counters sc
-        LEFT JOIN llms l ON l.llm_codename = sc.metric_key
+        LEFT JOIN (
+          SELECT llm_codename,
+            MAX(input_price_per_million) AS input_price_per_million,
+            MAX(output_price_per_million) AS output_price_per_million
+          FROM llms
+          GROUP BY llm_codename
+        ) l ON l.llm_codename = sc.metric_key
         WHERE sc.metric IN ('tokens_in', 'tokens_out')
           AND (${args.userId ?? null}::int IS NULL OR sc.user_id = ${args.userId ?? null})
           AND (${args.serverId ?? null}::int IS NULL OR sc.server_id = ${args.serverId ?? null})

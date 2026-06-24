@@ -112,7 +112,9 @@ export async function execute(
       timezoneOffset: userData.timezone_offset ?? null,
     });
 
-    await renderStatsDashboard(interaction, interaction.user.id, locale, tabs);
+    // Pin the invoking user's avatar to the dashboard's top-right corner.
+    const iconUrl = interaction.user.displayAvatarURL({ extension: "png", size: 256 });
+    await renderStatsDashboard(interaction, interaction.user.id, locale, tabs, iconUrl);
   } catch (error) {
     await log.error(`Error executing /stats personal for user ${userData.user_disc_id}`, error as Error, {
       userId: userData.user_id,

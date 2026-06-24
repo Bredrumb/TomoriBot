@@ -1,4 +1,5 @@
 import {
+  AttachmentBuilder,
   MessageFlags,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
@@ -9,6 +10,11 @@ import type { UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { buildNoticeContainer, replyInfoEmbed } from "@/utils/discord/ui/interactionCore";
+import {
+  isLocalPersonaAvatarPath,
+  loadStoredPersonaAvatarBuffer,
+  resolvePersonaAvatarPublicUrl,
+} from "@/utils/storage/avatarStorage";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import {
@@ -135,7 +141,31 @@ export async function execute(
       subtitle: `${selected.persona_nickname} • ${subtitle}`,
     });
 
-    await renderStatsDashboard(button, interaction.user.id, locale, tabs);
+    // Pin the selected persona's icon to the dashboard's top-right corner, mirroring how
+    // the persona picker resolves avatars so it works in non-production too:
+    //   - main persona  → the bot's per-server member avatar (always a public CDN URL).
+    //   - alter persona → its stored avatar as a public URL when available, otherwise
+    //     (non-prod, no AVATAR_PUBLIC_BASE_URL) the local file loaded from disk and
+    //     attached to the message, referenced via an `attachment://` Thumbnail ref.
+    // Any failure leaves both undefined and the card simply renders iconless.
+    let personaIconUrl: string | undefined;
+    let personaIconFile: AttachmentBuilder | undefined;
+    if (selected.is_alter) {
+      const publicUrl = resolvePersonaAvatarPublicUrl(selected.webhook_avatar_url);
+      if (publicUrl) {
+        personaIconUrl = publicUrl;
+      } else if (selected.webhook_avatar_url && isLocalPersonaAvatarPath(selected.webhook_avatar_url)) {
+        const buffer = await loadStoredPersonaAvatarBuffer(selected.webhook_avatar_url);
+        if (buffer) {
+          const name = "stats_persona_icon.png";
+          personaIconFile = new AttachmentBuilder(buffer, { name });
+          personaIconUrl = `attachment://${name}`;
+        }
+      }
+    } else {
+      personaIconUrl = guild.members.me?.displayAvatarURL({ extension: "png", size: 256 }) ?? undefined;
+    }
+    await renderStatsDashboard(button, interaction.user.id, locale, tabs, personaIconUrl, personaIconFile);
   } catch (error) {
     await log.error(`Error executing /stats persona for user ${userData.user_disc_id}`, error as Error, {
       userId: userData.user_id,

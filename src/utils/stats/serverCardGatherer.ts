@@ -1,182 +1,146 @@
 /**
- * serverCardGatherer.ts — data-gathering layer for the Server "Year in Review"
- * infographic card (plans/stat-tracking.md §10, Phase 3, Deliverable B).
- *
- * Mirrors the pattern in personalCardGatherer.ts:
- * - This is the ONLY file for the server card that touches the DB.
- * - `gatherServerCardData` reads from existing StatRepository methods, resolves
- *   guild member display names and persona names, and returns a `ServerCardData`
- *   struct.
- * - `renderServerCard` in statsInfographic.tsx consumes that struct as a pure
- *   function — it never touches the DB or the Discord API.
- *
- * Generation totals (text/image/video) are all-time only (quota counter tables
- * are not daily-bucketed), so `generationTotals` is only populated when
- * `timeframe === "all_time"`.
+ * Gatherer for the Server Leaderboard infographic. It owns database reads,
+ * Discord display-name resolution, and image-data conversion; the renderer is
+ * a pure function of the resulting ServerCardData.
  */
 import type { Guild } from "discord.js";
-import type { TopUserEntry } from "@/utils/db/repositories/StatRepository";
-import { statRepository } from "@/utils/db/repositories";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { statRepository } from "@/utils/db/repositories";
+import type { TopUserEntry } from "@/utils/db/repositories/StatRepository";
 import { log } from "@/utils/misc/logger";
+import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
-import type { ResolvedUserEntry, ServerCardData } from "@/utils/stats/statsInfographic";
+import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
+import type {
+  EmojiIcon,
+  PersonIcon,
+  ServerCardData,
+  ServerHumanEntry,
+  ServerPersonaEntry,
+} from "@/utils/stats/statsInfographic";
 
-// ── Display-name resolution ───────────────────────────────────────────────────
-
-/**
- * Resolves a Discord user snowflake to the guild member's display name.
- * Falls back to a short ID suffix on any error (member left, API failure, etc.)
- *
- * @param guild      - Discord.js Guild to resolve against.
- * @param userDiscId - Discord user snowflake string.
- */
-async function resolveDisplayName(guild: Guild, userDiscId: string): Promise<string> {
-  try {
-    const member = await guild.members.fetch(userDiscId);
-    return member.displayName;
-  } catch {
-    return `@${userDiscId.slice(-4)}`;
-  }
-}
-
-/**
- * Resolves a list of TopUserEntry rows to ResolvedUserEntry structs with display names.
- *
- * @param guild   - Discord.js Guild to resolve against.
- * @param entries - Raw DB entries with userDiscId snowflakes.
- */
-async function resolveDisplayNames(
-  guild: Guild,
-  entries: TopUserEntry[],
-): Promise<Array<ResolvedUserEntry & { rank: number }>> {
-  return Promise.all(
-    entries.map(async (e, i) => ({
-      displayName: await resolveDisplayName(guild, e.userDiscId),
-      count: e.count,
-      rank: i + 1,
-    })),
-  );
-}
-
-// ── Args type ─────────────────────────────────────────────────────────────────
-
-/** Arguments for `gatherServerCardData`. */
 export interface GatherServerCardArgs {
-  /** Internal `servers` FK (not the Discord snowflake). */
   serverId: number;
-  /** Discord guild snowflake, used for persona cache lookups. */
   guildDiscId: string;
-  /** Display name of the server shown on the card header. */
   serverName: string;
-  /** BCP-47 locale string passed through to ServerCardData. */
   locale: string;
-  /** Selected time window — drives the metric window for most reads. */
   timeframe: Timeframe;
-  /** Discord Guild object for display-name resolution. */
   guild: Guild;
 }
 
-// ── Peak hour helper ──────────────────────────────────────────────────────────
-
-/**
- * Extracts the peak hour (0–23) from a `getMetricKeyBreakdown` result for
- * the `active_hour` metric. Returns null when no activity data exists.
- *
- * @param entries - Breakdown result, highest-count first.
- */
-function extractPeakHour(entries: Array<{ key: string; count: number }>): number | null {
-  const top = entries[0];
-  if (!top) return null;
-  const h = Number.parseInt(top.key, 10);
-  return Number.isInteger(h) && h >= 0 && h <= 23 ? h : null;
+async function resolveHumanIcons(guild: Guild, entries: TopUserEntry[]): Promise<PersonIcon[]> {
+  return Promise.all(
+    entries.map(async (entry) => {
+      try {
+        const member = await guild.members.fetch(entry.userDiscId);
+        const avatarDataUri = await loadStoredPersonaAvatarDataUri(
+          member.displayAvatarURL({ extension: "png", forceStatic: true, size: 128 }),
+        );
+        return { name: member.displayName, avatarDataUri };
+      } catch {
+        return { name: `@${entry.userDiscId.slice(-4)}`, avatarDataUri: null };
+      }
+    }),
+  );
 }
 
-// ── Main gather function ───────────────────────────────────────────────────────
+async function resolveEmojiIcons(guild: Guild, entries: Array<{ key: string; count: number }>): Promise<EmojiIcon[]> {
+  return Promise.all(
+    entries.map(async (entry) => {
+      const emoji = guild.emojis.cache.find((candidate) => candidate.name === entry.key);
+      const imageDataUri = emoji
+        ? await loadStoredPersonaAvatarDataUri(emoji.imageURL({ extension: "png", size: 64 }))
+        : null;
+      return { name: entry.key, imageDataUri };
+    }),
+  );
+}
 
-/**
- * Gathers all data the Server "Year in Review" card needs from the DB and Discord
- * API, returning a `ServerCardData` struct for the pure renderer.
- *
- * Read categories:
- * - Windowed (uses timeframe): top chatters, persona messages, peak hour, top
- *   expression, top commands, estimated cost.
- * - All-time (not bucketed): generation totals (only populated for all_time).
- * - Cache: persona names from getCachedAllPersonas.
- *
- * @param args - Scope, locale, timeframe, server name, and Discord Guild.
- */
 export async function gatherServerCardData(args: GatherServerCardArgs): Promise<ServerCardData> {
   const { serverId, guildDiscId, serverName, locale, timeframe, guild } = args;
   const windowFrom = resolveWindowFrom(timeframe);
   const windowArg = windowFrom ? { from: windowFrom } : {};
 
-  // ── 1. Parallel windowed reads ────────────────────────────────────────────────
-  const [
-    rawTopChatters,
-    serverPersonaRoster,
-    peakHourBreakdown,
-    topEmojiRaw,
-    topStickersRaw,
-    topCommands,
-    estimatedCost,
-  ] = await Promise.all([
-    statRepository.getTopUsers({ serverId, limit: 3, ...windowArg }),
-    statRepository.getServerPersonaMessages({ serverId, limit: 3, ...windowArg }),
-    statRepository.getMetricKeyBreakdown({ metric: "active_hour", serverId, limit: 1, ...windowArg }),
-    statRepository.getMetricKeyBreakdown({ metric: "emoji_used", serverId, limit: 5, ...windowArg }),
-    statRepository.getMetricKeyBreakdown({ metric: "sticker_used", serverId, limit: 5, ...windowArg }),
-    statRepository.getTopCommands({ serverId, limit: 4, ...windowArg }),
-    statRepository.getEstimatedCost({ serverId, ...windowArg }),
+  const [rawTopHumans, personaRoster, tokenTotals, totalTriggers, estimatedCost, modelBreakdown, emojiEntries] =
+    await Promise.all([
+      statRepository.getTopUsers({ serverId, limit: 3, ...windowArg }),
+      statRepository.getServerPersonaMessages({ serverId, limit: 3, ...windowArg }),
+      statRepository.getTokenTotals({ serverId, ...windowArg }),
+      statRepository.getMetricTotal({ metric: "message_sent", serverId, ...windowArg }),
+      statRepository.getEstimatedCost({ serverId, ...windowArg }),
+      statRepository.getModelBreakdown({ serverId, ...windowArg }),
+      statRepository.getMetricKeyBreakdown({ metric: "emoji_used", serverId, limit: 5, ...windowArg }),
+    ]);
+
+  const [humanIcons, humanCosts] = await Promise.all([
+    resolveHumanIcons(guild, rawTopHumans),
+    Promise.all(
+      rawTopHumans.map((entry) => statRepository.getEstimatedCost({ serverId, userId: entry.userId, ...windowArg })),
+    ),
   ]);
+  const topHumans: ServerHumanEntry[] = rawTopHumans.map((entry, index) => ({
+    ...humanIcons[index],
+    rank: index + 1,
+    triggers: entry.count,
+    estimatedCost: humanCosts[index] ?? 0,
+  }));
 
-  // ── 2. Generation totals (stat_counters — supports time-window filtering) ──────
-  const generationTotals = await statRepository.getGenerationTotals({
-    serverId,
-    from: windowFrom ?? undefined,
-  });
-
-  // ── 3. Resolve top chatter display names ─────────────────────────────────────
-  const topChatters = await resolveDisplayNames(guild, rawTopChatters);
-
-  // ── 4. Resolve persona names from cache ──────────────────────────────────────
-  let topPersonas: Array<{ name: string; count: number; rank: number }> = [];
+  let topPersonas: ServerPersonaEntry[] = [];
   try {
     const personas = await getCachedAllPersonas(guildDiscId);
-    topPersonas = serverPersonaRoster.map((entry, i) => {
-      const match = personas.find((p) => p.persona_lineage_id === entry.lineageId);
-      return {
-        name: match?.persona_nickname ?? `Persona #${entry.lineageId}`,
-        count: entry.count,
-        rank: i + 1,
-      };
-    });
+    topPersonas = await Promise.all(
+      personaRoster.map(async (entry, index) => {
+        const persona = personas.find((candidate) => candidate.persona_lineage_id === entry.lineageId);
+        const [personaTokens, avatarDataUri] = await Promise.all([
+          statRepository.getTokenTotals({ serverId, lineageId: entry.lineageId, ...windowArg }),
+          persona?.webhook_avatar_url
+            ? loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)
+            : Promise.resolve(null),
+        ]);
+        return {
+          name: persona?.persona_nickname ?? `Persona #${entry.lineageId}`,
+          avatarDataUri,
+          rank: index + 1,
+          inputTokens: personaTokens.inputTokens,
+          outputTokens: personaTokens.outputTokens,
+          sharePct: totalTriggers > 0 ? (entry.count / totalTriggers) * 100 : 0,
+        };
+      }),
+    );
   } catch (error) {
-    log.warn("serverCardGatherer: persona cache lookup failed", error as Error);
+    log.warn("serverCardGatherer: persona resolution failed", error as Error);
   }
 
-  // ── 5. Merge emoji + sticker expression lists, sort, keep top 3 ──────────────
-  const combined = [...topEmojiRaw, ...topStickersRaw];
-  combined.sort((a, b) => b.count - a.count);
-  const mostLovedExpression = combined.slice(0, 3).map((e) => ({ key: e.key, count: e.count }));
+  let serverIconDataUri: string | null = null;
+  const serverIconUrl = guild.iconURL({ extension: "png", forceStatic: true, size: 128 });
+  if (serverIconUrl) {
+    try {
+      serverIconDataUri = await loadStoredPersonaAvatarDataUri(serverIconUrl);
+    } catch (error) {
+      log.warn("serverCardGatherer: server icon resolution failed", error as Error);
+    }
+  }
 
-  // ── 6. Assemble ServerCardData ────────────────────────────────────────────────
+  let topPersonaEmojis: EmojiIcon[] = [];
+  try {
+    topPersonaEmojis = await resolveEmojiIcons(guild, emojiEntries);
+  } catch (error) {
+    log.warn("serverCardGatherer: emoji resolution failed", error as Error);
+    topPersonaEmojis = emojiEntries.map((entry) => ({ name: entry.key, imageDataUri: null }));
+  }
+
   return {
     locale,
     timeframe,
     serverName,
-    topChatters,
+    serverIconDataUri,
     topPersonas,
-    generationTotals: generationTotals
-      ? {
-          text: generationTotals.textGenerations,
-          images: generationTotals.imageGenerations,
-          videos: generationTotals.videoGenerations,
-        }
-      : null,
+    topHumans,
+    topModelName: modelBreakdown[0] ? prettifyModelCodename(modelBreakdown[0].model) : null,
+    inputTokens: tokenTotals.inputTokens,
+    outputTokens: tokenTotals.outputTokens,
     estimatedCost,
-    peakHour: extractPeakHour(peakHourBreakdown),
-    mostLovedExpression,
-    topCommands: topCommands.map((c) => ({ command: c.command, count: c.count })),
+    totalTriggers,
+    topPersonaEmojis,
   };
 }

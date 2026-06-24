@@ -17,9 +17,9 @@ import {
   renderPersonaCard,
   renderServerCard,
   CARD_W,
-  PERSONAL_CARD_H,
-  PERSONA_CARD_H,
-  SERVER_CARD_H,
+  getPersonalCardHeight,
+  getPersonaCardHeight,
+  getServerCardHeight,
 } from "@/utils/stats/statsInfographic";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
 
@@ -119,7 +119,7 @@ export async function execute(
     if (cardType === "personal") {
       await executePersonalCard(interaction, userData, locale, serverId, timeframe, scope);
     } else if (cardType === "persona") {
-      await executePersonaCard(interaction, locale, serverId, guild, timeframe);
+      await executePersonaCard(interaction, userData, locale, serverId, guild, timeframe);
     } else {
       await executeServerCard(interaction, locale, serverId, guild.id, guild.name, timeframe);
     }
@@ -153,6 +153,16 @@ async function executePersonalCard(
   timeframe: Timeframe,
   scope: StatsScope,
 ): Promise<void> {
+  const userId = userData.user_id;
+  if (!userId) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+    });
+    return;
+  }
+
   // 1. Privacy gate: fully-private users cannot generate personal cards.
   const privacyLevel = await getCachedPrivacyLevel(interaction.user.id);
   if (privacyLevel === PrivacyLevel.FULL) {
@@ -171,20 +181,18 @@ async function executePersonalCard(
   // 3. Gather data. Omit serverId for global scope.
   const scopedServerId = scope === "this_server" ? serverId : undefined;
   const data = await gatherPersonalCardData({
-    // user_id is optional in the Zod schema (auto-generated PK); non-null here
-    // because this execute path is only reached with an already-loaded UserRow.
-    userId: userData.user_id!,
+    userId,
     serverId: scopedServerId,
     guildDiscId: interaction.guildId ?? "",
     username: interaction.user.displayName,
+    userAvatarUrl: interaction.user.displayAvatarURL({ extension: "png", forceStatic: true, size: 128 }),
     locale,
     timeframe,
-    offsetHours: userData.timezone_offset ?? null,
   });
 
   // 4. Render the VNode to a PNG buffer and send as an attachment.
   const node = renderPersonalCard(data);
-  const png = await renderCardToPng(node, CARD_W, PERSONAL_CARD_H);
+  const png = await renderCardToPng(node, CARD_W, getPersonalCardHeight(data));
   const attachment = new AttachmentBuilder(png, { name: `stats_personal_${Date.now()}.png` });
 
   await interaction.editReply({ files: [attachment] });
@@ -193,9 +201,9 @@ async function executePersonalCard(
 // ── Persona card ──────────────────────────────────────────────────────────────
 
 /**
- * Opens the persona picker then generates the Persona "trading card" for the
- * selected persona. The card reply is sent from the button interaction to avoid
- * double-acknowledging the original command interaction.
+ * Opens the persona picker then generates the invoking user's Persona Affinity
+ * card for the selected persona. The card reply is sent from the button
+ * interaction to avoid double-acknowledging the original command interaction.
  *
  * @param interaction - The original slash command interaction (used for the picker)
  * @param locale      - BCP-47 locale string
@@ -205,11 +213,22 @@ async function executePersonalCard(
  */
 async function executePersonaCard(
   interaction: ChatInputCommandInteraction,
+  userData: UserRow,
   locale: string,
   serverId: number,
   guild: import("discord.js").Guild,
   timeframe: Timeframe,
 ): Promise<void> {
+  const userId = userData.user_id;
+  if (!userId) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+    });
+    return;
+  }
+
   // 1. Guard: this server must have at least one persona to pick.
   const personas = await getCachedAllPersonas(guild.id);
   if (personas.length === 0) {
@@ -249,13 +268,16 @@ async function executePersonaCard(
     serverId,
     guildDiscId: guild.id,
     lineageId,
+    userId,
+    username: interaction.user.displayName,
+    userAvatarUrl: interaction.user.displayAvatarURL({ extension: "png", forceStatic: true, size: 128 }),
     locale,
     timeframe,
     guild,
   });
 
   const node = renderPersonaCard(data);
-  const png = await renderCardToPng(node, CARD_W, PERSONA_CARD_H);
+  const png = await renderCardToPng(node, CARD_W, getPersonaCardHeight(data));
   const attachment = new AttachmentBuilder(png, { name: `stats_persona_${Date.now()}.png` });
 
   await button.editReply({ files: [attachment] });
@@ -264,7 +286,7 @@ async function executePersonaCard(
 // ── Server card ───────────────────────────────────────────────────────────────
 
 /**
- * Generates and sends the Server "Year in Review" infographic card.
+ * Generates and sends the Server Leaderboard infographic card.
  *
  * @param interaction  - The slash command interaction
  * @param locale       - BCP-47 locale string
@@ -298,7 +320,7 @@ async function executeServerCard(
   });
 
   const node = renderServerCard(data);
-  const png = await renderCardToPng(node, CARD_W, SERVER_CARD_H);
+  const png = await renderCardToPng(node, CARD_W, getServerCardHeight(data));
   const attachment = new AttachmentBuilder(png, { name: `stats_server_${Date.now()}.png` });
 
   await interaction.editReply({ files: [attachment] });

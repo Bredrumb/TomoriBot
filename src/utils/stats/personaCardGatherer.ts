@@ -1,162 +1,123 @@
 /**
- * personaCardGatherer.ts — data-gathering layer for the Persona "trading card"
- * infographic (plans/stat-tracking.md §10, Phase 3, Deliverable B).
- *
- * Mirrors the pattern in personalCardGatherer.ts:
- * - This is the ONLY file for the persona card that touches the DB.
- * - `gatherPersonaCardData` reads from existing StatRepository methods, resolves
- *   guild member display names, and returns a `PersonaCardData` struct.
- * - `renderPersonaCard` in statsInfographic.tsx consumes that struct as a pure
- *   function — it never touches the DB or the Discord API.
- *
- * Conditioning/memory reads are all-time only (not bucketed in the DB), so those
- * sections are always shown regardless of timeframe.
+ * Gatherer for the per-invoker Persona Affinity infographic. Rendering remains
+ * pure in statsInfographic.tsx; this module owns all DB, cache, and Discord
+ * asset access.
  */
 import type { Guild } from "discord.js";
-import type { TopUserEntry } from "@/utils/db/repositories/StatRepository";
-import { statRepository } from "@/utils/db/repositories";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { statRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
-import type { PersonaCardData, ResolvedUserEntry } from "@/utils/stats/statsInfographic";
+import type { BreakdownSegment, EmojiIcon, PersonaCardData } from "@/utils/stats/statsInfographic";
 
-// ── Display-name resolution ───────────────────────────────────────────────────
-
-/**
- * Resolves a Discord user snowflake to the guild member's display name.
- * Falls back to a short ID suffix on any error (member left, API failure, etc.)
- * so rendering is never blocked by a failed lookup.
- *
- * @param guild      - The Discord.js Guild to resolve against.
- * @param userDiscId - Discord user snowflake string.
- */
-async function resolveDisplayName(guild: Guild, userDiscId: string): Promise<string> {
-  try {
-    const member = await guild.members.fetch(userDiscId);
-    return member.displayName;
-  } catch {
-    return `@${userDiscId.slice(-4)}`;
-  }
-}
-
-/**
- * Resolves a list of TopUserEntry rows to ResolvedUserEntry structs with display names.
- * All fetches run in parallel (Promise.all) since each is independent.
- *
- * @param guild   - The Discord.js Guild to resolve against.
- * @param entries - Raw DB entries with userDiscId snowflakes.
- */
-async function resolveDisplayNames(guild: Guild, entries: TopUserEntry[]): Promise<ResolvedUserEntry[]> {
-  return Promise.all(
-    entries.map(async (e) => ({
-      displayName: await resolveDisplayName(guild, e.userDiscId),
-      count: e.count,
-    })),
-  );
-}
-
-// ── Args type ─────────────────────────────────────────────────────────────────
-
-/** Arguments for `gatherPersonaCardData`. */
 export interface GatherPersonaCardArgs {
-  /** Internal `servers` FK (not the Discord snowflake). */
   serverId: number;
-  /** Discord guild snowflake, used for persona cache lookup and member resolution. */
   guildDiscId: string;
-  /** Internal persona_lineage_id for the selected persona. */
   lineageId: number;
-  /** BCP-47 locale string passed through to PersonaCardData. */
+  userId: number;
+  username: string;
+  userAvatarUrl?: string | null;
   locale: string;
-  /** Selected time window — drives the metric window for message/vibe reads. */
   timeframe: Timeframe;
-  /** Discord Guild object for display-name resolution. */
   guild: Guild;
 }
 
-// ── Main gather function ───────────────────────────────────────────────────────
+async function resolveEmojiIcons(guild: Guild, entries: Array<{ key: string; count: number }>): Promise<EmojiIcon[]> {
+  return Promise.all(
+    entries.map(async (entry) => {
+      const emoji = guild.emojis.cache.find((candidate) => candidate.name === entry.key);
+      const imageDataUri = emoji
+        ? await loadStoredPersonaAvatarDataUri(emoji.imageURL({ extension: "png", size: 64 }))
+        : null;
+      return { name: entry.key, imageDataUri };
+    }),
+  );
+}
 
-/**
- * Gathers all data the Persona "trading card" needs from the DB and Discord API,
- * returning a `PersonaCardData` struct for the pure renderer.
- *
- * Read categories:
- * - Windowed (uses timeframe): message_sent, vibe metrics.
- * - All-time (not bucketed in DB): memory count, top people by memory,
- *   conditioning top users, server rank (server rank uses the window too).
- * - External: persona avatar via safeDownload.
- *
- * @param args - Scope, locale, timeframe, and Discord guild for name resolution.
- */
+function toSegments(entries: Array<{ key: string; count: number }>): BreakdownSegment[] {
+  return entries.map((entry) => ({ label: entry.key, count: entry.count }));
+}
+
+function toEmotionSegments(entries: Array<{ emotion: string; count: number }>): BreakdownSegment[] {
+  return entries.map((entry) => ({ label: entry.emotion, count: entry.count }));
+}
+
 export async function gatherPersonaCardData(args: GatherPersonaCardArgs): Promise<PersonaCardData> {
-  const { serverId, guildDiscId, lineageId, locale, timeframe, guild } = args;
+  const { serverId, guildDiscId, lineageId, userId, username, userAvatarUrl, locale, timeframe, guild } = args;
   const windowFrom = resolveWindowFrom(timeframe);
   const windowArg = windowFrom ? { from: windowFrom } : {};
 
-  // ── 1. Parallel windowed reads ────────────────────────────────────────────────
-  const [totalMessages, vibeSprites, vibeEmoji, vibeStickers, vibeTools, serverPersonaRoster] = await Promise.all([
-    statRepository.getMetricTotal({ metric: "message_sent", serverId, lineageId, ...windowArg }),
-    statRepository.getMetricTotal({ metric: "sprite_shown", serverId, lineageId, ...windowArg }),
-    statRepository.getMetricTotal({ metric: "emoji_used", serverId, lineageId, ...windowArg }),
-    statRepository.getMetricTotal({ metric: "sticker_used", serverId, lineageId, ...windowArg }),
-    statRepository.getMetricTotal({ metric: "tool_used", serverId, lineageId, ...windowArg }),
-    // Fetch more results than needed so we can find the persona's exact rank position.
-    statRepository.getServerPersonaMessages({ serverId, limit: 20, ...windowArg }),
+  const [
+    tokenTotals,
+    totalTriggers,
+    totalUserTriggers,
+    estimatedCost,
+    conditioning,
+    emojiEntries,
+    emotionEntries,
+    toolEntries,
+    memoryCount,
+  ] = await Promise.all([
+    statRepository.getTokenTotals({ userId, serverId, lineageId, ...windowArg }),
+    statRepository.getMetricTotal({ metric: "message_sent", userId, serverId, lineageId, ...windowArg }),
+    statRepository.getMetricTotal({ metric: "message_sent", userId, serverId, ...windowArg }),
+    statRepository.getEstimatedCost({ userId, serverId, lineageId, ...windowArg }),
+    statRepository.getConditioningTotals({ userId, serverId, lineageId }),
+    statRepository.getMetricKeyBreakdown({ metric: "emoji_used", userId, serverId, lineageId, limit: 5, ...windowArg }),
+    statRepository.getEmotionBreakdown({ userId, serverId, lineageId, limit: 4, ...windowArg }),
+    statRepository.getMetricKeyBreakdown({ metric: "tool_used", userId, serverId, lineageId, limit: 4, ...windowArg }),
+    timeframe === "all_time" ? statRepository.getPersonalMemoryCount({ userId, lineageId }) : Promise.resolve(null),
   ]);
 
-  // ── 2. Derive server rank from the persona roster ─────────────────────────────
-  // 1-based rank (e.g. rank=1 means most popular). 0 = not found in top 20.
-  const rankIndex = serverPersonaRoster.findIndex((p) => p.lineageId === lineageId);
-  const serverRank = rankIndex >= 0 ? rankIndex + 1 : 0;
-
-  // ── 3. All-time reads (conditioning and memory are not daily-bucketed) ────────
-  const [memoryCount, rawTopPeopleByMemory, rawMostRewardedBy, rawMostPunishedBy] = await Promise.all([
-    statRepository.getPersonaMemoryCount({ lineageId }),
-    statRepository.getTopUsersByMemory({ serverId, lineageId, limit: 3 }),
-    statRepository.getConditioningTopUsers({ serverId, lineageId, type: "reward", limit: 2 }),
-    statRepository.getConditioningTopUsers({ serverId, lineageId, type: "punish", limit: 2 }),
-  ]);
-
-  // ── 4. Resolve display names in parallel ─────────────────────────────────────
-  const [topPeopleByMemory, mostRewardedBy, mostPunishedBy] = await Promise.all([
-    resolveDisplayNames(guild, rawTopPeopleByMemory),
-    resolveDisplayNames(guild, rawMostRewardedBy),
-    resolveDisplayNames(guild, rawMostPunishedBy),
-  ]);
-
-  // ── 5. Persona name + avatar from cache ──────────────────────────────────────
   let personaName = `Persona #${lineageId}`;
   let personaAvatarDataUri: string | null = null;
-
   try {
     const personas = await getCachedAllPersonas(guildDiscId);
-    const match = personas.find((p) => p.persona_lineage_id === lineageId);
-    if (match) {
-      personaName = match.persona_nickname;
-      const avatarUrl = match.webhook_avatar_url ?? null;
-      if (avatarUrl) {
-        personaAvatarDataUri = await loadStoredPersonaAvatarDataUri(avatarUrl);
-      }
+    const persona = personas.find((candidate) => candidate.persona_lineage_id === lineageId);
+    if (persona) {
+      personaName = persona.persona_nickname;
+      personaAvatarDataUri = persona.webhook_avatar_url
+        ? await loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)
+        : null;
     }
   } catch (error) {
     log.warn("personaCardGatherer: persona resolution failed", error as Error);
   }
 
-  // ── 6. Assemble PersonaCardData ───────────────────────────────────────────────
+  let userAvatarDataUri: string | null = null;
+  if (userAvatarUrl) {
+    try {
+      userAvatarDataUri = await loadStoredPersonaAvatarDataUri(userAvatarUrl);
+    } catch (error) {
+      log.warn("personaCardGatherer: user avatar resolution failed", error as Error);
+    }
+  }
+
+  let favoriteEmojis: EmojiIcon[] = [];
+  try {
+    favoriteEmojis = await resolveEmojiIcons(guild, emojiEntries);
+  } catch (error) {
+    log.warn("personaCardGatherer: emoji resolution failed", error as Error);
+    favoriteEmojis = emojiEntries.map((entry) => ({ name: entry.key, imageDataUri: null }));
+  }
+
   return {
     locale,
     timeframe,
+    username,
+    userAvatarDataUri,
     personaName,
     personaAvatarDataUri,
-    totalMessages,
+    inputTokens: tokenTotals.inputTokens,
+    outputTokens: tokenTotals.outputTokens,
+    totalTriggers,
+    sharePct: totalUserTriggers > 0 ? (totalTriggers / totalUserTriggers) * 100 : 0,
+    estimatedCost,
     memoryCount,
-    serverRank,
-    topPeopleByMemory,
-    mostRewardedBy,
-    mostPunishedBy,
-    vibeSprites,
-    vibeEmoji,
-    vibeStickers,
-    vibeTools,
+    conditioning: { rewards: conditioning.rewards, punishments: conditioning.punishments },
+    favoriteEmojis,
+    favoriteEmotions: toEmotionSegments(emotionEntries),
+    favoriteTools: toSegments(toolEntries),
   };
 }

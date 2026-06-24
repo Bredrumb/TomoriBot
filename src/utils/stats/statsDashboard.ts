@@ -21,6 +21,7 @@
  * rough stats only, surfaced as such in the footer.
  */
 import {
+  type AttachmentBuilder,
   ButtonStyle,
   ComponentType,
   MessageFlags,
@@ -45,6 +46,7 @@ import type {
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
+import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
 
 // ── Timeframe ─────────────────────────────────────────────────────────────────
 
@@ -113,7 +115,7 @@ function rankedList(locale: string, entries: Array<{ label: string; count: numbe
 }
 
 /**
- * Renders the richer per-model rows: "1. `model` — 31,386 in / 155 out / $0.0000".
+ * Renders the richer per-model rows: "1. `model`: 31,386 in / 155 out / $0.0000".
  * Falls back to the localized empty placeholder when there is no token data.
  */
 function modelCostList(locale: string, entries: ModelCostEntry[]): string {
@@ -123,7 +125,7 @@ function modelCostList(locale: string, entries: ModelCostEntry[]): string {
   return entries
     .map(
       (e, i) =>
-        `**${i + 1}.** \`${e.model}\` — ${fmtInt(e.inputTokens)} ${inShort} / ${fmtInt(e.outputTokens)} ${outShort} / ${fmtUsd(e.cost)}`,
+        `**${i + 1}.** \`${prettifyModelCodename(e.model)}\`: ${fmtInt(e.inputTokens)} ${inShort} / ${fmtInt(e.outputTokens)} ${outShort} / ${fmtUsd(e.cost)}`,
     )
     .join("\n");
 }
@@ -248,12 +250,17 @@ function page(titleKey: string, subtitle: string, fields: StatField[]): StatsTab
 
 // ── Components V2 rendering ───────────────────────────────────────────────────────
 
-/** Builds the rows of named tab buttons (≤5 per row); the active tab is disabled. */
+/**
+ * Builds the rows of named tab buttons (≤5 per row); the active tab is disabled.
+ * When `disableAll` is set (post-timeout paint), every button is disabled so the
+ * card freezes in place — buttons stay visible but unpressable instead of vanishing.
+ */
 function buildTabButtonRows(
   interactionId: string,
   tabs: StatsTab[],
   activeIndex: number,
   locale: string,
+  disableAll = false,
 ): ActionRowData<ButtonComponentData>[] {
   const rows: ActionRowData<ButtonComponentData>[] = [];
   for (let i = 0; i < tabs.length; i += 5) {
@@ -266,7 +273,7 @@ function buildTabButtonRows(
           style: index === activeIndex ? ButtonStyle.Primary : ButtonStyle.Secondary,
           customId: `stats:${interactionId}:${tab.id}`,
           label: localizer(locale, tab.labelKey),
-          disabled: index === activeIndex,
+          disabled: disableAll || index === activeIndex,
         } satisfies ButtonComponentData;
       }),
     });
@@ -285,12 +292,27 @@ function buildTabContainer(
   tabPage: StatsTabPage,
   buttonRows: ActionRowData<ButtonComponentData>[],
   withButtons: boolean,
+  iconUrl?: string,
 ): TopLevelComponentData[] {
   const components: ComponentInContainerData[] = [];
 
-  // 1. Title (H3) + subtitle line.
-  components.push({ type: ComponentType.TextDisplay, content: `### ${localizer(locale, tabPage.titleKey)}` });
-  components.push({ type: ComponentType.TextDisplay, content: tabPage.subtitle });
+  // 1. Title (H3) + subtitle line. When an icon URL is supplied, both lines live inside
+  //    a Section whose Thumbnail accessory pins the icon to the card's top-right corner;
+  //    otherwise they render as plain stacked text displays.
+  const titleText = `### ${localizer(locale, tabPage.titleKey)}`;
+  if (iconUrl) {
+    components.push({
+      type: ComponentType.Section,
+      components: [
+        { type: ComponentType.TextDisplay, content: titleText },
+        { type: ComponentType.TextDisplay, content: tabPage.subtitle },
+      ],
+      accessory: { type: ComponentType.Thumbnail, media: { url: iconUrl } },
+    });
+  } else {
+    components.push({ type: ComponentType.TextDisplay, content: titleText });
+    components.push({ type: ComponentType.TextDisplay, content: tabPage.subtitle });
+  }
   components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
 
   // 2. Fields. Merge consecutive inline scalars into a single text block (one line
@@ -339,18 +361,31 @@ function buildTabContainer(
   return [container];
 }
 
-/** Builds the editReply/update payload for the active tab. */
+/**
+ * Builds the editReply/update payload for the active tab.
+ * `disableAll` greys out every tab button for the final, post-timeout paint.
+ * `iconFile` is re-attached on every paint so an `attachment://` icon ref (local
+ * persona avatars in non-prod) keeps resolving across tab switches and the timeout.
+ */
 function dashboardPayload(
   interactionId: string,
   tabs: StatsTab[],
   activeIndex: number,
   locale: string,
   withButtons: boolean,
-): { components: TopLevelComponentData[]; flags: MessageFlags.IsComponentsV2 } {
-  const buttonRows = buildTabButtonRows(interactionId, tabs, activeIndex, locale);
+  disableAll = false,
+  iconUrl?: string,
+  iconFile?: AttachmentBuilder,
+): {
+  components: TopLevelComponentData[];
+  flags: MessageFlags.IsComponentsV2;
+  files?: AttachmentBuilder[];
+} {
+  const buttonRows = buildTabButtonRows(interactionId, tabs, activeIndex, locale, disableAll);
   return {
-    components: buildTabContainer(locale, tabs[activeIndex].page, buttonRows, withButtons),
+    components: buildTabContainer(locale, tabs[activeIndex].page, buttonRows, withButtons, iconUrl),
     flags: MessageFlags.IsComponentsV2,
+    ...(iconFile ? { files: [iconFile] } : {}),
   };
 }
 
@@ -371,18 +406,27 @@ function dashboardPayload(
  * @param invokerId   - Discord id allowed to operate the tab buttons.
  * @param locale      - Active locale.
  * @param tabs        - The tabs to render (first is shown initially).
+ * @param iconUrl     - Optional avatar/icon URL pinned to the card's top-right corner
+ *                      (user avatar for /personal, persona avatar for /persona, server
+ *                      icon for /server). Either a public http(s) URL or an
+ *                      `attachment://<name>` ref backed by `iconFile`.
+ * @param iconFile    - Optional attachment backing an `attachment://` iconUrl (a local
+ *                      persona avatar loaded from disk when no public URL exists, e.g.
+ *                      non-production). Re-attached on every repaint so the ref resolves.
  */
 export async function renderStatsDashboard(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
   invokerId: string,
   locale: string,
   tabs: StatsTab[],
+  iconUrl?: string,
+  iconFile?: AttachmentBuilder,
 ): Promise<void> {
   if (tabs.length === 0) return;
   let activeIndex = 0;
 
   const message = (await interaction.editReply(
-    dashboardPayload(interaction.id, tabs, activeIndex, locale, true),
+    dashboardPayload(interaction.id, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
   )) as Message;
 
   // 1. Persistent collector — no listening gap between clicks, so fast switches queue
@@ -400,20 +444,22 @@ export async function renderStatsDashboard(
     try {
       // 2. Acknowledge + repaint. Wrapped so a stale token (e.g. a duplicate click whose
       //    interaction Discord no longer recognizes) never escapes to the command handler.
-      await button.update(dashboardPayload(interaction.id, tabs, activeIndex, locale, true));
+      await button.update(dashboardPayload(interaction.id, tabs, activeIndex, locale, true, false, iconUrl, iconFile));
     } catch (error) {
       log.warn("renderStatsDashboard: tab-switch update failed (stale interaction, ignored)", error as Error);
     }
   });
 
-  // 3. Wait for the collector to end (timeout), then strip the buttons so the last
-  //    viewed tab stays as a clean static card.
+  // 3. Wait for the collector to end (timeout), then disable (but keep) the buttons so
+  //    the last viewed tab stays put with greyed-out, unpressable tabs.
   await new Promise<void>((resolve) => collector.once("end", () => resolve()));
 
   try {
-    await interaction.editReply(dashboardPayload(interaction.id, tabs, activeIndex, locale, false));
+    await interaction.editReply(
+      dashboardPayload(interaction.id, tabs, activeIndex, locale, true, true, iconUrl, iconFile),
+    );
   } catch (error) {
-    log.warn("renderStatsDashboard: failed to clear dashboard buttons after timeout", error as Error);
+    log.warn("renderStatsDashboard: failed to disable dashboard buttons after timeout", error as Error);
   }
 }
 
@@ -529,7 +575,9 @@ export async function buildPersonalTabs(args: {
     .map((c) => ({ label: lineageLabel(locale, names, c.lineageId), count: c.punishments }));
 
   // Top model by cost is the best available proxy for "favorite" without an extra read.
-  const favoriteModel = modelCost[0]?.model ?? localizer(locale, "commands.stats.empty");
+  const favoriteModel = modelCost[0]
+    ? prettifyModelCodename(modelCost[0].model)
+    : localizer(locale, "commands.stats.empty");
 
   // ── Overview (the most interesting stats, duped freely into detail tabs). ──
   // Group 1: trigger count + persona identity + favorite model.
@@ -946,7 +994,9 @@ export async function buildServerTabs(args: {
   const mostPopularPersonaName = popularPersonas[0]
     ? lineageLabel(locale, names, popularPersonas[0].lineageId)
     : localizer(locale, "commands.stats.empty");
-  const mostPopularModel = modelCost[0]?.model ?? localizer(locale, "commands.stats.empty");
+  const mostPopularModel = modelCost[0]
+    ? prettifyModelCodename(modelCost[0].model)
+    : localizer(locale, "commands.stats.empty");
 
   // ── Overview (shared core; Images/Videos are server-only — quota tables carry no
   //    persona lineage, so they cannot appear on the persona view). ──

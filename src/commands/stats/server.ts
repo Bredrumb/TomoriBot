@@ -87,7 +87,10 @@ export async function execute(
       subtitle: `${guild.name} • ${subtitle}`,
     });
 
-    await renderStatsDashboard(interaction, interaction.user.id, locale, tabs);
+    // Pin the server's icon to the dashboard's top-right corner (null when the guild
+    // has no custom icon — the card simply renders without one).
+    const iconUrl = guild.iconURL({ extension: "png", size: 256 }) ?? undefined;
+    await renderStatsDashboard(interaction, interaction.user.id, locale, tabs, iconUrl);
   } catch (error) {
     await log.error(`Error executing /stats server for user ${userData.user_disc_id}`, error as Error, {
       userId: userData.user_id,
