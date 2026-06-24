@@ -21,7 +21,7 @@ import type {
   SlashCommandSubcommandBuilder,
   TextBasedChannel,
 } from "discord.js";
-import { MessageFlags, EmbedBuilder, TextInputStyle } from "discord.js";
+import { AttachmentBuilder, MessageFlags, EmbedBuilder, TextInputStyle } from "discord.js";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -91,6 +91,15 @@ interface WriteTarget {
   documentId: number;
   dbServerId: number;
   personaId: number | null;
+}
+
+/** Per-window debug snapshot: the exact prompts sent to the extraction LLM */
+interface WindowDebugSnapshot {
+  windowIndex: number;
+  windowMessageText: string;
+  systemPrompt: string;
+  userPrompt: string;
+  extractedEntries: HistoryMemoryEntry[];
 }
 
 /**
@@ -209,6 +218,93 @@ async function retrieveInCharacterChunks(params: {
     .slice(0, maxResults);
 }
 
+/**
+ * Sends the captured in-character debug snapshots as a JSON attachment via DM to
+ * the invoking user. Falls back to an ephemeral follow-up on the original interaction
+ * if the DM fails (closed DMs, blocked bot, etc.). Never throws — failures are logged
+ * and swallowed so a debug-feature glitch doesn't tank a successful extraction.
+ */
+async function sendInCharacterDebugDump(params: {
+  interaction: ChatInputCommandInteraction;
+  locale: string;
+  personaNickname: string;
+  provider: string;
+  model: string;
+  snapshots: WindowDebugSnapshot[];
+}): Promise<void> {
+  const { interaction, locale, personaNickname, provider, model, snapshots } = params;
+
+  try {
+    const dump = {
+      captured_at: new Date().toISOString(),
+      guild_id: interaction.guild?.id ?? null,
+      channel_id: interaction.channelId,
+      persona_nickname: personaNickname,
+      provider,
+      model,
+      window_count: snapshots.length,
+      windows: snapshots.map((s) => ({
+        window_index: s.windowIndex,
+        system_prompt: s.systemPrompt,
+        user_prompt: s.userPrompt,
+        window_message_text: s.windowMessageText,
+        extracted_count: s.extractedEntries.length,
+        extracted_entries: s.extractedEntries,
+      })),
+    };
+
+    const fileContent = JSON.stringify(dump, null, 2);
+    const fileName = `history-import-debug-${interaction.channelId}-${Date.now()}.json`;
+    const attachment = new AttachmentBuilder(Buffer.from(fileContent, "utf-8"), { name: fileName });
+
+    const dmDescription = [
+      localizer(locale, "commands.memory.history.import.debug_dm_description", {
+        persona_name: personaNickname,
+        window_count: snapshots.length.toString(),
+      }),
+      "```yaml",
+      `provider: ${provider}`,
+      `model: ${model}`,
+      `windows: ${snapshots.length}`,
+      `total_extracted: ${snapshots.reduce((sum, s) => sum + s.extractedEntries.length, 0)}`,
+      "```",
+    ].join("\n\n");
+
+    try {
+      await interaction.user.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.memory.history.import.debug_dm_title"))
+            .setDescription(dmDescription)
+            .setColor(ColorCode.INFO),
+        ],
+        files: [attachment],
+      });
+    } catch (dmError) {
+      log.warn(
+        `Failed to DM in-character debug dump to user ${interaction.user.id}; falling back to ephemeral follow-up.`,
+        dmError as Error,
+      );
+      try {
+        await interaction.followUp({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(localizer(locale, "commands.memory.history.import.debug_dm_failed_title"))
+              .setDescription(localizer(locale, "commands.memory.history.import.debug_dm_failed_description"))
+              .setColor(ColorCode.WARN),
+          ],
+          files: [attachment],
+          flags: MessageFlags.Ephemeral,
+        });
+      } catch (followUpError) {
+        log.warn("Failed ephemeral fallback for in-character debug dump.", followUpError as Error);
+      }
+    }
+  } catch (error) {
+    log.warn("Failed to build in-character debug dump.", error as Error);
+  }
+}
+
 /** Shows the "no facts extracted from this batch" embed with the pagination footer. */
 async function showNoFactsExtractedEmbed(
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
@@ -303,6 +399,12 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setRequired(false)
         .setMinValue(50)
         .setMaxValue(100),
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName("debug")
+        .setDescription(localizer("en-US", "commands.memory.history.import.debug_description"))
+        .setRequired(false),
     );
 
 const EXTRACTION_PROMPT_MODAL_ID = "memory_history_import_prompt_modal";
@@ -523,6 +625,8 @@ async function runIncrementalExtraction(params: {
   endpointUrl?: string;
   /** Composes the system prompt for a given window. For static prompts (conversation/roleplay) this returns a constant; for in_character it does per-window RAG. */
   composeSystemPrompt: (windowText: string, windowIndex: number) => Promise<string>;
+  /** Optional per-window debug hook — fired after extraction so callers can capture exact prompts sent. */
+  onWindowSnapshot?: (snapshot: WindowDebugSnapshot) => void;
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
   locale: string;
   writeTargets: WriteTarget[];
@@ -539,6 +643,7 @@ async function runIncrementalExtraction(params: {
     apiKey,
     endpointUrl,
     composeSystemPrompt,
+    onWindowSnapshot,
     replyInteraction,
     locale,
     writeTargets,
@@ -581,6 +686,17 @@ async function runIncrementalExtraction(params: {
       composedSystemPrompt,
       endpointUrl,
     );
+
+    // Reconstruct the exact user prompt for debug snapshot — same builder extractWindow uses.
+    if (onWindowSnapshot) {
+      onWindowSnapshot({
+        windowIndex: i,
+        windowMessageText: windows[i],
+        systemPrompt: composedSystemPrompt,
+        userPrompt: buildExtractionUserPrompt(windows[i], previousRestatements),
+        extractedEntries: windowEntries,
+      });
+    }
 
     if (windowEntries.length > 0) {
       const windowChunks = windowEntries.map((e) => e.lossless_restatement);
@@ -800,6 +916,7 @@ export async function execute(
           ? "in_character"
           : "conversation";
     const messageFetchLimit = interaction.options.getInteger("limit") ?? 100;
+    const debugEnabled = interaction.options.getBoolean("debug") ?? false;
 
     // In-character extraction requires a single persona's identity to do its job —
     // reject global/automatic combinations rather than silently degrading.
@@ -965,6 +1082,11 @@ export async function execute(
             }
           : async (): Promise<string> => personaSystemPrompt;
 
+      // Debug capture — only meaningful for in_character mode (per-window prompts vary).
+      const debugSnapshots: WindowDebugSnapshot[] = [];
+      const debugActive = debugEnabled && promptMode === "in_character";
+      const onWindowSnapshot = debugActive ? (snap: WindowDebugSnapshot) => debugSnapshots.push(snap) : undefined;
+
       const footer = buildFooter({
         firstMessage: fetchResult.firstMessage,
         lastMessage: fetchResult.lastMessage,
@@ -1007,11 +1129,25 @@ export async function execute(
         apiKey: textCreds.apiKey,
         endpointUrl,
         composeSystemPrompt,
+        onWindowSnapshot,
         replyInteraction: modalSubmitInteraction,
         locale,
         writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: targetPersonaId }],
         ...embeddingParams,
       });
+
+      // Ship debug dump regardless of extraction outcome — snapshots are useful even
+      // when zero facts come back (in fact, *especially* then).
+      if (debugActive && debugSnapshots.length > 0) {
+        await sendInCharacterDebugDump({
+          interaction,
+          locale,
+          personaNickname: selectedPersona.persona_nickname,
+          provider,
+          model,
+          snapshots: debugSnapshots,
+        });
+      }
 
       if (!extractResult) {
         await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, targetPersonaId);
