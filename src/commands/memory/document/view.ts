@@ -225,7 +225,7 @@ async function regenChunkEmbedding(params: {
   }
 
   const model = await llmModelRepo.loadEmbeddingModelById(modelId);
-  if (!model || !model.embedding_model_id) {
+  if (!model?.embedding_model_id) {
     return { ok: false, errorKey: "no_embedding_model" };
   }
 

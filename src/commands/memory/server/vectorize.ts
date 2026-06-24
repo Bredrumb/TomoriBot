@@ -405,7 +405,7 @@ export async function execute(
       const overlayResult = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
       const stateWithOverlays = overlayResult.tomoriState;
 
-      let embeddingCreds;
+      let embeddingCreds: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
       try {
         embeddingCreds = await resolveCapabilityCredentials(stateWithOverlays.server_id, "embedding", {
           userId: userData.user_id ?? null,
