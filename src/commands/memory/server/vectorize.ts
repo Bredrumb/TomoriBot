@@ -52,10 +52,6 @@ const MAX_CHANNEL_TAGS_LENGTH = 200;
 
 const memoryLimits = getMemoryLimits();
 
-function formatMemoryPreview(memory: string, maxLength = 120): string {
-  return memory.length > maxLength ? `${memory.slice(0, maxLength)}...` : memory;
-}
-
 function parseChannelTagsInput(input: string, client: Client): string[] {
   return input
     .split(",")
