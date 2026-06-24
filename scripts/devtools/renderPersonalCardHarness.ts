@@ -91,34 +91,41 @@ const SERVER_EN: ServerCardData = {
   timeframe: "all_time",
   serverName: "Tomori Dev Server",
   serverIconDataUri: null,
+  tomoriconDataUri: TOMORICON_DATA_URI,
+  palette: DEFAULT_PERSONAL_CARD_PALETTE,
   topPersonas: [
-    { name: "Tomori", avatarDataUri: null, rank: 1, inputTokens: 31_386, outputTokens: 4_820, sharePct: 62.4 },
-    { name: "Lilya", avatarDataUri: null, rank: 2, inputTokens: 12_402, outputTokens: 1_204, sharePct: 18.2 },
-    { name: "Mutsumi", avatarDataUri: null, rank: 3, inputTokens: 8_121, outputTokens: 892, sharePct: 10.6 },
+    { name: "Tomori", avatarDataUri: null, rank: 1, totalTokens: 36_206, estimatedCost: 0.0213, accent: "#e7322a" },
+    { name: "Lilya", avatarDataUri: null, rank: 2, totalTokens: 13_606, estimatedCost: 0.0089, accent: "#db1458" },
+    { name: "Mutsumi", avatarDataUri: null, rank: 3, totalTokens: 9_013, estimatedCost: 0.0051, accent: "#2f6259" },
+    { name: "Anon", avatarDataUri: null, rank: 4, totalTokens: 5_204, estimatedCost: 0.0027, accent: "#315c87" },
+    { name: "Soyo", avatarDataUri: null, rank: 5, totalTokens: 2_118, estimatedCost: 0.0011, accent: "#6e57c4" },
   ],
-  topHumans: [
-    { name: "alice", avatarDataUri: null, rank: 1, triggers: 3_421, estimatedCost: 1.27 },
-    { name: "bob", avatarDataUri: null, rank: 2, triggers: 2_108, estimatedCost: 0.88 },
-    { name: "carol", avatarDataUri: null, rank: 3, triggers: 987, estimatedCost: 0.42 },
+  topMembers: [
+    { name: "alice", avatarDataUri: null, rank: 1, triggers: 3_421, accent: "#315c87" },
+    { name: "bob", avatarDataUri: null, rank: 2, triggers: 2_108, accent: "#2f6259" },
+    { name: "carol", avatarDataUri: null, rank: 3, triggers: 987, accent: "#b4632a" },
   ],
-  topModelName: "gemini-1.5-pro",
-  inputTokens: 84_210,
-  outputTokens: 12_408,
+  topModels: [
+    { name: "Gemini 1.5 Pro", totalTokens: 64_210, estimatedCost: 2.84 },
+    { name: "GPT-4o", totalTokens: 21_408, estimatedCost: 1.12 },
+    { name: "Claude 3.5 Sonnet", totalTokens: 11_000, estimatedCost: 0.31 },
+  ],
+  totalTokens: 96_618,
   estimatedCost: 4.27,
   totalTriggers: 8_230,
-  topPersonaEmojis: [
-    { name: "happy", imageDataUri: null },
-    { name: "smug", imageDataUri: null },
-    { name: "wink", imageDataUri: null },
-  ],
+  heroVariant: 0,
 };
 
 const SERVER_JA: ServerCardData = {
   ...SERVER_EN,
   locale: "ja",
   serverName: "友里のサーバー",
-  topPersonas: [{ name: "友里", avatarDataUri: null, rank: 1, inputTokens: 31_386, outputTokens: 4_820, sharePct: 62.4 }],
-  topHumans: [{ name: "さくら", avatarDataUri: null, rank: 1, triggers: 3_421, estimatedCost: 1.27 }],
+  topPersonas: [
+    { name: "友里", avatarDataUri: null, rank: 1, totalTokens: 36_206, estimatedCost: 0.0213, accent: "#e7322a" },
+    { name: "立希", avatarDataUri: null, rank: 2, totalTokens: 13_606, estimatedCost: 0.0089, accent: "#db1458" },
+  ],
+  topMembers: [{ name: "さくら", avatarDataUri: null, rank: 1, triggers: 3_421, accent: "#315c87" }],
+  topModels: [{ name: "Gemini 1.5 Pro", totalTokens: 64_210, estimatedCost: 2.84 }],
 };
 
 async function main(): Promise<void> {

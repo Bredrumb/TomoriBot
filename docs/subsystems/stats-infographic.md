@@ -27,8 +27,8 @@ Height is content-aware:
   text-only entries, and retains only total tokens and total spend.
 - Persona Affinity is `1080×1100` for all-time cards and shorter when the
   all-time-only memory tile is absent.
-- Server Leaderboard grows with its rendered top-persona and top-human rows,
-  avoiding a large empty lower area for smaller servers.
+- Server Leaderboard is a fixed `9:16` portrait card (`1080×2010`) that mirrors
+  the Personal Wrapped share format. The no-data card is shorter (`1080×900`).
 
 - Personal Wrapped: a dominant #1 favorite-persona avatar, truncated vertical
   user name, up to five ranked personas with per-persona token/cost totals,
@@ -41,9 +41,17 @@ image is unavailable or undecodable.
 - Persona Affinity: the invoking user and picked persona, scoped token/cost/trigger
   totals, all-time memory count, reward/punishment count, emoji icons, and emotion/
   tool donut charts. Memory count is hidden outside the all-time view.
-- Server Leaderboard: the top three personas with input/output tokens and message
-  share, the top three humans with triggers and cost, top model, server totals, and
-  top persona emoji icons.
+- Server Leaderboard: a left rail with the server icon and vertically-set server
+  name; a hero vertical bar chart of the top five personas by total tokens (avatar
+  capped, bar tinted to the persona avatar's accent, with a tokens-over-cost
+  fraction inscribed); a "Most Active Members" horizontal bar chart of the top
+  three members by triggers (avatar + name at the bar tip, bar tinted to the
+  member avatar's accent); a "Top Models" horizontal bar chart of the top three
+  models by tokens processed (no icon — model name at the tip, with
+  `{tokens} | {cost}` inscribed in the bar); and the server-wide total tokens and
+  total spend. Its light-mode palette is derived
+  from the server icon, mirroring how Personal Wrapped derives its palette from
+  the #1 persona avatar.
 
 `tokens_in` and `tokens_out` are daily counters. Per-persona costs are calculated
 in one grouped query, applying the matched model's input/output pricing to each
@@ -62,13 +70,16 @@ single visual narrative that remains legible in Discord's inline preview.
 
 The card is a `9:16` portrait image with four intentional zones, in order:
 
-1. **Hero** — the #1 persona avatar takes most of the upper card. The invoking
-   user's avatar and vertically set, truncated name appear in a narrow rail that
-   ends with the hero, not the whole card.
+1. **Hero** — the #1 (highest-token) persona avatar takes most of the upper card.
+   The invoking user's avatar and vertically set, truncated name appear in a
+   narrow rail that ends with the hero, not the whole card.
 2. **Ranked table** — the lower content width is unrestricted by the user rail.
    It presents at most five text-only persona rows with `Favorite Personas`,
-   `Tokens`, and `Spent` columns. Columns are aligned through fixed widths and
-   flexible name space rather than visible vertical rules.
+   `Tokens`, and `Spent` columns, **ranked by total tokens (descending)** so the
+   row order matches the visible Tokens column. The whole persona population is
+   ranked before the top five are taken, so a heavy-token persona is never
+   dropped for having fewer message triggers. Columns are aligned through fixed
+   widths and flexible name space rather than visible vertical rules.
 3. **Summary** — favorite model is a single row, followed by the two large
    aggregate values: `Total Tokens` and `Total Spent`.
 4. **Signature** — the contrast-tinted Tomoricon and localized
@@ -81,8 +92,16 @@ text dashboard instead.
 
 ### Palette and hero decoration
 
-`personalCardGatherer.ts` samples the #1 avatar at 64px after alpha filtering.
-It creates an accessible light-mode palette with two roles:
+The palette + image helpers live in the shared gather-layer module
+`cardColor.ts` (`extractCardPalette`, `extractAvatarAccentColor`,
+`loadTomoriconDataUri`, `chooseHeroVariant`). Personal Wrapped feeds it the #1
+persona avatar; Server Leaderboard feeds it the server icon. The renderer never
+imports it — it stays pure. `personalCardGatherer.ts` re-exports
+`extractPersonalCardPalette` as a backward-compatible alias of
+`extractCardPalette`.
+
+The palette extractor samples the hero image at 64px after alpha filtering and
+creates an accessible light-mode palette with two roles:
 
 - The most common usable hue is the **base**: pale background/surface colors,
   dark contrast-safe ink, muted text, borders, and the secondary hero color.
@@ -100,6 +119,28 @@ gatherer**, then stored on `PersonalCardData.heroVariant`. Keep randomness out o
 the renderer so a given data object always produces the same VNode and remains
 unit-testable. New variations must stay behind the avatar, use only palette
 colors, and avoid adding small text or semantic content.
+
+### Server Leaderboard: bar layout
+
+The Server card reuses the Personal Wrapped frame (left identity rail + hero box
++ bottom-aligned totals/signature) but its body is three bar charts:
+
+- **Bar tints come from the gatherer.** `extractAvatarAccentColor` distils one
+  vivid hue per persona/member avatar (`ServerPersonaBar.accent`,
+  `ServerMemberBar.accent`); the renderer fills each bar with it and picks
+  black/white in-bar text via `readableInkOn` (WCAG luminance). Models have no
+  avatar, so their bars use `palette.accentSecondary`.
+- **Bars are proportional, not floored.** Both the vertical persona bars and the
+  horizontal member/model bars size as `min + share × (ceiling − min)` where
+  `share = value / leaderValue`. Do **not** revert to `max(min, share × track)`:
+  that flattens every entry below the floor (#2 and #3 collapse to the same
+  size). The floor only guarantees the inscribed value text fits the shortest bar.
+- **Persona bars merge with their avatar** (the bar is absolutely-overlapped by
+  the avatar so they read as one shape) and are captioned by a shared baseline
+  name row, so caption alignment is independent of bar height.
+- Personal Wrapped and Server Leaderboard both push the aggregate
+  `Total Tokens` / `Total Spent` block and the Tomoricon signature to the card
+  bottom with a flex spacer, for a consistent share-card silhouette.
 
 ### Contributor checklist
 

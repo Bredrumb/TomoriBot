@@ -2,7 +2,13 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
 import type { ServerCardData } from "@/utils/stats/statsInfographic";
-import { CARD_W, getServerCardHeight, renderServerCard } from "@/utils/stats/statsInfographic";
+import {
+  CARD_W,
+  DEFAULT_PERSONAL_CARD_PALETTE,
+  getServerCardHeight,
+  renderServerCard,
+  SERVER_CARD_H,
+} from "@/utils/stats/statsInfographic";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
 beforeAll(async () => {
@@ -14,20 +20,24 @@ const SAMPLE_EN: ServerCardData = {
   timeframe: "all_time",
   serverName: "Tomori Dev Server",
   serverIconDataUri: null,
+  tomoriconDataUri: null,
+  palette: DEFAULT_PERSONAL_CARD_PALETTE,
   topPersonas: [
-    { name: "Tomori", avatarDataUri: null, rank: 1, inputTokens: 31_386, outputTokens: 4_820, sharePct: 62.4 },
-    { name: "Lilya", avatarDataUri: null, rank: 2, inputTokens: 12_402, outputTokens: 1_204, sharePct: 18.2 },
+    { name: "Tomori", avatarDataUri: null, rank: 1, totalTokens: 36_206, estimatedCost: 0.0213, accent: "#e7322a" },
+    { name: "Lilya", avatarDataUri: null, rank: 2, totalTokens: 13_606, estimatedCost: 0.0089, accent: "#db1458" },
   ],
-  topHumans: [
-    { name: "alice", avatarDataUri: null, rank: 1, triggers: 3_421, estimatedCost: 1.27 },
-    { name: "bob", avatarDataUri: null, rank: 2, triggers: 2_108, estimatedCost: 0.88 },
+  topMembers: [
+    { name: "alice", avatarDataUri: null, rank: 1, triggers: 3_421, accent: "#315c87" },
+    { name: "bob", avatarDataUri: null, rank: 2, triggers: 2_108, accent: "#2f6259" },
   ],
-  topModelName: "gemini-1.5-pro",
-  inputTokens: 84_210,
-  outputTokens: 12_408,
+  topModels: [
+    { name: "Gemini 1.5 Pro", totalTokens: 64_210, estimatedCost: 2.84 },
+    { name: "GPT-4o", totalTokens: 21_408, estimatedCost: 1.12 },
+  ],
+  totalTokens: 96_618,
   estimatedCost: 4.27,
   totalTriggers: 8_230,
-  topPersonaEmojis: [{ name: "happy", imageDataUri: null }],
+  heroVariant: 0,
 };
 
 const SAMPLE_JA: ServerCardData = {
@@ -35,9 +45,10 @@ const SAMPLE_JA: ServerCardData = {
   locale: "ja",
   serverName: "友里のサーバー",
   topPersonas: [
-    { name: "友里", avatarDataUri: null, rank: 1, inputTokens: 31_386, outputTokens: 4_820, sharePct: 62.4 },
+    { name: "友里", avatarDataUri: null, rank: 1, totalTokens: 36_206, estimatedCost: 0.0213, accent: "#e7322a" },
   ],
-  topHumans: [{ name: "さくら", avatarDataUri: null, rank: 1, triggers: 3_421, estimatedCost: 1.27 }],
+  topMembers: [{ name: "さくら", avatarDataUri: null, rank: 1, triggers: 3_421, accent: "#315c87" }],
+  topModels: [{ name: "Gemini 1.5 Pro", totalTokens: 64_210, estimatedCost: 2.84 }],
 };
 
 describe("renderServerCard", () => {
@@ -47,7 +58,9 @@ describe("renderServerCard", () => {
   });
 
   it("renders the no-data state when the server has no triggers", () => {
-    expect(renderServerCard({ ...SAMPLE_EN, totalTriggers: 0, topPersonas: [], topHumans: [] })).toBeObject();
+    expect(
+      renderServerCard({ ...SAMPLE_EN, totalTriggers: 0, topPersonas: [], topMembers: [], topModels: [] }),
+    ).toBeObject();
   });
 });
 
@@ -59,7 +72,8 @@ describe("renderServerCard PNG", () => {
     expect(japanese.byteLength).toBeGreaterThan(1000);
   });
 
-  it("adds height only for additional leaderboard rows", () => {
-    expect(getServerCardHeight(SAMPLE_EN)).toBeGreaterThan(getServerCardHeight(SAMPLE_JA));
+  it("uses the fixed portrait frame for populated cards and a shorter no-data card", () => {
+    expect(getServerCardHeight(SAMPLE_EN)).toBe(SERVER_CARD_H);
+    expect(getServerCardHeight({ ...SAMPLE_EN, totalTriggers: 0 })).toBeLessThan(SERVER_CARD_H);
   });
 }, 30_000);

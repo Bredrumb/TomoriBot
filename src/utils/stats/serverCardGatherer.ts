@@ -1,7 +1,12 @@
 /**
  * Gatherer for the Server Leaderboard infographic. It owns database reads,
- * Discord display-name resolution, and image-data conversion; the renderer is
- * a pure function of the resulting ServerCardData.
+ * Discord display-name resolution, image-data conversion, and per-avatar accent
+ * sampling; the renderer is a pure function of the resulting ServerCardData.
+ *
+ * Layout mirrors the Personal Wrapped "golden standard": a light-mode card whose
+ * palette is derived from the server icon, a vertical bar chart of the top
+ * personas by tokens, then horizontal bars for the most active members and the
+ * top models, and finally the server-wide token/spend totals.
  */
 import type { Guild } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -11,12 +16,18 @@ import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
+import {
+  chooseHeroVariant,
+  extractAvatarAccentColor,
+  extractCardPalette,
+  loadTomoriconDataUri,
+} from "@/utils/stats/cardColor";
 import type {
-  EmojiIcon,
   PersonIcon,
   ServerCardData,
-  ServerHumanEntry,
-  ServerPersonaEntry,
+  ServerMemberBar,
+  ServerModelBar,
+  ServerPersonaBar,
 } from "@/utils/stats/statsInfographic";
 
 export interface GatherServerCardArgs {
@@ -28,6 +39,7 @@ export interface GatherServerCardArgs {
   guild: Guild;
 }
 
+/** Resolves each top user's display name + avatar data URI (graceful on fetch failure). */
 async function resolveHumanIcons(guild: Guild, entries: TopUserEntry[]): Promise<PersonIcon[]> {
   return Promise.all(
     entries.map(async (entry) => {
@@ -44,73 +56,22 @@ async function resolveHumanIcons(guild: Guild, entries: TopUserEntry[]): Promise
   );
 }
 
-async function resolveEmojiIcons(guild: Guild, entries: Array<{ key: string; count: number }>): Promise<EmojiIcon[]> {
-  return Promise.all(
-    entries.map(async (entry) => {
-      const emoji = guild.emojis.cache.find((candidate) => candidate.name === entry.key);
-      const imageDataUri = emoji
-        ? await loadStoredPersonaAvatarDataUri(emoji.imageURL({ extension: "png", size: 64 }))
-        : null;
-      return { name: entry.key, imageDataUri };
-    }),
-  );
-}
-
 export async function gatherServerCardData(args: GatherServerCardArgs): Promise<ServerCardData> {
   const { serverId, guildDiscId, serverName, locale, timeframe, guild } = args;
   const windowFrom = resolveWindowFrom(timeframe);
   const windowArg = windowFrom ? { from: windowFrom } : {};
 
-  const [rawTopHumans, personaRoster, tokenTotals, totalTriggers, estimatedCost, modelBreakdown, emojiEntries] =
-    await Promise.all([
-      statRepository.getTopUsers({ serverId, limit: 3, ...windowArg }),
-      statRepository.getServerPersonaMessages({ serverId, limit: 3, ...windowArg }),
-      statRepository.getTokenTotals({ serverId, ...windowArg }),
-      statRepository.getMetricTotal({ metric: "message_sent", serverId, ...windowArg }),
-      statRepository.getEstimatedCost({ serverId, ...windowArg }),
-      statRepository.getModelBreakdown({ serverId, ...windowArg }),
-      statRepository.getMetricKeyBreakdown({ metric: "emoji_used", serverId, limit: 5, ...windowArg }),
-    ]);
-
-  const [humanIcons, humanCosts] = await Promise.all([
-    resolveHumanIcons(guild, rawTopHumans),
-    Promise.all(
-      rawTopHumans.map((entry) => statRepository.getEstimatedCost({ serverId, userId: entry.userId, ...windowArg })),
-    ),
+  // 1. One grouped query per ranked block — no per-row token/cost lookups.
+  const [rawTopMembers, personaTokenCosts, modelCosts, tokenTotals, totalTriggers, estimatedCost] = await Promise.all([
+    statRepository.getTopUsers({ serverId, limit: 3, ...windowArg }),
+    statRepository.getPersonaTokenCostBreakdown({ serverId, limit: 5, ...windowArg }),
+    statRepository.getModelCostBreakdown({ serverId, limit: 3, ...windowArg }),
+    statRepository.getTokenTotals({ serverId, ...windowArg }),
+    statRepository.getMetricTotal({ metric: "message_sent", serverId, ...windowArg }),
+    statRepository.getEstimatedCost({ serverId, ...windowArg }),
   ]);
-  const topHumans: ServerHumanEntry[] = rawTopHumans.map((entry, index) => ({
-    ...humanIcons[index],
-    rank: index + 1,
-    triggers: entry.count,
-    estimatedCost: humanCosts[index] ?? 0,
-  }));
 
-  let topPersonas: ServerPersonaEntry[] = [];
-  try {
-    const personas = await getCachedAllPersonas(guildDiscId);
-    topPersonas = await Promise.all(
-      personaRoster.map(async (entry, index) => {
-        const persona = personas.find((candidate) => candidate.persona_lineage_id === entry.lineageId);
-        const [personaTokens, avatarDataUri] = await Promise.all([
-          statRepository.getTokenTotals({ serverId, lineageId: entry.lineageId, ...windowArg }),
-          persona?.webhook_avatar_url
-            ? loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)
-            : Promise.resolve(null),
-        ]);
-        return {
-          name: persona?.persona_nickname ?? `Persona #${entry.lineageId}`,
-          avatarDataUri,
-          rank: index + 1,
-          inputTokens: personaTokens.inputTokens,
-          outputTokens: personaTokens.outputTokens,
-          sharePct: totalTriggers > 0 ? (entry.count / totalTriggers) * 100 : 0,
-        };
-      }),
-    );
-  } catch (error) {
-    log.warn("serverCardGatherer: persona resolution failed", error as Error);
-  }
-
+  // 2. Server icon → light-mode card palette (analogous to Personal's #1 avatar).
   let serverIconDataUri: string | null = null;
   const serverIconUrl = guild.iconURL({ extension: "png", forceStatic: true, size: 128 });
   if (serverIconUrl) {
@@ -120,27 +81,66 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
       log.warn("serverCardGatherer: server icon resolution failed", error as Error);
     }
   }
+  const palette = await extractCardPalette(serverIconDataUri);
+  const heroVariant = chooseHeroVariant();
+  const tomoriconDataUri = await loadTomoriconDataUri(palette.ink);
 
-  let topPersonaEmojis: EmojiIcon[] = [];
+  // 3. Top personas (vertical bars) — names + avatars from cache, bar tint from avatar.
+  let topPersonas: ServerPersonaBar[] = [];
   try {
-    topPersonaEmojis = await resolveEmojiIcons(guild, emojiEntries);
+    const personas = await getCachedAllPersonas(guildDiscId);
+    topPersonas = await Promise.all(
+      personaTokenCosts.map(async (entry, index) => {
+        const persona = personas.find((candidate) => candidate.persona_lineage_id === entry.lineageId);
+        const avatarDataUri = persona?.webhook_avatar_url
+          ? await loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)
+          : null;
+        const accent = await extractAvatarAccentColor(avatarDataUri, palette.accent);
+        return {
+          name: persona?.persona_nickname ?? `Persona #${entry.lineageId}`,
+          avatarDataUri,
+          rank: index + 1,
+          totalTokens: entry.inputTokens + entry.outputTokens,
+          estimatedCost: entry.cost,
+          accent,
+        };
+      }),
+    );
   } catch (error) {
-    log.warn("serverCardGatherer: emoji resolution failed", error as Error);
-    topPersonaEmojis = emojiEntries.map((entry) => ({ name: entry.key, imageDataUri: null }));
+    log.warn("serverCardGatherer: persona resolution failed", error as Error);
   }
+
+  // 4. Most active members (horizontal bars) — avatar + per-avatar bar tint.
+  const memberIcons = await resolveHumanIcons(guild, rawTopMembers);
+  const topMembers: ServerMemberBar[] = await Promise.all(
+    rawTopMembers.map(async (entry, index) => ({
+      ...memberIcons[index],
+      rank: index + 1,
+      triggers: entry.count,
+      accent: await extractAvatarAccentColor(memberIcons[index].avatarDataUri, palette.accentSecondary),
+    })),
+  );
+
+  // 5. Top models (horizontal bars) — token-ranked, no avatar.
+  const topModels: ServerModelBar[] = modelCosts.map((entry) => ({
+    name: prettifyModelCodename(entry.model),
+    totalTokens: entry.inputTokens + entry.outputTokens,
+    estimatedCost: entry.cost,
+  }));
 
   return {
     locale,
     timeframe,
     serverName,
     serverIconDataUri,
+    tomoriconDataUri,
+    palette,
     topPersonas,
-    topHumans,
-    topModelName: modelBreakdown[0] ? prettifyModelCodename(modelBreakdown[0].model) : null,
-    inputTokens: tokenTotals.inputTokens,
-    outputTokens: tokenTotals.outputTokens,
+    topMembers,
+    topModels,
+    totalTokens: tokenTotals.inputTokens + tokenTotals.outputTokens,
     estimatedCost,
     totalTriggers,
-    topPersonaEmojis,
+    heroVariant,
   };
 }

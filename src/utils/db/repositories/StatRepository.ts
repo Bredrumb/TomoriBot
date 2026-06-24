@@ -849,12 +849,17 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
-   * Per-persona token and estimated-cost totals for one user. The Personal
-   * Wrapped card joins these values to the message-ranked affinity list without
-   * issuing separate token/cost queries for each displayed persona.
+   * Per-persona token and estimated-cost totals, ranked by total tokens (highest
+   * first). With a `userId` this is the Personal Wrapped per-user "Favorite
+   * Personas" ranking (ordered by tokens to match the card's Tokens/Spent
+   * columns); with only a `serverId` it is the server-wide persona token
+   * leaderboard (Server Leaderboard card). Provide an optional `limit` to cap the
+   * ranked rows; omit it to return every persona.
+   *
+   * @param args - at least one of userId / serverId, optional limit, and window.
    */
   async getPersonaTokenCostBreakdown(
-    args: { userId: number; serverId?: number } & StatWindow,
+    args: { userId?: number; serverId?: number; limit?: number } & StatWindow,
   ): Promise<PersonaTokenCostEntry[]> {
     try {
       const from = windowFloor(args.from);
@@ -887,10 +892,15 @@ export class StatRepository implements IRepository<null> {
           GROUP BY llm_codename
         ) l ON l.llm_codename = sc.metric_key
         WHERE sc.metric IN ('tokens_in', 'tokens_out')
-          AND sc.user_id = ${args.userId}
+          AND (${args.userId ?? null}::int IS NULL OR sc.user_id = ${args.userId ?? null})
           AND (${args.serverId ?? null}::int IS NULL OR sc.server_id = ${args.serverId ?? null})
           AND sc.bucket >= ${from}::date
         GROUP BY sc.persona_lineage_id
+        ORDER BY (
+          COALESCE(SUM(CASE WHEN sc.metric = 'tokens_in' THEN sc.count ELSE 0 END), 0)
+          + COALESCE(SUM(CASE WHEN sc.metric = 'tokens_out' THEN sc.count ELSE 0 END), 0)
+        ) DESC
+        ${args.limit ? sql`LIMIT ${args.limit}` : sql``}
       `;
       return rows.map((row) => ({
         lineageId: Number(row.persona_lineage_id),
@@ -899,7 +909,7 @@ export class StatRepository implements IRepository<null> {
         cost: Number(row.cost),
       }));
     } catch (error) {
-      log.error(`StatRepository.getPersonaTokenCostBreakdown: failed for user ${args.userId}`, error);
+      log.error("StatRepository.getPersonaTokenCostBreakdown: failed", error);
       return [];
     }
   }

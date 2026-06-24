@@ -148,6 +148,10 @@ export default {
       top_humans: `トップユーザー`,
       top_model: `トップモデル`,
       top_persona_emojis: `ペルソナの人気絵文字`,
+      most_active_members: `アクティブなメンバー`,
+      top_models: `トップモデル`,
+      model_tokens_cost: `{count}トークン | {cost}`,
+      server_leaderboard_footer: `サーバーランキング（{timeframe}）`,
     },
 
     // /stats generate サブコマンド文字列

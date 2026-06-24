@@ -148,6 +148,10 @@ export default {
       top_humans: `Top Humans`,
       top_model: `Top Model`,
       top_persona_emojis: `Top Persona Emojis`,
+      most_active_members: `Most Active Members`,
+      top_models: `Top Models`,
+      model_tokens_cost: `{count} tokens | {cost}`,
+      server_leaderboard_footer: `SERVER LEADERBOARD ({timeframe})`,
     },
 
     // /stats generate subcommand strings
