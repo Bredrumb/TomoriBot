@@ -18,6 +18,7 @@ import type { TomoriState } from "../db/schema";
 import type { StructuredContextItem } from "../misc/context";
 import type { StreamingContext } from "../tool/interfaces";
 import type { ProviderError } from "../stream/interfaces";
+import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 export type ProviderApiFamily = "google-genai" | "openrouter" | "novelai" | "openai-compatible" | "anthropic";
 
@@ -111,6 +112,15 @@ export interface StreamResult {
    * user scope (the stream layer itself has no internal user id). Omitted when empty.
    */
   spritesShown?: string[];
+  /**
+   * Real, provider-reported token usage for this stream segment, normalized by
+   * the orchestrator from the adapter's native usage shape. Present only when
+   * the provider surfaced usage (OpenRouter, OpenAI-compatible, Anthropic,
+   * Gemini); absent for providers that report no usage, in which case the
+   * post-turn recorder falls back to the character estimate. One segment per
+   * tool-loop request, so a turn's true usage is the sum across segments.
+   */
+  usage?: TokenUsage;
 }
 
 /**

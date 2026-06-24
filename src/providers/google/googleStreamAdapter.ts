@@ -111,6 +111,12 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
   private speakerGuardAllowedSourceNames: string[] = [];
+  /**
+   * Latest `usageMetadata` seen on a raw Gemini stream chunk (kept in its native
+   * shape; the orchestrator normalizes it). Gemini reports cumulative usage and
+   * the authoritative totals on the final chunk, so latest-wins is correct.
+   */
+  private pendingUsage: Record<string, unknown> | undefined;
 
   constructor() {
     super({
@@ -171,6 +177,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
 
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
+    this.pendingUsage = undefined;
     const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
     this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
       botName,
@@ -320,6 +327,12 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         if (context.abortSignal?.aborted) {
           log.warn(`Google stream aborting for channel ${context.channel.id}: external abort signal received.`);
           return;
+        }
+        // Capture token usage off the raw SDK chunk (dropped by normalization).
+        // processChunk attaches it to metadata so the orchestrator can record it.
+        const usageMetadata = (chunkResponse as { usageMetadata?: Record<string, unknown> }).usageMetadata;
+        if (usageMetadata) {
+          this.pendingUsage = usageMetadata;
         }
         const normalizedChunk = this.normalizeGoogleStreamChunk(chunkResponse);
         const chunksToEmit = this.splitChunkWithTextAndFunctionCalls(normalizedChunk);
@@ -742,6 +755,12 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
 
     // Check for thought signatures and thought summaries
     const metadata: Record<string, unknown> = {};
+    // Attach the latest captured token usage (Gemini reports it on the raw
+    // chunk, which normalization strips). The orchestrator captures usage from
+    // any chunk's metadata, so emitting it here on every chunk is sufficient.
+    if (this.pendingUsage) {
+      metadata.usage = this.pendingUsage;
+    }
     const thoughtSignature = this.extractThoughtSignature(googleChunk);
     if (thoughtSignature) {
       metadata.thoughtSignature = thoughtSignature;

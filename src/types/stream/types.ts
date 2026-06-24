@@ -7,6 +7,7 @@
 
 import { HumanizerDegree } from "../db/schema";
 import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
+import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 /**
  * Discord streaming constants extracted from the original implementation
@@ -122,6 +123,16 @@ export interface StreamState {
    * so the post-turn stat recorder can count `sprite_shown` with full user scope.
    */
   spritesShown: string[];
+  /**
+   * Real, provider-reported token usage for this stream segment, normalized
+   * (via normalizeProviderUsage) from whichever chunk's metadata carried it.
+   * Captured across the whole loop — not just the terminal `done` chunk — so
+   * providers that emit usage on a separate trailing chunk (OpenAI
+   * `include_usage`) or clobber the done metadata (Anthropic `message_stop`)
+   * are still counted. Drained into StreamResult.usage. Undefined when the
+   * provider reported no usage.
+   */
+  usage?: TokenUsage;
 }
 
 /**
@@ -304,6 +315,7 @@ export function createDefaultStreamState(): StreamState {
     lastDeliveredSpriteKey: undefined,
     spriteGroupParity: false,
     spritesShown: [],
+    usage: undefined,
   };
 }
 

@@ -11,7 +11,7 @@ import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/ut
 import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
-import { charsToTokensText, estimateContextItemsTokens } from "@/utils/text/tokenEstimate";
+import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 
 /**
@@ -45,12 +45,15 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
  * emoji_used, and sprite_shown. Only counts turns that actually produced a persona
  * response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
  *
- * Tokens are CHARACTER-ESTIMATED (the "Track A" fallback shared with
- * `/tool estimate cost`): no provider StreamResult surfaces real usage yet, so
- * input is estimated from the built context and output from the response text.
- * This over-counts dense languages (e.g. Japanese) and is for rough stats / cost
- * estimates only, never billing truth. A future per-provider real-usage port can
- * replace the estimate without changing the metric shape (getEstimatedCost stays).
+ * Tokens prefer REAL provider usage when available: the orchestrator normalizes
+ * each provider's reported usage onto `StreamResult.usage`, and these are summed
+ * across the turn's stream segments (one per tool-loop request, each billed
+ * separately). When no segment reports usage (e.g. NovelAI, or a provider that
+ * omits it), tokens fall back to the CHARACTER-ESTIMATE ("Track A", shared with
+ * `/tool estimate cost`): input from the built context, output from the response
+ * text. The estimate over-counts dense languages (e.g. Japanese) and is rough;
+ * real usage is billing-accurate. Either way the metric shape is identical
+ * (`tokens_in`/`tokens_out` keyed by model id), so getEstimatedCost is unchanged.
  *
  * @param context - The completed turn's context (model + persona + server scope).
  * @param result  - The turn result; personaResponses carry the responding lineages.
@@ -87,13 +90,14 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     //    affinity), plus that persona's emoji usage and output-token volume — all
     //    persona-scoped, so keyed to the response's own lineage.
     const lineages = new Set<number>();
-    let outputTokens = 0;
+    let estimatedOutputTokens = 0;
     for (const response of result.personaResponses) {
       const lineageId = response.personaLineageId ?? primaryLineage;
       lineages.add(lineageId);
 
-      // 4a. Output token volume (character-estimated) for this response.
-      if (response.text) outputTokens += charsToTokensText(response.text.length);
+      // 4a. Output token volume (character-estimated) for this response — used
+      //     only as the fallback when the provider reported no real usage (5).
+      if (response.text) estimatedOutputTokens += charsToTokensText(response.text.length);
 
       // 4b. Successful custom-emoji uses in the final text, one increment per
       //     occurrence. Pre-aggregated per name so repeats collapse to one UPSERT.
@@ -119,11 +123,18 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     // 4c. One text_generated increment per completed turn (persona-scoped to the answering persona).
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "text_generated" });
 
-    // 5. Estimated token volume keyed by model id. Input is the built context (one
-    //    estimate per turn, attributed to the answering persona); output is summed
-    //    across persona responses. Cost is derived at read time from catalog pricing
-    //    (getEstimatedCost), so input vs output rate applies exactly per direction.
-    const inputTokens = estimateContextItemsTokens(context.contextItems);
+    // 5. Token volume keyed by model id, attributed to the answering persona.
+    //    Prefer REAL provider usage summed across the turn's stream segments
+    //    (billing-accurate); fall back to the character estimate (input from the
+    //    built context, output from response text) when no segment reported usage.
+    //    Cost is derived at read time from catalog pricing (getEstimatedCost), so
+    //    input vs output rate applies exactly per direction either way.
+    const realUsage = sumTurnUsage(result.streamResults);
+    const inputTokens = realUsage ? realUsage.inputTokens : estimateContextItemsTokens(context.contextItems);
+    const outputTokens = realUsage ? realUsage.outputTokens : estimatedOutputTokens;
+    if (realUsage) {
+      log.info(`Stats: recording real provider usage (in=${inputTokens}, out=${outputTokens}) for ${modelCodename}`);
+    }
     if (inputTokens > 0) {
       statRepository.recordStat({
         serverId,

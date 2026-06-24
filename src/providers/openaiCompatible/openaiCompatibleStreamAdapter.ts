@@ -439,9 +439,18 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
 
     const choice = openAIChunk.choices?.[0];
     if (!choice) {
+      // With `stream_options.include_usage`, the API emits a final chunk that has
+      // empty `choices` but carries `usage`. Surface that usage (the orchestrator
+      // captures it from any chunk's metadata) instead of dropping it here.
+      const trailingMetadata: Record<string, unknown> = {};
+      if (openAIChunk.usage) {
+        trailingMetadata.usage = openAIChunk.usage;
+        log.info(`${this.options.adapterName}: Usage ${openAIChunk.usage.total_tokens ?? "unknown"} total tokens`);
+      }
       return this.attachPendingThoughts({
         type: "text",
         content: "",
+        metadata: Object.keys(trailingMetadata).length > 0 ? trailingMetadata : undefined,
       });
     }
 

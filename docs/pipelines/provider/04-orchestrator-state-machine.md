@@ -24,6 +24,11 @@ determine the shape of the final `StreamResult`. Three concerns are woven throug
      return `{ status: "error", data: error }`
    - `"done"` → record `terminalDoneMetadata` (finish reason); continue the loop (generator will
      exhaust on the next `await`)
+   - **Token usage** — on *any* chunk (not just `"done"`), if `metadata.usage` is present it is
+     normalized (`normalizeProviderUsage`) into `state.usage`, latest-wins. This captures providers
+     that emit usage on a trailing empty-choices chunk (OpenAI `include_usage`) or that clobber the
+     terminal `done` metadata (Anthropic `message_stop`). `state.usage` is drained into
+     `StreamResult.usage` on the `function_call` and `completed` results.
 
 3. **Inactivity timeout** — a rolling `setTimeout` resets on every chunk (`resetInactivityTimer`).
    If no chunk arrives for `config.inactivityTimeoutMs`, `state.timedOut = true`. The loop detects
@@ -65,8 +70,16 @@ interface StreamResult {
   stopReason?: StreamStopReason;
   thoughtLog?: ThoughtLogPayload;
   naiContinuationPrefill?: string; // NAI-specific trailing fragment for retry
+  spritesShown?: string[];         // sprite labels delivered this segment (stat attribution)
+  usage?: TokenUsage;              // real provider token usage, normalized (when surfaced)
 }
 ```
+
+`usage` carries the provider's real `{ inputTokens, outputTokens }` for this segment when the
+provider reports it (OpenRouter, OpenAI-compatible, Anthropic, Gemini). The post-turn stat
+recorder (`recordUsageStats`) sums it across the turn's segments — each tool-loop request is
+billed separately, so the sum is billing-accurate — and falls back to the character estimate
+(`@/utils/text/tokenEstimate`) only when no segment surfaced usage.
 
 ## Side effects
 

@@ -22,6 +22,92 @@ export const CHARS_PER_TOKEN_TEXT = 4;
 export const CHARS_PER_TOKEN_JSON = 3.5;
 
 /**
+ * Normalized, provider-agnostic token usage for a single provider response.
+ *
+ * The streaming orchestrator collapses every provider's native usage shape
+ * (OpenAI `prompt_tokens`/`completion_tokens`, OpenRouter camelCase, Anthropic
+ * flat `input_tokens`/`output_tokens`, Gemini `usageMetadata`) into this one
+ * shape (see {@link normalizeProviderUsage}) so downstream consumers — the
+ * post-turn stat recorder above all — never branch on provider.
+ */
+export interface TokenUsage {
+  /** Real prompt/input tokens billed for this response. */
+  inputTokens: number;
+  /** Real completion/output tokens billed for this response (incl. reasoning). */
+  outputTokens: number;
+}
+
+/**
+ * Normalize any provider's raw usage object into {@link TokenUsage}.
+ *
+ * Accepts the union of every shape the adapters surface in `metadata.usage`
+ * (or, for Anthropic, flat on metadata): snake_case OpenAI, camelCase
+ * OpenRouter, Anthropic `input_tokens`/`output_tokens`, and Gemini
+ * `promptTokenCount`/`candidatesTokenCount` (+ `thoughtsTokenCount`, billed as
+ * output). Returns null when no usable token counts are present, so callers can
+ * cleanly fall back to the character estimate.
+ *
+ * @param raw - A provider usage object (or metadata that contains one), any shape.
+ * @returns Normalized usage, or null if nothing parseable was found.
+ */
+export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
+  if (!raw || typeof raw !== "object") return null;
+  const u = raw as Record<string, unknown>;
+
+  // 1. Some adapters nest the usage object under `.usage`; unwrap it first.
+  if (u.usage && typeof u.usage === "object") {
+    const nested = normalizeProviderUsage(u.usage);
+    if (nested) return nested;
+  }
+
+  const num = (...keys: string[]): number => {
+    for (const key of keys) {
+      const value = u[key];
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+    }
+    return 0;
+  };
+
+  // 2. Input: OpenAI/OpenRouter prompt tokens, Anthropic input, Gemini prompt count.
+  const inputTokens = num("prompt_tokens", "promptTokens", "input_tokens", "inputTokens", "promptTokenCount");
+  // 3. Output: completion/output tokens, Gemini candidates count. Gemini bills
+  //    thinking tokens separately (`thoughtsTokenCount`) at the output rate, so
+  //    add them to avoid undercounting reasoning models.
+  const outputTokens =
+    num("completion_tokens", "completionTokens", "output_tokens", "outputTokens", "candidatesTokenCount") +
+    num("thoughtsTokenCount");
+
+  if (inputTokens <= 0 && outputTokens <= 0) return null;
+  return { inputTokens, outputTokens };
+}
+
+/**
+ * Sum the real per-response usage across all stream segments of one turn.
+ *
+ * A tool-using turn issues one provider request per tool-loop iteration, each
+ * returning its own {@link TokenUsage}; the provider bills each request, so the
+ * turn's true token cost is the sum across segments (both input and output).
+ * Returns null when no segment surfaced real usage, signalling the caller to
+ * fall back to the character estimate for the whole turn.
+ *
+ * @param streamResults - The turn's stream segments (carry `usage` when real).
+ * @returns Summed real usage, or null if no segment had real usage.
+ */
+export function sumTurnUsage(streamResults: ReadonlyArray<{ usage?: TokenUsage }>): TokenUsage | null {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let found = false;
+  for (const result of streamResults) {
+    if (result.usage) {
+      inputTokens += result.usage.inputTokens;
+      outputTokens += result.usage.outputTokens;
+      found = true;
+    }
+  }
+  return found ? { inputTokens, outputTokens } : null;
+}
+
+/**
  * Estimate token count from a prose character count.
  * @param chars - Number of characters
  * @returns Estimated token count
