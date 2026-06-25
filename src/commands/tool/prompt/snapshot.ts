@@ -1504,11 +1504,14 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
     },
     custom: () => {
       const customThinking = buildCustomThinkingRequest(config.custom_endpoint_url, config.thinking_level);
-      if (customThinking.reasoning_effort) {
+      if (customThinking.reasoning_effort !== undefined) {
         out.reasoning_effort = customThinking.reasoning_effort;
       }
       if (customThinking.chat_template_kwargs) {
         out.chat_template_kwargs = customThinking.chat_template_kwargs;
+      }
+      if (customThinking.thinking_directive) {
+        out.thinking_directive = customThinking.thinking_directive;
       }
     },
     novelai: () => {

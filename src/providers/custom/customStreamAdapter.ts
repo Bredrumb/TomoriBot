@@ -87,7 +87,7 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
           requestBody.think = thinkingRequest.think;
           log.info(`CustomStreamAdapter: Applying Ollama think=${thinkingRequest.think}`);
         }
-        if (thinkingRequest.reasoning_effort) {
+        if (thinkingRequest.reasoning_effort !== undefined) {
           requestBody.reasoning_effort = thinkingRequest.reasoning_effort;
           log.info(`CustomStreamAdapter: Applying reasoning_effort=${thinkingRequest.reasoning_effort}`);
         }
@@ -96,6 +96,10 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
           log.info(
             `CustomStreamAdapter: Applying chat_template_kwargs=${JSON.stringify(thinkingRequest.chat_template_kwargs)}`,
           );
+        }
+        if (thinkingRequest.thinking_directive) {
+          applyCustomThinkingDirective(requestBody, thinkingRequest.thinking_directive);
+          log.info(`CustomStreamAdapter: Applying thinking directive ${thinkingRequest.thinking_directive}`);
         }
       },
     });
@@ -166,6 +170,28 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
 
     return { ...base, content: toolResult.visibleText, thoughts: allThoughts };
   }
+}
+
+function applyCustomThinkingDirective(requestBody: Record<string, unknown>, directive: string): void {
+  const messages = requestBody.messages;
+  if (!Array.isArray(messages)) {
+    return;
+  }
+
+  // Put /nothink in the assistant prefill so chat templates consume it as a
+  // generation directive rather than exposing it as visible user/system text.
+  const lastMessage = messages.at(-1) as Record<string, unknown> | undefined;
+  if (lastMessage?.role === "assistant" && typeof lastMessage.content === "string") {
+    if (!lastMessage.content.trimStart().startsWith(directive)) {
+      lastMessage.content = `${directive}\n${lastMessage.content}`;
+    }
+    return;
+  }
+
+  messages.push({
+    role: "assistant",
+    content: directive,
+  });
 }
 
 /** Merges two thought arrays, omitting undefined/empty sources. */
