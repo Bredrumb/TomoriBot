@@ -12,14 +12,14 @@ export default {
       select_option_description: `[{persona_name}] {reminder_time} ({timezone}) {target_channel} | {reminder_type}{repeat_text}{manager_created_by_text}`,
       select_type_task: `タスク`,
       select_type_reminder: `{user_nickname}さんへのリマインダー`,
-      select_repeat_text: ` | {hours}時間ごとに繰り返し`,
+      select_repeat_text: ` | {interval}ごとに繰り返し`,
       select_manager_created_by_text: ` | 作成者: {creator_name}`,
       no_entries_title: `スケジュール済みタスクがありません`,
       no_entries: `編集するスケジュール済みタスクやリマインダーがありません。リマインドしてほしい内容を私に伝えるか、タスクを予定してください。`,
       confirm_title: `このスケジュール済みタスクを編集しますか？`,
       confirm_description: `**内容:** {reminder_purpose}
 **次回実行:** {reminder_time}
-**間隔（時間）:** {repetition_interval_hours}
+**間隔:** {repetition_interval_text}
 **種類:** {reminder_type}
 **対象ユーザー:** {target_user}
 **チャンネル:** {target_channel}`,
@@ -30,9 +30,12 @@ export default {
       time_input_label: `次回実行時刻`,
       time_input_description: `14:30 または 1430 のような24時間表記を使います。`,
       time_input_placeholder: `14:30`,
-      interval_input_label: `間隔（時間）`,
+      interval_input_label: `間隔（分）`,
       interval_input_description: `繰り返しを無効にするには0を設定します。`,
       interval_input_placeholder: `0`,
+      repeat_limit_input_label: `繰り返し上限`,
+      repeat_limit_input_description: `空欄で維持。count:4、until:18:00、clear が使えます。`,
+      repeat_limit_input_placeholder: `count:4 または until:18:00`,
       reminder_checkbox_label: `自分宛てのリマインダーにする`,
       reminder_checkbox_description: `実行されるたびにあなたをメンションします。`,
       type_reminder: `リマインダー`,
@@ -43,13 +46,15 @@ export default {
       invalid_time_title: `実行時刻が無効です`,
       invalid_time_description: `\`14:30\`、\`1430\`、\`00:00\`、\`2400\` のような24時間表記を入力してください。`,
       invalid_interval_title: `間隔が無効です`,
-      invalid_interval_description: `間隔は時間単位の整数である必要があります。繰り返しを無効にするには \`0\` を使ってください。`,
+      invalid_interval_description: `間隔は分単位の整数である必要があります。繰り返しを無効にするには \`0\` を使ってください。`,
+      invalid_repeat_limit_title: `繰り返し上限が無効です`,
+      invalid_repeat_limit_description: `\`count:4\`、\`until:18:00\`、\`until:2026-06-22_18:00\`、\`clear\`、または空欄を使ってください。`,
       no_changes_title: `変更はありません`,
       no_changes_description: `スケジュール済みタスクは変更されませんでした。`,
       success_title: `スケジュール済みタスクを更新しました`,
       success_description: `**内容:** {reminder_purpose}
 **次回実行:** {reminder_time}
-**間隔（時間）:** {repetition_interval_hours}
+**間隔:** {repetition_interval_text}
 **種類:** {reminder_type}
 **対象ユーザー:** {target_user}
 **チャンネル:** {target_channel}`,
@@ -61,7 +66,7 @@ export default {
       select_description: `削除するスケジュール済みタスクまたはリマインダーを選択してください`,
       select_placeholder: `スケジュール済みタスクを選択...`,
       select_option_description: `[{persona_name}] {reminder_time} ({timezone}) #{target_channel}{repeat_text}{manager_created_by_text}`,
-      select_repeat_text: ` | {hours}時間ごとに繰り返し`,
+      select_repeat_text: ` | {interval}ごとに繰り返し`,
       select_manager_created_by_text: ` | 作成者: {creator_name}`,
       no_entries_title: `スケジュール済みタスクがありません`,
       no_entries: `削除するスケジュール済みタスクやリマインダーがありません。リマインドしてほしい内容を私に伝えるか、タスクを予定してください。`,

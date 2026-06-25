@@ -19,13 +19,68 @@ import { sendMatrixReminderMention } from "../utils/bridges/matrix";
 
 function getNextRecurringReminderTime(
   reminderTime: Date,
-  repetitionIntervalHours: number,
+  repetitionIntervalMinutes: number,
   referenceTimeMs = Date.now(),
 ): Date {
-  const intervalMs = repetitionIntervalHours * 60 * 60 * 1000;
+  const intervalMs = repetitionIntervalMinutes * 60 * 1000;
   const scheduledTimeMs = reminderTime.getTime();
   const intervalsElapsed = Math.max(1, Math.floor((referenceTimeMs - scheduledTimeMs) / intervalMs) + 1);
   return new Date(scheduledTimeMs + intervalsElapsed * intervalMs);
+}
+
+function getLocalDayStartUtcMs(date: Date, timezoneOffset: number): number {
+  const localDate = new Date(date.getTime() + timezoneOffset * 60 * 60 * 1000);
+  return (
+    Date.UTC(localDate.getUTCFullYear(), localDate.getUTCMonth(), localDate.getUTCDate()) -
+    timezoneOffset * 60 * 60 * 1000
+  );
+}
+
+function getLocalMinuteOfDay(date: Date, timezoneOffset: number): number {
+  const localDate = new Date(date.getTime() + timezoneOffset * 60 * 60 * 1000);
+  return localDate.getUTCHours() * 60 + localDate.getUTCMinutes();
+}
+
+function isInDailyWindow(
+  date: Date,
+  windowStartMinutes: number,
+  windowEndMinutes: number,
+  timezoneOffset: number,
+): boolean {
+  const localMinute = getLocalMinuteOfDay(date, timezoneOffset);
+  return localMinute >= windowStartMinutes && localMinute <= windowEndMinutes;
+}
+
+function alignToDailyWindow(
+  candidate: Date,
+  windowStartMinutes: number,
+  windowEndMinutes: number,
+  timezoneOffset: number,
+): Date {
+  const localMinute = getLocalMinuteOfDay(candidate, timezoneOffset);
+  const localDayStartUtcMs = getLocalDayStartUtcMs(candidate, timezoneOffset);
+
+  if (localMinute < windowStartMinutes) {
+    return new Date(localDayStartUtcMs + windowStartMinutes * 60 * 1000);
+  }
+
+  if (localMinute > windowEndMinutes) {
+    return new Date(localDayStartUtcMs + 24 * 60 * 60 * 1000 + windowStartMinutes * 60 * 1000);
+  }
+
+  return candidate;
+}
+
+function getNextWindowedRecurringReminderTime(
+  reminderTime: Date,
+  repetitionIntervalMinutes: number,
+  windowStartMinutes: number,
+  windowEndMinutes: number,
+  timezoneOffset: number,
+  referenceTimeMs = Date.now(),
+): Date {
+  const intervalCandidate = getNextRecurringReminderTime(reminderTime, repetitionIntervalMinutes, referenceTimeMs);
+  return alignToDailyWindow(intervalCandidate, windowStartMinutes, windowEndMinutes, timezoneOffset);
 }
 
 export class ReminderProcessor {
@@ -58,6 +113,74 @@ export class ReminderProcessor {
       log.info(
         `Executing reminder ${reminder.reminder_id} for user ${reminder.user_nickname} (${reminder.user_discord_id})`,
       );
+
+      const currentTime = new Date();
+      const repetitionIntervalMinutes =
+        typeof reminder.repetition_interval_minutes === "number"
+          ? reminder.repetition_interval_minutes
+          : typeof reminder.repetition_interval_hours === "number"
+            ? reminder.repetition_interval_hours * 60
+            : null;
+      const isRecurring = repetitionIntervalMinutes !== null && repetitionIntervalMinutes >= 1;
+      const hasDailyWindow =
+        typeof reminder.daily_window_start_minutes === "number" &&
+        typeof reminder.daily_window_end_minutes === "number" &&
+        typeof reminder.daily_window_timezone_offset === "number";
+      const repeatUntilTime = reminder.repeat_until_time instanceof Date ? reminder.repeat_until_time : null;
+      const currentRepeatRemainingCount =
+        typeof reminder.repeat_remaining_count === "number" ? reminder.repeat_remaining_count : null;
+
+      if (isRecurring && reminder.reminder_id) {
+        if (currentRepeatRemainingCount !== null && currentRepeatRemainingCount <= 0) {
+          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+          log.success(`Finite recurring reminder ${reminder.reminder_id} had no remaining runs and was deleted`);
+          return;
+        }
+
+        if (repeatUntilTime && reminder.reminder_time.getTime() > repeatUntilTime.getTime()) {
+          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+          log.success(`Recurring reminder ${reminder.reminder_id} was past its repeat-until time and was deleted`);
+          return;
+        }
+      }
+
+      if (isRecurring && hasDailyWindow && reminder.reminder_id) {
+        const windowStartMinutes = reminder.daily_window_start_minutes as number;
+        const windowEndMinutes = reminder.daily_window_end_minutes as number;
+        const windowTimezoneOffset = reminder.daily_window_timezone_offset as number;
+
+        if (!isInDailyWindow(currentTime, windowStartMinutes, windowEndMinutes, windowTimezoneOffset)) {
+          const nextTriggerTime = alignToDailyWindow(
+            currentTime,
+            windowStartMinutes,
+            windowEndMinutes,
+            windowTimezoneOffset,
+          );
+
+          if (repeatUntilTime && nextTriggerTime.getTime() > repeatUntilTime.getTime()) {
+            await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+            log.success(`Daily-window reminder ${reminder.reminder_id} passed its repeat-until time and was deleted`);
+            return;
+          }
+
+          const rescheduled = await serverScheduleRepository.rescheduleReminder(
+            reminder.reminder_id,
+            nextTriggerTime,
+            currentRepeatRemainingCount,
+            repeatUntilTime,
+          );
+
+          if (rescheduled) {
+            log.info(
+              `Daily-window reminder ${reminder.reminder_id} was due outside its active window and rescheduled for ${nextTriggerTime.toISOString()}`,
+            );
+          } else {
+            log.error(`Failed to reschedule daily-window reminder ${reminder.reminder_id}; deleting to prevent loops`);
+            await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+          }
+          return;
+        }
+      }
 
       const channel = await this.client.channels.fetch(reminder.channel_disc_id);
 
@@ -108,7 +231,6 @@ export class ReminderProcessor {
         return;
       }
 
-      const currentTime = new Date();
       const lateness = calculateLateness(reminder.reminder_time, currentTime);
 
       log.info(`About to call tomoriChat for reminder ${reminder.reminder_id}:`);
@@ -176,13 +298,37 @@ export class ReminderProcessor {
         await this.ensureReminderRecipientMention(channel, reminder, lastMessage.id, reminderStartTime);
       }
 
-      const repetitionIntervalHours =
-        typeof reminder.repetition_interval_hours === "number" ? reminder.repetition_interval_hours : null;
-      const isRecurring = repetitionIntervalHours !== null && repetitionIntervalHours >= 1;
-
       if (isRecurring && reminder.reminder_id) {
-        const nextTriggerTime = getNextRecurringReminderTime(reminder.reminder_time, repetitionIntervalHours);
-        const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, nextTriggerTime);
+        const nextRepeatRemainingCount =
+          currentRepeatRemainingCount !== null ? Math.max(0, currentRepeatRemainingCount - 1) : null;
+
+        if (nextRepeatRemainingCount !== null && nextRepeatRemainingCount <= 0) {
+          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+          log.success(`Finite recurring reminder ${reminder.reminder_id} executed its final run and was deleted`);
+          return;
+        }
+
+        const nextTriggerTime = hasDailyWindow
+          ? getNextWindowedRecurringReminderTime(
+              reminder.reminder_time,
+              repetitionIntervalMinutes,
+              reminder.daily_window_start_minutes as number,
+              reminder.daily_window_end_minutes as number,
+              reminder.daily_window_timezone_offset as number,
+            )
+          : getNextRecurringReminderTime(reminder.reminder_time, repetitionIntervalMinutes);
+        if (repeatUntilTime && nextTriggerTime.getTime() > repeatUntilTime.getTime()) {
+          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+          log.success(`Recurring reminder ${reminder.reminder_id} reached its repeat-until time and was deleted`);
+          return;
+        }
+
+        const rescheduled = await serverScheduleRepository.rescheduleReminder(
+          reminder.reminder_id,
+          nextTriggerTime,
+          nextRepeatRemainingCount,
+          repeatUntilTime,
+        );
 
         if (rescheduled) {
           log.success(`Reminder ${reminder.reminder_id} executed and rescheduled for ${nextTriggerTime.toISOString()}`);

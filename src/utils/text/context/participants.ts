@@ -40,8 +40,26 @@ const normalizeImageAppearanceTags = (tags: string[] | null | undefined): string
   return normalizedTags.length > 0 ? normalizedTags : undefined;
 };
 
+function formatMinuteOfDay(minutes: number): string {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+}
+
 export function formatPendingReminderForContext(
-  reminder: Pick<ReminderRow, "reminder_id" | "reminder_purpose" | "reminder_time" | "repetition_interval_hours">,
+  reminder: Pick<
+    ReminderRow,
+    | "reminder_id"
+    | "reminder_purpose"
+    | "reminder_time"
+    | "repetition_interval_hours"
+    | "repetition_interval_minutes"
+    | "repeat_remaining_count"
+    | "repeat_until_time"
+    | "daily_window_start_minutes"
+    | "daily_window_end_minutes"
+    | "daily_window_timezone_offset"
+  >,
   timezoneOffset: number,
 ): string {
   const formattedTime = `${formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
@@ -53,10 +71,49 @@ export function formatPendingReminderForContext(
     minute: "2-digit",
   })} (${formatUTCOffset(timezoneOffset)})`;
   const reminderIdPrefix = typeof reminder.reminder_id === "number" ? `ID:${reminder.reminder_id} ` : "";
-  const repeatText =
-    typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-      ? `, repeats every ${reminder.repetition_interval_hours} hour(s)`
-      : "";
+  const repeatMinutes =
+    typeof reminder.repetition_interval_minutes === "number" && reminder.repetition_interval_minutes >= 1
+      ? reminder.repetition_interval_minutes
+      : typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
+        ? reminder.repetition_interval_hours * 60
+        : 0;
+  const repeatDetails: string[] = [];
+
+  if (repeatMinutes >= 1) {
+    repeatDetails.push(
+      repeatMinutes % 60 === 0
+        ? `repeats every ${repeatMinutes / 60} hour(s)`
+        : `repeats every ${repeatMinutes} minute(s)`,
+    );
+
+    if (typeof reminder.repeat_remaining_count === "number" && reminder.repeat_remaining_count >= 1) {
+      repeatDetails.push(`${reminder.repeat_remaining_count} remaining run(s)`);
+    }
+
+    if (reminder.repeat_until_time instanceof Date) {
+      const formattedRepeatUntil = `${formatTimeWithOffset(new Date(reminder.repeat_until_time), timezoneOffset, {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })} (${formatUTCOffset(timezoneOffset)})`;
+      repeatDetails.push(`until ${formattedRepeatUntil}`);
+    }
+
+    if (
+      typeof reminder.daily_window_start_minutes === "number" &&
+      typeof reminder.daily_window_end_minutes === "number" &&
+      typeof reminder.daily_window_timezone_offset === "number"
+    ) {
+      repeatDetails.push(
+        `active ${formatMinuteOfDay(reminder.daily_window_start_minutes)}-${formatMinuteOfDay(reminder.daily_window_end_minutes)} (${formatUTCOffset(reminder.daily_window_timezone_offset)})`,
+      );
+    }
+  }
+
+  const repeatText = repeatDetails.length > 0 ? `, ${repeatDetails.join(", ")}` : "";
 
   return `${reminderIdPrefix}"${reminder.reminder_purpose}" (scheduled for ${formattedTime}${repeatText})`;
 }
