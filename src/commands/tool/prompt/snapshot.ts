@@ -1510,9 +1510,6 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
       if (customThinking.chat_template_kwargs) {
         out.chat_template_kwargs = customThinking.chat_template_kwargs;
       }
-      if (customThinking.thinking_directive) {
-        out.thinking_directive = customThinking.thinking_directive;
-      }
     },
     novelai: () => {
       out.thinking_directive = getNovelAiThinkingDirective(config.thinking_level);

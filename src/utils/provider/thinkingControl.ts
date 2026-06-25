@@ -42,18 +42,13 @@ export interface ThinkingModeRequest {
 export interface CustomThinkingRequest {
   /** Ollama-native boolean thinking toggle (on/off only). */
   think?: boolean;
-  /**
-   * OpenAI-convention effort level (vLLM, other compatible servers).
-   * Empty string is intentional for KoboldCPP: it clears reasoning_effort so the
-   * backend does not translate "none" into reasoning_budget=0.
-   */
-  reasoning_effort?: "" | "none" | "low" | "medium" | "high";
+  /** OpenAI-convention effort level (vLLM, other compatible servers). */
+  reasoning_effort?: "none" | "low" | "medium" | "high";
   /** Chat-template toggle used by local OpenAI-compatible backends such as KoboldCPP. */
   chat_template_kwargs?: {
     enable_thinking: boolean;
+    reasoning_effort?: "none" | "low" | "medium" | "high";
   };
-  /** In-band fallback for backends that ignore request-level thinking controls. */
-  thinking_directive?: "/nothink";
 }
 
 type ProviderEffortLevel = "low" | "medium" | "high";
@@ -343,19 +338,15 @@ export function buildCustomThinkingRequest(
   }
 
   if (effectiveLevel === "none") {
-    const request: CustomThinkingRequest = {
-      chat_template_kwargs: { enable_thinking: false },
-      thinking_directive: "/nothink",
-    };
-
-    // KoboldCPP maps reasoning_effort="none" to reasoning_budget=0, which still
-    // enters thinking mode and repeatedly reports that the zero-token budget was
-    // exceeded. Sending an empty effort clears that path while /nothink covers
-    // Gemma-style templates that need an in-band no-thinking directive.
     if (endpointUrl && looksLikeKoboldCppEndpoint(endpointUrl)) {
-      request.reasoning_effort = "";
+      // KoboldCPP maps top-level reasoning_effort="none" to reasoning_budget=0,
+      // which still enters thinking mode. Its Jinja renderer also accepts
+      // chat_template_kwargs, so put the "none" signal there instead: the Gemma
+      // template sees thinking disabled without poisoning the generation budget.
+      return { chat_template_kwargs: { enable_thinking: false, reasoning_effort: "none" } };
     }
-    return request;
+
+    return { chat_template_kwargs: { enable_thinking: false } };
   }
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.
