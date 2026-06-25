@@ -113,7 +113,7 @@ export function validatePersonas(): string[] {
 
 export function buildPersonaSeedStatements(): string[] {
   const rows = rowsOf();
-  
+
   const backfillValues = rows
     .map((preset) => `  (${str(preset.name)}, CAST(${preset.lineageId} AS BIGINT))`)
     .join(",\n");
@@ -126,9 +126,7 @@ ${backfillValues}
 WHERE persona_presets.persona_preset_name = seed.name
   AND persona_presets.preset_lineage_id IS NULL;`;
 
-  const values = rows
-    .map((preset) => `  (${renderPersonaTuple(preset)})`)
-    .join(",\n");
+  const values = rows.map((preset) => `  (${renderPersonaTuple(preset)})`).join(",\n");
 
   return [
     backfillStatement,

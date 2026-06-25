@@ -180,6 +180,18 @@ async function loadRegisteredOpenRouterEntriesForCapability(
   }
 }
 
+/**
+ * Resolve a codename to a curated built-in catalog entry, or null when it is not
+ * a built-in the scope can already use.
+ *
+ * A row counts as "built-in" (→ registration is rejected with `already_available`)
+ * only when it is BOTH non-scoped AND non-deprecated. Deprecated built-ins are
+ * deliberately excluded: every selection query filters `is_deprecated = false`, so
+ * a deprecated catalog row is hidden from the picker and must instead be
+ * registerable as a scoped model by a scope that explicitly opts into it. Returning
+ * null here lets {@link registerOpenRouterModelForScope} promote the shared row to a
+ * scoped registration (see `upsertScopedLlm`, which clears `is_deprecated`).
+ */
 async function loadOpenRouterBuiltInEntry(
   capability: OpenRouterModelCapability,
   modelCodename: string,
@@ -187,19 +199,25 @@ async function loadOpenRouterBuiltInEntry(
   switch (capability) {
     case "text": {
       const llm = await llmModelRepo.loadByProviderAndCodename("openrouter", modelCodename);
-      return llm && !llm.is_scoped_registration ? buildRegisteredEntryFromLlm(llm) : null;
+      return llm && !llm.is_scoped_registration && !llm.is_deprecated ? buildRegisteredEntryFromLlm(llm) : null;
     }
     case "embedding": {
       const model = await llmModelRepo.loadEmbeddingModelByProviderAndCodename("openrouter", modelCodename);
-      return model && !model.is_scoped_registration ? buildRegisteredEntryFromEmbeddingModel(model) : null;
+      return model && !model.is_scoped_registration && !model.is_deprecated
+        ? buildRegisteredEntryFromEmbeddingModel(model)
+        : null;
     }
     case "image": {
       const model = await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", modelCodename);
-      return model && !model.is_scoped_registration ? buildRegisteredEntryFromDiffusionModel(model) : null;
+      return model && !model.is_scoped_registration && !model.is_deprecated
+        ? buildRegisteredEntryFromDiffusionModel(model)
+        : null;
     }
     case "video": {
       const model = await llmModelRepo.loadVideoGenerationModelByProviderAndCodename("openrouter", modelCodename);
-      return model && !model.is_scoped_registration ? buildRegisteredEntryFromVideoModel(model) : null;
+      return model && !model.is_scoped_registration && !model.is_deprecated
+        ? buildRegisteredEntryFromVideoModel(model)
+        : null;
     }
   }
 }

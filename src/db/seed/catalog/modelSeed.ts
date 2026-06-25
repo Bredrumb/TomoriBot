@@ -66,6 +66,12 @@ const llmSpec: TableSpec<LlmInput> = {
       num(m.inputPricePerMillion),
       num(m.outputPricePerMillion),
     ].join(", "),
+  // The trailing WHERE guard is the key protection for scoped OpenRouter registrations:
+  // a row that a server/user has promoted to a scoped registration (is_scoped_registration = true)
+  // is user-owned, not a curated catalog entry, so the per-boot reseed must leave it untouched.
+  // Without this guard the reseed would reset is_scoped_registration = false and re-apply
+  // is_deprecated, silently reverting a user's deprecated-model registration on every restart.
+  // Curated (non-scoped, possibly NULL) rows still upsert normally and get normalized to false.
   onConflict: `ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
   ja_description = EXCLUDED.ja_description,
@@ -85,7 +91,8 @@ const llmSpec: TableSpec<LlmInput> = {
   supports_prefix_completion = EXCLUDED.supports_prefix_completion,
   input_price_per_million = EXCLUDED.input_price_per_million,
   output_price_per_million = EXCLUDED.output_price_per_million,
-  updated_at = CURRENT_TIMESTAMP`,
+  updated_at = CURRENT_TIMESTAMP
+  WHERE COALESCE(llms.is_scoped_registration, false) = false`,
   hasSmartest: true,
   sections: llmSections,
 };
@@ -104,6 +111,8 @@ const imageSpec: TableSpec<ImageInput> = {
       desc(m.desc),
       desc(m.ja),
     ].join(", "),
+  // WHERE guard: preserve scoped OpenRouter image registrations across the per-boot reseed.
+  // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   ja_description = EXCLUDED.ja_description,
@@ -113,7 +122,8 @@ const imageSpec: TableSpec<ImageInput> = {
   is_uncensored = EXCLUDED.is_uncensored,
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
-  updated_at = CURRENT_TIMESTAMP`,
+  updated_at = CURRENT_TIMESTAMP
+  WHERE COALESCE(image_diffusion_models.is_scoped_registration, false) = false`,
   hasSmartest: false,
   sections: imageSections,
 };
@@ -131,6 +141,8 @@ const videoSpec: TableSpec<VideoInput> = {
       desc(m.desc),
       desc(m.ja),
     ].join(", "),
+  // WHERE guard: preserve scoped OpenRouter video registrations across the per-boot reseed.
+  // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   ja_description = EXCLUDED.ja_description,
@@ -139,7 +151,8 @@ const videoSpec: TableSpec<VideoInput> = {
   is_free = EXCLUDED.is_free,
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
-  updated_at = CURRENT_TIMESTAMP`,
+  updated_at = CURRENT_TIMESTAMP
+  WHERE COALESCE(video_generation_models.is_scoped_registration, false) = false`,
   hasSmartest: false,
   sections: videoSections,
 };
@@ -157,6 +170,8 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
       desc(m.desc),
       desc(m.ja),
     ].join(", "),
+  // WHERE guard: preserve scoped OpenRouter embedding registrations across the per-boot reseed.
+  // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_family = EXCLUDED.model_family,
   model_description = EXCLUDED.model_description,
@@ -165,7 +180,8 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
   is_deprecated = EXCLUDED.is_deprecated,
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
-  updated_at = CURRENT_TIMESTAMP`,
+  updated_at = CURRENT_TIMESTAMP
+  WHERE COALESCE(embedding_models.is_scoped_registration, false) = false`,
   hasSmartest: false,
   sections: embeddingSections,
 };
