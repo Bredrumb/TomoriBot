@@ -44,6 +44,10 @@ export interface CustomThinkingRequest {
   think?: boolean;
   /** OpenAI-convention effort level (vLLM, other compatible servers). */
   reasoning_effort?: "none" | "low" | "medium" | "high";
+  /** Chat-template toggle used by local OpenAI-compatible backends such as KoboldCPP. */
+  chat_template_kwargs?: {
+    enable_thinking: boolean;
+  };
 }
 
 type ProviderEffortLevel = "low" | "medium" | "high";
@@ -320,6 +324,10 @@ export function buildCustomThinkingRequest(
   // Ollama supports a boolean think toggle only (no budget levels).
   if (endpointUrl && looksLikeOllamaEndpoint(endpointUrl)) {
     return { think: effectiveLevel !== "none" };
+  }
+
+  if (effectiveLevel === "none") {
+    return { chat_template_kwargs: { enable_thinking: false } };
   }
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.

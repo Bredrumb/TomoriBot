@@ -91,6 +91,12 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
           requestBody.reasoning_effort = thinkingRequest.reasoning_effort;
           log.info(`CustomStreamAdapter: Applying reasoning_effort=${thinkingRequest.reasoning_effort}`);
         }
+        if (thinkingRequest.chat_template_kwargs) {
+          requestBody.chat_template_kwargs = thinkingRequest.chat_template_kwargs;
+          log.info(
+            `CustomStreamAdapter: Applying chat_template_kwargs=${JSON.stringify(thinkingRequest.chat_template_kwargs)}`,
+          );
+        }
       },
     });
   }

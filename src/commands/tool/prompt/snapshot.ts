@@ -1507,6 +1507,9 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
       if (customThinking.reasoning_effort) {
         out.reasoning_effort = customThinking.reasoning_effort;
       }
+      if (customThinking.chat_template_kwargs) {
+        out.chat_template_kwargs = customThinking.chat_template_kwargs;
+      }
     },
     novelai: () => {
       out.thinking_directive = getNovelAiThinkingDirective(config.thinking_level);
