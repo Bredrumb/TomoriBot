@@ -2678,6 +2678,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   voice_message_enabled  BOOLEAN NOT NULL DEFAULT true,
   user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
+  verbatim_tool_calling_enabled BOOLEAN NOT NULL DEFAULT false,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

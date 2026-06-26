@@ -89,6 +89,17 @@ runToolLoop(ToolLoopParams)
 
 ## Pipeline-wide concerns
 
+### Verbatim Tool-Calling Workaround
+
+`/config workarounds` can enable `verbatim_tool_calling_enabled` for Custom
+OpenAI-compatible endpoints that stream only assistant text. The fallback parser
+lives in `CustomStreamAdapter`, not in `toolLoop.ts`: it converts a strict
+code-span/fenced tool call into the same provider-agnostic `FunctionCall` shape
+as native `delta.tool_calls`. From this pipeline's perspective, normal and
+verbatim tool calls both enter at `streamResult.status === "function_call"` and
+execute through `executeToolCall`, preserving deliberate-mode gating,
+tool-timeout handling, enhanced-context restarts, and function history.
+
 ### Iteration state
 
 The following state is shared across all iterations of the loop. Each call to

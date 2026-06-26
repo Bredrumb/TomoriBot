@@ -11,6 +11,11 @@ import { log } from "@/utils/misc/logger";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 import { humanizeString } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
+import {
+  VERBATIM_TOOL_CALLING_CONTEXT_DEPTH,
+  VERBATIM_TOOL_CALLING_NUDGE,
+  shouldInjectVerbatimToolCallingNudge,
+} from "@/utils/tools/verbatimToolCalling";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import {
   buildMediaAttributionText,
@@ -80,6 +85,13 @@ export async function appendDialogueHistoryContext(params: {
       const depth = params.tomoriConfig.context_note_depth ?? 0;
       activeNotes.push({ text: globalNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
     }
+  }
+  if (shouldInjectVerbatimToolCallingNudge(params.tomoriConfig, params.tomoriState)) {
+    activeNotes.push({
+      text: VERBATIM_TOOL_CALLING_NUDGE,
+      targetIndex: Math.max(0, totalMessages - VERBATIM_TOOL_CALLING_CONTEXT_DEPTH),
+      emitted: false,
+    });
   }
 
   const botNameLower = params.botName.toLowerCase();

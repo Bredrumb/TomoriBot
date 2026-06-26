@@ -68,7 +68,7 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `server_welcome_configs` — `/server welcome-channel`
 - `server_trigger_behavior_configs` — `/server always-reply`, `/server deliberate-trigger-mode`, cooldown settings (`ServerScheduleRepository`)
 - `server_auto_trigger_configs` — `/server auto-trigger` channels + threshold (`ServerScheduleRepository`)
-- `server_capabilities_configs` — `/capabilities manage` feature/tool toggles, `/capabilities toggle`
+- `server_capabilities_configs` — `/capabilities manage` feature/tool toggles, `/capabilities toggle`, `/config workarounds`
 - `server_novelai_imagegen_configs` — `/novelai` image parameters, `/config image-tags` defaults, `nai_diffusion_model_id`
 - `server_nsfw_configs` — `/nsfw` jailbreak toggles
 - `server_speech_configs` — `/speech` Chatterbox parameters, `chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, `chatterbox_exaggeration`
@@ -213,6 +213,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_member_permissions_configs.self_teaching_enabled` and `server_member_permissions_configs.personal_memories_enabled` are exposed in `/capabilities manage` because they gate core bot behavior, but they remain in the member-permissions split table with the other teaching/privacy toggles.
 - `server_capabilities_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
 - `server_capabilities_configs.user_blocking_enabled` gates the `block_user` and `unblock_user` built-in tools. The DB default is `true`.
+- `server_capabilities_configs.verbatim_tool_calling_enabled` gates the Custom-provider-only text parser that converts strict code-span tool calls into normal tool-loop calls. The DB default is `false`.
 - `persona_user_blocks` stores active persona-scoped mutes/blocks keyed by `(server_id, persona_id, user_disc_id)`, with `block_type` (`mute` or `block`), `reason`, and `expires_at`. Expired rows are ignored by repository reads. The table is intentionally separate from `personalization_blacklist`.
 - `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null.
 - `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`.

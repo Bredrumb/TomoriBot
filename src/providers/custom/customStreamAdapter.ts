@@ -2,10 +2,11 @@ import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/open
 import type { OpenAICompatibleStreamConfig } from "@/providers/openaiCompatible/openaiCompatibleTypes";
 import { GemmaToolCallParser } from "@/providers/custom/customGemmaToolParser";
 import { GemmaThinkingParser, GEMMA_THINKING_PARSER_ENABLED } from "@/providers/custom/customGemmaThinkingParser";
-import type { ProcessedChunk, RawStreamChunk } from "@/types/stream/interfaces";
+import type { ProcessedChunk, RawStreamChunk, StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 import { log } from "@/utils/misc/logger";
 import { buildCustomThinkingRequest } from "@/utils/provider/thinkingControl";
+import { VerbatimToolCallParser, getVerbatimToolCallMaxBufferChars } from "@/utils/tools/verbatimToolCallParser";
 
 /**
  * When true, the stream adapter scans `delta.content` for Gemma 4's hallucinated
@@ -27,6 +28,7 @@ export const CUSTOM_PROVIDER_PLACEHOLDER_API_KEY = "custom-endpoint-configured";
 export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
   private readonly gemmaThinkingParser = new GemmaThinkingParser();
   private readonly gemmaParser = new GemmaToolCallParser();
+  private verbatimParser: VerbatimToolCallParser | null = null;
 
   constructor() {
     super({
@@ -95,6 +97,18 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
     });
   }
 
+  override async *startStream(
+    config: StreamConfig,
+    context: StreamContext,
+  ): AsyncGenerator<RawStreamChunk, void, unknown> {
+    this.configureVerbatimToolCallParser(config, context);
+    try {
+      yield* super.startStream(config, context);
+    } finally {
+      this.verbatimParser = null;
+    }
+  }
+
   /**
    * Intercept text chunks to handle two Gemma 4 token formats that KoboldCPP
    * does not always convert to standard OpenAI fields:
@@ -114,16 +128,19 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
   override processChunk(chunk: RawStreamChunk): ProcessedChunk {
     const base = super.processChunk(chunk);
 
-    if (!GEMMA_TOOL_PARSER_ENABLED) {
+    if (!GEMMA_TOOL_PARSER_ENABLED && !this.verbatimParser) {
       return base;
     }
 
     // End-of-stream: flush both parsers and merge any recovered thoughts.
     if (base.type === "done") {
-      const thinkFlush = GEMMA_THINKING_PARSER_ENABLED
-        ? this.gemmaThinkingParser.flush()
-        : { visibleText: "", thoughts: [] };
-      const { pendingText, functionCall } = this.gemmaParser.flush();
+      const thinkFlush =
+        GEMMA_TOOL_PARSER_ENABLED && GEMMA_THINKING_PARSER_ENABLED
+          ? this.gemmaThinkingParser.flush()
+          : { visibleText: "", thoughts: [] };
+      const { pendingText, functionCall } = GEMMA_TOOL_PARSER_ENABLED
+        ? this.gemmaParser.flush()
+        : { pendingText: "", functionCall: null };
       const allThoughts = mergeThoughts(base.thoughts, thinkFlush.thoughts);
 
       if (functionCall) {
@@ -132,9 +149,22 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       }
 
       const flushedText = thinkFlush.visibleText + (pendingText ?? "");
-      if (flushedText) {
-        log.info(`CustomStreamAdapter: Flushing ${flushedText.length} held-back chars at stream end`);
-        return { ...base, type: "text", content: flushedText, thoughts: allThoughts };
+      const verbatimResult = this.feedVerbatimParser(flushedText);
+      const verbatimFlush = this.verbatimParser?.flush() ?? { pendingText: "", functionCall: null };
+      const visibleFlushText = verbatimResult.visibleText + verbatimFlush.pendingText;
+
+      if (verbatimResult.functionCall || verbatimFlush.functionCall) {
+        return {
+          ...base,
+          type: "function_call",
+          functionCall: verbatimResult.functionCall ?? verbatimFlush.functionCall ?? undefined,
+          thoughts: allThoughts,
+        };
+      }
+
+      if (visibleFlushText) {
+        log.info(`CustomStreamAdapter: Flushing ${visibleFlushText.length} held-back chars at stream end`);
+        return { ...base, type: "text", content: visibleFlushText, thoughts: allThoughts };
       }
 
       return { ...base, thoughts: allThoughts };
@@ -146,19 +176,62 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
     }
 
     // 1. Strip any <|channel>thought...<channel|> block, routing its content to thoughts.
-    const thinkResult = GEMMA_THINKING_PARSER_ENABLED
-      ? this.gemmaThinkingParser.feed(base.content)
-      : { visibleText: base.content, thoughts: [] };
+    const thinkResult =
+      GEMMA_TOOL_PARSER_ENABLED && GEMMA_THINKING_PARSER_ENABLED
+        ? this.gemmaThinkingParser.feed(base.content)
+        : { visibleText: base.content, thoughts: [] };
     const allThoughts = mergeThoughts(base.thoughts, thinkResult.thoughts);
 
     // 2. Scan remaining visible text for <|tool_call>...<tool_call|> tokens.
-    const toolResult = this.gemmaParser.feed(thinkResult.visibleText);
+    const toolResult = GEMMA_TOOL_PARSER_ENABLED
+      ? this.gemmaParser.feed(thinkResult.visibleText)
+      : { visibleText: thinkResult.visibleText, functionCall: null };
 
     if (toolResult.functionCall) {
       return { ...base, type: "function_call", functionCall: toolResult.functionCall, thoughts: allThoughts };
     }
 
-    return { ...base, content: toolResult.visibleText, thoughts: allThoughts };
+    const verbatimResult = this.feedVerbatimParser(toolResult.visibleText);
+    if (verbatimResult.functionCall) {
+      return { ...base, type: "function_call", functionCall: verbatimResult.functionCall, thoughts: allThoughts };
+    }
+
+    return { ...base, content: verbatimResult.visibleText, thoughts: allThoughts };
+  }
+
+  private configureVerbatimToolCallParser(config: StreamConfig, context: StreamContext): void {
+    this.verbatimParser = null;
+
+    const tools = Array.isArray(config.tools) ? config.tools : [];
+    const enabled = Boolean(
+      context.tomoriState.config.verbatim_tool_calling_enabled && context.tomoriState.llm.has_tools && tools.length > 0,
+    );
+    if (!enabled) {
+      return;
+    }
+
+    const parser = new VerbatimToolCallParser({
+      tools,
+      maxBufferChars: getVerbatimToolCallMaxBufferChars(),
+    });
+    if (!parser.hasTools) {
+      log.warn("CustomStreamAdapter: Verbatim tool-calling enabled, but no parseable OpenAI-compatible tools found");
+      return;
+    }
+
+    this.verbatimParser = parser;
+    log.info(`CustomStreamAdapter: Verbatim tool-calling parser enabled for ${tools.length} tool(s)`);
+  }
+
+  private feedVerbatimParser(text: string): {
+    visibleText: string;
+    functionCall: ProcessedChunk["functionCall"] | null;
+  } {
+    if (!this.verbatimParser || !text) {
+      return { visibleText: text, functionCall: null };
+    }
+
+    return this.verbatimParser.feed(text);
   }
 }
 

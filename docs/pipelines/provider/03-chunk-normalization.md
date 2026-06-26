@@ -70,6 +70,16 @@ The method also handles two additional responsibilities:
   strings (`stopStrings.ts`) are matched literally by the provider, so namespaced close tags must be
   added per model rule explicitly rather than via the shared pattern.
 
+- **Custom verbatim tool-call fallback** — when
+  `server_capabilities_configs.verbatim_tool_calling_enabled` is true, the active Custom text model
+  has tools, and the request includes OpenAI-compatible tool schemas, `CustomStreamAdapter` runs
+  `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It only
+  accepts a response that starts as an inline code span or fenced code block containing exactly one
+  known tool call, such as `` `read_file("media_1")` `` or
+  `` `web_search({"query":"latest current news"})` ``. Successful parses are emitted as
+  `type: "function_call"` before the literal text reaches Discord; rejected or incomplete text is
+  released normally.
+
 ## Input
 
 `chunk: RawStreamChunk` — the provider-native envelope yielded by stage 02.

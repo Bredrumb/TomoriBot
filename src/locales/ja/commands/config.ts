@@ -6,6 +6,20 @@ export default {
       enable: `有効化`,
       disable: `無効化`,
     },
+    workarounds: {
+      description: `実験的な互換性回避策を設定します。`,
+      modal_title: `実験的な回避策`,
+      checkbox_label: `利用可能な回避策`,
+      checkbox_description: `チェックした回避策がこのサーバーで有効になります。`,
+      verbatim_tool_calling_option: `逐語ツール呼び出し`,
+      verbatim_tool_calling_desc: `ネイティブツール非対応のCustomエンドポイントから厳格なテキストツール呼び出しを解析します。`,
+      no_changes_title: `変更はありません`,
+      no_changes_description: `回避策の設定はすでにその状態です。`,
+      success_title: `回避策を更新しました`,
+      success_description: `{count}件の回避策設定を更新しました。`,
+      enabled_label: `有効`,
+      disabled_label: `無効`,
+    },
     "image-tags": {
       description: `画像生成で外見やスタイルの補助として使うデフォルト画像タグを設定します。`,
       "default-positive": {

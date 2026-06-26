@@ -6,6 +6,20 @@ export default {
       enable: `Enable`,
       disable: `Disable`,
     },
+    workarounds: {
+      description: `Configure experimental compatibility workarounds.`,
+      modal_title: `Experimental Workarounds`,
+      checkbox_label: `Available Workarounds`,
+      checkbox_description: `Checked workarounds are enabled for this server.`,
+      verbatim_tool_calling_option: `Verbatim Tool-Calling`,
+      verbatim_tool_calling_desc: `Parse strict text tool calls from Custom endpoints without native tools.`,
+      no_changes_title: `No Changes`,
+      no_changes_description: `Workaround settings were already in that state.`,
+      success_title: `Workarounds Updated`,
+      success_description: `Updated {count} workaround setting(s).`,
+      enabled_label: `Enabled`,
+      disabled_label: `Disabled`,
+    },
     "image-tags": {
       description: `Configure default image tags used as appearance and style guidance for image generation.`,
       "default-positive": {
