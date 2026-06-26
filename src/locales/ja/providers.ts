@@ -21,7 +21,7 @@ export default {
     fallback_used_description: `{chain} の代わりに \`{success_model}\` が使用されました`,
     fallback_used_details_description: `次のモデルが先に失敗したため、フォールバック枠 {slot} の \`{success_model}\` で応答しました:
 {failure_list}`,
-    fallback_used_failure_line: `{index}. {model} は {error_code} で失敗しました`,
+    fallback_used_failure_line: `{index}. {model} は {error_detail} で失敗しました`,
     fallback_used_details_button: `Fallback Used`,
     fallback_used_hide_footer: `\`/config notice-embeds visibility\` でこれを非表示にし、詳細を思考ログへ回せます`,
     no_response_title: `応答なし`,
@@ -57,6 +57,9 @@ export default {
       provider_error_interaction: `ストリーム応答がブロック/停止されました。理由: {reason}。`,
       api_error_title: `🔴 プロバイダーAPIエラー`,
       api_error_tip: `APIキーを確認して再度お試しください。このエラーが解決しない場合は、\`/support discord\`で報告してください。`,
+      model_error_title: `🔴 モデル設定エラー`,
+      model_error_description: `選択されたモデルがプロバイダーに拒否されました。設定されているモデル名を確認し、プロバイダーが対応しているモデルIDに変更してください。`,
+      model_error_tip: `\`/model text\`、\`/personal provider model-text\`、またはカスタムエンドポイント設定で対応モデルIDを選んでください。`,
       rate_limit_title: `🟡 プロバイダーレート制限を超過`,
       rate_limit_title_all_rotation_keys: `🟡 全ローテーションキーがレート制限中`,
       rate_limit_tip: `数分お待ちいただいてから再度お試しください。複数の個人キーをお持ちなら、\`/config api-key rotation\` の利用も検討してください。`,

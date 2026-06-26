@@ -1,4 +1,5 @@
 import type { ProviderError } from "@/types/stream/interfaces";
+import { isProviderModelErrorMessage } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 
 interface ParsedOpenAICompatibleErrorPayload {
@@ -78,6 +79,12 @@ export function normalizeOpenAICompatibleProviderError(
     }
   }
 
+  if (isProviderModelErrorMessage(errorMessage)) {
+    errorType = "model_error";
+    errorCode = errorCode === "unknown" ? "model_error" : `${errorCode}_model`;
+    retryable = false;
+  }
+
   const normalizedMessage = errorMessage.toLowerCase();
   if (normalizedMessage.includes("econnrefused") || normalizedMessage.includes("connection refused")) {
     errorType = "api_error";
@@ -112,6 +119,9 @@ export function createOpenAICompatibleErrorDescription(
 
   let messageKey: string;
   switch (error.type) {
+    case "model_error":
+      messageKey = "model_error_default_message";
+      break;
     case "rate_limit":
       messageKey = "429_default_message";
       break;
@@ -132,7 +142,15 @@ export function createOpenAICompatibleErrorDescription(
   const localeKey = `${options.localeNamespace}.${messageKey}`;
   let message = localizer(locale, localeKey);
 
-  if (message === localeKey) {
+  if (error.type === "model_error") {
+    const details = getProviderErrorDisplayMessage(error);
+    if (message === localeKey) {
+      message = localizer(locale, "genai.stream.model_error_description");
+    }
+    if (details && !message.includes(details)) {
+      message += `\n\n**Details:**\n${details}`;
+    }
+  } else if (message === localeKey) {
     message = localizer(locale, `${options.localeNamespace}.unknown_default_message`);
 
     if (message === `${options.localeNamespace}.unknown_default_message`) {
@@ -158,12 +176,21 @@ function parseOpenAICompatibleErrorPayload(errorText: string): ParsedOpenAICompa
     const nestedError =
       parsed.error && typeof parsed.error === "object" ? (parsed.error as Record<string, unknown>) : parsed;
 
+    const detailMessage =
+      typeof parsed.detail === "string"
+        ? parsed.detail
+        : parsed.detail !== undefined
+          ? JSON.stringify(parsed.detail)
+          : undefined;
+
     const message =
       typeof nestedError.message === "string"
         ? nestedError.message
         : typeof parsed.message === "string"
           ? parsed.message
-          : errorText;
+          : detailMessage
+            ? detailMessage
+            : errorText;
 
     const codeValue =
       typeof nestedError.code === "string" || typeof nestedError.code === "number"
@@ -181,4 +208,13 @@ function parseOpenAICompatibleErrorPayload(errorText: string): ParsedOpenAICompa
       message: errorText,
     };
   }
+}
+
+function getProviderErrorDisplayMessage(error: ProviderError): string | null {
+  const maxErrorLength = 1200;
+  const detail = error.userMessage?.trim() || error.message.trim();
+  if (!detail) {
+    return null;
+  }
+  return detail.length > maxErrorLength ? `${detail.substring(0, maxErrorLength)}...` : detail;
 }

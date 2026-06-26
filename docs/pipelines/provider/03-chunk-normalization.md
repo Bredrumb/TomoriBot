@@ -29,9 +29,11 @@ The method also handles two additional responsibilities:
 - **Error normalisation** — raw SDK errors (HTTP status codes, provider-specific error objects)
   are converted to the shared `ProviderError` shape via `handleProviderError()`. This includes
   classifying the error type (`api_error`, `rate_limit`, `content_blocked`, `timeout`,
-  `provider_overloaded`) and setting `retryable` so the stage 04 orchestrator and the upstream
-  key-rotation logic in `runGenerationTurn` can make retry decisions without inspecting
-  provider-specific error objects.
+  `provider_overloaded`, `model_error`) and setting `retryable` so the stage 04 orchestrator and
+  the upstream key-rotation logic in `runGenerationTurn` can make retry decisions without
+  inspecting provider-specific error objects. `model_error` is reserved for model-selection or
+  model-availability failures such as "unsupported model" or "model not found"; the stream UI
+  surfaces the provider's raw supported-model details instead of hiding them behind a generic 400.
 
 - **Thought log extraction** — for providers that emit reasoning fields, thought summaries, or
   thought signatures (for example Google/Gemini `part.thought`, `thoughtSummary`, and
@@ -121,8 +123,8 @@ After this stage:
 | Surface | Plugin-relevance |
 |---|---|
 | `BaseStreamAdapter.processChunk()` abstract method | **A new provider adapter implements this to map its SDK chunk shapes to `ProcessedChunk`.** The contract is at `src/types/stream/interfaces.ts:184`. The implementation must be synchronous. |
-| `BaseStreamAdapter.handleProviderError()` abstract method | **A new provider adapter implements this to classify its SDK errors.** The `ProviderError.retryable` flag is consumed by the key-rotation loop in `runGenerationTurn`; the `type` field drives user-facing error embed formatting. Contract at `src/types/stream/interfaces.ts:201`. |
-| `BaseStreamAdapter.createErrorDescription()` abstract method | **A new provider adapter implements this to produce localized, provider-specific error text** for the error embed shown in Discord when `retryable: false` and user errors are not suppressed. Contract at `src/types/stream/interfaces.ts:207`. |
+| `BaseStreamAdapter.handleProviderError()` abstract method | **A new provider adapter implements this to classify its SDK errors.** The `ProviderError.retryable` flag is consumed by the key-rotation loop in `runGenerationTurn`; the `type` field drives user-facing error embed formatting. Model-name and model-availability failures should become `model_error` or carry a message that the shared model-error classifier can recognize. Contract at `src/types/stream/interfaces.ts:201`. |
+| `BaseStreamAdapter.createErrorDescription()` abstract method | **A new provider adapter implements this to produce localized, provider-specific error text** for the error embed shown in Discord when `retryable: false` and user errors are not suppressed. For `model_error`, preserve the provider's actionable details, such as supported model IDs. Contract at `src/types/stream/interfaces.ts:207`. |
 | `FunctionCall` shape (`name`, `args`, `thoughtSignature`) | The provider-agnostic function call format — `src/types/provider/interfaces.ts:145`. Fields like `thoughtSignature`, `reasoning_details`, and `deepseekReasoningContent` are provider-specific optional fields that must be preserved when passing tool results back to the provider in stage 01. |
 
 ## Related docs

@@ -21,7 +21,7 @@ export default {
     fallback_used_description: `\`{success_model}\` was used instead of {chain}`,
     fallback_used_details_description: `Fallback slot {slot} answered with \`{success_model}\` after these earlier failures:
 {failure_list}`,
-    fallback_used_failure_line: `{index}. {model} errored with {error_code}`,
+    fallback_used_failure_line: `{index}. {model} errored with {error_detail}`,
     fallback_used_details_button: `Fallback Used`,
     fallback_used_hide_footer: `Hide this and reroute details to thought logs with \`/config notice-embeds visibility\``,
     no_response_title: `No Response`,
@@ -57,6 +57,9 @@ export default {
       provider_error_interaction: `Stream response blocked/stopped. Reason: {reason}.`,
       api_error_title: `🔴 Provider API Error`,
       api_error_tip: `Please verify your API key and try again. If this error persists, report through \`/support discord\``,
+      model_error_title: `🔴 Model Configuration Error`,
+      model_error_description: `The selected model was rejected by the provider. Check the configured model name and switch to one of the provider's supported model IDs.`,
+      model_error_tip: `Use \`/model text\`, \`/personal provider model-text\`, or your custom endpoint settings to choose a supported model ID.`,
       rate_limit_title: `🟡 Provider Rate Limit Exceeded`,
       rate_limit_title_all_rotation_keys: `🟡 Provider Rate Limit Exceeded (All Rotation Keys)`,
       rate_limit_tip: `Please wait a few minutes before trying again. If you have multiple personal keys, consider \`/config api-key rotation\`.`,

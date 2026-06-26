@@ -1,6 +1,7 @@
 import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
+import type { ProviderError } from "@/types/stream/interfaces";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
@@ -12,6 +13,7 @@ import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/util
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { log } from "@/utils/misc/logger";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
+import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
@@ -138,7 +140,7 @@ export async function runGenerationTurn(
 
       failures.push({
         modelCodename: attempt.tomoriState.llm.llm_codename,
-        errorCode: extractErrorCode(result.streamResults.at(-1)),
+        errorDetail: extractErrorDetail(result.streamResults.at(-1)),
       });
     }
 
@@ -428,6 +430,48 @@ function extractErrorCode(streamResult: StreamResult | undefined): string {
   }
   const record = data as Record<string, unknown>;
   return String(record.code ?? record.type ?? record.message ?? streamResult?.status ?? "unknown");
+}
+
+// Per-line readability cap for a single failure detail in the fallback notice summary. This keeps
+// one verbose provider message from crowding out the others; the authoritative Discord embed
+// description limit is enforced on the joined list in `buildFailureList` (fallbackModelNotice.ts).
+const MAX_FALLBACK_DETAIL_LENGTH = 600;
+
+/**
+ * Resolves a human-readable failure detail for the "Fallback Model Used" notice. Unlike
+ * {@link extractErrorCode} (which prefers terse codes for key-rotation bookkeeping), this prefers
+ * the provider's verbose message — e.g. "Unsupported model X. Supported IDs: ..." — so users see
+ * the actionable reason instead of an opaque error code.
+ * @param streamResult - The last stream result recorded for the failed attempt.
+ * @returns A trimmed, length-capped detail string.
+ */
+function extractErrorDetail(streamResult: StreamResult | undefined): string {
+  const data = streamResult?.data;
+  if (!data || typeof data !== "object") {
+    return streamResult?.status ?? "unknown";
+  }
+  if (data instanceof Error) {
+    return truncateFallbackDetail(data.message || "error");
+  }
+
+  // 1. Prefer the normalized provider detail (userMessage/message/originalError) used by the error embed.
+  const providerDetail = getProviderErrorDetail(data as ProviderError);
+  if (providerDetail) {
+    return truncateFallbackDetail(providerDetail);
+  }
+
+  // 2. Fall back to whatever identifying field is present on the raw result.
+  const record = data as Record<string, unknown>;
+  return truncateFallbackDetail(
+    String(record.message ?? record.code ?? record.type ?? streamResult?.status ?? "unknown"),
+  );
+}
+
+function truncateFallbackDetail(detail: string): string {
+  const normalized = detail.replace(/\s+/g, " ").trim();
+  return normalized.length > MAX_FALLBACK_DETAIL_LENGTH
+    ? `${normalized.substring(0, MAX_FALLBACK_DETAIL_LENGTH)}...`
+    : normalized;
 }
 
 async function prepareProviderContextItems(args: {
