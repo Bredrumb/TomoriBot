@@ -14,6 +14,7 @@ import { buildServerDocumentContextItem } from "./rag";
 import { buildServerEmojiContextItem, buildServerStickerContextItem } from "./serverAssets";
 import { buildServerInfoContextItem } from "./serverInfo";
 import { buildConditioningContextItem, buildPromptContextItems, buildSampleDialogueContextItems } from "./templates";
+import { buildVerbatimToolDefinitionsContextItem } from "./toolDefinitions";
 import type { BuildContextParams } from "./types";
 
 export type NativeBuildContextResult = {
@@ -274,6 +275,11 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     log.warn("Failed to build short-term memory context", error);
   }
 
+  // Verbatim tool-calling workaround: when enabled, embed the resolved tool
+  // schemas as JSON in-band so endpoints that ignore the native `tools` field
+  // still expose them to the model. Placed in the stable reference zone (right
+  // before server documents) to stay inside the prompt-cache-friendly prefix.
+  await appendOptionalItem(contextItems, buildVerbatimToolDefinitionsContextItem({ tomoriConfig, tomoriState }));
   await appendOptionalItem(
     contextItems,
     buildServerDocumentContextItem({ tomoriState, simplifiedMessageHistory, triggererUserId, channelName }),

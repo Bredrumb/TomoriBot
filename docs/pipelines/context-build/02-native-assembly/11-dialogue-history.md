@@ -120,7 +120,10 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - If `tomoriConfig.verbatim_tool_calling_enabled` is true and
   `tomoriState.llm.has_tools` is true, injects one additional
   `CONTEXT_NOTE_INJECTION` at depth 3. This nudge tells Custom endpoint models
-  how to emit the strict code-span/fenced verbatim tool-call syntax.
+  how to emit the strict code-span/fenced verbatim tool-call syntax. The
+  matching tool *schemas* are dumped earlier in the prompt by stage 07b
+  ([`07b-verbatim-tool-definitions.md`](./07b-verbatim-tool-definitions)),
+  gated by the same predicate.
 
 ## Invariants
 

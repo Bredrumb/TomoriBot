@@ -57,6 +57,7 @@ export enum ContextItemTag {
   KNOWLEDGE_PERSONA_SPRITES = "knowledge_persona_sprites",
   KNOWLEDGE_SERVER_MEMORIES = "knowledge_server_memories",
   KNOWLEDGE_SERVER_DOCUMENTS = "knowledge_server_documents",
+  KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS = "knowledge_verbatim_tool_definitions", // Available tool JSON schemas, injected only when the verbatim tool-calling workaround is enabled
   KNOWLEDGE_SERVER_CONDITIONING = "knowledge_server_conditioning",
   KNOWLEDGE_PERSONA_USER_BLOCKS = "knowledge_persona_user_blocks",
   KNOWLEDGE_USER_MEMORIES = "knowledge_user_memories", // For a block of multiple users' memories

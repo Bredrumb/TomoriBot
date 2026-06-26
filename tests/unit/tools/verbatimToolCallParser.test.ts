@@ -159,16 +159,75 @@ describe("VerbatimToolCallParser", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("does not parse calls after visible prose", () => {
-    const text = 'I should use a tool: `read_file("media_1")`';
+  it("parses a wrapped call after visible prose, emitting the prose", () => {
+    const { visible, calls } = run(['I should use a tool: `read_file("media_1")`']);
+
+    expect(visible).toBe("I should use a tool: ");
+    expect(calls).toEqual([{ name: "read_file", args: { media_id: "media_1" } }]);
+  });
+
+  it("parses a bare (unwrapped) call after narration prose", () => {
+    const { visible, calls } = run([
+      "Fine. But I'm picking the aesthetic.\n",
+      'generate_image({"prompt":"a grumpy black cat","mode":"txt2img"})',
+    ]);
+
+    expect(visible).toBe("Fine. But I'm picking the aesthetic.\n");
+    expect(calls).toEqual([
+      {
+        name: "generate_image",
+        args: { prompt: "a grumpy black cat", mode: "txt2img" },
+      },
+    ]);
+  });
+
+  it("parses a bare call streamed character-by-character with prose on both sides", () => {
+    // Regression: the full tool name can stream in before its "(" arrives. The
+    // holdback must withhold the complete name, or the anchor never matches once
+    // the parenthesis lands on a later chunk (the real Custom-endpoint path).
+    const message =
+      'She sighs.\n\nFine. But only because I am bored.\n\ngenerate_image({"prompt": "a gray cat", "mode": "txt2img"})\n\nThere. Now you owe me.';
+    const { visible, calls } = run([...message]);
+
+    expect(calls).toEqual([
+      {
+        name: "generate_image",
+        args: { prompt: "a gray cat", mode: "txt2img" },
+      },
+    ]);
+    // Narration on both sides survives; only the call itself is consumed.
+    expect(visible).toBe("She sighs.\n\nFine. But only because I am bored.\n\n\n\nThere. Now you owe me.");
+  });
+
+  it("ignores parentheses inside JSON string values when balancing", () => {
+    const { visible, calls } = run(['generate_image({"prompt":"a cat (very cute) :)","mode":"txt2img"})']);
+
+    expect(visible).toBe("");
+    expect(calls).toEqual([
+      {
+        name: "generate_image",
+        args: { prompt: "a cat (very cute) :)", mode: "txt2img" },
+      },
+    ]);
+  });
+
+  it("emits a tool name mentioned in prose without invalid args as text", () => {
+    const text = "You could use generate_image (it makes art) yourself.";
     const { visible, calls } = run([text]);
 
     expect(visible).toBe(text);
     expect(calls).toHaveLength(0);
   });
 
-  it("flushes incomplete held text as visible text", () => {
-    const text = '`read_file("media_1")';
+  it("streams prose unaffected when no tool call is present", () => {
+    const { visible, calls } = run(["Just chatting, ", "no tools here at all."]);
+
+    expect(visible).toBe("Just chatting, no tools here at all.");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("flushes a truncated (unbalanced) call as visible text", () => {
+    const text = '`read_file("media_1"';
     const { visible, calls } = run([text]);
 
     expect(visible).toBe(text);

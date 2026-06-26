@@ -75,12 +75,19 @@ The method also handles two additional responsibilities:
 - **Custom verbatim tool-call fallback** — when
   `server_capabilities_configs.verbatim_tool_calling_enabled` is true, the active Custom text model
   has tools, and the request includes OpenAI-compatible tool schemas, `CustomStreamAdapter` runs
-  `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It only
-  accepts a response that starts as an inline code span or fenced code block containing exactly one
-  known tool call, such as `` `read_file("media_1")` `` or
-  `` `web_search({"query":"latest current news"})` ``. Successful parses are emitted as
-  `type: "function_call"` before the literal text reaches Discord; rejected or incomplete text is
-  released normally.
+  `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It scans
+  the stream for an anchor `<knownToolName>(` — only names from the exposed tool set trigger — then
+  accumulates from that name until the parentheses balance (quote-aware, so a `)` inside a JSON string
+  does not close early) and parses the `name(...)` body. The call may be **bare** or wrapped in an
+  inline code span / fenced block, and **prose before it is allowed** (chat models narrate before they
+  act): leading narration is emitted as normal text and the call is recovered after it, e.g.
+  `` Fine. `generate_image({"prompt":"a cat","mode":"txt2img"})` `` or the same call with no backticks.
+  The parse step is the false-positive guard — a tool name merely *mentioned* in prose
+  (`generate_image (it makes art)`) fails JSON/arity validation and is released as text. Successful
+  parses are emitted as `type: "function_call"` before the literal text reaches Discord; rejected or
+  incomplete text is released normally. Because the stream adapter drops `visibleText` whenever a
+  `functionCall` is present, the parser emits any preceding prose first (call unresolved) and resolves
+  the call on a later chunk or at stream flush.
 
 ## Input
 

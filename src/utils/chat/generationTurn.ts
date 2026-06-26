@@ -27,6 +27,7 @@ import {
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { providerIsApiFamily, runToolLoop } from "@/utils/chat/toolLoop";
+import { VERBATIM_TOOL_CALLING_NUDGE, shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
 
 interface GenerationAttempt {
   label: string;
@@ -482,6 +483,16 @@ async function prepareProviderContextItems(args: {
   retryCount: number;
 }): Promise<StructuredContextItem[]> {
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState);
+
+  // The verbatim tool-calling nudge is baked into the base context from the PRIMARY
+  // model. On a fallback to an attempt that will not run the verbatim parser (any
+  // non-custom provider, or a custom endpoint without tools), strip it: the nudge is
+  // useless noise there and can steer native tool-callers toward unparseable
+  // text-form calls. `filter` produces a new array, leaving the shared base intact.
+  if (!shouldInjectVerbatimToolCallingNudge(args.tomoriState.config, args.tomoriState)) {
+    contextItems = stripVerbatimNudgeItems(contextItems);
+  }
+
   contextItems = await applyProviderContextTruncation(contextItems, args.tomoriState, args.serverDiscId);
   if (
     shouldApplyLengthEmptyRetryTrim(args.tomoriState.llm.llm_provider, args.emptyResponseFinishReason, args.retryCount)
@@ -496,6 +507,25 @@ async function prepareProviderContextItems(args: {
     }
   }
   return contextItems;
+}
+
+/**
+ * The exact text the verbatim nudge is rendered as inside a context-note item
+ * (see `appendDialogueHistoryContext`). Matching on the text rather than the tag
+ * is required because the user's global context note shares
+ * `ContextItemTag.CONTEXT_NOTE_INJECTION`.
+ */
+const VERBATIM_NUDGE_CONTEXT_TEXT = `[System: ${VERBATIM_TOOL_CALLING_NUDGE}]`;
+
+/** Returns a new array with the verbatim tool-calling nudge note removed, if present. */
+function stripVerbatimNudgeItems(items: StructuredContextItem[]): StructuredContextItem[] {
+  return items.filter((item) => {
+    if (item.metadataTag !== ContextItemTag.CONTEXT_NOTE_INJECTION) {
+      return true;
+    }
+    const text = item.parts.map((part) => (part.type === "text" ? (part.text ?? "") : "")).join("");
+    return text !== VERBATIM_NUDGE_CONTEXT_TEXT;
+  });
 }
 
 function dropOldestHistoryExchangePairs(
