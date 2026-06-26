@@ -83,6 +83,22 @@ bun run check-locales
 
 This validates cross-locale key parity and catches missing keys.
 
+## Discord Length Limits
+
+Discord silently truncates several text slots past their cap, so a separate strict gate
+(`bun run check-locale-lengths`, also run as a fatal step in `bun run vl`) source-traces each
+locale key to the Discord component it feeds and flags any value that overruns:
+
+- Command descriptions — ≤100 chars
+- Modal titles / input labels — ≤45 chars
+- Modal placeholders / Label descriptions — ≤100 chars
+- **Select / checkbox option `label` and `description`** — ≤100 chars (traced from
+  `{ value, label: localizer(...), description: localizer(...) }` option literals)
+
+Both the `en-US` and `ja` values must fit. Shorten the reported string rather than relying on
+Discord's truncation — the cap is counted in characters (code points), so compact Japanese text
+usually fits where English does not.
+
 ## Best Practices
 
 - Localize all user-facing command/embed strings.

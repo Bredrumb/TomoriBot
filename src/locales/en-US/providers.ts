@@ -110,6 +110,7 @@ The selected model requires allowing data for paid model training, but your Open
       "403_default_message": `Access denied: check your OpenRouter account settings`,
       "408_default_message": `The OpenRouter request timed out`,
       "429_default_message": `OpenRouter rate limit exceeded, please wait before retrying`,
+      "429_free_models_message": `OpenRouter rate limit exceeded for free models. Add atleast 10 credits to your OpenRouter account to unlock 1000 free model requests per day.`,
       "500_default_message": `OpenRouter encountered an internal server error`,
       "502_default_message": `The upstream AI provider is temporarily unavailable`,
       "503_default_message": `The upstream AI model is currently overloaded`,

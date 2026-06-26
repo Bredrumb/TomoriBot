@@ -314,7 +314,6 @@ export async function normalizeNaiReferenceImage(buffer: Buffer): Promise<Buffer
 export async function convertToPNG(buffer: Buffer): Promise<Buffer> {
   try {
     const pngBuffer = await sharp(buffer).png().toBuffer();
-    log.info("Image converted to PNG format");
     return pngBuffer;
   } catch (error) {
     log.error("Failed to convert image to PNG:", error);

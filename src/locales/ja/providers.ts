@@ -110,6 +110,7 @@ export default {
       "403_default_message": `アクセスが拒否されました。OpenRouterアカウントの設定を確認してください`,
       "408_default_message": `OpenRouterリクエストがタイムアウトしました`,
       "429_default_message": `OpenRouterのレート制限を超えました。しばらく待ってから再試行してください`,
+      "429_free_models_message": `無料モデルのOpenRouterレート制限を超過しました。1日1000回の無料モデルリクエストを解放するには、OpenRouterアカウントに最低10クレジットを追加してください。`,
       "500_default_message": `OpenRouterで内部サーバーエラーが発生しました`,
       "502_default_message": `上流のAIプロバイダーが一時的に利用できません`,
       "503_default_message": `上流のAIモデルが現在過負荷状態です`,
