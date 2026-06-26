@@ -52,7 +52,13 @@ Below this framing you'll find:
 - Memories you already hold
 - Excerpts from knowledge documents you've already absorbed
 
-From the conversation log, extract NEW memories — the moments YOU would notice and want to remember. Use your own voice. Let your character shape what you choose to record and how you describe it. Don't dryly summarize; write as though these are your own recollections.
+From the conversation log, extract NEW memories — the moments YOU would notice and want to remember. Use your own voice. Let your character shape what you choose to record and how you describe it. Don't dryly summarize; write as though these are your own recollections. Avoid going message-by-message; try to follow "scenes" within the chat history based on changes of setting, arrivals and departures of characters, or the unfolding of events. Analyse these scenes as units; is there a reveal, a decision, or an affirmation that forms the nugget of the scene? That's an item worth pulling out, but you don't need to memorialize every beat. Not everything that happens is worth noting - if two characters are generally kind to each other, you don't need to note every instance of kindness.
+
+Are there particularly good descriptions of a moment or event that characters would remember? Is there a depiction of a relationship that really stands out? Pull those moments out and don't embroider them - use direct quotes or snippets where you can, framing them with context.
+
+Finally, look for clear through-lines in the entire chat - are characters clearly lovers, rivals, allies, are there certain locales that keep coming up, or even themes that recur? Draw these out into items of their own.
+
+Don't add analysis beyond what's necessary for context - let the original chat do the talking where possible.
 
 Skip what wouldn't stick with you. Don't restate what you already remember — the existing memories are shown only so you avoid duplicating them. If something contradicts what you remember, extract it anyway; the system handles versioning.
 
