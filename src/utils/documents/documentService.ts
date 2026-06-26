@@ -302,6 +302,8 @@ export async function retrieveRelevantDocumentChunks(params: {
       chunk_index: number;
       content: string;
       distance: number | string;
+      fts_rank: number | string | null;
+      vector_rank: number | string | null;
     }>
   >`
     WITH fts_q AS (
@@ -336,16 +338,20 @@ export async function retrieveRelevantDocumentChunks(params: {
       LIMIT ${candidateLimit}
     ),
     rrf_merged AS (
-      SELECT document_chunk_id, SUM(1.0 / (60.0 + rnk)) AS rrf_score
+      SELECT document_chunk_id,
+             SUM(1.0 / (60.0 + rnk)) AS rrf_score,
+             MIN(CASE WHEN src = 'fts' THEN rnk END) AS fts_rank,
+             MIN(CASE WHEN src = 'vec' THEN rnk END) AS vector_rank
       FROM (
-        SELECT document_chunk_id, rnk FROM vector_candidates
+        SELECT document_chunk_id, rnk, 'vec'::text AS src FROM vector_candidates
         UNION ALL
-        SELECT document_chunk_id, rnk FROM fts_candidates
+        SELECT document_chunk_id, rnk, 'fts'::text AS src FROM fts_candidates
       ) combined
       GROUP BY document_chunk_id
     )
     SELECT dc.document_id, d.document_name, dc.chunk_index, dc.content,
-           (dc.embedding <=> ${queryVector}::vector) AS distance
+           (dc.embedding <=> ${queryVector}::vector) AS distance,
+           r.fts_rank, r.vector_rank
     FROM rrf_merged r
     JOIN document_chunks dc ON dc.document_chunk_id = r.document_chunk_id
     JOIN documents d ON d.document_id = dc.document_id
@@ -357,7 +363,10 @@ export async function retrieveRelevantDocumentChunks(params: {
   for (const row of rows) {
     const distance = typeof row.distance === "string" ? Number.parseFloat(row.distance) : Number(row.distance);
     const similarity = Number.isFinite(distance) ? 1 - distance : 0;
-    if (similarity < minSimilarity) {
+    // FTS hits bypass the cosine floor: verbose chunks have dilute centroids that under-rate
+    // contextual queries, so the lexical match is the trusted signal for those rows.
+    const ftsMatched = row.fts_rank != null;
+    if (similarity < minSimilarity && !ftsMatched) {
       continue;
     }
     results.push({
