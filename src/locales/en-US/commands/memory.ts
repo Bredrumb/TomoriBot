@@ -34,6 +34,7 @@ export default {
         no_chunks_title: `Document Has No Content`,
         no_chunks_description: `This document has no stored chunks.`,
         chunk_footer: `Chunk {current} of {total}`,
+        chunk_too_long_to_edit: `Too long to edit`,
         btn_prev: `◀ Previous`,
         btn_next: `Next ▶`,
         btn_close: `Close`,

@@ -70,11 +70,22 @@ interface ChunkRow {
   content: string;
 }
 
+/**
+ * Chunks longer than the Discord modal Paragraph input cap can't safely round-trip
+ * through the edit flow — the prefill would be truncated and an unchanged submit
+ * would overwrite the chunk with the truncated prefix. Callers gate the Edit
+ * button and footer hint on this.
+ */
+function isChunkTooLongToEdit(chunk: ChunkRow | undefined): boolean {
+  return (chunk?.content.length ?? 0) > EDIT_CONTENT_INPUT_MAX;
+}
+
 function buildChunkEmbed(
   chunks: ChunkRow[],
   index: number,
   documentName: string,
   locale: string,
+  canEdit: boolean,
 ): EmbedBuilder {
   const raw = chunks[index]?.content ?? "";
   const truncated = raw.length > CHUNK_CONTENT_MAX;
@@ -85,25 +96,33 @@ function buildChunkEmbed(
     .setDescription(display || "​")
     .setColor(ColorCode.INFO);
 
+  const footerParts: string[] = [];
   if (chunks.length > 1) {
-    embed.setFooter({
-      text: localizer(locale, "commands.memory.document.view.chunk_footer", {
+    footerParts.push(
+      localizer(locale, "commands.memory.document.view.chunk_footer", {
         current: String(index + 1),
         total: String(chunks.length),
       }),
-    });
+    );
+  }
+  if (canEdit && isChunkTooLongToEdit(chunks[index])) {
+    footerParts.push(localizer(locale, "commands.memory.document.view.chunk_too_long_to_edit"));
+  }
+  if (footerParts.length > 0) {
+    embed.setFooter({ text: footerParts.join(" · ") });
   }
 
   return embed;
 }
 
 function buildNavRow(
+  chunks: ChunkRow[],
   index: number,
-  total: number,
   locale: string,
   canEdit: boolean,
 ): ActionRowBuilder<ButtonBuilder> {
   const row = new ActionRowBuilder<ButtonBuilder>();
+  const total = chunks.length;
 
   if (total > 1) {
     row.addComponents(
@@ -125,7 +144,8 @@ function buildNavRow(
       new ButtonBuilder()
         .setCustomId(BTN_EDIT)
         .setLabel(localizer(locale, "commands.memory.document.view.btn_edit"))
-        .setStyle(ButtonStyle.Secondary),
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(isChunkTooLongToEdit(chunks[index])),
       new ButtonBuilder()
         .setCustomId(BTN_DELETE)
         .setLabel(localizer(locale, "commands.memory.document.view.btn_delete"))
@@ -186,8 +206,7 @@ function tagArraysEqual(a: string[], b: string[]): boolean {
 }
 
 /** Outcomes from the embedding regeneration helper, surfaced as locale keys to the caller. */
-type RegenError =
-  | { ok: false; errorKey: "no_embedding_model" | "embedding_creds_missing" | "embedding_error" };
+type RegenError = { ok: false; errorKey: "no_embedding_model" | "embedding_creds_missing" | "embedding_error" };
 type RegenSuccess = {
   ok: true;
   embeddingVector: string;
@@ -489,7 +508,7 @@ export async function execute(
       });
       return;
     }
-    let documentName = documentMeta.document_name;
+    const documentName = documentMeta.document_name;
     let currentChannelTags = documentMeta.channel_tags;
 
     let chunks: ChunkRow[] = await serverMemoryRepository.loadDocumentChunks(selectedId, dbServerId, targetPersonaId);
@@ -509,8 +528,8 @@ export async function execute(
 
     // Reply with first chunk
     await modalSubmitInteraction.reply({
-      embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale)],
-      components: [buildNavRow(currentIndex, chunks.length, locale, canEdit)],
+      embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
+      components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
       flags: MessageFlags.Ephemeral,
     });
 
@@ -539,8 +558,8 @@ export async function execute(
         currentIndex = Math.max(0, currentIndex - 1);
         mode = "normal";
         await btnInteraction.update({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale)],
-          components: [buildNavRow(currentIndex, chunks.length, locale, canEdit)],
+          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
+          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
         });
         continue;
       }
@@ -549,8 +568,8 @@ export async function execute(
         currentIndex = Math.min(chunks.length - 1, currentIndex + 1);
         mode = "normal";
         await btnInteraction.update({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale)],
-          components: [buildNavRow(currentIndex, chunks.length, locale, canEdit)],
+          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
+          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
         });
         continue;
       }
@@ -702,8 +721,8 @@ export async function execute(
               : "edit_success_tags_only";
 
         await editSubmit.editReply({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale)],
-          components: [buildNavRow(currentIndex, chunks.length, locale, canEdit)],
+          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
+          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
         });
         await editSubmit.followUp({
           embeds: [
@@ -751,14 +770,18 @@ export async function execute(
         if (!currentChunk) {
           mode = "normal";
           await btnInteraction.update({
-            embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale)],
-            components: [buildNavRow(currentIndex, chunks.length, locale, canEdit)],
+            embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
+            components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
           });
           continue;
         }
 
         const wasLast = chunks.length === 1;
-        const deleted = await serverMemoryRepository.deleteChunk(currentChunk.document_chunk_id, dbServerId, targetPersonaId);
+        const deleted = await serverMemoryRepository.deleteChunk(
+          currentChunk.document_chunk_id,
+          dbServerId,
+          targetPersonaId,
+        );
         if (!deleted) {
           mode = "normal";
           await btnInteraction.update({
@@ -768,7 +791,7 @@ export async function execute(
                 .setDescription(localizer(locale, "commands.memory.document.view.delete_failed_description"))
                 .setColor(ColorCode.ERROR),
             ],
-            components: [buildNavRow(currentIndex, chunks.length, locale, canEdit)],
+            components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
           });
           continue;
         }
@@ -800,8 +823,8 @@ export async function execute(
         mode = "normal";
 
         await btnInteraction.update({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale)],
-          components: [buildNavRow(currentIndex, chunks.length, locale, canEdit)],
+          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
+          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
         });
         await btnInteraction.followUp({
           embeds: [
@@ -823,8 +846,8 @@ export async function execute(
       if (btnInteraction.customId === BTN_CANCEL_DELETE) {
         mode = "normal";
         await btnInteraction.update({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale)],
-          components: [buildNavRow(currentIndex, chunks.length, locale, canEdit)],
+          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
+          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
         });
         continue;
       }
@@ -832,7 +855,6 @@ export async function execute(
       // Unknown button — defer to avoid hanging
       await btnInteraction.deferUpdate();
     }
-
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,

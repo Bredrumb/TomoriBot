@@ -35,11 +35,7 @@ import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter"
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import { fetchHistoryAfter } from "@/utils/discord/historyFetcher";
 import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
-import {
-  createDocumentRecord,
-  appendDocumentChunks,
-  finalizeDocumentContent,
-} from "@/utils/documents/documentService";
+import { createDocumentRecord, appendDocumentChunks, finalizeDocumentContent } from "@/utils/documents/documentService";
 import {
   buildExtractionUserPrompt,
   composeInCharacterSystemPrompt,
@@ -341,25 +337,21 @@ async function promptForExtractionSystem(
     defaultPrompt = EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
   }
 
-  const modalResult = await promptWithRawModal(
-    host,
-    locale,
-    {
-      modalCustomId: EXTRACTION_PROMPT_MODAL_ID,
-      modalTitleKey: "commands.memory.history.import.prompt_modal_title",
-      components: [
-        {
-          customId: EXTRACTION_PROMPT_FIELD_ID,
-          style: TextInputStyle.Paragraph,
-          labelKey: "commands.memory.history.import.prompt_modal_label",
-          placeholder: "commands.memory.history.import.prompt_modal_placeholder",
-          required: false,
-          maxLength: 4000,
-          value: defaultPrompt,
-        },
-      ],
-    },
-  );
+  const modalResult = await promptWithRawModal(host, locale, {
+    modalCustomId: EXTRACTION_PROMPT_MODAL_ID,
+    modalTitleKey: "commands.memory.history.import.prompt_modal_title",
+    components: [
+      {
+        customId: EXTRACTION_PROMPT_FIELD_ID,
+        style: TextInputStyle.Paragraph,
+        labelKey: "commands.memory.history.import.prompt_modal_label",
+        placeholder: "commands.memory.history.import.prompt_modal_placeholder",
+        required: false,
+        maxLength: 4000,
+        value: defaultPrompt,
+      },
+    ],
+  });
 
   if (modalResult.outcome !== "submit" || !modalResult.interaction) return null;
   const systemPrompt = modalResult.values?.[EXTRACTION_PROMPT_FIELD_ID]?.trim() || defaultPrompt;
@@ -481,6 +473,31 @@ async function fetchAndFormatMessages(params: {
     lastMessage: messages[messages.length - 1],
     reachedEnd,
   };
+}
+
+/**
+ * Reserves a document quota slot at the point of commitment. Called right before
+ * each scope branch's document creation so that preflight validation (creds,
+ * embedding model, scope checks) doesn't burn the user's daily slot.
+ * Returns false and posts a rate-limit message if denied.
+ */
+async function reserveDocumentQuotaForImport(
+  userId: string,
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  locale: string,
+): Promise<boolean> {
+  const quotaReserve = reserveDocumentQuota(userId);
+  if (quotaReserve.allowed) return true;
+
+  const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
+  await replyInfoEmbed(replyInteraction, locale, {
+    titleKey: "rate_limit.error_quota_exceeded_title",
+    descriptionKey: "rate_limit.error_quota_exceeded_description",
+    descriptionVars: { reset_time: resetTime },
+    color: ColorCode.ERROR,
+    flags: MessageFlags.Ephemeral,
+  });
+  return false;
 }
 
 /**
@@ -736,19 +753,6 @@ export async function execute(
             .setDescription(localizer(locale, "rate_limit.error_memory_critical_description"))
             .setColor(ColorCode.ERROR),
         ],
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const quotaReserve = reserveDocumentQuota(interaction.user.id);
-    if (!quotaReserve.allowed) {
-      const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "rate_limit.error_quota_exceeded_title",
-        descriptionKey: "rate_limit.error_quota_exceeded_description",
-        descriptionVars: { reset_time: resetTime },
-        color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1101,6 +1105,8 @@ export async function execute(
         return;
       }
 
+      if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
+
       const documentId = await createDocumentForImport({
         documentName: nameInput,
         serverId: tomoriState.server_id,
@@ -1200,6 +1206,8 @@ export async function execute(
         });
         return;
       }
+
+      if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
 
       const documentId = await createDocumentForImport({
         documentName: nameInput,
@@ -1307,6 +1315,8 @@ export async function execute(
       // No personas detected — fall back to global scope
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
+      if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
+
       const documentId = await createDocumentForImport({
         documentName: nameInput,
         serverId: tomoriState.server_id,
@@ -1355,6 +1365,8 @@ export async function execute(
       });
       return;
     }
+
+    if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
 
     // Create per-persona document records before extraction starts
     const memoryLimits = getMemoryLimits();

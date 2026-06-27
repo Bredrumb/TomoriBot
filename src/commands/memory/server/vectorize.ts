@@ -69,9 +69,7 @@ function parseChannelTagsInput(input: string, client: Client): string[] {
 }
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand
-    .setName("vectorize")
-    .setDescription(localizer("en-US", "commands.memory.server.vectorize.description"));
+  subcommand.setName("vectorize").setDescription(localizer("en-US", "commands.memory.server.vectorize.description"));
 
 export async function execute(
   client: Client,
@@ -388,19 +386,6 @@ export async function execute(
         continue;
       }
 
-      const quotaReserve = reserveDocumentQuota(interaction.user.id);
-      if (!quotaReserve.allowed) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "rate_limit.error_quota_exceeded_title",
-          descriptionKey: "rate_limit.error_quota_exceeded_description",
-          descriptionVars: {
-            reset_time: quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown",
-          },
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
-
       // Resolve embedding credentials
       const overlayResult = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
       const stateWithOverlays = overlayResult.tomoriState;
@@ -524,6 +509,22 @@ export async function execute(
               )
               .setColor(ColorCode.ERROR),
           ],
+        });
+        continue;
+      }
+
+      // Reserve document quota now that all validation has passed — earlier placement
+      // would burn the user's daily slot on duplicate-name and credential errors that
+      // never write a document.
+      const quotaReserve = reserveDocumentQuota(interaction.user.id);
+      if (!quotaReserve.allowed) {
+        await replyInfoEmbed(vectorizeInteraction, locale, {
+          titleKey: "rate_limit.error_quota_exceeded_title",
+          descriptionKey: "rate_limit.error_quota_exceeded_description",
+          descriptionVars: {
+            reset_time: quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown",
+          },
+          color: ColorCode.ERROR,
         });
         continue;
       }

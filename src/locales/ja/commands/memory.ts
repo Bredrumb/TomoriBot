@@ -34,6 +34,7 @@ export default {
         no_chunks_title: `ドキュメントにコンテンツがありません`,
         no_chunks_description: `このドキュメントにはチャンクが保存されていません。`,
         chunk_footer: `チャンク {current} / {total}`,
+        chunk_too_long_to_edit: `編集するには長すぎます`,
         btn_prev: `◀ 前へ`,
         btn_next: `次へ ▶`,
         btn_close: `閉じる`,
