@@ -4,11 +4,11 @@ export default {
   provider: {
     description: `保存されたプロバイダー設定を管理`,
     add: {
-      description: `切り替えずに保存済みプロバイダー設定を追加または更新します。`,
+      description: `保存済みプロバイダー設定を追加または更新し、デフォルトのテキストモデルを有効化します。`,
       modal_title: `保存済みプロバイダーを追加`,
       success_title: `プロバイダーを保存しました`,
-      success: `**{provider}** の認証情報を保存しました。\`/model text\`でテキストモデルに選択するか、\`/model embedding|image|video|vision\`でその他の機能に設定できます。`,
-      updated_existing: `**{provider}** の保存済み認証情報を更新しました。`,
+      success: `**{provider}** の認証情報を保存し、現在のテキストモデルを \`{model_name}\` に設定しました。その他の機能は \`/model embedding|image|video|vision\` で設定できます。`,
+      updated_existing: `**{provider}** の保存済み認証情報を更新し、現在のテキストモデルを \`{model_name}\` に設定しました。`,
       custom_moved_title: `カスタムエンドポイントは移動しました`,
       custom_moved_description: `旧来のカスタムエンドポイント用プロバイダーフローは非推奨です。{custom_models_add_command} でエンドポイントを登録し、{model_text_command} で有効化してください。更新後の案内は {help_custom_models_command} を参照してください。`,
       provider_label: `対象プロバイダー`,

@@ -109,10 +109,10 @@ export default {
         endpoint_url_description: `ベースURL。例: http://localhost:5001。既存ラベル再利用時は任意（継承）。`,
         auth_token_description: `保護されたエンドポイント用のBearerトークン（任意）。`,
         success_title: `カスタムエンドポイントを追加しました`,
-        success_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。\`/model\` から選択できます。`,
-        speech_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/speech voice-add\` で音声サンプルを追加し、\`/speech voice-assign\` で割り当ててください。`,
-        speech_voice_design_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/model speech\` で選択し、\`/speech voice-design set\` でペルソナの声質プロンプトを設定してください。`,
-        speech_auto_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/model speech\` で選択してください。クローン用ペルソナは \`/speech voice-add\` と \`/speech voice-assign\`、VoiceDesign 用ペルソナは \`/speech voice-design set\` を使用します。`,
+        success_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加し、現在の **{capability}** に設定しました。`,
+        speech_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加し、現在の **{capability}** に設定しました。次に \`/speech voice-add\` で音声サンプルを追加し、\`/speech voice-assign\` で割り当ててください。`,
+        speech_voice_design_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加し、現在の **{capability}** に設定しました。次に \`/speech voice-design set\` でペルソナの声質プロンプトを設定してください。`,
+        speech_auto_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加し、現在の **{capability}** に設定しました。クローン用ペルソナは \`/speech voice-add\` と \`/speech voice-assign\`、VoiceDesign 用ペルソナは \`/speech voice-design set\` を使用します。`,
       },
       edit: {
         description: `登録済みのラベル付きカスタムエンドポイントを編集します。`,
@@ -256,7 +256,9 @@ export default {
         capability_description: `このモデルを追加するOpenRouter機能リストを選びます。`,
         model_name_description: `登録する正確なOpenRouterモデルコードネーム。`,
         success_title: `OpenRouterモデルを追加しました`,
-        success_description: `OpenRouterの{capability}モデル \`{model_name}\` をこのサーバーに登録しました。この機能の通常のOpenRouterモデル選択に表示されます。`,
+        success_description: `OpenRouterの{capability}モデル \`{model_name}\` をこのサーバーに登録し、現在の{capability}モデルに設定しました。`,
+        missing_provider_title: `OpenRouterプロバイダーが保存されていません`,
+        missing_provider_description: `モデルは登録されましたが、このサーバーにOpenRouterの保存済み認証情報がないため有効化できませんでした。先に \`/provider add\` でOpenRouterを追加してください。`,
         already_registered_title: `既に登録されています`,
         already_registered_description: `OpenRouterの{capability}モデル \`{model_name}\` はこのサーバーに既に登録されています。`,
         already_available_title: `最初から利用可能です`,
@@ -588,7 +590,7 @@ export default {
 {model_text_command} で有効なモデルを割り当てるか、{provider_add_command} で新しいプロバイダーを登録してください。問題が解決しない場合は、サーバー管理者にお問い合わせください。`,
       already_setup_description: `このサーバーでは既に設定が完了しています。設定を変更するには、\`/config\`、\`/persona\`、\`/memory\`、\`/server\`などの他のコマンドを使用してください。
 
-				プロバイダーを変更したい場合は、\`/provider add\`で新しいプロバイダーを登録し、\`/model text\`でアクティブにしてください。`,
+				プロバイダーを変更したい場合は、\`/provider add\`で新しいデフォルトのテキストプロバイダーを登録して有効化してください。`,
     },
     params: {
       description: `AI生成品質のサンプリングパラメーターを調整します。`,

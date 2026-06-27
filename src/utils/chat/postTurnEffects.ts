@@ -10,7 +10,7 @@ import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
 import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/utils/chat/contextAnnotations";
 import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
-import type { ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 
 const MAX_EMPTY_RESPONSE_RETRIES = 2;
 const EMPTY_RESPONSE_RETRY_DELAY_MS = 1000;
@@ -29,7 +29,7 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
 
 async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   const incoming = context.turn.lockedTurn.admission.incoming;
-  if (result.status !== "empty_response" || incoming.retryCount >= MAX_EMPTY_RESPONSE_RETRIES) {
+  if (!shouldRetryEmptyResponse(incoming, result)) {
     return;
   }
 
@@ -87,7 +87,13 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     manualTriggerInvoker: incoming.manualTriggerInvoker,
     manualStreamingContextOverrides: incoming.manualStreamingContextOverrides,
     sceneTurn: incoming.sceneTurn,
+    onGenerationResult: incoming.onGenerationResult,
+    onQueueDiscard: incoming.onQueueDiscard,
   });
+}
+
+export function shouldRetryEmptyResponse(incoming: ChatIncoming, result: GenerationTurnResult): boolean {
+  return result.status === "empty_response" && incoming.retryCount < MAX_EMPTY_RESPONSE_RETRIES;
 }
 
 async function consumeTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

@@ -21,4 +21,4 @@ Register with `/provider custom-endpoint add`:
 - transcription_model: `large-v3` or the model loaded by your server
 - transcription_language: optional default language hint
 
-Select it with `/model transcription`.
+Registration makes the endpoint active immediately. Use `/model transcription` later only when switching endpoints.

@@ -100,7 +100,7 @@ export function buildRevealedMessageMetadataTailDirective(): string {
     "Recent message metadata has been revealed in the visible conversation turns. " +
     "Each annotated message now includes a `ref_N` handle and sent timestamp. " +
     "`manage_message` can pin any recent message if Discord permissions allow it, and can edit or delete recent messages you or another character owns. " +
-    "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it."
+    "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it; replies targeting a known persona message use that persona identity when possible."
   );
 }
 

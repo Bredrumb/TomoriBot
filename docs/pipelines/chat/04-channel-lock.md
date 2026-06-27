@@ -118,13 +118,24 @@ an active turn. It does both:
    channel lock releases as normal via the `finally` block of `runWithChannelLock`.
 2. **Fire the stream kill callback** (`activeStreamKill(...)`) — if the LLM is
    mid-stream, this simultaneously calls `abortController.abort()` (cancels the
-   HTTP request) and rejects the `Promise.race` in `streamOnce`, causing it to
+   HTTP request) and rejects the `Promise.race` in `streamOnce`. Explicit stop
+   requests return `{status: "stopped_by_user"}`; SDK/stale-lock timeouts still
    return `{status: "timeout"}`.
 
 `/bot kill` in `src/commands/bot/kill.ts` additionally calls
 `StreamOrchestrator.requestStop` before `forceKillChannelStream`, and
 `clearChannelProcessingQueue` to drain the message queue — so neither the
 current turn nor any queued messages continue processing.
+
+While that stop request is pending, locked-channel admission ignores new
+same-user follow-up candidates with `locked_stop_requested` instead of queuing
+them. This prevents a message that arrives during the short kill-unwind window
+from re-populating the queue after `/bot kill` already cleared it.
+
+When the kill path aborts the provider SDK race, `toolLoop.ts/streamOnce`
+classifies the result as `stopped_by_user` rather than a generic SDK timeout,
+then clears the non-context stop request. Stale-lock SDK timeouts remain
+timeouts because they do not have an active stop request.
 
 `activeStreamKill` is registered by `toolLoop.ts/streamOnce` at the start of
 each provider call and cleared in `finally`. `activeTurnAbortController` is

@@ -490,6 +490,7 @@ Behavior:
 - If the persona still exists, that persona responds.
 - If the persona is missing, **fallback to main**.
 - Mention verification includes webhook messages, and sends a fallback ping if the response did not mention the target.
+- Reminder rows are deleted/rescheduled only after the generated delivery turn completes. If `/bot kill` stops the active turn or clears a queued reminder, delivery is not consumed; the row is rescheduled for retry after `REMINDER_DELIVERY_RETRY_DELAY_MS`.
 
 ## Commands and Workflows
 

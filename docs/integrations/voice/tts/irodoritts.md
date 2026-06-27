@@ -50,7 +50,7 @@ After the server is running, register it with `/provider custom-endpoint add`:
 - `script_markup`: `emoji`
 - `supports_instruct`: `false`
 
-Then select it with `/model speech`, upload a reference sample with `/speech voice-add`, and assign it with `/speech voice-assign`.
+Registration makes the endpoint active immediately. Then upload a reference sample with `/speech voice-add` and assign it with `/speech voice-assign`.
 
 TomoriBot strips Discord custom emoji syntax before sending text to TTS. With `script_markup: emoji`, Unicode emojis are preserved for IrodoriTTS emotion control; other speech modes remove Unicode emojis too so they are not spoken literally.
 

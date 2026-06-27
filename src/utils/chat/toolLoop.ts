@@ -203,6 +203,10 @@ async function streamOnce(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
+      if (StreamOrchestrator.hasStopRequest(channelId)) {
+        return { status: "stopped_by_user" };
+      }
+
       if (!params.context.streamingContext.suppressUserErrors) {
         await sendStandardEmbed(
           params.context.channel as Parameters<typeof sendStandardEmbed>[0],
@@ -528,7 +532,11 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
 
 function queueStopResponseIfPresent(context: ChatTurnContext): void {
   const stopContext = StreamOrchestrator.getAndClearStopContext(context.channel.id);
-  if (!stopContext) return;
+  if (!stopContext) {
+    StreamOrchestrator.clearStopRequest(context.channel.id);
+    return;
+  }
+
   queueStopResponseAtFront({
     channelId: context.channel.id,
     message: stopContext.originalStopMessage,

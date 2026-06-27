@@ -160,7 +160,7 @@ export default {
       rejoin_title: `TomoriBotが戻ってきました！`,
       rejoin_description: `このサーバーに再追加されたようです。以前の設定と人格はそのままです！\`/config\`、\`/persona\`、\`/memory\`、\`/server\`コマンドで私を管理できます。\`/memory personal export\`、\`/memory server export\`、\`/personal config\`、\`/server config\`でいつでもデータのエクスポートやリセットができます。
 
-			プロバイダーを変更したい場合は、\`/provider add\`で新しいプロバイダーを登録し、\`/model text\`でアクティブにしてください。
+			プロバイダーを変更したい場合は、\`/provider add\`で新しいデフォルトのテキストプロバイダーを登録して有効化してください。
 
 			**TomoriBotを使用することで、[利用規約](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/terms-of-service.md)と[プライバシーポリシー](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/privacy-policy.md)に同意したことになります。**\`/legal terms\`と\`/legal privacy\`でいつでも確認できます。`,
       setup_prompt_title: `TomoriBotの追加が完了しました`,

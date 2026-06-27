@@ -5,15 +5,21 @@ import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueu
 import {
   acquireChannelLockForTurn,
   channelLocks,
+  clearChannelProcessingQueue,
   enqueueBusyChannelMessage,
+  forceKillChannelStream,
   getOrCreateChannelLockEntry,
   releaseChannelLockAndReplayQueue,
+  setActiveChannelTurnState,
 } from "@/utils/chat/channelQueue";
 import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
-import type { ChatIncoming } from "@/utils/chat/types";
+import type { ChatIncoming, ChatTurnContext } from "@/utils/chat/types";
+import { runToolLoop } from "@/utils/chat/toolLoop";
 import { determineMatchingPersonas, isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
+import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { parseTriggerWordListInput } from "@/utils/text/triggerWords";
+import type { LLMProvider, StreamResult } from "@/types/provider/interfaces";
 
 type ProviderFixtureName = "google" | "openrouter" | "novelai";
 
@@ -164,6 +170,7 @@ function makeTomoriState(fixture: ConversationFixture, persona: PersonaFixture):
 
 describe("chat regression harness", () => {
   afterEach(() => {
+    StreamOrchestrator.clearStopRequest(channelId);
     channelLocks.clear();
   });
 
@@ -486,6 +493,155 @@ describe("chat regression harness", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(processedMessageIds).toEqual([queuedMessage.id]);
+  });
+
+  it("notifies queued message discard handlers when the channel queue is cleared", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const queuedMessage = makeMessage(fixture, client);
+    const discardedReasons: string[] = [];
+    const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);
+
+    enqueueBusyChannelMessage({
+      lockEntry,
+      channelId,
+      simulatedAutochatCounterReset: false,
+      queuedMessage: {
+        message: queuedMessage,
+        textQuotaSource: "system",
+        onQueueDiscard: (reason) => {
+          discardedReasons.push(reason);
+        },
+      },
+    });
+
+    expect(clearChannelProcessingQueue(channelId)).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(discardedReasons).toEqual(["channel_queue_cleared"]);
+  });
+
+  it("does not queue same-user follow-ups while a hard stop is pending", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const message = makeMessage(
+      {
+        ...fixture,
+        id: "post_kill_follow_up",
+        message: {
+          ...fixture.message,
+          content: "Tomori, are you still there?",
+          mentionedUserIds: [],
+        },
+      },
+      client,
+    );
+    const tomoriState = makeTomoriState(fixture, {
+      id: 1001,
+      nickname: "Tomori",
+      isAlter: false,
+      triggers: ["tomori"],
+    });
+    const incoming: ChatIncoming = {
+      client,
+      message,
+      isFromQueue: false,
+      retryCount: 0,
+      skipLock: false,
+      isPersonaJob: false,
+      isUserImpersonation: false,
+      textQuotaSource: "user",
+    };
+    const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);
+    acquireChannelLockForTurn(lockEntry, {
+      messageId: "active_before_kill",
+      userDiscId: message.author.id,
+      isPersonaJob: false,
+      isCommandTriggered: false,
+    });
+    setActiveChannelTurnState(lockEntry, {
+      activePersonaId: tomoriState.persona_id,
+      triggeredPersonaIds: [tomoriState.persona_id],
+      followUpEligible: true,
+    });
+    StreamOrchestrator.requestStop(channelId, message.author.id);
+
+    const disposition = await evaluateAdmissionQueueAndTriggerGate({
+      incoming,
+      channelScope: {
+        guild: null,
+        serverDiscId: guildId,
+        isDMChannel: false,
+      },
+      earlyTomoriState: tomoriState,
+      earlyAllPersonas: [tomoriState],
+      userDiscId: message.author.id,
+      cooldownUserDiscId: message.author.id,
+      isActiveNaturalStopMessage: false,
+      isNaturalStopMessage: false,
+    });
+
+    expect(disposition?.disposition).toBe("ignore");
+    expect(disposition?.reason).toBe("locked_stop_requested");
+    expect(lockEntry.messageQueue).toHaveLength(0);
+  });
+
+  it("treats /bot kill stream aborts as stopped_by_user and clears the stop request", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const message = makeMessage(fixture, client);
+    const tomoriState = makeTomoriState(fixture, {
+      id: 1001,
+      nickname: "Tomori",
+      isAlter: false,
+      triggers: ["tomori"],
+    });
+    const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);
+    acquireChannelLockForTurn(lockEntry, {
+      messageId: message.id,
+      userDiscId: message.author.id,
+      isPersonaJob: false,
+      isCommandTriggered: false,
+    });
+    const provider = {
+      streamToDiscord: () => new Promise<StreamResult>(() => {}),
+    } as unknown as LLMProvider;
+    const context = {
+      turn: {
+        lockedTurn: {
+          admission: {
+            incoming: {},
+          },
+        },
+      },
+      client,
+      message,
+      channel: message.channel,
+      isFromQueue: false,
+      streamingContext: {
+        suppressUserErrors: true,
+      },
+      currentPersona: tomoriState,
+      isUserImpersonation: false,
+    } as unknown as ChatTurnContext;
+
+    const resultPromise = runToolLoop({
+      context,
+      provider,
+      providerConfig: {
+        model: "test",
+        apiKey: "test",
+        temperature: 0,
+      },
+      tomoriState,
+    });
+
+    StreamOrchestrator.requestStop(channelId, message.author.id);
+    expect(forceKillChannelStream(channelId)).toBe(true);
+
+    const result = await resultPromise;
+
+    expect(result.status).toBe("stopped_by_user");
+    expect(StreamOrchestrator.hasStopRequest(channelId)).toBe(false);
   });
 
   it("pre-lock admission ignores non-triggering messages without locking the channel", async () => {

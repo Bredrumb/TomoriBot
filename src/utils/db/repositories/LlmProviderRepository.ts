@@ -1474,50 +1474,140 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     }
   }
 
+  async setDefaultCustomEndpoint(
+    params: {
+      serverId?: number | null;
+      userId?: number | null;
+      capability: CustomEndpointCapability;
+      customEndpointId: number;
+      clearScope?: "label" | "capability";
+    },
+    options: LlmProviderCacheOptions = {},
+  ): Promise<boolean> {
+    const { serverId = null, userId = null, clearScope = "label" } = params;
+
+    try {
+      const selectedRows =
+        serverId !== null
+          ? await sql<[{ custom_endpoint_id: number; label: string }]>`
+              SELECT custom_endpoint_id, label
+              FROM custom_endpoints
+              WHERE custom_endpoint_id = ${params.customEndpointId}
+                AND server_id = ${serverId}
+                AND user_id IS NULL
+                AND capability = ${params.capability}
+              LIMIT 1
+            `
+          : userId !== null
+            ? await sql<[{ custom_endpoint_id: number; label: string }]>`
+                SELECT custom_endpoint_id, label
+                FROM custom_endpoints
+                WHERE custom_endpoint_id = ${params.customEndpointId}
+                  AND user_id = ${userId}
+                  AND server_id IS NULL
+                  AND capability = ${params.capability}
+                LIMIT 1
+              `
+            : [];
+
+      const selectedEndpoint = selectedRows[0];
+      if (!selectedEndpoint) {
+        return false;
+      }
+
+      if (serverId !== null) {
+        if (clearScope === "capability") {
+          await sql`
+            UPDATE custom_endpoints
+            SET is_default = false,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE server_id = ${serverId}
+              AND user_id IS NULL
+              AND capability = ${params.capability}
+              AND custom_endpoint_id <> ${params.customEndpointId}
+              AND is_default = true
+          `;
+        } else {
+          await sql`
+            UPDATE custom_endpoints
+            SET is_default = false,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE server_id = ${serverId}
+              AND user_id IS NULL
+              AND label = ${selectedEndpoint.label}
+              AND capability = ${params.capability}
+              AND custom_endpoint_id <> ${params.customEndpointId}
+              AND is_default = true
+          `;
+        }
+      } else if (userId !== null) {
+        if (clearScope === "capability") {
+          await sql`
+            UPDATE custom_endpoints
+            SET is_default = false,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ${userId}
+              AND server_id IS NULL
+              AND capability = ${params.capability}
+              AND custom_endpoint_id <> ${params.customEndpointId}
+              AND is_default = true
+          `;
+        } else {
+          await sql`
+            UPDATE custom_endpoints
+            SET is_default = false,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ${userId}
+              AND server_id IS NULL
+              AND label = ${selectedEndpoint.label}
+              AND capability = ${params.capability}
+              AND custom_endpoint_id <> ${params.customEndpointId}
+              AND is_default = true
+          `;
+        }
+      }
+
+      const result =
+        serverId !== null
+          ? await sql`
+              UPDATE custom_endpoints
+              SET is_default = true,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE custom_endpoint_id = ${params.customEndpointId}
+                AND server_id = ${serverId}
+                AND user_id IS NULL
+                AND capability = ${params.capability}
+            `
+          : await sql`
+              UPDATE custom_endpoints
+              SET is_default = true,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE custom_endpoint_id = ${params.customEndpointId}
+                AND user_id = ${userId}
+                AND server_id IS NULL
+                AND capability = ${params.capability}
+            `;
+
+      const ok = result.count > 0;
+      if (ok && serverId !== null && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+      return ok;
+    } catch (error) {
+      log.error(`Error setting default custom endpoint ${params.customEndpointId}:`, error);
+      return false;
+    }
+  }
+
   async setActiveCustomEndpoint(params: {
     serverId: number;
     capability: "speech" | "transcription";
     customEndpointId: number;
   }): Promise<boolean> {
-    try {
-      const [selectedEndpoint] = await sql<[{ custom_endpoint_id: number }]>`
-        SELECT custom_endpoint_id
-        FROM custom_endpoints
-        WHERE custom_endpoint_id = ${params.customEndpointId}
-          AND server_id = ${params.serverId}
-          AND user_id IS NULL
-          AND capability = ${params.capability}
-        LIMIT 1
-      `;
-
-      if (!selectedEndpoint) {
-        return false;
-      }
-
-      await sql`
-        UPDATE custom_endpoints
-        SET is_default = false,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE server_id = ${params.serverId}
-          AND user_id IS NULL
-          AND capability = ${params.capability}
-      `;
-
-      const result = await sql`
-        UPDATE custom_endpoints
-        SET is_default = true,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE custom_endpoint_id = ${params.customEndpointId}
-          AND server_id = ${params.serverId}
-          AND user_id IS NULL
-          AND capability = ${params.capability}
-      `;
-
-      return result.count > 0;
-    } catch (error) {
-      log.error(`Error setting active custom endpoint ${params.customEndpointId}:`, error);
-      return false;
-    }
+    return await this.setDefaultCustomEndpoint({
+      serverId: params.serverId,
+      capability: params.capability,
+      customEndpointId: params.customEndpointId,
+      clearScope: "capability",
+    });
   }
 
   // ── OpenRouter model registration writes ───────────────────────────────────

@@ -18,8 +18,8 @@ Phase 4 routes both through custom endpoint capabilities:
 
 - `/speech elevenlabs` connects ElevenLabs speech and transcription in one flow.
 - `/provider custom-endpoint add` registers local `tts-clone` and `openai-compatible-transcription` endpoints.
-- `/model speech` selects the active TTS endpoint.
-- `/model transcription` selects the active STT endpoint.
+- `/model speech` switches the active TTS endpoint.
+- `/model transcription` switches the active STT endpoint.
 - `/speech voice-add` uploads the one server-local reference sample supported in Phase 4. You can upload any audio format; it is automatically converted to mono WAV and stored in S3/CloudFront in production or under `data/voice-samples/` in non-production. A 10-20 second clip with no background music is recommended.
 - `/speech voice-assign` assigns either the local sample or an ElevenLabs voice to a persona.
 - `/speech transcripts` controls visible transcript posting in chat. It does not enable or disable background STT.
