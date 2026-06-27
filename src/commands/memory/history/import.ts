@@ -271,6 +271,14 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     )
     .addStringOption((option) =>
       option
+        .setName("end_message_id")
+        .setDescription(localizer("en-US", "commands.memory.history.import.end_message_id_description"))
+        .setRequired(false)
+        .setMinLength(15)
+        .setMaxLength(25),
+    )
+    .addStringOption((option) =>
+      option
         .setName("channels")
         .setDescription(localizer("en-US", "commands.memory.history.import.channels_description"))
         .setRequired(false)
@@ -403,6 +411,7 @@ async function extractWindow(
 async function fetchAndFormatMessages(params: {
   channel: TextBasedChannel;
   startMessageId: string;
+  endMessageId: string | null;
   limit: number;
   allPersonas: TomoriState[];
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
@@ -413,7 +422,7 @@ async function fetchAndFormatMessages(params: {
   lastMessage: Message;
   reachedEnd: boolean;
 } | null> {
-  const { channel, startMessageId, limit, allPersonas, replyInteraction, locale } = params;
+  const { channel, startMessageId, endMessageId, limit, allPersonas, replyInteraction, locale } = params;
 
   await replyInteraction.editReply({
     embeds: [
@@ -423,7 +432,10 @@ async function fetchAndFormatMessages(params: {
     ],
   });
 
-  const fetchResult = await fetchHistoryAfter(channel, startMessageId, limit);
+  // When endMessageId is set we override the user limit and reach the full 100 so we can
+  // find the anchor anywhere in the window; the trim below shrinks back to the real span.
+  const effectiveLimit = endMessageId ? 100 : limit;
+  const fetchResult = await fetchHistoryAfter(channel, startMessageId, effectiveLimit);
   if (fetchResult.messages.length === 0) {
     await replyInteraction.editReply({
       embeds: [
@@ -436,13 +448,38 @@ async function fetchAndFormatMessages(params: {
     return null;
   }
 
-  const formattedResult = formatMessagesForExtraction(fetchResult.messages, allPersonas);
+  let messages = fetchResult.messages;
+  let reachedEnd = fetchResult.reachedEnd;
+
+  if (endMessageId) {
+    const endIdx = messages.findIndex((m) => m.id === endMessageId);
+    if (endIdx === -1) {
+      await replyInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.memory.history.import.end_too_far_title"))
+            .setDescription(
+              localizer(locale, "commands.memory.history.import.end_too_far_description", {
+                end_message_id: endMessageId,
+              }),
+            )
+            .setColor(ColorCode.ERROR),
+        ],
+      });
+      return null;
+    }
+    messages = messages.slice(0, endIdx + 1);
+    // User-defined endpoint; channel may have more after it, so don't claim channel-end.
+    reachedEnd = false;
+  }
+
+  const formattedResult = formatMessagesForExtraction(messages, allPersonas);
 
   return {
     formattedResult,
-    firstMessage: fetchResult.messages[0],
-    lastMessage: fetchResult.messages[fetchResult.messages.length - 1],
-    reachedEnd: fetchResult.reachedEnd,
+    firstMessage: messages[0],
+    lastMessage: messages[messages.length - 1],
+    reachedEnd,
   };
 }
 
@@ -825,6 +862,7 @@ export async function execute(
     const scope: HistoryScope =
       scopeInput === "automatic" ? "automatic" : scopeInput === "global" ? "global" : "persona";
     const startMessageId = interaction.options.getString("start_message_id", true).trim();
+    const endMessageId = interaction.options.getString("end_message_id")?.trim() || null;
     const channelsInput = interaction.options.getString("channels");
     const promptModeInput = interaction.options.getString("prompt");
     const promptMode: ExtractionPromptMode =
@@ -860,6 +898,46 @@ export async function execute(
         flags: MessageFlags.Ephemeral,
       });
       return;
+    }
+
+    if (endMessageId) {
+      try {
+        await interaction.channel.messages.fetch(endMessageId);
+      } catch {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.memory.history.import.invalid_end_id_title",
+          descriptionKey: "commands.memory.history.import.invalid_end_id_description",
+          descriptionVars: { end_message_id: endMessageId },
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      // Snowflake ordering: high bits encode timestamp, so BigInt compare gives strict chronology.
+      let startSnowflake: bigint;
+      let endSnowflake: bigint;
+      try {
+        startSnowflake = BigInt(startMessageId);
+        endSnowflake = BigInt(endMessageId);
+      } catch {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.memory.history.import.invalid_end_id_title",
+          descriptionKey: "commands.memory.history.import.invalid_end_id_description",
+          descriptionVars: { end_message_id: endMessageId },
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      if (endSnowflake <= startSnowflake) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.memory.history.import.end_not_after_start_title",
+          descriptionKey: "commands.memory.history.import.end_not_after_start_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
     }
     const channelTags: string[] = channelsInput
       ? channelsInput
@@ -948,6 +1026,7 @@ export async function execute(
       const fetchResult = await fetchAndFormatMessages({
         channel: interaction.channel,
         startMessageId,
+        endMessageId,
         limit: messageFetchLimit,
         allPersonas,
         replyInteraction: modalSubmitInteraction,
@@ -1091,6 +1170,7 @@ export async function execute(
       const fetchResult = await fetchAndFormatMessages({
         channel: interaction.channel,
         startMessageId,
+        endMessageId,
         limit: messageFetchLimit,
         allPersonas,
         replyInteraction: modalSubmitInteraction,
@@ -1189,6 +1269,7 @@ export async function execute(
     const fetchResult = await fetchAndFormatMessages({
       channel: interaction.channel,
       startMessageId,
+      endMessageId,
       limit: messageFetchLimit,
       allPersonas,
       replyInteraction: modalSubmitInteraction,
