@@ -4,7 +4,7 @@ import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { getVisibleDeliveryMode, type TextProcessingConfig } from "@/types/stream/types";
 
 export function createStreamTextProcessingConfig(config: StreamConfig, context: StreamContext): TextProcessingConfig {
-  const { mentionMap, mentionIdSet } = buildMentionLookup(context.contextItems);
+  const { mentionMap, mentionIdSet, personaMentionMap } = buildMentionLookup(context.contextItems);
   applyForcedMentions(mentionMap, mentionIdSet, context.forcedMentions);
   const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
 
@@ -15,6 +15,7 @@ export function createStreamTextProcessingConfig(config: StreamConfig, context: 
     emojiStrings: context.emojiStrings || [],
     mentionMap,
     mentionIdSet,
+    personaMentionMap,
     botName,
     botNameAliases: collectPersonaNameAliases(context.tomoriState, botName),
     registeredSpeakerNamesLower: collectRegisteredSpeakerNames(context.contextItems, botName),
@@ -122,11 +123,19 @@ function applyForcedMentions(
 export function buildMentionLookup(contextItems: StructuredContextItem[]): {
   mentionMap: Map<string, string[]>;
   mentionIdSet: Set<string>;
+  personaMentionMap: Map<string, string>;
 } {
   const mentionMap = new Map<string, string[]>();
   const mentionIdSet = new Set<string>();
+  const personaMentionMap = new Map<string, string>();
 
   for (const item of contextItems) {
+    if (item.personaMentionMap) {
+      for (const [alias, trigger] of item.personaMentionMap) {
+        personaMentionMap.set(alias, trigger);
+      }
+    }
+
     if (
       item.metadataTag !== ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION ||
       !item.conversationUsers ||
@@ -157,5 +166,5 @@ export function buildMentionLookup(contextItems: StructuredContextItem[]): {
     }
   }
 
-  return { mentionMap, mentionIdSet };
+  return { mentionMap, mentionIdSet, personaMentionMap };
 }

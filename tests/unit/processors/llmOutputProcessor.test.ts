@@ -7,6 +7,7 @@ import {
   truncateBeforeGenericSpeakerLine,
 } from "@/utils/text/processors/llmOutputProcessor";
 import { isAllowedRenderModifierSpeakerLabel } from "@/utils/discord/renderModifierParser";
+import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
 
 // ─── cleanLLMOutput ─────────────────────────────────────────────────────────
 
@@ -94,6 +95,23 @@ describe("cleanLLMOutput", () => {
     expect(cleaned).not.toContain("Tsukushi:");
     expect(cleaned).toContain("<:NagatoroSmug:1382568815900098660>");
     expect(cleaned).toContain("Staying up late.");
+  });
+
+  it("preserves known persona @trigger text after normal output cleanup", () => {
+    const personaMentionMap = buildPersonaMentionMap([{ persona_nickname: "Shy Tomori", trigger_words: ["lilya"] }]);
+    const cleaned = cleanLLMOutput(
+      "Tomori: I should ask @(Shy Tomori).",
+      "Tomori",
+      [],
+      true,
+      new Map(),
+      new Set(),
+      undefined,
+      [],
+      personaMentionMap,
+    );
+
+    expect(cleaned).toBe("I should ask @lilya.");
   });
 });
 

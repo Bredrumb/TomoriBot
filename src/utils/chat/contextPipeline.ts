@@ -59,6 +59,7 @@ import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMes
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
+import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
 
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
@@ -307,15 +308,18 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     messageIdMap,
   });
 
-  const contextItems = appendTailDirectives({
-    turn,
-    simplifiedMessages: history.simplifiedMessages,
-    contextItems: appendInjectedContextItems(contextBuild.contextItems, incoming.injectedContextItems),
-    lowerPriorityTailDirectives: contextBuild.lowerPriorityTailDirectives,
-    tailDirectives: contextBuild.tailDirectives,
-    uncensorDirective: contextBuild.uncensorDirective,
-    messageIdMap,
-  });
+  const contextItems = attachPersonaMentionMapToContextItems(
+    appendTailDirectives({
+      turn,
+      simplifiedMessages: history.simplifiedMessages,
+      contextItems: appendInjectedContextItems(contextBuild.contextItems, incoming.injectedContextItems),
+      lowerPriorityTailDirectives: contextBuild.lowerPriorityTailDirectives,
+      tailDirectives: contextBuild.tailDirectives,
+      uncensorDirective: contextBuild.uncensorDirective,
+      messageIdMap,
+    }),
+    buildPersonaMentionMap(turn.allPersonas),
+  );
 
   return {
     turn,

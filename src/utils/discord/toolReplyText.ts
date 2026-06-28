@@ -33,7 +33,7 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
 
   // 1. Build the static handle→user-ID lookup from the same conversation context the stream
   //    path uses, so tool replies resolve @mentions identically to normal replies.
-  const { mentionMap, mentionIdSet } = buildMentionLookup(contextItems);
+  const { mentionMap, mentionIdSet, personaMentionMap } = buildMentionLookup(contextItems);
 
   // 2. Drop custom emojis already used in recent bot turns (matches the stream pre-clean).
   const filtered = filterDuplicateCustomEmojis(content, contextItems);
@@ -58,6 +58,7 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
       sanitizeEnabled: context.tomoriState.config.uncensor_sanitize_enabled ?? false,
     },
     botNameAliases,
+    personaMentionMap,
   );
 
   // 4. Strip any leading *foreign* persona speaker labels (e.g. "Bella:") that the own-name-only
@@ -70,7 +71,7 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
 
   // 5. Resolve guild-wide @mentions: searches guild members for handles not present in the
   //    conversation context map, then replaces all resolved handles with `<@id>` tags.
-  const resolved = await resolveGuildMentions(deLabeled, context.channel, mentionMap, mentionIdSet);
+  const resolved = await resolveGuildMentions(deLabeled, context.channel, mentionMap, mentionIdSet, personaMentionMap);
 
   return resolved.trim();
 }

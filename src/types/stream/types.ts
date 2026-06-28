@@ -138,6 +138,7 @@ export interface TextProcessingConfig {
   emojiStrings: string[];
   mentionMap?: Map<string, string[]>;
   mentionIdSet?: Set<string>;
+  personaMentionMap?: Map<string, string>;
   botName: string;
   /** Extra names the active persona answers to (lore/default name, trigger names) — used to strip
    *  a leaked multi-name opening label chain like "Tomori: Lilya: ..." */
