@@ -26,7 +26,8 @@ context items per message with three orthogonal concerns interleaved:
    notices, or `increase_media_context` hints.
 3. **Context-note injection** — if `context_note` is configured, inject
    `[System: ${note}]` at `context_note_depth` messages from the end of
-   history.
+   history. The default-off verbatim tool-calling workaround adds a separate
+   depth-3 system note when enabled and the effective LLM has tools.
 
 ## Input
 
@@ -116,6 +117,13 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - Injects `[System: ${context_note}]` as a `user`-role item with tag
   `CONTEXT_NOTE_INJECTION` at the target index (or at the end if the
   history is shorter than the depth).
+- If `tomoriConfig.verbatim_tool_calling_enabled` is true and
+  `tomoriState.llm.has_tools` is true, injects one additional
+  `CONTEXT_NOTE_INJECTION` at depth 3. This nudge tells Custom endpoint models
+  how to emit the strict code-span/fenced verbatim tool-call syntax. The
+  matching tool *schemas* are dumped earlier in the prompt by stage 07b
+  ([`07b-verbatim-tool-definitions.md`](./07b-verbatim-tool-definitions)),
+  gated by the same predicate.
 
 ## Invariants
 
@@ -134,6 +142,9 @@ After this stage runs:
   attempt model.
 - Context note injects exactly once per build — either at the depth
   target or at the very end if history is shorter.
+- Verbatim tool-calling nudge injection is opt-in and independent of
+  persona/channel/global context notes; adding the workaround must not suppress
+  the global context-note fallback.
 - `messageIdMap.register(...)` is called for every media reference the
   LLM might ask about after resolution (so `increase_media_context`,
   `image_analysis_tool`, and media-reference tools have stable IDs).
@@ -150,6 +161,7 @@ After this stage runs:
 | `tomoriConfig` | `message_fetch_limit` | Caps media window |
 | `tomoriConfig` | `humanizer_degree` | HEAVY+ applies humanizer to model items |
 | `tomoriConfig` | `context_note`, `context_note_depth` | Context-note injection |
+| `tomoriConfig` | `verbatim_tool_calling_enabled` | Enables the depth-3 verbatim tool-calling nudge when the effective LLM has tools |
 | `tomoriConfig` | `uncensor_unicode_space_enabled`, `uncensor_sanitize_enabled` | Drives uncensor transforms |
 | `tomoriState` | `context_note`, `context_note_depth` | Persona-level override of tomoriConfig values |
 | Memory pressure | `memoryGuard.getMediaWindow()` | Dynamic media-window shrink under load |

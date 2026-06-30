@@ -25,6 +25,7 @@ import {
 } from "@/utils/chat/admissionGuards";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
+import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import type { ChatIncoming, NonRunnableChatAdmission } from "@/utils/chat/types";
 
 type RateLimitedChannel = Parameters<typeof enforceGlobalRateLimit>[0]["channel"];
@@ -92,6 +93,10 @@ async function evaluateLockedChannelAdmission(args: {
     reason,
   });
 
+  if (StreamOrchestrator.hasStopRequest(channelId) && !StreamOrchestrator.isFollowUpRequest(channelId)) {
+    return ignored("locked_stop_requested");
+  }
+
   if (args.isActiveNaturalStopMessage) {
     await requestNaturalStopForLockedTurn({
       channelId,
@@ -132,6 +137,8 @@ async function evaluateLockedChannelAdmission(args: {
       manualStreamingContextOverrides: followUpOverrides,
       isNaturalStopMessage: args.isNaturalStopMessage,
       shouldSurfaceUserErrors: true,
+      onGenerationResult: incoming.onGenerationResult,
+      onQueueDiscard: incoming.onQueueDiscard,
     })
   ) {
     return ignored("locked_follow_up_queued");
@@ -238,6 +245,8 @@ async function evaluateLockedChannelAdmission(args: {
       manualTriggerInvoker: incoming.manualTriggerInvoker,
       reminderRecipientID: incoming.reminderRecipientID,
       reminderData: incoming.reminderData,
+      onGenerationResult: incoming.onGenerationResult,
+      onQueueDiscard: incoming.onQueueDiscard,
       sceneTurn: incoming.sceneTurn,
       manualStreamingContextOverrides: incoming.manualStreamingContextOverrides
         ? {

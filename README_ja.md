@@ -178,7 +178,7 @@ TomoriBotのシステムプロンプト、ペルソナ設定、外部プロバ�
 | `cross_channel_message` | `{cross_channel_tool}` | ベースツール；NovelAI非対応；対象チャンネルの権限とクロスチャンネルブロックリストが適用される | 別のチャンネルやスレッドで即座に行動し、オプションで報告を返す。 |
 | `select_sticker_for_response` | `{sticker_tool}` | `sticker_usage_enabled`；`USE_EXTERNAL_STICKERS` | 返答に合うサーバースタンプを選択する。 |
 | `manage_message` | `{manage_message_tool}` | `manage_message_enabled`；`pin`に`MANAGE_MESSAGES`が必要 | 最近のメッセージをピン留めするか、Tomoriやそのキャラクターが送信した最近のメッセージを編集/削除する。 |
-| `interact_with_recent_message` | `{message_interaction_tool}` | ベースツール；通常のDiscord送信/リアクション機能が実行時に適用される | 最近のメッセージにリアクションするか、短い返信を送信する。 |
+| `interact_with_recent_message` | `{message_interaction_tool}` | ベースツール；通常のDiscord送信/リアクション機能が実行時に適用される | 最近のメッセージにリアクションするか、短い返信を送信する。ペルソナが送信したメッセージへの返信は、可能な場合そのペルソナの送信者IDを使用する。 |
 | `peek_profile_picture` | `{profile_picture_tool}` | ベースツール；ビジョン対応チャットモデルまたは設定済み`vision_llm`が必要 | ユーザーのアバターまたはアクティブなペルソナのアバターを確認する。 |
 | `read_document` | `{document_tool}` | ベースツール | 最近のメッセージのPDF、TXT、またはMD添付ファイルからテキストを抽出する。 |
 | `reveal_message_metadata` | `{message_metadata_tool}` | ベースツール | 最近の可視ターンに`ref_N`ハンドルと送信タイムスタンプを付与して、正確なメッセージターゲティングを可能にする。 |

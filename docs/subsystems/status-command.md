@@ -66,6 +66,7 @@ Server status is split across multiple pages so durable state stays visible with
   - random trigger advanced fields
 - Features and moderation:
   - feature toggles
+  - experimental workaround toggles
   - moderation flags
   - blacklist state
 - Prompt pages:

@@ -19,18 +19,10 @@
  */
 
 import type { Client } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { personaRepository, type UnsyncedMainPointer } from "@/utils/db/repositories";
 import { isAvatarUpdateRateLimited } from "@/utils/discord/avatarRateLimit";
 import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";
-
-/** A main persona whose guild avatar is out of date with its preset. */
-type UnsyncedMainPointer = {
-  server_disc_id: string;
-  persona_id: number;
-  preset_avatar_shared_url: string;
-  preset_avatar_hash: string;
-};
 
 /**
  * Parses a non-negative-integer env var, falling back to a default when unset or
@@ -65,33 +57,6 @@ const MAX_PER_RUN = readIntEnv("PRESET_AVATAR_SYNC_MAX_PER_RUN", 0);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Loads every server whose active main persona is an unforked preset pointer and
- * whose last-applied avatar hash differs from its preset's current avatar hash.
- * Materialized personas (is_pointer = false) and presets without a seeded avatar
- * are excluded by the join/predicates, so the result is exactly the work set.
- */
-async function loadUnsyncedMainPointers(): Promise<UnsyncedMainPointer[]> {
-  const rows = await sql<UnsyncedMainPointer[]>`
-    SELECT
-      s.server_disc_id,
-      p.persona_id,
-      pp.preset_avatar_shared_url,
-      pp.preset_avatar_hash
-    FROM personas p
-    JOIN servers s ON s.server_id = p.server_id
-    JOIN persona_presets pp
-      ON pp.preset_lineage_id = p.preset_lineage_id
-      AND pp.preset_language = p.preset_language
-    WHERE p.is_alter = false
-      AND p.is_pointer = true
-      AND pp.preset_avatar_hash IS NOT NULL
-      AND pp.preset_avatar_shared_url IS NOT NULL
-      AND p.applied_avatar_hash IS DISTINCT FROM pp.preset_avatar_hash
-  `;
-  return rows;
 }
 
 /**
@@ -153,7 +118,7 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
 
   let targets: UnsyncedMainPointer[];
   try {
-    targets = await loadUnsyncedMainPointers();
+    targets = await personaRepository.loadUnsyncedMainPointers();
   } catch (error) {
     log.warn("[Preset Avatar Fanout] Failed to load unsynced main pointers; skipping run", error);
     return;
@@ -208,8 +173,8 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
     // 4. Prevent race condition: check if the user customized the avatar (materializing the pointer)
     // while this server was waiting in the reconciler queue.
     try {
-      const [freshPersona] = await sql`SELECT is_pointer FROM personas WHERE persona_id = ${target.persona_id}`;
-      if (!freshPersona?.is_pointer) {
+      const isPointer = await personaRepository.isPersonaPointer(target.persona_id);
+      if (!isPointer) {
         log.info(
           `[Preset Avatar Fanout] Persona ${target.persona_id} is no longer a pointer; skipping guild ${target.server_disc_id}`,
         );
@@ -227,11 +192,7 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
     if (result === "ok") {
       // 4. Stamp the applied hash so this persona is skipped until the art changes again.
       try {
-        await sql`
-          UPDATE personas
-          SET applied_avatar_hash = ${target.preset_avatar_hash}
-          WHERE persona_id = ${target.persona_id}
-        `;
+        await personaRepository.stampPointerAvatarHash(target.persona_id, target.preset_avatar_hash);
         applied++;
         log.info(`[Preset Avatar Fanout] Synced guild ${target.server_disc_id} avatar (persona ${target.persona_id})`);
       } catch (error) {

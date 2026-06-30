@@ -87,6 +87,7 @@ Per-task guides:
 - [`contributor-guides/adding-new-provider.md`](./contributor-guides/adding-new-provider)
 - [`contributor-guides/adding-locale.md`](./contributor-guides/adding-locale)
 - [`contributor-guides/adding-persona-preset.md`](./contributor-guides/adding-persona-preset)
+- [`contributor-guides/raw-sql-boundary.md`](./contributor-guides/raw-sql-boundary) — keeping raw SQL in the repository layer (enforced by `bun run audit-sql` + a unit test)
 
 Testing your changes:
 

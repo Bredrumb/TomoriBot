@@ -187,6 +187,17 @@ const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
   "thought_log_channel_disc_id",
 ]);
 
+/**
+ * A main persona whose Discord guild avatar is out of date with its preset —
+ * the unit of work consumed by the background preset-avatar fan-out reconciler.
+ */
+export type UnsyncedMainPointer = {
+  server_disc_id: string;
+  persona_id: number;
+  preset_avatar_shared_url: string;
+  preset_avatar_hash: string;
+};
+
 export class PersonaRepository implements IRepository<PersonaExportShape> {
   private static readonly FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
     (process.env.FALLBACK_DEBUG_ENABLED ?? "").trim().toLowerCase(),
@@ -1184,6 +1195,72 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
+  /**
+   * Loads every server whose active main persona is an unforked preset pointer
+   * and whose last-applied avatar hash differs from its preset's current avatar
+   * hash — exactly the work set for the background preset-avatar fan-out
+   * reconciler. Materialized personas (`is_pointer = false`) and presets without
+   * a seeded avatar are excluded by the join/predicates.
+   *
+   * Errors propagate to the caller, which owns the "skip this run" semantics.
+   */
+  async loadUnsyncedMainPointers(): Promise<UnsyncedMainPointer[]> {
+    return await sql<UnsyncedMainPointer[]>`
+      SELECT
+        s.server_disc_id,
+        p.persona_id,
+        pp.preset_avatar_shared_url,
+        pp.preset_avatar_hash
+      FROM personas p
+      JOIN servers s ON s.server_id = p.server_id
+      JOIN persona_presets pp
+        ON pp.preset_lineage_id = p.preset_lineage_id
+        AND pp.preset_language = p.preset_language
+      WHERE p.is_alter = false
+        AND p.is_pointer = true
+        AND pp.preset_avatar_hash IS NOT NULL
+        AND pp.preset_avatar_shared_url IS NOT NULL
+        AND p.applied_avatar_hash IS DISTINCT FROM pp.preset_avatar_hash
+    `;
+  }
+
+  /**
+   * Returns whether a persona is still an unforked pointer, or `null` when the
+   * row no longer exists. The avatar reconciler uses this to skip a persona the
+   * user customized (materialized) while it waited in the reconciler queue.
+   *
+   * Errors propagate so the caller can decide to skip the persona to be safe.
+   *
+   * @param personaId - Internal persona DB ID
+   */
+  async isPersonaPointer(personaId: number): Promise<boolean | null> {
+    const [row] = await sql<Array<{ is_pointer: boolean | null }>>`
+      SELECT is_pointer FROM personas WHERE persona_id = ${personaId}
+    `;
+    if (!row) return null;
+    return row.is_pointer ?? false;
+  }
+
+  /**
+   * Stamps a single main pointer's `applied_avatar_hash` after a SUCCESSFUL
+   * guild-avatar PATCH so the reconciler skips it until the preset art changes
+   * again. Unlike {@link markServerMainAvatarSynced} (which resolves the hash via
+   * the preset join for an apply-site), this writes a hash the caller already
+   * holds for one specific persona.
+   *
+   * Errors propagate so the caller can log and retry on the next boot.
+   *
+   * @param personaId        - Internal persona DB ID
+   * @param presetAvatarHash - The preset avatar hash to record as applied
+   */
+  async stampPointerAvatarHash(personaId: number, presetAvatarHash: string): Promise<void> {
+    await sql`
+      UPDATE personas
+      SET applied_avatar_hash = ${presetAvatarHash}
+      WHERE persona_id = ${personaId}
+    `;
+  }
+
   async createPresetPointerAlterPersona(params: {
     serverId: number;
     nickname: string;
@@ -1896,7 +1973,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
         scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
-        scaps.tool_use_enabled,
+        scaps.tool_use_enabled, scaps.verbatim_tool_calling_enabled,
         -- 5. server_notice_embeds_configs
         snec.tool_notice_hidden_keys,
         -- 6. server_nsfw_configs
@@ -1999,7 +2076,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
         scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
-        scaps.tool_use_enabled,
+        scaps.tool_use_enabled, scaps.verbatim_tool_calling_enabled,
         -- 5. server_notice_embeds_configs
         snec.tool_notice_hidden_keys,
         -- 6. server_nsfw_configs

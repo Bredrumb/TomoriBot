@@ -29,9 +29,11 @@ The method also handles two additional responsibilities:
 - **Error normalisation** — raw SDK errors (HTTP status codes, provider-specific error objects)
   are converted to the shared `ProviderError` shape via `handleProviderError()`. This includes
   classifying the error type (`api_error`, `rate_limit`, `content_blocked`, `timeout`,
-  `provider_overloaded`) and setting `retryable` so the stage 04 orchestrator and the upstream
-  key-rotation logic in `runGenerationTurn` can make retry decisions without inspecting
-  provider-specific error objects.
+  `provider_overloaded`, `model_error`) and setting `retryable` so the stage 04 orchestrator and
+  the upstream key-rotation logic in `runGenerationTurn` can make retry decisions without
+  inspecting provider-specific error objects. `model_error` is reserved for model-selection or
+  model-availability failures such as "unsupported model" or "model not found"; the stream UI
+  surfaces the provider's raw supported-model details instead of hiding them behind a generic 400.
 
 - **Thought log extraction** — for providers that emit reasoning fields, thought summaries, or
   thought signatures (for example Google/Gemini `part.thought`, `thoughtSummary`, and
@@ -69,6 +71,23 @@ The method also handles two additional responsibilities:
   sweep all consume it. Adding a new vendor namespace is a one-line change there. Note: API stop
   strings (`stopStrings.ts`) are matched literally by the provider, so namespaced close tags must be
   added per model rule explicitly rather than via the shared pattern.
+
+- **Custom verbatim tool-call fallback** — when
+  `server_capabilities_configs.verbatim_tool_calling_enabled` is true, the active Custom text model
+  has tools, and the request includes OpenAI-compatible tool schemas, `CustomStreamAdapter` runs
+  `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It scans
+  the stream for an anchor `<knownToolName>(` — only names from the exposed tool set trigger — then
+  accumulates from that name until the parentheses balance (quote-aware, so a `)` inside a JSON string
+  does not close early) and parses the `name(...)` body. The call may be **bare** or wrapped in an
+  inline code span / fenced block, and **prose before it is allowed** (chat models narrate before they
+  act): leading narration is emitted as normal text and the call is recovered after it, e.g.
+  `` Fine. `generate_image({"prompt":"a cat","mode":"txt2img"})` `` or the same call with no backticks.
+  The parse step is the false-positive guard — a tool name merely *mentioned* in prose
+  (`generate_image (it makes art)`) fails JSON/arity validation and is released as text. Successful
+  parses are emitted as `type: "function_call"` before the literal text reaches Discord; rejected or
+  incomplete text is released normally. Because the stream adapter drops `visibleText` whenever a
+  `functionCall` is present, the parser emits any preceding prose first (call unresolved) and resolves
+  the call on a later chunk or at stream flush.
 
 ## Input
 
@@ -111,8 +130,8 @@ After this stage:
 | Surface | Plugin-relevance |
 |---|---|
 | `BaseStreamAdapter.processChunk()` abstract method | **A new provider adapter implements this to map its SDK chunk shapes to `ProcessedChunk`.** The contract is at `src/types/stream/interfaces.ts:184`. The implementation must be synchronous. |
-| `BaseStreamAdapter.handleProviderError()` abstract method | **A new provider adapter implements this to classify its SDK errors.** The `ProviderError.retryable` flag is consumed by the key-rotation loop in `runGenerationTurn`; the `type` field drives user-facing error embed formatting. Contract at `src/types/stream/interfaces.ts:201`. |
-| `BaseStreamAdapter.createErrorDescription()` abstract method | **A new provider adapter implements this to produce localized, provider-specific error text** for the error embed shown in Discord when `retryable: false` and user errors are not suppressed. Contract at `src/types/stream/interfaces.ts:207`. |
+| `BaseStreamAdapter.handleProviderError()` abstract method | **A new provider adapter implements this to classify its SDK errors.** The `ProviderError.retryable` flag is consumed by the key-rotation loop in `runGenerationTurn`; the `type` field drives user-facing error embed formatting. Model-name and model-availability failures should become `model_error` or carry a message that the shared model-error classifier can recognize. Contract at `src/types/stream/interfaces.ts:201`. |
+| `BaseStreamAdapter.createErrorDescription()` abstract method | **A new provider adapter implements this to produce localized, provider-specific error text** for the error embed shown in Discord when `retryable: false` and user errors are not suppressed. For `model_error`, preserve the provider's actionable details, such as supported model IDs. Contract at `src/types/stream/interfaces.ts:207`. |
 | `FunctionCall` shape (`name`, `args`, `thoughtSignature`) | The provider-agnostic function call format — `src/types/provider/interfaces.ts:145`. Fields like `thoughtSignature`, `reasoning_details`, and `deepseekReasoningContent` are provider-specific optional fields that must be preserved when passing tool results back to the provider in stage 01. |
 
 ## Related docs

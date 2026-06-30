@@ -353,7 +353,7 @@ The bot tracks sent Matrix event IDs → persona name in a bounded in-memory map
 Matrix users can be set as reminder targets. Since they have no row in the `users` table (which stores Discord snowflake IDs), several adjustments are made:
 
 1. **`reminderTool.ts`**: Skips BigInt fuzzy-matching (Matrix IDs are not numeric), skips `users` table lookup, and trusts the AI-provided nickname directly.
-2. **`reminderTimer.ts`**: After delivering the reminder, calls `sendMatrixReminderMention()` instead of the Discord mention path. This sends a direct Matrix mention to the linked room if the AI response didn't already include the `@{localpart}` placeholder.
+2. **`reminderProcessor.ts`**: After acknowledged reminder delivery, calls `sendMatrixReminderMention()` instead of the Discord mention path. This sends a direct Matrix mention to the linked room if the AI response didn't already include the `@{localpart}` placeholder. If delivery is stopped or cleared from the queue, the reminder is rescheduled instead of consumed.
 3. **`scheduled-task/remove.ts`**: Displays Matrix reminders with `(Matrix)` suffix and `for {nickname}` instead of `created by {nickname}` so server managers can identify them.
 4. **`updateTaskTool.ts`**: Matrix relay users can edit/delete non-self reminders targeted at their own Matrix user ID through `update_task`; Matrix-originated self-tasks without a requester row stay slash-command managed.
 

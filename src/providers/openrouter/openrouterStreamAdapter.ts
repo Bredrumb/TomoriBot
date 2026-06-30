@@ -2211,6 +2211,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       return localizer(locale, "genai.openrouter.404_privacy_policy_error");
     }
 
+    // Special case: Free model rate limit error
+    if (
+      error.message?.includes("free-models-per-day") ||
+      error.message?.includes("unlock 1000 free model requests per day")
+    ) {
+      return localizer(locale, "genai.openrouter.429_free_models_message");
+    }
+
     // Get OpenRouter-specific message based on error code and type
     let openrouterMessage = error.userMessage;
 

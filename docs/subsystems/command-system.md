@@ -263,6 +263,7 @@ Examples:
 
 - `/server whitelist remove`
 - `/config remove modeloverride` (channels + personas together)
+- `/config workarounds` (experimental server-scoped workaround toggles)
 - `/server stm manage` (active server-shared STM entries)
 - `/server private-channels`
 - `/server rp-channels`
@@ -407,7 +408,7 @@ Rules:
 ## Representative Command Groups
 
 - `bot`: respond, generate(image/scene), kill, impersonate
-- `config`: setup, model(text/image/embedding/video/vision/speech/transcription), api-key(rotation), provider(add/remove), custom-endpoint(add/edit/remove), image-tags(default-positive/default-negative), system-prompt(set/remove/preset), context-note(set), params(*), timezone, message-fetch-limit, self-debug, model-randomizer, bot-permissions -> tool-use(toggle/manage), notice-embeds(visibility)
+- `config`: setup, model(text/image/embedding/video/vision/speech/transcription), api-key(rotation), provider(add/remove), custom-endpoint(add/edit/remove), image-tags(default-positive/default-negative), system-prompt(set/remove/preset), context-note(set), params(*), timezone, message-fetch-limit, self-debug, model-randomizer, workarounds, bot-permissions -> tool-use(toggle/manage), notice-embeds(visibility)
 - `speech`: elevenlabs, voice-add, voice-remove, voice-assign, transcripts, chatterbox(parameters)
 - `nsfw`: jailbreaks
 - `optional-key`: brave/set/remove
@@ -437,6 +438,8 @@ Rules:
 `/generate video` is a modal-driven async generation command. It validates `videogen_enabled`, provider capability, API key, configured `video_model_id`, and server quota before polling the selected provider until the MP4 result is ready.
 
 `/config model-randomizer` is a server-level toggle (mirrors `/config self-debug`) for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a **block-until-fallbacks** precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured via `/model fallback`, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` — see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn).
+
+`/config workarounds` is a checkbox-group modal for experimental compatibility patches. V1 exposes `Verbatim Tool-Calling`, a default-off server flag stored in `server_capabilities_configs.verbatim_tool_calling_enabled`. The command uses `promptWithRawModal(..., MessageFlags.Ephemeral)` as the first acknowledgement, writes only changed columns through `ConfigRepository.updateCapabilitiesConfig`, and invalidates TomoriState cache after a successful DB write.
 
 ### Personal-provider (BYOK) routing in commands
 

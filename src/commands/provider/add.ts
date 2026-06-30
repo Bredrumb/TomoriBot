@@ -20,6 +20,7 @@ import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { buildSavedProviderConfigFromExistingOrDefaults } from "@/utils/provider/savedProviderConfig";
+import { activateServerTextModelFromSavedConfig } from "@/utils/provider/providerActivation";
 
 const MODAL_CUSTOM_ID = "config_provider_add_modal";
 const PROVIDER_SELECT_ID = "provider_select";
@@ -251,11 +252,35 @@ export async function execute(
       return;
     }
 
+    const activationResult = await activateServerTextModelFromSavedConfig({
+      serverDiscId: serverId,
+      tomoriState,
+      savedConfig,
+    });
+    if (activationResult.status !== "activated") {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey:
+          activationResult.status === "missing_model"
+            ? "commands.provider.api-key.set.no_default_model_title"
+            : "general.errors.update_failed_title",
+        descriptionKey:
+          activationResult.status === "missing_model"
+            ? "commands.provider.api-key.set.no_default_model_description"
+            : "general.errors.update_failed_description",
+        descriptionVars: {
+          provider: getProviderDisplayName(selectedProvider),
+        },
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.provider.add.success_title",
       descriptionKey: existingConfig ? "commands.provider.add.updated_existing" : "commands.provider.add.success",
       descriptionVars: {
         provider: getProviderDisplayName(selectedProvider),
+        model_name: activationResult.modelName ?? localizer(locale, "general.unknown"),
       },
       color: ColorCode.SUCCESS,
     });

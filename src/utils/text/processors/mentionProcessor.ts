@@ -1,4 +1,5 @@
 import { escapeRegExp } from "./regexUtils";
+import { resolvePersonaMentionHandle } from "@/utils/text/personaMentionHandles";
 
 /**
  * Strips curly braces from unknown template placeholders in text, leaving only the inner word.
@@ -91,8 +92,11 @@ export function replaceMentionHandles(
   text: string,
   mentionMap?: Map<string, string[]>,
   mentionIdSet?: Set<string>,
+  personaMentionMap?: ReadonlyMap<string, string>,
 ): string {
-  if (!text || !mentionMap || mentionMap.size === 0) return text;
+  if (!text || ((!mentionMap || mentionMap.size === 0) && (!personaMentionMap || personaMentionMap.size === 0))) {
+    return text;
+  }
 
   const codeBlocks: string[] = [];
   const inlineCode: string[] = [];
@@ -113,13 +117,20 @@ export function replaceMentionHandles(
     const pipeIndex = handle.lastIndexOf("|");
     if (pipeIndex > -1) {
       const idPart = handle.slice(pipeIndex + 1).trim();
+      const namePart = handle.slice(0, pipeIndex).trim();
       if (/^\d{17,20}$/.test(idPart) && mentionIdSet?.has(idPart)) return `<@${idPart}>`;
+      const personaMention = resolvePersonaMentionHandle(namePart, personaMentionMap);
+      if (personaMention) return personaMention;
     }
 
     if (/^\d{17,20}$/.test(handle) && mentionIdSet?.has(handle)) return `<@${handle}>`;
 
     const normalizedHandle = handle.toLowerCase();
     const ids = mentionMap?.get(normalizedHandle);
+    if (!ids || ids.length !== 1) {
+      const personaMention = resolvePersonaMentionHandle(handle, personaMentionMap);
+      if (personaMention) return personaMention;
+    }
     // Fallback: show plain name — {handle} would look like a stray template var
     if (!ids || ids.length !== 1) return handle;
     return `<@${ids[0]}>`;
@@ -139,11 +150,29 @@ export function replaceMentionHandles(
     resolveHandle((rawHandle as string).trim(), match),
   );
 
+  if (personaMentionMap && personaMentionMap.size > 0) {
+    const multiWordAliases = [...personaMentionMap.keys()]
+      .filter((alias) => /\s/.test(alias))
+      .sort((a, b) => b.length - a.length);
+
+    for (const alias of multiWordAliases) {
+      const canonicalTrigger = personaMentionMap.get(alias);
+      if (!canonicalTrigger) continue;
+      const aliasPattern = alias.split(/\s+/).map(escapeRegExp).join("\\s+");
+      processedText = processedText.replace(
+        new RegExp(`(^|[^\\p{L}\\p{N}_<])@${aliasPattern}(?=$|[^\\p{L}\\p{N}_-])`, "giu"),
+        (_match, prefix) => `${prefix}@${canonicalTrigger}`,
+      );
+    }
+  }
+
   // @name|id format without braces (LLM sometimes omits braces)
   processedText = processedText.replace(
     /(^|[^\p{L}\p{N}_<])@([\p{L}\p{N}_][\p{L}\p{N}_ -]*)\|(\d{17,20})/giu,
     (_match, prefix, rawHandle, idPart) => {
       if (mentionIdSet?.has(idPart)) return `${prefix}<@${idPart}>`;
+      const personaMention = resolvePersonaMentionHandle((rawHandle as string).trim(), personaMentionMap);
+      if (personaMention) return `${prefix}${personaMention}`;
       return `${prefix}${rawHandle}|${idPart}`;
     },
   );
@@ -155,6 +184,10 @@ export function replaceMentionHandles(
       if (!handle) return match;
       const normalizedHandle = handle.toLowerCase();
       const ids = mentionMap?.get(normalizedHandle);
+      if (!ids || ids.length !== 1) {
+        const personaMention = resolvePersonaMentionHandle(handle, personaMentionMap);
+        if (personaMention) return `${prefix}${personaMention}`;
+      }
       if (!ids || ids.length !== 1) return `${prefix}${handle}`;
       return `${prefix}<@${ids[0]}>`;
     },

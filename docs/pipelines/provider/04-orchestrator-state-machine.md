@@ -88,10 +88,16 @@ billed separately, so the sum is billing-accurate — and falls back to the char
 - **Stop-request mutation** — `clearStopRequest(channelId)` is called on exit paths that consumed
   a stop. The stop registry is a shared module-level map in `stopRequests.ts`.
 - **Error embed** — when `chunk.type === "error"` and `!context.suppressUserErrors`, calls
-  `StreamErrorUi.handleProviderError()` which sends a Discord embed to the channel. This is the
-  **sole** embed send path for `ProviderError` types — the downstream response sink
-  (`emitStreamResult` in `responseEmitter.ts`) deliberately skips the generic fallback embed when
-  `result.data` is a `ProviderError`, to avoid double-sending.
+  `StreamErrorUi.handleProviderError()` which sends a Discord embed to the channel. The embed is
+  composed centrally: a provider's localized headline (`createErrorDescription`) followed by the
+  **raw provider detail** for every error type, extracted via `getProviderErrorDetail` and
+  truncated to Discord's embed description limit. This means providers that map known codes to
+  hardcoded locale strings (e.g. OpenRouter) no longer hide the actual provider message; the detail
+  is de-duped so a provider that already appended it is not echoed twice. Recognized `model_error`
+  failures additionally get a dedicated "Model Configuration Error" title. This is the **sole**
+  embed send path for `ProviderError` types — the downstream response sink (`emitStreamResult` in
+  `responseEmitter.ts`) deliberately skips the generic fallback embed when `result.data` is a
+  `ProviderError`, to avoid double-sending.
 - **Timeout embed** — when the inactivity timer fires and user errors are not suppressed, sends
   a timeout embed via `sendStandardEmbed()`.
 - **Progress callback** — calls `context.onStreamProgress?.()` on each chunk to reset the

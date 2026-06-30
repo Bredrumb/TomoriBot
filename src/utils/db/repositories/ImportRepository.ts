@@ -309,6 +309,9 @@ export class ImportRepository {
           user_blocking_enabled: config.user_blocking_enabled,
         }),
         ...(config.tool_use_enabled !== undefined && { tool_use_enabled: config.tool_use_enabled }),
+        ...(config.verbatim_tool_calling_enabled !== undefined && {
+          verbatim_tool_calling_enabled: config.verbatim_tool_calling_enabled,
+        }),
       };
 
       // server_notice_embeds_configs: tool notice key suppressions

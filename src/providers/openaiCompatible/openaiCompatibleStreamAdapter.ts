@@ -37,6 +37,7 @@ import type {
 import { BaseStreamAdapter } from "@/types/stream/interfaces";
 import { log } from "@/utils/misc/logger";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
+import { isProviderModelErrorMessage } from "@/utils/provider/providerErrorClassification";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
@@ -442,12 +443,20 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     const openAIChunk = chunk.data as OpenAICompatibleStreamChunk;
 
     if ("error" in openAIChunk && openAIChunk.error) {
+      const errorMessage = openAIChunk.error.message || `${this.options.errorMessagePrefix}: provider API error`;
+      const isModelError = isProviderModelErrorMessage(errorMessage);
       return this.attachPendingThoughts({
         type: "error",
         error: {
-          type: "api_error",
-          message: openAIChunk.error.message || `${this.options.errorMessagePrefix}: provider API error`,
-          code: openAIChunk.error.code !== undefined ? String(openAIChunk.error.code) : "unknown",
+          type: isModelError ? "model_error" : "api_error",
+          message: errorMessage,
+          code: isModelError
+            ? openAIChunk.error.code !== undefined
+              ? `${String(openAIChunk.error.code)}_model`
+              : "model_error"
+            : openAIChunk.error.code !== undefined
+              ? String(openAIChunk.error.code)
+              : "unknown",
           retryable: false,
           originalError: openAIChunk.error,
         },

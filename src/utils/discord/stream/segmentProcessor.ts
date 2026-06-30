@@ -143,6 +143,7 @@ export class StreamSegmentProcessor {
         sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
       },
       textConfig.botNameAliases,
+      textConfig.personaMentionMap,
     );
 
     const segmentMentionMap = textConfig.mentionMap ?? new Map<string, string[]>();
@@ -154,6 +155,7 @@ export class StreamSegmentProcessor {
       context.channel,
       segmentMentionMap,
       segmentMentionIdSet,
+      textConfig.personaMentionMap,
     );
     if (
       normalizedLeadingWhitespace &&
@@ -326,6 +328,7 @@ export class StreamSegmentProcessor {
         sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
       },
       textConfig.botNameAliases,
+      textConfig.personaMentionMap,
     );
 
     const prefillMentionMap = textConfig.mentionMap ?? new Map<string, string[]>();
@@ -337,6 +340,7 @@ export class StreamSegmentProcessor {
       context.channel,
       prefillMentionMap,
       prefillMentionIdSet,
+      textConfig.personaMentionMap,
     );
     if (!resolvedPrefill.trim()) return;
 

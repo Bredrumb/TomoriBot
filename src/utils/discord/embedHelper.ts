@@ -27,6 +27,27 @@ type Provider = keyof typeof TRANSLATOR_COLORS;
  */
 const MAX_FIELD_VALUE_LENGTH = 1024;
 
+/**
+ * Discord's maximum embed description length.
+ */
+export const MAX_EMBED_DESCRIPTION_LENGTH = 4096;
+
+/**
+ * Truncates text so it fits within Discord's embed description limit, optionally reserving
+ * space for other content that shares the same description (e.g. a headline above the detail).
+ * @param value - The text to fit into the description.
+ * @param reservedChars - Characters already consumed by other description content.
+ * @returns The value, truncated with a trailing ellipsis when it would otherwise overflow.
+ */
+export function truncateForEmbedDescription(value: string, reservedChars = 0): string {
+  const available = Math.max(0, MAX_EMBED_DESCRIPTION_LENGTH - reservedChars);
+  if (value.length <= available) {
+    return value;
+  }
+  // Reserve 3 characters for the ellipsis; if there is not even room for that, hard-cut.
+  return available <= 3 ? value.substring(0, available) : `${value.substring(0, available - 3)}...`;
+}
+
 export type WebhookEmbedContext = {
   webhook?: Webhook;
   personaUsername?: string;

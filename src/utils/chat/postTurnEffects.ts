@@ -12,7 +12,7 @@ import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/se
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
-import type { ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 
 /**
  * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`).
@@ -201,7 +201,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
 
 async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   const incoming = context.turn.lockedTurn.admission.incoming;
-  if (result.status !== "empty_response" || incoming.retryCount >= MAX_EMPTY_RESPONSE_RETRIES) {
+  if (!shouldRetryEmptyResponse(incoming, result)) {
     return;
   }
 
@@ -259,7 +259,13 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     manualTriggerInvoker: incoming.manualTriggerInvoker,
     manualStreamingContextOverrides: incoming.manualStreamingContextOverrides,
     sceneTurn: incoming.sceneTurn,
+    onGenerationResult: incoming.onGenerationResult,
+    onQueueDiscard: incoming.onQueueDiscard,
   });
+}
+
+export function shouldRetryEmptyResponse(incoming: ChatIncoming, result: GenerationTurnResult): boolean {
+  return result.status === "empty_response" && incoming.retryCount < MAX_EMPTY_RESPONSE_RETRIES;
 }
 
 async function consumeTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

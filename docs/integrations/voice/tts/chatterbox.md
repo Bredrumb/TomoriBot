@@ -21,7 +21,7 @@ Register with `/provider custom-endpoint add`:
 - script_markup: `bracket-tags`
 - supports_instruct: `false`
 
-Then run `/model speech`, `/speech voice-add`, and `/speech voice-assign`.
+Registration makes the endpoint active immediately. Then run `/speech voice-add` and `/speech voice-assign`.
 
 Use `/speech chatterbox parameters` to tune the Chatterbox request payload:
 

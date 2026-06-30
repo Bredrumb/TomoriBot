@@ -4,11 +4,11 @@ export default {
   provider: {
     description: `Manage saved provider configurations`,
     add: {
-      description: `Add or update a saved provider configuration without switching to it.`,
+      description: `Add or update a saved provider configuration and activate its default text model.`,
       modal_title: `Add Saved Provider`,
       success_title: `Provider Saved`,
-      success: `Saved credentials for **{provider}**. Select it as your text model with \`/model text\`, or use \`/model embedding|image|video|vision\` for other capabilities.`,
-      updated_existing: `Updated the saved credentials for **{provider}**.`,
+      success: `Saved credentials for **{provider}** and set the current text model to \`{model_name}\`. Use \`/model embedding|image|video|vision\` if you want to configure other capabilities.`,
+      updated_existing: `Updated the saved credentials for **{provider}** and set the current text model to \`{model_name}\`.`,
       custom_moved_title: `Custom Endpoint Moved`,
       custom_moved_description: `The legacy Custom Endpoint provider flow is deprecated. Register the endpoint with {custom_models_add_command}, then activate it with {model_text_command}. Use {help_custom_models_command} for the updated help page.`,
       provider_label: `Target Provider`,

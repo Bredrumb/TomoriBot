@@ -4,6 +4,7 @@ import {
   replaceMentionHandles,
   sanitizeUnknownTemplatePlaceholders,
 } from "@/utils/text/processors/mentionProcessor";
+import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
 
 // ─── sanitizeUnknownTemplatePlaceholders ────────────────────────────────────
 
@@ -201,6 +202,46 @@ describe("replaceMentionHandles", () => {
     it("resolves when id is known", () => {
       const result = replaceMentionHandles("@alice|111111111111111111", mentionMap, mentionIdSet);
       expect(result).toBe("<@111111111111111111>");
+    });
+  });
+
+  describe("persona trigger preservation", () => {
+    const personaMentionMap = buildPersonaMentionMap([
+      { persona_nickname: "Shy Tomori", trigger_words: ["lilya"] },
+      { persona_nickname: "Ren", trigger_words: ["ren"] },
+    ]);
+
+    it("canonicalizes braced persona nicknames to @trigger text", () => {
+      expect(replaceMentionHandles("go ask @{Shy Tomori}", mentionMap, mentionIdSet, personaMentionMap)).toBe(
+        "go ask @lilya",
+      );
+    });
+
+    it("canonicalizes common hallucinated mention styles", () => {
+      expect(replaceMentionHandles("@(Shy Tomori) @[Ren] @lilya", mentionMap, mentionIdSet, personaMentionMap)).toBe(
+        "@lilya @ren @lilya",
+      );
+    });
+
+    it("canonicalizes bare multi-word persona aliases before normal mention cleanup", () => {
+      expect(replaceMentionHandles("go ask @Shy Tomori now", mentionMap, mentionIdSet, personaMentionMap)).toBe(
+        "go ask @lilya now",
+      );
+    });
+
+    it("keeps Discord user mentions ahead of persona trigger aliases", () => {
+      const overlappingPersonas = buildPersonaMentionMap([{ persona_nickname: "Alice", trigger_words: ["alice"] }]);
+      expect(replaceMentionHandles("hey @alice", mentionMap, mentionIdSet, overlappingPersonas)).toBe(
+        "hey <@111111111111111111>",
+      );
+    });
+
+    it("does not preserve ambiguous persona aliases", () => {
+      const ambiguousPersonas = buildPersonaMentionMap([
+        { persona_nickname: "Ren", trigger_words: ["ren"] },
+        { persona_nickname: "Ren", trigger_words: ["renee"] },
+      ]);
+      expect(replaceMentionHandles("hey @Ren", new Map(), new Set(), ambiguousPersonas)).toBe("hey Ren");
     });
   });
 

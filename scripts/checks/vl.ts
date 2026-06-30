@@ -464,7 +464,7 @@ async function main() {
     "Localization Keys":
       "Missing Japanese equivalents are fine to push — run `bun run prune-locales` to clean up orphaned keys, or add the missing `ja` entries to get a clean run.",
     "Localization Discord Limits":
-      "Discord truncates modal placeholders (>100 chars), modal titles (>45), and command descriptions (>100). Shorten the listed locale strings — both `en-US` and `ja` sides must fit.",
+      "Discord truncates modal placeholders/descriptions and select-option labels/descriptions (>100 chars), modal titles/labels (>45), and command descriptions (>100). Shorten the listed locale strings — both `en-US` and `ja` sides must fit.",
   };
 
   const getHint = (name: string) => {

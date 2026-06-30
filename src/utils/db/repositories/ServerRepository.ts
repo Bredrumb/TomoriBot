@@ -48,6 +48,14 @@ export type ManagedDiscordWebhookRow = {
   updated_at?: Date;
 };
 
+/** Sync freshness for a server's emoji or sticker set (lazy-sync cache input). */
+export interface ServerAssetSyncStatus {
+  /** Most recent `updated_at` across the rows, or null when none exist. */
+  lastUpdated: Date | null;
+  /** Number of synced rows for the server. */
+  count: number;
+}
+
 // ── Emoji/sticker sync private types ──────────────────────────────────────────
 
 // biome-ignore lint/suspicious/noExplicitAny: transaction type is complex and internal to Bun's SQL library
@@ -269,6 +277,46 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     } catch (error) {
       log.error(`Error loading stickers for server ID ${internalServerId}:`, error);
       return [];
+    }
+  }
+
+  /**
+   * Returns how many emojis are synced for a server and when they were last
+   * updated. Used by the lazy-sync cache to decide whether a Discord refetch is
+   * due. A server with no synced emojis yields `{ lastUpdated: null, count: 0 }`.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async getEmojiSyncStatus(serverId: number): Promise<ServerAssetSyncStatus> {
+    try {
+      const [row] = await sql<Array<{ last_updated: Date | null; asset_count: number | string }>>`
+        SELECT MAX(updated_at) AS last_updated, COUNT(*) AS asset_count
+        FROM server_emojis
+        WHERE server_id = ${serverId}
+      `;
+      return { lastUpdated: row?.last_updated ?? null, count: Number(row?.asset_count ?? 0) };
+    } catch (error) {
+      log.error(`Error loading emoji sync status for server ${serverId}:`, error);
+      return { lastUpdated: null, count: 0 };
+    }
+  }
+
+  /**
+   * Sticker counterpart of {@link getEmojiSyncStatus}.
+   *
+   * @param serverId - Internal server DB ID
+   */
+  async getStickerSyncStatus(serverId: number): Promise<ServerAssetSyncStatus> {
+    try {
+      const [row] = await sql<Array<{ last_updated: Date | null; asset_count: number | string }>>`
+        SELECT MAX(updated_at) AS last_updated, COUNT(*) AS asset_count
+        FROM server_stickers
+        WHERE server_id = ${serverId}
+      `;
+      return { lastUpdated: row?.last_updated ?? null, count: Number(row?.asset_count ?? 0) };
+    } catch (error) {
+      log.error(`Error loading sticker sync status for server ${serverId}:`, error);
+      return { lastUpdated: null, count: 0 };
     }
   }
 

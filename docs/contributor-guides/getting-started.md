@@ -87,18 +87,18 @@ If you want to use only a self-hosted or proxy-backed custom endpoint, `/config 
 
 ```text
 /provider custom-endpoint add
-/model text
 ```
 
+The add command registers the endpoint and makes it the current model for the selected capability.
 Later changes to that registration can be done in place with `/provider custom-endpoint edit`.
 
-If you want to save an additional provider afterward:
+If you want to save and activate an additional provider afterward:
 
 ```text
-/config provider add
+/provider add
 ```
 
-Then use `/config provider switch` whenever you want to make one of your saved providers active.
+Then use `/model text` whenever you want to switch to another saved provider or model later.
 
 Common saved providers:
 

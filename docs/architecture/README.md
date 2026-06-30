@@ -129,6 +129,7 @@ chat pipeline
 - Optional pg_cron scheduling for cooldown cleanup
 - Shared in-app scheduled work coordinator for reminder delivery and random triggers
   - Uses next-due `setTimeout` scheduling plus DB-write nudges and a periodic reconcile backstop
+  - Reminder rows are acknowledged only after generated delivery succeeds; aborted or queue-cleared deliveries are rescheduled after `REMINDER_DELIVERY_RETRY_DELAY_MS`
 
 ## Why This Shape Works
 

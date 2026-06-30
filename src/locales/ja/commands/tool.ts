@@ -321,6 +321,7 @@ export default {
       field_user_byok_enabled: `有効。ユーザー発言に対する応答では各メンバーの個人プロバイダーが必要です。{toggle_command} で切り替えられます。`,
       field_user_byok_disabled: `無効。個人プロバイダーがない場合でもユーザー発言はサーバープロバイダーにフォールバックできます。{toggle_command} で切り替えられます。`,
       field_tool_use: `ツール使用`,
+      field_verbatim_tool_calling: `逐語ツール呼び出し`,
       field_prompt_snapshot: `プロンプトスナップショット`,
       field_stm_privacy_bypass: `STMプライバシーバイパス`,
       field_voice_messages: `音声メッセージ`,

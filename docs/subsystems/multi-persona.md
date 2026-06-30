@@ -75,6 +75,7 @@ Reminders are tied to a persona to preserve the identity that set them:
   - Ensure persona nicknames are unique.
 - **Bot mention** → main persona responds.
 - Direct replies and bot mentions can combine with explicit persona trigger words in the same message. For example, replying to Tomori while mentioning `@Ren` routes the turn to Tomori and Ren.
+- Persona-authored output can intentionally cascade to another persona by emitting that persona's `@trigger`. During output cleanup, known persona nicknames and trigger names are preserved as deliberate trigger text instead of being stripped as unresolved Discord user mentions. The common model variants `@{Name}`, `@(Name)`, and `@[Name]` are canonicalized to bare `@trigger`. Real Discord user mentions still resolve first.
 - **Auto-message threshold** → main persona responds.
 
 ### Trigger words
@@ -219,6 +220,7 @@ Every automatic persona activation (not manually triggered) increments the trigg
 - **Multi-persona triggers**: User message triggers Alice, Bob, Charlie → Alice is #1 (free), Bob is #2 (additional), Charlie is #3 (additional)
 - **Chain triggers**: Alice’s response triggers Dave → Dave counts as an additional trigger
 - Both share the same counter for the session
+- In deliberate trigger mode, a persona chain must emit a deliberate form such as `@Dave`; plain `Dave` is still ignored. The output cleaner preserves known persona-directed `@trigger` text so this works for model-authored messages and `interact_with_recent_message` replies.
 
 #### **Bypass (No Limit Applied)**
 
@@ -490,6 +492,7 @@ Behavior:
 - If the persona still exists, that persona responds.
 - If the persona is missing, **fallback to main**.
 - Mention verification includes webhook messages, and sends a fallback ping if the response did not mention the target.
+- Reminder rows are deleted/rescheduled only after the generated delivery turn completes. If `/bot kill` stops the active turn or clears a queued reminder, delivery is not consumed; the row is rescheduled for retry after `REMINDER_DELIVERY_RETRY_DELAY_MS`.
 
 ## Commands and Workflows
 

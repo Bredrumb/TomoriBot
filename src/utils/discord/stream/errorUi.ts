@@ -1,7 +1,8 @@
 import { EmbedBuilder, MessageFlags, type ColorResolvable } from "discord.js";
 import type { ProviderError, StreamProvider, StreamContext } from "@/types/stream/interfaces";
-import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { sendStandardEmbed, truncateForEmbedDescription } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { getProviderErrorDetail, isProviderModelError } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 
 /**
@@ -11,7 +12,8 @@ export class StreamErrorUi {
   public async handleProviderError(error: unknown, provider: StreamProvider, context: StreamContext): Promise<void> {
     const providerError = error as ProviderError;
     const locale = context.locale;
-    const providerDescription = provider.createErrorDescription(providerError, locale);
+    const isModelError = isProviderModelError(providerError);
+    const providerDescription = this.resolveProviderDescription(providerError, provider, locale, isModelError);
     const errorMessage =
       providerDescription ||
       localizer(locale, "genai.stream.provider_error_interaction", {
@@ -105,6 +107,14 @@ export class StreamErrorUi {
     tipKey: string;
     color: ColorResolvable;
   } {
+    if (isProviderModelError(providerError)) {
+      return {
+        titleKey: "genai.stream.model_error_title",
+        tipKey: "genai.stream.model_error_tip",
+        color: ColorCode.ERROR,
+      };
+    }
+
     switch (providerError.type) {
       case "rate_limit":
         return {
@@ -139,5 +149,47 @@ export class StreamErrorUi {
           color: providerError.retryable ? ColorCode.WARN : ColorCode.ERROR,
         };
     }
+  }
+
+  /**
+   * Builds the embed description for a provider error: a friendly, localized headline followed by
+   * the raw provider detail. The detail is appended for ALL error types — not just model errors —
+   * so providers that map known codes to hardcoded locale strings (e.g. OpenRouter) no longer hide
+   * the actual provider message from the user.
+   * @param providerError - The normalized provider error.
+   * @param provider - The active stream provider (supplies the localized headline).
+   * @param locale - The resolved user locale.
+   * @param isModelError - Whether the error classifies as a model-selection error (drives the headline fallback).
+   * @returns The composed description, or null when no headline can be produced.
+   */
+  private resolveProviderDescription(
+    providerError: ProviderError,
+    provider: StreamProvider,
+    locale: string,
+    isModelError: boolean,
+  ): string | null {
+    // 1. Headline: the provider's friendly, localized message. Model errors fall back to a generic
+    //    headline when the provider does not supply one.
+    const providerHeadline = provider.createErrorDescription(providerError, locale);
+    const headline =
+      providerHeadline || (isModelError ? localizer(locale, "genai.stream.model_error_description") : null);
+    if (!headline) {
+      return null;
+    }
+
+    // 2. Raw provider detail. Skip when absent or already embedded in the headline (a provider may
+    //    have appended it itself) so we never duplicate the "Details" section.
+    const detail = getProviderErrorDetail(providerError);
+    if (!detail || headline.includes(detail)) {
+      return headline;
+    }
+
+    // 3. Append the detail, truncated so the combined description stays within Discord's embed limit.
+    const detailsLabel = "\n\n**Details:**\n";
+    const truncatedDetail = truncateForEmbedDescription(detail, headline.length + detailsLabel.length);
+    if (!truncatedDetail) {
+      return headline;
+    }
+    return `${headline}${detailsLabel}${truncatedDetail}`;
   }
 }

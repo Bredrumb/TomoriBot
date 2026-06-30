@@ -539,7 +539,7 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(emittedErrors).toHaveLength(0);
     expect(finalizedResults).toEqual([fallbackSuccess]);
     expect(fallbackNoticeCalls).toHaveLength(1);
-    expect(fallbackNoticeCalls[0]?.failures).toEqual([{ modelCodename: "primary-model", errorCode: "429" }]);
+    expect(fallbackNoticeCalls[0]?.failures).toEqual([{ modelCodename: "primary-model", errorDetail: "rate limited" }]);
     expect(fallbackNoticeCalls[0]?.successModel.llm_codename).toBe("fallback-model");
     expect(context.streamingContext.suppressUserErrors).toBe(false);
     expect(context.streamingContext.forceModelFallback).toBe(false);

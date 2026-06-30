@@ -12,6 +12,6 @@ Visible transcript posting is separate. `/speech transcripts` only controls whet
 
 1. Start the WhisperX reference server from `servers/stt/`.
 2. Register it with `/provider custom-endpoint add` using capability `transcription` and api style `openai-compatible-transcription`.
-3. Select it with `/model transcription`.
+3. Use `/model transcription` later only when switching between registered STT endpoints.
 
 ElevenLabs users should use `/speech elevenlabs`; it registers transcription alongside speech.

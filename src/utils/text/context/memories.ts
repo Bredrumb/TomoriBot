@@ -12,7 +12,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import type { MentionConverter } from "./templates";
-import { sql } from "@/utils/db/client";
+import { serverMemoryRepository } from "@/utils/db/repositories";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
 
 const MIN_MESSAGES_FOR_SUMMARY = Number.parseInt(process.env.SHORT_TERM_MEMORY_MIN_MESSAGES_FOR_SUMMARY || "6", 10);
@@ -52,13 +52,15 @@ export async function buildServerMemoryContextItem(params: {
 
   let serverMemoryLines: string[] = [];
   try {
-    const serverMemoryRows = await sql<Array<{ server_memory_id: number; content: string; tags: string[] | null }>>`
-      SELECT server_memory_id, content, tags
-      FROM server_memories
-      WHERE server_id = ${params.tomoriState.server_id}
-        AND persona_lineage_id = ${params.tomoriState.persona_lineage_id}
-      ORDER BY created_at DESC
-    `;
+    // Without a resolved server id + persona lineage there is nothing to scope
+    // to — treat it as "no memories" (the previous raw query interpolated NULL,
+    // matching none).
+    const serverId = params.tomoriState.server_id;
+    const personaLineageId = params.tomoriState.persona_lineage_id;
+    const serverMemoryRows =
+      serverId === undefined || personaLineageId === undefined
+        ? []
+        : await serverMemoryRepository.loadServerMemoriesScoped(serverId, personaLineageId);
 
     const filteredServerRows = serverMemoryRows.filter((row) => {
       const normalized = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
@@ -83,7 +85,8 @@ export async function buildServerMemoryContextItem(params: {
     });
 
     serverMemoryLines = filteredServerRows.map((row) =>
-      formatMemoryWithId(row.server_memory_id, row.content, row.tags ?? []),
+      // biome-ignore lint/style/noNonNullAssertion: a loaded server-memory row always carries its PK.
+      formatMemoryWithId(row.server_memory_id!, row.content, row.tags ?? []),
     );
   } catch (error) {
     log.warn("Failed to load server memories with IDs for context", error);
