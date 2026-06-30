@@ -42,8 +42,9 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
 /**
  * Records per-turn usage stats at the single post-turn chokepoint:
  * message_sent, active_hour, model_used, tokens_in/tokens_out (estimated),
- * emoji_used, and sprite_shown. Only counts turns that actually produced a persona
- * response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
+ * emoji_used, sprite_shown, and sprite_emotion (non-identity sprites only). Only
+ * counts turns that actually produced a persona response. DMs are skipped
+ * (stat_counters.server_id is a NOT NULL FK).
  *
  * Tokens prefer REAL provider usage when available: the orchestrator normalizes
  * each provider's reported usage onto `StreamResult.usage`, and these are summed
@@ -158,10 +159,19 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
 
     // 6. Sprite deliveries surfaced from the stream (one entry per delivered sprite
     //    message). Sprites are the answering persona's own, so key on primaryLineage.
+    //    Two counts are pre-aggregated per sprite name:
+    //      - sprite_shown:   every delivered sprite (identity or not) — the leaderboard.
+    //      - sprite_emotion: non-identity sprites only — the sprite's user-given tag is
+    //        treated as an emotion (getEmotionBreakdown unions this metric directly, no
+    //        classification join), so identity (DID-alter) sprites are excluded here.
     const spriteCounts = new Map<string, number>();
+    const spriteEmotionCounts = new Map<string, number>();
     for (const stream of result.streamResults) {
-      for (const spriteName of stream.spritesShown ?? []) {
-        spriteCounts.set(spriteName, (spriteCounts.get(spriteName) ?? 0) + 1);
+      for (const entry of stream.spritesShown ?? []) {
+        spriteCounts.set(entry.name, (spriteCounts.get(entry.name) ?? 0) + 1);
+        if (!entry.isIdentity) {
+          spriteEmotionCounts.set(entry.name, (spriteEmotionCounts.get(entry.name) ?? 0) + 1);
+        }
       }
     }
     for (const [spriteName, count] of spriteCounts) {
@@ -170,6 +180,16 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
         userId,
         lineageId: primaryLineage,
         metric: "sprite_shown",
+        metricKey: spriteName,
+        delta: count,
+      });
+    }
+    for (const [spriteName, count] of spriteEmotionCounts) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "sprite_emotion",
         metricKey: spriteName,
         delta: count,
       });

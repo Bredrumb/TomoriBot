@@ -48,6 +48,25 @@ export enum VisibleDeliveryMode {
 export interface SpriteMessageRecordInfo {
   personaId: number;
   spriteName: string;
+  /**
+   * Whether this sprite is a DID-alter "identity" sprite. In-memory routing context
+   * only (not part of the persisted persona_sprite_messages mapping): the post-turn
+   * stat recorder uses it to count identity sprites in `sprite_shown` but exclude them
+   * from `sprite_emotion` (so they never reach the emotion breakdown).
+   */
+  isIdentity: boolean;
+}
+
+/**
+ * One delivered sprite, drained from StreamState into StreamResult for the post-turn
+ * stat recorder. Carries the identity flag so it can split the all-inclusive
+ * `sprite_shown` count from the non-identity `sprite_emotion` count.
+ */
+export interface SpriteShownEntry {
+  /** Sprite name — the user-given tag, used directly as the stat metric_key. */
+  name: string;
+  /** Identity (DID-alter) sprites count toward sprite_shown but never sprite_emotion. */
+  isIdentity: boolean;
 }
 
 export interface StreamRenderModifierState {
@@ -120,9 +139,10 @@ export interface StreamState {
   /**
    * Sprite labels delivered during this stream, in render order (one entry per
    * delivered sprite message, repeats kept). Drained into StreamResult.spritesShown
-   * so the post-turn stat recorder can count `sprite_shown` with full user scope.
+   * so the post-turn stat recorder can count `sprite_shown` (all) and `sprite_emotion`
+   * (non-identity only) with full user scope.
    */
-  spritesShown: string[];
+  spritesShown: SpriteShownEntry[];
   /**
    * Real, provider-reported token usage for this stream segment, normalized
    * (via normalizeProviderUsage) from whichever chunk's metadata carried it.

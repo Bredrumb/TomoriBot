@@ -13,7 +13,11 @@
  *   - tokens_in     → model id / codename (count accumulates input token deltas, not 1)
  *   - tokens_out    → model id / codename (count accumulates output token deltas, not 1)
  *   - tool_used     → tool name
- *   - sprite_shown      → sprite name
+ *   - sprite_shown      → sprite name (every delivered sprite, identity or not)
+ *   - sprite_emotion    → sprite name, recorded ONLY for non-identity sprites so the
+ *                         sprite's user-given tag can feed the emotion breakdown
+ *                         (getEmotionBreakdown) without dragging in DID-alter identity
+ *                         sprites. sprite_shown stays the all-inclusive leaderboard count.
  *   - emoji_used        → emoji name
  *   - sticker_used      → sticker name/id
  *   - active_hour       → hour-of-day "0".."23"
@@ -33,6 +37,7 @@ export const STAT_METRICS = [
   "memory_taught",
   "reminder_set",
   "sprite_shown",
+  "sprite_emotion",
   "emoji_used",
   "sticker_used",
   "active_hour",

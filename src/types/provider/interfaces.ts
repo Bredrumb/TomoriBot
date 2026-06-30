@@ -18,6 +18,7 @@ import type { TomoriState } from "../db/schema";
 import type { StructuredContextItem } from "../misc/context";
 import type { StreamingContext } from "../tool/interfaces";
 import type { ProviderError } from "../stream/interfaces";
+import type { SpriteShownEntry } from "../stream/types";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 export type ProviderApiFamily = "google-genai" | "openrouter" | "novelai" | "openai-compatible" | "anthropic";
@@ -108,10 +109,12 @@ export interface StreamResult {
   /**
    * Sprite labels delivered during this stream segment, in render order (one entry
    * per delivered sprite message, so repeats are kept). Surfaced from StreamState so
-   * the post-turn stat recorder can attribute `sprite_shown` to the triggerer's
-   * user scope (the stream layer itself has no internal user id). Omitted when empty.
+   * the post-turn stat recorder can attribute `sprite_shown` / `sprite_emotion` to the
+   * triggerer's user scope (the stream layer itself has no internal user id). Each
+   * entry carries `isIdentity` so identity sprites are excluded from `sprite_emotion`.
+   * Omitted when empty.
    */
-  spritesShown?: string[];
+  spritesShown?: SpriteShownEntry[];
   /**
    * Real, provider-reported token usage for this stream segment, normalized by
    * the orchestrator from the adapter's native usage shape. Present only when

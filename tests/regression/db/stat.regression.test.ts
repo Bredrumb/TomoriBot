@@ -289,6 +289,52 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(breakdown.find((m) => m.model === TEST_MODEL)?.count).toBe(2);
   });
 
+  it("getEmotionBreakdown surfaces non-identity sprite tags as emotions, lower-cased and collapsed, while identity sprites stay out", async () => {
+    // sprite_shown counts every delivered sprite (identity "yuki" + non-identity "happy"/"Happy");
+    // sprite_emotion is recorded only for non-identity sprites, so the emotion read sees just "happy".
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "sprite_shown",
+      metricKey: "happy",
+    });
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "sprite_shown",
+      metricKey: "yuki", // identity sprite — present in the leaderboard, absent from emotions
+    });
+    // Two casing variants of the same tag exercise the LOWER() + GROUP BY collapse.
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "sprite_emotion",
+      metricKey: "happy",
+    });
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "sprite_emotion",
+      metricKey: "Happy",
+    });
+    await statRepository.flush();
+
+    const emotions = await statRepository.getEmotionBreakdown({ serverId: refs.serverId });
+    // "happy" + "Happy" collapse to a single lower-cased entry with summed count 2.
+    expect(emotions.find((e) => e.emotion === "happy")?.count).toBe(2);
+    // The identity sprite never produced a sprite_emotion row, so it is not an emotion.
+    expect(emotions.find((e) => e.emotion === "yuki")).toBeUndefined();
+
+    // Both sprites still count toward the standalone leaderboard.
+    const sprites = await statRepository.getMetricKeyBreakdown({ metric: "sprite_shown", serverId: refs.serverId });
+    expect(sprites.find((s) => s.key === "happy")?.count).toBe(1);
+    expect(sprites.find((s) => s.key === "yuki")?.count).toBe(1);
+  });
+
   it("windowed reads (bucket >= from) sum only in-window rows", async () => {
     // Direct inserts let us control the bucket date (recordStat always uses today).
     await testSql`

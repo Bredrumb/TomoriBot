@@ -1324,12 +1324,16 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
-   * Top emotion categories expressed, highest first. Joins the emoji_used / sticker_used
-   * metrics to the per-server emotion_key classification on server_emojis / server_stickers
-   * (set by `/server emojis|stickers initialize`) and sums both streams by emotion. Emojis
-   * and stickers not yet classified (NULL emotion_key) are excluded. Narrow by userId /
-   * serverId / lineageId; the join keys on each row's own server_id so the personal "global"
-   * scope correctly resolves emotions across every server.
+   * Top emotion categories expressed, highest first. Sums three streams by emotion:
+   *   1. emoji_used   — joined to the per-server emotion_key on server_emojis
+   *   2. sticker_used — joined to the per-server emotion_key on server_stickers
+   *   3. sprite_emotion — the sprite's user-given tag IS the emotion key (no join;
+   *      identity sprites were already excluded upstream when this metric was recorded)
+   * Emojis/stickers not yet classified (NULL emotion_key) are excluded; sprite tags are
+   * lower-cased so casing variants collapse and align with the lower-case emoji/sticker
+   * taxonomy (the dashboard title-cases for display). Narrow by userId / serverId /
+   * lineageId; each join keys on the row's own server_id so the personal "global" scope
+   * correctly resolves emotions across every server.
    *
    * @param args - optional scope filters, window, and result limit.
    */
@@ -1357,6 +1361,14 @@ export class StatRepository implements IRepository<null> {
           FROM stat_counters sc
           JOIN server_stickers ss ON ss.server_id = sc.server_id AND ss.sticker_name = sc.metric_key
           WHERE sc.metric = 'sticker_used' AND ss.emotion_key IS NOT NULL
+            AND (${userId}::int IS NULL OR sc.user_id = ${userId})
+            AND (${serverId}::int IS NULL OR sc.server_id = ${serverId})
+            AND (${lineageId}::bigint IS NULL OR sc.persona_lineage_id = ${lineageId})
+            AND sc.bucket >= ${from}::date
+          UNION ALL
+          SELECT LOWER(sc.metric_key) AS emotion_key, sc.count AS cnt
+          FROM stat_counters sc
+          WHERE sc.metric = 'sprite_emotion'
             AND (${userId}::int IS NULL OR sc.user_id = ${userId})
             AND (${serverId}::int IS NULL OR sc.server_id = ${serverId})
             AND (${lineageId}::bigint IS NULL OR sc.persona_lineage_id = ${lineageId})

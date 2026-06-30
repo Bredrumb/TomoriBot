@@ -70,7 +70,7 @@ interface StreamResult {
   stopReason?: StreamStopReason;
   thoughtLog?: ThoughtLogPayload;
   naiContinuationPrefill?: string; // NAI-specific trailing fragment for retry
-  spritesShown?: string[];         // sprite labels delivered this segment (stat attribution)
+  spritesShown?: SpriteShownEntry[]; // { name, isIdentity } per delivered sprite (sprite_shown + sprite_emotion attribution)
   usage?: TokenUsage;              // real provider token usage, normalized (when surfaced)
 }
 ```
