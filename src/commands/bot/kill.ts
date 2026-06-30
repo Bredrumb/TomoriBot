@@ -1,14 +1,9 @@
 import { MessageFlags, type SlashCommandSubcommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
-import {
-  clearChannelProcessingQueue,
-  forceKillChannelStream,
-  isChannelProcessingLocked,
-} from "@/utils/chat/channelQueue";
+import { killChannelGeneration } from "@/utils/chat/channelKill";
 import type { UserRow } from "../../types/db/schema";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
-import { ColorCode, log } from "../../utils/misc/logger";
+import { ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 
 /**
@@ -48,8 +43,11 @@ export async function execute(
   }
 
   const channelId = interaction.channel.id;
-  const hasActiveStream = isChannelProcessingLocked(channelId);
-  const clearedQueueCount = clearChannelProcessingQueue(channelId);
+  const { hasActiveStream, clearedQueueCount } = killChannelGeneration(
+    channelId,
+    interaction.user.id,
+    "Stop/clear requested via /bot kill",
+  );
 
   if (!hasActiveStream && clearedQueueCount === 0) {
     await replyInfoEmbed(
@@ -64,17 +62,6 @@ export async function execute(
     );
     return;
   }
-
-  if (hasActiveStream) {
-    // 1. Signal the stream processing loop to stop gracefully.
-    StreamOrchestrator.requestStop(channelId, interaction.user.id);
-    // 2. Abort the underlying HTTP request and unblock Promise.race so the lock releases immediately.
-    forceKillChannelStream(channelId);
-  }
-
-  log.info(
-    `Stop/clear requested via /bot kill by user ${interaction.user.id} in channel ${channelId}. Active stream: ${hasActiveStream}. Cleared ${clearedQueueCount} queued message(s).`,
-  );
 
   await replyInfoEmbed(
     interaction,

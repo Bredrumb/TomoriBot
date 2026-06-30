@@ -519,6 +519,7 @@ export class VertexexpressProvider
         forcedMentions: streamingContext?.forcedMentions,
         abortSignal: streamingContext?.abortSignal,
         messageIdMap: streamingContext?.messageIdMap,
+        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
       };
 
       const orchestrator = new StreamOrchestrator();

@@ -85,7 +85,7 @@ describe("mergeConsecutiveSameRole", () => {
     expect(mergeConsecutiveSameRole(input)).toEqual(input);
   });
 
-  it("merges consecutive same-role string turns into combined content parts", () => {
+  it("merges consecutive same-role string turns into flattened text", () => {
     const input: NormalizableMessage[] = [
       { role: "user", content: "one" },
       { role: "user", content: "two" },
@@ -94,10 +94,7 @@ describe("mergeConsecutiveSameRole", () => {
     expect(mergeConsecutiveSameRole(input)).toEqual([
       {
         role: "user",
-        content: [
-          { type: "text", text: "one" },
-          { type: "text", text: "two" },
-        ],
+        content: "one\ntwo",
       },
       { role: "assistant", content: "ok" },
     ]);

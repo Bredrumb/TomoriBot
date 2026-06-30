@@ -212,6 +212,9 @@ export const serverTriggerBehaviorConfigExportSchema = z.object({
   deliberate_tool_mode: z.boolean().optional(), // Added May 2026
   deliberate_tool_context_turns: z.number().int().min(0).max(10).nullable().optional(), // Added May 2026
   deliberate_tool_triggers: z.record(z.string(), z.array(deliberateToolTriggerEntrySchema)).optional(), // Added May 2026 - keyed by tool target, values are literal strings or {type, value} entries (regex). Shared schema with DB row to prevent drift.
+  fast_regeneration_enabled: z.boolean().optional(),
+  fast_regeneration_retry_enabled: z.boolean().optional(),
+  fast_regeneration_continue_enabled: z.boolean().optional(),
   cooldown_type: z.number().int().min(0).max(4).optional(),
   cooldown_length: z.number().int().min(1).max(86400).optional(),
 });

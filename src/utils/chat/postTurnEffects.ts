@@ -25,6 +25,7 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   await writeShortTermMemory(context, result);
   await emitThoughtLog(context, result);
   scheduleBoomerangFollowUp(context);
+  await context.fastRegenerationRecorder?.arm();
 }
 
 async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

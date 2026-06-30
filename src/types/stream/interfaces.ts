@@ -145,6 +145,8 @@ export interface StreamContext {
 
   // Progress callback for outer watchdog timers (provider chunk received or Discord send succeeded)
   onStreamProgress?: () => void;
+  // Records final visible Tomori output messages for short-lived regenerate reactions.
+  recordTurnOutputMessage?: (message: Message, personaId?: number) => void;
 
   // Opaque message ID map for resolving media_N/ref_N keys back to Discord snowflake IDs
   messageIdMap?: MessageIdMap;

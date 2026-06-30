@@ -2636,6 +2636,9 @@ CREATE TABLE IF NOT EXISTS server_trigger_behavior_configs (
   deliberate_tool_mode          BOOLEAN NOT NULL DEFAULT false,
   deliberate_tool_context_turns INTEGER,
   deliberate_tool_triggers      JSONB   NOT NULL DEFAULT '{}'::JSONB,
+  fast_regeneration_enabled     BOOLEAN NOT NULL DEFAULT false,
+  fast_regeneration_retry_enabled BOOLEAN NOT NULL DEFAULT false,
+  fast_regeneration_continue_enabled BOOLEAN NOT NULL DEFAULT false,
   cooldown_type                 INT     NOT NULL DEFAULT 0,
   cooldown_length               INT     NOT NULL DEFAULT 5,
   created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -2644,6 +2647,9 @@ CREATE TABLE IF NOT EXISTS server_trigger_behavior_configs (
 SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_mode', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_context_turns', 'INTEGER', 'NULL');
 SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'deliberate_tool_triggers', 'JSONB', '''{}''::JSONB');
+SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'fast_regeneration_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'fast_regeneration_retry_enabled', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('server_trigger_behavior_configs', 'fast_regeneration_continue_enabled', 'BOOLEAN', 'false');
 
 DROP TRIGGER IF EXISTS update_server_trigger_behavior_configs_timestamp ON server_trigger_behavior_configs;
 CREATE TRIGGER update_server_trigger_behavior_configs_timestamp
