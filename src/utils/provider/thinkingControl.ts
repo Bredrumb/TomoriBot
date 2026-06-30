@@ -46,6 +46,8 @@ export interface CustomThinkingRequest {
   reasoning_effort?: "none" | "low" | "medium" | "high";
 }
 
+type ProviderEffortLevel = "low" | "medium" | "high";
+
 function parseBudgetEnv(name: string, fallback: number): number {
   const raw = Number.parseInt(process.env[name] ?? String(fallback), 10);
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
@@ -53,6 +55,8 @@ function parseBudgetEnv(name: string, fallback: number): number {
 
 function getLevelBudget(level: Exclude<ThinkingLevelValue, "auto" | "none">): number {
   switch (level) {
+    case "minimal":
+      return 1;
     case "low":
       return parseBudgetEnv("THINKING_LEVEL_BUDGET_LOW_TOKENS", DEFAULT_LOW_BUDGET_TOKENS);
     case "medium":
@@ -113,6 +117,10 @@ function looksLikeOllamaEndpoint(endpointUrl: string): boolean {
   } catch {
     return endpointUrl.toLowerCase().includes("ollama");
   }
+}
+
+function toProviderEffortLevel(level: Exclude<ThinkingLevelValue, "auto" | "none">): ProviderEffortLevel {
+  return level === "minimal" ? "low" : level;
 }
 
 export function resolveConfiguredThinkingLevel(value: string | null | undefined): ThinkingLevelValue {
@@ -179,6 +187,10 @@ export function buildGoogleThinkingConfig(
     };
   }
 
+  if (effectiveLevel === "minimal") {
+    return { thinkingLevel: ThinkingLevel.MINIMAL };
+  }
+
   if (effectiveLevel === "low") {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
@@ -231,7 +243,7 @@ export function buildAnthropicThinkingRequest(
 
   return {
     thinking: { type: "adaptive" },
-    output_config: { effort: effectiveLevel },
+    output_config: { effort: toProviderEffortLevel(effectiveLevel) },
     omitSampling: true,
   };
 }
@@ -247,7 +259,7 @@ export function buildOpenRouterReasoningRequest(
 
   return {
     reasoning: {
-      effort: effectiveLevel,
+      effort: toProviderEffortLevel(effectiveLevel),
     },
   };
 }
@@ -311,7 +323,7 @@ export function buildCustomThinkingRequest(
   }
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.
-  return { reasoning_effort: effectiveLevel };
+  return { reasoning_effort: toProviderEffortLevel(effectiveLevel) };
 }
 
 export function getNovelAiThinkingDirective(
