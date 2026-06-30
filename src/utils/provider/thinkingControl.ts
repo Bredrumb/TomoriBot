@@ -323,7 +323,7 @@ export function buildCustomThinkingRequest(
   }
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.
-  return { reasoning_effort: effectiveLevel === "minimal" ? "low" : effectiveLevel };
+  return { reasoning_effort: toProviderEffortLevel(effectiveLevel) };
 }
 
 export function getNovelAiThinkingDirective(
