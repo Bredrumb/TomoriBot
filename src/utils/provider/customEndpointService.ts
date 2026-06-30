@@ -374,9 +374,12 @@ async function activatePersonalCustomEndpointForCapability(params: {
     return true;
   }
 
+  // Vision is a fallback slot for non-vision chat models, not the capability being registered.
+  // Only auto-fill it when empty so a deliberately configured vision model is never overwritten by
+  // registering an image-capable text model.
   return await assignPersonalCapabilityToProvider(params.userId, params.provider, "vision", (row) => ({
     ...row,
-    vision_llm_id: params.modelId,
+    vision_llm_id: row.vision_llm_id ?? params.modelId,
   }));
 }
 
@@ -581,12 +584,10 @@ export async function registerCustomEndpoint(
   const currentActive = existingConfig ? getCapabilityModelId(existingConfig, input.capability) : null;
   const activeId = shouldActivateNewRegistration ? modelId : (currentActive ?? modelId);
   const currentVision = existingConfig?.vision_llm_id ?? null;
-  const visionId =
-    input.capability === "text" && input.seesImages
-      ? shouldActivateNewRegistration
-        ? modelId
-        : (currentVision ?? modelId)
-      : currentVision;
+  // Vision is a fallback slot for non-vision chat models, not the capability being registered. Unlike
+  // the active text slot (which always swaps to the new model on add), only auto-fill vision when it
+  // is currently empty so a deliberately configured vision model is never overwritten.
+  const visionId = input.capability === "text" && input.seesImages ? (currentVision ?? modelId) : currentVision;
 
   const savedConfig = await buildSavedConfigForCustomEndpoint(input.scope, provider, existingConfig, input, modelId);
   const nextSavedConfig = {

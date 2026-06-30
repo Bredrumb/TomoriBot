@@ -58,6 +58,7 @@ export {
   whitelistRepository,
 };
 
+export type { UnsyncedMainPointer } from "./PersonaRepository";
 export type { OpenRouterModelScope } from "./LlmModelRepository";
 export type { ImportValidationResult, ImportFileType } from "./ImportRepository";
 export type { ReminderSelectionRow } from "./ServerScheduleRepository";
