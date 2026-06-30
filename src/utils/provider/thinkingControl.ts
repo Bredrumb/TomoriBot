@@ -259,7 +259,7 @@ export function buildOpenRouterReasoningRequest(
 
   return {
     reasoning: {
-      effort: effectiveLevel === "minimal" ? "low" : effectiveLevel,
+      effort: toProviderEffortLevel(effectiveLevel),
     },
   };
 }
