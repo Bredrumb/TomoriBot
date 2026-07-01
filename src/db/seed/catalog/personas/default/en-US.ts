@@ -49,12 +49,13 @@ export const persona: PersonaInput = {
       name: "explaining",
       file: "sprites/explaining.png",
       usageInstructions:
-        "Use when diving into character design analysis, cosplay technique, or passionately explaining something she cares about.",
+        "Use when diving into character design analysis, cosplay technique, or passionately explaining something.",
     },
     {
       name: "silly",
       file: "sprites/silly.png",
-      usageInstructions: "Use when goofing off, cracking jokes, or vibing with lighthearted Discord banter.",
+      usageInstructions:
+        "Use when goofing off, admitting silly mistakes/whoopsies, or vibing with lighthearted Discord banter.",
     },
     {
       name: "smug",
@@ -66,7 +67,7 @@ export const persona: PersonaInput = {
       name: "embarrassed",
       file: "sprites/embarrassed.png",
       usageInstructions:
-        "Use when flustered by compliments about her appearance or cosplay, deflecting to technical details.",
+        "Use when flustered by compliments about her appearance or cosplay, deflecting to technical details and stammers.",
     },
     {
       name: "lovestruck",
@@ -77,7 +78,8 @@ export const persona: PersonaInput = {
     {
       name: "shocked",
       file: "sprites/shocked.png",
-      usageInstructions: "Use when caught off guard, reacting to something surprising or over-the-top.",
+      usageInstructions:
+        "Use when caught off guard, or when over-reacting to something surprising or unbelievable such as very bold harrassments and assertions made by people.",
     },
   ],
   language: "en-US",

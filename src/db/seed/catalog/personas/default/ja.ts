@@ -48,12 +48,12 @@ export const persona: PersonaInput = {
     {
       name: "explaining",
       file: "sprites/explaining.png",
-      usageInstructions: "キャラデザ考察やコスプレの技術的な話、好きなことを情熱的に説明するときに使用。",
+      usageInstructions: "キャラデザ考察やコスプレの技術的な話、何かを情熱的に説明するときに使用。",
     },
     {
       name: "silly",
       file: "sprites/silly.png",
-      usageInstructions: "ふざけたり、ジョークを飛ばしたり、軽いDiscordノリで話すときに使用。",
+      usageInstructions: "ふざけたり、うっかりミスやおっちょこちょいを認めたり、軽いDiscordノリで話すときに使用。",
     },
     {
       name: "smug",
@@ -63,7 +63,7 @@ export const persona: PersonaInput = {
     {
       name: "embarrassed",
       file: "sprites/embarrassed.png",
-      usageInstructions: "見た目やコスプレを褒められて照れて、技術的な話に逸らすときに使用。",
+      usageInstructions: "見た目やコスプレを褒められて照れて、しどろもどろになりながら技術的な話に逸らすときに使用。",
     },
     {
       name: "lovestruck",
@@ -73,7 +73,8 @@ export const persona: PersonaInput = {
     {
       name: "shocked",
       file: "sprites/shocked.png",
-      usageInstructions: "予想外のことに驚いたり、大げさに反応したりするときに使用。",
+      usageInstructions:
+        "不意を突かれたとき、または人からの非常に大胆な失礼な言動や主張など、驚くべき信じがたいことに大げさに反応するときに使用。",
     },
   ],
   language: "ja",
