@@ -8,6 +8,7 @@ import type {
   Message,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { zaicodingProviderInfo } from "@/providers/zaicoding/providerInfo";
 import { ZaicodingStreamAdapter, type ZaicodingStreamConfig } from "@/providers/zaicoding/zaicodingStreamAdapter";
 import { getZaicodingToolAdapter } from "@/providers/zaicoding/zaicodingToolAdapter";
@@ -325,7 +326,8 @@ export class ZaicodingProvider
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
 
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "zaicoding",
         channel,
         client,
         initialInteraction,
@@ -335,23 +337,13 @@ export class ZaicodingProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "zaicoding",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-        forcedMentions: streamingContext?.forcedMentions,
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-      };
+      });
 
       const orchestrator = new StreamOrchestrator();
       const adapter = new ZaicodingStreamAdapter();

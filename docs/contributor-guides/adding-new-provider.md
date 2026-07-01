@@ -121,6 +121,12 @@ Recommended pattern:
 - keep provider-specific API key validation and user-facing error formatting inside the provider
 - keep config conversion inside `createConfig()`
 - keep streaming behavior inside the provider stream adapter
+- assemble the runtime `StreamContext` with the shared `buildStreamContext()` helper
+  (`src/utils/provider/streamContext.ts`) instead of hand-building the object literal. Pass only
+  the values your `streamToDiscord()` already has in scope plus your `provider` name; the helper
+  owns every common copy-through field (locale fallback, suppress/prefill/reply-notice flags,
+  webhook/persona identity, forced mentions, abort signal, message ID map, NAI continuation). This
+  keeps all backends in lock-step when a new cross-cutting stream field is introduced.
 
 `formatErrorDescription()` is important. Provider-specific error formatting should stay inside the provider abstraction instead of being reimplemented in commands.
 

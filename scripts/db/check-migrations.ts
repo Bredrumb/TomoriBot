@@ -1,10 +1,16 @@
 /**
- * Migration rollback pairing check.
+ * Migration rollback pairing + numbering-uniqueness check.
  *
- * Verifies that every up-migration (NNN_description.sql) in src/db/migrations/
- * has a corresponding rollback file (NNN_description.down.sql).
+ * Verifies two invariants over src/db/migrations/:
+ *   1. Every up-migration (NNN_description.sql) has a corresponding rollback
+ *      file (NNN_description.down.sql).
+ *   2. No two up-migrations share the same NNN prefix. Two open PRs can each
+ *      pick the next free number off `main` and merge without a git conflict
+ *      (different descriptions), silently landing two NNN_* files. This gate
+ *      turns that into a loud failure for whichever PR merges second, whose
+ *      fix is a one-line rename.
  *
- * Exits with code 1 if any up-migration is missing its rollback so CI catches
+ * Exits with code 1 if either invariant is violated so CI/`bun run vl` catches
  * the gap before the migration reaches a shared environment.
  *
  * Usage:
@@ -61,13 +67,33 @@ async function checkMigrationPairing(): Promise<void> {
     }
   }
 
-  // 3. Warn about files that don't match the naming convention
+  // 3. Uniqueness: no two up-migrations may share an NNN prefix.
+  //    A duplicate number means the runner has to tie-break two migrations
+  //    that were each authored as "the next one" — an ordering hazard and a
+  //    review-clarity hazard. Group stems by their 3-digit prefix and fail on
+  //    any group with more than one member.
+  const byNumber = new Map<string, string[]>();
+  for (const stem of upMigrations) {
+    const num = stem.slice(0, 3); // "043" from "043_description"
+    const group = byNumber.get(num) ?? [];
+    group.push(stem);
+    byNumber.set(num, group);
+  }
+  for (const [num, stems] of [...byNumber].sort()) {
+    if (stems.length > 1) {
+      console.error(`[ERROR] Duplicate migration number ${num}: ${stems.sort().join(", ")}`);
+      console.error("        Rename the newer file(s) to the next free number so ordering stays unambiguous.");
+      ok = false;
+    }
+  }
+
+  // 4. Warn about files that don't match the naming convention
   for (const file of unrecognised) {
     console.warn(`[WARN]  File does not match NNN_description.sql convention: ${file}`);
   }
 
   if (ok) {
-    console.log(`[OK]    All ${upMigrations.size} migration(s) have paired rollback files`);
+    console.log(`[OK]    All ${upMigrations.size} migration(s) have paired rollbacks and unique numbers`);
     process.exit(0);
   } else {
     process.exit(1);

@@ -8,6 +8,7 @@ import type {
   Message,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { deepseekProviderInfo } from "@/providers/deepseek/providerInfo";
 import { DeepseekStreamAdapter, type DeepseekStreamConfig } from "@/providers/deepseek/deepseekStreamAdapter";
 import { getDeepseekToolAdapter } from "@/providers/deepseek/deepseekToolAdapter";
@@ -303,7 +304,8 @@ export class DeepseekProvider
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
 
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "deepseek",
         channel,
         client,
         initialInteraction,
@@ -313,25 +315,13 @@ export class DeepseekProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "deepseek",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-        forcedMentions: streamingContext?.forcedMentions,
-
-        // External abort signal for SDK call timeout cancellation
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-      };
+      });
 
       const orchestrator = new StreamOrchestrator();
       const adapter = new DeepseekStreamAdapter();

@@ -8,6 +8,7 @@ import type {
   Message,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { nvidiaProviderInfo } from "@/providers/nvidia/providerInfo";
 import { NvidiaStreamAdapter, type NvidiaStreamConfig } from "@/providers/nvidia/nvidiaStreamAdapter";
 import { getNvidiaToolAdapter } from "@/providers/nvidia/nvidiaToolAdapter";
@@ -425,7 +426,8 @@ export class NvidiaProvider
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
 
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "nvidia",
         channel,
         client,
         initialInteraction,
@@ -435,23 +437,13 @@ export class NvidiaProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "nvidia",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-        forcedMentions: streamingContext?.forcedMentions,
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-      };
+      });
 
       const orchestrator = new StreamOrchestrator();
       const adapter = new NvidiaStreamAdapter();

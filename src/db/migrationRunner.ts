@@ -45,7 +45,16 @@ async function getAppliedMigrations(client: SQL): Promise<Set<string>> {
 
 /**
  * Scans the migrations directory and returns unapplied up-migrations,
- * sorted ascending by version number.
+ * sorted ascending by version number, then by full stem name as a tie-break.
+ *
+ * The secondary stem-name key makes ordering fully deterministic even when two
+ * migrations share the same NNN prefix (a cross-PR numbering collision): the
+ * pair is ordered by code-point of their stems rather than by filesystem
+ * `readdir` order, so a fresh install and an upgraded install apply them
+ * identically. Because stems are unique per file, (version, name) is a total
+ * order — no ties survive. Same-number siblings must still be mutually
+ * order-independent; this tie-break guarantees *stability*, not that an
+ * alphabetically-later migration may safely depend on an earlier one.
  *
  * Rollback files (*.down.sql) and files not matching the naming convention
  * are skipped. An unrecognised filename emits a warning so typos are visible.
@@ -83,7 +92,15 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
     }
   }
 
-  return pending.sort((a, b) => a.version - b.version);
+  // 1. Primary key: ascending version number.
+  // 2. Tie-break: code-point comparison of the full stem, so same-numbered
+  //    migrations apply in a stable, filesystem-independent order. We compare
+  //    by code point (not localeCompare) to stay deterministic across host
+  //    locales; stems are restricted to [a-z0-9_] so this is well-defined.
+  return pending.sort((a, b) => {
+    if (a.version !== b.version) return a.version - b.version;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  });
 }
 
 /**

@@ -380,7 +380,8 @@ const CATEGORIES = {
   SECURITY: (r: ResultItem) => r.name.includes("Dependency Audit"),
   UNIT_TESTS: (r: ResultItem) => r._category === "unit-test",
   REGRESSION_TESTS: (r: ResultItem) => r._category === "regression-test",
-  DB: (r: ResultItem) => r.name.includes("Schema Drift") || r.name.includes("Lifecycle"),
+  DB: (r: ResultItem) =>
+    r.name.includes("Schema Drift") || r.name.includes("Lifecycle") || r.name.includes("Migration Files"),
   LOCALES: (r: ResultItem) => r.name.includes("Localization"),
 };
 
@@ -395,6 +396,7 @@ async function main() {
     sqlAuditResult,
     mediaSizeResult,
     modelCatalogResult,
+    migrationFilesResult,
     testResultItems,
     schemaDriftResult,
     dbLifecycleResult,
@@ -407,6 +409,9 @@ async function main() {
     runCheck("SQL Audit (bun run audit-sql)", ["bun", "run", "audit-sql"], true),
     runCheck("Media Size (bun run check-media-size)", ["bun", "run", "check-media-size"], true),
     runCheck("Seed Catalog (bun run check-seed-catalogs)", ["bun", "run", "check-seed-catalogs"], true),
+    // Filesystem-only (no DB): verifies rollback pairing + numbering uniqueness,
+    // so it runs unconditionally regardless of local DB configuration.
+    runCheck("Migration Files (bun run check-migrations)", ["bun", "run", "check-migrations"], true),
     runTests(),
     dbConfigured
       ? runCheck("Schema Drift Check (bun run check-schema)", ["bun", "run", "check-schema"], true)
@@ -433,6 +438,7 @@ async function main() {
     sqlAuditResult,
     mediaSizeResult,
     modelCatalogResult,
+    migrationFilesResult,
     ...testResultItems,
     schemaDriftResult,
     dbLifecycleResult,
@@ -460,6 +466,8 @@ async function main() {
     "Media Size":
       "Run `bun run compress-media` to fix this automatically (lossless re-encode, downscaling oversized art to fit). Default Persona avatars/sprites ship to Discord, so keep them under 1 MB. Override the budget with MEDIA_SIZE_LIMIT_BYTES if truly needed.",
     "Schema Drift Check": "Ensure `schema.sql` and your Zod types in `src/types/db/schema.ts` are in sync. See the check output for the specific mismatch (column missing from schema.sql, export coverage gap, or INSERT column count mismatch).",
+    "Migration Files":
+      "Every `NNN_*.sql` up-migration needs a paired `NNN_*.down.sql`, and no two may share an `NNN` prefix. If another PR already merged your number, rename yours to the next free number.",
     "DB Lifecycle Validation": "Check the detailed logs above. Your migration might be invalid or nuke-db failed.",
     "Localization Keys":
       "Missing Japanese equivalents are fine to push — run `bun run prune-locales` to clean up orphaned keys, or add the missing `ja` entries to get a clean run.",

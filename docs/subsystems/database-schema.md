@@ -378,7 +378,49 @@ src/db/migrations/
 
 - Names must match `NNN_description.sql` (3-digit zero-padded version, lowercase, underscores).
 - Every up-migration **must** ship with a paired `.down.sql` rollback file.
-- `bun run check-migrations` (also part of `bun run vl`) verifies pairing and fails CI if any rollback is missing.
+- No two up-migrations may share the same `NNN` prefix.
+- `bun run check-migrations` (run as part of `bun run vl`) verifies both rollback
+  pairing **and** numbering uniqueness, and fails if either is violated.
+
+### Numbering collisions across PRs
+
+Because the `NNN` prefix is hand-picked, two PRs opened against `main` at the same
+time can each read the directory, see `042` as the latest, and both pick `043`.
+Their filenames differ (`043_foo.sql` vs `043_bar.sql`), so git reports **no merge
+conflict** and both can land silently.
+
+This is contained by two independent layers:
+
+1. **Detection** — the uniqueness check in `bun run check-migrations` (above) fails
+   for whichever PR merges second, whose fix is a one-line rename to the next free
+   number.
+2. **Deterministic apply order** — see below. Even if a duplicate ever slips
+   through, the runner applies the pair in a stable, environment-independent order.
+
+### Apply ordering
+
+`getPendingMigrations()` in `src/db/migrationRunner.ts` sorts pending migrations by
+a **total order**: primary key is the integer version, and the tie-break is a
+code-point comparison of the full stem name.
+
+```ts
+pending.sort((a, b) => {
+  if (a.version !== b.version) return a.version - b.version;
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+});
+```
+
+- The tie-break only matters when two migrations share an `NNN` prefix. It uses
+  code-point order (not `localeCompare`) so the result is identical across host
+  locales, and does not depend on filesystem `readdir` order.
+- Both the upgrade path (`runMigrations()`) and the fresh-install marker path
+  (`markAllMigrationsApplied()`) call `getPendingMigrations()`, so a same-numbered
+  pair is recorded/applied in the **same** sequence on a clean install and an
+  upgraded one — no fresh-vs-upgraded divergence.
+- This guarantees *stability*, not dependency correctness: an alphabetically-later
+  migration must not depend on the schema changes of an alphabetically-earlier
+  sibling that shares its number. Same-number siblings must be mutually
+  order-independent; if one depends on another, give it a strictly higher number.
 
 ### Running migrations manually
 
