@@ -299,6 +299,14 @@ export class StreamUiUpdater {
       }).catch((recordError) => {
         log.warn("Stream Send: Failed to record sprite message mapping", recordError as Error);
       });
+      // Track the delivered sprite label so the post-turn stat recorder can count
+      // `sprite_shown` / `sprite_emotion` (the stream layer has no internal user id;
+      // post-turn does). isIdentity rides along so identity sprites are kept out of
+      // the emotion count while still counting toward sprite_shown.
+      state.spritesShown.push({
+        name: payload.spriteRecord.spriteName,
+        isIdentity: payload.spriteRecord.isIdentity,
+      });
     }
     state.messageSentCount++;
     if (textForState) {

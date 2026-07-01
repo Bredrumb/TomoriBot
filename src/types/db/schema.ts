@@ -2,6 +2,7 @@ import { StickerFormatType } from "discord.js";
 import { z } from "zod";
 import { SUPPORTED_PARAM_VALUES, isSupportedParamValue, type SupportedParamValue } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
+import { STAT_METRICS } from "@/constants/statMetrics";
 import { TOOL_NOTICE_KEYS, isToolNoticeKey, type ToolNoticeKey } from "@/constants/toolNotices";
 import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 import { logitBiasEntrySchema, normalizeLogitBiasEntries } from "@/types/provider/logitBias";
@@ -45,6 +46,7 @@ export const userSchema = z.object({
   shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // Added April 2026 - User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"), // Added May 2026 - User-scoped deliberate tool mode tri-state
+  timezone_offset: z.number().int().min(-12).max(14).nullable().optional(), // Added June 2026 - Personal UTC offset; NULL = not set / opt-out
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -183,6 +185,36 @@ export const personaAutochRuntimeStateSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonaAutochRuntimeStateRow = z.infer<typeof personaAutochRuntimeStateSchema>;
+
+/**
+ * Coerces a Postgres BIGINT (returned by Bun SQL as bigint or string depending
+ * on magnitude/driver) into a JS number. Mirrors the conditioning_history
+ * lineage handling so large counters/lineage ids parse uniformly.
+ */
+const bigintToNumber = (value: unknown): unknown => {
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "string" && value.trim() !== "") return Number(value);
+  return value;
+};
+
+/**
+ * Schema for the stat_counters telemetry table (migration 035). One row per
+ * (server, user, persona lineage, metric, metric_key, day). `count` is a generic
+ * accumulator and `persona_lineage_id` is the cross-server persona anchor (both
+ * BIGINT in Postgres). See plans/stat-tracking.md and src/constants/statMetrics.ts.
+ */
+export const statCounterSchema = z.object({
+  server_id: z.number().int(),
+  user_id: z.number().int(),
+  persona_lineage_id: z.preprocess(bigintToNumber, z.number().int().nonnegative().default(0)),
+  metric: z.enum(STAT_METRICS),
+  metric_key: z.string().default(""),
+  bucket: z.date(),
+  count: z.preprocess(bigintToNumber, z.number().int().default(0)),
+  first_at: z.date().optional(),
+  last_at: z.date().optional(),
+});
+export type StatCounterRow = z.infer<typeof statCounterSchema>;
 
 /**
  * Schema for voice_samples table — reference audio clips for local TTS voice cloning.

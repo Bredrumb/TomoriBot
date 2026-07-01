@@ -859,6 +859,9 @@ $$;
 -- Personal deliberate tool mode (May 2026) - User-scoped tri-state: 'off', 'follow' (default), 'on'
 SELECT add_column_if_not_exists('users', 'personal_deliberate_tool_mode', 'TEXT', '''follow''');
 
+-- Personal timezone offset (June 2026) - NULL = not set / not opted in; mirrors server timezone range (-12..+14)
+SELECT add_column_if_not_exists('users', 'timezone_offset', 'SMALLINT');
+
 -- Create updated_at trigger for users table
 DROP TRIGGER IF EXISTS update_users_timestamp ON users;
 CREATE TRIGGER update_users_timestamp
@@ -2958,3 +2961,35 @@ DROP TRIGGER IF EXISTS update_channel_context_notes_timestamp ON channel_context
 CREATE TRIGGER update_channel_context_notes_timestamp
     BEFORE UPDATE ON channel_context_notes
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================================
+-- Stat counters (migration 035)
+-- Pre-aggregated daily usage telemetry: one row per
+-- (server, user, persona lineage, metric, metric_key, day), incremented by
+-- UPSERT. count is a generic accumulator (events add 1; token/cost metrics add
+-- the turn's token delta). persona_lineage_id is the cross-server persona
+-- identity anchor (BIGINT, 0 sentinel for persona-agnostic metrics, mirroring
+-- personal_memories / conditioning_history). user_id is the internal users FK.
+-- High-frequency runtime telemetry: FK cascades, never exported.
+-- Never index count or last_at — keeping mutating columns out of all indexes
+-- preserves Postgres HOT updates on hot counter rows. See plans/stat-tracking.md.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS stat_counters (
+  server_id          INT         NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+  user_id            INT         NOT NULL REFERENCES users(user_id)     ON DELETE CASCADE,
+  persona_lineage_id BIGINT      NOT NULL DEFAULT 0,  -- 0 sentinel = persona-agnostic metric
+  metric             TEXT        NOT NULL,            -- enum-like metric name (see plan §5)
+  metric_key         TEXT        NOT NULL DEFAULT '', -- command name / model id / hour / '' for scalars
+  bucket             DATE        NOT NULL,            -- CURRENT_DATE at write time (daily grain)
+  count              BIGINT      NOT NULL DEFAULT 0,  -- generic accumulator (events or token deltas)
+  first_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (server_id, user_id, persona_lineage_id, metric, metric_key, bucket)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stat_counters_server_metric_bucket
+  ON stat_counters(server_id, metric, bucket);
+CREATE INDEX IF NOT EXISTS idx_stat_counters_user_metric_bucket
+  ON stat_counters(user_id, metric, bucket);
+CREATE INDEX IF NOT EXISTS idx_stat_counters_user_lineage_metric
+  ON stat_counters(user_id, persona_lineage_id, metric);

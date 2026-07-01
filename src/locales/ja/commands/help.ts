@@ -232,7 +232,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
 - \`/personal privacy\`で完全に見えなくなるオプションが利用可能です
 - 詳しくは\`/help memory\`をご覧ください`,
       time_title: `時間認識`,
-      time_description: `- サーバーの現在時刻を認識しています（\`/config timezone\`経由）
+      time_description: `- サーバーの現在時刻を認識しています（\`/server timezone\`経由）
 - リマインダーを設定できます（何かを思い出させるように頼んでみて！）
 - 繰り返しリマインダーもサポートされており、ペルソナ固有です`,
       alter_title: `アルターペルソナ`,

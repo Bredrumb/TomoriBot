@@ -24,6 +24,7 @@ import {
 import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import { charsToTokensJson, charsToTokensText, estimateContextItemsTokens } from "@/utils/text/tokenEstimate";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { GoogleProvider, type GoogleProviderConfig } from "@/providers/google/googleProvider";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
@@ -52,16 +53,10 @@ import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from 
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { llmSections } from "@/db/seed/catalog/models";
 
-/**
- * Token estimation constants
- *
- * Important notes:
- * - Tokenization varies a lot by language (English vs Japanese), punctuation/JSON, and provider/model.
- * - These numbers are intentionally "ballpark" and are tuned to roughly match typical chat-style prompts.
- * - Tool/function schemas (JSON) usually tokenize a bit denser than natural language prose.
- */
-const CHARS_PER_TOKEN_TEXT = 4;
-const CHARS_PER_TOKEN_JSON = 3.5;
+// Char-per-token ratios and the primitive estimators (charsToTokensText/Json,
+// estimateContextItemsTokens) now live in @/utils/text/tokenEstimate so this command
+// and the post-turn stat recorder share one source of truth. The higher-level,
+// cost-specific helpers below still live here.
 
 /**
  * Rough per-message overhead for chat-format wrappers (role markers, separators, etc.).
@@ -262,25 +257,6 @@ function parseIntegerEnv(value: string | undefined, fallback: number, minimum: n
 }
 
 /**
- * Calculate token count from character count
- * @param chars - Number of characters
- * @returns Estimated token count
- */
-function charsToTokensText(chars: number): number {
-  return Math.ceil(chars / CHARS_PER_TOKEN_TEXT);
-}
-
-/**
- * Calculate token count for JSON-ish strings (tools, schemas).
- * JSON generally tokenizes slightly denser than prose, so we use a smaller chars/token ratio.
- * @param chars - Number of characters
- * @returns Estimated token count
- */
-function charsToTokensJson(chars: number): number {
-  return Math.ceil(chars / CHARS_PER_TOKEN_JSON);
-}
-
-/**
  * Estimate tokens for a chat history made of many short messages.
  * Includes a small fixed per-message overhead for chat wrappers plus speaker prefixes.
  * @param messageCount - Number of messages
@@ -290,29 +266,6 @@ function charsToTokensJson(chars: number): number {
 function estimateChatHistoryTokens(messageCount: number, avgMessageChars: number): number {
   const totalChars = messageCount * (avgMessageChars + AVG_SPEAKER_PREFIX_CHARS);
   return charsToTokensText(totalChars) + messageCount * TOKENS_PER_CHAT_MESSAGE_OVERHEAD;
-}
-
-/**
- * Approximate input tokens for an already-built context when the provider exposes no
- * live token-counting API (Track A fallback).
- *
- * Sums the character length of every text part across all context items and applies the
- * standard text ratio ({@link charsToTokensText}, CHARS_PER_TOKEN_TEXT). Non-text parts
- * (images/videos) are intentionally not counted — this is a deliberately rough estimate
- * whose accuracy varies by language (e.g. Japanese tokenizes denser than ~4 chars/token).
- * @param contextItems - The assembled runtime-parity context
- * @returns Estimated input token count
- */
-function estimateContextItemsTokens(contextItems: StructuredContextItem[]): number {
-  let totalChars = 0;
-  for (const item of contextItems) {
-    for (const part of item.parts) {
-      if (part.type === "text") {
-        totalChars += part.text.length;
-      }
-    }
-  }
-  return charsToTokensText(totalChars);
 }
 
 /**

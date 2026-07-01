@@ -92,10 +92,7 @@ describe("mergeConsecutiveSameRole", () => {
       { role: "assistant", content: "ok" },
     ];
     expect(mergeConsecutiveSameRole(input)).toEqual([
-      {
-        role: "user",
-        content: "one\ntwo",
-      },
+      { role: "user", content: "one\ntwo" },
       { role: "assistant", content: "ok" },
     ]);
   });

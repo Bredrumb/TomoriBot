@@ -18,7 +18,7 @@ import {
 import { GoogleGenAI } from "@google/genai";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { personaRepository, llmModelRepo } from "@/utils/db/repositories";
+import { personaRepository, llmModelRepo, statRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
@@ -346,47 +346,49 @@ export async function execute(
   const apiKey = imageCreds.apiKey;
   const executionProvider = imageCreds.provider;
 
-  // 9. Check image generation quota BEFORE showing modal (prevent user frustration)
-  const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
+  // 9. Check image generation quota BEFORE showing modal (personal-provider users bypass quota)
+  if (imageCreds.source === "server") {
+    const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
 
-  if (!quotaCheck.allowed) {
-    // Build user-friendly error message based on quota type
-    const errorTitleKey = "commands.generate.image.quota_exceeded_title";
-    let errorDescriptionKey = "commands.generate.image.quota_exceeded_description";
-    const descriptionVars: Record<string, string> = {};
+    if (!quotaCheck.allowed) {
+      // Build user-friendly error message based on quota type
+      const errorTitleKey = "commands.generate.image.quota_exceeded_title";
+      let errorDescriptionKey = "commands.generate.image.quota_exceeded_description";
+      const descriptionVars: Record<string, string> = {};
 
-    if (quotaCheck.resetTime) {
-      const now = new Date();
-      const resetTime = quotaCheck.resetTime;
-      const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+      if (quotaCheck.resetTime) {
+        const now = new Date();
+        const resetTime = quotaCheck.resetTime;
+        const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
 
-      if (hoursUntilReset < 24) {
-        descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_hours", {
-          hours: hoursUntilReset.toString(),
-        });
-      } else {
-        const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-        descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_days", {
-          days: daysUntilReset.toString(),
-        });
+        if (hoursUntilReset < 24) {
+          descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_hours", {
+            hours: hoursUntilReset.toString(),
+          });
+        } else {
+          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
+          descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_days", {
+            days: daysUntilReset.toString(),
+          });
+        }
       }
-    }
 
-    if (quotaCheck.reason === "user_quota_exceeded") {
-      errorDescriptionKey = "commands.generate.image.user_quota_exceeded_description";
-    } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-      errorDescriptionKey = "commands.generate.image.serverwide_quota_exceeded_description";
-    }
+      if (quotaCheck.reason === "user_quota_exceeded") {
+        errorDescriptionKey = "commands.generate.image.user_quota_exceeded_description";
+      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+        errorDescriptionKey = "commands.generate.image.serverwide_quota_exceeded_description";
+      }
 
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: errorTitleKey,
-      descriptionKey: errorDescriptionKey,
-      descriptionVars,
-      footerKey: "commands.generate.image.quota_exceeded_footer",
-      color: ColorCode.ERROR,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: errorTitleKey,
+        descriptionKey: errorDescriptionKey,
+        descriptionVars,
+        footerKey: "commands.generate.image.quota_exceeded_footer",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
   }
 
   // Track modal submit interaction for error handling in catch block
@@ -670,8 +672,23 @@ export async function execute(
     const filename = `generated_${Date.now()}.${extension}`;
     const attachment = new AttachmentBuilder(imageBuffer, { name: filename });
 
-    // 19.5. Increment quota after successful generation
-    await incrementImageQuota(tomoriState.server_id, interaction.user.id);
+    // 19.5. Increment quota after successful generation (server providers only)
+    if (imageCreds.source === "server") {
+      await incrementImageQuota(tomoriState.server_id, interaction.user.id);
+    }
+    // Record canonical generation telemetry; quota tables enforce limits only.
+    if (userData.user_id) {
+      statRepository.recordStat({
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        lineageId: tomoriState.persona_lineage_id ?? 0,
+        metric: "image_generated",
+        // Key by model codename so the read layer can break generations down by
+        // model (the total stays SUM(count) over keys); this dimension can't be
+        // reconstructed after the fact.
+        metricKey: modelCodename,
+      });
+    }
 
     // 20. Build success embed
     const successEmbed = new EmbedBuilder()

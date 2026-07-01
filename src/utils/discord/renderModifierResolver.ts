@@ -287,6 +287,7 @@ export async function resolveSpriteRenderModifierTarget(
           spriteRecord: {
             personaId,
             spriteName: sprite.sprite_name,
+            isIdentity: sprite.is_identity,
           },
           isIdentitySprite: sprite.is_identity,
         }

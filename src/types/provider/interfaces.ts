@@ -18,6 +18,8 @@ import type { TomoriState } from "../db/schema";
 import type { StructuredContextItem } from "../misc/context";
 import type { StreamingContext } from "../tool/interfaces";
 import type { ProviderError } from "../stream/interfaces";
+import type { SpriteShownEntry } from "../stream/types";
+import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 export type ProviderApiFamily = "google-genai" | "openrouter" | "novelai" | "openai-compatible" | "anthropic";
 
@@ -104,6 +106,24 @@ export interface StreamResult {
   thoughtLog?: ThoughtLogPayload; // Reasoning/thought text captured separately from visible output
   /** NAI GLM-4.6: incomplete trailing sentence dropped by sentenceTrailingBuffer, available for prompt continuation on retry */
   naiContinuationPrefill?: string;
+  /**
+   * Sprite labels delivered during this stream segment, in render order (one entry
+   * per delivered sprite message, so repeats are kept). Surfaced from StreamState so
+   * the post-turn stat recorder can attribute `sprite_shown` / `sprite_emotion` to the
+   * triggerer's user scope (the stream layer itself has no internal user id). Each
+   * entry carries `isIdentity` so identity sprites are excluded from `sprite_emotion`.
+   * Omitted when empty.
+   */
+  spritesShown?: SpriteShownEntry[];
+  /**
+   * Real, provider-reported token usage for this stream segment, normalized by
+   * the orchestrator from the adapter's native usage shape. Present only when
+   * the provider surfaced usage (OpenRouter, OpenAI-compatible, Anthropic,
+   * Gemini); absent for providers that report no usage, in which case the
+   * post-turn recorder falls back to the character estimate. One segment per
+   * tool-loop request, so a turn's true usage is the sum across segments.
+   */
+  usage?: TokenUsage;
 }
 
 /**

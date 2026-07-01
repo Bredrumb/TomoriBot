@@ -8,7 +8,7 @@ import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
+import { replyInfoEmbed } from "../../utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
 import { formatUTCOffset } from "../../utils/text/timezoneHelper";
 
@@ -18,26 +18,26 @@ const TIMEZONE_MAX = 14;
 const TIMEZONE_DEFAULT = 0; // UTC
 
 /**
- * Configures the subcommand for timezone setting
+ * Configures the subcommand for server timezone setting
  * @param subcommand - The subcommand builder
  * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("timezone")
-    .setDescription(localizer("en-US", "commands.config.timezone.description"))
+    .setDescription(localizer("en-US", "commands.server.timezone.description"))
     .addNumberOption((option) =>
       option
         .setName("value")
-        .setDescription(localizer("en-US", "commands.config.timezone.value_description"))
+        .setDescription(localizer("en-US", "commands.server.timezone.value_description"))
         .setMinValue(TIMEZONE_MIN)
         .setMaxValue(TIMEZONE_MAX)
         .setRequired(true),
     );
 
 /**
- * Sets the timezone offset for the server
- * This affects how times are displayed in reminders and context messages
+ * Sets the timezone offset for the server.
+ * This affects how times are displayed in reminders and context messages.
  * @param _client - Discord client instance
  * @param interaction - Command interaction
  * @param userData - User data from database
@@ -69,8 +69,8 @@ export async function execute(
     // 3. Additional validation (Discord already handles min/max, but just in case)
     if (timezoneValue < TIMEZONE_MIN || timezoneValue > TIMEZONE_MAX) {
       await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.config.timezone.invalid_value_title",
-        descriptionKey: "commands.config.timezone.invalid_value_description",
+        titleKey: "commands.server.timezone.invalid_value_title",
+        descriptionKey: "commands.server.timezone.invalid_value_description",
         descriptionVars: {
           min: TIMEZONE_MIN.toString(),
           max: TIMEZONE_MAX.toString(),
@@ -95,8 +95,8 @@ export async function execute(
     const currentTimezone = tomoriState.config.timezone_offset ?? TIMEZONE_DEFAULT;
     if (timezoneValue === currentTimezone) {
       await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.config.timezone.already_set_title",
-        descriptionKey: "commands.config.timezone.already_set_description",
+        titleKey: "commands.server.timezone.already_set_title",
+        descriptionKey: "commands.server.timezone.already_set_description",
         descriptionVars: {
           timezone: formatUTCOffset(timezoneValue),
         },
@@ -115,7 +115,7 @@ export async function execute(
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
         metadata: {
-          command: "config timezone",
+          command: "server timezone",
           guildId: interaction.guild?.id,
           timezoneValue,
         },
@@ -133,10 +133,10 @@ export async function execute(
     // 7. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // 9. Success message with formatted timezone display
+    // 8. Success message with formatted timezone display
     await replyInfoEmbed(interaction, locale, {
-      titleKey: "commands.config.timezone.success_title",
-      descriptionKey: "commands.config.timezone.success_description",
+      titleKey: "commands.server.timezone.success_title",
+      descriptionKey: "commands.server.timezone.success_description",
       descriptionVars: {
         timezone: formatUTCOffset(timezoneValue),
         previous_timezone: formatUTCOffset(currentTimezone),
@@ -159,13 +159,13 @@ export async function execute(
       personaId: personaIdForError,
       errorType: "CommandExecutionError",
       metadata: {
-        command: "config timezone",
+        command: "server timezone",
         guildId: interaction.guild?.id,
         executorDiscordId: interaction.user.id,
         valueAttempted: interaction.options.getNumber("value"),
       },
     };
-    await log.error(`Error executing /config timezone for user ${userData.user_disc_id}`, error as Error, context);
+    await log.error(`Error executing /server timezone for user ${userData.user_disc_id}`, error as Error, context);
 
     // 10. Inform user of unknown error
     if (interaction.deferred && !interaction.replied) {

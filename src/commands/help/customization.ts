@@ -61,7 +61,7 @@ export async function execute(
     const configApikeyDeleteMention = commandRegistry.getCommandMention("provider", "remove");
     const configBraveapiSetMention = commandRegistry.getCommandMention("optional-key", "brave", "set");
     const configBraveapiDeleteMention = commandRegistry.getCommandMention("optional-key", "brave", "remove");
-    const configTimezoneMention = commandRegistry.getCommandMention("config", "timezone");
+    const configTimezoneMention = commandRegistry.getCommandMention("server", "timezone");
     const configPermissionsMention = commandRegistry.getCommandMention("config", "tools", "manage");
     const personaRemoveMention = commandRegistry.getCommandMention("persona", "remove");
     const serverWhitelistChannelMention = commandRegistry.getCommandMention("server", "whitelist", "channel");

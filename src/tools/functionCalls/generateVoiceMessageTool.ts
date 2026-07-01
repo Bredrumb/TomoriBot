@@ -23,6 +23,7 @@ import type { VoiceMessageMetadata } from "@/utils/audio/voiceMessageMetadata";
 import { getOptApiKey } from "@/utils/security/crypto";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
+import { statRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 
 /** Discord IS_VOICE_MESSAGE flag value (1 << 13). */
@@ -512,6 +513,19 @@ export class GenerateVoiceMessageTool extends BaseTool {
         await this.postTranscriptCaption(context, captionText, threadId);
       }
 
+      // Canonical audio-generation telemetry, keyed by TTS backend so the read
+      // layer can break voice usage down by engine (the total stays SUM over keys).
+      // tool_used already counts the call; this adds the un-backfillable backend dimension.
+      if (context.internalUserId) {
+        statRepository.recordStat({
+          serverId: context.tomoriState.server_id,
+          userId: context.internalUserId,
+          lineageId: context.tomoriState.persona_lineage_id ?? 0,
+          metric: "audio_generated",
+          metricKey: "tts-voice-design",
+        });
+      }
+
       return { success: true, message: "Voice message generated and sent to Discord.", endTurn: true };
     }
 
@@ -571,6 +585,17 @@ export class GenerateVoiceMessageTool extends BaseTool {
 
       if (sentMessageId && captionText && context.tomoriState.config.voice_transcript_chat_mode) {
         await this.postTranscriptCaption(context, captionText, threadId);
+      }
+
+      // Canonical audio-generation telemetry, keyed by TTS backend (see voice-design branch).
+      if (context.internalUserId) {
+        statRepository.recordStat({
+          serverId: context.tomoriState.server_id,
+          userId: context.internalUserId,
+          lineageId: context.tomoriState.persona_lineage_id ?? 0,
+          metric: "audio_generated",
+          metricKey: "tts-clone",
+        });
       }
 
       return { success: true, message: "Voice message generated and sent to Discord.", endTurn: true };
@@ -637,6 +662,17 @@ export class GenerateVoiceMessageTool extends BaseTool {
 
     if (sentMessageId && captionText && context.tomoriState.config.voice_transcript_chat_mode) {
       await this.postTranscriptCaption(context, captionText, threadId);
+    }
+
+    // Canonical audio-generation telemetry, keyed by TTS backend (see voice-design branch).
+    if (context.internalUserId) {
+      statRepository.recordStat({
+        serverId: context.tomoriState.server_id,
+        userId: context.internalUserId,
+        lineageId: context.tomoriState.persona_lineage_id ?? 0,
+        metric: "audio_generated",
+        metricKey: "elevenlabs",
+      });
     }
 
     return { success: true, message: "Voice message generated and sent to Discord.", endTurn: true };

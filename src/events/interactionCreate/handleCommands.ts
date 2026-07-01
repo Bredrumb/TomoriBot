@@ -2,7 +2,7 @@ import { MessageFlags, type Client, type Interaction } from "discord.js";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
-import { cooldownRepository, userRepository } from "@/utils/db/repositories";
+import { cooldownRepository, serverRepository, statRepository, userRepository } from "@/utils/db/repositories";
 import {
   loadCommandData,
   ROOT_COMMAND_EXECUTION_KEY,
@@ -238,6 +238,40 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
       // 6. Execute command
       if (userData) {
         await executeFunction(client, interaction, userData, finalLocale);
+
+        // 6a. Record command usage (fire-and-forget so stat tracking never adds
+        // latency to the command response). command_used is persona-agnostic, so
+        // it buffers under the lineage-0 sentinel. DM commands have no guild and
+        // are skipped (stat_counters.server_id is a NOT NULL FK). The single
+        // commandLoader dispatch path covers every slash command for free.
+        const statUserId = userData.user_id;
+        if (interaction.guildId && statUserId) {
+          const guildId = interaction.guildId;
+          // Record the full command path (category + optional group + subcommand,
+          // space-joined) so stats distinguish subcommands like "config humanizer"
+          // from "config message-fetch-limit" — top-level alone is too coarse for
+          // underused-command detection.
+          const fullCommandName = groupName
+            ? `${commandName} ${groupName} ${subcommandName}`
+            : subcommandName
+              ? `${commandName} ${subcommandName}`
+              : commandName;
+          void (async () => {
+            try {
+              const internalServerId = await serverRepository.loadServerIdByDiscId(guildId);
+              if (internalServerId) {
+                statRepository.recordStat({
+                  serverId: internalServerId,
+                  userId: statUserId,
+                  metric: "command_used",
+                  metricKey: fullCommandName,
+                });
+              }
+            } catch (statError) {
+              log.warn(`Failed to record command_used stat for ${fullCommandName}: ${statError}`);
+            }
+          })();
+        }
       } else {
         // Handle case where user data couldn't be obtained
         const context: ErrorContext = {

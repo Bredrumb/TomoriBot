@@ -109,6 +109,11 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
   private speakerGuardAllowedSourceNames: string[] = [];
+  /**
+   * Latest `usageMetadata` seen on a raw Gemini stream chunk (native shape; the
+   * orchestrator normalizes it). Latest-wins matches Gemini's cumulative usage.
+   */
+  private pendingUsage: Record<string, unknown> | undefined;
   protected readonly providerName: string;
   private readonly clientFactory: (apiKey: string) => GoogleGenAI;
 
@@ -199,6 +204,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     // 3. Speaker guard setup (same as Google)
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
+    this.pendingUsage = undefined;
     const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
     this.speakerGuardAllowedSourceNames = collectRenderModifierSourceNames(
       botName,
@@ -342,6 +348,11 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
 
       // 12. Yield each chunk (same normalisation pipeline as Google)
       for await (const chunkResponse of stream) {
+        // Capture token usage off the raw SDK chunk (dropped by normalization).
+        const usageMetadata = (chunkResponse as { usageMetadata?: Record<string, unknown> }).usageMetadata;
+        if (usageMetadata) {
+          this.pendingUsage = usageMetadata;
+        }
         const normalizedChunk = this.normalizeVertexStreamChunk(chunkResponse);
         const chunksToEmit = this.splitChunkWithTextAndFunctionCalls(normalizedChunk);
 
@@ -755,6 +766,10 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
 
     // Check for thought signatures and thought summaries
     const metadata: Record<string, unknown> = {};
+    // Attach the latest captured token usage so the orchestrator can record it.
+    if (this.pendingUsage) {
+      metadata.usage = this.pendingUsage;
+    }
     const thoughtSignature = this.extractThoughtSignature(vertexChunk);
     if (thoughtSignature) {
       metadata.thoughtSignature = thoughtSignature;

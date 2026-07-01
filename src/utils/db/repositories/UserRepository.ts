@@ -361,6 +361,11 @@ export class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
+  async setTimezoneOffset(userId: number, offset: number | null): Promise<boolean> {
+    const updated = await this.update(userId, { timezone_offset: offset });
+    return updated !== null;
+  }
+
   // ── Personal spotlight ────────────────────────────────────────────────────
 
   /**

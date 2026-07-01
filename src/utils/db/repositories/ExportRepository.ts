@@ -487,7 +487,8 @@ export class ExportRepository {
       // 1. Query user settings including image appearance fields and behavioral preferences
       const rows = await sql`
         SELECT user_nickname, language_pref, impersonation_prompt, physical_appearance_tags, nai_char_ref_url,
-               privacy_level, personal_dtm, personal_deliberate_tool_mode, shortterm_cache_crossserver_opt_in
+               privacy_level, personal_dtm, personal_deliberate_tool_mode, shortterm_cache_crossserver_opt_in,
+               timezone_offset
         FROM users
         WHERE user_disc_id = ${userDiscId}
         LIMIT 1
@@ -514,6 +515,7 @@ export class ExportRepository {
           personal_dtm: userData.personal_dtm ?? undefined,
           personal_deliberate_tool_mode: userData.personal_deliberate_tool_mode ?? undefined,
           shortterm_cache_crossserver_opt_in: userData.shortterm_cache_crossserver_opt_in ?? undefined,
+          timezone_offset: userData.timezone_offset ?? undefined,
         },
       };
 

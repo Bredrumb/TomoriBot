@@ -90,13 +90,13 @@ describe("StreamMessageDelivery copied-render options", () => {
         avatarUrl: "https://example.com/sprites/mad.png",
       },
       accumulatedTextPrefix: "Ren (mad): ",
-      spriteRecord: { personaId: 42, spriteName: "mad" },
+      spriteRecord: { personaId: 42, spriteName: "mad", isIdentity: false },
     });
 
     expect(sentPayloads).toHaveLength(1);
     expect(sentPayloads[0].payload.identityOverride?.username).toBe("Ren");
     expect(sentPayloads[0].payload.accumulatedTextPrefix).toBe("Ren (mad): ");
-    expect(sentPayloads[0].payload.spriteRecord).toEqual({ personaId: 42, spriteName: "mad" });
+    expect(sentPayloads[0].payload.spriteRecord).toEqual({ personaId: 42, spriteName: "mad", isIdentity: false });
   });
 
   it("flushes aggregate-mode bot text before sending a copied-render override", async () => {
