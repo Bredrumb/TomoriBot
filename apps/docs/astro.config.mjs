@@ -24,9 +24,11 @@ if (!existsSync(junctionPath)) {
 }
 
 // Sidebar source of truth:
+// - Top-level groups are discovered from docs/*/README.md.
 // - Page links use each Markdown file's `title`.
 // - Folder groups use `sidebar.groupLabel` from that folder's README when present.
 // - Ordering uses `sidebar.order` only where filename order is not enough.
+// - Set `sidebar.hidden: true` on a top-level README to keep that folder out of main nav.
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 const maxOrder = Number.MAX_SAFE_INTEGER;
 
@@ -199,14 +201,30 @@ function stripMarkdownExtension(fileName) {
   return fileName.replace(/\.mdx?$/i, "");
 }
 
-const sidebar = [
-  buildSidebarSection("architecture"),
-  buildSidebarSection("pipelines"),
-  buildSidebarSection("subsystems"),
-  buildSidebarSection("integrations"),
-  buildSidebarSection("contributor-guides"),
-  buildSidebarSection("user-guides"),
-];
+function buildTopLevelSidebar() {
+  return readdirSync(docsTarget, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const dirPath = resolve(docsTarget, entry.name);
+      const readmePath = getReadmePath(dirPath);
+      if (!readmePath) return [];
+
+      const readmeData = readFrontmatter(readmePath);
+      if (readmeData.sidebar?.hidden === true) return [];
+
+      return [
+        {
+          item: buildSidebarSection(entry.name),
+          order: readmeData.sidebar?.order ?? maxOrder,
+          sortKey: entry.name,
+        },
+      ];
+    })
+    .sort(compareNodes)
+    .map((node) => node.item);
+}
+
+const sidebar = buildTopLevelSidebar();
 
 export default defineConfig({
   site: "https://docs.tomoribot.app",

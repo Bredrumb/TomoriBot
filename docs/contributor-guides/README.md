@@ -14,6 +14,7 @@ conventions, then jump to the guide for your task.
 ## Local Setup
 
 - [`getting-started.md`](./getting-started) — set up TomoriBot locally with Bun + PostgreSQL for development
+- [`docs-authoring.md`](./docs-authoring) — docs routes, frontmatter, sidebar, cards, and asset conventions
 
 ## Adding Things
 

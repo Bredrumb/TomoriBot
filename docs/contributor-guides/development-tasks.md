@@ -18,6 +18,7 @@ Each guide below is self-contained with steps, notes, and a quality gate.
 | Add a new AI provider | [`adding-new-provider.md`](./adding-new-provider) |
 | Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](./adding-feature-flag-tool) |
 | Add a persona preset | [`adding-persona-preset.md`](./adding-persona-preset) |
+| Add or move docs pages | [`docs-authoring.md`](./docs-authoring) |
 
 ## Development Checklist
 

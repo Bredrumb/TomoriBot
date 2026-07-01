@@ -19,6 +19,7 @@ High-level orientation: what TomoriBot is, how it starts up, and how data is mod
 Each pipeline folder has a `README.md` (overview + ASCII flow) and numbered stage files.
 These are the primary reference for contributors and future plugin authors.
 
+- [`pipelines/README.md`](./pipelines/) — pipeline docs overview
 - [`pipelines/chat/`](./pipelines/chat/) — message ingress → per-turn execution
 - [`pipelines/context-build/`](./pipelines/context-build/) — preset routing + native context assembly (14 blocks)
 - [`pipelines/tool-loop/`](./pipelines/tool-loop/) — tool-call dispatch loop driven by the generation turn
@@ -32,6 +33,7 @@ These are the primary reference for contributors and future plugin authors.
 Supporting services that pipelines depend on. Not pipelines themselves — these expose surfaces
 rather than sequenced stages.
 
+- [`subsystems/README.md`](./subsystems/) — subsystem docs overview
 - [`subsystems/database-schema.md`](./subsystems/database-schema)
 - [`subsystems/event-system.md`](./subsystems/event-system)
 - [`subsystems/command-system.md`](./subsystems/command-system)
@@ -53,6 +55,7 @@ rather than sequenced stages.
 
 ## Integrations
 
+- [`integrations/README.md`](./integrations/) — integration docs overview
 - Matrix:
   - [`integrations/matrix/bridge.md`](./integrations/matrix/bridge)
 - Discord platform capabilities:
@@ -88,6 +91,7 @@ Per-task guides:
 - [`contributor-guides/adding-locale.md`](./contributor-guides/adding-locale)
 - [`contributor-guides/adding-persona-preset.md`](./contributor-guides/adding-persona-preset)
 - [`contributor-guides/raw-sql-boundary.md`](./contributor-guides/raw-sql-boundary) — keeping raw SQL in the repository layer (enforced by `bun run audit-sql` + a unit test)
+- [`contributor-guides/docs-authoring.md`](./contributor-guides/docs-authoring) — docs routes, frontmatter, sidebar, cards, and asset conventions
 
 Testing your changes:
 
