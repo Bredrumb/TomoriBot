@@ -670,6 +670,8 @@ export class GenerateVideoTool extends BaseTool {
           userId: context.internalUserId,
           lineageId: context.tomoriState.persona_lineage_id ?? 0,
           metric: "video_generated",
+          // Key by model codename for a per-model generation breakdown at read time.
+          metricKey: modelCodename,
         });
       }
 

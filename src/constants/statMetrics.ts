@@ -22,8 +22,14 @@
  *   - sticker_used      → sticker name/id
  *   - active_hour       → hour-of-day "0".."23"
  *   - text_generated    → "" (one per completed chat turn)
- *   - image_generated   → "" (one per successful image generation)
- *   - video_generated   → "" (one per successful video generation)
+ *   - image_generated   → model codename (one per successful image generation; keyed
+ *                         so the total is SUM(count) over keys while still exposing a
+ *                         per-model breakdown that cannot be backfilled later)
+ *   - video_generated   → model codename (one per successful video generation)
+ *   - audio_generated   → TTS backend label ("elevenlabs" | "tts-clone" |
+ *                         "tts-voice-design"); one per successful voice message.
+ *                         Backend (not raw voice id) is used: low-cardinality,
+ *                         privacy-safe, and answers "paid API vs local TTS" for cost.
  *   - (all others)      → "" (scalar event counter)
  */
 export const STAT_METRICS = [
@@ -44,6 +50,7 @@ export const STAT_METRICS = [
   "text_generated",
   "image_generated",
   "video_generated",
+  "audio_generated",
 ] as const;
 
 /** Union of all valid `stat_counters.metric` values. */

@@ -606,6 +606,8 @@ export async function execute(
         userId: userData.user_id,
         lineageId: tomoriState.persona_lineage_id ?? 0,
         metric: "video_generated",
+        // Key by model codename for a per-model generation breakdown at read time.
+        metricKey: modelCodename,
       });
     }
     log.success(`Video generated in ${elapsedSec}s via ${displayModelName}`);

@@ -1312,6 +1312,9 @@ export class GenerateImageNaiTool extends BaseTool {
           userId: context.internalUserId,
           lineageId: context.tomoriState.persona_lineage_id ?? 0,
           metric: "image_generated",
+          // Key by the base NAI model codename (inpaint variants collapse into their
+          // base model) for a per-model breakdown at read time.
+          metricKey: baseModelCodename,
         });
       }
 

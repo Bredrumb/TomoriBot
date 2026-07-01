@@ -1623,6 +1623,8 @@ export class GenerateImageTool extends BaseTool {
           userId: context.internalUserId,
           lineageId: context.tomoriState.persona_lineage_id ?? 0,
           metric: "image_generated",
+          // Key by model codename for a per-model generation breakdown at read time.
+          metricKey: modelCodename,
         });
       }
 

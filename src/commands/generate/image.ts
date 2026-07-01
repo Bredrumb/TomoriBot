@@ -683,6 +683,10 @@ export async function execute(
         userId: userData.user_id,
         lineageId: tomoriState.persona_lineage_id ?? 0,
         metric: "image_generated",
+        // Key by model codename so the read layer can break generations down by
+        // model (the total stays SUM(count) over keys); this dimension can't be
+        // reconstructed after the fact.
+        metricKey: modelCodename,
       });
     }
 
