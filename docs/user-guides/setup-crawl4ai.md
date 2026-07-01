@@ -91,7 +91,7 @@ The MCP fetch fallback does **not** support cookie injection — cookies only ap
 
 Set `CRAWL4AI_COOKIES_JSON` in `.env` as a JSON array:
 
-```env
+```dotenv
 CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":".example.com"}]
 ```
 

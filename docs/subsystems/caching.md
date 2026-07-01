@@ -215,7 +215,7 @@ Default emergency behavior:
 
 Operational knobs:
 
-```env
+```dotenv
 EMERGENCY_CACHE_CLEAR_ENABLED=true
 EMERGENCY_CACHE_CLEAR_INCLUDE_STM=false
 EMERGENCY_CACHE_CLEAR_DISCORD_VOLATILE=true
@@ -234,7 +234,7 @@ because STM is conversational state, not merely a database read-through cache.
 
 ## Recommended Env Knobs
 
-```env
+```dotenv
 TOMORI_STATE_CACHE_TTL_MINUTES=10
 USER_CACHE_TTL_MINUTES=30
 EMOJI_STICKER_CACHE_TTL_MINUTES=10

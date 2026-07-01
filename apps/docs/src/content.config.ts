@@ -1,6 +1,7 @@
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
 import { docsSchema } from "@astrojs/starlight/schema";
+import { z } from "astro/zod";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -21,6 +22,16 @@ export const collections = {
           .replace(/README\.md$/i, "index.md") // README.md → index so it becomes the section root
           .replace(/\.mdx?$/, ""), // strip extension for clean slugs
     }),
-    schema: docsSchema(),
+    // Extend Starlight's frontmatter schema with an AI-disclaimer opt-out.
+    // Defaults to true, so every page renders the disclaimer note unless a
+    // human-authored doc explicitly sets `aiGenerated: false`. The note itself
+    // is injected at render time by the MarkdownContent component override —
+    // no per-file markdown edits, so pages stay clean and the wording lives
+    // in exactly one place.
+    schema: docsSchema({
+      extend: z.object({
+        aiGenerated: z.boolean().default(true),
+      }),
+    }),
   }),
 };

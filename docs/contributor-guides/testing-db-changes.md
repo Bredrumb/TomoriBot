@@ -45,7 +45,7 @@ The only required environment variable is `POSTGRES_PASSWORD` (or a full `DATABA
 
 A minimal `.env` for contributors:
 
-```env
+```dotenv
 POSTGRES_PASSWORD=your_local_postgres_password
 ```
 

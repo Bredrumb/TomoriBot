@@ -236,6 +236,9 @@ export default defineConfig({
       // import that expects an Astro image object { src, width, height }, not a URL string.
       components: {
         SiteTitle: "./src/components/SiteTitle.astro",
+        // Prepends the "AI-generated" disclaimer note to every page.
+        // Opt out per-page with `aiGenerated: false` in frontmatter.
+        MarkdownContent: "./src/components/MarkdownContent.astro",
       },
       // Starlight v0.33.0+ expects an array of link items instead of a keyed object.
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" }],

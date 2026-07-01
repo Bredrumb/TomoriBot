@@ -33,7 +33,7 @@ cp .env.example .env
 
 Minimum required values for local development:
 
-```env
+```dotenv
 DISCORD_TOKEN=...
 CRYPTO_SECRET=...
 POSTGRES_HOST=localhost
