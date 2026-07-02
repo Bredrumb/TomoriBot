@@ -16,9 +16,12 @@ function resolveBackupsRoot(): string {
 // scripts/devtools/backupPersonas.ts
 //   bun run backup:personas  → export ALL personas across all servers
 //
-//   For each persona: writes an import-compatible JSON file containing the
-//   preset data (same as /persona export) plus server memories for that
-//   persona lineage. Organized into per-server subdirectories.
+//   For each persona: writes a single import-compatible file — a PNG with
+//   embedded metadata when an avatar is stored (restores the PFP too), or a
+//   flat JSON matching the /persona import schema otherwise — plus a
+//   `.meta.json` sidecar carrying extras (webhook avatar URL, trigger words,
+//   server memories) that /persona import does not consume. Organized into
+//   per-server subdirectories.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -41,8 +44,11 @@ interface PersonaRow {
 }
 
 interface PersonaManifestEntry {
+  /** Import-compatible file — upload this via /persona import. */
   filename: string;
-  filename_png: string | null;
+  format: "png" | "json";
+  /** Sidecar with extras (meta + memories) not consumed by /persona import. */
+  sidecar_filename: string;
   nickname: string;
   persona_id: number;
   is_alter: boolean;
@@ -192,31 +198,16 @@ async function runBackup(): Promise<void> {
             : Number(persona.persona_lineage_id ?? 0);
         const memories = await getMemoriesForPersona(server.server_id, lineageId);
 
-        // 6c. Build full backup payload
-        const backup = {
-          // Import-compatible preset (works with /persona import)
-          preset: exportResult.data,
-          // Extra metadata not in standard export
-          meta: {
-            persona_id: persona.persona_id,
-            is_alter,
-            webhook_avatar_url: persona.webhook_avatar_url ?? null,
-            trigger_words: persona.trigger_words ?? [],
-          },
-          // Server memories for this persona
-          memories,
-        };
-
-        // 6d. Write JSON file
         const sanitized = sanitizeAttachmentFilenamePart(nickname, {
           fallback: "persona",
           maxLength: 50,
         });
-        const filename = `${sanitized}_${persona.persona_id}.json`;
-        writeFileSync(join(serverDir, filename), `${JSON.stringify(backup, null, 2)}\n`);
+        const base = `${sanitized}_${persona.persona_id}`;
 
-        // 6e. Generate PNG with embedded metadata (only when avatar is available)
-        let filenamePng: string | null = null;
+        // 6c. Prefer a PNG with embedded metadata — it round-trips through
+        //     /persona import as the exact PresetExport shape AND restores
+        //     the avatar. Only possible when a stored avatar exists.
+        let pngWithMetadata: Buffer | null = null;
         if (persona.webhook_avatar_url) {
           try {
             const [{ loadStoredPersonaAvatarBuffer }, { convertToPNG }, { embedMetadataInPNG }] = await Promise.all([
@@ -226,22 +217,49 @@ async function runBackup(): Promise<void> {
             ]);
             const avatarBuffer = await loadStoredPersonaAvatarBuffer(persona.webhook_avatar_url);
             if (avatarBuffer) {
-              const pngBuffer = await convertToPNG(avatarBuffer);
-              const pngWithMetadata = embedMetadataInPNG(pngBuffer, exportResult.data);
-              filenamePng = `${sanitized}_${persona.persona_id}.png`;
-              writeFileSync(join(serverDir, filenamePng), pngWithMetadata);
+              const rawPng = await convertToPNG(avatarBuffer);
+              pngWithMetadata = embedMetadataInPNG(rawPng, exportResult.data);
             }
           } catch (error) {
-            log.warn(`      PNG generation skipped for ${nickname}: ${error}`);
+            log.warn(`      PNG generation failed for ${nickname}, falling back to JSON: ${error}`);
           }
         }
 
-        log.success(`    Exported: ${nickname} (${typeTag}, ${memories.length} memories${filenamePng ? ", PNG" : ""})`);
+        // 6d. Write the primary import-compatible file: PNG if we built one above,
+        //     otherwise the flat PresetExport as-is (no wrapper), so it passes
+        //     presetExportSchema directly like /persona import expects.
+        let filename: string;
+        let format: "png" | "json";
+        if (pngWithMetadata) {
+          filename = `${base}.png`;
+          format = "png";
+          writeFileSync(join(serverDir, filename), pngWithMetadata);
+        } else {
+          filename = `${base}.json`;
+          format = "json";
+          writeFileSync(join(serverDir, filename), `${JSON.stringify(exportResult.data, null, 2)}\n`);
+        }
+
+        // 6e. Sidecar with extras /persona import doesn't consume (meta + memories)
+        const sidecarFilename = `${base}.meta.json`;
+        const sidecar = {
+          meta: {
+            persona_id: persona.persona_id,
+            is_alter,
+            webhook_avatar_url: persona.webhook_avatar_url ?? null,
+            trigger_words: persona.trigger_words ?? [],
+          },
+          memories,
+        };
+        writeFileSync(join(serverDir, sidecarFilename), `${JSON.stringify(sidecar, null, 2)}\n`);
+
+        log.success(`    Exported: ${nickname} (${typeTag}, ${format.toUpperCase()}, ${memories.length} memories)`);
         totalExported++;
 
         serverEntry.personas.push({
           filename,
-          filename_png: filenamePng,
+          format,
+          sidecar_filename: sidecarFilename,
           nickname,
           persona_id: persona.persona_id,
           is_alter,

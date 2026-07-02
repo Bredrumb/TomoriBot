@@ -466,7 +466,6 @@ ChatMock用の推奨機能フラグ：
 | `bun run backup` | DBダンプと`.env`を含むバンドルを`backups/`に作成し、すべてのデータを含む |
 | `bun run restore-backup` | バンドルから`.env`とデータベースを復元。`--latest`または`--from backups/<bundle-dir>`フラグを使用 |
 | `bun run backup:personas` | サーバーメモリーを含むペルソナのみを`backups/`にエクスポート。**`restore-backup`で使用できず、`/persona import`で手動で再インポートが必要（主キー競合を回避）** |
-| `bun run backup:memories` | すべてのユーザーに対する個人メモリーのみを`backups/`にエクスポート。**手動で再インポートが必要で、`restore-backup`で使用できません（主キー競合を回避）** |
 | `bun run nuke-db` | 全テーブルを削除（その後ボットを起動して再初期化）。クリーンインストール時にバックアップと組み合わせて使用 |
 | `bun run purge-commands` | 登録済みのDiscordスラッシュコマンドをすべて削除 |
 | `bun run rotate-keys` | すべての暗号化フィールドを現在のキーバージョンに移行 |

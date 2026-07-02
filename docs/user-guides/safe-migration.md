@@ -40,11 +40,10 @@ If you restore without it:
 
 ### Option A: Use the project's backup script
 
-TomoriBot includes three backup scripts, each targeting different data:
+TomoriBot includes two backup scripts, each targeting different data:
 
 - **`bun run backup`** — Full database schema + data dump (personas, memories, configs, everything)
 - **`bun run backup:personas`** — Persona presets and per-persona server memories only
-- **`bun run backup:memories`** — Personal memories across all users
 
 For a safe migration, use the **full backup**:
 
@@ -52,7 +51,7 @@ For a safe migration, use the **full backup**:
 bun run backup
 ```
 
-This creates a timestamped bundle in `backups/` (or your `TOMORI_BACKUP_DIR` if overridden in `.env`) containing the entire PostgreSQL database in a compressed format. To restore later, run:
+This creates a timestamped bundle in `backups/` (or your `TOMORI_BACKUP_DIR` if overridden in `.env`) containing the entire PostgreSQL database as a plain SQL dump. To restore later, run:
 
 ```bash
 bun run restore-backup --latest
@@ -61,8 +60,19 @@ bun run restore-backup --latest
 Or restore from a specific bundle:
 
 ```bash
-bun run restore-backup --from backups/transfer_2024_01_15_14-30-45
+bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
+
+### Automatic local startup backups
+
+In non-production (`RUN_ENV` not set to `production`), TomoriBot also checks for a full data backup before database initialization runs. It creates an automatic `backupData.ts`-compatible bundle when either condition is true:
+
+- the latest full data backup was created by a different `package.json` bot version
+- the latest full data backup is at least `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` old (default: `24`)
+
+Automatic backups are tagged with `backupType: "automatic"` in `bundle_info.json` and named with an `_auto` suffix. Manual `bun run backup` bundles are tagged as `manual`; they can satisfy the latest-backup check, but they never count toward automatic retention. The startup gate keeps the newest `TOMORI_AUTO_BACKUP_MAX` automatic bundles (default: `5`) and deletes older automatic bundles only.
+
+Set `TOMORI_AUTO_BACKUP_ENABLED=false` in `.env` if you need to start a local/dev bot without this safety gate, for example on a machine without `pg_dump`.
 
 ### Option B: Direct `pg_dump`
 

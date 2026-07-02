@@ -2,6 +2,7 @@ import { config } from "dotenv";
 import { resolveEnvironment } from "@/types/config";
 import { startHealthServer } from "@/init/healthServer";
 import { loadSecrets } from "@/init/secrets";
+import { initStartupBackup } from "@/init/backup";
 import { createDiscordClient, resolvePresenceIntentEnabled } from "@/init/discord";
 import { initDatabase } from "@/init/database";
 import { initLoaders } from "@/init/loaders";
@@ -31,6 +32,8 @@ function isDisallowedIntentsError(error: unknown): boolean {
 config({ quiet: true });
 
 const environment = resolveEnvironment();
+
+await initStartupBackup(environment);
 
 // Bind to PORT immediately so Cloud Run's startup probe passes before the rest of init runs
 if (environment === "production") {
