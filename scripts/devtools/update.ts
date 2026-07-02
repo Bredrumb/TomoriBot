@@ -2,7 +2,7 @@
 import { config } from "dotenv";
 import pc from "picocolors";
 import { confirm, isNonInteractiveMode } from "../lib/prompt";
-import { log } from "@/utils/misc/logger";
+import { log } from "../lib/cliLogger";
 
 config({ quiet: true });
 
@@ -20,12 +20,13 @@ ${pc.bold("Usage:")}
   bun run update                  Backup, git pull, bun install
   bun run update --build          Also run bun run build after install
   bun run update --docker         Backup, git pull, docker compose build, docker compose up -d
-  bun run update --skip-backup    Skip the manual backup step
+  bun run update --skip-backup    Skip the pre-update backup step
   bun run update --yes            Do not prompt before starting
 
 ${pc.bold("Notes:")}
   Stop TomoriBot before updating so the backup and migrations have a quiet database.
   This command uses: git pull --rebase --autostash
+  If Git reports "needs merge", resolve the listed files, run git add on them, then re-run update.
 `);
 }
 
@@ -61,6 +62,40 @@ async function ensureGitRepository(): Promise<void> {
   }
 }
 
+async function getUnmergedPaths(): Promise<string[]> {
+  const proc = Bun.spawn(["git", "diff", "--name-only", "--diff-filter=U"], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  const [exitCode, stdout] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
+  if (exitCode !== 0) {
+    return [];
+  }
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+function printGitConflictGuidance(paths: string[]): void {
+  log.warn("Git has unresolved merge conflicts.");
+  if (paths.length > 0) {
+    log.info("Conflicted files:");
+    for (const path of paths) {
+      log.info(`  ${path}`);
+    }
+  }
+  log.info("Open each conflicted file, choose the correct content, and remove conflict markers:");
+  log.info("  <<<<<<<");
+  log.info("  =======");
+  log.info("  >>>>>>>");
+  log.info("Then mark the files resolved:");
+  log.info("  git add <resolved-file> [...]");
+  log.info("If Git says a stash entry was kept, leave it alone until you have confirmed your changes are present.");
+  log.info("After the worktree is clean of conflicts, re-run `bun run update`.");
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const flags = new Set(args);
@@ -84,6 +119,11 @@ async function main(): Promise<void> {
   }
 
   await ensureGitRepository();
+  const existingConflicts = await getUnmergedPaths();
+  if (existingConflicts.length > 0) {
+    printGitConflictGuidance(existingConflicts);
+    process.exit(1);
+  }
 
   if (skipBackup) {
     log.warn("Skipping backup because --skip-backup was provided.");
@@ -99,7 +139,18 @@ async function main(): Promise<void> {
   }
 
   log.section("Pull latest code");
-  await run("git", ["pull", "--rebase", "--autostash"]);
+  try {
+    await run("git", ["pull", "--rebase", "--autostash"]);
+  } catch (error) {
+    log.error("Git pull failed. Update stopped before dependency install.", error);
+    const conflictedPaths = await getUnmergedPaths();
+    if (conflictedPaths.length > 0) {
+      printGitConflictGuidance(conflictedPaths);
+    } else {
+      log.info("No unresolved merge files were reported. Review the Git output above, fix the issue, then re-run update.");
+    }
+    process.exit(1);
+  }
 
   if (docker) {
     log.section("Docker Compose update");

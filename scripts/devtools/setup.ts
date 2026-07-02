@@ -5,17 +5,10 @@ import { join } from "node:path";
 import pc from "picocolors";
 import { config } from "dotenv";
 import { isPlaceholder, readEnvValues, seedFromExample, upsertEnvKeys } from "../lib/envFile";
-import { ask, askSecret, confirm, isNonInteractiveMode, multiSelectMenu, selectMenu } from "../lib/prompt";
+import { ask, askSecret, confirm, isNonInteractiveMode, type MenuItem, selectMenu } from "../lib/prompt";
 import { detectPython, type PythonCommand } from "../lib/pyenv";
-import {
-  SETUP_MODULES,
-  type SetupCategory,
-  type SetupContext,
-  getCategoryLabel,
-  getModulesByCategory,
-  getSetupCategories,
-} from "../setup/registry";
-import { log } from "@/utils/misc/logger";
+import { type SetupContext, type SetupModule, getFullInstallModules } from "../setup/registry";
+import { log } from "../lib/cliLogger";
 
 config({ quiet: true });
 
@@ -25,9 +18,8 @@ interface CommandProbe {
 }
 
 interface PrereqScan {
-  hasNode: boolean;
-  nodeMajor?: number;
   hasPsql: boolean;
+  hasPgDump: boolean;
   hasDocker: boolean;
   python?: PythonCommand;
 }
@@ -46,25 +38,42 @@ interface PostgresConnection {
 }
 
 type EnvConfigureMode = "fill" | "reconfigure" | "keep";
+type SetupMode = "base" | "full";
+
+interface BaseInstallOptions {
+  showCompletion?: boolean;
+}
 
 const ROOT = process.cwd();
 const ENV_PATH = join(ROOT, ".env");
 const ENV_EXAMPLE_PATH = join(ROOT, ".env.example");
+const REQUIRED_ENV_KEYS = [
+  "DISCORD_TOKEN",
+  "CRYPTO_SECRET",
+  "POSTGRES_HOST",
+  "POSTGRES_PORT",
+  "POSTGRES_USER",
+  "POSTGRES_PASSWORD",
+  "POSTGRES_DB",
+];
 function printHelp(): void {
   console.log(`
 ${pc.bold("bun run setup")} - interactive TomoriBot setup wizard
 
 ${pc.bold("Usage:")}
-  bun run setup              Open the interactive setup menu
+  bun run setup              Choose Full Install (recommended) or Base Install
   bun run setup --base       Run Base Install only
-  bun run setup --module id  Run a single optional setup module
-  bun run setup --defaults   Accept safe defaults for Base Install; fails when required values have no default
+  bun run setup --full       Run Base Install, then optional DB/AI helper setup
+  bun run setup --defaults   Accept safe defaults for Base Install
+  bun run setup --full --defaults
+                             Accept safe defaults for Full Install
 
 ${pc.bold("Examples:")}
   bun run setup
   bun run setup --base
+  bun run setup --full
+  bun run setup --full --defaults
   bun run setup --defaults
-  bun run setup --module tokenizers
 `);
 }
 
@@ -111,9 +120,10 @@ function parseNodeMajor(output: string | undefined): number | undefined {
 async function scanPrereqs(): Promise<PrereqScan> {
   log.section("Prerequisite scan");
 
-  const [nodeProbe, psqlProbe, dockerProbe, python] = await Promise.all([
+  const [nodeProbe, psqlProbe, pgDumpProbe, dockerProbe, python] = await Promise.all([
     commandProbe("node", ["--version"]),
     commandProbe("psql", ["--version"]),
+    commandProbe("pg_dump", ["--version"]),
     commandProbe("docker", ["--version"]),
     detectPython(),
   ]);
@@ -130,25 +140,30 @@ async function scanPrereqs(): Promise<PrereqScan> {
   if (psqlProbe.available) {
     log.success(`psql ${psqlProbe.output ?? ""}`.trim());
   } else {
-    log.warn("psql was not found. Database auto-provisioning and backups need PostgreSQL client tools.");
+    log.warn("psql was not found. Native database auto-provisioning needs PostgreSQL client tools.");
+  }
+
+  if (pgDumpProbe.available) {
+    log.success(`pg_dump ${pgDumpProbe.output ?? ""}`.trim());
+  } else {
+    log.warn("pg_dump was not found. Backups and backup-first updates need PostgreSQL client tools.");
   }
 
   if (dockerProbe.available) {
     log.success(`Docker ${dockerProbe.output ?? ""}`.trim());
   } else {
-    log.warn("Docker was not found. Docker database/sidecar setup will be guided only.");
+    log.warn("Docker was not found. Docker database setup will be unavailable.");
   }
 
   if (python) {
     log.success(`Python detected: ${python.displayName}`);
   } else {
-    log.warn("Python 3 was not found. Python-based MCP/voice modules will be guided only.");
+    log.warn("Python 3 was not found. URL Fetch MCP setup will be guided only.");
   }
 
   return {
-    hasNode: nodeProbe.available,
-    nodeMajor,
     hasPsql: psqlProbe.available,
+    hasPgDump: pgDumpProbe.available,
     hasDocker: dockerProbe.available,
     python,
   };
@@ -158,7 +173,6 @@ function buildContext(scan: PrereqScan): SetupContext {
   return {
     projectRoot: ROOT,
     envPath: ENV_PATH,
-    hasDocker: scan.hasDocker,
     hasPsql: scan.hasPsql,
     python: scan.python,
   };
@@ -175,6 +189,10 @@ function validateNonPlaceholder(label: string): (value: string) => string | null
     }
     return null;
   };
+}
+
+function getMissingRequiredEnvKeys(env: Record<string, string>): string[] {
+  return REQUIRED_ENV_KEYS.filter((key) => isPlaceholder(env[key]));
 }
 
 function quoteSqlIdentifier(value: string): string {
@@ -214,16 +232,26 @@ function buildProvisioningSql(appUser: string, appPassword: string, appDatabase:
   };
 }
 
+function printManualProvisioningSql(sql: ReturnType<typeof buildProvisioningSql>): void {
+  log.info("Run this SQL as a local PostgreSQL admin:");
+  log.info(sql.roleSql);
+  log.info(sql.createDatabaseSql);
+  log.warn("TomoriBot cannot connect with these .env database credentials until this SQL has run successfully.");
+}
+
 async function runPsql(connection: PostgresConnection, sql: string, stdout: "inherit" | "pipe" = "inherit"): Promise<{
   exitCode: number;
   output: string;
 }> {
   const outputArgs = stdout === "pipe" ? ["-t", "-A"] : [];
-  const proc = Bun.spawn(["psql", buildPostgresUrl(connection), "-v", "ON_ERROR_STOP=1", ...outputArgs, "-c", sql], {
-    cwd: ROOT,
-    stdout,
-    stderr: "inherit",
-  });
+  const proc = Bun.spawn(
+    ["psql", buildPostgresUrl(connection), "-v", "ON_ERROR_STOP=1", ...outputArgs, "-c", sql],
+    {
+      cwd: ROOT,
+      stdout,
+      stderr: "inherit",
+    },
+  );
   const exitCode = await proc.exited;
   const output = stdout === "pipe" ? await new Response(proc.stdout).text() : "";
   return { exitCode, output };
@@ -234,9 +262,7 @@ async function provisionNativeDatabase(app: PostgresConnection, hasPsql: boolean
 
   if (!hasPsql) {
     log.warn("psql is missing, so automatic database provisioning is not available.");
-    log.info("Run this SQL as a local PostgreSQL admin:");
-    log.info(sql.roleSql);
-    log.info(sql.createDatabaseSql);
+    printManualProvisioningSql(sql);
     return;
   }
 
@@ -245,9 +271,7 @@ async function provisionNativeDatabase(app: PostgresConnection, hasPsql: boolean
     true,
   );
   if (!shouldProvision) {
-    log.info("Run this SQL as a local PostgreSQL admin:");
-    log.info(sql.roleSql);
-    log.info(sql.createDatabaseSql);
+    printManualProvisioningSql(sql);
     return;
   }
 
@@ -256,8 +280,8 @@ async function provisionNativeDatabase(app: PostgresConnection, hasPsql: boolean
     default: "postgres",
     validate: validateNonPlaceholder("Admin user"),
   });
-  const adminPassword = await askSecret("PostgreSQL admin password (blank is OK for trust auth)", {
-    default: "",
+  const adminPassword = await askSecret("PostgreSQL admin password", {
+    validate: validateNonPlaceholder("Admin password"),
   });
   const maintenanceDb = await ask("Maintenance database", {
     default: "postgres",
@@ -275,9 +299,7 @@ async function provisionNativeDatabase(app: PostgresConnection, hasPsql: boolean
   const roleResult = await runPsql(adminConnection, sql.roleSql);
   if (roleResult.exitCode !== 0) {
     log.warn("Could not create/update the PostgreSQL user automatically.");
-    log.info("Run this SQL as a local PostgreSQL admin:");
-    log.info(sql.roleSql);
-    log.info(sql.createDatabaseSql);
+    printManualProvisioningSql(sql);
     return;
   }
 
@@ -286,6 +308,7 @@ async function provisionNativeDatabase(app: PostgresConnection, hasPsql: boolean
     log.warn("Could not check whether the database already exists.");
     log.info("Run this SQL as a local PostgreSQL admin if needed:");
     log.info(sql.createDatabaseSql);
+    log.warn("TomoriBot cannot connect with these .env database credentials until the database exists.");
     return;
   }
 
@@ -303,17 +326,20 @@ async function provisionNativeDatabase(app: PostgresConnection, hasPsql: boolean
   log.warn("Could not create the database automatically.");
   log.info("Run this SQL as a local PostgreSQL admin:");
   log.info(sql.createDatabaseSql);
+  log.warn("TomoriBot cannot connect with these .env database credentials until the database exists.");
 }
 
-async function chooseEnvMode(envAlreadyExisted: boolean): Promise<EnvConfigureMode> {
+async function chooseEnvMode(envAlreadyExisted: boolean, env: Record<string, string>): Promise<EnvConfigureMode> {
   if (!envAlreadyExisted) {
     return "fill";
   }
 
+  const missingRequiredKeys = getMissingRequiredEnvKeys(env);
+  const canUseCurrentEnv = missingRequiredKeys.length === 0;
   const selected = await selectMenu<EnvConfigureMode>("Existing .env found", [
     {
       id: "fill",
-      label: "Fill missing required values",
+      label: "(Recommended) Fill missing required values",
       description: "Keep real values and replace blanks/placeholders.",
     },
     {
@@ -323,8 +349,11 @@ async function chooseEnvMode(envAlreadyExisted: boolean): Promise<EnvConfigureMo
     },
     {
       id: "keep",
-      label: "Keep .env as-is",
-      description: "Skip required value prompts.",
+      label: "Use current .env without changes",
+      description: canUseCurrentEnv
+        ? "Skip prompts because all required values are already set."
+        : `Unavailable until these required values are set: ${missingRequiredKeys.join(", ")}.`,
+      disabled: !canUseCurrentEnv,
     },
   ]);
 
@@ -378,12 +407,13 @@ async function configureCryptoSecret(env: Record<string, string>, mode: EnvConfi
 function needsDatabaseConfig(env: Record<string, string>, mode: EnvConfigureMode): boolean {
   if (mode === "keep") return false;
   if (mode === "reconfigure") return true;
-  return ["POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"].some((key) =>
-    isPlaceholder(env[key]),
-  );
+  return getMissingRequiredEnvKeys(env).some((key) => key.startsWith("POSTGRES_"));
 }
 
 async function configureNativeDatabase(env: Record<string, string>, scan: PrereqScan): Promise<DatabaseConfigResult> {
+  log.info("These values define the TomoriBot database account to create/use.");
+  log.info("For a new local setup on this machine, the defaults are usually fine.");
+
   const host = await ask("PostgreSQL host", {
     default: isPlaceholder(env.POSTGRES_HOST) ? "localhost" : env.POSTGRES_HOST,
     validate: validateNonPlaceholder("PostgreSQL host"),
@@ -451,21 +481,41 @@ async function configureDatabase(env: Record<string, string>, mode: EnvConfigure
     return { values: {}, startDockerDatabase: false };
   }
 
-  const selected = await selectMenu<"native" | "docker">("Database setup", [
-    {
-      id: "native",
-      label: "Use installed PostgreSQL",
-      description: "Configure local/native PostgreSQL and optionally auto-create the user/database.",
-    },
-    {
-      id: "docker",
-      label: "Use Docker Compose database",
-      description: scan.hasDocker ? "Use the repo's postgres service on localhost:15432." : "Docker was not detected.",
-      disabled: !scan.hasDocker,
-    },
-  ]);
+  const dockerChoice: MenuItem<"native" | "docker"> = {
+    id: "docker",
+    label: "Use bundled Docker PostgreSQL",
+    description: scan.hasDocker
+      ? "Database-only container on localhost:15432; TomoriBot and scripts still run on host Bun."
+      : "Unavailable because Docker was not detected.",
+    disabled: !scan.hasDocker,
+  };
+  const nativeChoice: MenuItem<"native" | "docker"> = {
+    id: "native",
+    label: scan.hasPsql ? "(Recommended) Use installed PostgreSQL" : "Use an existing PostgreSQL server",
+    description: scan.hasPsql
+      ? "Best fit for local Bun when PostgreSQL is already installed; defaults usually work."
+      : "Use this if you already know the host, port, user, database, and manual SQL steps.",
+  };
+  const choices: MenuItem<"native" | "docker">[] = scan.hasPsql
+    ? [nativeChoice, dockerChoice]
+    : scan.hasDocker
+      ? [
+          {
+            ...dockerChoice,
+            label: "(Recommended) Use bundled Docker PostgreSQL",
+          },
+          nativeChoice,
+        ]
+      : [nativeChoice, dockerChoice];
 
-  return selected.id === "docker" ? configureDockerDatabase(env) : configureNativeDatabase(env, scan);
+  const selected = await selectMenu<"native" | "docker">("Database for local Bun setup", choices);
+
+  if (selected.id === "docker") {
+    log.info("This uses Docker only for PostgreSQL. TomoriBot will still start with `bun run dev` or `bun run launch`.");
+    return configureDockerDatabase(env);
+  }
+
+  return configureNativeDatabase(env, scan);
 }
 
 async function maybeStartDockerDatabase(scan: PrereqScan): Promise<void> {
@@ -487,18 +537,14 @@ async function runBunInstall(): Promise<void> {
   await runInherited("bun", ["install"]);
 }
 
-async function maybeRunTokenizers(ctx: SetupContext): Promise<void> {
-  if (!(await confirm("Download tokenizer assets for model-aware logit bias now?", false))) {
-    return;
-  }
-  const tokenizers = SETUP_MODULES.find((module) => module.id === "tokenizers");
-  if (!tokenizers) {
-    throw new Error("Tokenizer setup module is missing.");
-  }
-  await tokenizers.run(ctx);
+function printSetupComplete(title: string): void {
+  log.section(title);
+  log.info("Next steps:");
+  log.info("  1. Start TomoriBot with `bun run dev` or `bun run launch`.");
+  log.info("  2. When Discord shows the bot online, run `/config setup` in your server.");
 }
 
-async function runBaseInstall(scan: PrereqScan): Promise<void> {
+async function runBaseInstall(scan: PrereqScan, options: BaseInstallOptions = {}): Promise<void> {
   log.section("Base Install");
 
   const envAlreadyExisted = existsSync(ENV_PATH);
@@ -506,8 +552,8 @@ async function runBaseInstall(scan: PrereqScan): Promise<void> {
     log.success("Created .env from .env.example.");
   }
 
-  const mode = await chooseEnvMode(envAlreadyExisted);
   const env = readEnvValues(ENV_PATH);
+  const mode = await chooseEnvMode(envAlreadyExisted, env);
   const envUpdates: Record<string, string> = {};
 
   Object.assign(envUpdates, await configureCryptoSecret(env, mode));
@@ -527,84 +573,64 @@ async function runBaseInstall(scan: PrereqScan): Promise<void> {
   }
 
   await runBunInstall();
-  await maybeRunTokenizers(buildContext(scan));
 
-  log.section("Base Install Complete");
-  log.info("Next steps:");
-  log.info("  1. Start TomoriBot with `bun run dev` or `bun run launch`.");
-  log.info("  2. When Discord shows the bot online, run `/config setup` in your server.");
+  if (options.showCompletion ?? true) {
+    printSetupComplete("Base Install Complete");
+  }
 }
 
-async function runCategory(category: SetupCategory, ctx: SetupContext): Promise<void> {
-  const modules = getModulesByCategory(category);
-  const choices = await multiSelectMenu(
-    `${getCategoryLabel(category)} setup modules`,
-    modules.map((module) => ({
-      id: module.id,
-      label: module.label,
-      description: module.summary,
-    })),
-  );
-
-  for (const choice of choices) {
-    const module = modules.find((candidate) => candidate.id === choice.id);
-    if (!module) {
-      throw new Error(`Unknown setup module: ${choice.id}`);
-    }
-
-    log.section(module.label);
-    const result = await module.run(ctx);
-    if (result === "done") {
-      log.success(`${module.label} complete.`);
-    } else if (result === "guided") {
-      log.info(`${module.label} needs the guided step(s) shown above.`);
-    } else {
-      log.info(`${module.label} skipped.`);
-    }
+async function runSetupModule(module: SetupModule, ctx: SetupContext): Promise<void> {
+  let result: "done" | "guided" | "skipped";
+  try {
+    result = await module.run(ctx);
+  } catch (error) {
+    log.warn(`${module.label} failed; continuing because Full Install extras are optional.`, error);
+    log.info("You can re-run Full Install after fixing the issue.");
+    return;
   }
+
+  if (result === "done") {
+    log.success(`${module.label} complete.`);
+  } else if (result === "guided") {
+    log.info(`${module.label} needs the guided step(s) shown above.`);
+  } else {
+    log.info(`${module.label} skipped.`);
+  }
+}
+
+async function runFullInstall(scan: PrereqScan): Promise<void> {
+  log.section("Full Install");
+  log.info("Full Install runs Base Install, then optional database and AI helper setup.");
+  await runBaseInstall(scan, { showCompletion: false });
+
+  const ctx = buildContext(scan);
+  for (const module of getFullInstallModules()) {
+    await runSetupModule(module, ctx);
+  }
+
+  printSetupComplete("Full Install Complete");
 }
 
 async function runInteractiveMenu(scan: PrereqScan): Promise<void> {
-  const ctx = buildContext(scan);
+  const selected = await selectMenu<SetupMode>("TomoriBot setup", [
+    {
+      id: "full",
+      label: "(Recommended) Full Install",
+      description: "Base Install plus pgvector, pg_cron, tokenizer assets, and URL Fetch MCP.",
+    },
+    {
+      id: "base",
+      label: "Base Install",
+      description: "Required first run only: .env, Discord token, PostgreSQL, dependencies.",
+    },
+  ]);
 
-  while (true) {
-    const categories = getSetupCategories();
-    const selected = await selectMenu<string>("TomoriBot setup", [
-      {
-        id: "base",
-        label: "Base Install",
-        description: "Required .env, Discord token, database, dependencies.",
-      },
-      ...categories.map((category) => ({
-        id: category,
-        label: getCategoryLabel(category),
-        description: "Optional setup modules.",
-      })),
-      {
-        id: "exit",
-        label: "Exit",
-      },
-    ]);
-
-    if (selected.id === "exit") {
-      return;
-    }
-
-    if (selected.id === "base") {
-      await runBaseInstall(scan);
-      continue;
-    }
-
-    await runCategory(selected.id as SetupCategory, ctx);
+  if (selected.id === "base") {
+    await runBaseInstall(scan);
+    return;
   }
-}
 
-async function runSingleModule(moduleId: string, scan: PrereqScan): Promise<void> {
-  const module = SETUP_MODULES.find((candidate) => candidate.id === moduleId);
-  if (!module) {
-    throw new Error(`Unknown setup module "${moduleId}". Available: ${SETUP_MODULES.map((m) => m.id).join(", ")}`);
-  }
-  await module.run(buildContext(scan));
+  await runFullInstall(scan);
 }
 
 async function main(): Promise<void> {
@@ -615,17 +641,15 @@ async function main(): Promise<void> {
     printHelp();
     return;
   }
+  if (flags.has("--base") && flags.has("--full")) {
+    throw new Error("Choose either --base or --full, not both.");
+  }
 
   console.log(pc.bold("\nTomoriBot Setup Wizard\n"));
   const scan = await scanPrereqs();
 
-  const moduleIndex = args.indexOf("--module");
-  if (moduleIndex !== -1) {
-    const moduleId = args[moduleIndex + 1];
-    if (!moduleId) {
-      throw new Error("Provide a module id after --module.");
-    }
-    await runSingleModule(moduleId, scan);
+  if (flags.has("--full")) {
+    await runFullInstall(scan);
     return;
   }
 

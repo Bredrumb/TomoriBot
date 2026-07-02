@@ -18,6 +18,7 @@ RUN apk update && apk upgrade && \
     tzdata \
     curl \
     ffmpeg \
+    postgresql-client \
     python3~=3.12 \
     py3-pip \
     nodejs \
@@ -32,8 +33,9 @@ RUN apk update && apk upgrade && \
 RUN addgroup -g 1001 -S tomori && \
     adduser -S tomori -u 1001 -G tomori
 
-# Change ownership of the app directory to our user
-RUN chown -R tomori:tomori /app
+# Prepare writable runtime directories and change ownership of the app directory
+RUN mkdir -p /app/backups /app/logs /app/data && \
+    chown -R tomori:tomori /app
 
 # Switch to non-root user
 USER tomori
@@ -85,6 +87,10 @@ RUN bun install --frozen-lockfile --production
 # Copy the rest of the application code
 # This is like moving TomoriBot's belongings into her new apartment
 COPY --chown=tomori:tomori src/ ./src/
+
+# Copy maintenance scripts so Docker Compose users can run backup/restore/update
+# helpers inside the app image without host Bun.
+COPY --chown=tomori:tomori scripts/ ./scripts/
 
 # Copy static images used by slash commands (banners)
 COPY --chown=tomori:tomori assets/img/ ./assets/img/

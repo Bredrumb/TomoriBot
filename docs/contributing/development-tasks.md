@@ -14,7 +14,7 @@ Each guide below is self-contained with steps, notes, and a quality gate.
 | Add an event handler | [`adding-event-handler.md`](./adding-event-handler) |
 | Add a built-in tool | [`adding-builtin-tool.md`](./adding-builtin-tool) |
 | Add a DB column | [`adding-db-column.md`](./adding-db-column) |
-| Add a setup wizard module | [`adding-setup-module.md`](./adding-setup-module) |
+| Add a Full Install setup module | [`adding-setup-module.md`](./adding-setup-module) |
 | Add a locale | [`adding-locale.md`](./adding-locale) |
 | Add a new AI provider | [`adding-new-provider.md`](./adding-new-provider) |
 | Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](./adding-feature-flag-tool) |

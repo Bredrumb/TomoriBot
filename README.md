@@ -161,7 +161,14 @@ If they keep talking 10 minutes later, use {manage_message_tool} to delete their
 <!-- GETTING STARTED -->
 # Self-Hosting
 
-The recommended path is the setup wizard. It creates `.env`, generates a safe `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, runs `bun install`, and offers optional setup modules.
+Choose one install path:
+
+- **Local Bun setup (Recommended):** requires [Bun](https://bun.sh/), Node.js v20+ for MCP tooling, and either PostgreSQL or Docker for the database.
+- **Docker Compose full-container setup:** requires Docker only for running the bot/database, but host-side maintenance scripts still need host tooling. Skip the setup wizard and use the [Docker Compose](#docker-compose) section below.
+
+The recommended path for most self-hosters is the local Bun setup wizard. Its default **Full Install** path creates `.env`, generates a safe `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, runs `bun install`, then attempts the lightweight database and AI helper extras.
+
+## Local Bun Setup
 
 1. **Clone the repository**
    ```sh
@@ -184,10 +191,12 @@ Once you see `TomoriBot up and running!`, run `/config setup` in Discord.
 
 ## Setup Notes
 
-- Required local prerequisites: [Bun](https://bun.sh/), Node.js v20+ for MCP tooling, and either PostgreSQL or Docker.
 - The wizard can use a local PostgreSQL superuser flow for self-hosted/dev installs. Do not use a superuser app role on shared production databases.
+- When `psql` is available, the wizard recommends installed PostgreSQL for local Bun. The bundled Docker PostgreSQL option is a database-only convenience path, not a full Docker install.
+- If you choose the bundled Docker database inside the wizard, only PostgreSQL runs in Docker. TomoriBot and maintenance scripts still run on the host through Bun.
 - PostgreSQL schema, `pgcrypto`, seeds, and migrations initialize automatically on first bot start.
-- Optional features such as pgvector, tokenizers, MCP Fetch, SearXNG, Crawl4AI, local voice servers, Grafana, and Matrix are available from the wizard's grouped menu.
+- Full Install adds `pgvector`, `pg_cron`, tokenizer assets, and the URL Fetch MCP package when your machine supports them. DuckDuckGo/Felo web search is already bundled with the normal Bun dependencies behind `web_search`.
+- Sidecars and heavier integrations such as SearXNG, Crawl4AI, local voice servers, Grafana, and Matrix are documented in the guides instead of the setup wizard.
 - Full wizard behavior and manual fallback details are in [the setup wizard guide](docs/self-hosting/setup-wizard.md).
 
 ## Optional Sidecars
@@ -200,7 +209,7 @@ bun run launch
 # With SearXNG and Crawl4AI Docker sidecars
 bun run launch --searxng --crawl4ai
 
-# With a local TTS server after its setup module has created the venv
+# With a local TTS server after following the voice setup docs
 bun run launch --qwen3tts
 
 # See all available flags
@@ -236,7 +245,7 @@ Or slide into TomoriBot's DMs and say hi!
 
 | Command | Description |
 |---|---|
-| `bun run setup` | Opens the setup wizard for Base Install and optional modules |
+| `bun run setup` | Opens the setup wizard for Base Install or Full Install |
 | `bun run update` | Stops before code changes if backup fails, then pulls latest code and installs dependencies |
 | `bun run backup` | Creates a bundle in `backups/` with your DB dump and `.env`, contains all of your data |
 | `bun run restore-backup` | Restores `.env` and database from a bundle, use the `--latest` or `--from backups/<bundle-dir>` flags |
@@ -270,9 +279,9 @@ If you run from `dist/`, use `bun run update --build`. If you run Docker Compose
 bun run update --docker
 ```
 
-## Alternative: Docker Compose
+## Docker Compose
 
-If you prefer containerized deployment, you can use Docker Compose instead of manual setup:
+Docker Compose builds and runs TomoriBot plus PostgreSQL. It does not use the setup wizard.
 
 **Required `.env` variables for Docker Compose:**
 - `DISCORD_TOKEN` - Your Discord bot token
@@ -282,14 +291,46 @@ If you prefer containerized deployment, you can use Docker Compose instead of ma
 For Docker Compose, start from `.env.example`, then add `POSTGRES_PASSWORD` if you have not already set it. Optional Docker or runtime tuning values can still be copied from `.env.optional.example`.
 
 ```sh
-# Build TomoriBot's container (first time or after code changes)
-docker compose build
-
-# Start TomoriBot and her database only
-docker compose up
+# Build and start TomoriBot and her database
+docker compose up --build
 ```
 
+For later starts, `docker compose up` is enough unless you changed code or dependencies.
+
 **Note:** Docker Compose automatically configures the database connection. The PostgreSQL service runs in development mode (no SSL) and connects to the internal Docker network.
+
+Docker Compose supports automatic startup backups inside the app container. Backup
+bundles are written to the host `backups/` directory because Compose mounts it into
+the container.
+
+For a manual Docker backup:
+
+```sh
+docker compose stop tomoribot
+docker compose run --rm tomoribot bun run backup
+docker compose start tomoribot
+```
+
+For a Docker restore:
+
+```sh
+docker compose stop tomoribot
+docker compose run --rm tomoribot bun run restore-backup --latest
+docker compose up -d
+```
+
+Host-side scripts such as `bun run backup`, `bun run update`, and `bun run nuke-db`
+do not automatically run through Docker. To use host scripts against the Compose
+database instead, run them on the host with Bun plus PostgreSQL client tools
+installed, and set:
+
+```env
+POSTGRES_HOST=localhost
+POSTGRES_PORT=15432
+POSTGRES_USER=tomori
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=tomodb
+```
 
 #### Optional Docker Sidecars
 

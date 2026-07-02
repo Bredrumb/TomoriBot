@@ -51,20 +51,96 @@ interface DataBackupBundle {
 const DEFAULT_AUTO_BACKUP_INTERVAL_HOURS = 24;
 const DEFAULT_AUTO_BACKUP_MAX = 5;
 
+class ExternalCommandError extends Error {
+  constructor(
+    readonly command: string,
+    readonly exitCode: number | null,
+    readonly stderr: string,
+    cause?: unknown,
+  ) {
+    super(exitCode === null ? `${command} failed to start` : `${command} exited with code ${exitCode}`, { cause });
+    this.name = "ExternalCommandError";
+  }
+}
+
 async function runExternalCommand(
   command: string,
   args: string[],
   options: { stdout?: "inherit" | "ignore" } = {},
 ): Promise<void> {
-  const subprocess = Bun.spawn([command, ...args], {
-    stdout: options.stdout ?? "inherit",
-    stderr: "inherit",
-  });
-
-  const exitCode = await subprocess.exited;
-  if (exitCode !== 0) {
-    throw new Error(`${command} exited with code ${exitCode}`);
+  let subprocess: ReturnType<typeof Bun.spawn>;
+  try {
+    subprocess = Bun.spawn([command, ...args], {
+      stdout: options.stdout ?? "inherit",
+      stderr: "pipe",
+    });
+  } catch (error) {
+    throw new ExternalCommandError(command, null, "", error);
   }
+
+  const stderrStream = subprocess.stderr;
+  const stderrPromise =
+    stderrStream instanceof ReadableStream ? new Response(stderrStream).text() : Promise.resolve("");
+  const [exitCode, stderr] = await Promise.all([subprocess.exited, stderrPromise]);
+  if (exitCode !== 0) {
+    throw new ExternalCommandError(command, exitCode, stderr.trim());
+  }
+}
+
+function logPgDumpFailureGuidance(error: unknown): void {
+  if (!(error instanceof ExternalCommandError)) {
+    log.info("Check that PostgreSQL client tools are installed and that your database settings are valid.");
+    return;
+  }
+
+  const stderr = error.stderr.trim();
+  if (stderr.length > 0) {
+    log.info("pg_dump output:");
+    for (const line of stderr.split(/\r?\n/)) {
+      log.info(`  ${line}`);
+    }
+  }
+
+  const normalized = stderr.toLowerCase();
+  if (error.exitCode === null) {
+    log.info("pg_dump could not be started. Install PostgreSQL client tools and ensure pg_dump is in PATH.");
+    log.info("  Windows: install PostgreSQL from https://www.postgresql.org/download/windows/");
+    log.info("  macOS:   brew install postgresql");
+    log.info("  Linux:   sudo apt-get install postgresql-client");
+    return;
+  }
+
+  if (normalized.includes("password authentication failed")) {
+    log.info("The database rejected the POSTGRES_USER/POSTGRES_PASSWORD from your .env.");
+    log.info(
+      "If setup printed manual SQL earlier, run that SQL as a PostgreSQL admin or re-run setup and enter the admin password.",
+    );
+    return;
+  }
+
+  if (normalized.includes("role") && normalized.includes("does not exist")) {
+    log.info("The POSTGRES_USER from your .env does not exist in PostgreSQL.");
+    log.info("Re-run setup with automatic database creation, or run the printed role/database SQL manually.");
+    return;
+  }
+
+  if (normalized.includes("database") && normalized.includes("does not exist")) {
+    log.info("The POSTGRES_DB from your .env does not exist in PostgreSQL.");
+    log.info("Re-run setup with automatic database creation, or create the database manually.");
+    return;
+  }
+
+  if (
+    normalized.includes("connection refused") ||
+    normalized.includes("could not connect") ||
+    normalized.includes("no route to host")
+  ) {
+    log.info("PostgreSQL was not reachable at the POSTGRES_HOST/POSTGRES_PORT from your .env.");
+    log.info("Start PostgreSQL, or update .env to point at the running database.");
+    return;
+  }
+
+  log.info("pg_dump is installed, but PostgreSQL rejected or failed the dump request. Check the pg_dump output above.");
 }
 
 export function resolveEnvPath(): string {
@@ -287,10 +363,13 @@ export async function runDataBackup(options: DataBackupOptions = {}): Promise<Da
     await runExternalCommand("pg_dump", [dbUrl, "--clean", "--if-exists", "-f", dbDumpPath]);
     log.success("Database dump completed.");
   } catch (error) {
-    await log.error("pg_dump failed. Ensure pg_dump is installed and in your PATH.", error);
-    log.info("  Windows: install PostgreSQL from https://www.postgresql.org/download/windows/");
-    log.info("  macOS:   brew install postgresql");
-    log.info("  Linux:   sudo apt-get install postgresql-client");
+    await log.error("pg_dump failed. No database changes were made.", error);
+    logPgDumpFailureGuidance(error);
+    const resolvedBundleDir = resolve(bundleDir);
+    if (isPathInside(backupsRoot, resolvedBundleDir) && existsSync(resolvedBundleDir)) {
+      rmSync(resolvedBundleDir, { recursive: true, force: true });
+      log.info(`Removed incomplete backup bundle: ${resolvedBundleDir}`);
+    }
     throw error;
   }
 

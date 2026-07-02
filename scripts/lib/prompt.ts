@@ -16,16 +16,22 @@ export interface MenuItem<TId extends string = string> {
   disabled?: boolean;
 }
 
-export interface MultiSelectOptions<TId extends string = string> {
-  defaultIds?: TId[];
-}
-
 export function isNonInteractiveMode(): boolean {
   return process.argv.includes("--yes") || process.argv.includes("--defaults") || process.env.CI === "true" || !process.stdin.isTTY;
 }
 
 function formatQuestion(question: string, defaultValue?: string): string {
-  return defaultValue === undefined ? `${question}: ` : `${question} [${defaultValue}]: `;
+  return defaultValue === undefined ? `${question}: ` : `${question} [Enter for default (${defaultValue})]: `;
+}
+
+function formatSecretQuestion(question: string, defaultValue: string | undefined): string {
+  if (defaultValue === undefined) {
+    return `${question}: `;
+  }
+  if (defaultValue.length === 0) {
+    return `${question} [Enter for blank]: `;
+  }
+  return `${question} [Enter to use saved/generated value]: `;
 }
 
 function applyDefault(value: string, defaultValue: string | undefined): string {
@@ -118,11 +124,32 @@ async function readMaskedLine(question: string, defaultValue: string | undefined
       }
     };
 
-    output.write(defaultValue === undefined ? `${question}: ` : `${question} [hidden default]: `);
+    output.write(formatSecretQuestion(question, defaultValue));
     input.setRawMode(true);
     input.resume();
     input.on("data", onData);
   });
+}
+
+async function askSecretVisibleFallback(question: string, options: SecretPromptOptions): Promise<string> {
+  while (true) {
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    try {
+      const raw = await rl.question(formatSecretQuestion(question, options.default));
+      const value = applyDefault(raw, options.default);
+      const validationMessage = validateOrMessage(value, options.validate);
+      if (!validationMessage) {
+        return value;
+      }
+      console.warn(validationMessage);
+    } finally {
+      rl.close();
+    }
+  }
 }
 
 export async function askSecret(question: string, options: SecretPromptOptions = {}): Promise<string> {
@@ -144,8 +171,8 @@ export async function askSecret(question: string, options: SecretPromptOptions =
     if (options.allowVisibleFallback === false) {
       throw new Error(`Cannot securely read "${question}" because this terminal does not support masked input.`);
     }
-    console.warn("Masked input is not available in this terminal; the next answer may be visible.");
-    return ask(question, options);
+    console.warn("Masked input is not available in this terminal; typed input may be visible.");
+    return askSecretVisibleFallback(question, options);
   }
 
   while (true) {
@@ -159,16 +186,33 @@ export async function askSecret(question: string, options: SecretPromptOptions =
 }
 
 export async function confirm(question: string, defaultValue = false): Promise<boolean> {
-  const defaultLabel = defaultValue ? "Y/n" : "y/N";
-  const answer = await ask(`${question} (${defaultLabel})`, {
-    default: defaultValue ? "y" : "n",
-    validate: (value) => {
-      const normalized = value.trim().toLowerCase();
-      return ["y", "yes", "n", "no"].includes(normalized) ? null : "Answer yes or no.";
-    },
-  });
+  if (isNonInteractiveMode()) {
+    return defaultValue;
+  }
 
-  return ["y", "yes"].includes(answer.trim().toLowerCase());
+  const defaultLabel = defaultValue ? "Y/n" : "y/N";
+
+  while (true) {
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    try {
+      const raw = await rl.question(`${question} (${defaultLabel}): `);
+      const normalized = raw.trim().toLowerCase();
+      const answer = normalized.length > 0 ? normalized : defaultValue ? "y" : "n";
+      if (["y", "yes"].includes(answer)) {
+        return true;
+      }
+      if (["n", "no"].includes(answer)) {
+        return false;
+      }
+      console.warn("Answer yes or no.");
+    } finally {
+      rl.close();
+    }
+  }
 }
 
 export async function selectMenu<TId extends string>(
@@ -201,48 +245,4 @@ export async function selectMenu<TId extends string>(
   });
 
   return items[Number.parseInt(selected, 10) - 1];
-}
-
-export async function multiSelectMenu<TId extends string>(
-  title: string,
-  items: MenuItem<TId>[],
-  options: MultiSelectOptions<TId> = {},
-): Promise<MenuItem<TId>[]> {
-  console.log("");
-  console.log(title);
-  items.forEach((item, index) => {
-    const disabledLabel = item.disabled ? " (unavailable)" : "";
-    const description = item.description ? ` - ${item.description}` : "";
-    console.log(`  ${index + 1}. ${item.label}${disabledLabel}${description}`);
-  });
-
-  const defaultIndexes =
-    options.defaultIds
-      ?.map((id) => items.findIndex((item) => item.id === id) + 1)
-      .filter((index) => index > 0)
-      .join(",") ?? "";
-
-  const answer = await ask("Choose numbers separated by commas, or leave blank to cancel", {
-    default: defaultIndexes,
-    validate: (value) => {
-      if (value.trim().length === 0) return null;
-      for (const part of value.split(",")) {
-        const index = Number.parseInt(part.trim(), 10);
-        if (!Number.isInteger(index) || index < 1 || index > items.length) {
-          return `Choose numbers from 1 to ${items.length}.`;
-        }
-        if (items[index - 1].disabled) {
-          return `Option ${index} is unavailable.`;
-        }
-      }
-      return null;
-    },
-  });
-
-  if (answer.trim().length === 0) {
-    return [];
-  }
-
-  const uniqueIndexes = [...new Set(answer.split(",").map((part) => Number.parseInt(part.trim(), 10)))];
-  return uniqueIndexes.map((index) => items[index - 1]);
 }
