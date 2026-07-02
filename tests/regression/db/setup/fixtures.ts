@@ -120,12 +120,36 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
     ON CONFLICT (user_disc_id) DO UPDATE
     SET
       user_nickname = EXCLUDED.user_nickname,
-      privacy_level = 0,
-      shortterm_cache_crossserver_opt_in = false,
-      personal_dtm = 'follow'
+      privacy_level = 0
     RETURNING user_id
   `;
   const userId: number = userRow.user_id;
+
+  await db`
+    INSERT INTO user_personalization_configs (
+      user_id,
+      shortterm_cache_crossserver_opt_in,
+      physical_appearance_tags,
+      nai_char_ref_url,
+      impersonation_prompt,
+      personal_dtm
+    ) VALUES (
+      ${userId},
+      false,
+      ARRAY[]::TEXT[],
+      NULL,
+      NULL,
+      'follow'
+    )
+    ON CONFLICT (user_id) DO UPDATE
+    SET
+      shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
+      physical_appearance_tags = EXCLUDED.physical_appearance_tags,
+      nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+      impersonation_prompt = EXCLUDED.impersonation_prompt,
+      personal_dtm = EXCLUDED.personal_dtm,
+      updated_at = NOW()
+  `;
 
   return { serverId, personaId, personaLineageId, userId };
 }

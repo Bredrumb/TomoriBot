@@ -86,9 +86,9 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `persona_imagegen_configs` — `physical_appearance_tags`, `nai_char_ref_url`
 - `persona_textgen_configs` — NovelAI ATTG author/title/tags/genre/stars
 
-### User personalization normalization (Phase 6 Step #14 — complete)
+### User personalization normalization (Phase 6 Step #14 — complete through column drop)
 
-`users` personalization columns are being extracted to one table:
+`users` personalization columns live in one split table:
 
 - `user_personalization_configs` — `shortterm_cache_crossserver_opt_in`, `physical_appearance_tags`, `nai_char_ref_url`, `impersonation_prompt`, `personal_dtm`
 
@@ -231,12 +231,14 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 
 - `personas.physical_appearance_tags` stores public per-persona physical appearance image tags configured by `/persona image-tags`.
 - `personas.nai_char_ref_url` stores the persisted persona reference image URL/path used by the `/novelai character-reference` workflow.
-- `users.physical_appearance_tags` stores public per-user physical appearance image tags keyed by Discord snowflake (`users.user_disc_id`) and configured by `/personal image-tags`.
-- `users.nai_char_ref_url` stores the persisted user reference image URL/path keyed by Discord snowflake.
+- `user_personalization_configs.physical_appearance_tags` stores public per-user physical appearance image tags keyed through `users.user_id` and configured by `/personal image-tags`.
+- `user_personalization_configs.nai_char_ref_url` stores the persisted user reference image URL/path keyed through `users.user_id`.
 
 ### User personalization
 
-- `users.impersonation_prompt` stores the global user-owned prompt used during `/bot impersonate` user impersonation replies.
+- `user_personalization_configs.impersonation_prompt` stores the global user-owned prompt used during `/bot impersonate` user impersonation replies.
+- `user_personalization_configs.personal_dtm` stores the user-scoped deliberate trigger tri-state.
+- `user_personalization_configs.shortterm_cache_crossserver_opt_in` stores the cross-server short-term memory sharing opt-in.
 
 ### Personal spotlight routing
 
@@ -396,6 +398,10 @@ src/db/migrations/
   004_user_personalization_configs.sql  ← user_personalization_configs Stage A expand
   004_user_personalization_configs.down.sql
   ...
+  043_backfill_user_personalization_drift.sql       ← user split drift repair
+  043_backfill_user_personalization_drift.down.sql
+  044_drop_user_personalization_mirror_columns.sql  ← user split column drop
+  044_drop_user_personalization_mirror_columns.down.sql
 ```
 
 - Names must match `NNN_description.sql` (3-digit zero-padded version, lowercase, underscores).

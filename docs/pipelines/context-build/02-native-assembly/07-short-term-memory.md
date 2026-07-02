@@ -113,7 +113,7 @@ After this stage runs:
 | STM cache backend (`shortTermMemoryCache.ts`) | Currently in-memory. A plugin replacing this with a persistent backend would extend the cache module, not this contributor. |
 | Same-channel summary format | Coupled to `update_short_term_memory` tool output; changing the format changes both. |
 | Tool-hint phrasing | Hardcoded English strings here; localization happens elsewhere. The hint text is the seam if a plugin wants alternate phrasing. → plugin plan candidate. |
-| Cross-server opt-in policy | Coupled to the `users.shortterm_cache_crossserver_opt_in` column; user-facing toggle is the `/personalize` command. |
+| Cross-server opt-in policy | Coupled to `user_personalization_configs.shortterm_cache_crossserver_opt_in`; user-facing toggle is `/personal cache`. |
 | Provider-specific STM-tool availability | `llm_provider === "novelai"` hardcoded; a plugin adding a provider that doesn't support STM tools would extend this gate. AC-2 (name-switch purge) lists this as a violation to eliminate. → plugin plan candidate. |
 
 ## Related docs

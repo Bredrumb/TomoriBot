@@ -63,20 +63,33 @@ export class ImportRepository {
 
   /** Upserts a user row by Discord ID and returns the internal user_id. */
   private async ensureUserId(userDiscId: string): Promise<number | null> {
-    const upserted = await sql<Array<{ user_id: number }>>`
-      INSERT INTO users (
-        user_disc_id,
-        user_nickname,
-        language_pref
-      ) VALUES (
-        ${userDiscId},
-        ${userDiscId},
-        'en'
-      )
-      ON CONFLICT (user_disc_id) DO UPDATE
-      SET user_disc_id = EXCLUDED.user_disc_id
-      RETURNING user_id
-    `;
+    const upserted = await sql.begin(async (tx) => {
+      const rows = await tx<Array<{ user_id: number }>>`
+        INSERT INTO users (
+          user_disc_id,
+          user_nickname,
+          language_pref
+        ) VALUES (
+          ${userDiscId},
+          ${userDiscId},
+          'en'
+        )
+        ON CONFLICT (user_disc_id) DO UPDATE
+        SET user_disc_id = EXCLUDED.user_disc_id
+        RETURNING user_id
+      `;
+
+      const userId = rows[0]?.user_id;
+      if (userId) {
+        await tx`
+          INSERT INTO user_personalization_configs (user_id)
+          VALUES (${userId})
+          ON CONFLICT (user_id) DO NOTHING
+        `;
+      }
+
+      return rows;
+    });
 
     return upserted[0]?.user_id ?? null;
   }
@@ -167,45 +180,71 @@ export class ImportRepository {
     importData: PersonalSettingsExportData,
   ): Promise<ImportResult> {
     try {
-      // 1. Build the physical appearance tags PostgreSQL array literal for safe insertion
+      // 1. Normalize split-table personalization values.
       const physicalAppearanceTags = importData.physical_appearance_tags ?? [];
-      const physicalAppearanceTagsArrayLiteral = `{${physicalAppearanceTags
-        .map((tag: string) => `"${tag.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
       const naiCharRefUrl = importData.nai_char_ref_url ?? null;
       const impersonationPrompt = importData.impersonation_prompt ?? null;
 
-      // 2. Upsert user row with settings, image appearance fields, and behavioral preferences
-      const updateResult = await sql`
-        INSERT INTO users (
-          user_disc_id,
-          user_nickname,
-          language_pref,
-          impersonation_prompt,
-          physical_appearance_tags,
-          nai_char_ref_url
-        ) VALUES (
-          ${userDiscId},
-          ${importData.user_nickname},
-          ${importData.language_pref},
-          ${impersonationPrompt},
-          ${physicalAppearanceTagsArrayLiteral}::text[],
-          ${naiCharRefUrl}
-        )
-        ON CONFLICT (user_disc_id) DO UPDATE
-        SET
-          user_nickname = EXCLUDED.user_nickname,
-          language_pref = EXCLUDED.language_pref,
-          impersonation_prompt = EXCLUDED.impersonation_prompt,
-          physical_appearance_tags = EXCLUDED.physical_appearance_tags,
-          nai_char_ref_url = EXCLUDED.nai_char_ref_url,
-          privacy_level = COALESCE(${importData.privacy_level ?? null}, users.privacy_level),
-          personal_dtm = COALESCE(${importData.personal_dtm ?? null}, users.personal_dtm),
-          personal_deliberate_tool_mode = COALESCE(${importData.personal_deliberate_tool_mode ?? null}, users.personal_deliberate_tool_mode),
-          shortterm_cache_crossserver_opt_in = COALESCE(${importData.shortterm_cache_crossserver_opt_in ?? null}, users.shortterm_cache_crossserver_opt_in),
-          timezone_offset = COALESCE(${importData.timezone_offset ?? null}, users.timezone_offset)
-        RETURNING user_id
-      `;
+      // 2. Upsert identity fields to users, then the 5 personalization fields to the split table.
+      const updateResult = await sql.begin(async (tx) => {
+        const userRows = await tx<Array<{ user_id: number }>>`
+          INSERT INTO users (
+            user_disc_id,
+            user_nickname,
+            language_pref,
+            privacy_level,
+            personal_deliberate_tool_mode,
+            timezone_offset
+          ) VALUES (
+            ${userDiscId},
+            ${importData.user_nickname},
+            ${importData.language_pref},
+            ${importData.privacy_level ?? 0},
+            ${importData.personal_deliberate_tool_mode ?? "follow"},
+            ${importData.timezone_offset ?? null}
+          )
+          ON CONFLICT (user_disc_id) DO UPDATE
+          SET
+            user_nickname = EXCLUDED.user_nickname,
+            language_pref = EXCLUDED.language_pref,
+            privacy_level = COALESCE(${importData.privacy_level ?? null}, users.privacy_level),
+            personal_deliberate_tool_mode = COALESCE(${importData.personal_deliberate_tool_mode ?? null}, users.personal_deliberate_tool_mode),
+            timezone_offset = COALESCE(${importData.timezone_offset ?? null}, users.timezone_offset)
+          RETURNING user_id
+        `;
+
+        const userId = userRows[0]?.user_id;
+        if (!userId) {
+          return userRows;
+        }
+
+        await tx`
+          INSERT INTO user_personalization_configs (
+            user_id,
+            shortterm_cache_crossserver_opt_in,
+            physical_appearance_tags,
+            nai_char_ref_url,
+            impersonation_prompt,
+            personal_dtm
+          ) VALUES (
+            ${userId},
+            ${importData.shortterm_cache_crossserver_opt_in ?? false},
+            ${sql.array(physicalAppearanceTags, "TEXT")},
+            ${naiCharRefUrl},
+            ${impersonationPrompt},
+            ${importData.personal_dtm ?? "follow"}
+          )
+          ON CONFLICT (user_id) DO UPDATE SET
+            shortterm_cache_crossserver_opt_in = COALESCE(${importData.shortterm_cache_crossserver_opt_in ?? null}, user_personalization_configs.shortterm_cache_crossserver_opt_in),
+            physical_appearance_tags = EXCLUDED.physical_appearance_tags,
+            nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+            impersonation_prompt = EXCLUDED.impersonation_prompt,
+            personal_dtm = COALESCE(${importData.personal_dtm ?? null}, user_personalization_configs.personal_dtm),
+            updated_at = NOW()
+        `;
+
+        return userRows;
+      });
 
       if (!updateResult.length) {
         return { success: false, error: "commands.data.import.error_update_failed" };

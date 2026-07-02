@@ -611,6 +611,18 @@ export type AutochatPersonaOverride = z.infer<typeof autochatPersonaOverrideSche
 
 // ── Split Config Tables (Phase 6 / Stage A & B) ──────────────────────────
 
+export const userPersonalizationConfigsSchema = z.object({
+  user_id: z.number().int(),
+  shortterm_cache_crossserver_opt_in: z.boolean().default(false),
+  physical_appearance_tags: z.array(z.string()).default([]),
+  nai_char_ref_url: z.string().nullable().optional(),
+  impersonation_prompt: z.string().nullable().optional(),
+  personal_dtm: z.enum(["off", "follow", "on"]).default("follow"),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type UserPersonalizationConfigsRow = z.infer<typeof userPersonalizationConfigsSchema>;
+
 export const serverModelConfigSchema = z.object({
   server_id: z.number().int(),
   llm_id: z.number().int().nullable().optional(),

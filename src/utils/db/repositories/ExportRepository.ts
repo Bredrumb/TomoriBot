@@ -68,11 +68,18 @@ export class ExportRepository {
     includeGlobalMemories = true,
   ): Promise<ExportResult> {
     try {
-      // 1. Query user data from database (includes image appearance fields)
+      // 1. Query user data from database (personalization fields live in the split table)
       const rows = await sql`
-        SELECT user_id, user_nickname, language_pref, impersonation_prompt, physical_appearance_tags, nai_char_ref_url
-        FROM users
-        WHERE user_disc_id = ${userDiscId}
+        SELECT
+          u.user_id,
+          u.user_nickname,
+          u.language_pref,
+          upc.impersonation_prompt,
+          COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
+          upc.nai_char_ref_url
+        FROM users u
+        LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+        WHERE u.user_disc_id = ${userDiscId}
         LIMIT 1
       `;
 
@@ -486,11 +493,20 @@ export class ExportRepository {
     try {
       // 1. Query user settings including image appearance fields and behavioral preferences
       const rows = await sql`
-        SELECT user_nickname, language_pref, impersonation_prompt, physical_appearance_tags, nai_char_ref_url,
-               privacy_level, personal_dtm, personal_deliberate_tool_mode, shortterm_cache_crossserver_opt_in,
-               timezone_offset
-        FROM users
-        WHERE user_disc_id = ${userDiscId}
+        SELECT
+          u.user_nickname,
+          u.language_pref,
+          upc.impersonation_prompt,
+          COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
+          upc.nai_char_ref_url,
+          u.privacy_level,
+          COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
+          u.personal_deliberate_tool_mode,
+          COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
+          u.timezone_offset
+        FROM users u
+        LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+        WHERE u.user_disc_id = ${userDiscId}
         LIMIT 1
       `;
 

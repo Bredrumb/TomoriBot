@@ -825,36 +825,13 @@ CREATE INDEX IF NOT EXISTS idx_users_disc_id ON users(user_disc_id);
 -- Add registration_locale column for user region analytics
 SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
 
--- Add cross-server short-term memory sharing opt-in (Phase 1: Short-term memory system)
-SELECT add_column_if_not_exists('users', 'shortterm_cache_crossserver_opt_in', 'BOOLEAN', 'false');
-
--- User-specific public imageboard-style physical appearance tags for image generation
-SELECT add_column_if_not_exists('users', 'physical_appearance_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
--- User-specific NovelAI character reference image (March 2026)
-SELECT add_column_if_not_exists('users', 'nai_char_ref_url', 'TEXT');
--- User-specific prompt used during /bot impersonate user-mode replies (March 2026)
-SELECT add_column_if_not_exists('users', 'impersonation_prompt', 'TEXT');
--- Personal deliberate trigger mode (April 2026) - User-scoped DTM tri-state: 'off', 'follow' (default), 'on'
--- If column exists as BOOLEAN (old schema), convert to TEXT preserving intent (true → 'on', false → 'follow')
--- If column does not exist, add it as TEXT directly
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'users' AND column_name = 'personal_dtm' AND data_type = 'boolean'
-  ) THEN
-    ALTER TABLE users ALTER COLUMN personal_dtm DROP DEFAULT;
-    ALTER TABLE users ALTER COLUMN personal_dtm TYPE TEXT
-      USING CASE WHEN personal_dtm = TRUE THEN 'on' ELSE 'follow' END;
-    ALTER TABLE users ALTER COLUMN personal_dtm SET DEFAULT 'follow';
-  ELSIF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'users' AND column_name = 'personal_dtm'
-  ) THEN
-    ALTER TABLE users ADD COLUMN personal_dtm TEXT DEFAULT 'follow';
-  END IF;
-END;
-$$;
+-- User personalization mirror columns were removed from users by migration
+-- 044_drop_user_personalization_mirror_columns.sql. The live fields are:
+--   user_personalization_configs.shortterm_cache_crossserver_opt_in
+--   user_personalization_configs.physical_appearance_tags
+--   user_personalization_configs.nai_char_ref_url
+--   user_personalization_configs.impersonation_prompt
+--   user_personalization_configs.personal_dtm
 
 -- Personal deliberate tool mode (May 2026) - User-scoped tri-state: 'off', 'follow' (default), 'on'
 SELECT add_column_if_not_exists('users', 'personal_deliberate_tool_mode', 'TEXT', '''follow''');
@@ -2887,8 +2864,8 @@ CREATE TRIGGER update_persona_textgen_configs_timestamp
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================
--- User Personalization Configs (migration 004)
--- User-scoped personalization fields extracted from the users table.
+-- User Personalization Configs (migration 004; completed by migrations 043/044)
+-- Current source for user-scoped personalization fields extracted from users.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS user_personalization_configs (
