@@ -19,7 +19,7 @@ export const collections = {
       generateId: ({ entry }) =>
         entry
           .replace(/\\/g, "/") // normalize Windows backslashes → forward slashes
-          .replace(/README\.md$/i, "index.md") // README.md → index so it becomes the section root
+          .replace(/README\.mdx?$/i, "index.md") // README.md/.mdx → index so it becomes the section root
           .replace(/\.mdx?$/, ""), // strip extension for clean slugs
     }),
     // Extend Starlight's frontmatter schema with an AI-disclaimer opt-out.

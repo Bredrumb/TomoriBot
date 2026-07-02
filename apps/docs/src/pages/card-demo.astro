@@ -1,7 +1,9 @@
 ---
 // TEMPORARY demo page — preview at http://localhost:4321/card-demo/ after `bun run dev`.
-// Compares card-layout variations for the future landing/customization pages.
-// Delete this file + src/components/FeatureCard.astro + public/card-demo-img/ when done.
+// Compares card-layout variations for the landing/customization pages.
+// FeatureCard.astro has graduated to a permanent, documented component; this scratch
+// page is deleted once the Phase 2 introduction/README.mdx landing lands. Demo images
+// now live under public/img/ (renamed from the old card-demo-img/ path).
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import { Card, CardGrid, LinkCard, LinkButton } from "@astrojs/starlight/components";
 import FeatureCard from "../components/FeatureCard.astro";
@@ -64,11 +66,11 @@ import FeatureCard from "../components/FeatureCard.astro";
   <p>You can drop a screenshot into a <code>&lt;Card&gt;</code> body. Works, but the image sits inside the card’s default padding/border — a bit boxy.</p>
   <CardGrid>
     <Card title="Multi-Persona Support">
-      <img src="/card-demo-img/3.png" alt="Multi-persona screenshot" style="border-radius:0.4rem; margin:0.5rem 0;" />
+      <img src="/img/3.png" alt="Multi-persona screenshot" style="border-radius:0.4rem; margin:0.5rem 0;" />
       Change personality, behavior, and avatar per server; export as shareable persona cards.
     </Card>
     <Card title="100+ Native Commands">
-      <img src="/card-demo-img/4.png" alt="Commands screenshot" style="border-radius:0.4rem; margin:0.5rem 0;" />
+      <img src="/img/4.png" alt="Commands screenshot" style="border-radius:0.4rem; margin:0.5rem 0;" />
       Everything is managed through Discord’s native slash commands and interactive UI.
     </Card>
   </CardGrid>
@@ -81,16 +83,16 @@ import FeatureCard from "../components/FeatureCard.astro";
     demo; “Connect a provider” points at the existing wiki page so you can see a live link.)</em>
   </p>
   <div class="feature-grid">
-    <FeatureCard title="Set up multiple personas" img="/card-demo-img/3.png" href="/user-guides/customization/personas/">
+    <FeatureCard title="Set up multiple personas" img="/img/3.png" href="/user-guides/customization/personas/">
       Create, customize, switch, and export personas — each with its own memory and avatar.
     </FeatureCard>
-    <FeatureCard title="Connect a provider" img="/card-demo-img/1.png" href="/wiki/supported-providers/">
+    <FeatureCard title="Connect a provider" img="/img/1.png" href="/wiki/supported-providers/">
       Bring your own API key or local model: Gemini, OpenRouter, NovelAI, or a custom endpoint.
     </FeatureCard>
-    <FeatureCard title="Give her memory" img="/card-demo-img/2.png" href="/user-guides/customization/memory/">
+    <FeatureCard title="Give her memory" img="/img/2.png" href="/user-guides/customization/memory/">
       Teach her facts, enable RAG documents, and short-term memory across channels.
     </FeatureCard>
-    <FeatureCard title="Browse all commands" img="/card-demo-img/4.png" href="/customization/">
+    <FeatureCard title="Browse all commands" img="/img/4.png" href="/customization/">
       The comprehensive reference for all 100+ slash commands — the web version of <code>/help</code>.
     </FeatureCard>
   </div>

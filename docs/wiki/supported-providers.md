@@ -17,7 +17,7 @@ If you don't have the workstation to host your own models, TomoriBot supports a 
 | **Z.ai** | ✅ | ✅ | ✅ | - |Free Models Available |
 | **Z.ai Coding** | ✅ | ✅ | - | - |Subscription Plan ⚠️ ToS restricts to coding/agent use only |
 | **Google Vertex AI** | ✅ | ✅ | ✅ |✅ | Includes 'free' Express version |
-| **Codex CLI (via ChatMock)** | ✅ | ✅ | ✅ | - |[Instructions in setup-chatmock.md](../user-guides/setup-chatmock.md) |
+| **Codex CLI (via ChatMock)** | ✅ | ✅ | ✅ | - |[Instructions in setup-chatmock.md](../self-hosting/setup-chatmock) |
 
 ### Image Generation
 

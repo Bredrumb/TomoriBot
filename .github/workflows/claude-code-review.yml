@@ -120,7 +120,7 @@ jobs:
             POSSIBLE ISSUES — blockers; each of these violates a project guideline. Give your attention in
             this order: security (S) first, then correctness (1–4), then the rest (5–9b).
             S. Security (highest priority) — actively hunt for vulnerabilities in the diff, both general
-               and TomoriBot-specific; consult docs/subsystems/security.md for the project's model. General
+               and TomoriBot-specific; consult docs/architecture/subsystems/security.md for the project's model. General
                classes to check: injection (SQL/command/prompt), SSRF, secret/credential leakage,
                authorization/permission bypass, path traversal, unsafe deserialization, ReDoS, and
                unvalidated user input reaching a sink. TomoriBot-specific must-checks:
@@ -145,22 +145,22 @@ jobs:
                  (pin by digest or commit SHA); keep `--frozen-lockfile`; verify external asset checksums.
                - Command gating: do not silently drop guildOnly / managerOnly (ManageGuild) / nsfw flags or
                  other permission checks on sensitive commands.
-               (docs/subsystems/security.md)
+               (docs/architecture/subsystems/security.md)
             1. Raw-SQL boundary — raw `sql`…`` / `tx`…`` tagged template literals may ONLY live in
                src/utils/db/repositories/ (plus the allow-listed plumbing in sqlAudit.ts). Any `sql`…``
                in a command, event, tool, util, cache, or context builder is a violation; it must be a
-               repository method call instead. (docs/contributor-guides/raw-sql-boundary.md)
+               repository method call instead. (docs/contributing/raw-sql-boundary.md)
             2. Cache-after-write ordering — invalidate caches AFTER a successful DB write, in the SAME
                code path, never before the write and never on a failed write. Do not manually mutate
                cached objects. Prefer repository-owned invalidation. Flag caller-side invalidation that
                was removed without the repository method taking it over.
-               (docs/subsystems/caching.md, docs/contributor-guides/development-tasks.md)
+               (docs/architecture/subsystems/caching.md, docs/contributing/development-tasks.md)
             3. Discord interaction timing — the interaction must be acknowledged within ~3s via reply(),
                deferReply(), or showModal(). Do NOT deferReply() before a modal or before the
                pagination/modal helpers (promptWithRawModal, replyPaginatedChoices, etc.); pre-modal data
-               loading must fit inside the 3s window. (docs/subsystems/command-system.md — Interaction
+               loading must fit inside the 3s window. (docs/architecture/subsystems/command-system.md — Interaction
                Timing Rules)
-            3b. Command-pattern selection — docs/subsystems/command-system.md is the canonical catalog of
+            3b. Command-pattern selection — docs/architecture/subsystems/command-system.md is the canonical catalog of
                interaction patterns (Pattern 1 simple, 2 defer-first, 3 modal, 3A bulk checkbox groups,
                3B persistent checklist, 3C modal→review→modal, 4/4A pagination + persona-picker loop,
                5 manual timing), each mapped to a proven use case in this codebase. When a command's flow
@@ -173,17 +173,17 @@ jobs:
                pattern, when a newer documented pattern is the better match — and flag command code that
                ignores the pattern's stated rules (e.g. cache invalidation only after successful writes,
                surfacing durable server settings in /tool status). Consult the doc before assuming a
-               bespoke approach is warranted. (docs/subsystems/command-system.md — Interaction Timing
+               bespoke approach is warranted. (docs/architecture/subsystems/command-system.md — Interaction Timing
                Rules & Pattern catalog)
             4. Localization length caps (Discord silently truncates) — any locale value that DOES exist
                must fit its Discord slot: command description ≤100, modal title/label ≤45, modal
                placeholder/description ≤100, select/checkbox option label/description ≤100. This is a HARD
                blocker — fatal in `bun run vl` via check-locale-lengths — because Discord silently truncates
                overruns. Applies to every locale that has a value (en-US and ja). Shorten the string rather
-               than relying on truncation. (docs/subsystems/localization.md, scripts/checks/vl.ts)
+               than relying on truncation. (docs/architecture/subsystems/localization.md, scripts/checks/vl.ts)
             5. No hardcoded operational limits/timeouts/thresholds in feature logic — read them from env
                vars with a fallback default and document optional ones in .env.optional.example.
-               (docs/contributor-guides/development-tasks.md, pull_request_template.md)
+               (docs/contributing/development-tasks.md, pull_request_template.md)
             6. Slash commands only — no legacy prefix-command pathways.
             7. Schema migrations must be idempotent (IF NOT EXISTS, guarded blocks, helper functions);
                queries use Bun SQL template literals. (development-tasks.md, database-schema.md)
@@ -200,7 +200,7 @@ jobs:
                hardcoded user-facing text that bypasses localizer. Do NOT flag a missing `ja` (or other
                non-English) translation — parity is intentionally non-fatal in `bun run vl` so a contributor
                who doesn't speak Japanese is never blocked; at most mention an untranslated key as a
-               low-severity nicety. (docs/subsystems/localization.md, scripts/checks/vl.ts)
+               low-severity nicety. (docs/architecture/subsystems/localization.md, scripts/checks/vl.ts)
 
             NICE-TO-HAVES — non-blocking ideas that would make the PR better; never a merge blocker. Do
             NOT nag about pure formatting/style (indentation, quotes, import order, camelCase, `any`) —
@@ -212,7 +212,7 @@ jobs:
             10. UX (this is a Discord bot): a clearer interaction flow, better or more helpful error/success
                 messaging, the right ephemeral-vs-public choice, fewer steps or smarter defaults, and edge
                 cases a real user could hit (empty states, missing permissions, very long input, no results).
-                When a smoother interaction pattern from docs/subsystems/command-system.md fits (e.g. a
+                When a smoother interaction pattern from docs/architecture/subsystems/command-system.md fits (e.g. a
                 checkbox-group modal instead of repeated one-at-a-time selects, or a persona-picker loop),
                 suggest it.
             11. Performance & efficiency: avoidable or duplicated DB queries (N+1, refetching what a cache

@@ -2,115 +2,121 @@
 title: "TomoriBot Docs Index"
 ---
 
-This folder is organized by topic. Start with `architecture/` for a high-level orientation, then
-go to `pipelines/` for the authoritative per-stage reference.
+The docs site is organized as an audience gradient: curious visitor → user → self-hoster
+→ contributor → deep-diver. Sidebar order follows that gradient.
 
-## Architecture
+> **Restructure in progress.** Many `introduction/`, `features/`, and `self-hosting/`
+> pages are Phase 1 stubs (frontmatter + placeholder). Prose lands in Phase 2 — see
+> `plans/docs-site-restructure.md`.
 
-High-level orientation: what TomoriBot is, how it starts up, and how data is modelled.
+## Introduction (order 1)
 
-- [`architecture/README.md`](./architecture/) — introduction + architecture overview
-- [`architecture/entry-point.md`](./architecture/entry-point) — startup and initialization flow
+The marketing front door — what TomoriBot is and how to start using it.
 
-> Local dev setup moved to [`contributor-guides/getting-started.md`](./contributor-guides/getting-started).
+- [`introduction/README.mdx`](./introduction/) — hero + feature-card deck (Phase 2)
+- [`introduction/quickstart.md`](./introduction/quickstart) — invite the public instance or self-host
 
-## Pipelines
+## Features (order 2)
 
-Each pipeline folder has a `README.md` (overview + ASCII flow) and numbered stage files.
-These are the primary reference for contributors and future plugin authors.
+Capability-oriented pages for people *using* TomoriBot. Category pages with sections;
+a section graduates to its own file when it outgrows ~2-3 screens or gains its own setup flow.
 
-- [`pipelines/README.md`](./pipelines/) — pipeline docs overview
-- [`pipelines/chat/`](./pipelines/chat/) — message ingress → per-turn execution
-- [`pipelines/context-build/`](./pipelines/context-build/) — preset routing + native context assembly (14 blocks)
-- [`pipelines/tool-loop/`](./pipelines/tool-loop/) — tool-call dispatch loop driven by the generation turn
-- [`pipelines/provider/`](./pipelines/provider/) — stream adapter → chunk normalization → Discord delivery
-- [`pipelines/memory/`](./pipelines/memory/) — STM passive capture + LTM create/update/delete
-- `pipelines/command/` — _(planned; absorbs `subsystems/command-system.md`)_
-- `pipelines/webhook-persona/` — _(planned; absorbs `subsystems/multi-persona.md` identity-swap parts)_
+- [`features/README.mdx`](./features/) — capability tour card grid
+- [`features/chatting-and-triggers.md`](./features/chatting-and-triggers)
+- [`features/multiple-personas.md`](./features/multiple-personas)
+- [`features/memory.md`](./features/memory)
+- [`features/tools-and-extensions.md`](./features/tools-and-extensions)
+- [`features/scheduled-tasks.md`](./features/scheduled-tasks)
+- [`features/media-generation/`](./features/media-generation/) — image, video, and voice generation
+- [`features/providers-and-models.md`](./features/providers-and-models)
+- [`features/personalization.md`](./features/personalization)
+- [`features/server-moderation.md`](./features/server-moderation)
+- [`features/behavior-tweaking.md`](./features/behavior-tweaking)
+- [`features/data-handling.md`](./features/data-handling)
+- [`features/stats-and-insights.md`](./features/stats-and-insights)
+- [`features/matrix-bridge.md`](./features/matrix-bridge)
+- [`features/command-reference.md`](./features/command-reference) — generated from command locales (Phase 3)
+- [`features/sillytavern-support.md`](./features/sillytavern-support)
 
-## Subsystems
+## Self-Hosting (order 3)
 
-Supporting services that pipelines depend on. Not pipelines themselves — these expose surfaces
-rather than sequenced stages.
+Running your own instance — core install plus every optional module. You don't need the
+source open to follow these.
 
-- [`subsystems/README.md`](./subsystems/) — subsystem docs overview
-- [`subsystems/database-schema.md`](./subsystems/database-schema)
-- [`subsystems/event-system.md`](./subsystems/event-system)
-- [`subsystems/command-system.md`](./subsystems/command-system)
-- [`subsystems/tool-system.md`](./subsystems/tool-system)
-- [`subsystems/status-command.md`](./subsystems/status-command)
-- [`subsystems/prompt-snapshot.md`](./subsystems/prompt-snapshot)
-- [`subsystems/utils.md`](./subsystems/utils)
-- [`subsystems/localization.md`](./subsystems/localization)
-- [`subsystems/security.md`](./subsystems/security)
-- [`subsystems/caching.md`](./subsystems/caching)
-- [`subsystems/cooldowns.md`](./subsystems/cooldowns)
-- [`subsystems/video-generation.md`](./subsystems/video-generation)
-- [`subsystems/stats-infographic.md`](./subsystems/stats-infographic) — `/stats generate` PNG card pipeline (satori→resvg, gather/render split, Donut/Podium primitives, env config)
-- [`subsystems/thinking-level.md`](./subsystems/thinking-level)
-- [`subsystems/logit-bias.md`](./subsystems/logit-bias)
-- [`subsystems/strict-chat-completion.md`](./subsystems/strict-chat-completion) — role-alternation / prefix-completion toggles + always-on media relocation
-- [`subsystems/multi-persona.md`](./subsystems/multi-persona) — _(will migrate to `pipelines/webhook-persona/` when that pipeline is walked)_
-- [`subsystems/persona-presets.md`](./subsystems/persona-presets) — _(will migrate to `pipelines/webhook-persona/` when that pipeline is walked)_
+- [`self-hosting/README.md`](./self-hosting/) — requirements + module directory
+- [`self-hosting/setup-wizard.md`](./self-hosting/setup-wizard) — guided `bun run setup`
+- [`self-hosting/manual-setup.md`](./self-hosting/manual-setup) — manual procedure for technical users
+- [`self-hosting/local-endpoints.md`](./self-hosting/local-endpoints) — self-hosted endpoints hub
+- [`self-hosting/setup-local-llm.md`](./self-hosting/setup-local-llm)
+- [`self-hosting/setup-comfyui.md`](./self-hosting/setup-comfyui)
+- [`self-hosting/setup-searxng.md`](./self-hosting/setup-searxng)
+- [`self-hosting/setup-crawl4ai.md`](./self-hosting/setup-crawl4ai)
+- [`self-hosting/setup-chatmock.md`](./self-hosting/setup-chatmock)
+- [`self-hosting/setup-local-mcp.md`](./self-hosting/setup-local-mcp)
+- [`self-hosting/text-to-speech/`](./self-hosting/text-to-speech/) — local TTS engines
+- [`self-hosting/speech-to-text/`](./self-hosting/speech-to-text/) — local STT engines
+- [`self-hosting/safe-migration.md`](./self-hosting/safe-migration)
+- [`self-hosting/local-monitoring.md`](./self-hosting/local-monitoring)
+- [`self-hosting/local-grafana-setup.md`](./self-hosting/local-grafana-setup)
 
-## Integrations
-
-- [`integrations/README.md`](./integrations/) — integration docs overview
-- Matrix:
-  - [`integrations/matrix/bridge.md`](./integrations/matrix/bridge)
-- Discord platform capabilities:
-  - [`integrations/discord/message-components-v2.md`](./integrations/discord/message-components-v2)
-  - [`integrations/discord/modal-input-components.md`](./integrations/discord/modal-input-components)
-- SillyTavern:
-  - [`integrations/sillytavern/card-support.md`](./integrations/sillytavern/card-support)
-  - [`integrations/sillytavern/preset-system.md`](./integrations/sillytavern/preset-system)
-- NovelAI:
-  - [`integrations/novelai/tool-calling.md`](./integrations/novelai/tool-calling)
-  - [`integrations/novelai/limitations.md`](./integrations/novelai/limitations)
-  - [`integrations/novelai/inpainting.md`](./integrations/novelai/inpainting)
-- Voice (all audio I/O):
-  - [`integrations/voice/README.md`](./integrations/voice/README)
-  - [`integrations/voice/tts/`](./integrations/voice/tts/)
-  - [`integrations/voice/stt/`](./integrations/voice/stt/)
-
-## Contributor Guides
+## Contributing (order 4)
 
 Code-contribution guides — for extending or modifying the bot with the source open.
-Start at [`contributor-guides/development-tasks.md`](./contributor-guides/development-tasks)
-for the task index and coding conventions, and
-[`contributor-guides/getting-started.md`](./contributor-guides/getting-started) for local dev setup.
+Start at [`contributing/development-tasks.md`](./contributing/development-tasks) for the
+task index and coding conventions, and
+[`contributing/getting-started.md`](./contributing/getting-started) for local dev setup.
 
 Per-task guides:
 
-- [`contributor-guides/adding-slash-command.md`](./contributor-guides/adding-slash-command)
-- [`contributor-guides/adding-event-handler.md`](./contributor-guides/adding-event-handler)
-- [`contributor-guides/adding-builtin-tool.md`](./contributor-guides/adding-builtin-tool)
-- [`contributor-guides/adding-feature-flag-tool.md`](./contributor-guides/adding-feature-flag-tool)
-- [`contributor-guides/adding-setup-module.md`](./contributor-guides/adding-setup-module)
-- [`contributor-guides/adding-db-column.md`](./contributor-guides/adding-db-column)
-- [`contributor-guides/adding-new-provider.md`](./contributor-guides/adding-new-provider)
-- [`contributor-guides/adding-locale.md`](./contributor-guides/adding-locale)
-- [`contributor-guides/adding-persona-preset.md`](./contributor-guides/adding-persona-preset)
-- [`contributor-guides/raw-sql-boundary.md`](./contributor-guides/raw-sql-boundary) — keeping raw SQL in the repository layer (enforced by `bun run audit-sql` + a unit test)
-- [`contributor-guides/docs-authoring.md`](./contributor-guides/docs-authoring) — docs routes, frontmatter, sidebar, cards, and asset conventions
+- [`contributing/adding-slash-command.md`](./contributing/adding-slash-command)
+- [`contributing/adding-event-handler.md`](./contributing/adding-event-handler)
+- [`contributing/adding-builtin-tool.md`](./contributing/adding-builtin-tool)
+- [`contributing/adding-feature-flag-tool.md`](./contributing/adding-feature-flag-tool)
+- [`contributing/adding-setup-module.md`](./contributing/adding-setup-module)
+- [`contributing/adding-db-column.md`](./contributing/adding-db-column)
+- [`contributing/adding-new-provider.md`](./contributing/adding-new-provider)
+- [`contributing/adding-locale.md`](./contributing/adding-locale)
+- [`contributing/adding-persona-preset.md`](./contributing/adding-persona-preset)
+- [`contributing/raw-sql-boundary.md`](./contributing/raw-sql-boundary) — keeping raw SQL in the repository layer
+- [`contributing/docs-authoring.md`](./contributing/docs-authoring) — docs routes, frontmatter, sidebar, cards, and asset conventions
 
 Testing your changes:
 
-- [`contributor-guides/testing-db-changes.md`](./contributor-guides/testing-db-changes)
-- [`contributor-guides/testing-chat-changes.md`](./contributor-guides/testing-chat-changes)
+- [`contributing/testing-db-changes.md`](./contributing/testing-db-changes)
+- [`contributing/testing-chat-changes.md`](./contributing/testing-chat-changes)
 
-## User Guides
+## Architecture (order 5)
 
-Self-hosting and operation guides — for running your own instance, no source required.
+Code-level reference for deep-divers and plugin authors.
 
-- [`user-guides/setup-searxng.md`](./user-guides/setup-searxng)
-- [`user-guides/setup-crawl4ai.md`](./user-guides/setup-crawl4ai)
-- [`user-guides/setup-chatmock.md`](./user-guides/setup-chatmock)
-- [`user-guides/setup-wizard.md`](./user-guides/setup-wizard)
-- [`user-guides/local-monitoring.md`](./user-guides/local-monitoring)
-- [`user-guides/local-grafana-setup.md`](./user-guides/local-grafana-setup)
-- [`user-guides/safe-migration.md`](./user-guides/safe-migration)
+- [`architecture/README.md`](./architecture/) — code-level overview
+- [`architecture/entry-point.md`](./architecture/entry-point) — startup and initialization flow
 
-## Wiki
+### Pipelines
 
-- [`wiki/refactor-record.md`](./wiki/refactor-record) — Historical record of the plugin-architecture-prerequisite refactor (Phases 1–5.5e): module restructuring, behavioral verification, DB layer reorganization, and cache invalidation ownership.
+Per-stage reference. Each folder has a `README.md` (overview + ASCII flow) and numbered stage files.
+
+- [`architecture/pipelines/chat/`](./architecture/pipelines/chat/) — message ingress → per-turn execution
+- [`architecture/pipelines/context-build/`](./architecture/pipelines/context-build/) — preset routing + native context assembly
+- [`architecture/pipelines/tool-loop/`](./architecture/pipelines/tool-loop/) — tool-call dispatch loop
+- [`architecture/pipelines/provider/`](./architecture/pipelines/provider/) — stream adapter → chunk normalization → Discord delivery
+- [`architecture/pipelines/memory/`](./architecture/pipelines/memory/) — STM passive capture + LTM create/update/delete
+
+### Subsystems
+
+Supporting services that pipelines depend on.
+
+- [`architecture/subsystems/`](./architecture/subsystems/) — database schema, events, commands, tools,
+  caching, cooldowns, security, localization, multi-persona, persona-presets, and more
+
+### Integrations
+
+- [`architecture/integrations/`](./architecture/integrations/) — Discord platform, Matrix bridge,
+  NovelAI, SillyTavern, and voice pipeline internals
+
+## Wiki (hidden)
+
+Reachable only via in-page links — not shown in the sidebar.
+
+- [`wiki/refactor-record.md`](./wiki/refactor-record) — historical plugin-architecture-prerequisite refactor record
+- [`wiki/threat-models.md`](./wiki/threat-models) — security threat models

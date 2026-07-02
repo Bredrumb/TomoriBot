@@ -188,7 +188,7 @@ Once you see `TomoriBot up and running!`, run `/config setup` in Discord.
 - The wizard can use a local PostgreSQL superuser flow for self-hosted/dev installs. Do not use a superuser app role on shared production databases.
 - PostgreSQL schema, `pgcrypto`, seeds, and migrations initialize automatically on first bot start.
 - Optional features such as pgvector, tokenizers, MCP Fetch, SearXNG, Crawl4AI, local voice servers, Grafana, and Matrix are available from the wizard's grouped menu.
-- Full wizard behavior and manual fallback details are in [the setup wizard guide](docs/user-guides/setup-wizard.md).
+- Full wizard behavior and manual fallback details are in [the setup wizard guide](docs/self-hosting/setup-wizard.md).
 
 ## Optional Sidecars
 
@@ -209,7 +209,7 @@ bun run launch --help
 
 Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`, `--help`
 
-Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused on subsequent runs, no manual `docker run` needed. Python TTS/STT sidecars require their venv to be set up once beforehand; see the individual setup guides in `docs/integrations/voice/`.
+Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused on subsequent runs, no manual `docker run` needed. Python TTS/STT sidecars require their venv to be set up once beforehand; see the individual setup guides in `docs/self-hosting/text-to-speech/` and `docs/self-hosting/speech-to-text/`.
 
 **Hot reload** applies only to the bot (`src/`). Sidecar servers are unaffected by file changes and stay running until you stop them manually.
 
@@ -308,9 +308,9 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 See the guides below for full setup details:
 
-- **[SearXNG Web Search Sidecar](https://docs.tomoribot.app/user-guides/setup-searxng/)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
-- **[Crawl4AI Sidecar](https://docs.tomoribot.app/user-guides/setup-crawl4ai/)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
-- **[Local Grafana Monitoring](https://docs.tomoribot.app/user-guides/local-monitoring/)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
+- **[SearXNG Web Search Sidecar](https://docs.tomoribot.app/self-hosting/setup-searxng/)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
+- **[Crawl4AI Sidecar](https://docs.tomoribot.app/self-hosting/setup-crawl4ai/)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[Local Grafana Monitoring](https://docs.tomoribot.app/self-hosting/local-monitoring/)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
 
 > **Using `bun run dev` instead of Docker Compose?** Use `bun run launch --searxng --crawl4ai` — it handles the Docker container lifecycle for you automatically. See the [Optional Sidecars](#optional-sidecars) section above.
 

@@ -67,10 +67,10 @@ Guild MCP replacements still work: if an enabled guild MCP server is registered 
 
 [Crawl4AI](https://docs.crawl4ai.com/) is an optional browser-rendered markdown sidecar used only behind `fetch_url`. When `CRAWL4AI_BASE_URL` is set and the health probe passes, it runs before `mcp_fetch` in the engine chain. If unset or unavailable, `fetch_url` falls back to `mcp_fetch` transparently.
 
-See **[Setup: Crawl4AI Sidecar](../user-guides/setup-crawl4ai.md)** for deployment, cookie injection, and `FETCH_URL_ENGINE_ORDER` configuration.
+See **[Setup: Crawl4AI Sidecar](../self-hosting/setup-crawl4ai)** for deployment, cookie injection, and `FETCH_URL_ENGINE_ORDER` configuration.
 
 #### SearXNG sidecar (optional self-hosted engine)
 
 [SearXNG](https://docs.searxng.org/) is a privacy-respecting metasearch aggregator that sidesteps single-engine rate limits and unlocks SearXNG-only search categories: `science`, `it`, `files`, and `music`. It sits between Brave and DDG/Felo in the engine chain. If unset or unavailable, the chain reduces to `Brave → DDG → Felo`.
 
-See **[Setup: SearXNG Web Search Sidecar](../user-guides/setup-searxng.md)** for deployment, image result tuning, and AWS/GCP configuration.
+See **[Setup: SearXNG Web Search Sidecar](../self-hosting/setup-searxng)** for deployment, image result tuning, and AWS/GCP configuration.

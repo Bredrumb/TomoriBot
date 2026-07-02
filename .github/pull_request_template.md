@@ -10,7 +10,7 @@ Closes # <!-- Replace # with issue number, or remove this line if not applicable
 
 ## Quality Gates
 - [ ] `bun run vl` output shows no critical failures
-- [ ] (If adding or modifying a Discord Command) Followed command patterns and conventions in [`docs/subsystems/command-system.md`](../docs/subsystems/command-system.md) 
+- [ ] (If adding or modifying a Discord Command) Followed command patterns and conventions in [`docs/architecture/subsystems/command-system.md`](../docs/architecture/subsystems/command-system.md) 
 - [ ] No hardcoded operational limits/timeouts (use env vars, document in `.env.optional.example`)
 
 ## Testing
