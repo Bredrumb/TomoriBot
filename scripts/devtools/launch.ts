@@ -3,13 +3,14 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "dotenv";
 import pc from "picocolors";
+import { resolvePythonExe } from "../lib/pyenv";
 
 config();
 
 // ---------------------------------------------------------------------------
 // scripts/devtools/launch.ts
 //
-//   bun launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts]
+//   bun run launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts]
 //
 //   Starts requested sidecar services, waits for them to be ready, then
 //   launches the bot in watch mode (equivalent to `bun run dev`).
@@ -22,10 +23,6 @@ config();
 // ---------------------------------------------------------------------------
 
 const ROOT = process.cwd();
-const IS_WINDOWS = process.platform === "win32";
-/** Python executable name inside a venv's Scripts/ (Windows) or bin/ (POSIX). */
-const VENV_BIN_DIR = IS_WINDOWS ? "Scripts" : "bin";
-const VENV_PYTHON = IS_WINDOWS ? "python.exe" : "python3";
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -36,10 +33,10 @@ const flags = new Set(argv.filter((a) => a.startsWith("--")).map((a) => a.slice(
 
 if (flags.has("help") || flags.has("h")) {
   console.log(`
-${pc.bold("bun launch")} — start sidecars + TomoriBot in watch mode
+${pc.bold("bun run launch")} — start sidecars + TomoriBot in watch mode
 
 ${pc.bold("Usage:")}
-  bun launch [options]
+  bun run launch [options]
 
 ${pc.bold("Options:")}
   --searxng     Start the SearXNG metasearch Docker container (port 8080 by default)
@@ -51,9 +48,9 @@ ${pc.bold("Options:")}
   --help        Show this message
 
 ${pc.bold("Examples:")}
-  bun launch
-  bun launch --searxng --crawl4ai
-  bun launch --qwen3tts --searxng
+  bun run launch
+  bun run launch --searxng --crawl4ai
+  bun run launch --qwen3tts --searxng
 `);
   process.exit(0);
 }
@@ -277,13 +274,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
 // ---------------------------------------------------------------------------
 // Python helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Resolves the absolute path to the Python interpreter inside a venv.
- */
-function resolvePythonExe(venvRelPath: string): string {
-  return join(ROOT, venvRelPath, VENV_BIN_DIR, VENV_PYTHON);
-}
 
 /**
  * Spawns a Python sidecar server from its pre-built venv and waits

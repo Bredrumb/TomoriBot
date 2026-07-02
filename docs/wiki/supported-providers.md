@@ -52,8 +52,8 @@ For URL reading, the LLM sees `fetch_url(url, max_length?, start_index?, raw?)`.
 | Engine | Categories | Integration | Notes |
 |----------|-------------|-----|-------|
 | **Brave Search** | text / image / video / news | REST API | First in chain when a Brave API key is configured. ⚠️ Set a $5 usage limit in the Brave dashboard to avoid surprise charges. |
-| **SearXNG** | text / image / video / news / science / it / files / music | REST API (self-hosted sidecar) | Self-hosted aggregator that proxies Google, Bing, DDG, Brave, Wikipedia, etc. See `servers/searxng/README.md` or simply run `bun launch --searxng`. |
+| **SearXNG** | text / image / video / news / science / it / files / music | REST API (self-hosted sidecar) | Self-hosted aggregator that proxies Google, Bing, DDG, Brave, Wikipedia, etc. See `servers/searxng/README.md` or simply run `bun run launch --searxng`. |
 | **DuckDuckGo** | text only | MCP server | Default Web Search. Fallback when Brave/SearXNG are unavailable; transparently cascades to Felo on rate limits. |
 | **Felo AI Search** | text only | MCP server | Final-resort text fallback. |
-| **Crawl4AI** | URL fetch | REST API (self-hosted sidecar) |Browser-renders pages and returns markdown via `/md`; falls back to `mcp_fetch` when unavailable. See `servers/crawl4ai/README.md` or simply run `bun launch --searxng` |
+| **Crawl4AI** | URL fetch | REST API (self-hosted sidecar) |Browser-renders pages and returns markdown via `/md`; falls back to `mcp_fetch` when unavailable. See `servers/crawl4ai/README.md` or simply run `bun run launch --crawl4ai` |
 | **MCP Fetch** | URL fetch | Bundled MCP server | Default URL fetch. Mandatory final `fetch_url` fallback and default behavior when no browser sidecar is configured or healthy. |

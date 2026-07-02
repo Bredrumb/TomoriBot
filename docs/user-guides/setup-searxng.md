@@ -21,10 +21,10 @@ If using production, set `SEARXNG_SECRET` in `.env` to any 32+ char string (it's
 ### 2. Standalone Docker (when running `bun run dev`)
 First, set `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` so the bot knows where to connect.
 
-Then, instead of running TomoriBot directly with `bun run dev`, use `bun launch --searxng`. This handles the container lifecycle automatically and waits for the container to be healthy before starting the bot:
+Then, instead of running TomoriBot directly with `bun run dev`, use `bun run launch --searxng`. This handles the container lifecycle automatically and waits for the container to be healthy before starting the bot:
 
 ```sh
-bun launch --searxng
+bun run launch --searxng
 ```
 
 If you prefer to manage the container yourself, keep `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` and run:

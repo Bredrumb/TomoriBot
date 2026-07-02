@@ -8,6 +8,10 @@ sidebar:
 Guides for **self-hosting and operating** TomoriBot. These are for running your own
 instance — you don't need the source code open to follow them.
 
+## Setup
+
+- [`setup-wizard.md`](./setup-wizard) — interactive `bun run setup` wizard for self-host installs
+
 ## Optional Sidecars
 
 - [`setup-searxng.md`](./setup-searxng) — self-hosted SearXNG metasearch for the `web_search` tool

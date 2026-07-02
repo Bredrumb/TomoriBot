@@ -161,132 +161,7 @@ If they keep talking 10 minutes later, use {manage_message_tool} to delete their
 <!-- GETTING STARTED -->
 # Self-Hosting
 
-This guide will help you set up TomoriBot locally for development or personal use.
-
-## Prerequisites
-
-Before running TomoriBot, ensure you have the following installed:
-
-* **Node.js v20+** - Required for MCP servers (DuckDuckGo search requires the File API from Node 20+)
-  ```sh
-  # Check your current version
-  node --version
-
-  # If below v20, upgrade via:
-  # Ubuntu/Debian
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-  sudo apt-get install -y nodejs
-
-  # macOS (using Homebrew)
-  brew install node@20
-
-  # Windows (using Chocolatey)
-  choco install nodejs-lts
-  ```
-
-* **Bun** - JavaScript runtime and package manager
-  ```sh
-  # Windows (PowerShell)
-  powershell -c "irm bun.sh/install.ps1 | iex"
-
-  # macOS/Linux
-  curl -fsSL https://bun.sh/install | bash
-  ```
-* **PostgreSQL** - Database server
-  ```sh
-  # Windows (using Chocolatey)
-  choco install postgresql
-
-  # macOS (using Homebrew)
-  brew install postgresql
-
-  # Linux (Ubuntu/Debian)
-  sudo apt-get install postgresql postgresql-contrib
-  ```
-  - After installing PostgreSQL, login:
-  ```sh
-  # Linux
-   sudo -u postgres psql
-
-   # macOS (Homebrew)
-   psql postgres
-
-   # Windows
-   # Use "SQL Shell (psql)" from Start Menu or:
-   psql -U postgres
-  ```
-  - Create the required database and user for TomoriBot. Replace `your_` variables with your own and take note of them:
-  ```sql
-  CREATE USER your_username WITH PASSWORD 'your_password' SUPERUSER;
-  CREATE DATABASE your_dbname OWNER your_username;
-  \q
-  ```
-
-  **Note:** The database schema (including required extensions like `pgcrypto`) is automatically initialized when you first run TomoriBot.
-
-### Optional Prerequisites
-  #### 1. **pgvector (Optional but recommended for RAG/document memory):**
-  - If you want RAG features locally, install [pgvector](https://github.com/pgvector/pgvector) then run:
-  ```sql
-  CREATE EXTENSION vector;
-  ```
-  - This is needed for RAG on all setups to create vectorized data on your database
-
-  #### 2. **Python3** (Optional but recommended) - Required for URL Fetching MCP server tool
-  ```sh
-  # Windows (using Chocolatey)
-  choco install python
-
-  # macOS (using Homebrew)
-  brew install python
-
-  # Linux (Ubuntu/Debian) - Usually pre-installed
-  sudo apt-get install python3 python3-pip
-  ```
-  - Install MCP server packages:
-  ```sh
-  # Install URL fetcher for web content analysis
-  pip install mcp-server-fetch
-
-  # Linux users: If you get an "externally-managed-environment" error, use:
-  pip install --break-system-packages mcp-server-fetch
-  # OR create a virtual environment
-  ```
-  #### 3. **pg_cron (Optional for periodic cleanup jobs):**
-  - Use this only for optional database maintenance jobs such as cooldown/reminder cleanup. Reminder delivery and random triggers run in the app, not in `pg_cron`.
-  - If you use Docker Compose from this repo, `pg_cron` is already configured.
-  - To find the active PostgreSQL config file path for `postgresql.conf`, run:
-  ```sql
-  SHOW config_file;
-  ```
-  - If you use your own PostgreSQL server, enable it in `postgresql.conf`:
-  ```conf
-  shared_preload_libraries = 'pg_cron'
-  cron.database_name = 'your_dbname'
-  ```
-  - If `shared_preload_libraries` already has other values, append `pg_cron` instead of replacing them, for example:
-  ```conf
-  shared_preload_libraries = 'pg_stat_statements,pg_cron'
-  ```
-  - Restart PostgreSQL, then run:
-  ```sql
-  CREATE EXTENSION IF NOT EXISTS pg_cron;
-  ```
-#### 4. **Tokenizer assets** (Optional, for logit bias) - Required for model-aware logit bias (emoji/word repetition penalties)
-  ```sh
-  bun run setup:tokenizers
-  ```
-  - Some families (e.g. Gemma) are gated and require a [HuggingFace access token](https://huggingface.co/settings/tokens) after accepting their license. If prompted, re-run with:
-  ```sh
-  # Windows (PowerShell)
-  $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
-
-  # macOS/Linux
-  HF_TOKEN=hf_xxx bun run setup:tokenizers
-  ```
-  - Without this step, logit bias is silently disabled, but everything else still works normally.
-
-## Installation
+The recommended path is the setup wizard. It creates `.env`, generates a safe `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, runs `bun install`, and offers optional setup modules.
 
 1. **Clone the repository**
    ```sh
@@ -294,82 +169,42 @@ Before running TomoriBot, ensure you have the following installed:
    cd TomoriBot
    ```
 
-2. **Install dependencies**
+2. **Run the setup wizard**
    ```sh
-   bun install
+   bun run setup
    ```
 
-## Configuration
-
-**Create your local environment file** by copying `.env.example` to `.env`, then fill in the required values:
+3. **Start TomoriBot**
 
 ```sh
-cp .env.example .env
-```
-
-Your `.env` should contain the following values
-
-```
-# Discord Bot Configuration (Required)
-DISCORD_TOKEN=your_discord_bot_token_here
-# Make sure your Discord bot has the following Privileged Gateway Intents:
-# GuildMembers, MessageContent, GuildPresences
-
-# Security (Required)
-CRYPTO_SECRET=your_32_character_crypto_secret_here
-
-# Database Configuration (Required)
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=your_username
-POSTGRES_PASSWORD=your_password
-POSTGRES_DB=tomodb
-```
-
-**Required Variables:**
-- **DISCORD_TOKEN**: Your Discord bot authentication token from the [Discord Developer Portal](https://discord.com/developers/applications)
-- **CRYPTO_SECRET**: A 32-character secret key for encrypting API keys stored in the database
-- **POSTGRES_HOST**: PostgreSQL server hostname (default: `localhost`)
-- **POSTGRES_PORT**: PostgreSQL server port (default: `5432`)
-- **POSTGRES_USER**: PostgreSQL database username
-- **POSTGRES_PASSWORD**: PostgreSQL database password
-- **POSTGRES_DB**: PostgreSQL database name
-
-If you want to tune optional limits, integrations, or provider-specific settings, copy the entries you need from `.env.optional.example` into your real `.env`.
-
-## Running TomoriBot
-
-Once you've completed the configuration, start the bot:
-
-```sh
-# Development mode with hot reload
 bun run dev
 ```
 
-The bot will automatically:
-- Initialize the database schema and required extensions
-- Load localization files
-- Connect to Discord
-- Register slash commands
+Once you see `TomoriBot up and running!`, run `/config setup` in Discord.
 
-Once you see `TomoriBot up and running!`, without errors in your logs, the bot is online and ready to use.
+## Setup Notes
 
-### Optional Sidecars (`bun launch`)
+- Required local prerequisites: [Bun](https://bun.sh/), Node.js v20+ for MCP tooling, and either PostgreSQL or Docker.
+- The wizard can use a local PostgreSQL superuser flow for self-hosted/dev installs. Do not use a superuser app role on shared production databases.
+- PostgreSQL schema, `pgcrypto`, seeds, and migrations initialize automatically on first bot start.
+- Optional features such as pgvector, tokenizers, MCP Fetch, SearXNG, Crawl4AI, local voice servers, Grafana, and Matrix are available from the wizard's grouped menu.
+- Full wizard behavior and manual fallback details are in [the setup wizard guide](docs/user-guides/setup-wizard.md).
 
-If you want to run optional sidecar services alongside the bot such as SearXNG for web search, Crawl4AI for browser-rendered page fetches, or a local TTS server, use `bun launch` instead of `bun run dev`. It starts the requested sidecars, waits for them to be ready, then launches the bot in watch mode automatically:
+## Optional Sidecars
+
+If you want to run optional sidecar services alongside the bot such as SearXNG for web search, Crawl4AI for browser-rendered page fetches, or a local TTS/STT server, use `bun run launch` instead of `bun run dev`:
 
 ```sh
-# Bot only: identical to bun run dev
-bun launch
+bun run launch
 
 # With SearXNG and Crawl4AI Docker sidecars
-bun launch --searxng --crawl4ai
+bun run launch --searxng --crawl4ai
 
-# With a local TTS server (venv must be set up first, see docs/integrations/voice/tts/)
-bun launch --qwen3tts
+# With a local TTS server after its setup module has created the venv
+bun run launch --qwen3tts
 
 # See all available flags
-bun launch --help
+bun run launch --help
 ```
 
 Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`, `--help`
@@ -401,6 +236,8 @@ Or slide into TomoriBot's DMs and say hi!
 
 | Command | Description |
 |---|---|
+| `bun run setup` | Opens the setup wizard for Base Install and optional modules |
+| `bun run update` | Stops before code changes if backup fails, then pulls latest code and installs dependencies |
 | `bun run backup` | Creates a bundle in `backups/` with your DB dump and `.env`, contains all of your data |
 | `bun run restore-backup` | Restores `.env` and database from a bundle, use the `--latest` or `--from backups/<bundle-dir>` flags |
 | `bun run backup:personas` | Export ONLY personas (with server memories) across all servers to `backups/`. **Must be re-imported manually via `/persona import`, cannot be used with `restore-backup` (avoids primary key conflicts)** |
@@ -408,33 +245,29 @@ Or slide into TomoriBot's DMs and say hi!
 | `bun run purge-commands` | Clear all registered Discord slash commands |
 | `bun run rotate-keys` | Migrate all encrypted fields to the current key version |
 
-`bun run backup` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH.
+`bun run backup` and `bun run update` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH.
 
 ## Updating TomoriBot
 
-### **Always back up before pulling a new version.**
+Stop your running bot process first, then use the backup-first updater:
+
+```sh
+bun run update
+```
+
+`bun run update` runs `bun run backup` first, then `git pull --rebase --autostash`, then `bun install`. The backup bundle is saved to `backups/` and includes both the database dump and `.env`.
+
+Manual fallback:
 ```sh
 bun run backup
-```
-The bundle is saved to `backups/` and includes both the database dump and your `.env`.
-To restore: `bun run restore-backup --latest` or `--from backups/<bundle-dir>`
-**Note:** If `bun run backup` fails with "Script not found", run `git pull --rebase --autostash` first without running the bot after, it only updates code files and does not touch your database, so it is safe to do before backing up.
-
-**Manual (non-Docker) update:**
-```sh
-# Stop your running bot process first (Ctrl+C / service stop / pm2 stop / etc.)
-git pull --rebase --autostash  # Avoids merge commits and handles dirty working trees automatically
+git pull --rebase --autostash
 bun install
-
-# If you run from dist/ (bun run start), rebuild:
-bun run build
 ```
 
-**Docker Compose update:**
+If you run from `dist/`, use `bun run update --build`. If you run Docker Compose:
+
 ```sh
-git pull --rebase --autostash  # Avoids merge commits and handles dirty working trees automatically
-docker compose build
-docker compose up -d
+bun run update --docker
 ```
 
 ## Alternative: Docker Compose
@@ -479,7 +312,7 @@ See the guides below for full setup details:
 - **[Crawl4AI Sidecar](https://docs.tomoribot.app/user-guides/setup-crawl4ai/)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
 - **[Local Grafana Monitoring](https://docs.tomoribot.app/user-guides/local-monitoring/)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
 
-> **Using `bun run dev` instead of Docker Compose?** Use `bun launch --searxng --crawl4ai` — it handles the Docker container lifecycle for you automatically. See the [Optional Sidecars](#optional-sidecars-bun-launch) section above.
+> **Using `bun run dev` instead of Docker Compose?** Use `bun run launch --searxng --crawl4ai` — it handles the Docker container lifecycle for you automatically. See the [Optional Sidecars](#optional-sidecars) section above.
 
 <!-- ROADMAP -->
 ## Roadmap
@@ -500,7 +333,7 @@ See the guides below for full setup details:
 - [ ] Replace AI-generated placeholder assets
 
 - [ ] Web dashboard for configuration
-- [ ] Create "easy install" file for non-technical users wishing to host their own TomoriBot
+- [x] Create "easy install" file for non-technical users wishing to host their own TomoriBot
 
 See the [open issues](https://github.com/Bredrumb/TomoriBot/issues) for a full list of proposed features and known issues.
 

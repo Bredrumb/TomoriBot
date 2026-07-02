@@ -61,22 +61,22 @@ TomoriBot can route her built-in web tools through your own self-hosted infrastr
 | **SearXNG** | `web_search` | Privacy-respecting metasearch engine proxy to avoid rate limits | [Setup Guide](../user-guides/setup-searxng.md) |
 | **Crawl4AI** | `fetch_url` | Browser-rendered markdown extraction for JS-heavy sites | [Setup Guide](../user-guides/setup-crawl4ai.md) |
 
-### Starting Sidecars with `bun launch`
+### Starting Sidecars with `bun run launch`
 
-Instead of starting sidecar services manually, use `bun launch` which starts the requested sidecars, waits for them to be ready, then launches the bot in watch mode automatically:
+Instead of starting sidecar services manually, use `bun run launch` which starts the requested sidecars, waits for them to be ready, then launches the bot in watch mode automatically:
 
 ```sh
 # Bot only, identical to bun run dev
-bun launch
+bun run launch
 
 # With SearXNG and Crawl4AI Docker sidecars
-bun launch --searxng --crawl4ai
+bun run launch --searxng --crawl4ai
 
 # With a local TTS server (venv must be set up first — see docs/integrations/voice/tts/)
-bun launch --qwen3tts
+bun run launch --qwen3tts
 
 # See all available flags
-bun launch --help
+bun run launch --help
 ```
 
 Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`

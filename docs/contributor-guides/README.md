@@ -22,6 +22,7 @@ conventions, then jump to the guide for your task.
 - [`adding-event-handler.md`](./adding-event-handler)
 - [`adding-builtin-tool.md`](./adding-builtin-tool)
 - [`adding-feature-flag-tool.md`](./adding-feature-flag-tool)
+- [`adding-setup-module.md`](./adding-setup-module)
 - [`adding-db-column.md`](./adding-db-column)
 - [`adding-new-provider.md`](./adding-new-provider)
 - [`adding-locale.md`](./adding-locale)

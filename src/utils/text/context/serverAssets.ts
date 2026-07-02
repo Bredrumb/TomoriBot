@@ -103,7 +103,7 @@ export async function buildServerEmojiContextItem(params: {
   const emojiContent = `## ${params.serverName}'s Emojis\n- ${emojiLines.join("\n- ")}.`;
   const emojiUsage = params.isUserImpersonation
     ? `\nTo use ${params.serverName}'s emojis, write :name: (name only, no IDs). Names are case-insensitive.\n`
-    : `\nTo use ${params.serverName}'s emojis, just write :name: (name only, no IDs). Names are case-insensitive, and {bot} will expand them to the correct custom emoji. {bot} only uses server emojis when it matches their actual mood.\n`;
+    : `\nTo use ${params.serverName}'s emojis, just write :name: (name only, no IDs). Names are case-insensitive. {bot} only uses server emojis when it matches their actual mood.\n`;
 
   return {
     role: "system",
