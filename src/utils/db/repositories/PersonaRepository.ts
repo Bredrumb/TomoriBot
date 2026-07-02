@@ -80,6 +80,11 @@ export type PersonaTextgenConfigsRow = {
   nai_attg_stars: number | null;
 };
 
+type PersonaScopedConfigFields = Omit<PersonaContextNoteConfigsRow, "persona_id"> &
+  Omit<PersonaVoiceConfigsRow, "persona_id"> &
+  Omit<PersonaImagegenConfigsRow, "persona_id"> &
+  Omit<PersonaTextgenConfigsRow, "persona_id">;
+
 /** Per-persona config bundle (Stage A). */
 export type PersonaConfigBundle = {
   persona_id: number;
@@ -142,19 +147,6 @@ const TOMORI_POINTER_CONTENT_FIELDS = new Set<string>([
   "attribute_list",
   "sample_dialogues_in",
   "sample_dialogues_out",
-  "context_note",
-  "context_note_depth",
-  "physical_appearance_tags",
-  "nai_char_ref_url",
-  "nai_attg_author",
-  "nai_attg_title",
-  "nai_attg_tags",
-  "nai_attg_genre",
-  "nai_attg_stars",
-  "speech_voice_sample_id",
-  "speech_voice_id",
-  "speech_voice_name",
-  "speech_voice_design_prompt",
 ]);
 
 /** Fields where SQL NULL carries semantic meaning ("not configured") and must not be coerced to undefined. */
@@ -652,9 +644,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
-   * Set the context note (and depth) for a persona. Writes to both the new
-   * `persona_context_note_configs` table and the persona mirror columns
-   * (dual-write expand-then-contract pattern, mirrors fromExportShape).
+   * Set the context note (and depth) for a persona.
    *
    * @param personaId - Internal persona DB ID
    * @param contextNote - Note text, or null to clear
@@ -672,7 +662,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         context_note: contextNote,
         context_note_depth: contextNoteDepth,
       };
-      await Promise.all([this.sqlUpsertPersonaContextNoteConfigs(row), this.sqlDualWriteContextNoteToTomoris(row)]);
+      await this.sqlUpsertPersonaContextNoteConfigs(row);
       return true;
     } catch (e) {
       log.error(`Error setting context note for persona ${personaId}:`, e);
@@ -682,8 +672,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Set the NovelAI ATTG (Author/Title/Tags/Genre/Stars) metadata for a persona.
-   * Writes to both the new `persona_textgen_configs` table and the legacy
-   * `personas` columns (dual-write expand-then-contract pattern).
    *
    * @param personaId - Internal persona DB ID
    * @param attg     - ATTG fields; any subset may be null to clear that field
@@ -705,7 +693,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       }
 
       const row: PersonaTextgenConfigsRow = { persona_id: personaId, ...attg };
-      await Promise.all([this.sqlUpsertPersonaTextgenConfigs(row), this.sqlDualWriteTextgenToTomoris(row)]);
+      await this.sqlUpsertPersonaTextgenConfigs(row);
       return true;
     } catch (e) {
       log.error(`Error setting NAI ATTG for persona ${personaId}:`, e);
@@ -714,9 +702,29 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
+   * Replace the full voice assignment config for a persona.
+   *
+   * @param personaId - Internal persona DB ID
+   * @param voice - Complete voice config row excluding persona_id
+   */
+  async setVoiceConfig(personaId: number, voice: Omit<PersonaVoiceConfigsRow, "persona_id">): Promise<boolean> {
+    try {
+      const materialized = await this.materializeIfPointer(personaId);
+      if (!materialized) {
+        return false;
+      }
+
+      await this.sqlUpsertPersonaVoiceConfigs({ persona_id: personaId, ...voice });
+      return true;
+    } catch (e) {
+      log.error(`Error setting voice config for persona ${personaId}:`, e);
+      return false;
+    }
+  }
+
+  /**
    * Replace the persona's physical appearance image tags.
-   * Writes only `physical_appearance_tags` to both the split imagegen table
-   * and the `personas.physical_appearance_tags` mirror, preserving `nai_char_ref_url`.
+   * Writes only `physical_appearance_tags`, preserving `nai_char_ref_url`.
    *
    * @param personaId - Internal persona DB ID
    * @param tags - Full replacement tag array (use [] to clear)
@@ -728,20 +736,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         return false;
       }
 
-      await Promise.all([
-        sql`
-          INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags)
-          VALUES (${personaId}, ${sql.array(tags, "TEXT")})
-          ON CONFLICT (persona_id) DO UPDATE SET
-            physical_appearance_tags   = EXCLUDED.physical_appearance_tags,
-            updated_at = NOW()
-        `,
-        sql`
-          UPDATE personas
-          SET physical_appearance_tags = ${sql.array(tags, "TEXT")}, updated_at = NOW()
-          WHERE persona_id = ${personaId}
-        `,
-      ]);
+      await sql`
+        INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags)
+        VALUES (${personaId}, ${sql.array(tags, "TEXT")})
+        ON CONFLICT (persona_id) DO UPDATE SET
+          physical_appearance_tags = EXCLUDED.physical_appearance_tags,
+          updated_at = NOW()
+      `;
       return true;
     } catch (e) {
       log.error(`Error setting physical appearance tags for persona ${personaId}:`, e);
@@ -751,7 +752,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Replace the persona's NovelAI character reference image URL.
-   * Writes both the split imagegen config row and the legacy personas column.
    *
    * @param personaId - Internal persona DB ID
    * @param refUrl    - Stored reference URL/path, or null to clear
@@ -763,20 +763,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         return false;
       }
 
-      await Promise.all([
-        sql`
-          INSERT INTO persona_imagegen_configs (persona_id, nai_char_ref_url)
-          VALUES (${personaId}, ${refUrl})
-          ON CONFLICT (persona_id) DO UPDATE SET
-            nai_char_ref_url = EXCLUDED.nai_char_ref_url,
-            updated_at       = NOW()
-        `,
-        sql`
-          UPDATE personas
-          SET nai_char_ref_url = ${refUrl}, updated_at = NOW()
-          WHERE persona_id = ${personaId}
-        `,
-      ]);
+      await sql`
+        INSERT INTO persona_imagegen_configs (persona_id, nai_char_ref_url)
+        VALUES (${personaId}, ${refUrl})
+        ON CONFLICT (persona_id) DO UPDATE SET
+          nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+          updated_at = NOW()
+      `;
       return true;
     } catch (e) {
       log.error(`Error setting NAI character reference for persona ${personaId}:`, e);
@@ -1052,14 +1045,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           sample_dialogues_in,
           sample_dialogues_out,
           is_alter,
-          persona_lineage_id,
-          physical_appearance_tags,
-          nai_char_ref_url,
-          nai_attg_author,
-          nai_attg_title,
-          nai_attg_tags,
-          nai_attg_genre,
-          nai_attg_stars
+          persona_lineage_id
         )
         VALUES (
           ${params.serverId},
@@ -1068,26 +1054,50 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           ${sql.array(params.sampleDialoguesIn, "TEXT")},
           ${sql.array(params.sampleDialoguesOut, "TEXT")},
           true,
-          COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq')),
-          ${sql.array(params.physicalAppearanceTags ?? [], "TEXT")},
-          ${params.naiCharRefUrl ?? null},
-          ${params.naiAttgAuthor ?? null},
-          ${params.naiAttgTitle ?? null},
-          ${params.naiAttgTags ?? null},
-          ${params.naiAttgGenre ?? null},
-          ${params.naiAttgStars ?? null}
+          COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq'))
         )
         RETURNING *
       `;
       if (!insertedRow?.persona_id) {
         return null;
       }
+      const personaId = insertedRow.persona_id as number;
+
+      await tx`
+        INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags, nai_char_ref_url)
+        VALUES (${personaId}, ${sql.array(params.physicalAppearanceTags ?? [], "TEXT")}, ${params.naiCharRefUrl ?? null})
+        ON CONFLICT (persona_id) DO UPDATE SET
+          physical_appearance_tags = EXCLUDED.physical_appearance_tags,
+          nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+          updated_at = NOW()
+      `;
+
+      await tx`
+        INSERT INTO persona_textgen_configs (
+          persona_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
+        )
+        VALUES (
+          ${personaId},
+          ${params.naiAttgAuthor ?? null},
+          ${params.naiAttgTitle ?? null},
+          ${params.naiAttgTags ?? null},
+          ${params.naiAttgGenre ?? null},
+          ${params.naiAttgStars ?? null}
+        )
+        ON CONFLICT (persona_id) DO UPDATE SET
+          nai_attg_author = EXCLUDED.nai_attg_author,
+          nai_attg_title = EXCLUDED.nai_attg_title,
+          nai_attg_tags = EXCLUDED.nai_attg_tags,
+          nai_attg_genre = EXCLUDED.nai_attg_genre,
+          nai_attg_stars = EXCLUDED.nai_attg_stars,
+          updated_at = NOW()
+      `;
 
       const flags = normalizeAttributePublicFlags(params.attributes, params.attributePublicFlags);
       for (let index = 0; index < params.attributes.length; index++) {
         await tx`
           INSERT INTO persona_attributes (persona_id, attribute_order, attribute_text, is_public)
-          VALUES (${insertedRow.persona_id}, ${index + 1}, ${params.attributes[index]}, ${flags[index]})
+          VALUES (${personaId}, ${index + 1}, ${params.attributes[index]}, ${flags[index]})
         `;
       }
 
@@ -1617,7 +1627,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Restores persona config table rows for all personas in a server.
-   * Dual-writes: upserts into each config table AND back into personas.
    *
    * @param ownerId - Discord server snowflake
    * @param data    - Previously exported PersonaExportShape
@@ -1631,19 +1640,15 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
         if (bundle.context_note_configs) {
           ops.push(this.sqlUpsertPersonaContextNoteConfigs(bundle.context_note_configs));
-          ops.push(this.sqlDualWriteContextNoteToTomoris(bundle.context_note_configs));
         }
         if (bundle.voice_configs) {
           ops.push(this.sqlUpsertPersonaVoiceConfigs(bundle.voice_configs));
-          ops.push(this.sqlDualWriteVoiceToTomoris(bundle.voice_configs));
         }
         if (bundle.imagegen_configs) {
           ops.push(this.sqlUpsertPersonaImagegenConfigs(bundle.imagegen_configs));
-          ops.push(this.sqlDualWriteImagegenToTomoris(bundle.imagegen_configs));
         }
         if (bundle.textgen_configs) {
           ops.push(this.sqlUpsertPersonaTextgenConfigs(bundle.textgen_configs));
-          ops.push(this.sqlDualWriteTextgenToTomoris(bundle.textgen_configs));
         }
 
         await Promise.all(ops);
@@ -1794,54 +1799,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         nai_attg_genre  = EXCLUDED.nai_attg_genre,
         nai_attg_stars  = EXCLUDED.nai_attg_stars,
         updated_at      = NOW()
-    `;
-  }
-
-  // ── dual-write back to personas ─────────────────────────────────
-
-  private async sqlDualWriteContextNoteToTomoris(row: PersonaContextNoteConfigsRow): Promise<void> {
-    await sql`
-      UPDATE personas SET
-        context_note       = ${row.context_note},
-        context_note_depth = ${row.context_note_depth},
-        updated_at         = NOW()
-      WHERE persona_id = ${row.persona_id}
-    `;
-  }
-
-  private async sqlDualWriteVoiceToTomoris(row: PersonaVoiceConfigsRow): Promise<void> {
-    await sql`
-      UPDATE personas SET
-        speech_voice_sample_id    = ${row.speech_voice_sample_id},
-        speech_voice_id           = ${row.speech_voice_id},
-        speech_voice_name         = ${row.speech_voice_name},
-        speech_voice_design_prompt = ${row.speech_voice_design_prompt},
-        updated_at                = NOW()
-      WHERE persona_id = ${row.persona_id}
-    `;
-  }
-
-  private async sqlDualWriteImagegenToTomoris(row: PersonaImagegenConfigsRow): Promise<void> {
-    await sql`
-      UPDATE personas SET
-        physical_appearance_tags         = ${sql.array(row.physical_appearance_tags, "TEXT")},
-        nai_char_ref_url = ${row.nai_char_ref_url},
-        updated_at       = NOW()
-      WHERE persona_id = ${row.persona_id}
-    `;
-  }
-
-  private async sqlDualWriteTextgenToTomoris(row: PersonaTextgenConfigsRow): Promise<void> {
-    await sql`
-      UPDATE personas SET
-        nai_attg_author = ${row.nai_attg_author},
-        nai_attg_title  = ${row.nai_attg_title},
-        nai_attg_tags   = ${row.nai_attg_tags},
-        nai_attg_genre  = ${row.nai_attg_genre},
-        nai_attg_stars  = ${row.nai_attg_stars},
-        updated_at      = NOW()
-      WHERE persona_id = ${row.persona_id}
-    `;
+      `;
   }
 
   // ── private helpers: row normalization ────────────────────────────────────
@@ -2431,13 +2389,52 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   // ── private SQL: persona reads ────────────────────────────────────────────
 
+  private withPersonaSplitConfigFields(row: Record<string, unknown>): TomoriRow & PersonaScopedConfigFields {
+    return {
+      ...row,
+      context_note: (row.split_context_note as string | null | undefined) ?? null,
+      context_note_depth: (row.split_context_note_depth as number | null | undefined) ?? 0,
+      speech_voice_sample_id: (row.split_speech_voice_sample_id as number | null | undefined) ?? null,
+      speech_voice_id: (row.split_speech_voice_id as string | null | undefined) ?? null,
+      speech_voice_name: (row.split_speech_voice_name as string | null | undefined) ?? null,
+      speech_voice_design_prompt: (row.split_speech_voice_design_prompt as string | null | undefined) ?? null,
+      physical_appearance_tags: Array.isArray(row.split_physical_appearance_tags)
+        ? (row.split_physical_appearance_tags as string[])
+        : [],
+      nai_char_ref_url: (row.split_nai_char_ref_url as string | null | undefined) ?? null,
+      nai_attg_author: (row.split_nai_attg_author as string | null | undefined) ?? null,
+      nai_attg_title: (row.split_nai_attg_title as string | null | undefined) ?? null,
+      nai_attg_tags: (row.split_nai_attg_tags as string | null | undefined) ?? null,
+      nai_attg_genre: (row.split_nai_attg_genre as string | null | undefined) ?? null,
+      nai_attg_stars: (row.split_nai_attg_stars as number | null | undefined) ?? null,
+    } as TomoriRow & PersonaScopedConfigFields;
+  }
+
   private async loadTomoriState(serverDiscId: string): Promise<TomoriState | null> {
     try {
       // 1. Load main persona row using server Discord ID
       const tomoriRows = await sql`
-        SELECT t.*
+        SELECT
+          t.*,
+          pcnc.context_note AS split_context_note,
+          pcnc.context_note_depth AS split_context_note_depth,
+          pvc.speech_voice_sample_id AS split_speech_voice_sample_id,
+          pvc.speech_voice_id AS split_speech_voice_id,
+          pvc.speech_voice_name AS split_speech_voice_name,
+          pvc.speech_voice_design_prompt AS split_speech_voice_design_prompt,
+          pic.physical_appearance_tags AS split_physical_appearance_tags,
+          pic.nai_char_ref_url AS split_nai_char_ref_url,
+          ptc.nai_attg_author AS split_nai_attg_author,
+          ptc.nai_attg_title AS split_nai_attg_title,
+          ptc.nai_attg_tags AS split_nai_attg_tags,
+          ptc.nai_attg_genre AS split_nai_attg_genre,
+          ptc.nai_attg_stars AS split_nai_attg_stars
         FROM personas t
         JOIN servers s ON t.server_id = s.server_id
+        LEFT JOIN persona_context_note_configs pcnc ON pcnc.persona_id = t.persona_id
+        LEFT JOIN persona_voice_configs pvc ON pvc.persona_id = t.persona_id
+        LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = t.persona_id
+        LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = t.persona_id
         WHERE s.server_disc_id = ${serverDiscId}
         ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
         LIMIT 1
@@ -2447,7 +2444,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         log.warn(`No Tomori instance found for server ${serverDiscId}`);
         return null;
       }
-      const tomoriData = tomoriRows[0] as TomoriRow;
+      const tomoriData = this.withPersonaSplitConfigFields(tomoriRows[0] as Record<string, unknown>);
 
       // 2. Load associated config using server_id (server-scoped config)
       // biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
@@ -2710,9 +2707,27 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         try {
           // 1. Load all Tomori persona rows for this server (main first, then alters)
           const tomoriRows = await sql`
-            SELECT t.*
+            SELECT
+              t.*,
+              pcnc.context_note AS split_context_note,
+              pcnc.context_note_depth AS split_context_note_depth,
+              pvc.speech_voice_sample_id AS split_speech_voice_sample_id,
+              pvc.speech_voice_id AS split_speech_voice_id,
+              pvc.speech_voice_name AS split_speech_voice_name,
+              pvc.speech_voice_design_prompt AS split_speech_voice_design_prompt,
+              pic.physical_appearance_tags AS split_physical_appearance_tags,
+              pic.nai_char_ref_url AS split_nai_char_ref_url,
+              ptc.nai_attg_author AS split_nai_attg_author,
+              ptc.nai_attg_title AS split_nai_attg_title,
+              ptc.nai_attg_tags AS split_nai_attg_tags,
+              ptc.nai_attg_genre AS split_nai_attg_genre,
+              ptc.nai_attg_stars AS split_nai_attg_stars
             FROM personas t
             JOIN servers s ON t.server_id = s.server_id
+            LEFT JOIN persona_context_note_configs pcnc ON pcnc.persona_id = t.persona_id
+            LEFT JOIN persona_voice_configs pvc ON pvc.persona_id = t.persona_id
+            LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = t.persona_id
+            LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = t.persona_id
             WHERE s.server_disc_id = ${serverDiscId}
             ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
           `;
@@ -2722,7 +2737,9 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             return [];
           }
 
-          const typedTomoriRows = tomoriRows as TomoriRow[];
+          const typedTomoriRows: Array<TomoriRow & PersonaScopedConfigFields> = tomoriRows.map((row: unknown) =>
+            this.withPersonaSplitConfigFields(row as Record<string, unknown>),
+          );
           const serverId = typedTomoriRows[0].server_id;
           const pointerPresetsByPersonaId = await this.loadPointerPresetsForRows(typedTomoriRows);
 
@@ -2884,7 +2901,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
           // 8. Batch-load autochat runtime counters for all personas in this server.
           const personaIds: number[] = typedTomoriRows
-            .map((r) => r.persona_id)
+            .map((r: TomoriRow & PersonaScopedConfigFields) => r.persona_id)
             .filter((id): id is number => typeof id === "number");
           const personaAttributeRows =
             personaIds.length > 0

@@ -797,27 +797,31 @@ export class PresetRepository {
         typeof targetPersonaId === "number"
           ? await sql`
               SELECT
-                persona_id, persona_nickname, persona_lineage_id,
-                attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, is_pointer, preset_lineage_id, preset_language,
-                physical_appearance_tags, nai_char_ref_url,
-                nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-              FROM personas
-              WHERE server_id = ${serverId}
-                AND persona_id = ${targetPersonaId}
+                p.persona_id, p.persona_nickname, p.persona_lineage_id,
+                p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
+                p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language,
+                pic.physical_appearance_tags, pic.nai_char_ref_url,
+                ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
+              FROM personas p
+              LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = p.persona_id
+              LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = p.persona_id
+              WHERE p.server_id = ${serverId}
+                AND p.persona_id = ${targetPersonaId}
               LIMIT 1
             `
           : await sql`
               SELECT
-                persona_id, persona_nickname, persona_lineage_id,
-                attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, is_pointer, preset_lineage_id, preset_language,
-                physical_appearance_tags, nai_char_ref_url,
-                nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-              FROM personas
-              WHERE server_id = ${serverId}
-                AND is_alter = false
-              ORDER BY updated_at DESC NULLS LAST, persona_id DESC
+                p.persona_id, p.persona_nickname, p.persona_lineage_id,
+                p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
+                p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language,
+                pic.physical_appearance_tags, pic.nai_char_ref_url,
+                ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
+              FROM personas p
+              LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = p.persona_id
+              LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = p.persona_id
+              WHERE p.server_id = ${serverId}
+                AND p.is_alter = false
+              ORDER BY p.updated_at DESC NULLS LAST, p.persona_id DESC
               LIMIT 1
             `;
 
@@ -1063,12 +1067,7 @@ export class PresetRepository {
         .join(",")}}`;
       const shouldUseImportedLineage = identityMode === "preserve" && importedLineageId !== null;
 
-      // 5. Build physical appearance tags array literal for safe insertion
-      const physicalAppearanceTagsArrayLiteral = `{${(validatedImportData.physical_appearance_tags ?? [])
-        .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
-
-      // 6. Update personas table with personality data, lineage behavior, and image-related fields
+      // 5. Update personas table with personality data and lineage behavior.
       try {
         await sql`
           UPDATE personas
@@ -1084,14 +1083,7 @@ export class PresetRepository {
             END,
             is_pointer = false,
             preset_lineage_id = ${importedPresetLineageId},
-            preset_language = NULL,
-            physical_appearance_tags = ${physicalAppearanceTagsArrayLiteral}::text[],
-            nai_char_ref_url = ${validatedImportData.nai_char_ref_url ?? null},
-            nai_attg_author = ${validatedImportData.nai_attg_author ?? null},
-            nai_attg_title = ${validatedImportData.nai_attg_title ?? null},
-            nai_attg_tags = ${validatedImportData.nai_attg_tags ?? null},
-            nai_attg_genre = ${validatedImportData.nai_attg_genre ?? null},
-            nai_attg_stars = ${validatedImportData.nai_attg_stars ?? null}
+            preset_language = NULL
           WHERE persona_id = ${mainTomoriId}
         `;
       } catch (error) {
@@ -1102,6 +1094,26 @@ export class PresetRepository {
           };
         }
         throw error;
+      }
+
+      const imageTagsUpdated = await personaRepository.setPhysicalAppearanceTags(
+        mainTomoriId,
+        validatedImportData.physical_appearance_tags ?? [],
+      );
+      const charRefUpdated = await personaRepository.setNaiCharRef(
+        mainTomoriId,
+        validatedImportData.nai_char_ref_url ?? null,
+      );
+      const attgUpdated = await personaRepository.setNaiAttg(mainTomoriId, {
+        nai_attg_author: validatedImportData.nai_attg_author ?? null,
+        nai_attg_title: validatedImportData.nai_attg_title ?? null,
+        nai_attg_tags: validatedImportData.nai_attg_tags ?? null,
+        nai_attg_genre: validatedImportData.nai_attg_genre ?? null,
+        nai_attg_stars: validatedImportData.nai_attg_stars ?? null,
+      });
+
+      if (!imageTagsUpdated || !charRefUpdated || !attgUpdated) {
+        return { success: false, error: "commands.persona.import.error_import_failed" };
       }
 
       const attributesUpdated = await personaRepository.replaceAttributes(

@@ -199,7 +199,9 @@ async function saveVoiceDesignPrompt(
   // Keep clone/provider voice assignments as reusable persona data. In auto
   // endpoint mode, speech_voice_name marks VoiceDesign as the active voice
   // choice while preserving any saved sample/provider voice for later.
-  const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
+  const updatedTomori = await personaRepository.setVoiceConfig(selectedPersona.persona_id, {
+    speech_voice_sample_id: selectedPersona.speech_voice_sample_id ?? null,
+    speech_voice_id: selectedPersona.speech_voice_id ?? null,
     speech_voice_design_prompt: designPrompt,
     speech_voice_name: "VoiceDesign",
   });

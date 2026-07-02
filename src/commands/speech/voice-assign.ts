@@ -224,14 +224,14 @@ export async function execute(
         const voiceNameIfDesignPromptRemains = selectedPersona.speech_voice_design_prompt?.trim()
           ? "VoiceDesign"
           : null;
-        const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
+        const updatedTomori = await personaRepository.setVoiceConfig(selectedPersona.persona_id, {
           speech_voice_sample_id: sampleIdToAssign,
+          speech_voice_id: isClear ? (selectedPersona.speech_voice_id ?? null) : null,
           // Keep any saved VoiceDesign prompt as reusable persona data. In auto
           // endpoint mode, speech_voice_name marks which saved voice type is
           // active, so assigning a sample makes clone synthesis the active path.
-          ...(isClear
-            ? { speech_voice_name: voiceNameIfDesignPromptRemains }
-            : { speech_voice_id: null, speech_voice_name: chosenSample?.name ?? null }),
+          speech_voice_name: isClear ? voiceNameIfDesignPromptRemains : (chosenSample?.name ?? null),
+          speech_voice_design_prompt: selectedPersona.speech_voice_design_prompt ?? null,
         });
 
         if (!updatedTomori) {
@@ -359,11 +359,12 @@ export async function execute(
         return;
       }
 
-      const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
+      const updatedTomori = await personaRepository.setVoiceConfig(selectedPersona.persona_id, {
         speech_voice_id: chosenVoice?.voiceId ?? null,
         speech_voice_name:
           chosenVoice?.name ?? (selectedPersona.speech_voice_design_prompt?.trim() ? "VoiceDesign" : null),
         speech_voice_sample_id: null,
+        speech_voice_design_prompt: selectedPersona.speech_voice_design_prompt ?? null,
       });
 
       if (!updatedTomori) {

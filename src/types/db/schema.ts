@@ -97,23 +97,27 @@ export const tomoriSchema = z.object({
   is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
   applied_avatar_hash: z.string().nullable().optional(), // Added migration 033 - preset_avatar_hash last PATCHed onto this persona's guild member avatar (NULL = never synced)
-  physical_appearance_tags: z.array(z.string()).default([]), // Public imageboard-style physical appearance tags
-  nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - Persona-specific NovelAI character reference image
-  nai_attg_author: z.string().nullable().optional(), // Added March 2026 - ATTG: Story author name
-  nai_attg_title: z.string().nullable().optional(), // Added March 2026 - ATTG: Story title
-  nai_attg_tags: z.string().nullable().optional(), // Added March 2026 - ATTG: Genre/style tags
-  nai_attg_genre: z.string().nullable().optional(), // Added March 2026 - ATTG: Genre categories
-  nai_attg_stars: z.number().int().min(1).max(5).nullable().optional(), // Added March 2026 - ATTG: Quality stars (Erato only)
-  context_note: z.string().nullable().optional(), // Added April 2026 - Author's note injected into conversation history at inference
-  context_note_depth: z.number().int().min(0).max(100).default(0), // Added April 2026 - Depth from bottom (0=lowest, 100=max)
-  speech_voice_sample_id: z.number().int().nullable().optional(), // Added Phase 4.1 - FK → voice_samples; used for local TTS clone path
-  speech_voice_id: z.string().nullable().optional(), // Added Phase 4.1 - Preset voice ID for provider-hosted voices (e.g. ElevenLabs)
-  speech_voice_name: z.string().nullable().optional(), // Added Phase 4.1 - Cached friendly voice display name (either path)
-  speech_voice_design_prompt: z.string().nullable().optional(), // Added May 2026 - Persona voice-design prompt for instruct-capable local TTS endpoints
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
 export type TomoriRow = z.infer<typeof tomoriSchema>;
+
+export const personaScopedConfigStateSchema = z.object({
+  physical_appearance_tags: z.array(z.string()).default([]), // From persona_imagegen_configs
+  nai_char_ref_url: z.string().nullable().optional(), // From persona_imagegen_configs
+  nai_attg_author: z.string().nullable().optional(), // From persona_textgen_configs
+  nai_attg_title: z.string().nullable().optional(), // From persona_textgen_configs
+  nai_attg_tags: z.string().nullable().optional(), // From persona_textgen_configs
+  nai_attg_genre: z.string().nullable().optional(), // From persona_textgen_configs
+  nai_attg_stars: z.number().int().min(1).max(5).nullable().optional(), // From persona_textgen_configs
+  context_note: z.string().nullable().optional(), // From persona_context_note_configs
+  context_note_depth: z.number().int().min(0).max(100).default(0), // From persona_context_note_configs
+  speech_voice_sample_id: z.number().int().nullable().optional(), // From persona_voice_configs
+  speech_voice_id: z.string().nullable().optional(), // From persona_voice_configs
+  speech_voice_name: z.string().nullable().optional(), // From persona_voice_configs
+  speech_voice_design_prompt: z.string().nullable().optional(), // From persona_voice_configs
+});
+export type PersonaScopedConfigState = z.infer<typeof personaScopedConfigStateSchema>;
 
 export const personaAttributeSchema = z.object({
   attribute_id: z.number().optional(),
@@ -1498,30 +1502,31 @@ export type RandomTriggerRow = z.infer<typeof randomTriggerSchema>;
 /**
  * Tomori's combined state (base config + LLM settings + LLM info)
  */
-export type TomoriState = TomoriRow & {
-  config: AssembledServerConfig;
-  llm: LlmRow; // Added LLM information
-  trigger_words: string[]; // Persona-scoped trigger words from persona_configs
-  persona_prompt: string | null; // Optional persona-specific prompt appended after system prompt
-  persona_attributes: PersonaAttributeRow[]; // Ordered persona attributes with public/private visibility
-  reward_conditioning_enabled: boolean; // Persona-scoped reward conditioning injection toggle
-  punish_conditioning_enabled: boolean; // Persona-scoped punish conditioning injection toggle
-  server_memories: string[]; // Changed to string array to match implementation
-  rotation_keys?: ApiKeyRotationRow[]; // Optional: API key rotation pool for load balancing/failover
-  persona_llm?: LlmRow; // Added March 2026 - Persona-specific model override (highest priority in chain)
-  vision_llm?: LlmRow; // Added March 2026 - Dedicated vision model for non-vision chat models
-  nai_preset?: NaiPresetRow; // Added March 2026 - Active NovelAI sampling preset (null when not using NAI)
-  fallback_llms?: LlmRow[]; // Added March 2026 - Resolved LLM rows for fallback model failover chain (legacy; prefer fallback_chain)
-  fallback_chain?: FallbackEntry[]; // Added April 2026 - Ordered fallback entries resolving both llm and custom_endpoint refs
-  // Autochat runtime counters from persona_autoch_runtime_state (migration 015).
-  autoch_counter: number;
-  autoch_next_target: number;
-};
+export type TomoriState = TomoriRow &
+  PersonaScopedConfigState & {
+    config: AssembledServerConfig;
+    llm: LlmRow; // Added LLM information
+    trigger_words: string[]; // Persona-scoped trigger words from persona_configs
+    persona_prompt: string | null; // Optional persona-specific prompt appended after system prompt
+    persona_attributes: PersonaAttributeRow[]; // Ordered persona attributes with public/private visibility
+    reward_conditioning_enabled: boolean; // Persona-scoped reward conditioning injection toggle
+    punish_conditioning_enabled: boolean; // Persona-scoped punish conditioning injection toggle
+    server_memories: string[]; // Changed to string array to match implementation
+    rotation_keys?: ApiKeyRotationRow[]; // Optional: API key rotation pool for load balancing/failover
+    persona_llm?: LlmRow; // Added March 2026 - Persona-specific model override (highest priority in chain)
+    vision_llm?: LlmRow; // Added March 2026 - Dedicated vision model for non-vision chat models
+    nai_preset?: NaiPresetRow; // Added March 2026 - Active NovelAI sampling preset (null when not using NAI)
+    fallback_llms?: LlmRow[]; // Added March 2026 - Resolved LLM rows for fallback model failover chain (legacy; prefer fallback_chain)
+    fallback_chain?: FallbackEntry[]; // Added April 2026 - Ordered fallback entries resolving both llm and custom_endpoint refs
+    // Autochat runtime counters from persona_autoch_runtime_state (migration 015).
+    autoch_counter: number;
+    autoch_next_target: number;
+  };
 
 /**
  * Schema for validating the combined Tomori state
  */
-export const tomoriStateSchema = tomoriSchema.extend({
+export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSchema).extend({
   config: assembledServerConfigSchema,
   llm: llmSchema, // Added LLM schema validation
   trigger_words: z.array(z.string()).default([]),

@@ -153,15 +153,14 @@ SELECT add_column_if_not_exists('personas', 'preset_language', 'TEXT');
 UPDATE personas SET is_pointer = false WHERE is_pointer IS NULL;
 ALTER TABLE personas ALTER COLUMN is_pointer SET DEFAULT false;
 ALTER TABLE personas ALTER COLUMN is_pointer SET NOT NULL;
--- physical_appearance_tags: Public imageboard-style physical appearance tags for image generation
-SELECT add_column_if_not_exists('personas', 'physical_appearance_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
--- nai_char_ref_url: Stored reference image URL/path for NovelAI character consistency
-SELECT add_column_if_not_exists('personas', 'nai_char_ref_url', 'TEXT');
 -- applied_avatar_hash: preset_avatar_hash last PATCHed onto this persona's guild
 -- member avatar by the main-avatar fan-out reconciler (migration 033). NULL = never synced.
 SELECT add_column_if_not_exists('personas', 'applied_avatar_hash', 'TEXT');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
+-- physical_appearance_tags and nai_char_ref_url were added here and later
+-- moved to persona_imagegen_configs; personas mirrors were dropped by
+-- migration 046_drop_persona_mirror_columns.sql.
 
 CREATE TABLE IF NOT EXISTS persona_attributes (
   attribute_id SERIAL PRIMARY KEY,
@@ -2063,11 +2062,8 @@ CREATE TRIGGER update_channel_llm_overrides_timestamp
 -- Stars are Erato-only (injected only when model = llama-3-erato-v1).
 -- ============================================================================
 
-SELECT add_column_if_not_exists('personas', 'nai_attg_author', 'TEXT', NULL);
-SELECT add_column_if_not_exists('personas', 'nai_attg_title',  'TEXT', NULL);
-SELECT add_column_if_not_exists('personas', 'nai_attg_tags',   'TEXT', NULL);
-SELECT add_column_if_not_exists('personas', 'nai_attg_genre',  'TEXT', NULL);
-SELECT add_column_if_not_exists('personas', 'nai_attg_stars',  'SMALLINT', NULL);
+-- personas.nai_attg_* mirrors were moved to persona_textgen_configs and
+-- dropped by migration 046_drop_persona_mirror_columns.sql.
 -- ============================================================================
 -- NOVELAI SAMPLING PRESETS (March 2026)
 -- Stores per-model preset configs (Kayra and Erato) with human-readable
@@ -2473,9 +2469,8 @@ CREATE TRIGGER update_user_saved_provider_configs_timestamp
 -- depth=0 means "at the very bottom" (after all fetched messages).
 -- depth=N means N messages above the bottom; clamped to top if N > total.
 -- ============================================================
--- Per-persona note (on personas)
-SELECT add_column_if_not_exists('personas', 'context_note', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('personas', 'context_note_depth', 'INTEGER', '0');
+-- Per-persona note lives in persona_context_note_configs. The old personas
+-- mirrors were dropped by migration 046_drop_persona_mirror_columns.sql.
 
 -- ============================================================
 -- Voice / TTS feature toggles (March 2026)
@@ -2510,24 +2505,9 @@ CREATE TABLE IF NOT EXISTS voice_samples (
 
 CREATE INDEX IF NOT EXISTS idx_voice_samples_server ON voice_samples(server_id);
 
-SELECT add_column_if_not_exists('personas', 'speech_voice_sample_id', 'INTEGER', 'NULL');
-SELECT add_column_if_not_exists('personas', 'speech_voice_id', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('personas', 'speech_voice_name', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('personas', 'speech_voice_design_prompt', 'TEXT', 'NULL');
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'personas_speech_voice_sample_id_fkey'
-  ) THEN
-    ALTER TABLE personas
-    ADD CONSTRAINT personas_speech_voice_sample_id_fkey
-    FOREIGN KEY (speech_voice_sample_id)
-    REFERENCES voice_samples(sample_id)
-    ON DELETE SET NULL;
-  END IF;
-END $$;
+-- Per-persona voice assignment lives in persona_voice_configs. The old
+-- personas.speech_voice_* mirrors and FK were dropped by
+-- migration 046_drop_persona_mirror_columns.sql.
 
 -- Max output tokens override (April 2026)
 -- User-configurable generation length cap per saved provider. NULL = use provider default (8192 or hardcoded fallback).

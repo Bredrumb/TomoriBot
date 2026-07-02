@@ -6,11 +6,21 @@
  *
  * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { forkPointerForAvatarChange } from "@/commands/persona/avatar";
 import { personaRepository } from "@/utils/db/repositories";
+import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
+
+async function executeMigrationFile(fileName: string): Promise<void> {
+  const sqlText = await readFile(join(import.meta.dir, "..", "..", "..", "src", "db", "migrations", fileName), "utf-8");
+  for (const statement of splitSqlStatements(sqlText)) {
+    await testSql.unsafe(statement);
+  }
+}
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
   let refs: FixtureRefs;
@@ -44,6 +54,420 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
   it("loadTomoriState includes a server_memories array for a fresh persona", async () => {
     const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
     expect(Array.isArray(state?.server_memories)).toBe(true);
+  });
+
+  it("loadTomoriState and loadAllPersonasForServer read persona config from split tables", async () => {
+    try {
+      await personaRepository.setContextNote(refs.personaId, "_rt_note_from_setter", 4);
+      await personaRepository.setVoiceConfig(refs.personaId, {
+        speech_voice_sample_id: null,
+        speech_voice_id: "_rt_voice_from_setter",
+        speech_voice_name: "_rt_voice_name_from_setter",
+        speech_voice_design_prompt: "_rt_voice_prompt_from_setter",
+      });
+      await personaRepository.setPhysicalAppearanceTags(refs.personaId, ["_rt_tag_from_setter"]);
+      await personaRepository.setNaiCharRef(refs.personaId, "_rt_ref_from_setter");
+      await personaRepository.setNaiAttg(refs.personaId, {
+        nai_attg_author: "_rt_author_from_setter",
+        nai_attg_title: "_rt_title_from_setter",
+        nai_attg_tags: "_rt_tags_from_setter",
+        nai_attg_genre: "_rt_genre_from_setter",
+        nai_attg_stars: 3,
+      });
+
+      await testSql`
+        UPDATE persona_context_note_configs
+        SET context_note = '_rt_note_from_split', context_note_depth = 9
+        WHERE persona_id = ${refs.personaId}
+      `;
+      await testSql`
+        UPDATE persona_voice_configs
+        SET
+          speech_voice_id = '_rt_voice_from_split',
+          speech_voice_name = '_rt_voice_name_from_split',
+          speech_voice_design_prompt = '_rt_voice_prompt_from_split'
+        WHERE persona_id = ${refs.personaId}
+      `;
+      await testSql`
+        UPDATE persona_imagegen_configs
+        SET physical_appearance_tags = ARRAY['_rt_tag_from_split']::TEXT[], nai_char_ref_url = '_rt_ref_from_split'
+        WHERE persona_id = ${refs.personaId}
+      `;
+      await testSql`
+        UPDATE persona_textgen_configs
+        SET
+          nai_attg_author = '_rt_author_from_split',
+          nai_attg_title = '_rt_title_from_split',
+          nai_attg_tags = '_rt_tags_from_split',
+          nai_attg_genre = '_rt_genre_from_split',
+          nai_attg_stars = 5
+        WHERE persona_id = ${refs.personaId}
+      `;
+
+      const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
+      expect(state?.context_note).toBe("_rt_note_from_split");
+      expect(state?.context_note_depth).toBe(9);
+      expect(state?.speech_voice_id).toBe("_rt_voice_from_split");
+      expect(state?.speech_voice_name).toBe("_rt_voice_name_from_split");
+      expect(state?.speech_voice_design_prompt).toBe("_rt_voice_prompt_from_split");
+      expect(state?.physical_appearance_tags).toEqual(["_rt_tag_from_split"]);
+      expect(state?.nai_char_ref_url).toBe("_rt_ref_from_split");
+      expect(state?.nai_attg_author).toBe("_rt_author_from_split");
+      expect(state?.nai_attg_title).toBe("_rt_title_from_split");
+      expect(state?.nai_attg_tags).toBe("_rt_tags_from_split");
+      expect(state?.nai_attg_genre).toBe("_rt_genre_from_split");
+      expect(state?.nai_attg_stars).toBe(5);
+
+      const personas = await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId);
+      const loaded = personas.find((persona) => persona.persona_id === refs.personaId);
+      expect(loaded?.context_note).toBe("_rt_note_from_split");
+      expect(loaded?.speech_voice_id).toBe("_rt_voice_from_split");
+      expect(loaded?.physical_appearance_tags).toEqual(["_rt_tag_from_split"]);
+      expect(loaded?.nai_attg_author).toBe("_rt_author_from_split");
+    } finally {
+      await testSql`DELETE FROM persona_context_note_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_voice_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_imagegen_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_textgen_configs WHERE persona_id = ${refs.personaId}`;
+    }
+  });
+
+  it("loadTomoriState tolerates missing persona split rows", async () => {
+    await testSql`DELETE FROM persona_context_note_configs WHERE persona_id = ${refs.personaId}`;
+    await testSql`DELETE FROM persona_voice_configs WHERE persona_id = ${refs.personaId}`;
+    await testSql`DELETE FROM persona_imagegen_configs WHERE persona_id = ${refs.personaId}`;
+    await testSql`DELETE FROM persona_textgen_configs WHERE persona_id = ${refs.personaId}`;
+
+    const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
+    expect(state).not.toBeNull();
+    expect(state?.context_note).toBeNull();
+    expect(state?.context_note_depth).toBe(0);
+    expect(state?.speech_voice_sample_id).toBeNull();
+    expect(state?.speech_voice_id).toBeNull();
+    expect(state?.speech_voice_name).toBeNull();
+    expect(state?.speech_voice_design_prompt).toBeNull();
+    expect(state?.physical_appearance_tags).toEqual([]);
+    expect(state?.nai_char_ref_url).toBeNull();
+    expect(state?.nai_attg_author).toBeNull();
+    expect(state?.nai_attg_stars).toBeNull();
+  });
+
+  it("createAlterPersona seeds persona imagegen and textgen split rows", async () => {
+    const alterName = `_rt_split_seed_alter_${Date.now()}`;
+    let alterPersonaId: number | null = null;
+
+    try {
+      const alter = await personaRepository.createAlterPersona({
+        serverId: refs.serverId,
+        nickname: alterName,
+        attributes: ["_rt_seed_attr"],
+        sampleDialoguesIn: ["_rt_seed_in"],
+        sampleDialoguesOut: ["_rt_seed_out"],
+        physicalAppearanceTags: ["_rt_seed_tag"],
+        naiCharRefUrl: "_rt_seed_ref",
+        naiAttgAuthor: "_rt_seed_author",
+        naiAttgTitle: "_rt_seed_title",
+        naiAttgTags: "_rt_seed_tags",
+        naiAttgGenre: "_rt_seed_genre",
+        naiAttgStars: 4,
+      });
+      alterPersonaId = alter?.persona_id ?? null;
+      expect(alterPersonaId).not.toBeNull();
+
+      const [imagegenRow] = await testSql<Array<{ physical_appearance_tags: string[]; nai_char_ref_url: string }>>`
+        SELECT physical_appearance_tags, nai_char_ref_url
+        FROM persona_imagegen_configs
+        WHERE persona_id = ${alterPersonaId}
+      `;
+      expect(imagegenRow.physical_appearance_tags).toEqual(["_rt_seed_tag"]);
+      expect(imagegenRow.nai_char_ref_url).toBe("_rt_seed_ref");
+
+      const [textgenRow] = await testSql<Array<{ nai_attg_author: string; nai_attg_stars: number }>>`
+        SELECT nai_attg_author, nai_attg_stars
+        FROM persona_textgen_configs
+        WHERE persona_id = ${alterPersonaId}
+      `;
+      expect(textgenRow.nai_attg_author).toBe("_rt_seed_author");
+      expect(textgenRow.nai_attg_stars).toBe(4);
+
+      const personas = await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId);
+      const loadedAlter = personas.find((persona) => persona.persona_id === alterPersonaId);
+      expect(loadedAlter?.physical_appearance_tags).toEqual(["_rt_seed_tag"]);
+      expect(loadedAlter?.nai_char_ref_url).toBe("_rt_seed_ref");
+      expect(loadedAlter?.nai_attg_author).toBe("_rt_seed_author");
+      expect(loadedAlter?.nai_attg_stars).toBe(4);
+    } finally {
+      if (alterPersonaId !== null) {
+        await testSql`DELETE FROM personas WHERE persona_id = ${alterPersonaId}`;
+      } else {
+        await testSql`DELETE FROM personas WHERE server_id = ${refs.serverId} AND persona_nickname = ${alterName}`;
+      }
+    }
+  });
+
+  it("migration 045 backfills missing split rows and lets mirror values win drift", async () => {
+    let missingSplitPersonaId: number | null = null;
+
+    try {
+      await executeMigrationFile("046_drop_persona_mirror_columns.down.sql");
+
+      const [missingSplitPersona] = await testSql<Array<{ persona_id: number }>>`
+        INSERT INTO personas (server_id, persona_nickname, is_alter)
+        VALUES (${refs.serverId}, '_rt_045_missing_split', true)
+        RETURNING persona_id
+      `;
+      missingSplitPersonaId = missingSplitPersona.persona_id;
+
+      await testSql`
+        UPDATE personas
+        SET
+          context_note = '_rt_045_mirror_note',
+          context_note_depth = 8,
+          speech_voice_id = '_rt_045_mirror_voice',
+          speech_voice_name = '_rt_045_mirror_voice_name',
+          speech_voice_design_prompt = '_rt_045_mirror_prompt',
+          physical_appearance_tags = ARRAY['_rt_045_mirror_tag']::TEXT[],
+          nai_char_ref_url = '_rt_045_mirror_ref',
+          nai_attg_author = '_rt_045_mirror_author',
+          nai_attg_title = '_rt_045_mirror_title',
+          nai_attg_tags = '_rt_045_mirror_tags',
+          nai_attg_genre = '_rt_045_mirror_genre',
+          nai_attg_stars = 2
+        WHERE persona_id = ${refs.personaId}
+      `;
+      await testSql`
+        INSERT INTO persona_context_note_configs (persona_id, context_note, context_note_depth)
+        VALUES (${refs.personaId}, '_rt_045_old_note', 1)
+        ON CONFLICT (persona_id) DO UPDATE SET
+          context_note = EXCLUDED.context_note,
+          context_note_depth = EXCLUDED.context_note_depth
+      `;
+      await testSql`
+        INSERT INTO persona_voice_configs (
+          persona_id, speech_voice_id, speech_voice_name, speech_voice_design_prompt
+        )
+        VALUES (${refs.personaId}, '_rt_045_old_voice', '_rt_045_old_voice_name', '_rt_045_old_prompt')
+        ON CONFLICT (persona_id) DO UPDATE SET
+          speech_voice_id = EXCLUDED.speech_voice_id,
+          speech_voice_name = EXCLUDED.speech_voice_name,
+          speech_voice_design_prompt = EXCLUDED.speech_voice_design_prompt
+      `;
+      await testSql`
+        INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags, nai_char_ref_url)
+        VALUES (${refs.personaId}, ARRAY['_rt_045_old_tag']::TEXT[], '_rt_045_old_ref')
+        ON CONFLICT (persona_id) DO UPDATE SET
+          physical_appearance_tags = EXCLUDED.physical_appearance_tags,
+          nai_char_ref_url = EXCLUDED.nai_char_ref_url
+      `;
+      await testSql`
+        INSERT INTO persona_textgen_configs (
+          persona_id, nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
+        )
+        VALUES (
+          ${refs.personaId},
+          '_rt_045_old_author',
+          '_rt_045_old_title',
+          '_rt_045_old_tags',
+          '_rt_045_old_genre',
+          1
+        )
+        ON CONFLICT (persona_id) DO UPDATE SET
+          nai_attg_author = EXCLUDED.nai_attg_author,
+          nai_attg_title = EXCLUDED.nai_attg_title,
+          nai_attg_tags = EXCLUDED.nai_attg_tags,
+          nai_attg_genre = EXCLUDED.nai_attg_genre,
+          nai_attg_stars = EXCLUDED.nai_attg_stars
+      `;
+
+      await testSql`
+        UPDATE personas
+        SET
+          context_note = '_rt_045_missing_note',
+          context_note_depth = 6,
+          physical_appearance_tags = ARRAY['_rt_045_missing_tag']::TEXT[],
+          nai_attg_author = '_rt_045_missing_author'
+        WHERE persona_id = ${missingSplitPersonaId}
+      `;
+      await testSql`DELETE FROM persona_context_note_configs WHERE persona_id = ${missingSplitPersonaId}`;
+      await testSql`DELETE FROM persona_imagegen_configs WHERE persona_id = ${missingSplitPersonaId}`;
+      await testSql`DELETE FROM persona_textgen_configs WHERE persona_id = ${missingSplitPersonaId}`;
+
+      await executeMigrationFile("045_backfill_persona_split_configs.sql");
+
+      const [contextRow] = await testSql<Array<{ context_note: string; context_note_depth: number }>>`
+        SELECT context_note, context_note_depth
+        FROM persona_context_note_configs
+        WHERE persona_id = ${refs.personaId}
+      `;
+      expect(contextRow.context_note).toBe("_rt_045_mirror_note");
+      expect(contextRow.context_note_depth).toBe(8);
+
+      const [imageRow] = await testSql<Array<{ physical_appearance_tags: string[]; nai_char_ref_url: string }>>`
+        SELECT physical_appearance_tags, nai_char_ref_url
+        FROM persona_imagegen_configs
+        WHERE persona_id = ${refs.personaId}
+      `;
+      expect(imageRow.physical_appearance_tags).toEqual(["_rt_045_mirror_tag"]);
+      expect(imageRow.nai_char_ref_url).toBe("_rt_045_mirror_ref");
+
+      const [voiceRow] = await testSql<Array<{ speech_voice_id: string; speech_voice_design_prompt: string }>>`
+        SELECT speech_voice_id, speech_voice_design_prompt
+        FROM persona_voice_configs
+        WHERE persona_id = ${refs.personaId}
+      `;
+      expect(voiceRow.speech_voice_id).toBe("_rt_045_mirror_voice");
+      expect(voiceRow.speech_voice_design_prompt).toBe("_rt_045_mirror_prompt");
+
+      const [textRow] = await testSql<Array<{ nai_attg_author: string; nai_attg_stars: number }>>`
+        SELECT nai_attg_author, nai_attg_stars
+        FROM persona_textgen_configs
+        WHERE persona_id = ${refs.personaId}
+      `;
+      expect(textRow.nai_attg_author).toBe("_rt_045_mirror_author");
+      expect(textRow.nai_attg_stars).toBe(2);
+
+      const [createdMissingRow] = await testSql<Array<{ context_note: string }>>`
+        SELECT context_note
+        FROM persona_context_note_configs
+        WHERE persona_id = ${missingSplitPersonaId}
+      `;
+      expect(createdMissingRow.context_note).toBe("_rt_045_missing_note");
+    } finally {
+      if (missingSplitPersonaId !== null) {
+        await testSql`DELETE FROM personas WHERE persona_id = ${missingSplitPersonaId}`;
+      }
+      await executeMigrationFile("046_drop_persona_mirror_columns.sql");
+      await testSql`DELETE FROM persona_context_note_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_voice_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_imagegen_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_textgen_configs WHERE persona_id = ${refs.personaId}`;
+    }
+  });
+
+  it("migration 046 rollback restores mirror columns from split tables", async () => {
+    try {
+      await executeMigrationFile("046_drop_persona_mirror_columns.sql");
+      await personaRepository.setContextNote(refs.personaId, "_rt_046_note", 7);
+      await personaRepository.setVoiceConfig(refs.personaId, {
+        speech_voice_sample_id: null,
+        speech_voice_id: "_rt_046_voice",
+        speech_voice_name: "_rt_046_voice_name",
+        speech_voice_design_prompt: "_rt_046_prompt",
+      });
+      await personaRepository.setPhysicalAppearanceTags(refs.personaId, ["_rt_046_tag"]);
+      await personaRepository.setNaiCharRef(refs.personaId, "_rt_046_ref");
+      await personaRepository.setNaiAttg(refs.personaId, {
+        nai_attg_author: "_rt_046_author",
+        nai_attg_title: "_rt_046_title",
+        nai_attg_tags: "_rt_046_tags",
+        nai_attg_genre: "_rt_046_genre",
+        nai_attg_stars: 5,
+      });
+
+      await executeMigrationFile("046_drop_persona_mirror_columns.down.sql");
+
+      const [row] = await testSql<
+        Array<{
+          context_note: string;
+          context_note_depth: number;
+          speech_voice_id: string;
+          speech_voice_design_prompt: string;
+          physical_appearance_tags: string[];
+          nai_char_ref_url: string;
+          nai_attg_author: string;
+          nai_attg_stars: number;
+        }>
+      >`
+        SELECT
+          context_note,
+          context_note_depth,
+          speech_voice_id,
+          speech_voice_design_prompt,
+          physical_appearance_tags,
+          nai_char_ref_url,
+          nai_attg_author,
+          nai_attg_stars
+        FROM personas
+        WHERE persona_id = ${refs.personaId}
+      `;
+
+      expect(row.context_note).toBe("_rt_046_note");
+      expect(row.context_note_depth).toBe(7);
+      expect(row.speech_voice_id).toBe("_rt_046_voice");
+      expect(row.speech_voice_design_prompt).toBe("_rt_046_prompt");
+      expect(row.physical_appearance_tags).toEqual(["_rt_046_tag"]);
+      expect(row.nai_char_ref_url).toBe("_rt_046_ref");
+      expect(row.nai_attg_author).toBe("_rt_046_author");
+      expect(row.nai_attg_stars).toBe(5);
+    } finally {
+      await executeMigrationFile("046_drop_persona_mirror_columns.sql");
+      await testSql`DELETE FROM persona_context_note_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_voice_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_imagegen_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_textgen_configs WHERE persona_id = ${refs.personaId}`;
+    }
+  });
+
+  it("persona config export/import round-trips through split tables", async () => {
+    try {
+      await personaRepository.setContextNote(refs.personaId, "_rt_export_note", 3);
+      await personaRepository.setVoiceConfig(refs.personaId, {
+        speech_voice_sample_id: null,
+        speech_voice_id: "_rt_export_voice",
+        speech_voice_name: "_rt_export_voice_name",
+        speech_voice_design_prompt: "_rt_export_prompt",
+      });
+      await personaRepository.setPhysicalAppearanceTags(refs.personaId, ["_rt_export_tag"]);
+      await personaRepository.setNaiCharRef(refs.personaId, "_rt_export_ref");
+      await personaRepository.setNaiAttg(refs.personaId, {
+        nai_attg_author: "_rt_export_author",
+        nai_attg_title: "_rt_export_title",
+        nai_attg_tags: "_rt_export_tags",
+        nai_attg_genre: "_rt_export_genre",
+        nai_attg_stars: 4,
+      });
+
+      const exported = await personaRepository.toExportShape(FIXTURE_IDS.serverDiscId);
+      expect(exported).not.toBeNull();
+      if (!exported) {
+        throw new Error("Expected persona export shape for fixture server.");
+      }
+
+      await testSql`
+        UPDATE persona_context_note_configs
+        SET context_note = '_rt_export_mutated', context_note_depth = 1
+        WHERE persona_id = ${refs.personaId}
+      `;
+      await testSql`
+        UPDATE persona_voice_configs
+        SET speech_voice_id = '_rt_export_mutated_voice'
+        WHERE persona_id = ${refs.personaId}
+      `;
+      await testSql`
+        UPDATE persona_imagegen_configs
+        SET physical_appearance_tags = ARRAY['_rt_export_mutated_tag']::TEXT[]
+        WHERE persona_id = ${refs.personaId}
+      `;
+      await testSql`
+        UPDATE persona_textgen_configs
+        SET nai_attg_author = '_rt_export_mutated_author'
+        WHERE persona_id = ${refs.personaId}
+      `;
+
+      expect(await personaRepository.fromExportShape(FIXTURE_IDS.serverDiscId, exported)).toBe(true);
+
+      const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
+      expect(state?.context_note).toBe("_rt_export_note");
+      expect(state?.context_note_depth).toBe(3);
+      expect(state?.speech_voice_id).toBe("_rt_export_voice");
+      expect(state?.physical_appearance_tags).toEqual(["_rt_export_tag"]);
+      expect(state?.nai_attg_author).toBe("_rt_export_author");
+    } finally {
+      await testSql`DELETE FROM persona_context_note_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_voice_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_imagegen_configs WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM persona_textgen_configs WHERE persona_id = ${refs.personaId}`;
+    }
   });
 
   // ── loadAllPersonasForServer ─────────────────────────────────────────────
