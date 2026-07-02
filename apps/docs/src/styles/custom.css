@@ -96,3 +96,24 @@
   color: var(--tb-color-off-white);
   background-color: var(--tb-color-red);
 }
+
+/*
+  Landing-page layout helpers.
+  Global (not component-scoped) so Markdown/MDX content pages can use them:
+  - .feature-grid: responsive grid for the introduction FeatureCard deck.
+  - .button-row: hero call-to-action row of Starlight <LinkButton>s.
+*/
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 1.5rem 0;
+}

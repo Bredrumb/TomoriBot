@@ -4,10 +4,78 @@ sidebar:
   order: 3
 ---
 
-<!-- STUB (Phase 1 structural, no prose yet). Phase 2 source: /help speech (anchor
-     #text-to-speech) + /help transcription (anchor #speech-to-text). Merge in full
-     ElevenLabs (cloud) setup from architecture/integrations/voice/elevenlabs-tts.md
-     and elevenlabs-stt.md (then delete those holdings). Local engines link →
-     self-hosting/text-to-speech/ and self-hosting/speech-to-text/. -->
+TomoriBot can **speak** (text-to-speech) and **listen** (speech-to-text):
 
-_Placeholder — content lands in Phase 2._
+- **TTS** lets her reply with native Discord voice messages.
+- **STT** turns user audio attachments into text she can use as conversation context.
+
+Both work through the same endpoint system. The quickest path is **ElevenLabs** (cloud,
+documented in full below). If you'd rather run voice on your own hardware, use a local engine
+and follow the self-hosting guides.
+
+## Text-to-Speech
+
+### ElevenLabs (cloud, easiest)
+
+1. Get an API key from [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
+2. Run `/speech elevenlabs` and paste the key. This single command:
+   - registers the ElevenLabs **speech** endpoint (and the **transcription** endpoint too),
+   - selects them as active,
+   - can assign a voice to one persona on the spot.
+3. Assign voices to additional personas with `/speech voice-assign`. Browse voices in the
+   [ElevenLabs Voice Library](https://elevenlabs.io/app/voice-library), where you can also
+   clone your own.
+
+Run `/speech elevenlabs` again anytime to update the saved key.
+
+Notes:
+
+- On the **free plan, only premade voices work**. Browse the
+  [premade voice list](https://elevenlabs-sdk.mintlify.app/voices/premade-voices).
+- Characters are counted when she generates and reads voice messages; the free tier has
+  monthly limits — check your ElevenLabs dashboard.
+- Voice replies are gated by `voice_message_enabled` and require the active persona to have a
+  voice assigned.
+
+Run `/help speech` for the same walkthrough in Discord.
+
+### Local voice-cloning engines (self-hosted)
+
+On a self-hosted instance you can run a local voice-clone server instead. The general flow is:
+start the wrapper server, register it with `/provider custom-endpoint add`, select it with
+`/model speech`, upload a sample with `/speech voice-add`, then assign it with
+`/speech voice-assign`. Any audio format is accepted (auto-converted to mono WAV); 10–20
+second clips with no background music work best.
+
+Each engine has its own setup guide:
+
+- [Chatterbox-Turbo](/self-hosting/text-to-speech/chatterbox/) — fast, English-only, supports
+  bracket delivery tags like `[excited]`.
+- [Qwen3-TTS](/self-hosting/text-to-speech/qwen3tts/) — multilingual (10 languages), plus a
+  natural-language VoiceDesign mode.
+- [IrodoriTTS](/self-hosting/text-to-speech/irodoritts/) — Japanese-specialized, reads emoji
+  as emotion cues.
+
+See the [Text-to-Speech](/self-hosting/text-to-speech/) hub for the full list.
+
+## Speech-to-Text
+
+Transcription endpoints turn user audio attachments into text for background conversation
+context. Whether transcripts are **visibly posted** in chat is controlled separately by
+`/speech transcripts`.
+
+### ElevenLabs (cloud)
+
+Already covered above — `/speech elevenlabs` registers the transcription endpoint alongside
+speech. Use `/model transcription` to pick between transcription endpoints.
+
+### Local engines (self-hosted)
+
+- [WhisperX](/self-hosting/speech-to-text/whisperx/) — the recommended local path; ~100
+  languages, GPU-accelerated, multiple model sizes.
+- [KoboldCPP](/self-hosting/speech-to-text/koboldcpp/) — works if your build exposes an
+  OpenAI-compatible transcription endpoint.
+- [whisper.cpp](/self-hosting/speech-to-text/whispercpp/).
+
+See the [Speech-to-Text](/self-hosting/speech-to-text/) hub for the full list. Run
+`/help transcription` for the Discord summary.

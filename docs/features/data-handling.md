@@ -4,8 +4,66 @@ sidebar:
   order: 11
 ---
 
-<!-- STUB (Phase 1 structural, no prose yet). Phase 2 source: /help data.
-     Export/import/delete + privacy notice. Kept separate from stats-and-insights
-     (trust topic, different reader intent). -->
+TomoriBot is built to be transparent about your data. You can export, import, or delete
+everything she stores, and this page spells out exactly what that is. For the legal text,
+see `/legal privacy` and `/legal terms`.
 
-_Placeholder — content lands in Phase 2._
+## What She Stores
+
+**Stored:**
+
+- Server and personal memories
+- Her settings and persona data
+- Server configuration
+- Encrypted API keys
+
+**Not stored:**
+
+- Your Discord messages
+- Chat history
+
+**Sent to your AI provider:** whenever she's triggered, she fetches the **latest messages**
+in the channel plus any **relevant memories** as context for the model. She does not monitor
+or read messages outside of those triggers.
+
+:::note
+Your chosen AI provider (Google, OpenRouter, NovelAI, …) processes messages under *their own*
+privacy policies. Never share sensitive personal information with any AI.
+:::
+
+## Export Your Data
+
+Everything exportable is sent to your DMs as a JSON file:
+
+- `/memory personal export` — your personal memories (one persona scope, or your global scope).
+- `/memory server export` — server memories for a selected persona.
+- `/personal config export` — your personal settings (nickname, language, etc.).
+- `/server config export` — server configuration values (no API keys or triggers).
+- `/persona export` — full persona definitions.
+
+## Import Your Data
+
+Attach a previously exported file to restore it:
+
+- `/memory personal import`, `/memory server import` — file type is auto-detected; you choose
+  a target persona or global scope.
+- `/personal config import`, `/server config import` — server imports require **Manage
+  Server**.
+- `/persona import` — restore a persona (also imports SillyTavern cards — see
+  [SillyTavern Support](/features/sillytavern-support/)).
+
+## Delete Your Data
+
+These permanently remove or reset data — **they cannot be undone**:
+
+- `/memory personal remove`, `/memory server remove`
+- `/personal config remove` (reset personal settings)
+- `/server config remove` (reset server configuration)
+
+## Opting Out
+
+- `/personal privacy` — control your visibility to her, up to full invisibility (opt out of
+  memory features entirely).
+- `/capabilities` — server admins can turn off self-learning and other features.
+
+See [Memory](/features/memory/) for how memories work day to day.

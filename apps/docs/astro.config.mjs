@@ -228,6 +228,26 @@ const sidebar = buildTopLevelSidebar();
 
 export default defineConfig({
   site: "https://docs.tomoribot.app",
+  // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`
+  // (see above). Vite resolves each content file to its real path under `../../docs/...`,
+  // which sits outside this app, so a bare `@astrojs/starlight/components` import in an MDX
+  // page resolves from repo-root node_modules and fails (Starlight is installed only under
+  // `apps/docs/node_modules`). Alias that one package subpath to its concrete location so
+  // MDX landing pages can use Starlight's <Card>/<LinkCard>/<LinkButton>. A global
+  // `resolve.preserveSymlinks` would fix this too but breaks Bun's `.bun/` symlink store.
+  vite: {
+    resolve: {
+      // Exact-match regex (not a string prefix) so ONLY the bare specifier is rewritten —
+      // Starlight resolves its own `@astrojs/starlight/components/Banner.astro` subpaths
+      // internally and must not be touched.
+      alias: [
+        {
+          find: /^@astrojs\/starlight\/components$/,
+          replacement: resolve(__dirname, "node_modules/@astrojs/starlight/components.ts"),
+        },
+      ],
+    },
+  },
   integrations: [
     starlight({
       title: "TomoriBot",

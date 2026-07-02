@@ -5,7 +5,58 @@ sidebar:
   order: 2
 ---
 
-{/* STUB (Phase 1 structural, no prose yet). Phase 2 writes the capability-tour
-    card grid (absorbs /help features). Landing uses cards, hence .mdx. */}
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-_Placeholder — capability-tour card grid lands in Phase 2._
+Everything TomoriBot can do, grouped by what you're trying to accomplish. Each card links
+to a full guide. Prefer to see it in Discord? Run `/help features` for the live capability
+list, or `/help` to browse every command.
+
+## Core Usage
+
+<CardGrid>
+  <LinkCard title="Chatting & Triggers" href="/features/chatting-and-triggers/"
+    description="Mentions, trigger words, auto-trigger, and deliberate trigger mode — how she decides when to reply." />
+  <LinkCard title="Multiple Personas" href="/features/multiple-personas/"
+    description="Create, generate, and switch personas; alter characters with their own triggers and webhook avatars." />
+  <LinkCard title="Memory" href="/features/memory/"
+    description="Personal and server memories, tagging, short-term memory, and a document knowledge base." />
+  <LinkCard title="Tools & Extensions" href="/features/tools-and-extensions/"
+    description="Built-in agentic tools, web search, MCP servers, and deliberate tool mode." />
+  <LinkCard title="Scheduled Tasks" href="/features/scheduled-tasks/"
+    description="One-time and recurring reminders and self-tasks — just ask her." />
+</CardGrid>
+
+## Media Generation
+
+<CardGrid>
+  <LinkCard title="Media Generation" href="/features/media-generation/"
+    description="Generate images, short videos, and spoken voice messages directly in chat." />
+</CardGrid>
+
+## Configuration
+
+<CardGrid>
+  <LinkCard title="Providers & Models" href="/features/providers-and-models/"
+    description="API keys per provider, custom endpoints, and the full supported-provider matrix." />
+  <LinkCard title="Personalization" href="/features/personalization/"
+    description="Your own providers (BYOK), timezone, prompts, personal spotlight, and privacy." />
+  <LinkCard title="Server Moderation" href="/features/server-moderation/"
+    description="Thought logs, quotas, whitelists, and BYOK-required mode — admin cost and safety controls." />
+  <LinkCard title="Behavior Tweaking" href="/features/behavior-tweaking/"
+    description="Capabilities and high-value config: what TomoriBot is allowed to do." />
+</CardGrid>
+
+## Reference
+
+<CardGrid>
+  <LinkCard title="Data Handling" href="/features/data-handling/"
+    description="Export, import, and delete your data — plus exactly what she stores." />
+  <LinkCard title="Stats & Insights" href="/features/stats-and-insights/"
+    description="Usage tracking and shareable infographic cards." />
+  <LinkCard title="Matrix Bridge" href="/features/matrix-bridge/"
+    description="Link a Matrix room to a Discord channel and chat from either side." />
+  <LinkCard title="Command Reference" href="/features/command-reference/"
+    description="Every slash command in one grouped, searchable table." />
+  <LinkCard title="SillyTavern Support" href="/features/sillytavern-support/"
+    description="Import SillyTavern prompt presets and character cards." />
+</CardGrid>

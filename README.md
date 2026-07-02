@@ -113,13 +113,13 @@ If you're enjoying TomoriBot, please consider giving her a ⭐ on GitHub or supp
 
 TomoriBot supports a wide range of LLM providers, image generation APIs, voice services, and search tools out of the box. This includes popular providers like Google Gemini, OpenRouter, Anthropic, NovelAI, Nvidia, Deepseek, and more. 
 
-**[Read the full list of Supported Providers here](https://docs.tomoribot.app/wiki/supported-providers/)**
+**[Read the full list of Supported Providers here](https://docs.tomoribot.app/features/providers-and-models/#supported-providers)**
 
 ## Local & Self-Hosted Endpoints
 
 Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch Docker sidecars.
 
-**[Read the Local & Self-Hosted Endpoints guide here](https://docs.tomoribot.app/wiki/local-endpoints/)**
+**[Read the Local & Self-Hosted Endpoints guide here](https://docs.tomoribot.app/self-hosting/local-endpoints/)**
 
 ## Security & Threat Models
 
@@ -132,7 +132,7 @@ TomoriBot employs encryption and security best practices to keep data and API ke
 
 TomoriBot comes with a variety of built-in tools (such as web search, memory management, image generation, cross-channel messaging, and more), which you can directly refer to in your prompts with macros:
 
-**[Read the complete Built-In Tool Reference here](https://docs.tomoribot.app/wiki/built-in-tools/)**
+**[Read the complete Built-In Tool Reference here](https://docs.tomoribot.app/features/tools-and-extensions/)**
 
 ### Sample Prompts with Tools
 

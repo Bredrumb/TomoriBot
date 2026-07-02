@@ -5,6 +5,12 @@ sidebar:
   order: 5
 ---
 
+:::tip[New to TomoriBot?]
+This section is the code-level overview for contributors and integrators. If you're here to
+*use* the bot, start at the **[Introduction](/introduction/)** and
+**[Features](/features/)** instead.
+:::
+
 TomoriBot is a TypeScript + Bun Discord AI chatbot focused on configurable personalities, memory, and tool use. It is a modular bot with provider-agnostic AI execution, centralized tool routing, and PostgreSQL-backed state.
 
 ## What TomoriBot Includes

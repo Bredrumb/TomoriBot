@@ -4,7 +4,41 @@ sidebar:
   order: 5
 ---
 
-<!-- STUB (Phase 1 structural, no prose yet). Phase 2 source: create_task tool +
-     /scheduled-task commands. Summarized + linked from tools-and-extensions. -->
+TomoriBot can set reminders and schedule tasks for later — one-time or recurring. The
+easiest way is to just **ask her**; she creates the task through her `create_task` tool.
+Scheduled tasks are persona-specific.
 
-_Placeholder — content lands in Phase 2._
+## Creating One
+
+Just tell her in chat:
+
+```text
+remind me to submit the report at 14:30
+every Friday at 8pm, post a reminder that game night is starting
+```
+
+She parses the time and recurrence and schedules it. Reminders **ping the target user** when
+they fire; tasks are silent self-actions the persona performs at the scheduled time.
+
+## Managing Tasks
+
+Two slash commands let you review and adjust existing schedules:
+
+- `/scheduled-task edit` — change a task's content, next trigger time, recurrence interval,
+  or whether it's a reminder. Set the interval to `0` to disable recurrence.
+- `/scheduled-task remove` — delete a reminder or task.
+
+Both open a picker listing your existing schedules (persona, time, channel, and recurrence),
+so you don't need to remember IDs.
+
+## How Delivery Works
+
+Reminders are delivered by an in-app scheduler and are only marked done **after delivery
+succeeds** — if a delivery is aborted or the channel queue is cleared, it's automatically
+rescheduled and retried. For the runtime details, see the
+[architecture overview](/architecture/#runtime-extensions).
+
+---
+
+Scheduling is one of several agentic capabilities — see
+[Tools & Extensions](/features/tools-and-extensions/) for the full picture.
