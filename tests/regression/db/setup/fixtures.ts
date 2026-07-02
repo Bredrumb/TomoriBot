@@ -112,6 +112,10 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
     VALUES (${personaId}, ARRAY['_rt_trigger']::TEXT[])
     ON CONFLICT (persona_id) DO UPDATE SET trigger_words = EXCLUDED.trigger_words
   `;
+  await db`DELETE FROM persona_context_note_configs WHERE persona_id = ${personaId}`;
+  await db`DELETE FROM persona_voice_configs WHERE persona_id = ${personaId}`;
+  await db`DELETE FROM persona_imagegen_configs WHERE persona_id = ${personaId}`;
+  await db`DELETE FROM persona_textgen_configs WHERE persona_id = ${personaId}`;
 
   // 5. Test user
   const [userRow] = await db`

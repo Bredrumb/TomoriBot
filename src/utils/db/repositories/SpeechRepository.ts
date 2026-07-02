@@ -3,7 +3,7 @@
  *
  * Owns tables: voice_samples, custom_endpoints (speech/transcription rows),
  * saved_provider_configs (credential lookup by provider name), and
- * personas.speech_voice_sample_id (persona voice assignment).
+ * persona_voice_configs.speech_voice_sample_id (persona voice assignment).
  *
  * Note: decryptApiKey is NOT called here — credential decryption is a security
  * concern owned by the caller (speechEndpointResolver.ts). This repo returns
@@ -196,9 +196,11 @@ export async function deleteVoiceSample(sampleId: number): Promise<void> {
 export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<number> {
   try {
     const [row] = await sql<[{ count: string }]>`
-      SELECT COUNT(*) AS count FROM personas
-      WHERE server_id = ${serverId}
-        AND speech_voice_sample_id = ${sampleId}
+      SELECT COUNT(*) AS count
+      FROM persona_voice_configs pvc
+      JOIN personas p ON p.persona_id = pvc.persona_id
+      WHERE p.server_id = ${serverId}
+        AND pvc.speech_voice_sample_id = ${sampleId}
     `;
     return Number(row?.count ?? 0);
   } catch (error) {
@@ -216,10 +218,12 @@ export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: nu
  */
 export async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<void> {
   await sql`
-    UPDATE personas
+    UPDATE persona_voice_configs pvc
     SET speech_voice_sample_id = NULL
-    WHERE server_id = ${serverId}
-      AND speech_voice_sample_id = ${sampleId}
+    FROM personas p
+    WHERE p.persona_id = pvc.persona_id
+      AND p.server_id = ${serverId}
+      AND pvc.speech_voice_sample_id = ${sampleId}
   `;
 }
 

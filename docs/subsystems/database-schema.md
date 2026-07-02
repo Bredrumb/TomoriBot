@@ -79,7 +79,7 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 
 ### Persona config normalization (Phase 6 Step #14 — complete)
 
-`personas` persona-specific config columns were extracted to 4 tables (steps #14.2–#14.6 complete):
+`personas` persona-specific config columns were extracted to 4 tables. Migration `045_backfill_persona_split_configs.sql` backfills these tables from the old `personas` mirrors with mirror values winning drift, and migration `046_drop_persona_mirror_columns.sql` drops the 13 mirror columns after runtime reads cut over:
 
 - `persona_context_note_configs` — per-persona context note + depth
 - `persona_voice_configs` — `speech_voice_*` (`elevenlabs_voice_*` dropped by migration 010, Phase 6 Step #14.2)
@@ -218,6 +218,10 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `persona_user_blocks` stores active persona-scoped mutes/blocks keyed by `(server_id, persona_id, user_disc_id)`, with `block_type` (`mute` or `block`), `reason`, and `expires_at`. Expired rows are ignored by repository reads. The table is intentionally separate from `personalization_blacklist`.
 - `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null.
 - `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`.
+- `persona_voice_configs.speech_voice_sample_id`, `speech_voice_id`, `speech_voice_name`, and `speech_voice_design_prompt` store per-persona voice assignment for local clone samples, provider-hosted voices, and VoiceDesign prompts.
+- `persona_imagegen_configs.physical_appearance_tags` stores public per-persona physical appearance image tags configured by `/persona image-tags`.
+- `persona_imagegen_configs.nai_char_ref_url` stores the persisted persona reference image URL/path used by the `/novelai character-reference` workflow.
+- `persona_textgen_configs.nai_attg_author`, `nai_attg_title`, `nai_attg_tags`, `nai_attg_genre`, and `nai_attg_stars` store NovelAI ATTG metadata.
 
 ### Server config export/import
 
@@ -229,8 +233,8 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 
 ### Image tags and NovelAI references
 
-- `personas.physical_appearance_tags` stores public per-persona physical appearance image tags configured by `/persona image-tags`.
-- `personas.nai_char_ref_url` stores the persisted persona reference image URL/path used by the `/novelai character-reference` workflow.
+- `persona_imagegen_configs.physical_appearance_tags` stores public per-persona physical appearance image tags configured by `/persona image-tags`.
+- `persona_imagegen_configs.nai_char_ref_url` stores the persisted persona reference image URL/path used by the `/novelai character-reference` workflow.
 - `user_personalization_configs.physical_appearance_tags` stores public per-user physical appearance image tags keyed through `users.user_id` and configured by `/personal image-tags`.
 - `user_personalization_configs.nai_char_ref_url` stores the persisted user reference image URL/path keyed through `users.user_id`.
 
@@ -303,7 +307,7 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
   Prices live on the row (not in code), so registering a model's cost is a one-line catalog edit re-seeded on boot. See the command at `src/commands/tool/estimate/cost.ts`.
 - `voice_samples` stores server-scoped reference audio metadata for local speech cloning. `file_path` is a production S3/CloudFront URL or a local `data/voice-samples/` path. Phase 4 allows one uploaded local sample per server.
 - `server_speech_configs.chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, and `chatterbox_exaggeration` store server-scoped Chatterbox speech settings. CFG weight and exaggeration are forwarded to local TTS clone endpoints but only affect the bundled Chatterbox server when Turbo is disabled.
-- `personas.speech_voice_sample_id`, `personas.speech_voice_id`, and `personas.speech_voice_name` store per-persona voice assignment for local clone samples and provider-hosted voices. The legacy `elevenlabs_voice_*` columns were dropped by migration 010 (Phase 6 Step #14.2); `speech_voice_id` is now the sole voice identifier.
+- `persona_voice_configs.speech_voice_sample_id`, `speech_voice_id`, `speech_voice_name`, and `speech_voice_design_prompt` store per-persona voice assignment for local clone samples, provider-hosted voices, and VoiceDesign prompts. The legacy `elevenlabs_voice_*` columns were dropped by migration 010 (Phase 6 Step #14.2); `speech_voice_id` is now the sole provider-hosted voice identifier.
 - `openrouter_model_registrations` scopes extra OpenRouter text `llms` rows to a specific `server_id` or `user_id`.
 - `openrouter_embedding_model_registrations`, `openrouter_image_model_registrations`, and `openrouter_video_model_registrations` do the same for `embedding_models`, `image_diffusion_models`, and `video_generation_models`.
 - All four backing model tables use `is_scoped_registration = true` on those extra rows so they stay hidden from global provider pickers unless joined through a matching registration for that owner.
