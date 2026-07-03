@@ -15,5 +15,8 @@ Two install paths:
 - [`setup-wizard`](./setup-wizard) — guided `bun run setup` install (recommended)
 - [`manual-setup`](./manual-setup) — the manual procedure, for technical users
 
+Once you're running, [`maintenance`](./maintenance) covers the host-side scripts, updating,
+and backing up/restoring your database.
+
 Optional modules (local LLMs, ComfyUI, SearXNG, Crawl4AI, local TTS/STT, ChatMock,
 local MCP servers) each have their own page — see the sidebar.

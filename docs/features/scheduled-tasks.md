@@ -20,6 +20,20 @@ every Friday at 8pm, post a reminder that game night is starting
 She parses the time and recurrence and schedules it. Reminders **ping the target user** when
 they fire; tasks are silent self-actions the persona performs at the scheduled time.
 
+## Timezones
+
+Absolute times ("at 14:30", "on Friday at 8pm") are interpreted in the **server's timezone**
+(`/server timezone`) by default. If you've set a personal timezone with `/personal timezone`,
+the AI sees your local clock in context and labels your times with your UTC offset when
+creating the task — the bot then does the conversion deterministically, so "remind me at 9am"
+means *your* 9am even if the server is on another continent. Relative times ("in 2 hours")
+are timezone-free and always safe.
+
+When a reminder targets a user whose personal timezone differs from the server's, the
+confirmation embed shows **both clocks** (server time and the target's local time), so a
+mislabeled time is immediately visible and can be fixed with a follow-up message or
+`/scheduled-task edit`.
+
 ## Managing Tasks
 
 Two slash commands let you review and adjust existing schedules:

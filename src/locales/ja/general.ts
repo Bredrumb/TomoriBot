@@ -172,6 +172,7 @@ export default {
     },
   },
   reminders: {
+    dual_time_display: `{server_time}（{server_offset} サーバー時間）／ {user_time}（{user_offset}、{user_nickname}さんの現地時間）`,
     reminder_set_title: `⏰ {persona_nickname}がリマインダーを設定しました`,
     reminder_set_description: `{user_nickname}さんに「**{reminder_purpose}**」について\`{reminder_time}\`にリマインドします`,
     reminder_set_footer: `{time_remaining}後にメンションを送信します。リマインダーは\`/scheduled-task remove\`で削除できます。`,

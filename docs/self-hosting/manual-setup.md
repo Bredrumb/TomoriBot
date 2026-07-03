@@ -36,10 +36,12 @@ cp .env.example .env
 
 Required:
 
-- `DISCORD_TOKEN` — your Discord bot token.
+- `DISCORD_TOKEN` — your Discord bot token (enable the `GuildMembers`, `MessageContent`, and
+  `GuildPresences` privileged intents).
 - `CRYPTO_SECRET` — a 32-character encryption key (used to encrypt stored API keys).
-- PostgreSQL connection settings (e.g. `POSTGRES_PASSWORD` and the related `POSTGRES_*` /
-  `DATABASE_URL` values for your database).
+- PostgreSQL connection: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
+  `POSTGRES_PASSWORD`, `POSTGRES_DB`. (For Docker Compose, only `POSTGRES_PASSWORD` is
+  required — the rest is auto-configured.)
 
 Optional tuning lives in `.env.optional.example` — copy over any values you want to
 customize (limits, timeouts, feature toggles, sidecar URLs, etc.).
@@ -62,41 +64,12 @@ bun run launch --searxng --crawl4ai
 bun run launch --help        # see all flags
 ```
 
-## Maintenance Scripts
+## Maintenance, updating & backups
 
-| Command | Description |
-|---|---|
-| `bun run setup` | Open the setup wizard for base install and optional modules. |
-| `bun run update` | Back up first, then pull latest code and install dependencies. |
-| `bun run backup` | Create a bundle in `backups/` with your DB dump and `.env`. |
-| `bun run restore-backup` | Restore `.env` and database from a bundle (`--latest` or `--from backups/<dir>`). |
-| `bun run backup:personas` | Export ONLY personas (with server memories); re-import via `/persona import`. |
-| `bun run nuke-db` | Drop all tables (start the bot afterward to reinitialize). |
-| `bun run purge-commands` | Clear all registered Discord slash commands. |
-| `bun run rotate-keys` | Re-encrypt all encrypted fields to the current key version. |
-
-`bun run backup` and `bun run update` require PostgreSQL client tools (`pg_dump`, `psql`) in
-your PATH.
-
-## Updating
-
-Stop the running bot first, then use the backup-first updater:
-
-```sh
-bun run update
-```
-
-This runs `bun run backup`, then `git pull --rebase --autostash`, then `bun install`. Manual
-fallback:
-
-```sh
-bun run backup
-git pull --rebase --autostash
-bun install
-```
-
-Running from `dist/`? Use `bun run update --build`. Running Docker Compose? Use
-`bun run update --docker`.
+Once you're installed, the host-side scripts (`bun run update`, `bun run backup`,
+`bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, …) and the update and
+backup procedures all live on the [Maintenance & Backups](./maintenance) page. If you're about
+to pull a new version, start with [Safe Migration](./safe-migration).
 
 ## Alternative: Docker Compose
 

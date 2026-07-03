@@ -96,6 +96,61 @@ describe("update_task helpers", () => {
     ).toMatchObject({ ok: false, status: "task_update_failed_invalid_time" });
   });
 
+  it("interprets absolute times in utc_offset when labeled, else the server timezone", () => {
+    // Without utc_offset: 09:00 at the server's UTC+8 is 01:00 UTC
+    const serverFrame = parseUpdateTaskArguments(
+      {
+        reminder_id: 5,
+        reminder_purpose: "Ping Alice about standup.",
+        reminder_time: "2099-01-01_09:00",
+      },
+      8,
+    );
+    expect(serverFrame.ok).toBe(true);
+    if (!serverFrame.ok) return;
+    expect(serverFrame.newReminderTime?.toISOString()).toBe("2099-01-01T01:00:00.000Z");
+
+    // With utc_offset: 09:00 at Alice's UTC-5 is 14:00 UTC — server offset must NOT apply
+    const userFrame = parseUpdateTaskArguments(
+      {
+        reminder_id: 5,
+        reminder_purpose: "Ping Alice about standup.",
+        reminder_time: "2099-01-01_09:00",
+        utc_offset: -5,
+      },
+      8,
+    );
+    expect(userFrame.ok).toBe(true);
+    if (!userFrame.ok) return;
+    expect(userFrame.newReminderTime?.toISOString()).toBe("2099-01-01T14:00:00.000Z");
+  });
+
+  it("rejects out-of-range or non-numeric utc_offset values", () => {
+    expect(
+      parseUpdateTaskArguments(
+        {
+          reminder_id: 5,
+          reminder_purpose: "Ping Alice about standup.",
+          reminder_time: "2099-01-01_09:00",
+          utc_offset: 20,
+        },
+        0,
+      ),
+    ).toMatchObject({ ok: false, status: "task_update_failed_invalid_args" });
+
+    expect(
+      parseUpdateTaskArguments(
+        {
+          reminder_id: 5,
+          reminder_purpose: "Ping Alice about standup.",
+          reminder_time: "2099-01-01_09:00",
+          utc_offset: "-5",
+        },
+        0,
+      ),
+    ).toMatchObject({ ok: false, status: "task_update_failed_invalid_args" });
+  });
+
   it("authorizes creator and non-self target edits, but not unrelated users", () => {
     const reminder = {
       created_by_user_id: 10,

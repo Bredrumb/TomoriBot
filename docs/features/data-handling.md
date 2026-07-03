@@ -8,6 +8,12 @@ TomoriBot is built to be transparent about your data. You can export, import, or
 everything she stores, and this page spells out exactly what that is. For the legal text,
 see `/legal privacy` and `/legal terms`.
 
+:::note
+This page covers the in-Discord, per-user controls. **Self-hosting your own instance?**
+Whole-database backups and restores are a host-side operation — see
+[Maintenance & Backups](/self-hosting/maintenance/).
+:::
+
 ## What She Stores
 
 **Stored:**

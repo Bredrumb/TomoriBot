@@ -241,43 +241,12 @@ Simply mention the bot in a server or use the configured trigger words to start 
 
 Or slide into TomoriBot's DMs and say hi!
 
-## Maintenance Scripts
+## Maintenance & Updates
 
-| Command | Description |
-|---|---|
-| `bun run setup` | Opens the setup wizard for Base Install or Full Install |
-| `bun run update` | Stops before code changes if backup fails, then pulls latest code and installs dependencies |
-| `bun run backup` | Creates a bundle in `backups/` with your DB dump and `.env`, contains all of your data |
-| `bun run restore-backup` | Restores `.env` and database from a bundle, use the `--latest` or `--from backups/<bundle-dir>` flags |
-| `bun run backup:personas` | Export ONLY personas (with server memories) across all servers to `backups/`. **Must be re-imported manually via `/persona import`, cannot be used with `restore-backup` (avoids primary key conflicts)** |
-| `bun run nuke-db` | Drops all tables (start the bot afterwards to reinitialise). Usually used in conjunction with backups for clean installs |
-| `bun run purge-commands` | Clear all registered Discord slash commands |
-| `bun run rotate-keys` | Migrate all encrypted fields to the current key version |
+The host-side maintenance scripts (`bun run update`, `bun run backup`, `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, and more), the backup-first update procedure, and database backup/restore for both local and Docker Compose deployments are all documented in the guides:
 
-`bun run backup` and `bun run update` require PostgreSQL client tools (`pg_dump` and `psql`) in PATH.
-
-## Updating TomoriBot
-
-Stop your running bot process first, then use the backup-first updater:
-
-```sh
-bun run update
-```
-
-`bun run update` runs `bun run backup` first, then `git pull --rebase --autostash`, then `bun install`. The backup bundle is saved to `backups/` and includes both the database dump and `.env`.
-
-Manual fallback:
-```sh
-bun run backup
-git pull --rebase --autostash
-bun install
-```
-
-If you run from `dist/`, use `bun run update --build`. If you run Docker Compose:
-
-```sh
-bun run update --docker
-```
+- **[Maintenance & Backups](https://docs.tomoribot.app/self-hosting/maintenance/)** - maintenance scripts, updating, and backing up/restoring your database.
+- **[Safe Migration](https://docs.tomoribot.app/self-hosting/safe-migration/)** - how to protect your data before pulling a new version.
 
 ## Docker Compose
 
@@ -299,38 +268,7 @@ For later starts, `docker compose up` is enough unless you changed code or depen
 
 **Note:** Docker Compose automatically configures the database connection. The PostgreSQL service runs in development mode (no SSL) and connects to the internal Docker network.
 
-Docker Compose supports automatic startup backups inside the app container. Backup
-bundles are written to the host `backups/` directory because Compose mounts it into
-the container.
-
-For a manual Docker backup:
-
-```sh
-docker compose stop tomoribot
-docker compose run --rm tomoribot bun run backup
-docker compose start tomoribot
-```
-
-For a Docker restore:
-
-```sh
-docker compose stop tomoribot
-docker compose run --rm tomoribot bun run restore-backup --latest
-docker compose up -d
-```
-
-Host-side scripts such as `bun run backup`, `bun run update`, and `bun run nuke-db`
-do not automatically run through Docker. To use host scripts against the Compose
-database instead, run them on the host with Bun plus PostgreSQL client tools
-installed, and set:
-
-```env
-POSTGRES_HOST=localhost
-POSTGRES_PORT=15432
-POSTGRES_USER=tomori
-POSTGRES_PASSWORD=your_password
-POSTGRES_DB=tomodb
-```
+Backing up and restoring a Docker Compose deployment (including running host scripts against the Compose database) is covered in the **[Maintenance & Backups](https://docs.tomoribot.app/self-hosting/maintenance/)** guide.
 
 #### Optional Docker Sidecars
 

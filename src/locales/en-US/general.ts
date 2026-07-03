@@ -172,6 +172,7 @@ export default {
     },
   },
   reminders: {
+    dual_time_display: `{server_time} ({server_offset} server time) / {user_time} ({user_offset}, {user_nickname}'s local time)`,
     reminder_set_title: `⏰ {persona_nickname} Set a Reminder`,
     reminder_set_description: `I'll remind {user_nickname} about "**{reminder_purpose}**" at \`{reminder_time}\``,
     reminder_set_footer: `A mention will be sent after {time_remaining} from now. Delete reminders with \`/scheduled-task remove\`.`,

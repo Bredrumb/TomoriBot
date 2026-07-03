@@ -1,7 +1,7 @@
 ---
 title: Local Monitoring with Grafana
 sidebar:
-  order: 13
+  order: 14
 ---
 # Local Monitoring with Grafana
 

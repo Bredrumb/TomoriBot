@@ -1188,6 +1188,15 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
       {
         provider: "nvidia",
+        codename: "z-ai/glm-5.2",
+        isFree: true,
+        hasTools: true,
+        supportsStructoutput: true,
+        desc: "Latest tool-capable NVIDIA NIM GLM 5.2 model with structured output support",
+        ja: "ツール利用と構造化出力に対応した、最新のNVIDIA NIM GLM 5.2モデル",
+      },
+      {
+        provider: "nvidia",
         codename: "stepfun-ai/step-3.5-flash",
         isFree: true,
         hasTools: true,

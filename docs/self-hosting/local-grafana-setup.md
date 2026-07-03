@@ -1,7 +1,7 @@
 ---
 title: "Local Grafana Setup"
 sidebar:
-  order: 14
+  order: 15
 ---
 
 This guide connects your local Grafana instance to TomoriBot's production Cloud SQL database

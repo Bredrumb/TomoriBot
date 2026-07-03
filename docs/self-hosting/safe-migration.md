@@ -1,7 +1,7 @@
 ---
 title: "Safe Migration Guide for Self-Hosters"
 sidebar:
-  order: 12
+  order: 13
 ---
 
 When you `git pull` new code and restart TomoriBot, the bot automatically runs database schema migrations on boot. This is powerful — it means you don't have to manually manage SQL updates — but it also means destructive operations can silently affect your data. This guide shows you how to protect yourself before pulling.

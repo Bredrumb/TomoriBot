@@ -55,6 +55,7 @@ source open to follow these.
 - [`self-hosting/setup-local-mcp.md`](./self-hosting/setup-local-mcp)
 - [`self-hosting/text-to-speech/`](./self-hosting/text-to-speech/) — local TTS engines
 - [`self-hosting/speech-to-text/`](./self-hosting/speech-to-text/) — local STT engines
+- [`self-hosting/maintenance.md`](./self-hosting/maintenance) — maintenance scripts, updating, backups/restore
 - [`self-hosting/safe-migration.md`](./self-hosting/safe-migration)
 - [`self-hosting/local-monitoring.md`](./self-hosting/local-monitoring)
 - [`self-hosting/local-grafana-setup.md`](./self-hosting/local-grafana-setup)
