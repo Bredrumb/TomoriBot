@@ -6,6 +6,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help matrix subcommand
@@ -39,6 +40,7 @@ export async function execute(
       {
         titleKey: "commands.help.matrix.title",
         descriptionKey: "commands.help.matrix.embed_description",
+        docsPath: DOCS_PATHS.MATRIX_BRIDGE,
         color: ColorCode.INFO,
         fields: [
           {

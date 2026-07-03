@@ -1,6 +1,7 @@
 ---
 title: "Memory Pipeline"
 sidebar:
+  label: "Overview"
   groupLabel: "Memory"
   order: 500
 ---

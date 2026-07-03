@@ -25,7 +25,7 @@ export default {
 
     // Shared dashboard strings
     empty: `(None)`,
-    footer: `Token and cost figures are rough character-based estimates.`,
+    footer: `Tokens reflect real provider usage where reported; cost is estimated from list prices.`,
     unknown_persona: `Unknown Persona #{id}`,
     days: `{count} days`,
     local_suffix: `local`,

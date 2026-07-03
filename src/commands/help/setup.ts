@@ -6,6 +6,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help setup subcommand
@@ -54,6 +55,7 @@ export async function execute(
       {
         titleKey: "commands.help.setup.title",
         descriptionKey: "commands.help.setup.embed_description",
+        docsPath: DOCS_PATHS.QUICKSTART,
         color: ColorCode.SUCCESS,
         fields: [
           {

@@ -8,6 +8,7 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -40,6 +41,7 @@ export async function execute(
     const embedOptions: SummaryEmbedOptions = {
       titleKey: "commands.help.spotlight.title",
       descriptionKey: "commands.help.spotlight.embed_description",
+      docsPath: DOCS_PATHS.PERSONAL_SPOTLIGHT,
       color: ColorCode.INFO,
       fields: [
         {

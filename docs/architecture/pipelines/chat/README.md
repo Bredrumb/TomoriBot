@@ -1,6 +1,7 @@
 ---
 title: "Chat Pipeline"
 sidebar:
+  label: "Overview"
   groupLabel: "Chat"
   order: 100
 ---

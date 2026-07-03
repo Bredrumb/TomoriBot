@@ -339,7 +339,7 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
         log.success("PostgreSQL RAG schema verified");
       } else {
         log.info(
-          "Skipping RAG schema init (pgvector extension not detected). Install pgvector to enable document features (see README.md).",
+          "Skipping RAG schema init (pgvector extension not detected). Install pgvector to enable document features (see https://docs.tomoribot.app/self-hosting/manual-setup/).",
         );
       }
 

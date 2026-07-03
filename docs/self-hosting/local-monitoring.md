@@ -1,12 +1,10 @@
 ---
-title: Local Monitoring with Grafana
+title: Local Grafana Monitoring
 sidebar:
-  order: 14
+  order: 7
 ---
-# Local Monitoring with Grafana
 
-You can monitor your local TomoriBot instance with Grafana dashboards using a provided Docker Compose profile. 
-*(If you are looking for production Google Cloud monitoring, see [local-grafana-setup.md](local-grafana-setup.md) instead).*
+You can monitor your local TomoriBot instance with Grafana dashboards using a provided Docker Compose profile.
 
 To start both TomoriBot and Grafana together on your machine:
 

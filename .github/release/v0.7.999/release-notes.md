@@ -2,12 +2,12 @@
   
 ![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.999/zaya-comic.webp)
 
-Small minor update right before the bigger 0.8.0.00. Highlights for this update are stat tracking as well as a [refreshed docs website](https://docs.tomoribot.app/) that allows newer users of TomoriBot to discover her morbillion random features.
+Small minor update right before the bigger 0.8.0.00. Highlights for this update are stat tracking as well as a [refreshed docs website](https://docs.tomoribot.app/) that allows both newer and older users of TomoriBot to discover her morbillion random features.
 
 ## Documentation Update
-The official documentation website for TomoriBot ([here](https://docs.tomoribot.app/)) has been polished to make it easier for users to find TomoriBot's existing features (well, most of its pages, for now). Take a look at the **Features** and **Self-Hosting** categories and see if you might've missed some things TomoriBot has to offer! You may also run the docs website yourself by `bun run`ing the `/apps/docs/` directory
+The official documentation website for TomoriBot ([here](https://docs.tomoribot.app/)) has been polished to make it easier for both new and old users in finding TomoriBot's existing features. Take a look at the **Features** and **Self-Hosting** categories and see if you might've missed some things TomoriBot has to offer! You may also run the docs website yourself by `bun run`ing the `/apps/docs/` directory
 
-Un-rewritten AI-generated pages will have a disclaimer at the top of the page, if there's no disclaimer then I've written it with my two weak human hands.
+Un-rewritten AI-generated pages will have a disclaimer at the top of the page, if there's no disclaimer then I've written (or atleast co-written) it with my two weak human hands.
 
 ## New Tomori Features
 - (Thanks Baetican!) `/config context-note set` can now be scoped into channels
@@ -37,7 +37,7 @@ Un-rewritten AI-generated pages will have a disclaimer at the top of the page, i
 - TomoriBot now automatically stores DB backups during bot startup before everything else (stored in `/backups/` with `_auto` suffix), checking if:
   - Last automatic backup is from an older version
   - Last automatic backup is atleast 24 hours old
-- Docker deploys of TomoriBot now support manual (and automatic) DB backups and restores (see root README.md)
+- Docker deploys of TomoriBot now support manual (and automatic) DB backups and restores (see the [Maintenance & Backups guide](https://docs.tomoribot.app/self-hosting/maintenance/))
 - New `bun run setup` and `bun run update` which makes it easier to first-time setup and update TomoriBot for local instances
 
 ## Persona Updates

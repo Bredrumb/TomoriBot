@@ -8,6 +8,7 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { replySummaryEmbed } from "@/utils/discord/interactionHelper";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -43,6 +44,7 @@ export async function execute(
     const embedOptions: SummaryEmbedOptions = {
       titleKey: "commands.help.deliberate-tool-mode.title",
       descriptionKey: "commands.help.deliberate-tool-mode.embed_description",
+      docsPath: DOCS_PATHS.DELIBERATE_TOOL_MODE,
       color: ColorCode.INFO,
       fields: [
         {

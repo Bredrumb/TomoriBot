@@ -1,6 +1,7 @@
 ---
 title: "Integrations"
 sidebar:
+  label: "Overview"
   groupLabel: "Integrations"
   order: 40
 ---

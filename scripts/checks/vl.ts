@@ -383,6 +383,7 @@ const CATEGORIES = {
   DB: (r: ResultItem) =>
     r.name.includes("Schema Drift") || r.name.includes("Lifecycle") || r.name.includes("Migration Files"),
   LOCALES: (r: ResultItem) => r.name.includes("Localization"),
+  DOCS: (r: ResultItem) => r.name.includes("Command Reference"),
 };
 
 async function main() {
@@ -402,6 +403,7 @@ async function main() {
     dbLifecycleResult,
     localesResult,
     localeLengthsResult,
+    commandReferenceResult,
   ] = await Promise.all([
     runCheck("Type Check (bun run check)", ["bun", "run", "check"], true),
     runLint(),
@@ -429,6 +431,11 @@ async function main() {
       ["bun", "run", "check-locale-lengths"],
       true,
     ),
+    runCheck(
+      "Command Reference Freshness (bun run check-command-reference)",
+      ["bun", "run", "check-command-reference"],
+      true,
+    ),
   ]);
 
   const results: ResultItem[] = [
@@ -444,6 +451,7 @@ async function main() {
     dbLifecycleResult,
     localesResult,
     localeLengthsResult,
+    commandReferenceResult,
   ];
 
   console.log("\n====================================");
@@ -473,6 +481,8 @@ async function main() {
       "Missing Japanese equivalents are fine to push — run `bun run prune-locales` to clean up orphaned keys, or add the missing `ja` entries to get a clean run.",
     "Localization Discord Limits":
       "Discord truncates modal placeholders/descriptions and select-option labels/descriptions (>100 chars), modal titles/labels (>45), and command descriptions (>100). Shorten the listed locale strings — both `en-US` and `ja` sides must fit.",
+    "Command Reference":
+      "Run `bun run generate-command-reference` and commit the regenerated docs/features/command-reference.md.",
   };
 
   const getHint = (name: string) => {
@@ -532,6 +542,8 @@ async function main() {
   printSection("\nDatabase Validation", results.filter((r) => CATEGORIES.DB(r)));
 
   printSection("\nLocalization", results.filter((r) => CATEGORIES.LOCALES(r)));
+
+  printSection("\nDocs", results.filter((r) => CATEGORIES.DOCS(r)));
 
   console.log("\n====================================");
   if (allFatalPassed) {

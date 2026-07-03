@@ -1,6 +1,7 @@
 ---
 title: "Subsystems"
 sidebar:
+  label: "Overview"
   groupLabel: "Subsystems"
   order: 30
 ---

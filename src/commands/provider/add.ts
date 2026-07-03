@@ -26,6 +26,19 @@ const MODAL_CUSTOM_ID = "config_provider_add_modal";
 const PROVIDER_SELECT_ID = "provider_select";
 const API_KEY_INPUT_ID = "api_key_input";
 
+const PROVIDER_CHOICE_DESCRIPTION_KEYS: Record<string, string> = {
+  anthropic: "commands.provider.add.provider_choice_descriptions.anthropic",
+  deepseek: "commands.provider.add.provider_choice_descriptions.deepseek",
+  google: "commands.provider.add.provider_choice_descriptions.google",
+  novelai: "commands.provider.add.provider_choice_descriptions.novelai",
+  nvidia: "commands.provider.add.provider_choice_descriptions.nvidia",
+  openrouter: "commands.provider.add.provider_choice_descriptions.openrouter",
+  vertex: "commands.provider.add.provider_choice_descriptions.vertex",
+  vertexexpress: "commands.provider.add.provider_choice_descriptions.vertexexpress",
+  zai: "commands.provider.add.provider_choice_descriptions.zai",
+  zaicoding: "commands.provider.add.provider_choice_descriptions.zaicoding",
+};
+
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.provider.add.description"));
 
@@ -82,16 +95,22 @@ export async function execute(
   const alreadyExistingSuffix = localizer(locale, "commands.provider.add.already_existing_suffix");
 
   const providerSelectOptions: SelectOption[] = uniqueProviders.map((provider) => {
+    const normalizedProvider = provider.toLowerCase();
     const isExisting = savedProviderNames.has(provider.toLowerCase());
-    const isFree = freeProviders.has(provider.toLowerCase());
+    const isFree = freeProviders.has(normalizedProvider);
     const baseName = getProviderDisplayName(provider);
     const label = [baseName, isFree && `(${freeSuffix})`, isExisting && `(${alreadyExistingSuffix})`]
       .filter(Boolean)
       .join(" ");
+    const descriptionKey = PROVIDER_CHOICE_DESCRIPTION_KEYS[normalizedProvider];
     return {
       label,
-      value: provider.toLowerCase(),
-      description: isExisting ? localizer(locale, "commands.provider.add.already_existing_description") : undefined,
+      value: normalizedProvider,
+      description: isExisting
+        ? localizer(locale, "commands.provider.add.already_existing_description")
+        : descriptionKey
+          ? localizer(locale, descriptionKey)
+          : undefined,
     };
   });
   providerSelectOptions.push({

@@ -1,6 +1,7 @@
 ---
 title: "LTM Sub-Pipeline"
 sidebar:
+  label: "Overview"
   groupLabel: "LTM"
   order: 520
 ---

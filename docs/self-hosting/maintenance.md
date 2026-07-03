@@ -1,13 +1,13 @@
 ---
 title: "Maintenance & Backups"
 sidebar:
-  order: 12
+  order: 5
 ---
 
 Day-to-day operation of a self-hosted instance: the maintenance scripts, how to update, and
 how to back up and restore your database. These are host-side operations — you run them from a
 shell, not from Discord. For the in-Discord, per-user export/import/delete flows, see
-[Data Handling](/features/data-handling/) instead.
+[Data Handling](/features/knowledge/data-handling/) instead.
 
 If you're about to `git pull` a new version, read [Safe Migration](./safe-migration) first —
 it covers backing up *before* the on-boot migration runner touches your schema.
@@ -116,5 +116,5 @@ want a clean slate you can still roll back from — never run it without a curre
 ## See also
 
 - [Safe Migration](./safe-migration) — backing up before pulling, and the `pgvector` restore prerequisite
-- [Data Handling](/features/data-handling/) — per-user, in-Discord export/import/delete
+- [Data Handling](/features/knowledge/data-handling/) — per-user, in-Discord export/import/delete
 - [Setup Wizard](./setup-wizard) — the guided `bun run setup` install

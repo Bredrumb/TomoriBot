@@ -1,6 +1,7 @@
 ---
 title: "Contributing"
 sidebar:
+  label: "Overview"
   groupLabel: "Contributing"
   order: 4
 ---

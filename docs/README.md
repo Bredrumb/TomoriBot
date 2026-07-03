@@ -21,22 +21,30 @@ The marketing front door — what TomoriBot is and how to start using it.
 Capability-oriented pages for people *using* TomoriBot. Category pages with sections;
 a section graduates to its own file when it outgrows ~2-3 screens or gains its own setup flow.
 
+Pages are bucketed into task-based sub-categories, each with a landing card-grid README.
+
 - [`features/README.mdx`](./features/) — capability tour card grid
-- [`features/chatting-and-triggers.md`](./features/chatting-and-triggers)
-- [`features/multiple-personas.md`](./features/multiple-personas)
-- [`features/memory.md`](./features/memory)
-- [`features/tools-and-extensions.md`](./features/tools-and-extensions)
-- [`features/scheduled-tasks.md`](./features/scheduled-tasks)
-- [`features/media-generation/`](./features/media-generation/) — image, video, and voice generation
-- [`features/providers-and-models.md`](./features/providers-and-models)
-- [`features/personalization.md`](./features/personalization)
-- [`features/server-moderation.md`](./features/server-moderation)
-- [`features/behavior-tweaking.md`](./features/behavior-tweaking)
-- [`features/data-handling.md`](./features/data-handling)
-- [`features/stats-and-insights.md`](./features/stats-and-insights)
-- [`features/matrix-bridge.md`](./features/matrix-bridge)
-- [`features/command-reference.md`](./features/command-reference) — generated from command locales (Phase 3)
-- [`features/sillytavern-support.md`](./features/sillytavern-support)
+- **Chatting & Personality** — [`chatting-personality/`](./features/chatting-personality/)
+  - [`chatting-and-triggers.md`](./features/chatting-personality/chatting-and-triggers/)
+  - [`multiple-personas.md`](./features/chatting-personality/multiple-personas/)
+  - [`behavior-tweaking.md`](./features/chatting-personality/behavior-tweaking/)
+- **Knowledge** — [`knowledge/`](./features/knowledge/)
+  - [`memory.md`](./features/knowledge/memory/)
+  - [`personalization.md`](./features/knowledge/personalization/)
+  - [`data-handling.md`](./features/knowledge/data-handling/)
+- **Capabilities** — [`capabilities/`](./features/capabilities/)
+  - [`tools-and-extensions.md`](./features/capabilities/tools-and-extensions/)
+  - [`scheduled-tasks.md`](./features/capabilities/scheduled-tasks/)
+  - [`media-generation/`](./features/capabilities/media-generation/) — image, video, and voice generation
+- **Setup & Administration** — [`setup-administration/`](./features/setup-administration/)
+  - [`providers-and-models.md`](./features/setup-administration/providers-and-models/)
+  - [`server-moderation.md`](./features/setup-administration/server-moderation/)
+  - [`age-restricted-commands.md`](./features/setup-administration/age-restricted-commands/)
+  - [`stats-and-insights.md`](./features/setup-administration/stats-and-insights/)
+- **Integrations** — [`integrations/`](./features/integrations/)
+  - [`matrix-bridge.md`](./features/integrations/matrix-bridge/)
+  - [`sillytavern-support.md`](./features/integrations/sillytavern-support/)
+- [`features/command-reference.md`](./features/command-reference/) — generated from command locales (Phase 3)
 
 ## Self-Hosting (order 3)
 
@@ -46,19 +54,18 @@ source open to follow these.
 - [`self-hosting/README.md`](./self-hosting/) — requirements + module directory
 - [`self-hosting/setup-wizard.md`](./self-hosting/setup-wizard) — guided `bun run setup`
 - [`self-hosting/manual-setup.md`](./self-hosting/manual-setup) — manual procedure for technical users
-- [`self-hosting/local-endpoints.md`](./self-hosting/local-endpoints) — self-hosted endpoints hub
-- [`self-hosting/setup-local-llm.md`](./self-hosting/setup-local-llm)
-- [`self-hosting/setup-comfyui.md`](./self-hosting/setup-comfyui)
-- [`self-hosting/setup-searxng.md`](./self-hosting/setup-searxng)
-- [`self-hosting/setup-crawl4ai.md`](./self-hosting/setup-crawl4ai)
-- [`self-hosting/setup-chatmock.md`](./self-hosting/setup-chatmock)
-- [`self-hosting/setup-local-mcp.md`](./self-hosting/setup-local-mcp)
-- [`self-hosting/text-to-speech/`](./self-hosting/text-to-speech/) — local TTS engines
-- [`self-hosting/speech-to-text/`](./self-hosting/speech-to-text/) — local STT engines
+- [`self-hosting/local-endpoints/`](./self-hosting/local-endpoints/) — self-hosted endpoints hub
+  - [`local-endpoints/setup-local-llm.md`](./self-hosting/local-endpoints/setup-local-llm)
+  - [`local-endpoints/setup-comfyui.md`](./self-hosting/local-endpoints/setup-comfyui)
+  - [`local-endpoints/setup-searxng.md`](./self-hosting/local-endpoints/setup-searxng)
+  - [`local-endpoints/setup-crawl4ai.md`](./self-hosting/local-endpoints/setup-crawl4ai)
+  - [`local-endpoints/setup-chatmock.md`](./self-hosting/local-endpoints/setup-chatmock)
+  - [`local-endpoints/setup-local-mcp.md`](./self-hosting/local-endpoints/setup-local-mcp)
+  - [`local-endpoints/text-to-speech/`](./self-hosting/local-endpoints/text-to-speech/) — local TTS engines
+  - [`local-endpoints/speech-to-text/`](./self-hosting/local-endpoints/speech-to-text/) — local STT engines
 - [`self-hosting/maintenance.md`](./self-hosting/maintenance) — maintenance scripts, updating, backups/restore
 - [`self-hosting/safe-migration.md`](./self-hosting/safe-migration)
 - [`self-hosting/local-monitoring.md`](./self-hosting/local-monitoring)
-- [`self-hosting/local-grafana-setup.md`](./self-hosting/local-grafana-setup)
 
 ## Contributing (order 4)
 
@@ -114,6 +121,19 @@ Supporting services that pipelines depend on.
 
 - [`architecture/integrations/`](./architecture/integrations/) — Discord platform, Matrix bridge,
   NovelAI, SillyTavern, and voice pipeline internals
+
+## Meet Tomori (order 6)
+
+The persona gallery — a card deck introducing each of Tomori's "sisters" (the default
+personas TomoriBot ships with). Card sources: `src/db/seed/catalog/personas/*`.
+
+- [`meet-tomori/README.mdx`](./meet-tomori/) — hero + sister card deck (stub)
+- [`meet-tomori/rose.md`](./meet-tomori/rose/) — Default Tomori, the eldest
+- [`meet-tomori/zaya.md`](./meet-tomori/zaya/) — Prideful Tomori, the former esports champion
+- [`meet-tomori/aphel.md`](./meet-tomori/aphel/) — Gloomy Tomori, the exhausted advisor
+- [`meet-tomori/lilya.md`](./meet-tomori/lilya/) — Shy Tomori, the youngest
+- [`meet-tomori/nerine.md`](./meet-tomori/nerine/) — Loyal Tomori, the discontinued model
+- [`meet-tomori/locke.md`](./meet-tomori/locke/) — Unhinged Tomori, planned (replaces Temari)
 
 ## Wiki (hidden)
 

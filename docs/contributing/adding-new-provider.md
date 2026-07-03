@@ -368,9 +368,9 @@ Checklist:
   - confirm the assistant/tool loop shape matches TomoriBot's runtime
 - reasoning or thinking mode:
   - check for continuation-only fields that must be replayed within the same turn
-  - decide explicitly how the `thinking_level` option in `/config samplers` behaves for the provider: map it, or document a deliberate no-op
+  - decide explicitly how the `thinking_level` option in `/model parameters` behaves for the provider: map it, or document a deliberate no-op
   - DeepSeek example: preserve `reasoning_content` across tool sub-turns, but do not treat it as normal cross-turn chat history
-  - Z.ai example: the `thinking_level` option in `/config samplers` maps to `thinking: { type: "enabled" | "disabled" }`; active thinking removes temperature / top_p / frequency_penalty / presence_penalty
+  - Z.ai example: the `thinking_level` option in `/model parameters` maps to `thinking: { type: "enabled" | "disabled" }`; active thinking removes temperature / top_p / frequency_penalty / presence_penalty
 - structured output:
   - determine whether the provider offers strict schema mode or only JSON-object mode
   - implement provider-owned `callStructuredJSON()` for the contract the vendor actually supports
@@ -409,7 +409,7 @@ Use this as the last pass before you call a provider integration "done".
 
 ### Thinking Level
 
-- if the vendor has a verified request-side reasoning control, map the `thinking_level` option from `/config samplers` in the provider layer
+- if the vendor has a verified request-side reasoning control, map the `thinking_level` option from `/model parameters` in the provider layer
 - if the vendor only supports startup flags, GUI toggles, or backend-template-specific reasoning controls, do not invent a generic request field
 - document the result in `docs/architecture/subsystems/thinking-level.md` and the provider notes
 - if the provider only guarantees JSON objects, inject the required prompt guidance and validate locally with Zod

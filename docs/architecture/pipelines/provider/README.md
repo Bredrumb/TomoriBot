@@ -1,6 +1,7 @@
 ---
 title: "Provider Pipeline"
 sidebar:
+  label: "Overview"
   groupLabel: "Provider"
   order: 400
 ---

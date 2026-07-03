@@ -7,6 +7,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help api-key subcommand
@@ -400,6 +401,13 @@ export async function execute(
         // Should never happen due to choices validation
         throw new Error(`Unknown provider: ${provider}`);
     }
+
+    embedOptions.docsPath =
+      provider === "custom"
+        ? DOCS_PATHS.CUSTOM_ENDPOINTS
+        : provider === "elevenlabs"
+          ? DOCS_PATHS.TTS
+          : DOCS_PATHS.API_KEYS;
 
     // Use replySummaryEmbed to show provider-specific guide
     await replySummaryEmbed(interaction, locale, embedOptions, MessageFlags.Ephemeral);

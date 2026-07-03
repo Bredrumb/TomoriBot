@@ -1,0 +1,62 @@
+---
+title: "Text-to-Speech (Local Engines)"
+aiGenerated: false
+sidebar:
+  label: "Overview"
+  groupLabel: "Text-to-Speech"
+  order: 7
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBot treats speech as a custom endpoint capability. Local engines run outside the bot as HTTP servers and implement `POST /synthesize`; most clone engines receive text plus the configured reference audio sample.
+
+## Available Engines
+
+<CardGrid>
+  <LinkCard title="Chatterbox TTS" href="/self-hosting/local-endpoints/text-to-speech/chatterbox/"
+    description="Fast local voice cloning through Chatterbox-Turbo, with supported bracket delivery tags for expressive speech." />
+  <LinkCard title="Qwen3-TTS" href="/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
+    description="Multilingual local TTS with clone and VoiceDesign modes. Largest but best quality." />
+  <LinkCard title="IrodoriTTS" href="/self-hosting/local-endpoints/text-to-speech/irodoritts/"
+    description="Japanese-focused voice cloning that preserves Unicode emoji markup for emotion control." />
+</CardGrid>
+
+## Setup Flow
+
+1. Pick one engine from the cards above and start its wrapper from `servers/tts/`.
+2. Register it with `/provider custom-endpoint add` using capability `speech` and api style `tts-clone`.
+3. In the registration modal, choose the voice source mode and script markup listed in that engine's guide.
+
+Registration makes the endpoint active immediately. Use `/model speech` later only when switching between registered TTS endpoints.
+
+## Persona Voice Flow
+
+For clone engines, add and assign one voice sample per persona:
+
+1. Prepare a clean 10-20 second clip with one speaker and no background music.
+2. Run `/speech voice-add` and upload the sample. Any audio format is accepted; TomoriBot converts it to mono WAV.
+3. Run `/speech voice-assign`, then choose the persona and voice sample.
+
+For Qwen3-TTS VoiceDesign, skip the audio sample and run `/speech voice-design set` for each persona instead.
+
+ElevenLabs users should use `/speech elevenlabs`; it registers the speech and transcription endpoints together.
+
+TomoriBot strips Discord custom emoji syntax such as `:pepega:` or `<:pepega:123456789012345678>` from generated voice scripts before synthesis. Unicode emojis are also stripped unless the speech endpoint uses emoji markup, which is intended for IrodoriTTS.
+
+## Hardware requirements
+
+Local TTS engines are **much lighter than an LLM** — these are small models (roughly
+0.5B–1.7B parameters). Even a modest NVIDIA GPU (a few GB of VRAM is plenty) runs any of them
+comfortably and keeps synthesis fast. They also run on **CPU** — slower, but workable, since
+voice clips are short.
+
+| Engine | Model size | Notes |
+|---|---|---|
+| Chatterbox | ~0.5B (Turbo) | Fastest current option. |
+| Qwen3-TTS | 1.7B (12 Hz) | Separate clone + VoiceDesign models; only one loads at a time. |
+| IrodoriTTS | 500M (v2) | Japanese-focused; `bf16` on GPU, `fp32` on CPU. |
+
+The first synthesis after startup (or after Qwen3-TTS swaps models in auto mode) is slower
+while the model loads into memory; later requests are fast. TomoriBot waits up to
+`TTS_SYNTHESIZE_TIMEOUT_MS` (default 240000 ms) for each response.

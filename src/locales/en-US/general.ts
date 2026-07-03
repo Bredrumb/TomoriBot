@@ -12,6 +12,9 @@ export default {
     defaults: {
       bot_name: `Tomori`,
     },
+    docs: {
+      open_button_label: `Open Full Docs`,
+    },
     api_styles: {
       openai_compatible: `OpenAI-Compatible`,
       comfyui: `ComfyUI`,
@@ -64,12 +67,12 @@ export default {
       channel_not_supported_title: `Unsupported Channel Type`,
       channel_not_supported_description: `Sorry, I can only work in server text channels or Direct Messages. Group DMs and other channel types are not supported.`,
       tomori_not_setup_title: `Initial Setup Required`,
-      tomori_not_setup_description: `It seems I haven't been set up on this server yet. A server member with \`Manage Server\` permissions needs to use \`/config setup\` first. You may also use the \`/help setup\` for help, and the \`/config language\` command to set your preferred language.`,
+      tomori_not_setup_description: `This server still needs initial setup. A member with **Manage Server** permission should run \`/config setup\` first. Use \`/help setup\` or https://docs.tomoribot.app/introduction/quickstart/ for the short guide.`,
       tomori_updating_title: `Currently Updating...`,
       tomori_updating_description: `I'm currently being updated and will be back shortly. Please try again in a few moments!`,
-      tomori_not_setup_dm_footer: `DMs are treated as mini "servers" wherein I respond to any of your messages privately. Most server related commands will still work as intended.`,
+      tomori_not_setup_dm_footer: `DMs use a private setup, so most server-style settings still apply.`,
       api_key_missing_title: `API Key Missing`,
-      api_key_missing_description: `I need an active provider to function, but none is configured for this server. A server member with \`Manage Server\` permissions can set one using \`/setup\` (first time) or \`/provider add\`.`,
+      api_key_missing_description: `I need an active provider to respond. A member with **Manage Server** permission can run \`/config setup\` for first setup or \`/provider add\` to save a provider.`,
       api_key_error_title: `API Key Error`,
       api_key_error_description: `There was an issue accessing or decrypting the configured provider credentials. Please reconfigure them using \`/provider add\`.`,
       personal_provider_required_title: `Personal Provider Required`,
@@ -109,7 +112,7 @@ export default {
       searxng_unreachable: {
         title: `SearXNG Unreachable`,
         description: `The self-hosted SearXNG metasearch instance isn't responding. Falling back to DuckDuckGo for now. Check that the sidecar container is running and \`SEARXNG_BASE_URL\` is correct.`,
-        footer: `See servers/searxng/README.md for troubleshooting`,
+        footer: `See the SearXNG self-hosting guide for troubleshooting`,
       },
       operation_failed_title: `Operation Failed`,
       operation_failed_description: `The requested operation could not be completed. Please try again.`,
@@ -158,17 +161,13 @@ export default {
   events: {
     addBot: {
       rejoin_title: `I'm Back!`,
-      rejoin_description: `Looks like I was re-added to this server. My previous settings and personality are still intact! You can manage me using the \`/config\`, \`/persona\`, \`/memory\`, and \`/server\` commands. You can also export or reset your data anytime with \`/memory personal export\`, \`/memory server export\`, \`/personal config\`, and \`/server config\`.
+      rejoin_description: `Looks like I was re-added to this server. Existing settings and personas are still intact. Use \`/config\`, \`/persona\`, \`/memory\`, \`/server\`, and \`/provider add\` to review or change them.
 
-			If you wish to change my provider, use \`/provider add\` to register and activate a new default text provider.
-
-			**By using me, you agree to these [Terms of Service](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/terms-of-service.md) and [Privacy Policy](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/privacy-policy.md).** View them anytime with \`/legal terms\` and \`/legal privacy\`.`,
+			View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
       setup_prompt_title: `Successfully Added`,
-      setup_prompt_description: `Thanks for adding me! To get started, someone with the **Manage Server** permission needs to run my \`/config setup\` command to choose my initial personality and configure my AI features. You can also export or reset your data anytime with \`/memory personal export\`, \`/memory server export\`, \`/personal config\`, and \`/server config\`.
+      setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or https://docs.tomoribot.app/introduction/quickstart/ for the short guide.
 
-			Use the \`/help api-key\` command if you are unsure on how to create an API key for your chosen AI provider. API keys will be kept encrypted but if you are still wary of giving it to a public Discord bot, feel free to run your own TomoriBot using the [repository's guide](https://github.com/Bredrumb/TomoriBot) instead.
-
-			**By using me, you agree to these [Terms of Service](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/terms-of-service.md) and [Privacy Policy](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/privacy-policy.md).** View them anytime with \`/legal terms\` and \`/legal privacy\`.`,
+			Use \`/help api-key\` if you need provider key instructions. View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
     },
   },
   reminders: {

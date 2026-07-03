@@ -1,6 +1,7 @@
 ---
 title: "06: Per-Turn Loop"
 sidebar:
+  label: "Overview"
   groupLabel: "06: Per-Turn"
 ---
 

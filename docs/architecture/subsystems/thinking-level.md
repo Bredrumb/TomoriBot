@@ -15,8 +15,9 @@ Use this page to verify:
 
 `thinking_level` is a **provider-scoped saved preference** controlled by:
 
-- `/config samplers thinking_level:<value>`
-- `/config samplers provider:<saved-provider> thinking_level:<value>`
+- `/model parameters thinking_level:<value>` — for a server saved provider (you pick which
+  saved provider via the interactive picker after running the command)
+- `/personal parameters thinking_level:<value>` — for your personal saved provider
 
 Current values:
 

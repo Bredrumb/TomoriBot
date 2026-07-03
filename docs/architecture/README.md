@@ -1,6 +1,7 @@
 ---
 title: "Architecture"
 sidebar:
+  label: "Overview"
   groupLabel: "Architecture"
   order: 5
 ---

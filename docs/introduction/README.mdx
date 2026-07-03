@@ -1,5 +1,6 @@
 ---
-title: "Introduction"
+title: "What is TomoriBot?"
+aiGenerated: false
 sidebar:
   groupLabel: "Introduction"
   order: 1
@@ -8,67 +9,63 @@ sidebar:
 import { LinkButton } from "@astrojs/starlight/components";
 import FeatureCard from "/src/components/FeatureCard.astro";
 
-**TomoriBot** is a customizable Discord AI chatbot. Give her an API key, and she chats
-naturally in your server — remembering people, switching between personas, searching the
-web, generating images and voice, and running tools on your behalf. You can invite the
-public instance in seconds, or self-host your own for full control over your data and models.
+**TomoriBot** is a free and open-source project that aims to bring personal AI agents and role-playing systems right into Discord servers, inspired by SillyTavern and Discord's discontinued Clyde. Simply put, she (or *it*) is an agentic+roleplaying harness for AIs put into Discord:
+
+![Tomori Formula](/img/docs/intro/00-tomori-formula.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>Like an unholy trinity of Discord, SillyTavern, and OpenClaw</small>
+
+Read as Tomo(友)-Ri(里), roughly meaning "Home of Friends", Tomori is a home for your very own practical assistant(s), customizable companion(s), and/or role-play partner(s) for in DMs, or for everyone in your Discord server. She is also built with beginners in mind, so those new with AI agents can learn with her too.
+
+You can invite the public instance now or self-host your own for full control over your data (more info at [Quickstart](/introduction/quickstart/)):
 
 <div class="button-row">
   <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
-    Invite TomoriBot
+    **Invite TomoriBot**
   </LinkButton>
   <LinkButton href="/self-hosting/" variant="secondary">
-    Self-Host
-  </LinkButton>
-  <LinkButton href="/introduction/quickstart/" variant="minimal">
-    Quickstart →
+    **Self-Host TomoriBot**
   </LinkButton>
 </div>
 
-## What TomoriBot Can Do
+## What can TomoriBot do?
 
-Every card below links to a full guide. New here? The [Quickstart](/introduction/quickstart/)
-walks you from inviting the bot to your first conversation.
 
 <div class="feature-grid">
-  <FeatureCard title="Multiple Personas" img="/img/docs/intro/01-multiple-personas.png" href="/features/multiple-personas/">
-    Run several characters in one server, each with its own personality, trigger words,
-    and webhook avatar — and let them talk to each other.
+  <FeatureCard title="Multiple Personas" img="/img/docs/intro/01-multiple-personas.png" href="/features/chatting-personality/multiple-personas/">
+    Run several custom characters in one server, each with their own settings, memories, and avatars. Watch them coordinate (or mess around) with each other!
   </FeatureCard>
-  <FeatureCard title="Memory" img="/img/docs/intro/02-memory.png" href="/features/memory/">
-    Teach her facts about people and your server. She remembers across conversations,
-    and personal memories follow you between servers.
+  <FeatureCard title="Persistent Memory" img="/img/docs/intro/02-memory.png" href="/features/knowledge/memory/">
+    Make your Tomori grow by teaching her facts about people and your server. She remembers across conversations, and personal memories follow you between servers.
   </FeatureCard>
-  <FeatureCard title="Media Generation" img="/img/docs/intro/03-media-generation.png" href="/features/media-generation/">
-    Generate images, short videos, and spoken voice messages right in chat — from a
-    prompt or by editing a reference image.
+  <FeatureCard title="Media Generation" img="/img/docs/intro/03-media-generation.png" href="/features/capabilities/media-generation/">
+    Generate/edit images, short videos, and spoken voice messages right in chat from a
+    prompt or through reference.
   </FeatureCard>
-  <FeatureCard title="Agentic Tools" img="/img/docs/intro/04-agentic-tools.png" href="/features/tools-and-extensions/">
-    Web search, URL reading, scheduled reminders, cross-channel messages, and custom
-    MCP tools — she decides when to use them.
+  <FeatureCard title="Agentic Tools" img="/img/docs/intro/04-agentic-tools.png" href="/features/capabilities/tools-and-extensions/">
+    TomoriBot can autonomously web search, schedule reminders, block users, utilize custom
+    MCP tools, and more.
   </FeatureCard>
   <FeatureCard title="Fully Local Setup" img="/img/docs/intro/05-fully-local-setup.png" href="/self-hosting/local-endpoints/">
-    Point her at your own hardware: local LLMs, ComfyUI, SearXNG, and local voice
-    servers. Your hardware, your data.
+    Create your own privately owned setup with local LLMs, ComfyUI, SearXNG, local voice
+    servers, and MCPs.
   </FeatureCard>
-  <FeatureCard title="Server Moderation" img="/img/docs/intro/06-server-moderation.png" href="/features/server-moderation/">
-    Admin controls for cost and safety: quotas, channel and role whitelists, thought
-    logs, and a bring-your-own-key requirement.
+  <FeatureCard title="Server Moderation" img="/img/docs/intro/06-server-moderation.png" href="/features/setup-administration/server-moderation/">
+    Add admin controls for cost and safety: quotas, channel and role whitelists, thought
+    logs, and BYOK requirements.
   </FeatureCard>
-  <FeatureCard title="Command Reference" img="/img/docs/intro/07-command-reference.png" href="/features/command-reference/">
-    Dozens of slash commands for deep customization — every one of them documented in a
-    single searchable reference.
+  <FeatureCard title="200+ Commands" img="/img/docs/intro/07-command-reference.png" href="/features/command-reference/">
+    Hundreds of native Discord slash commands for deeper customization, ranging from prompts used to permissions granted.
   </FeatureCard>
-  <FeatureCard title="SillyTavern Support" img="/img/docs/intro/08-sillytavern-support.png" href="/features/sillytavern-support/">
-    Import SillyTavern prompt presets and character cards to bring existing characters
-    straight into Discord.
+  <FeatureCard title="SillyTavern Support" img="/img/docs/intro/08-sillytavern-support.png" href="/features/integrations/sillytavern-support/">
+    Import SillyTavern prompt presets and character cards to bring existing instructions and characters straight into Discord.
   </FeatureCard>
 </div>
 
 ## Where to Go Next
 
-- **Just want to use her?** Start with the [Quickstart](/introduction/quickstart/), then
+- **Want to use her now?** See [Quickstart](/introduction/quickstart/), then
   browse the [Features](/features/) tour.
-- **Want to run your own instance?** Head to [Self-Hosting](/self-hosting/).
-- **Want to understand or extend the code?** See the [Architecture](/architecture/) overview
+- **Want to run your own TomoriBot instance?** Head to [Self-Hosting](/self-hosting/).
+- **Want to contribute to the code?** See the [Architecture](/architecture/) overview
   and the [Contributing](/contributing/) guides.
+- **Want to help the project stay afloat?** Star her repository on [GitHub](https://github.com/Bredrumb/TomoriBot) donate to Bredrumb's [Ko-Fi](https://ko-fi.com/J3J71O7NE6), or even better, share her with your friends! Its all very much appreciated.

@@ -1,0 +1,38 @@
+---
+title: "Speech-to-Text (Local Engines)"
+sidebar:
+  label: "Overview"
+  groupLabel: "Speech-to-Text"
+  order: 8
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBot treats speech-to-text as the `transcription` custom endpoint capability. Audio attachments are transcribed in the background and added to conversation context when an active transcription endpoint exists.
+
+Visible transcript posting is separate. `/speech transcripts` only controls whether voice-message transcripts are posted in chat; it does not enable or disable background STT.
+
+## Available Engines
+
+<CardGrid>
+  <LinkCard title="WhisperX" href="/self-hosting/local-endpoints/speech-to-text/whisperx/"
+    description="Beginner-friendly local transcription using the reference WhisperX server under servers/stt." />
+  <LinkCard title="whisper.cpp" href="/self-hosting/local-endpoints/speech-to-text/whispercpp/"
+    description="Use a lightweight whisper.cpp HTTP server when it exposes an OpenAI-compatible transcription endpoint." />
+  <LinkCard title="KoboldCPP" href="/self-hosting/local-endpoints/speech-to-text/koboldcpp/"
+    description="Use KoboldCPP Whisper-based STT when your build exposes OpenAI-compatible audio transcription." />
+</CardGrid>
+
+## Setup Flow
+
+1. Start one STT server from the engine guides above.
+2. Register it with `/provider custom-endpoint add` using capability `transcription` and api style `openai-compatible-transcription`.
+3. Use `/model transcription` later only when switching between registered STT endpoints.
+
+## Transcript Flow
+
+When a transcription endpoint is active, TomoriBot reads supported audio attachments in the background and adds the transcript to chat context. No persona assignment is needed.
+
+Use `/speech transcripts` only if you also want those transcripts posted visibly in chat.
+
+ElevenLabs users should use `/speech elevenlabs`; it registers transcription alongside speech.

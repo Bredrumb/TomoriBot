@@ -1,6 +1,7 @@
 ---
 title: "Context-Build Pipeline"
 sidebar:
+  label: "Overview"
   groupLabel: "Context Build"
   order: 200
 ---

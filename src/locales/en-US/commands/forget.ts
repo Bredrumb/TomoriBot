@@ -31,7 +31,7 @@ export default {
       select_description: `Choose which document to remove`,
       select_placeholder: `Select a document...`,
       rag_disabled_title: `Document RAG Disabled`,
-      rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector in your database and restart me to enable it (see README.md).`,
+      rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector in your database and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/self-hosting/manual-setup/)).`,
       none_title: `No Documents`,
       none_description: `There are no documents to remove in this scope. Add one with \`/memory document add\`.`,
       success_title: `Document Removed`,

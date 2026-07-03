@@ -53,6 +53,7 @@ Common fields:
 | Field | Use |
 |---|---|
 | `title` | Page title and default sidebar label |
+| `description` | Meta description for search engines and link previews (optional; see SEO below) |
 | `sidebar.label` | Sidebar-only page label override |
 | `sidebar.groupLabel` | Folder/group label when set on that folder's README |
 | `sidebar.order` | Manual ordering among siblings |
@@ -62,6 +63,22 @@ Common fields:
 Filenames and folder names are URL slugs. Keep them short, lowercase, and stable. Use
 `title` and `groupLabel` for human-facing names.
 
+## SEO
+
+The docs site handles most SEO automatically:
+
+- **Meta descriptions**: when a page has no `description` frontmatter, the route middleware
+  (`apps/docs/src/routeData.ts`) derives one from the page's first prose paragraph at build
+  time. A hand-written `description:` always wins, so add one when the opening paragraph
+  does not summarize the page well. Keep it under ~160 characters.
+- **First paragraphs matter**: because they become search snippets, open each page with one
+  or two plain sentences that describe the page, before any heading, list, aside, or
+  component.
+- **Internal pages**: everything under `docs/wiki/` is marked `noindex` and stays out of
+  search engines. Put maintainer-only records there.
+- **robots.txt / sitemap**: `apps/docs/public/robots.txt` advertises the auto-generated
+  `sitemap-index.xml`. No per-page action needed.
+
 ## Moving Pages
 
 When moving docs:
@@ -69,8 +86,10 @@ When moving docs:
 1. Use `git mv` for tracked files when possible.
 2. Update links in `docs/`, `README.md`, `.github/`, and release notes when relevant.
 3. Update `docs/README.md` when section structure changes.
-4. Add an Astro redirect under `apps/docs/src/pages/...` only when old URLs should keep
-   working.
+4. When old URLs should keep working, add both an entry in the `redirects` map in
+   `apps/docs/astro.config.mjs` (meta-refresh fallback page) and matching 301 rules in
+   `apps/docs/public/_redirects` (real redirects on Cloudflare, listed with and without
+   the trailing slash).
 5. Run the docs build:
 
 ```bash

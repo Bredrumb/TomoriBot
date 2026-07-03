@@ -5,6 +5,7 @@ import type { ErrorContext } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help nsfw subcommand
@@ -35,6 +36,7 @@ export async function execute(
       {
         titleKey: "commands.help.nsfw.title",
         descriptionKey: "commands.help.nsfw.embed_description",
+        docsPath: DOCS_PATHS.AGE_RESTRICTED_COMMANDS,
         color: ColorCode.WARN,
         fields: [
           {

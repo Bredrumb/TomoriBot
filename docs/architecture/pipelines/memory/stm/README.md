@@ -1,6 +1,7 @@
 ---
 title: "STM Sub-Pipeline"
 sidebar:
+  label: "Overview"
   groupLabel: "STM"
   order: 510
 ---

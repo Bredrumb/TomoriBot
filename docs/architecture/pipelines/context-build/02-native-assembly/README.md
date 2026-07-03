@@ -1,5 +1,7 @@
 ---
 title: "02: Native Assembly"
+sidebar:
+  label: "Overview"
 ---
 
 Fixed-order contributor pipeline. Each numbered file in this folder

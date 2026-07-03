@@ -1,6 +1,7 @@
 ---
 title: "Voice System"
 sidebar:
+  label: "Overview"
   groupLabel: "Voice"
 ---
 
@@ -32,5 +33,5 @@ Audio attachments are transcribed only when a `transcription` endpoint is config
 
 Local setup guides:
 
-- [Text-to-Speech (local engines)](../../../self-hosting/text-to-speech/)
-- [Speech-to-Text (local engines)](../../../self-hosting/speech-to-text/)
+- [Text-to-Speech (local engines)](../../../self-hosting/local-endpoints/text-to-speech/)
+- [Speech-to-Text (local engines)](../../../self-hosting/local-endpoints/speech-to-text/)

@@ -1,11 +1,11 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
-import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
+import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help st-preset subcommand.
@@ -32,9 +32,10 @@ export async function execute(
     const personaPromptSetMention = commandRegistry.getCommandMention("persona", "prompt", "set");
     const personaAttributeAddMention = commandRegistry.getCommandMention("persona", "attribute", "add");
     const personaSampleDialogueAddMention = commandRegistry.getCommandMention("persona", "sample-dialogue", "add");
-    const botImpersonateMention = commandRegistry.getCommandMention("bot", "impersonate");
 
-    const pages: SummaryEmbedOptions[] = [
+    await replySummaryEmbed(
+      interaction,
+      locale,
       {
         titleKey: "commands.help.st-preset.embed1_title",
         descriptionKey: "commands.help.st-preset.embed1_description",
@@ -43,6 +44,7 @@ export async function execute(
           stPresetToggle: stPresetToggleMention,
           stPresetRemove: stPresetRemoveMention,
         },
+        docsPath: DOCS_PATHS.SILLYTAVERN_PROMPT_PRESETS,
         color: ColorCode.INFO,
         fields: [
           {
@@ -60,57 +62,11 @@ export async function execute(
             }),
             inline: false,
           },
-          {
-            nameKey: "commands.help.st-preset.embed1_mapping_title",
-            value: localizer(locale, "commands.help.st-preset.embed1_mapping_description", {
-              configSystemPromptSet: configSystemPromptSetMention,
-              personaPromptSet: personaPromptSetMention,
-              personaAttributeAdd: personaAttributeAddMention,
-              personaSampleDialogueAdd: personaSampleDialogueAddMention,
-            }),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.st-preset.embed1_system_prompt_title",
-            value: localizer(locale, "commands.help.st-preset.embed1_system_prompt_description", {
-              configSystemPromptSet: configSystemPromptSetMention,
-            }),
-            inline: false,
-          },
         ],
         footerKey: "commands.help.st-preset.embed1_footer",
       },
-      {
-        titleKey: "commands.help.st-preset.embed2_title",
-        descriptionKey: "commands.help.st-preset.embed2_description",
-        descriptionVars: {
-          stPresetToggle: stPresetToggleMention,
-        },
-        color: ColorCode.INFO,
-        fields: [],
-        footerKey: "commands.help.st-preset.embed2_footer",
-        footerVars: {
-          stPresetToggle: stPresetToggleMention,
-        },
-      },
-      {
-        titleKey: "commands.help.st-preset.embed3_title",
-        descriptionKey: "commands.help.st-preset.embed3_description",
-        descriptionVars: {
-          botImpersonate: botImpersonateMention,
-          configSystemPromptSet: configSystemPromptSetMention,
-          stPresetRemove: stPresetRemoveMention,
-        },
-        color: ColorCode.INFO,
-        fields: [],
-        footerKey: "commands.help.st-preset.embed3_footer",
-        footerVars: {
-          stPresetRemove: stPresetRemoveMention,
-        },
-      },
-    ];
-
-    await replyPaginatedStatusPages(interaction, locale, pages, MessageFlags.Ephemeral);
+      MessageFlags.Ephemeral,
+    );
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,

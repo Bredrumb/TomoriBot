@@ -1,6 +1,7 @@
 ---
 title: "Tool-Loop Pipeline"
 sidebar:
+  label: "Overview"
   groupLabel: "Tool Loop"
   order: 300
 ---

@@ -1,6 +1,7 @@
 ---
 title: "Pipelines"
 sidebar:
+  label: "Overview"
   groupLabel: "Pipelines"
   order: 20
 ---

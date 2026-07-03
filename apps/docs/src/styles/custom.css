@@ -117,3 +117,36 @@
   align-items: center;
   margin: 1.5rem 0;
 }
+
+/* Justify text alignment for markdown content */
+.sl-markdown-content p,
+.sl-markdown-content li {
+  text-align: justify;
+}
+
+/*
+  Sidebar sub-category label sizing.
+
+  Starlight's SidebarSublist tags EVERY collapsible group label with `.large`
+  regardless of nesting depth, while page links are only `.large` at the top
+  level. A nested sub-category folder therefore renders bigger than the plain
+  `.md` page links sitting beside it, which reads as odd.
+
+  Fix: shrink only labels that live inside a nested sublist. The recursion emits
+  nested groups as a bare `<ul>` (no `top-level` class), so `.top-level ul ...`
+  matches sub-category labels exclusively — top-level category labels have no
+  inner `<ul>` ancestor and keep their larger size. These rules are unlayered,
+  so they beat Starlight's `@layer starlight.core` defaults without `!important`.
+  Font sizes mirror the sibling page-link sizes at each breakpoint (base on
+  mobile, sm on desktop); weight 600 is kept so a folder still reads as a group.
+*/
+.top-level ul .group-label > .large {
+  font-size: var(--sl-text-base);
+  font-weight: 600;
+}
+
+@media (min-width: 50rem) {
+  .top-level ul .group-label > .large {
+    font-size: var(--sl-text-sm);
+  }
+}
