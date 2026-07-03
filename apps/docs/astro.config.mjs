@@ -321,7 +321,12 @@ export default defineConfig({
         SocialIcons: "./src/components/SocialIcons.astro",
       },
       // Starlight v0.33.0+ expects an array of link items instead of a keyed object.
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" }],
+      // Discord uses a built-in Starlight icon; Ko-fi is appended separately in the
+      // SocialIcons override since it isn't part of Starlight's fixed icon set.
+      social: [
+        { icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" },
+        { icon: "discord", label: "Discord", href: "https://discord.gg/bjCfHm9QsB" },
+      ],
       sidebar,
     }),
   ],
