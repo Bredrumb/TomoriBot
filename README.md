@@ -325,11 +325,10 @@ Since TomoriBot is still in Beta, any contributions made are **greatly appreciat
    - Copy all keys and nested objects
    - Translate all user-facing text while preserving placeholders like `{variable}`
 
-3. **Add preset translations** (optional but recommended) in `src/db/seed/02_personas.sql`:
-   - Translate the `persona_preset_desc` field for each preset
-   - Translate the `preset_attribute_list`, `preset_sample_dialogues_in`, and `preset_sample_dialogues_out` arrays
-   - Add LLM descriptions by translating the `ja` field of each row in `src/db/seed/catalog/models.ts` (alongside the English `desc`); models are seeded into the database directly from this catalog at startup (no SQL file to regenerate)
-   - Set `preset_language` to your locale code
+3. **Add preset translations** (optional but recommended) in `src/db/seed/catalog/personas/`:
+   - For each persona folder (`bratty/`, `default/`, `gloomy/`, etc.), copy `en-US.ts` to `{your-locale}.ts`
+   - Translate the `desc`, `attributes`, `sampleDialoguesIn`, and `sampleDialoguesOut` fields, and set `language` to your locale code
+   - Add LLM descriptions by translating the `ja` field of each row in `src/db/seed/catalog/models.ts` (alongside the English `desc`); both personas and models are seeded into the database directly from these catalogs at startup (no SQL file to regenerate)
 
 4. **Test your translations**:
    ```sh
@@ -337,7 +336,7 @@ Since TomoriBot is still in Beta, any contributions made are **greatly appreciat
    bun run check-locales
    ```
 
-5. **Submit a pull request** with your new locale file(s) and any `src/db/seed/*.sql` additions
+5. **Submit a pull request** with your new locale file(s) and any `src/db/seed/catalog/` additions
 
 ### To contribute new features
 
