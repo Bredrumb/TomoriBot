@@ -14,7 +14,7 @@ import { healthTracker } from "@/utils/misc/healthTracker";
  */
 export function startHealthServer(port: number): void {
   const server = createServer((req, res) => {
-    if (req.method === "GET" && req.url === "/health") {
+    if (req.method === "GET" && (req.url === "/health" || req.url === "/healthz")) {
       const healthStatus = healthTracker.getHealthStatus();
       const statusCode = healthStatus.healthy ? 200 : 503;
 

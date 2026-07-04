@@ -23,12 +23,16 @@ Primary files:
 
 Behavior:
 - Non-production (or `TEST_PRODUCTION=true`): secrets load from `.env`.
-- Production (`RUN_ENV=production`): secrets load from AWS Secrets Manager (`tomoribot/production`, region from `AWS_REGION`, default `us-east-1`).
+- Production (`RUN_ENV=production`): secrets load from `SECRET_FILE` when set, then
+  `GCP_SECRET_FILE` for the legacy Cloud Run mount, then AWS Secrets Manager
+  (`tomoribot/production`, region from `AWS_REGION`, default `us-east-1`).
 - Required secrets are validated at startup:
   - `DISCORD_TOKEN`
   - `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
   - `CRYPTO_SECRET`
 - After loading, secrets are mapped to `process.env` and `keyManager.initialize()` is called.
+  This includes S3-compatible storage credentials such as `S3_ENDPOINT`,
+  `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`.
 
 Key takeaway: encryption key initialization happens only after secrets are loaded.
 

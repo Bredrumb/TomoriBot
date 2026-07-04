@@ -305,7 +305,7 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
   - `bun run check-seed-catalogs` enforces that every active, billable first-party row carries both prices (`collectMeteredPriceViolations` in `modelSeed.ts`), excluding deprecated / Gemma / `isFree` / pricing-pending rows.
 
   Prices live on the row (not in code), so registering a model's cost is a one-line catalog edit re-seeded on boot. See the command at `src/commands/tool/estimate/cost.ts`.
-- `voice_samples` stores server-scoped reference audio metadata for local speech cloning. `file_path` is a production S3/CloudFront URL or a local `data/voice-samples/` path. Phase 4 allows one uploaded local sample per server.
+- `voice_samples` stores server-scoped reference audio metadata for local speech cloning. `file_path` is a production object-storage public URL or a local `data/voice-samples/` path. Phase 4 allows one uploaded local sample per server.
 - `server_speech_configs.chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, and `chatterbox_exaggeration` store server-scoped Chatterbox speech settings. CFG weight and exaggeration are forwarded to local TTS clone endpoints but only affect the bundled Chatterbox server when Turbo is disabled.
 - `persona_voice_configs.speech_voice_sample_id`, `speech_voice_id`, `speech_voice_name`, and `speech_voice_design_prompt` store per-persona voice assignment for local clone samples, provider-hosted voices, and VoiceDesign prompts. The legacy `elevenlabs_voice_*` columns were dropped by migration 010 (Phase 6 Step #14.2); `speech_voice_id` is now the sole provider-hosted voice identifier.
 - `openrouter_model_registrations` scopes extra OpenRouter text `llms` rows to a specific `server_id` or `user_id`.

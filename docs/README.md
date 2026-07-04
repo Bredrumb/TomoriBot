@@ -54,6 +54,8 @@ source open to follow these.
 - [`self-hosting/README.md`](./self-hosting/) — requirements + module directory
 - [`self-hosting/setup-wizard.md`](./self-hosting/setup-wizard) — guided `bun run setup`
 - [`self-hosting/manual-setup.md`](./self-hosting/manual-setup) — manual procedure for technical users
+- [`self-hosting/docker-compose.md`](./self-hosting/docker-compose) — containerized local bot + database
+- [`self-hosting/azure-vm.md`](./self-hosting/azure-vm) — Azure VM compose and R2 cutover contract
 - [`self-hosting/local-endpoints/`](./self-hosting/local-endpoints/) — self-hosted endpoints hub
   - [`local-endpoints/setup-local-llm.md`](./self-hosting/local-endpoints/setup-local-llm)
   - [`local-endpoints/setup-comfyui.md`](./self-hosting/local-endpoints/setup-comfyui)

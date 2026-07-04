@@ -13,7 +13,8 @@ import { log } from "@/utils/misc/logger";
  * - CRYPTO_SECRET_V1, V2, etc. for key rotation support
  * - DISCORD_WEBHOOK_URL for logging webhooks
  * - AVATAR_GCS_BUCKET / VOICE_SAMPLE_GCS_* for GCP Cloud Storage (GCP deployments)
- * - AVATAR_S3_BUCKET / CHARREF_S3_* for AWS S3 (AWS deployments)
+ * - AVATAR_S3_* / VOICE_SAMPLE_S3_* / CHARREF_S3_* for S3-compatible object storage
+ * - S3_ENDPOINT and AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY for R2 or other S3-compatible backends
  */
 export interface TomoriSecrets {
   DISCORD_TOKEN: string;
@@ -34,9 +35,15 @@ export interface TomoriSecrets {
   VOICE_SAMPLE_GCS_PREFIX?: string;
   VOICE_SAMPLE_PUBLIC_BASE_URL?: string;
   // AWS S3 storage (set when deployed to AWS)
+  AWS_ACCESS_KEY_ID?: string;
+  AWS_SECRET_ACCESS_KEY?: string;
+  S3_ENDPOINT?: string;
   AVATAR_S3_BUCKET?: string;
   AVATAR_S3_REGION?: string;
   AVATAR_S3_PREFIX?: string;
+  VOICE_SAMPLE_S3_BUCKET?: string;
+  VOICE_SAMPLE_S3_REGION?: string;
+  VOICE_SAMPLE_S3_PREFIX?: string;
   CHARREF_S3_BUCKET?: string;
   CHARREF_S3_REGION?: string;
   CHARREF_S3_PREFIX?: string;
@@ -58,12 +65,13 @@ export interface TomoriSecrets {
  *
  * Resolution order:
  * 1. Development / test-production → process.env (dotenv)
- * 2. Production + GCP_SECRET_FILE set → mounted GCP Secret Manager volume file (JSON)
- * 3. Production (fallback) → AWS Secrets Manager API call
+ * 2. Production + SECRET_FILE set → mounted JSON secret file
+ * 3. Production + GCP_SECRET_FILE set → mounted GCP Secret Manager volume file (JSON, legacy fallback)
+ * 4. Production (fallback) → AWS Secrets Manager API call
  *
- * GCP file path:
- * - Cloud Run mounts the secret at /run/secrets/<secret_id> (configured in cloud-run.tf)
- * - GCP_SECRET_FILE env var points to that path
+ * Mounted secret file path:
+ * - Azure compose mounts the JSON secret at /run/secrets/tomoribot.json and sets SECRET_FILE to that path
+ * - Cloud Run mounts the secret at /run/secrets/<secret_id> and sets GCP_SECRET_FILE to that path
  * - File content is identical JSON shape to the AWS secret string
  * - No SDK call needed — plain fs.readFileSync
  *
@@ -126,9 +134,15 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       "VOICE_SAMPLE_GCS_BUCKET",
       "VOICE_SAMPLE_GCS_PREFIX",
       "VOICE_SAMPLE_PUBLIC_BASE_URL",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "S3_ENDPOINT",
       "AVATAR_S3_BUCKET",
       "AVATAR_S3_REGION",
       "AVATAR_S3_PREFIX",
+      "VOICE_SAMPLE_S3_BUCKET",
+      "VOICE_SAMPLE_S3_REGION",
+      "VOICE_SAMPLE_S3_PREFIX",
       "CHARREF_S3_BUCKET",
       "CHARREF_S3_REGION",
       "CHARREF_S3_PREFIX",
@@ -155,15 +169,16 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
     return secrets;
   }
 
-  // Production + GCP: Read from the Secret Manager volume file mounted by Cloud Run
-  const gcpSecretFile = process.env.GCP_SECRET_FILE;
-  if (gcpSecretFile) {
-    log.info(`Reading secrets from GCP Secret Manager file: ${gcpSecretFile}`);
+  // Production + mounted JSON secret file: SECRET_FILE is provider-neutral;
+  // GCP_SECRET_FILE remains a fallback so the live Cloud Run deployment is unchanged.
+  const secretFile = process.env.SECRET_FILE?.trim() || process.env.GCP_SECRET_FILE?.trim();
+  if (secretFile) {
+    log.info(`Reading secrets from mounted JSON secret file: ${secretFile}`);
     try {
-      // 1. Read and parse the JSON blob written by Cloud Run's secret volume mount
-      const fileContent = await Bun.file(gcpSecretFile).text();
+      // 1. Read and parse the JSON blob written by the platform secret mount
+      const fileContent = await Bun.file(secretFile).text();
       if (!fileContent) {
-        throw new Error(`GCP secret file "${gcpSecretFile}" is empty. Ensure the secret version is populated.`);
+        throw new Error(`Secret file "${secretFile}" is empty. Ensure the secret version is populated.`);
       }
 
       const rawSecrets = JSON.parse(fileContent);
@@ -195,9 +210,15 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         "VOICE_SAMPLE_GCS_BUCKET",
         "VOICE_SAMPLE_GCS_PREFIX",
         "VOICE_SAMPLE_PUBLIC_BASE_URL",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "S3_ENDPOINT",
         "AVATAR_S3_BUCKET",
         "AVATAR_S3_REGION",
         "AVATAR_S3_PREFIX",
+        "VOICE_SAMPLE_S3_BUCKET",
+        "VOICE_SAMPLE_S3_REGION",
+        "VOICE_SAMPLE_S3_PREFIX",
         "CHARREF_S3_BUCKET",
         "CHARREF_S3_REGION",
         "CHARREF_S3_PREFIX",
@@ -221,20 +242,19 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       // 5. Validate required fields
       validateRequiredSecrets(secrets);
 
-      log.info("Successfully loaded secrets from GCP Secret Manager file");
+      log.info("Successfully loaded secrets from mounted JSON secret file");
 
       return secrets;
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new Error(
-          `GCP secret file "${gcpSecretFile}" contains invalid JSON. ` +
-            `Re-populate the secret with a valid JSON object.`,
+          `Secret file "${secretFile}" contains invalid JSON. Re-populate the secret with a valid JSON object.`,
         );
       }
 
       // Re-throw with context for file-not-found and other I/O errors
       log.error(
-        "Failed to read secrets from GCP Secret Manager file",
+        "Failed to read secrets from mounted JSON secret file",
         error instanceof Error ? error : new Error(String(error)),
       );
 
@@ -292,9 +312,15 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       "VOICE_SAMPLE_GCS_BUCKET",
       "VOICE_SAMPLE_GCS_PREFIX",
       "VOICE_SAMPLE_PUBLIC_BASE_URL",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "S3_ENDPOINT",
       "AVATAR_S3_BUCKET",
       "AVATAR_S3_REGION",
       "AVATAR_S3_PREFIX",
+      "VOICE_SAMPLE_S3_BUCKET",
+      "VOICE_SAMPLE_S3_REGION",
+      "VOICE_SAMPLE_S3_PREFIX",
       "CHARREF_S3_BUCKET",
       "CHARREF_S3_REGION",
       "CHARREF_S3_PREFIX",

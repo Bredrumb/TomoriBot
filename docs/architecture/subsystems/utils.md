@@ -124,8 +124,12 @@ New code should use `utils/bridges` for generic bridge helpers and `utils/bridge
 ### `utils/image` and `utils/storage`
 
 - `avatarHelper.ts`, `imageProcessor.ts`, `pngMetadata.ts`
-- `avatarStorage.ts` for S3/public avatar URL support
-- `charrefStorage.ts` for NovelAI character reference storage (S3 in production, local filesystem in non-production)
+- `avatarStorage.ts` for GCS or S3-compatible public avatar URL support
+- `voiceSampleStorage.ts` for GCS or S3-compatible voice sample storage
+- `charrefStorage.ts` for NovelAI character reference storage (S3-compatible in production, local filesystem in non-production)
+- `S3_ENDPOINT` enables Cloudflare R2 or another S3-compatible endpoint; when set,
+  storage clients use path-style requests while public URLs still come from the
+  relevant `*_PUBLIC_BASE_URL` value.
 
 ### `utils/misc`
 
