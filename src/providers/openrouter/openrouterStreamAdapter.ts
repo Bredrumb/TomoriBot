@@ -2043,7 +2043,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     } else if (finalCode.includes("401") || finalMessage.includes("401")) {
       return { type: "api_error", retryable: false };
     } else if (finalCode.includes("402") || finalMessage.includes("402")) {
-      return { type: "rate_limit", retryable: false }; // Insufficient credits
+      // Insufficient credits is a billing issue, not a transient rate limit — classify as
+      // api_error so it reads "402_default_message" and gets the generic API-error title/tip
+      // instead of the misleading "rate limit exceeded, wait and retry" copy.
+      return { type: "api_error", retryable: false };
     } else if (finalCode.includes("413") || finalMessage.includes("413")) {
       return { type: "api_error", retryable: false }; // Payload too large
     } else if (finalCode.includes("404") || finalMessage.includes("404")) {
