@@ -18,10 +18,10 @@ title: "Threat Models"
 This document outlines the threat model for TomoriBot using the STRIDE framework and groups risks by attack vector.
 
 Related reference:
-- `docs/subsystems/security.md`
-- `docs/pipelines/tool-loop/` (tool-loop pipeline reference)
-- `docs/integrations/matrix/bridge.md`
-- `docs/integrations/voice/README.md`
+- `docs/architecture/subsystems/security.md`
+- `docs/architecture/pipelines/tool-loop/` (tool-loop pipeline reference)
+- `docs/architecture/integrations/matrix/bridge.md`
+- `docs/architecture/integrations/voice/README.md`
 
 ---
 
@@ -138,7 +138,7 @@ The Matrix bridge is optional and runs as a Matrix appservice. It relays Matrix 
 | Threat (STRIDE) | Scenario | Risk | Current Mitigation | Implementation Area | Residual Risk / Assumption |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Tampering / Elevation of Privilege** | Malicious dependency update runs code during install/build/runtime. | High | `bun.lock`, dependency pinning/overrides, patches, CI audit, and container scanning guidance. | `package.json`, `bun.lock`, `patches/`, `.github/workflows/*`, `Dockerfile` | Upstream registry or maintainer compromise remains possible. Review lockfile diffs carefully. |
-| **Information Disclosure** | CI/CD secrets leak through logs or compromised actions. | High | Production deployment uses OIDC where documented and avoids long-lived static AWS credentials where possible. | `.github/workflows/*`, `docs/subsystems/security.md` | GitHub Actions and cloud IAM configuration remain part of the trust boundary. |
+| **Information Disclosure** | CI/CD secrets leak through logs or compromised actions. | High | Production deployment uses OIDC where documented and avoids long-lived static AWS credentials where possible. | `.github/workflows/*`, `docs/architecture/subsystems/security.md` | GitHub Actions and cloud IAM configuration remain part of the trust boundary. |
 | **Information Disclosure / Tampering** | Production secrets are loaded from the wrong source or missing key versions break decryption. | High | Production uses AWS Secrets Manager; startup validates required secrets and initializes key manager after loading. Versioned encryption keys support rotation. | `src/utils/security/secretsManager.ts`, `src/index.ts`, `src/utils/security/keyManager.ts` | `RUN_ENV` must be set correctly. Removing old key versions before rotation completes can make rows undecryptable. |
 | **Denial of Service** | Runtime memory leak, parser crash, provider hang, or unhandled promise crashes the process. | Medium | Memory monitor/guardrails, provider timeouts in several adapters, stream error handling, and operational process restart expectations. | `src/timers/memoryMonitor.ts`, `src/utils/security/rateLimiter.ts`, provider adapters | External process supervision is still required for production reliability. |
 

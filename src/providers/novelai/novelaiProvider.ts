@@ -19,6 +19,7 @@ import type {
   AnyThreadChannel,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { NovelaiStreamAdapter, type NovelaiStreamConfig } from "./novelaiStreamAdapter";
 import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
@@ -354,51 +355,24 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       }
 
       // Create streaming context
-      const streamContext: StreamContext = {
-        // Discord context
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "novelai",
         channel,
         client,
         initialInteraction,
         replyToMessage,
-
-        // Application context
         tomoriState,
         contextItems,
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-
-        // Provider context
-        provider: "novelai",
-        locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
-
-        // Multi-persona webhook support
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-
-        // Forced mentions (e.g., reminder recipients)
-        forcedMentions: streamingContext?.forcedMentions,
-
-        // NAI text suppression for tool retry mode
-        suppressTextOutput: streamingContext?.suppressTextOutput,
-
-        // NAI GLM-4.6 prompt continuation: trailing fragment from previous truncated stream
-        naiContinuationPrefill: streamingContext?.naiContinuationPrefill,
-
-        // External abort signal for SDK call timeout cancellation
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
-      };
+      });
 
       // Create the modular streaming components
       const orchestrator = new StreamOrchestrator();

@@ -20,6 +20,7 @@ import type { ModalComponent, SelectOption } from "@/types/discord/modal";
 import { buildUserSavedProviderConfigFromExistingOrDefaults } from "@/utils/provider/savedProviderConfig";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { activatePersonalProviderTextModel } from "@/utils/provider/providerActivation";
 
 const MODAL_CUSTOM_ID = "personal_provider_add_modal";
 const PROVIDER_SELECT_ID = "provider_select";
@@ -187,6 +188,29 @@ export async function execute(
       return;
     }
 
+    const activationResult = await activatePersonalProviderTextModel({
+      userId: userData.user_id,
+      provider: selectedProvider,
+      llmId: savedConfig.llm_id,
+    });
+    if (activationResult.status !== "activated") {
+      await replyInfoEmbed(modalResult.interaction, locale, {
+        titleKey:
+          activationResult.status === "missing_model"
+            ? "commands.provider.api-key.set.no_default_model_title"
+            : "general.errors.update_failed_title",
+        descriptionKey:
+          activationResult.status === "missing_model"
+            ? "commands.provider.api-key.set.no_default_model_description"
+            : "general.errors.update_failed_description",
+        descriptionVars: {
+          provider: getProviderDisplayName(selectedProvider),
+        },
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+
     await replyInfoEmbed(modalResult.interaction, locale, {
       titleKey: "commands.personal.provider.add.success_title",
       descriptionKey: existingConfig
@@ -194,6 +218,7 @@ export async function execute(
         : "commands.personal.provider.add.success_description",
       descriptionVars: {
         provider: getProviderDisplayName(selectedProvider),
+        model_name: activationResult.modelName ?? localizer(locale, "general.unknown"),
       },
       color: ColorCode.SUCCESS,
     });

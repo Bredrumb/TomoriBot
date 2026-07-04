@@ -5,6 +5,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -28,6 +29,7 @@ export async function execute(
     await replySummaryEmbed(interaction, locale, {
       titleKey: "commands.help.personal-provider.title",
       descriptionKey: "commands.help.personal-provider.description_body",
+      docsPath: DOCS_PATHS.PERSONAL_PROVIDERS,
       color: ColorCode.INFO,
       fields: [
         {

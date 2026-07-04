@@ -1,8 +1,18 @@
 ---
-// TEMPORARY demo component for the card-layout comparison page (/card-demo/).
-// Option 3 from the docs plan: a custom "marketing" card that shows a real
-// image/screenshot (Starlight's built-in <Card> only supports named icons).
-// Delete this file along with src/pages/card-demo.astro when done evaluating.
+// Screenshot-forward "marketing" card for landing/task-router surfaces, where a real
+// image sells the feature better than an icon (Starlight's built-in <Card> only
+// supports named icons). Used by the introduction landing page's feature-card deck.
+//
+// Props:
+// - title: heading rendered under the image.
+// - img:   root-relative image URL served from apps/docs/public/ (e.g. "/img/1.png").
+//          Production serves apps/docs/dist, so images must live under public/.
+// - href:  optional navigation target; when set the whole card becomes a link.
+//
+// The card body text is passed as the default <slot/>.
+//
+// Reserve this component for evergreen landing/task-router grids; prefer the built-in
+// <Card>/<CardGrid>/<LinkCard> for deep reference pages likely to drift with the UI.
 interface Props {
   title: string;
   img: string;

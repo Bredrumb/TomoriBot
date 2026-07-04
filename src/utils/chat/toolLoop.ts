@@ -1,6 +1,7 @@
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
+import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
@@ -203,6 +204,10 @@ async function streamOnce(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
+      if (StreamOrchestrator.hasStopRequest(channelId)) {
+        return { status: "stopped_by_user" };
+      }
+
       if (!params.context.streamingContext.suppressUserErrors) {
         await sendStandardEmbed(
           params.context.channel as Parameters<typeof sendStandardEmbed>[0],
@@ -348,6 +353,51 @@ async function executeToolCall(
   }
   log.info(`Function call completed: ${functionName} (${Date.now() - startedAt}ms)`);
 
+  // Record tool usage at the single tool-dispatch chokepoint (covers every
+  // built-in / REST / MCP tool). metric_key is the tool name, so per-tool
+  // breakdowns (web search, sticker, memory, reminder, …) fall out for free.
+  // Only successful, non-blocked calls count. Fire-and-forget so stat tracking
+  // never adds latency; DMs are skipped (server_id is a NOT NULL FK).
+  if (toolResult.success && !isBlockedByDeliberateAllowlist && !params.context.isDMChannel) {
+    const serverId = params.tomoriState.server_id;
+    const userId = params.context.triggererUserId;
+    if (serverId && userId) {
+      const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
+      // userId is carried on the context (resolved once at turn planning), so no
+      // per-tool-call DB lookup — recordStat just buffers in memory.
+      try {
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId,
+          metric: "tool_used",
+          metricKey: functionName,
+        });
+
+        // Per-sticker breakdown: when the sticker tool resolves a sticker, also
+        // record `sticker_used` keyed by the canonical resolved name (from the tool
+        // result, not the model's fuzzy input). tool_used already counts the call;
+        // this adds the "favorite sticker" dimension that mirrors emoji_used. The
+        // tool name must match StickerTool.name.
+        if (functionName === "select_sticker_for_response") {
+          const stickerData = toolResult.data as { status?: string; sticker_name?: string } | undefined;
+          if (stickerData?.status === "sticker_selected_successfully" && stickerData.sticker_name) {
+            statRepository.recordStat({
+              serverId,
+              userId,
+              lineageId,
+              metric: "sticker_used",
+              metricKey: stickerData.sticker_name,
+            });
+          }
+        }
+      } catch (statError) {
+        log.warn(`Failed to record tool_used stat for ${functionName}: ${statError}`);
+      }
+    }
+  }
+
+  // When a tool call fails, surface a hidden thought-log notice explaining why.
   if (!toolResult.success) {
     await emitFailedToolCallThoughtLog(toolContext, functionName, functionCall.args ?? {}, toolResult);
   }
@@ -528,7 +578,11 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
 
 function queueStopResponseIfPresent(context: ChatTurnContext): void {
   const stopContext = StreamOrchestrator.getAndClearStopContext(context.channel.id);
-  if (!stopContext) return;
+  if (!stopContext) {
+    StreamOrchestrator.clearStopRequest(context.channel.id);
+    return;
+  }
+
   queueStopResponseAtFront({
     channelId: context.channel.id,
     message: stopContext.originalStopMessage,

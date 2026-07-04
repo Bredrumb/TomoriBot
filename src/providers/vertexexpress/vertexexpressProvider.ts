@@ -10,6 +10,7 @@ import type {
   Message,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { TomoriState } from "@/types/db/schema";
@@ -494,7 +495,8 @@ export class VertexexpressProvider
         log.info("VertexexpressProvider: Skipping context-aware tool reload - model doesn't support tools");
       }
 
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "vertexexpress",
         channel,
         client,
         initialInteraction,
@@ -504,23 +506,13 @@ export class VertexexpressProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "vertexexpress",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        suppressTextOutput: streamingContext?.suppressTextOutput,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-        forcedMentions: streamingContext?.forcedMentions,
-        abortSignal: streamingContext?.abortSignal,
-        messageIdMap: streamingContext?.messageIdMap,
-        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
-      };
+      });
 
       const orchestrator = new StreamOrchestrator();
       const adapter = new VertexexpressStreamAdapter();

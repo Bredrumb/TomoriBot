@@ -1,7 +1,8 @@
 import { sql } from "bun";
 import { log } from "@/utils/misc/logger";
 import { config } from "dotenv";
-import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { resolveBackupsRoot, runDataBackup } from "@/utils/backup/dataBackup";
+import { existsSync, copyFileSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 config();
@@ -50,10 +51,6 @@ function resolveEnvPath(): string {
   return process.env.TOMORI_ENV_FILE ? resolve(process.env.TOMORI_ENV_FILE) : join(process.cwd(), ".env");
 }
 
-function resolveBackupsRoot(): string {
-  return process.env.TOMORI_BACKUP_DIR ? resolve(process.env.TOMORI_BACKUP_DIR) : join(process.cwd(), "backups");
-}
-
 /**
  * Resolves a PostgreSQL connection URL from environment variables.
  * Prefers DATABASE_URL if set, otherwise constructs it from POSTGRES_* vars.
@@ -80,80 +77,8 @@ function resolveDatabaseUrl(): string {
 // --backup mode
 // ---------------------------------------------------------------------------
 
-/**
- * Creates a timestamped transfer bundle containing:
- *   - database.sql   — full pg_dump of the current database
- *   - config.env     — copy of the current .env file
- *   - bundle_info.json — metadata for validation on restore
- *
- * Output directory: backups/backup_YYYY-MM-DD_HH-MM-SS/
- */
 async function runBackup(): Promise<void> {
-  log.section("📦 TRANSFER BACKUP");
-  log.info("Creating a migration bundle with your database and config...");
-
-  // 1. Locate the .env file
-  const envPath = resolveEnvPath();
-  if (!existsSync(envPath)) {
-    log.error(`Environment file not found: ${envPath}. Cannot bundle config.`);
-    process.exit(1);
-  }
-
-  // 2. Create the backups/ output directory
-  const backupsRoot = resolveBackupsRoot();
-  if (!existsSync(backupsRoot)) {
-    mkdirSync(backupsRoot, { recursive: true });
-  }
-
-  // 3. Build a timestamped bundle directory name
-  const timestamp = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_");
-  const bundleDir = join(backupsRoot, `backup_${timestamp}`);
-  mkdirSync(bundleDir, { recursive: true });
-
-  const dbDumpPath = join(bundleDir, "database.sql");
-  const envBackupPath = join(bundleDir, "config.env");
-  const manifestPath = join(bundleDir, "bundle_info.json");
-
-  log.info(`Bundle directory: ${bundleDir}`);
-
-  // 4. Dump the database
-  const dbUrl = resolveDatabaseUrl();
-  log.info("Running pg_dump...");
-  try {
-    await runExternalCommand("pg_dump", [dbUrl, "--clean", "--if-exists", "-f", dbDumpPath]);
-    log.success("Database dump completed.");
-  } catch (_error) {
-    log.error("pg_dump failed. Ensure pg_dump is installed and in your PATH.");
-    log.info("  Windows: install PostgreSQL from https://www.postgresql.org/download/windows/");
-    log.info("  macOS:   brew install postgresql");
-    log.info("  Linux:   sudo apt-get install postgresql-client");
-    process.exit(1);
-  }
-
-  // 5. Copy .env
-  copyFileSync(envPath, envBackupPath);
-  log.success("Config (.env) copied.");
-
-  // 6. Write bundle manifest
-  const { version } = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf-8")) as {
-    version: string;
-  };
-  const manifest = {
-    createdAt: new Date().toISOString(),
-    botVersion: version,
-    files: ["database.sql", "config.env"],
-  };
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-
-  log.section("✅ Bundle Created!");
-  log.info(`Location:    ${bundleDir}`);
-  log.info("Contents:");
-  log.info("  database.sql     — PostgreSQL dump (restore with: bun run restore-backup)");
-  log.info("  config.env       — Copy of your .env (review before restoring!)");
-  log.info("  bundle_info.json — Bundle metadata");
-  log.info("");
-  log.info("To restore on a new install:");
-  log.info(`  bun run restore-backup --from ${bundleDir}`);
+  await runDataBackup({ backupType: "manual" });
 }
 
 // ---------------------------------------------------------------------------
@@ -335,7 +260,7 @@ function resolveLatestBundle(): string {
     process.exit(1);
   }
 
-  // Filter to only transfer_* subdirectories and sort descending by name
+  // Filter to only backup_* subdirectories and sort descending by name
   const bundles = readdirSync(backupsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.startsWith("backup_"))
     .map((entry) => entry.name)

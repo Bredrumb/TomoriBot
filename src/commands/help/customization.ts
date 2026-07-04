@@ -1,13 +1,12 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
-import { ChannelType, MessageFlags } from "discord.js";
+import { MessageFlags } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import type { ErrorContext } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
-import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
-import { isGuildMessageCommandChannel } from "@/utils/discord/guildMessageChannel";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help customization subcommand
@@ -31,58 +30,17 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // Get command mentions for cross-references
     const helpMemoryMention = commandRegistry.getCommandMention("help", "memory");
     const personaCreateMention = commandRegistry.getCommandMention("persona", "create");
     const personaGenerateMention = commandRegistry.getCommandMention("persona", "generate");
-    const personaDefaultMention = commandRegistry.getCommandMention("persona", "default");
-    const personaExportMention = commandRegistry.getCommandMention("persona", "export");
-    const personaImportMention = commandRegistry.getCommandMention("persona", "import");
     const personaAttributeAddMention = commandRegistry.getCommandMention("persona", "attribute", "add");
     const personaSampleDialogueAddMention = commandRegistry.getCommandMention("persona", "sample-dialogue", "add");
-    const serverAvatarMention = commandRegistry.getCommandMention("server", "avatar");
-    const configRenameMention = commandRegistry.getCommandMention("config", "rename");
-    const personaAttributeRemoveMention = commandRegistry.getCommandMention("persona", "attribute", "remove");
-    const personaSampleDialogueRemoveMention = commandRegistry.getCommandMention(
-      "persona",
-      "sample-dialogue",
-      "remove",
-    );
-    const serverMemberpermissionsMention = commandRegistry.getCommandMention("server", "member-permissions");
-    const serverBlacklistMention = commandRegistry.getCommandMention("server", "blacklist");
-    const serverAutotriggerChannelsMention = commandRegistry.getCommandMention("server", "auto-trigger", "channels");
-    const serverAutotriggerThresholdMention = commandRegistry.getCommandMention("server", "auto-trigger", "threshold");
-    const serverTriggerAddMention = commandRegistry.getCommandMention("server", "trigger", "add");
-    const serverTriggerRemoveMention = commandRegistry.getCommandMention("server", "trigger", "remove");
     const configModelMention = commandRegistry.getCommandMention("model", "text");
-    const configTemperatureMention = commandRegistry.getCommandMention("config", "samplers");
     const configHumanizerMention = commandRegistry.getCommandMention("config", "humanizer");
-    const configApikeySetMention = commandRegistry.getCommandMention("provider", "add");
-    const configApikeyDeleteMention = commandRegistry.getCommandMention("provider", "remove");
-    const configBraveapiSetMention = commandRegistry.getCommandMention("optional-key", "brave", "set");
-    const configBraveapiDeleteMention = commandRegistry.getCommandMention("optional-key", "brave", "remove");
-    const configTimezoneMention = commandRegistry.getCommandMention("config", "timezone");
-    const configPermissionsMention = commandRegistry.getCommandMention("config", "tools", "manage");
-    const personaRemoveMention = commandRegistry.getCommandMention("persona", "remove");
+    const configSystemPromptSetMention = commandRegistry.getCommandMention("config", "system-prompt", "set");
+    const capabilitiesManageMention = commandRegistry.getCommandMention("capabilities", "manage");
     const serverWhitelistChannelMention = commandRegistry.getCommandMention("server", "whitelist", "channel");
-    const serverWhitelistPersonaMention = commandRegistry.getCommandMention("server", "whitelist", "persona");
-    const serverWhitelistRoleMention = commandRegistry.getCommandMention("server", "whitelist", "role");
-    const serverWhitelistRemoveMention = commandRegistry.getCommandMention("server", "whitelist", "remove");
-    const memoryDocumentAddMention = commandRegistry.getCommandMention("memory", "document", "add");
-    const memoryDocumentRemoveMention = commandRegistry.getCommandMention("memory", "document", "remove");
-    const configApikeyRotationMention = commandRegistry.getCommandMention("provider", "api-key", "rotation");
-    const configUncensorsMention = commandRegistry.getCommandMention("nsfw", "jailbreaks");
-    const configModelEmbeddingMention = commandRegistry.getCommandMention("model", "embedding");
-    const configModelImageMention = commandRegistry.getCommandMention("model", "image");
-    const configPromptChangeMention = commandRegistry.getCommandMention("config", "system-prompt", "set");
-    const configPromptPresetMention = commandRegistry.getCommandMention("config", "system-prompt", "preset");
-    const configPromptClearMention = commandRegistry.getCommandMention("config", "system-prompt", "remove");
-    const serverInitializeExpressionsMention = commandRegistry.getCommandMention("server", "initialize", "expressions");
-    const personalPrivacyMention = commandRegistry.getCommandMention("personal", "privacy");
-    const configCooldownMention = commandRegistry.getCommandMention("config", "cooldown");
-    const generateImageMention = commandRegistry.getCommandMention("generate", "image");
 
-    // EMBED 1: Overview + Personality Personas (reply with first embed)
     await replySummaryEmbed(
       interaction,
       locale,
@@ -92,117 +50,40 @@ export async function execute(
         descriptionVars: {
           helpMemory: helpMemoryMention,
         },
+        docsPath: DOCS_PATHS.MULTIPLE_PERSONAS,
         color: ColorCode.INFO,
         fields: [
           {
-            nameKey: "commands.help.customization.embed1_personas_title",
-            value: localizer(locale, "commands.help.customization.embed1_personas_description", {
+            nameKey: "commands.help.customization.summary_personas_title",
+            value: localizer(locale, "commands.help.customization.summary_personas_description", {
               personaCreate: personaCreateMention,
               personaGenerate: personaGenerateMention,
-              personaDefault: personaDefaultMention,
-              personaExport: personaExportMention,
-              personaImport: personaImportMention,
-              personaRemove: personaRemoveMention,
               personaAttributeAdd: personaAttributeAddMention,
               personaSampleDialogueAdd: personaSampleDialogueAddMention,
-              serverAvatar: serverAvatarMention,
             }),
             inline: false,
           },
           {
-            nameKey: "commands.help.customization.embed1_what_personas_include_title",
-            value: localizer(locale, "commands.help.customization.embed1_what_personas_include_description"),
+            nameKey: "commands.help.customization.summary_behavior_title",
+            value: localizer(locale, "commands.help.customization.summary_behavior_description", {
+              configModel: configModelMention,
+              configHumanizer: configHumanizerMention,
+              configSystemPromptSet: configSystemPromptSetMention,
+              capabilitiesManage: capabilitiesManageMention,
+            }),
+            inline: false,
+          },
+          {
+            nameKey: "commands.help.customization.summary_server_title",
+            value: localizer(locale, "commands.help.customization.summary_server_description", {
+              serverWhitelistChannel: serverWhitelistChannelMention,
+            }),
             inline: false,
           },
         ],
-        footerKey: "commands.help.customization.embed1_footer",
       },
-      MessageFlags.SuppressNotifications,
+      MessageFlags.Ephemeral,
     );
-
-    // Get channel for follow-up embeds
-    const channel = interaction.channel;
-    if (!channel || channel.partial || (channel.type !== ChannelType.DM && !isGuildMessageCommandChannel(channel))) {
-      log.warn("Invalid channel type for /help customization follow-up embeds");
-      return;
-    }
-
-    // EMBED 2: Teaching System
-    await sendStandardEmbed(channel, locale, {
-      titleKey: "commands.help.customization.embed2_title",
-      descriptionKey: "commands.help.customization.embed2_description",
-      descriptionVars: {
-        personaAttributeAdd: personaAttributeAddMention,
-        personaSampleDialogueAdd: personaSampleDialogueAddMention,
-        configRename: configRenameMention,
-      },
-      color: ColorCode.INFO,
-      footerKey: "commands.help.customization.embed2_footer",
-    });
-
-    // EMBED 3: Configuration & Management
-    await sendStandardEmbed(channel, locale, {
-      titleKey: "commands.help.customization.embed3_title",
-      descriptionKey: "commands.help.customization.embed3_description",
-      descriptionVars: {
-        personaAttributeRemove: personaAttributeRemoveMention,
-        personaSampleDialogueRemove: personaSampleDialogueRemoveMention,
-        serverMemberpermissions: serverMemberpermissionsMention,
-        serverBlacklist: serverBlacklistMention,
-        serverAutotriggerChannels: serverAutotriggerChannelsMention,
-        serverAutotriggerThreshold: serverAutotriggerThresholdMention,
-        serverTriggerAdd: serverTriggerAddMention,
-        serverTriggerRemove: serverTriggerRemoveMention,
-        serverAvatar: serverAvatarMention,
-        serverWhitelistChannel: serverWhitelistChannelMention,
-        serverWhitelistPersona: serverWhitelistPersonaMention,
-        serverWhitelistRole: serverWhitelistRoleMention,
-        serverWhitelistRemove: serverWhitelistRemoveMention,
-        memoryDocumentAdd: memoryDocumentAddMention,
-        memoryDocumentRemove: memoryDocumentRemoveMention,
-        configCooldown: configCooldownMention,
-      },
-      color: ColorCode.INFO,
-      footerKey: "commands.help.customization.embed3_footer",
-    });
-
-    // EMBED 4: Advanced Settings
-    await sendStandardEmbed(channel, locale, {
-      titleKey: "commands.help.customization.embed4_title",
-      descriptionKey: "commands.help.customization.embed4_description",
-      descriptionVars: {
-        configModel: configModelMention,
-        configTemperature: configTemperatureMention,
-        configHumanizer: configHumanizerMention,
-        configApikeySet: configApikeySetMention,
-        configApikeyDelete: configApikeyDeleteMention,
-        configBraveapiSet: configBraveapiSetMention,
-        configBraveapiDelete: configBraveapiDeleteMention,
-        configRename: configRenameMention,
-        configTimezone: configTimezoneMention,
-        configPermissions: configPermissionsMention,
-        configApikeyRotation: configApikeyRotationMention,
-        configUncensors: configUncensorsMention,
-        configModelEmbedding: configModelEmbeddingMention,
-        generateImage: generateImageMention,
-        configModelImage: configModelImageMention,
-        configPromptChange: configPromptChangeMention,
-        configPromptPreset: configPromptPresetMention,
-        configPromptClear: configPromptClearMention,
-        serverInitializeExpressions: serverInitializeExpressionsMention,
-        personalPrivacy: personalPrivacyMention,
-      },
-      color: ColorCode.INFO,
-      footerKey: "commands.help.customization.embed4_footer",
-    });
-
-    // EMBED 5: Pro Tips
-    /*
-		await sendStandardEmbed(channel, locale, {
-			titleKey: "commands.help.customization.embed5_title",
-			descriptionKey: "commands.help.customization.embed5_description",
-			color: ColorCode.INFO,
-		});*/
   } catch (error) {
     // Log error with context
     const context: ErrorContext = {

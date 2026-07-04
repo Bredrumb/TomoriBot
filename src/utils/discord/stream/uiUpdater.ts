@@ -35,6 +35,19 @@ function isInvalidWebhookError(error: unknown): boolean {
   return code === 10015 || code === "10015" || code === 50027 || code === "50027";
 }
 
+/**
+ * Detects transient webhook send failures (network aborts/timeouts) where the
+ * webhook itself is still valid — the individual HTTP request just did not land.
+ * Unlike {@link isInvalidWebhookError}, these are safe to retry with the same
+ * persona identity so the persona avatar/username is preserved on the retry.
+ *
+ * @param error - The error thrown by the webhook send attempt
+ * @returns True when the failure is a transient abort worth a single retry
+ */
+function isTransientWebhookError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 function resolveWebhookTargetChannel(channel: StreamContext["channel"]): BaseGuildTextChannel | null {
   const isThread = "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
   if (isThread) {
@@ -286,6 +299,14 @@ export class StreamUiUpdater {
       }).catch((recordError) => {
         log.warn("Stream Send: Failed to record sprite message mapping", recordError as Error);
       });
+      // Track the delivered sprite label so the post-turn stat recorder can count
+      // `sprite_shown` / `sprite_emotion` (the stream layer has no internal user id;
+      // post-turn does). isIdentity rides along so identity sprites are kept out of
+      // the emotion count while still counting toward sprite_shown.
+      state.spritesShown.push({
+        name: payload.spriteRecord.spriteName,
+        isIdentity: payload.spriteRecord.isIdentity,
+      });
     }
     state.messageSentCount++;
     if (textForState) {
@@ -333,13 +354,15 @@ export class StreamUiUpdater {
     webhookAllowedMentions: NonNullable<StreamSendPayload["allowedMentions"]>,
     identityOverride?: ResolvedWebhookIdentity,
   ): Promise<Message | null> {
+    // 1. Recover whenever a webhook-backed persona identity was in play — mirror
+    //    the send/fallback gate (context.webhook && personaUsername) rather than
+    //    limiting to alters, since non-alter sprite personas send via webhook too.
+    // 2. Retry on invalid-webhook errors (stale webhook -> recreate) AND transient
+    //    aborts (webhook still valid -> recreate + resend preserves persona avatar).
     const shouldRecoverWebhook =
       context.webhook &&
-      ((context.personaUsername &&
-        context.tomoriState.is_alter &&
-        context.personaUsername === context.tomoriState.persona_nickname) ||
-        identityOverride) &&
-      isInvalidWebhookError(discordError);
+      (context.personaUsername || identityOverride) &&
+      (isInvalidWebhookError(discordError) || isTransientWebhookError(discordError));
 
     if (!shouldRecoverWebhook) {
       return null;

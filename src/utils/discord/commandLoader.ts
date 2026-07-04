@@ -88,7 +88,7 @@ type DirectoryItem = {
 };
 
 // Categories that are completely restricted to guilds only
-const GUILD_ONLY_CATEGORIES: string[] = ["server", "conditioning"];
+const GUILD_ONLY_CATEGORIES: string[] = ["server", "conditioning", "stats"];
 // Categories that require manage permissions in guild context
 const MANAGER_ONLY_CATEGORIES = [
   "config",

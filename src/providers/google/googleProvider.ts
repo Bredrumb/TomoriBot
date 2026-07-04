@@ -59,6 +59,7 @@ import { llmModelRepo } from "@/utils/db/repositories";
 import { googleProviderInfo } from "./providerInfo";
 import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 
 /**
  * Gets the default Google Gemini model with a robust fallback chain:
@@ -661,47 +662,25 @@ export class GoogleProvider
         log.info("GoogleProvider: Skipping context-aware tool reload - model doesn't support tools");
       }
 
-      // Create streaming context
-      const streamContext: StreamContext = {
-        // Discord context
+      // Create streaming context via the shared builder (owns all common copy-through fields)
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "google",
         channel,
         client,
         initialInteraction,
         replyToMessage,
-
-        // Application context
         tomoriState,
         contextItems,
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-
-        // Provider context
-        provider: "google",
-        locale: userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        suppressTextOutput: streamingContext?.suppressTextOutput,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
-
-        // Multi-persona webhook support
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-
-        // Forced mentions (e.g., reminder recipients)
-        forcedMentions: streamingContext?.forcedMentions,
-
-        // External abort signal for SDK call timeout cancellation
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
-      };
+      });
 
       // Create the modular streaming components
       const orchestrator = new StreamOrchestrator();

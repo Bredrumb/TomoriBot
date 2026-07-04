@@ -10,7 +10,17 @@ import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
 import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/utils/chat/contextAnnotations";
 import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
-import type { ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import { statRepository } from "@/utils/db/repositories";
+import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
+import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+
+/**
+ * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`).
+ * Only resolved tags appear in the final persona text (cleanLLMOutput converts a
+ * successful `:name:` shortcode into this form), so counting these is exactly the
+ * "successful server-emoji resolve" signal the stat plan calls for. Capture 1 = name.
+ */
+const RESOLVED_CUSTOM_EMOJI_RE = /<a?:([A-Za-z0-9_~]+):\d+>/g;
 
 const MAX_EMPTY_RESPONSE_RETRIES = 2;
 const EMPTY_RESPONSE_RETRY_DELAY_MS = 1000;
@@ -26,11 +36,173 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   await emitThoughtLog(context, result);
   scheduleBoomerangFollowUp(context);
   await context.fastRegenerationRecorder?.arm();
+  // Fire-and-forget so stat tracking never adds latency to the response path.
+  void recordUsageStats(context, result);
+}
+
+/**
+ * Records per-turn usage stats at the single post-turn chokepoint:
+ * message_sent, active_hour, model_used, tokens_in/tokens_out (estimated),
+ * emoji_used, sprite_shown, and sprite_emotion (non-identity sprites only). Only
+ * counts turns that actually produced a persona response. DMs are skipped
+ * (stat_counters.server_id is a NOT NULL FK).
+ *
+ * Tokens prefer REAL provider usage when available: the orchestrator normalizes
+ * each provider's reported usage onto `StreamResult.usage`, and these are summed
+ * across the turn's stream segments (one per tool-loop request, each billed
+ * separately). When no segment reports usage (e.g. NovelAI, or a provider that
+ * omits it), tokens fall back to the CHARACTER-ESTIMATE ("Track A", shared with
+ * `/tool estimate cost`): input from the built context, output from the response
+ * text. The estimate over-counts dense languages (e.g. Japanese) and is rough;
+ * real usage is billing-accurate. Either way the metric shape is identical
+ * (`tokens_in`/`tokens_out` keyed by model id), so getEstimatedCost is unchanged.
+ *
+ * @param context - The completed turn's context (model + persona + server scope).
+ * @param result  - The turn result; personaResponses carry the responding lineages.
+ */
+async function recordUsageStats(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  // 1. Only count turns that produced a real persona response, and not DMs.
+  if (result.personaResponses.length === 0 || context.isDMChannel) return;
+  const serverId = context.tomoriState.server_id;
+  if (!serverId) return;
+
+  try {
+    // 2. Triggerer's internal users FK — resolved once at turn planning and
+    //    carried on the context, so stat recording needs no per-turn DB lookup.
+    const userId = context.triggererUserId;
+    if (!userId) return;
+
+    const hour = String(new Date().getUTCHours());
+    const modelCodename = context.tomoriState.llm.llm_codename;
+    const primaryLineage = context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0;
+
+    // 3. Once per turn: the model used and the active hour-of-day, keyed to the
+    //    answering persona. (active_hour is summed across lineages at read time,
+    //    so recording it once per turn keeps the hour histogram un-inflated.)
+    statRepository.recordStat({
+      serverId,
+      userId,
+      lineageId: primaryLineage,
+      metric: "model_used",
+      metricKey: modelCodename,
+    });
+    statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "active_hour", metricKey: hour });
+
+    // 4. Per responding persona: one message exchanged (drives favorite-persona
+    //    affinity), plus that persona's emoji usage and output-token volume — all
+    //    persona-scoped, so keyed to the response's own lineage.
+    const lineages = new Set<number>();
+    let estimatedOutputTokens = 0;
+    for (const response of result.personaResponses) {
+      const lineageId = response.personaLineageId ?? primaryLineage;
+      lineages.add(lineageId);
+
+      // 4a. Output token volume (character-estimated) for this response — used
+      //     only as the fallback when the provider reported no real usage (5).
+      if (response.text) estimatedOutputTokens += charsToTokensText(response.text.length);
+
+      // 4b. Successful custom-emoji uses in the final text, one increment per
+      //     occurrence. Pre-aggregated per name so repeats collapse to one UPSERT.
+      const emojiCounts = new Map<string, number>();
+      for (const match of response.text.matchAll(RESOLVED_CUSTOM_EMOJI_RE)) {
+        const name = match[1];
+        emojiCounts.set(name, (emojiCounts.get(name) ?? 0) + 1);
+      }
+      for (const [name, count] of emojiCounts) {
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId,
+          metric: "emoji_used",
+          metricKey: name,
+          delta: count,
+        });
+      }
+    }
+    for (const lineageId of lineages) {
+      statRepository.recordStat({ serverId, userId, lineageId, metric: "message_sent" });
+    }
+    // 4c. One text_generated increment per completed turn (persona-scoped to the answering persona).
+    statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "text_generated" });
+
+    // 5. Token volume keyed by model id, attributed to the answering persona.
+    //    Prefer REAL provider usage summed across the turn's stream segments
+    //    (billing-accurate); fall back to the character estimate (input from the
+    //    built context, output from response text) when no segment reported usage.
+    //    Cost is derived at read time from catalog pricing (getEstimatedCost), so
+    //    input vs output rate applies exactly per direction either way.
+    const realUsage = sumTurnUsage(result.streamResults);
+    const inputTokens = realUsage ? realUsage.inputTokens : estimateContextItemsTokens(context.contextItems);
+    const outputTokens = realUsage ? realUsage.outputTokens : estimatedOutputTokens;
+    if (realUsage) {
+      log.info(`Stats: recording real provider usage (in=${inputTokens}, out=${outputTokens}) for ${modelCodename}`);
+    }
+    if (inputTokens > 0) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "tokens_in",
+        metricKey: modelCodename,
+        delta: inputTokens,
+      });
+    }
+    if (outputTokens > 0) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "tokens_out",
+        metricKey: modelCodename,
+        delta: outputTokens,
+      });
+    }
+
+    // 6. Sprite deliveries surfaced from the stream (one entry per delivered sprite
+    //    message). Sprites are the answering persona's own, so key on primaryLineage.
+    //    Two counts are pre-aggregated per sprite name:
+    //      - sprite_shown:   every delivered sprite (identity or not) — the leaderboard.
+    //      - sprite_emotion: non-identity sprites only — the sprite's user-given tag is
+    //        treated as an emotion (getEmotionBreakdown unions this metric directly, no
+    //        classification join), so identity (DID-alter) sprites are excluded here.
+    const spriteCounts = new Map<string, number>();
+    const spriteEmotionCounts = new Map<string, number>();
+    for (const stream of result.streamResults) {
+      for (const entry of stream.spritesShown ?? []) {
+        spriteCounts.set(entry.name, (spriteCounts.get(entry.name) ?? 0) + 1);
+        if (!entry.isIdentity) {
+          spriteEmotionCounts.set(entry.name, (spriteEmotionCounts.get(entry.name) ?? 0) + 1);
+        }
+      }
+    }
+    for (const [spriteName, count] of spriteCounts) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "sprite_shown",
+        metricKey: spriteName,
+        delta: count,
+      });
+    }
+    for (const [spriteName, count] of spriteEmotionCounts) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "sprite_emotion",
+        metricKey: spriteName,
+        delta: count,
+      });
+    }
+  } catch (error) {
+    log.warn("Failed to record usage stats for turn", error);
+  }
 }
 
 async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   const incoming = context.turn.lockedTurn.admission.incoming;
-  if (result.status !== "empty_response" || incoming.retryCount >= MAX_EMPTY_RESPONSE_RETRIES) {
+  if (!shouldRetryEmptyResponse(incoming, result)) {
     return;
   }
 
@@ -88,7 +260,13 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     manualTriggerInvoker: incoming.manualTriggerInvoker,
     manualStreamingContextOverrides: incoming.manualStreamingContextOverrides,
     sceneTurn: incoming.sceneTurn,
+    onGenerationResult: incoming.onGenerationResult,
+    onQueueDiscard: incoming.onQueueDiscard,
   });
+}
+
+export function shouldRetryEmptyResponse(incoming: ChatIncoming, result: GenerationTurnResult): boolean {
+  return result.status === "empty_response" && incoming.retryCount < MAX_EMPTY_RESPONSE_RETRIES;
 }
 
 async function consumeTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

@@ -3,6 +3,7 @@ import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -35,7 +36,7 @@ export async function execute(
   try {
     const engine = (interaction.options.getString("engine") ?? "overview") as TranscriptionHelpEngine;
     const customEndpointAdd = commandRegistry.getCommandMention("provider", "custom-endpoint", "add");
-    const modelTranscription = commandRegistry.getCommandMention("config", "model", "transcription");
+    const modelTranscription = commandRegistry.getCommandMention("model", "transcription");
     const elevenLabs = commandRegistry.getCommandMention("speech", "elevenlabs");
     const speechTranscripts = commandRegistry.getCommandMention("speech", "transcripts");
     const helpSpeech = commandRegistry.getCommandMention("help", "speech");
@@ -51,29 +52,16 @@ export async function execute(
         help_speech: helpSpeech,
       },
       color: ColorCode.INFO,
+      docsPath: DOCS_PATHS.STT,
       fields: [
         {
-          nameKey: `commands.help.transcription.${engine}.steps_title`,
-          value: localizer(locale, `commands.help.transcription.${engine}.steps_description`, {
+          nameKey: "commands.help.transcription.summary_title",
+          value: localizer(locale, "commands.help.transcription.summary_description", {
             custom_endpoint_add: customEndpointAdd,
             model_transcription: modelTranscription,
             elevenlabs: elevenLabs,
             speech_transcripts: speechTranscripts,
           }),
-          inline: false,
-        },
-        ...(engine === "whisperx"
-          ? [
-              {
-                nameKey: "commands.help.transcription.whisperx.models_title",
-                value: localizer(locale, "commands.help.transcription.whisperx.models_description"),
-                inline: false,
-              },
-            ]
-          : []),
-        {
-          nameKey: "commands.help.transcription.docs_title",
-          value: localizer(locale, "commands.help.transcription.docs_description"),
           inline: false,
         },
       ],

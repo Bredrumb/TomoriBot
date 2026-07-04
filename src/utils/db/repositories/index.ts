@@ -23,6 +23,7 @@ import { serverMemoryRepository } from "./ServerMemoryRepository";
 import { serverRepository } from "./ServerRepository";
 import { serverScheduleRepository } from "./ServerScheduleRepository";
 import { shortTermMemoryRepository } from "./ShortTermMemoryRepository";
+import { statRepository } from "./StatRepository";
 import { toolRepository } from "./ToolRepository";
 import { userRepository } from "./UserRepository";
 import { whitelistRepository } from "./WhitelistRepository";
@@ -53,11 +54,13 @@ export {
   serverRepository,
   serverScheduleRepository,
   shortTermMemoryRepository,
+  statRepository,
   toolRepository,
   userRepository,
   whitelistRepository,
 };
 
+export type { UnsyncedMainPointer } from "./PersonaRepository";
 export type { OpenRouterModelScope } from "./LlmModelRepository";
 export type { ImportValidationResult, ImportFileType } from "./ImportRepository";
 export type { ReminderSelectionRow } from "./ServerScheduleRepository";

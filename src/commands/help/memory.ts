@@ -6,6 +6,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help memory subcommand
@@ -50,6 +51,7 @@ export async function execute(
         descriptionVars: {
           helpCustomization: helpCustomizationMention,
         },
+        docsPath: DOCS_PATHS.MEMORY,
         color: ColorCode.INFO,
         fields: [
           {

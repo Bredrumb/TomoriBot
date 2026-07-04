@@ -11,6 +11,7 @@ export const NVIDIA_STRUCTURED_OUTPUT_MODELS = new Set([
   "deepseek-ai/deepseek-v3.2",
   "qwen/qwen3.5-397b-a17b",
   "z.ai/glm-4.7",
+  "z-ai/glm-5.2",
   "minimaxai/minimax-m3",
   "moonshotai/kimi-k2.6",
   "nvidia/nemotron-3-ultra-550b-a55b",

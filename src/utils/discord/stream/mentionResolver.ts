@@ -80,6 +80,7 @@ export async function resolveGuildMentions(
   channel: MentionResolvableChannel,
   mentionMap: Map<string, string[]>,
   mentionIdSet: Set<string>,
+  personaMentionMap?: ReadonlyMap<string, string>,
 ): Promise<string> {
   if (!text.includes("@")) return text;
   if (!("guild" in channel)) return text;
@@ -136,5 +137,5 @@ export async function resolveGuildMentions(
     }
   }
 
-  return replaceMentionHandles(text, mentionMap, mentionIdSet);
+  return replaceMentionHandles(text, mentionMap, mentionIdSet, personaMentionMap);
 }

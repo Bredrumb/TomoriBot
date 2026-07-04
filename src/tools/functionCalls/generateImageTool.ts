@@ -31,6 +31,7 @@ import {
   type ImageToolCapabilities,
 } from "@/tools/functionCalls/generateImageToolCapabilities";
 import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
+import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
@@ -1614,6 +1615,17 @@ export class GenerateImageTool extends BaseTool {
       // Increment quota after successful generation (server providers only)
       if (creds.source === "server") {
         await incrementImageQuota(context.tomoriState.server_id, userDiscId);
+      }
+      // Record canonical generation telemetry for all providers; quotas enforce limits only.
+      if (context.internalUserId) {
+        statRepository.recordStat({
+          serverId: context.tomoriState.server_id,
+          userId: context.internalUserId,
+          lineageId: context.tomoriState.persona_lineage_id ?? 0,
+          metric: "image_generated",
+          // Key by model codename for a per-model generation breakdown at read time.
+          metricKey: modelCodename,
+        });
       }
 
       // Note: We intentionally DO NOT include imageMetadata for generated images

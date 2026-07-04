@@ -29,6 +29,7 @@ export default {
       personal_value: `{add_command} で自分専用のラベル付きエンドポイントを登録し、{remove_command} で選んだ機能だけ削除できます。`,
       selection_field: `使い方`,
       selection_value: `登録後は {text_command}、{image_command}、{video_command} からラベルを選択してください。そのラベルに同じ機能のモデルが複数ある場合は、選択メニューから1つ選べます。画像理解対応のテキストエンドポイントは \`/model vision\` にも表示されます。同じラベル・同じ機能で別のモデル名を指定して追加コマンドを再実行すると、その接続にモデルを追加登録できます（エンドポイントURLとAPIスタイルは引き継がれます）。`,
+      selection_summary_value: `登録後は {text_command}、{image_command}、{video_command} からラベルを選択します。同じラベルに同一機能のモデルが複数ある場合は、TomoriBot が使用するモデルを確認します。`,
       labels_field: `ラベルと削除`,
       labels_value: `1つのラベルは対応する全機能をまとめたカスタムプロバイダーバンドルです。{server_remove_command} と {personal_remove_command} はチェックを外した機能だけ削除します。{server_provider_remove_command} と {personal_provider_remove_command} はそのラベル全体を削除します。`,
       comfyui_page1_title: `ComfyUI セットアップ`,
@@ -65,12 +66,17 @@ export default {
       comfyui_page4_output_value: `TomoriBot が取得するのは最初に保存された出力だけなので、ワークフローは実際に画像または動画ファイルを保存する必要があります。プレビュー専用ノードだけでは不十分です。複数保存した場合は、ComfyUI の history で最初に報告されたものが返されます。`,
       comfyui_page4_metadata_field: `extra_pnginfo メタデータ`,
       comfyui_page4_metadata_value: `TomoriBot は、解決済みの値を \`extra_pnginfo\` にも入れます。そこには prompt、model、mode、aspect ratio、width、height、size、参照画像数、さらに動画用の duration・resolution・audio フラグも含まれます。JSON プレースホルダーの代わりに ComfyUI メタデータを読むカスタムノードを使いたい場合に有用です。`,
+      comfyui_summary_description: `ComfyUI カスタムエンドポイントでは、保存済みの画像/動画ワークフローを TomoriBot がキューに送り、最初に保存された出力を返します。詳しい手順は、ワークフロー書き出し、プレースホルダー、参照画像、ポーリング、出力ルールを含むドキュメントを確認してください。`,
+      comfyui_summary_register_field: `登録して有効化`,
+      comfyui_summary_register_value: `{server_add_command} または {personal_add_command} でエンドポイントを登録し、{image_command} または {video_command} でそのラベルを選択します。ComfyUI ワークフロー設定の詳細はドキュメントボタンから確認してください。`,
     },
     speech: {
       description: `音声生成の設定方法を確認します。`,
       engine_description: `音声エンジンのガイドを選択します。`,
       docs_title: `詳細ドキュメント`,
-      docs_description: `コピー用のセットアップ手順とラッパーの注意点については、GitHub上の[TTSドキュメント](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/tts)と[サーバーのREADME](https://github.com/Bredrumb/TomoriBot/blob/main/servers/tts/README.md)を確認してください。`,
+      docs_description: `設定手順とラッパーの注意点は、[TTSドキュメント](https://docs.tomoribot.app/features/capabilities/media-generation/tts-and-stt/#text-to-speech) と [ローカルTTS設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/) を確認してください。`,
+      summary_title: `音声生成の使い方`,
+      summary_description: `ローカル音声クローンでは、{custom_endpoint_add} で音声エンドポイントを登録し、{model_speech} で選択、{voice_add} でサンプル追加、{voice_assign} で割り当てます。ElevenLabs は {elevenlabs} を実行します。VoiceDesign 設定は {voice_design_set} を使います。`,
       overview: {
         title: `音声生成の概要`,
         description: `音声エンドポイントを使うと、ローカル音声クローンまたはElevenLabsでDiscordボイスメッセージを送信できます。ローカルクローンの場合、どの音声形式でも自動でモノラルWAVに変換されます。BGMなしの10〜20秒のクリップを推奨します。`,
@@ -91,7 +97,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
         steps_title: `設定手順`,
         steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. GitHubリポジトリからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
+1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/chatterbox/) に従ってサーバーを準備します。
 2. ダウンロードした \`chatterbox\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. numpy を先にインストールします: \`pip install numpy\`、その後 \`requirements.txt\` をインストールします。
 4. *(GPU のみ)* PyTorch を再インストールします: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -108,7 +114,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
 • SoX をシステムにインストール（Windows: \`scoop install sox\`、macOS: \`brew install sox\`）
 • CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. GitHubからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
+1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/qwen3tts/) に従ってサーバーを準備します。
 2. ダウンロードした \`qwen3tts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements.txt\` をインストールします。
 4. *(GPU)* PyTorch を再インストール: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -123,7 +129,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
         steps_title: `設定手順`,
         steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. GitHubからマシンに [TTSサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) をダウンロードします。
+1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/irodoritts/) に従ってサーバーを準備します。
 2. ダウンロードした \`irodoritts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements.txt\` をインストールします。
 4. パッチスクリプトで irodori-tts をインストール（上流のバグ対処）:
@@ -145,12 +151,14 @@ Linux/macOS: \`bash install-irodori.sh\`
       description: `音声文字起こしの設定方法を確認します。`,
       engine_description: `文字起こしエンジンのガイドを選択します。`,
       docs_title: `詳細ドキュメント`,
-      docs_description: `ローカルサーバー設定の詳細については、GitHub上の[Transcriptionドキュメント](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/transcription)と[STTのREADME](https://github.com/Bredrumb/TomoriBot/blob/main/servers/stt/README.md)を確認してください。`,
+      docs_description: `文字起こしについては [STTドキュメント](https://docs.tomoribot.app/features/capabilities/media-generation/tts-and-stt/#speech-to-text) と [ローカルSTT設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/) を確認してください。`,
+      summary_title: `文字起こしの使い方`,
+      summary_description: `{custom_endpoint_add} で文字起こしエンドポイントを登録し、{model_transcription} で選択します。字幕をチャットに表示したい場合だけ {speech_transcripts} を使います。ElevenLabs ユーザーは {elevenlabs} を実行できます。`,
       overview: {
         title: `文字起こしの概要`,
         description: `文字起こしエンドポイントは、音声添付を内部会話コンテキスト用のテキストに変換します。見える形で投稿する字幕は {speech_transcripts} で別途制御します。`,
         steps_title: `推奨経路`,
-        steps_description: `まず WhisperX を推奨します。\`servers/stt\` の参照サーバーを起動し、{custom_endpoint_add} で登録してから {model_transcription} で選択します。ElevenLabs ユーザーは {elevenlabs} を実行します。
+        steps_description: `まず WhisperX を推奨します。ローカルSTT設定ガイドに従い、{custom_endpoint_add} で登録してから {model_transcription} で選択します。ElevenLabs ユーザーは {elevenlabs} を実行します。
 
 **エンジン別設定ガイド:**
 • WhisperX → \`/help transcription engine:WhisperX\`
@@ -166,7 +174,7 @@ Linux/macOS: \`bash install-irodori.sh\`
 • FFmpeg をシステムにインストール（必須）
 • CUDA 12.x + ドライバー（任意、GPU 高速化用）
 
-1. GitHubからマシンに [STTサーバー](https://github.com/Bredrumb/TomoriBot/tree/main/servers/stt) をダウンロードします。
+1. [ローカルSTT設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/whisperx/) に従ってサーバーを準備します。
 2. ダウンロードした \`stt\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements-whisperx.txt\` をインストールします。
 4. *(GPU)* CUDA 対応 PyTorch を再インストール:
@@ -207,6 +215,14 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       description: `TomoriBotができることを表示`,
       title: `TomoriBotの機能（バージョン {version}）`,
       embed_description: `これが私の全機能です：`,
+      summary_chat_title: `会話とペルソナ`,
+      summary_chat_description: `TomoriBot はトリガーワード、メンション、返信、アルターペルソナ、Webhook ID、設定可能なペルソナ動作で応答できます。`,
+      summary_knowledge_title: `知識とメモリー`,
+      summary_knowledge_description: `個人メモリー、サーバーメモリー、ドキュメント知識、短期記憶、プライバシー制御により、TomoriBot が使える文脈をサーバーごとに決められます。`,
+      summary_capabilities_title: `ツールとメディア`,
+      summary_capabilities_description: `Web/検索、予定タスク、メディア解析、画像/動画生成、音声メッセージ、文字起こし、MCP、カスタムエンドポイント連携などのツールを使えます。`,
+      summary_reference_title: `管理とリファレンス`,
+      summary_reference_description: `プロバイダー設定、モデル選択、サーバー管理、年齢制限コマンド、統計、Matrix連携、自動生成コマンド一覧はドキュメントにまとまっています。`,
       vision_title: `ビジョン＆メディア`,
       vision_description: `- 画像、動画、スタンプ、絵文字を見て分析できます
 - YouTubeリンクから動画を視聴できます
@@ -232,7 +248,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
 - \`/personal privacy\`で完全に見えなくなるオプションが利用可能です
 - 詳しくは\`/help memory\`をご覧ください`,
       time_title: `時間認識`,
-      time_description: `- サーバーの現在時刻を認識しています（\`/config timezone\`経由）
+      time_description: `- サーバーの現在時刻を認識しています（\`/server timezone\`経由）
 - リマインダーを設定できます（何かを思い出させるように頼んでみて！）
 - 繰り返しリマインダーもサポートされており、ペルソナ固有です`,
       alter_title: `アルターペルソナ`,
@@ -748,6 +764,12 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       description: `TomoriBotのパーソナリティと動作をカスタマイズする方法を学ぶ`,
       embed1_title: `TomoriBotのカスタマイズ`,
       embed1_description: `TomoriBotは高度にカスタマイズ可能です！私を本当にあなたのものにするために設定できるすべてがここにあります。これは**私がどう振る舞うか**（パーソナリティ、トーン、設定）についてです。**私が記憶していること**（事実、記憶）については、代わりに{helpMemory}をご覧ください！`,
+      summary_personas_title: `ペルソナ`,
+      summary_personas_description: `{personaCreate} または {personaGenerate} でペルソナを作り、{personaAttributeAdd} と {personaSampleDialogueAdd} で調整できます。ペルソナは切り替え、エクスポート、インポート、別々のアルターIDとして使用できます。`,
+      summary_behavior_title: `動作設定`,
+      summary_behavior_description: `{configModel}、{configHumanizer}、{configSystemPromptSet}、{capabilitiesManage} で、モデル選択、人間らしさ、システム指示、機能アクセスを調整できます。`,
+      summary_server_title: `サーバー側の制御`,
+      summary_server_description: `管理者は、ペルソナ制限、{serverWhitelistChannel} などのホワイトリストチャンネル、自動トリガー、クールダウン、ロール権限を組み合わせて、TomoriBot がどこでどう応答するかを制御できます。`,
       embed1_personas_title: `パーソナリティペルソナ`,
       embed1_personas_description: `私の核となるパーソナリティと動作を制御：
 
@@ -894,10 +916,12 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 認証が不要なMCPサーバーの場合は、**認証トークン**フィールドを空白のままにしてください。サーバーによっては別の認証形式を使用する場合があります。詳細はそのサーバーのドキュメントを確認してください。
 
 認証トークンは保存後に暗号化され、平文で表示されることはありません。`,
+      online_summary_description: `{configMcpAdd} で、公開された HTTPS MCP サーバーを登録できます。認証トークンは保存後に暗号化されます。接続URLの注意点はドキュメントを確認してください。`,
       local_title: `ローカルMCPの追加（自己ホスト限定）`,
       local_description: `ローカルMCPサーバーは、**自己ホストのTomoriBotインスタンスでのみ対応しています**。公式ホスト版のbotはセキュリティのためHTTPSが必要で、ローカル/プライベートアドレスはブロックされます。
 
 自己ホストの場合は、ローカルサーバーのURLを指定してください（例：\`http://localhost:3000/sse\`）。ローカルサーバーには認証トークンは不要です。`,
+      local_summary_description: `ローカル MCP サーバーは自己ホスト専用です。公式ホスト版はローカル/プライベートアドレスをブロックします。ローカルMCPの起動とURL登録手順はドキュメントにあります。`,
       removing_title: `MCPサーバーの削除`,
       removing_description: `{configMcpRemove} を使えば、いつでもサーバーの登録を解除できます。削除すると即座に接続が切断され、新しいサーバーのスロットが解放されます。`,
       security_title: `セキュリティに関する警告`,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import { resolveReferencedWebhookTarget } from "@/utils/chat/webhookIdentity";
+import { resolvePersonaForMessage, resolveReferencedWebhookTarget } from "@/utils/chat/webhookIdentity";
 
 function persona(nickname: string, id: number): TomoriState {
   return {
@@ -19,6 +19,16 @@ function webhookMessage(username: string): Message {
   } as Message;
 }
 
+function directMessage(authorId: string): Message {
+  return {
+    webhookId: null,
+    author: {
+      id: authorId,
+      username: "Tomori",
+    },
+  } as Message;
+}
+
 describe("resolveReferencedWebhookTarget", () => {
   it("routes replies to copied-render webhook names back to the source persona", () => {
     const ren = persona("Ren", 123);
@@ -28,5 +38,30 @@ describe("resolveReferencedWebhookTarget", () => {
 
     expect(result.replyPersona).toBe(ren);
     expect(result.impersonatedUserId).toBeNull();
+  });
+});
+
+describe("resolvePersonaForMessage", () => {
+  it("resolves bot-authored direct messages to the main persona", () => {
+    const main = persona("Tomori", 1);
+    const alter = persona("Ren", 2);
+    alter.is_alter = true;
+
+    expect(resolvePersonaForMessage(directMessage("bot_1"), [main, alter], "bot_1")).toBe(main);
+  });
+
+  it("resolves alter webhook messages by copied-render username", () => {
+    const main = persona("Tomori", 1);
+    const ren = persona("Ren", 2);
+    ren.is_alter = true;
+
+    expect(resolvePersonaForMessage(webhookMessage("Ren (bredrumb)"), [main, ren], "bot_1")).toBe(ren);
+  });
+
+  it("ignores non-persona bridge webhook messages", () => {
+    const ren = persona("Ren", 2);
+    ren.is_alter = true;
+
+    expect(resolvePersonaForMessage(webhookMessage("[Matrix|@ren:example.org] Ren"), [ren], "bot_1")).toBeNull();
   });
 });

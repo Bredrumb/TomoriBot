@@ -24,6 +24,17 @@ export interface ChatReminderData {
   self_reminder?: boolean;
 }
 
+export type QueuedMessageDiscardReason =
+  | "admission_rejected"
+  | "channel_queue_cleared"
+  | "queued_processing_failed"
+  | "stale_lock_release"
+  | "superseded_follow_up"
+  | "self_reply_work_cleared";
+
+export type ChatGenerationResultHandler = (result: GenerationTurnResult) => void | Promise<void>;
+export type QueuedMessageDiscardHandler = (reason: QueuedMessageDiscardReason) => void | Promise<void>;
+
 export interface ManualTriggerInvoker {
   userDiscId: string;
   username: string;
@@ -76,6 +87,8 @@ export interface TomoriChatInput {
   manualTriggerInvoker?: ManualTriggerInvoker;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
+  onGenerationResult?: ChatGenerationResultHandler;
+  onQueueDiscard?: QueuedMessageDiscardHandler;
 }
 
 export interface ChatIncoming {
@@ -109,6 +122,8 @@ export interface ChatIncoming {
   manualTriggerInvoker?: ManualTriggerInvoker;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
+  onGenerationResult?: ChatGenerationResultHandler;
+  onQueueDiscard?: QueuedMessageDiscardHandler;
 }
 
 export type ChatAdmissionDisposition = "run" | "ignore" | "queued" | "blocked" | "error";
@@ -202,6 +217,8 @@ export interface ChatTurnContext {
   locale: string;
   serverDiscId: string;
   userDiscId: string;
+  /** Internal users FK of the triggerer, resolved once at turn planning (no per-turn lookup). */
+  triggererUserId: number | undefined;
   isDMChannel: boolean;
   isFromQueue: boolean;
   isStopResponse: boolean;

@@ -16,6 +16,20 @@ import {
 import { ensureDiscordUserMention } from "../utils/discord/mentionHelper";
 import { isBridgeUserId } from "../utils/bridges";
 import { sendMatrixReminderMention } from "../utils/bridges/matrix";
+import type { GenerationTurnResult, QueuedMessageDiscardReason } from "@/utils/chat/types";
+
+const REMINDER_DELIVERY_RETRY_DELAY_MS = parseIntegerEnvFlag(
+  process.env.REMINDER_DELIVERY_RETRY_DELAY_MS,
+  60_000,
+  1_000,
+);
+
+function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
+  if (typeof value !== "string") return defaultValue;
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return defaultValue;
+  return Math.max(minimum, parsed);
+}
 
 function getNextRecurringReminderTime(
   reminderTime: Date,
@@ -83,8 +97,13 @@ function getNextWindowedRecurringReminderTime(
   return alignToDailyWindow(intervalCandidate, windowStartMinutes, windowEndMinutes, timezoneOffset);
 }
 
+function isReminderDeliverySuccessful(result: GenerationTurnResult): boolean {
+  return result.status === "completed";
+}
+
 export class ReminderProcessor {
   private readonly client: Client;
+  private readonly activeReminderIds = new Set<number>();
 
   constructor(client: Client) {
     this.client = client;
@@ -110,6 +129,11 @@ export class ReminderProcessor {
 
   private async executeReminder(reminder: ReminderRow): Promise<void> {
     try {
+      if (reminder.reminder_id && this.activeReminderIds.has(reminder.reminder_id)) {
+        log.info(`Reminder ${reminder.reminder_id} is already queued or executing; skipping duplicate delivery.`);
+        return;
+      }
+
       log.info(
         `Executing reminder ${reminder.reminder_id} for user ${reminder.user_nickname} (${reminder.user_discord_id})`,
       );
@@ -242,6 +266,14 @@ export class ReminderProcessor {
 
       const reminderStartTime = Date.now();
       const isSelfReminder = reminder.self_reminder === true;
+      this.markReminderDeliveryActive(reminder);
+      const deliveryTracker = this.createReminderDeliveryTracker({
+        reminder,
+        channel,
+        afterMessageId: lastMessage.id,
+        reminderStartTime,
+        isSelfReminder,
+      });
 
       suppressNextSelfReply(channel.id);
 
@@ -265,86 +297,186 @@ export class ReminderProcessor {
         shouldSurfaceUserErrors: true,
         // Tasks (self_reminder) may spawn follow-up tasks; user reminders block create_task to prevent loops
         manualStreamingContextOverrides: isSelfReminder ? undefined : { disableReminderTool: true },
+        onGenerationResult: deliveryTracker.handleGenerationResult,
+        onQueueDiscard: deliveryTracker.handleQueueDiscard,
       });
 
       log.info(`tomoriChat call completed for reminder ${reminder.reminder_id} (disposition: ${disposition})`);
 
-      // 1. If the chat call was rejected before it could run (ignored/blocked/error), do not delete
-      //    the DB row — let the next reconcile cycle retry. Without this guard, a reminder that fires
-      //    while the channel is in a transient blocked/ignored state would be lost forever.
+      // If the chat call was rejected before it could run (ignored/blocked/error), do not delete
+      // the DB row. Defer it so transient blocked/ignored states cannot consume the reminder.
       if (disposition !== "run" && disposition !== "queued") {
-        log.warn(
-          `Reminder ${reminder.reminder_id} not executed (disposition: ${disposition}); leaving DB row intact for next reconcile cycle.`,
-        );
+        log.warn(`Reminder ${reminder.reminder_id} not executed (disposition: ${disposition}); deferring for retry.`);
+        await deliveryTracker.deferRetry(`admission_${disposition}`);
         return;
       }
 
-      // 2. "queued" means the reminder is waiting behind a busy channel. The queued replay carries
-      //    the reminder context (reminderRecipientID/reminderData on QueuedMessage) and will execute
-      //    later, so we still delete/reschedule the DB row to prevent the reconcile loop from
-      //    double-firing. But we skip the post-reminder mention fallback below — firing it now would
-      //    mention the user before the queued reply actually lands.
-      const isQueued = disposition === "queued";
-
-      if (!isQueued && !isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
-        await sendMatrixReminderMention(
-          channel,
-          reminder,
-          lastMessage.id,
-          reminderStartTime,
-          this.client.user?.id ?? "",
-        );
-      } else if (!isQueued && !isSelfReminder) {
-        await this.ensureReminderRecipientMention(channel, reminder, lastMessage.id, reminderStartTime);
-      }
-
-      if (isRecurring && reminder.reminder_id) {
-        const nextRepeatRemainingCount =
-          currentRepeatRemainingCount !== null ? Math.max(0, currentRepeatRemainingCount - 1) : null;
-
-        if (nextRepeatRemainingCount !== null && nextRepeatRemainingCount <= 0) {
-          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
-          log.success(`Finite recurring reminder ${reminder.reminder_id} executed its final run and was deleted`);
-          return;
-        }
-
-        const nextTriggerTime = hasDailyWindow
-          ? getNextWindowedRecurringReminderTime(
-              reminder.reminder_time,
-              repetitionIntervalMinutes,
-              reminder.daily_window_start_minutes as number,
-              reminder.daily_window_end_minutes as number,
-              reminder.daily_window_timezone_offset as number,
-            )
-          : getNextRecurringReminderTime(reminder.reminder_time, repetitionIntervalMinutes);
-        if (repeatUntilTime && nextTriggerTime.getTime() > repeatUntilTime.getTime()) {
-          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
-          log.success(`Recurring reminder ${reminder.reminder_id} reached its repeat-until time and was deleted`);
-          return;
-        }
-
-        const rescheduled = await serverScheduleRepository.rescheduleReminder(
-          reminder.reminder_id,
-          nextTriggerTime,
-          nextRepeatRemainingCount,
-          repeatUntilTime,
-        );
-
-        if (rescheduled) {
-          log.success(`Reminder ${reminder.reminder_id} executed and rescheduled for ${nextTriggerTime.toISOString()}`);
-        } else {
-          log.error(`Failed to reschedule recurring reminder ${reminder.reminder_id}; deleting to prevent duplicates`);
-          await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
-        }
-      } else if (reminder.reminder_id) {
-        await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
-        log.success(`Reminder ${reminder.reminder_id} executed and deleted successfully`);
-      } else {
-        log.error("Cannot delete reminder: reminder_id is undefined");
+      if (disposition === "run" && !deliveryTracker.isSettled()) {
+        await deliveryTracker.deferRetry("no_generation_result");
+      } else if (disposition === "queued") {
+        log.info(`Reminder ${reminder.reminder_id} queued; DB row remains pending until queued delivery completes.`);
       }
     } catch (error) {
       log.error(`Error executing reminder ${reminder.reminder_id}:`, error);
       await this.handleReminderExecutionFailure(reminder, error instanceof Error ? error.message : "Unknown error");
+      this.releaseReminderDelivery(reminder);
+    }
+  }
+
+  private createReminderDeliveryTracker(args: {
+    reminder: ReminderRow;
+    channel: TextBasedChannel;
+    afterMessageId: string;
+    reminderStartTime: number;
+    isSelfReminder: boolean;
+  }): {
+    isSettled: () => boolean;
+    handleGenerationResult: (result: GenerationTurnResult) => Promise<void>;
+    handleQueueDiscard: (reason: QueuedMessageDiscardReason) => Promise<void>;
+    deferRetry: (reason: string) => Promise<void>;
+  } {
+    let settled = false;
+
+    const settle = async (operation: () => Promise<void>): Promise<void> => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+
+      try {
+        await operation();
+      } finally {
+        this.releaseReminderDelivery(args.reminder);
+      }
+    };
+
+    const deferRetry = async (reason: string): Promise<void> => {
+      await settle(async () => {
+        await this.deferReminderRetry(args.reminder, reason);
+      });
+    };
+
+    return {
+      isSettled: () => settled,
+      handleGenerationResult: async (result) => {
+        if (isReminderDeliverySuccessful(result)) {
+          await settle(async () => {
+            await this.completeReminderDelivery(args);
+          });
+          return;
+        }
+
+        await deferRetry(`generation_${result.status}`);
+      },
+      handleQueueDiscard: async (reason) => {
+        await deferRetry(`queue_${reason}`);
+      },
+      deferRetry,
+    };
+  }
+
+  private async completeReminderDelivery(args: {
+    reminder: ReminderRow;
+    channel: TextBasedChannel;
+    afterMessageId: string;
+    reminderStartTime: number;
+    isSelfReminder: boolean;
+  }): Promise<void> {
+    const { reminder, channel, afterMessageId, reminderStartTime, isSelfReminder } = args;
+
+    if (!isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
+      await sendMatrixReminderMention(channel, reminder, afterMessageId, reminderStartTime, this.client.user?.id ?? "");
+    } else if (!isSelfReminder) {
+      await this.ensureReminderRecipientMention(channel, reminder, afterMessageId, reminderStartTime);
+    }
+
+    const repetitionIntervalMinutes =
+      typeof reminder.repetition_interval_minutes === "number"
+        ? reminder.repetition_interval_minutes
+        : typeof reminder.repetition_interval_hours === "number"
+          ? reminder.repetition_interval_hours * 60
+          : null;
+    const isRecurring = repetitionIntervalMinutes !== null && repetitionIntervalMinutes >= 1;
+    const hasDailyWindow =
+      typeof reminder.daily_window_start_minutes === "number" &&
+      typeof reminder.daily_window_end_minutes === "number" &&
+      typeof reminder.daily_window_timezone_offset === "number";
+    const repeatUntilTime = reminder.repeat_until_time instanceof Date ? reminder.repeat_until_time : null;
+    const currentRepeatRemainingCount =
+      typeof reminder.repeat_remaining_count === "number" ? reminder.repeat_remaining_count : null;
+
+    if (isRecurring && reminder.reminder_id) {
+      const nextRepeatRemainingCount =
+        currentRepeatRemainingCount !== null ? Math.max(0, currentRepeatRemainingCount - 1) : null;
+
+      if (nextRepeatRemainingCount !== null && nextRepeatRemainingCount <= 0) {
+        await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+        log.success(`Finite recurring reminder ${reminder.reminder_id} executed its final run and was deleted`);
+        return;
+      }
+
+      const nextTriggerTime = hasDailyWindow
+        ? getNextWindowedRecurringReminderTime(
+            reminder.reminder_time,
+            repetitionIntervalMinutes,
+            reminder.daily_window_start_minutes as number,
+            reminder.daily_window_end_minutes as number,
+            reminder.daily_window_timezone_offset as number,
+          )
+        : getNextRecurringReminderTime(reminder.reminder_time, repetitionIntervalMinutes);
+      if (repeatUntilTime && nextTriggerTime.getTime() > repeatUntilTime.getTime()) {
+        await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+        log.success(`Recurring reminder ${reminder.reminder_id} reached its repeat-until time and was deleted`);
+        return;
+      }
+
+      const rescheduled = await serverScheduleRepository.rescheduleReminder(
+        reminder.reminder_id,
+        nextTriggerTime,
+        nextRepeatRemainingCount,
+        repeatUntilTime,
+      );
+
+      if (rescheduled) {
+        log.success(`Reminder ${reminder.reminder_id} executed and rescheduled for ${nextTriggerTime.toISOString()}`);
+      } else {
+        log.error(`Failed to reschedule recurring reminder ${reminder.reminder_id}; deleting to prevent duplicates`);
+        await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+      }
+    } else if (reminder.reminder_id) {
+      await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
+      log.success(`Reminder ${reminder.reminder_id} executed and deleted successfully`);
+    } else {
+      log.error("Cannot delete reminder: reminder_id is undefined");
+    }
+  }
+
+  private async deferReminderRetry(reminder: ReminderRow, reason: string): Promise<void> {
+    if (!reminder.reminder_id) {
+      log.error(`Cannot defer reminder retry for missing reminder_id (reason: ${reason})`);
+      return;
+    }
+
+    const retryTime = new Date(Date.now() + REMINDER_DELIVERY_RETRY_DELAY_MS);
+    const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, retryTime);
+    if (rescheduled) {
+      log.warn(
+        `Reminder ${reminder.reminder_id} delivery was not acknowledged (${reason}); retrying at ${retryTime.toISOString()}.`,
+      );
+    } else {
+      log.error(`Failed to defer reminder ${reminder.reminder_id} after unacknowledged delivery (${reason}).`);
+    }
+  }
+
+  private markReminderDeliveryActive(reminder: ReminderRow): void {
+    if (reminder.reminder_id) {
+      this.activeReminderIds.add(reminder.reminder_id);
+    }
+  }
+
+  private releaseReminderDelivery(reminder: ReminderRow): void {
+    if (reminder.reminder_id) {
+      this.activeReminderIds.delete(reminder.reminder_id);
     }
   }
 

@@ -52,6 +52,7 @@ export interface CustomThinkingRequest {
 }
 
 type ProviderEffortLevel = "low" | "medium" | "high";
+type ProviderReasoningEffortLevel = "none" | ProviderEffortLevel;
 
 function parseBudgetEnv(name: string, fallback: number): number {
   const raw = Number.parseInt(process.env[name] ?? String(fallback), 10);
@@ -136,6 +137,10 @@ function looksLikeKoboldCppEndpoint(endpointUrl: string): boolean {
 
 function toProviderEffortLevel(level: Exclude<ThinkingLevelValue, "auto" | "none">): ProviderEffortLevel {
   return level === "minimal" ? "low" : level;
+}
+
+function toProviderReasoningEffortLevel(level: Exclude<ThinkingLevelValue, "auto">): ProviderReasoningEffortLevel {
+  return level === "none" ? "none" : toProviderEffortLevel(level);
 }
 
 export function resolveConfiguredThinkingLevel(value: string | null | undefined): ThinkingLevelValue {
@@ -274,7 +279,7 @@ export function buildOpenRouterReasoningRequest(
 
   return {
     reasoning: {
-      effort: effectiveLevel === "minimal" ? "low" : effectiveLevel,
+      effort: toProviderReasoningEffortLevel(effectiveLevel),
     },
   };
 }
@@ -350,7 +355,7 @@ export function buildCustomThinkingRequest(
   }
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.
-  return { reasoning_effort: effectiveLevel === "minimal" ? "low" : effectiveLevel };
+  return { reasoning_effort: toProviderReasoningEffortLevel(effectiveLevel) };
 }
 
 export function getNovelAiThinkingDirective(

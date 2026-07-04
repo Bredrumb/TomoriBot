@@ -4,6 +4,30 @@
  */
 
 /**
+ * Valid UTC offset bounds (UTC-12 through UTC+14, matching real-world timezones
+ * and the /server timezone and /personal timezone command ranges)
+ */
+export const UTC_OFFSET_MIN = -12;
+export const UTC_OFFSET_MAX = 14;
+
+/**
+ * Validates that a value is a usable UTC offset in hours
+ * @param value - The value to validate (accepts fractional offsets like 5.5 for UTC+5:30)
+ * @returns True if the value is a finite number within [UTC_OFFSET_MIN, UTC_OFFSET_MAX]
+ *
+ * @example
+ * ```ts
+ * isValidUtcOffset(8)     // true
+ * isValidUtcOffset(5.5)   // true (UTC+5:30)
+ * isValidUtcOffset(20)    // false (out of range)
+ * isValidUtcOffset("8")   // false (not a number)
+ * ```
+ */
+export function isValidUtcOffset(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= UTC_OFFSET_MIN && value <= UTC_OFFSET_MAX;
+}
+
+/**
  * Formats a UTC offset number into a display string
  * @param offset - The UTC offset in hours (e.g., 8, -5, 0)
  * @returns Formatted string (e.g., "UTC+8", "UTC-5", "UTC+0")

@@ -24,9 +24,11 @@ if (!existsSync(junctionPath)) {
 }
 
 // Sidebar source of truth:
+// - Top-level groups are discovered from docs/*/README.md.
 // - Page links use each Markdown file's `title`.
 // - Folder groups use `sidebar.groupLabel` from that folder's README when present.
 // - Ordering uses `sidebar.order` only where filename order is not enough.
+// - Set `sidebar.hidden: true` on a top-level README to keep that folder out of main nav.
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 const maxOrder = Number.MAX_SAFE_INTEGER;
 
@@ -199,21 +201,87 @@ function stripMarkdownExtension(fileName) {
   return fileName.replace(/\.mdx?$/i, "");
 }
 
-const sidebar = [
-  buildSidebarSection("architecture"),
-  buildSidebarSection("pipelines"),
-  buildSidebarSection("subsystems"),
-  buildSidebarSection("integrations"),
-  buildSidebarSection("contributor-guides"),
-  buildSidebarSection("user-guides"),
-];
+function buildTopLevelSidebar() {
+  return readdirSync(docsTarget, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const dirPath = resolve(docsTarget, entry.name);
+      const readmePath = getReadmePath(dirPath);
+      if (!readmePath) return [];
+
+      const readmeData = readFrontmatter(readmePath);
+      if (readmeData.sidebar?.hidden === true) return [];
+
+      return [
+        {
+          item: buildSidebarSection(entry.name),
+          order: readmeData.sidebar?.order ?? maxOrder,
+          sortKey: entry.name,
+        },
+      ];
+    })
+    .sort(compareNodes)
+    .map((node) => node.item);
+}
+
+const sidebar = buildTopLevelSidebar();
 
 export default defineConfig({
   site: "https://docs.tomoribot.app",
+  // Redirects for the /features/ restructure: the flat pages were bucketed into
+  // task-based sub-category folders, changing their slugs. Keep the old URLs
+  // (shared links, search-engine index) working by forwarding to the new paths.
+  // Astro emits a static meta-refresh page for each key at build time.
+  redirects: {
+    "/features/chatting-and-triggers": "/features/chatting-personality/chatting-and-triggers/",
+    "/features/multiple-personas": "/features/chatting-personality/multiple-personas/",
+    "/features/behavior-tweaking": "/features/chatting-personality/behavior-tweaking/",
+    "/features/memory": "/features/knowledge/memory/",
+    "/features/personalization": "/features/knowledge/personalization/",
+    "/features/data-handling": "/features/knowledge/data-handling/",
+    "/features/tools-and-extensions": "/features/capabilities/tools-and-extensions/",
+    "/features/scheduled-tasks": "/features/capabilities/scheduled-tasks/",
+    "/features/media-generation": "/features/capabilities/media-generation/",
+    "/features/media-generation/image-generation": "/features/capabilities/media-generation/image-generation/",
+    "/features/media-generation/video-generation": "/features/capabilities/media-generation/video-generation/",
+    "/features/media-generation/tts-and-stt": "/features/capabilities/media-generation/tts-and-stt/",
+    "/features/providers-and-models": "/features/setup-administration/providers-and-models/",
+    "/features/server-moderation": "/features/setup-administration/server-moderation/",
+    "/features/age-restricted-commands": "/features/setup-administration/age-restricted-commands/",
+    "/features/stats-and-insights": "/features/setup-administration/stats-and-insights/",
+    "/features/matrix-bridge": "/features/integrations/matrix-bridge/",
+    "/features/sillytavern-support": "/features/integrations/sillytavern-support/",
+  },
+  // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`
+  // (see above). Vite resolves each content file to its real path under `../../docs/...`,
+  // which sits outside this app, so a bare `@astrojs/starlight/components` import in an MDX
+  // page resolves from repo-root node_modules and fails (Starlight is installed only under
+  // `apps/docs/node_modules`). Alias that one package subpath to its concrete location so
+  // MDX landing pages can use Starlight's <Card>/<LinkCard>/<LinkButton>. A global
+  // `resolve.preserveSymlinks` would fix this too but breaks Bun's `.bun/` symlink store.
+  vite: {
+    resolve: {
+      // Exact-match regex (not a string prefix) so ONLY the bare specifier is rewritten —
+      // Starlight resolves its own `@astrojs/starlight/components/Banner.astro` subpaths
+      // internally and must not be touched.
+      alias: [
+        {
+          find: /^@astrojs\/starlight\/components$/,
+          replacement: resolve(__dirname, "node_modules/@astrojs/starlight/components.ts"),
+        },
+      ],
+    },
+  },
   integrations: [
     starlight({
       title: "TomoriBot",
-      description: "Developer documentation for TomoriBot",
+      // Fallback meta description for pages without one (see routeMiddleware
+      // below, which auto-derives per-page descriptions from page content).
+      description:
+        "Documentation for TomoriBot, a self-hostable AI Discord bot with persistent memory, multiple personas, media generation, and multi-provider LLM support.",
+      // SEO head tags: auto-derives per-page meta descriptions from each
+      // page's first paragraph and noindexes internal wiki/ pages.
+      routeMiddleware: "./src/routeData.ts",
       // Served from apps/docs/public/favicon.ico at the site root as /favicon.ico.
       favicon: "/favicon.ico",
       head: [
@@ -222,8 +290,14 @@ export default defineConfig({
           attrs: { property: "og:image", content: "https://docs.tomoribot.app/tomoricon.png" },
         },
         {
+          // "summary" (small square card) rather than "summary_large_image":
+          // the og:image is a square logo, which large-image cards stretch.
+          tag: "meta",
+          attrs: { name: "twitter:card", content: "summary" },
+        },
+        {
           tag: "link",
-          attrs: { rel: "icon", type: "image/png", href: "/tomoricon.png", sizes: "256x256" },
+          attrs: { rel: "icon", type: "image/x-icon", href: "/favicon.ico", sizes: "any" },
         },
         {
           tag: "link",
@@ -231,14 +305,28 @@ export default defineConfig({
         },
       ],
       customCss: ["/src/styles/custom.css"],
-      // SiteTitle override renders /favicon.ico directly as a plain <img> in the nav header.
+      // SiteTitle override renders /tomoricon.png directly as a plain <img> in the nav header.
       // The standard `logo` config can't reference public/ files because it generates a Vite
       // import that expects an Astro image object { src, width, height }, not a URL string.
       components: {
         SiteTitle: "./src/components/SiteTitle.astro",
+        // Prepends the "AI-generated" disclaimer note to every page.
+        // Opt out per-page with `aiGenerated: false` in frontmatter.
+        MarkdownContent: "./src/components/MarkdownContent.astro",
+        // Resolves prev/next pager labels to each target page's real title, so
+        // generic "Overview" sidebar labels don't leak into footer navigation.
+        Pagination: "./src/components/Pagination.astro",
+        // Appends a Ko-fi support link beside the GitHub icon in the header,
+        // since Ko-fi isn't part of Starlight's built-in social icon set.
+        SocialIcons: "./src/components/SocialIcons.astro",
       },
       // Starlight v0.33.0+ expects an array of link items instead of a keyed object.
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" }],
+      // Discord uses a built-in Starlight icon; Ko-fi is appended separately in the
+      // SocialIcons override since it isn't part of Starlight's fixed icon set.
+      social: [
+        { icon: "github", label: "GitHub", href: "https://github.com/Bredrumb/TomoriBot" },
+        { icon: "discord", label: "Discord", href: "https://discord.gg/bjCfHm9QsB" },
+      ],
       sidebar,
     }),
   ],

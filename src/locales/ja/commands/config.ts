@@ -6,6 +6,20 @@ export default {
       enable: `有効化`,
       disable: `無効化`,
     },
+    workarounds: {
+      description: `実験的な互換性回避策を設定します。`,
+      modal_title: `実験的な回避策`,
+      checkbox_label: `利用可能な回避策`,
+      checkbox_description: `チェックした回避策がこのサーバーで有効になります。`,
+      verbatim_tool_calling_option: `逐語ツール呼び出し`,
+      verbatim_tool_calling_desc: `ネイティブツール非対応のCustomエンドポイントから厳格なテキストツール呼び出しを解析します。`,
+      no_changes_title: `変更はありません`,
+      no_changes_description: `回避策の設定はすでにその状態です。`,
+      success_title: `回避策を更新しました`,
+      success_description: `{count}件の回避策設定を更新しました。`,
+      enabled_label: `有効`,
+      disabled_label: `無効`,
+    },
     "image-tags": {
       description: `画像生成で外見やスタイルの補助として使うデフォルト画像タグを設定します。`,
       "default-positive": {
@@ -95,10 +109,10 @@ export default {
         endpoint_url_description: `ベースURL。例: http://localhost:5001。既存ラベル再利用時は任意（継承）。`,
         auth_token_description: `保護されたエンドポイント用のBearerトークン（任意）。`,
         success_title: `カスタムエンドポイントを追加しました`,
-        success_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。\`/model\` から選択できます。`,
-        speech_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/speech voice-add\` で音声サンプルを追加し、\`/speech voice-assign\` で割り当ててください。`,
-        speech_voice_design_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/model speech\` で選択し、\`/speech voice-design set\` でペルソナの声質プロンプトを設定してください。`,
-        speech_auto_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加しました。次に \`/model speech\` で選択してください。クローン用ペルソナは \`/speech voice-add\` と \`/speech voice-assign\`、VoiceDesign 用ペルソナは \`/speech voice-design set\` を使用します。`,
+        success_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加し、現在の **{capability}** に設定しました。`,
+        speech_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加し、現在の **{capability}** に設定しました。次に \`/speech voice-add\` で音声サンプルを追加し、\`/speech voice-assign\` で割り当ててください。`,
+        speech_voice_design_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加し、現在の **{capability}** に設定しました。次に \`/speech voice-design set\` でペルソナの声質プロンプトを設定してください。`,
+        speech_auto_next_steps_description: `**{display_name}** をラベル **{label}** の **{capability}** として追加し、現在の **{capability}** に設定しました。クローン用ペルソナは \`/speech voice-add\` と \`/speech voice-assign\`、VoiceDesign 用ペルソナは \`/speech voice-design set\` を使用します。`,
       },
       edit: {
         description: `登録済みのラベル付きカスタムエンドポイントを編集します。`,
@@ -177,8 +191,8 @@ export default {
         video_edit_title: `動画エンドポイントを編集`,
         image_workflow_edit_title: `画像ワークフローを編集`,
         video_workflow_edit_title: `動画ワークフローを編集`,
-        model_name_label: `モデル名`,
-        model_name_placeholder: `例: llama3.2, gemma3:12b, text-embedding-3-small`,
+        model_name_label: `モデル名（正確なAPI ID）`,
+        model_name_placeholder: `APIリクエストで使われる正確なID。例: deepseek-chat, gemma3:latest`,
         display_name_label: `表示名`,
         display_name_placeholder: `省略するとモデル名が使われます`,
         num_ctx_label: `コンテキストウィンドウ上書き`,
@@ -242,7 +256,9 @@ export default {
         capability_description: `このモデルを追加するOpenRouter機能リストを選びます。`,
         model_name_description: `登録する正確なOpenRouterモデルコードネーム。`,
         success_title: `OpenRouterモデルを追加しました`,
-        success_description: `OpenRouterの{capability}モデル \`{model_name}\` をこのサーバーに登録しました。この機能の通常のOpenRouterモデル選択に表示されます。`,
+        success_description: `OpenRouterの{capability}モデル \`{model_name}\` をこのサーバーに登録し、現在の{capability}モデルに設定しました。`,
+        missing_provider_title: `OpenRouterプロバイダーが保存されていません`,
+        missing_provider_description: `モデルは登録されましたが、このサーバーにOpenRouterの保存済み認証情報がないため有効化できませんでした。先に \`/provider add\` でOpenRouterを追加してください。`,
         already_registered_title: `既に登録されています`,
         already_registered_description: `OpenRouterの{capability}モデル \`{model_name}\` はこのサーバーに既に登録されています。`,
         already_available_title: `最初から利用可能です`,
@@ -576,7 +592,7 @@ export default {
 {model_text_command} で有効なモデルを割り当てるか、{provider_add_command} で新しいプロバイダーを登録してください。問題が解決しない場合は、サーバー管理者にお問い合わせください。`,
       already_setup_description: `このサーバーでは既に設定が完了しています。設定を変更するには、\`/config\`、\`/persona\`、\`/memory\`、\`/server\`などの他のコマンドを使用してください。
 
-				プロバイダーを変更したい場合は、\`/provider add\`で新しいプロバイダーを登録し、\`/model text\`でアクティブにしてください。`,
+				プロバイダーを変更したい場合は、\`/provider add\`で新しいデフォルトのテキストプロバイダーを登録して有効化してください。`,
     },
     params: {
       description: `AI生成品質のサンプリングパラメーターを調整します。`,
@@ -666,16 +682,6 @@ export default {
         success_description: `Min-Pが \`{previous_min_p}\` から \`{min_p}\` に変更されました。
 **対応プロバイダー:** {supported_providers}`,
       },
-    },
-    timezone: {
-      description: `サーバーのUTCオフセットを設定します（デフォルト: 0 / UTC）。`,
-      value_description: `UTCオフセット（時間、デフォルト: 0）。例: 8、-5、0、9`,
-      invalid_value_title: `無効なタイムゾーンオフセット`,
-      invalid_value_description: `タイムゾーンオフセットは {min} から {max} 時間の間でなければなりません。`,
-      already_set_title: `タイムゾーンは既に設定済みです`,
-      already_set_description: `タイムゾーンは既に \`{timezone}\` に設定されています。`,
-      success_title: `タイムゾーンが更新されました`,
-      success_description: `サーバーのタイムゾーンが \`{previous_timezone}\` から \`{timezone}\` に変更されました。`,
     },
     "system-prompt": {
       description: `人格指示のためのカスタムシステムプロンプトを管理します`,

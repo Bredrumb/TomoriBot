@@ -20,19 +20,13 @@ import { serverRepository } from "@/utils/db/repositories/ServerRepository";
  */
 export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceFetch = false): Promise<boolean> {
   try {
-    // 1. Check when emojis were last synced for this server
-    const [lastSync] = await sql<Array<{ last_updated: Date; emoji_count: number }>>`
-			SELECT
-				MAX(updated_at) as last_updated,
-				COUNT(*) as emoji_count
-			FROM server_emojis
-			WHERE server_id = ${serverId}
-		`;
+    // 1. Check when emojis were last synced for this server (via repository).
+    const lastSync = await serverRepository.getEmojiSyncStatus(serverId);
 
     // 2. Determine if we need to fetch
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
     const now = new Date();
-    const cachedEmojiCount = lastSync?.emoji_count || 0;
+    const cachedEmojiCount = lastSync.count;
 
     // 3. Smart count mismatch detection
     // Check if Discord.js has emojis cached (from GUILD_CREATE or previous fetch)
@@ -43,7 +37,7 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
     if (discordCachePopulated) {
       // Discord cache is populated - use it for comparison
       hasCountMismatch = Math.abs(guildEmojiCount - cachedEmojiCount) > 2;
-    } else if (lastSync && cachedEmojiCount > 0) {
+    } else if (cachedEmojiCount > 0) {
       // Discord cache is EMPTY but DB has emojis - suspicious!
       // This indicates bot restart/rejoin - fetch to verify count
       log.info(
@@ -57,11 +51,10 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
     // 4. Check if sync is needed
     const needsFetch =
       forceFetch ||
-      !lastSync ||
-      lastSync.emoji_count === 0 ||
-      !lastSync.last_updated ||
+      lastSync.count === 0 ||
+      !lastSync.lastUpdated ||
       hasCountMismatch ||
-      now.getTime() - new Date(lastSync.last_updated).getTime() > CACHE_DURATION_MS;
+      now.getTime() - new Date(lastSync.lastUpdated).getTime() > CACHE_DURATION_MS;
 
     if (!needsFetch) {
       return false;
@@ -72,7 +65,7 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
       ? "forced"
       : hasCountMismatch
         ? `count mismatch (guild: ${guildEmojiCount}, DB: ${cachedEmojiCount})`
-        : lastSync?.emoji_count === 0
+        : lastSync.count === 0
           ? "no emojis in DB"
           : "cache stale";
 

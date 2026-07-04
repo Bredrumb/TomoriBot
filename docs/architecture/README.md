@@ -1,9 +1,16 @@
 ---
-title: "Introduction to TomoriBot"
+title: "Architecture"
 sidebar:
-  groupLabel: "Introduction"
-  order: 1
+  label: "Overview"
+  groupLabel: "Architecture"
+  order: 5
 ---
+
+:::tip[New to TomoriBot?]
+This section is the code-level overview for contributors and integrators. If you're here to
+*use* the bot, start at the **[Introduction](/introduction/)** and
+**[Features](/features/)** instead.
+:::
 
 TomoriBot is a TypeScript + Bun Discord AI chatbot focused on configurable personalities, memory, and tool use. It is a modular bot with provider-agnostic AI execution, centralized tool routing, and PostgreSQL-backed state.
 
@@ -129,6 +136,7 @@ chat pipeline
 - Optional pg_cron scheduling for cooldown cleanup
 - Shared in-app scheduled work coordinator for reminder delivery and random triggers
   - Uses next-due `setTimeout` scheduling plus DB-write nudges and a periodic reconcile backstop
+  - Reminder rows are acknowledged only after generated delivery succeeds; aborted or queue-cleared deliveries are rescheduled after `REMINDER_DELIVERY_RETRY_DELAY_MS`
 
 ## Why This Shape Works
 
@@ -145,4 +153,4 @@ Commands are loaded from folders under `src/commands/` (currently 25 top-level c
 ## Read Next
 
 - [entry-point.md](./entry-point) — startup and initialization flow
-- Setting up locally for development: [`contributor-guides/getting-started.md`](../contributor-guides/getting-started)
+- Setting up locally for development: [`contributing/getting-started.md`](../contributing/getting-started)

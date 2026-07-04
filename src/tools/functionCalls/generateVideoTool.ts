@@ -19,6 +19,7 @@ import {
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { checkVideoQuota, incrementVideoQuota, type VideoQuotaCheckResult } from "../../utils/quota/videoQuotaManager";
+import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
@@ -674,6 +675,17 @@ export class GenerateVideoTool extends BaseTool {
       // 13. Increment quota after successful generation (server providers only)
       if (creds.source === "server") {
         await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
+      }
+      // Record canonical generation telemetry for all providers; quotas enforce limits only.
+      if (context.internalUserId) {
+        statRepository.recordStat({
+          serverId: context.tomoriState.server_id,
+          userId: context.internalUserId,
+          lineageId: context.tomoriState.persona_lineage_id ?? 0,
+          metric: "video_generated",
+          // Key by model codename for a per-model generation breakdown at read time.
+          metricKey: modelCodename,
+        });
       }
 
       // 14. Build success message

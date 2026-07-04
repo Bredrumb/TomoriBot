@@ -427,6 +427,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           this.inputTokens = msgData.message.usage.input_tokens ?? 0;
           this.outputTokens = msgData.message.usage.output_tokens ?? 0;
           metadata.inputTokens = this.inputTokens;
+          // Surface normalized usage so the orchestrator can record real tokens.
+          // message_delta later overrides this with the final output_tokens.
+          metadata.usage = { inputTokens: this.inputTokens, outputTokens: this.outputTokens };
         }
         // No text to emit, but track metadata
         return { type: "text", content: "", thoughts: [], metadata };
@@ -554,6 +557,10 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         if (msgDelta.usage?.output_tokens) {
           this.outputTokens = msgDelta.usage.output_tokens;
           metadata.outputTokens = this.outputTokens;
+          // Final usage for the turn: input from message_start + final output here.
+          // Emitted on this `done`-bearing event so it survives the message_stop
+          // event (which otherwise clobbers terminal metadata).
+          metadata.usage = { inputTokens: this.inputTokens, outputTokens: this.outputTokens };
         }
 
         // If stop_reason indicates tool_use but we haven't emitted the function call yet,

@@ -91,6 +91,8 @@ export interface SummaryField {
 }
 
 export interface SummaryEmbedOptions extends StandardEmbedOptions {
+  docsPath?: string;
+  docsLabelKey?: string;
   fields: Array<{
     nameKey?: string;
     name?: string; // Allow direct name string

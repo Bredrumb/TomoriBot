@@ -1,6 +1,7 @@
 import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { getGuildMcpManager } from "../../utils/mcp/guildMcpManager";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
+import { statRepository } from "@/utils/db/repositories/StatRepository";
 import { log } from "../../utils/misc/logger";
 import type { ErrorContext } from "../../types/db/schema";
 import { registerMCPAdapter } from "../../tools/toolRegistry";
@@ -103,6 +104,9 @@ export default async (): Promise<void> => {
     const cleanupHandler = async (signal: string) => {
       log.info("Shutting down guild MCP connections...");
       await guildMcpManager.cleanup();
+      // Drain any buffered usage stats so a normal restart loses nothing
+      // (plan §4 — graceful shutdown covers the documented crash window).
+      await statRepository.shutdown();
       process.kill(process.pid, signal);
     };
     process.once("SIGINT", () => cleanupHandler("SIGINT"));

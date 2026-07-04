@@ -20,19 +20,13 @@ import { serverRepository } from "@/utils/db/repositories/ServerRepository";
  */
 export async function lazySyncGuildStickers(guild: Guild, serverId: number, forceFetch = false): Promise<boolean> {
   try {
-    // 1. Check when stickers were last synced for this server
-    const [lastSync] = await sql<Array<{ last_updated: Date; sticker_count: number }>>`
-			SELECT
-				MAX(updated_at) as last_updated,
-				COUNT(*) as sticker_count
-			FROM server_stickers
-			WHERE server_id = ${serverId}
-		`;
+    // 1. Check when stickers were last synced for this server (via repository).
+    const lastSync = await serverRepository.getStickerSyncStatus(serverId);
 
     // 2. Determine if we need to fetch
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
     const now = new Date();
-    const cachedStickerCount = lastSync?.sticker_count || 0;
+    const cachedStickerCount = lastSync.count;
 
     // 3. Smart count mismatch detection
     // Check if Discord.js has stickers cached (from GUILD_CREATE or previous fetch)
@@ -43,7 +37,7 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
     if (discordCachePopulated) {
       // Discord cache is populated - use it for comparison
       hasCountMismatch = Math.abs(guildStickerCount - cachedStickerCount) > 2;
-    } else if (lastSync && cachedStickerCount > 0) {
+    } else if (cachedStickerCount > 0) {
       // Discord cache is EMPTY but DB has stickers - suspicious!
       // This indicates bot restart/rejoin - fetch to verify count
       log.info(
@@ -57,11 +51,10 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
     // 4. Check if sync is needed
     const needsFetch =
       forceFetch ||
-      !lastSync ||
-      lastSync.sticker_count === 0 ||
-      !lastSync.last_updated ||
+      lastSync.count === 0 ||
+      !lastSync.lastUpdated ||
       hasCountMismatch ||
-      now.getTime() - new Date(lastSync.last_updated).getTime() > CACHE_DURATION_MS;
+      now.getTime() - new Date(lastSync.lastUpdated).getTime() > CACHE_DURATION_MS;
 
     if (!needsFetch) {
       return false;
@@ -72,7 +65,7 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
       ? "forced"
       : hasCountMismatch
         ? `count mismatch (guild: ${guildStickerCount}, DB: ${cachedStickerCount})`
-        : lastSync?.sticker_count === 0
+        : lastSync.count === 0
           ? "no stickers in DB"
           : "cache stale";
 

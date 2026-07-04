@@ -10,7 +10,14 @@ import { sendTaskEmbedWithExpand } from "@/utils/discord/expandableEmbedNotice";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
-import { formatTimeWithOffset, formatUTCOffset, parseTimeWithOffset } from "@/utils/text/timezoneHelper";
+import {
+  formatTimeWithOffset,
+  formatUTCOffset,
+  isValidUtcOffset,
+  parseTimeWithOffset,
+  UTC_OFFSET_MAX,
+  UTC_OFFSET_MIN,
+} from "@/utils/text/timezoneHelper";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import type { ReminderRow } from "@/types/db/schema";
 
@@ -134,13 +141,28 @@ export function parseUpdateTaskArguments(
   let newReminderTime: Date | undefined;
   const reminderTimeArg = args.reminder_time;
   if (typeof reminderTimeArg === "string" && reminderTimeArg.trim()) {
+    // The model labels the timezone frame of reminder_time via utc_offset instead of
+    // converting the time itself; fall back to the server timezone when unlabeled.
+    let effectiveParseOffset = timezoneOffset;
+    if (hasProvidedArg(args, "utc_offset")) {
+      const utcOffsetArg = args.utc_offset;
+      if (!isValidUtcOffset(utcOffsetArg)) {
+        return {
+          ok: false,
+          status: "task_update_failed_invalid_args",
+          reason: `Invalid 'utc_offset' value: '${utcOffsetArg}'. Expected a number of hours between ${UTC_OFFSET_MIN} and ${UTC_OFFSET_MAX}.`,
+        };
+      }
+      effectiveParseOffset = utcOffsetArg;
+    }
+
     const normalizedReminderTime = normalizeReminderTimeInput(reminderTimeArg);
-    const parsedReminderTime = parseTimeWithOffset(normalizedReminderTime, timezoneOffset);
+    const parsedReminderTime = parseTimeWithOffset(normalizedReminderTime, effectiveParseOffset);
     if (!parsedReminderTime) {
       return {
         ok: false,
         status: "task_update_failed_invalid_time",
-        reason: `Invalid reminder time format: '${reminderTimeArg}'. Expected YYYY-MM-DD_HH:MM format in ${formatUTCOffset(timezoneOffset)}.`,
+        reason: `Invalid reminder time format: '${reminderTimeArg}'. Expected YYYY-MM-DD_HH:MM format in ${formatUTCOffset(effectiveParseOffset)}.`,
       };
     }
     newReminderTime = parsedReminderTime;
@@ -455,7 +477,7 @@ function formatRepeatText(locale: string, repetitionIntervalMinutes: number | nu
 export class UpdateTaskTool extends BaseTool {
   name = "update_task";
   description =
-    "Replace, reschedule, or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead. You may reschedule it with reminder_time in YYYY-MM-DD_HH:MM using the server timezone, or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. You may change recurrence with repetition_interval_minutes or repetition_interval_hours. You may change finite limits with repeat_count, repeat_until_time, or clear_repeat_limit. You may change daily active windows with daily_window_start_time/daily_window_end_time or clear_daily_window. Do not use this to change target user, target channel, or whether it is a self task.";
+    "Replace, reschedule, or delete an existing scheduled task/reminder by ID. Use the reminder ID shown in context (for example, ID:42). Set reminder_purpose to the full replacement content. If reminder_purpose is empty or blank, delete the targeted reminder instead. You may reschedule it with reminder_time in YYYY-MM-DD_HH:MM (pass the wall-clock time exactly as the user expressed it. NEVER convert between timezones yourself; it is interpreted in the server timezone unless you set utc_offset to the offset the user spoke in), or relative time parameters such as minutes_from_now/hours_from_now/days_from_now/months_from_now. If no time is provided, keep the existing trigger time. You may change recurrence with repetition_interval_minutes or repetition_interval_hours. You may change finite limits with repeat_count, repeat_until_time, or clear_repeat_limit. You may change daily active windows with daily_window_start_time/daily_window_end_time or clear_daily_window. Do not use this to change target user, target channel, or whether it is a self task.";
   category = "utility" as const;
 
   parameters: ToolParameterSchema = {
@@ -473,7 +495,12 @@ export class UpdateTaskTool extends BaseTool {
       reminder_time: {
         type: "string",
         description:
-          "OPTIONAL: Absolute replacement trigger time in YYYY-MM-DD_HH:MM format using the server's configured timezone. If provided, this takes priority over relative time parameters.",
+          "OPTIONAL: Absolute replacement trigger time in YYYY-MM-DD_HH:MM format. Pass the wall-clock time exactly as the user expressed it. do NOT convert between timezones yourself. Without 'utc_offset', this is interpreted in the server's configured timezone. If provided, this takes priority over relative time parameters.",
+      },
+      utc_offset: {
+        type: "number",
+        description:
+          "OPTIONAL: The UTC offset in hours that 'reminder_time' is expressed in (e.g., 8 for UTC+8, -5 for UTC-5, 5.5 for UTC+5:30). Set this to the target user's personal timezone offset (shown in the conversation context) when they expressed the time in their own local time. If omitted, the server's configured timezone is used. Only meaningful together with 'reminder_time'.",
       },
       minutes_from_now: {
         type: "number",
@@ -796,7 +823,37 @@ export class UpdateTaskTool extends BaseTool {
     const personaNickname =
       context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
     const reminderPurposeText = truncateReminderPurpose(parsedArgs.newPurpose);
-    const reminderTimeText = formatReminderTime(finalReminderTime, timezoneOffset);
+
+    // Show both clocks when the target user has a personal timezone (/personal timezone)
+    // differing from the server's - lets the user spot a mislabeled/misconverted time.
+    // Self tasks target the bot, which has no personal timezone.
+    let targetPersonalOffset: number | null = null;
+    if (!existingReminder.self_reminder) {
+      const targetUserRow = await userRepository.loadByDiscordId(existingReminder.user_discord_id);
+      targetPersonalOffset = targetUserRow?.timezone_offset ?? null;
+    }
+    const reminderTimeText =
+      targetPersonalOffset != null && targetPersonalOffset !== timezoneOffset
+        ? localizer(context.locale, "reminders.dual_time_display", {
+            server_time: formatTimeWithOffset(finalReminderTime, timezoneOffset, {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            server_offset: formatUTCOffset(timezoneOffset),
+            user_time: formatTimeWithOffset(finalReminderTime, targetPersonalOffset, {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            user_offset: formatUTCOffset(targetPersonalOffset),
+            user_nickname: existingReminder.user_nickname,
+          })
+        : formatReminderTime(finalReminderTime, timezoneOffset);
     const repeatText = formatRepeatText(context.locale, finalRepetitionIntervalMinutes);
 
     // Attach a "Show Full Task" button when the new purpose was truncated.

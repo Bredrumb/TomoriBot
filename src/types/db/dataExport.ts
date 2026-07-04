@@ -76,6 +76,7 @@ export const personalSettingsExportDataSchema = z.object({
   personal_dtm: z.enum(["off", "follow", "on"]).optional(),
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),
   shortterm_cache_crossserver_opt_in: z.boolean().optional(),
+  timezone_offset: z.number().int().min(-12).max(14).nullable().optional(),
 });
 
 export type PersonalSettingsExportData = z.infer<typeof personalSettingsExportDataSchema>;
@@ -168,6 +169,7 @@ export const serverCapabilitiesConfigExportSchema = z.object({
   thread_creation_enabled: z.boolean().optional(),
   user_blocking_enabled: z.boolean().optional(),
   tool_use_enabled: z.boolean().optional(),
+  verbatim_tool_calling_enabled: z.boolean().optional(),
 });
 
 /** Portable server_notice_embeds_configs export fields. */

@@ -6,6 +6,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help mcp subcommand.
@@ -33,36 +34,25 @@ export async function execute(
   try {
     // Resolve command mentions for cross-references in the guide
     const configMcpAddMention = commandRegistry.getCommandMention("mcp", "add");
-    const configMcpRemoveMention = commandRegistry.getCommandMention("mcp", "remove");
 
     const embedOptions: SummaryEmbedOptions = {
       titleKey: "commands.help.mcp.title",
       descriptionKey: "commands.help.mcp.description_text",
+      docsPath: DOCS_PATHS.MCP,
       color: ColorCode.INFO,
       fields: [
-        // 1. Smithery.ai online MCP walkthrough
         {
           nameKey: "commands.help.mcp.online_title",
-          value: localizer(locale, "commands.help.mcp.online_description", {
+          value: localizer(locale, "commands.help.mcp.online_summary_description", {
             configMcpAdd: configMcpAddMention,
           }),
           inline: false,
         },
-        // 2. Local MCP servers (self-hosted instances only)
         {
           nameKey: "commands.help.mcp.local_title",
-          value: localizer(locale, "commands.help.mcp.local_description"),
+          value: localizer(locale, "commands.help.mcp.local_summary_description"),
           inline: false,
         },
-        // 3. How to remove an MCP server
-        {
-          nameKey: "commands.help.mcp.removing_title",
-          value: localizer(locale, "commands.help.mcp.removing_description", {
-            configMcpRemove: configMcpRemoveMention,
-          }),
-          inline: false,
-        },
-        // 4. Security warning about malicious MCP servers
         {
           nameKey: "commands.help.mcp.security_title",
           value: localizer(locale, "commands.help.mcp.security_description"),

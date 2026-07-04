@@ -31,7 +31,7 @@ export default {
       select_description: `削除する文書を選択してください`,
       select_placeholder: `文書を選択...`,
       rag_disabled_title: `ドキュメントRAGが無効です`,
-      rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[セットアップガイド](https://github.com/Bredrumb/TomoriBot#readme)を参照）。`,
+      rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[自己ホスト設定ガイド](https://docs.tomoribot.app/self-hosting/manual-setup/)を参照）。`,
       none_title: `文書がありません`,
       none_description: `このスコープには削除できる文書がありません。\`/memory document add\`で追加してください。`,
       success_title: `文書が削除されました`,

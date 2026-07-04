@@ -101,12 +101,14 @@ export async function execute(
     const voiceNameIfOtherVoiceRemains = selectedPersona.speech_voice_sample_id
       ? selectedPersona.speech_voice_name === "VoiceDesign"
         ? "Voice Clone"
-        : selectedPersona.speech_voice_name
+        : (selectedPersona.speech_voice_name ?? null)
       : selectedPersona.speech_voice_id?.trim()
-        ? selectedPersona.speech_voice_name
+        ? (selectedPersona.speech_voice_name ?? null)
         : null;
 
-    const updatedTomori = await personaRepository.update(selectedPersona.persona_id, {
+    const updatedTomori = await personaRepository.setVoiceConfig(selectedPersona.persona_id, {
+      speech_voice_sample_id: selectedPersona.speech_voice_sample_id ?? null,
+      speech_voice_id: selectedPersona.speech_voice_id ?? null,
       speech_voice_design_prompt: null,
       speech_voice_name: voiceNameIfOtherVoiceRemains,
     });

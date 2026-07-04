@@ -257,6 +257,7 @@ import {
   isModalCheckboxField,
 } from "../../../types/discord/modal";
 import { createStandardEmbed, createSummaryEmbed } from "../embedHelper";
+import { buildDocsLinkRow } from "@/utils/discord/docsLinks";
 
 const PROMPT_TIMEOUT = 60000; // 60 seconds
 const MODAL_DESCRIPTION_MAX_LENGTH = 99; // Discord modal description limit
@@ -900,6 +901,7 @@ export async function replySummaryEmbed(
     | undefined = MessageFlags.Ephemeral,
 ): Promise<void> {
   const embed = createSummaryEmbed(locale, options);
+  const components = options.docsPath ? [buildDocsLinkRow(locale, options.docsPath, options.docsLabelKey)] : [];
 
   // Defensive interaction state checking
   const interactionState = {
@@ -921,7 +923,7 @@ export async function replySummaryEmbed(
     try {
       await interaction.webhook.send({
         embeds: [embed],
-        components: [],
+        components,
         flags: flags || MessageFlags.Ephemeral,
       });
       return;
@@ -933,9 +935,9 @@ export async function replySummaryEmbed(
 
   try {
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ embeds: [embed], components: [] });
+      await interaction.editReply({ embeds: [embed], components });
     } else {
-      await interaction.reply({ embeds: [embed], components: [], flags });
+      await interaction.reply({ embeds: [embed], components, flags });
     }
   } catch (error) {
     log.warn("Failed to show summary embed via primary method:", error);
@@ -948,21 +950,21 @@ export async function replySummaryEmbed(
         log.info("Attempting webhook.send due to acknowledgment conflict (raw REST desync)");
         await interaction.webhook.send({
           embeds: [embed],
-          components: [],
+          components,
           flags: flags || MessageFlags.Ephemeral,
         });
       } else if (errorMessage.includes("not been sent or deferred")) {
         log.info("Attempting basic reply due to no prior acknowledgment");
         await interaction.reply({
           embeds: [embed],
-          components: [],
+          components,
           flags: flags || MessageFlags.Ephemeral,
         });
       } else {
         log.info("Attempting webhook.send as last resort fallback");
         await interaction.webhook.send({
           embeds: [embed],
-          components: [],
+          components,
           flags: flags || MessageFlags.Ephemeral,
         });
       }

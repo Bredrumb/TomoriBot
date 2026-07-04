@@ -81,6 +81,12 @@ const MODAL_KIND_LIMITS = {
   label: 45,
   description: 100,
   placeholder: 100,
+  // Discord string-select option fields (`StringSelectMenuOptionBuilder.setLabel`/`setDescription`)
+  // both cap at 100 chars. These flow through `label:`/`description:` props inside an `options:`
+  // array — objects shaped `{ value, label, description }` with no `customId`/`labelKey`, so the
+  // modal-component tracer below misses them. Discord silently truncates overruns in the picker UI.
+  optionLabel: 100,
+  optionDescription: 100,
 } as const;
 type ModalKind = keyof typeof MODAL_KIND_LIMITS;
 
@@ -650,6 +656,13 @@ function findEnclosingObjectRange(content: string, idx: number): { start: number
  *    - `descriptionKey: "literal"` → description (cap 100; truncated as placeholder)
  *    - `placeholder: "commands.*"` → placeholder (cap 100; only `commands.*` literals
  *      are treated as locale keys, matching the runtime check at interactionCore.ts:671-674)
+ * 3. String-select option object — `label: localizer(locale, "literal")` whose enclosing
+ *    literal also has a `value:` prop (the `{ value, label, description }` shape). These are
+ *    the checkbox/select choices rendered inside modals and message components. Within it:
+ *    - `label: localizer(…, "literal")` → optionLabel (cap 100)
+ *    - `description: localizer(…, "literal")` → optionDescription (cap 100)
+ *    The `value:` sibling requirement excludes button literals (`{ customId, label }`), whose
+ *    `label` carries a different (80-char) cap.
  */
 async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>> {
   const usages = new Map<string, ModalKeyUsage>();
@@ -710,6 +723,28 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
         }
       }
       customIdMatch = customIdPattern.exec(content);
+    }
+
+    // 3. String-select option fields: anchor on `label: localizer(…, "key")`, then confirm the
+    // enclosing literal is an option (has a `value:` sibling) rather than a button. Both the
+    // option label and its `description: localizer(…)` cap at 100 chars in Discord's picker.
+    const optionLabelPattern = /\blabel\s*:\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']/g;
+    let optionLabelMatch: RegExpExecArray | null = optionLabelPattern.exec(content);
+    while (optionLabelMatch !== null) {
+      const range = findEnclosingObjectRange(content, optionLabelMatch.index);
+      if (range) {
+        const obj = content.substring(range.start, range.end);
+
+        // `value:` sibling marks a select option ({ value, label, description }); buttons
+        // ({ customId, label }) lack it and carry a different cap, so they stay out of scope.
+        if (/\bvalue\s*:/.test(obj)) {
+          add(optionLabelMatch[1], "optionLabel", file);
+
+          const optionDescMatch = obj.match(/\bdescription\s*:\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']/);
+          if (optionDescMatch) add(optionDescMatch[1], "optionDescription", file);
+        }
+      }
+      optionLabelMatch = optionLabelPattern.exec(content);
     }
   }
 
@@ -1565,6 +1600,8 @@ function displayResults(results: AnalysisResult): void {
       label: "📏 MODAL LABEL USAGE VIOLATIONS (setLabel cap: ≤45 chars)",
       description: "📏 MODAL DESCRIPTION USAGE VIOLATIONS (setPlaceholder cap: ≤100 chars — truncated by interactionCore.ts)",
       placeholder: "📏 MODAL PLACEHOLDER USAGE VIOLATIONS (setPlaceholder cap: ≤100 chars)",
+      optionLabel: "📏 SELECT OPTION LABEL VIOLATIONS (option setLabel cap: ≤100 chars)",
+      optionDescription: "📏 SELECT OPTION DESCRIPTION VIOLATIONS (option setDescription cap: ≤100 chars)",
     };
 
     const byKind = new Map<ModalKind, ModalUsageViolation[]>();
@@ -1574,7 +1611,7 @@ function displayResults(results: AnalysisResult): void {
       byKind.set(v.kind, list);
     }
 
-    for (const kind of ["title", "label", "description", "placeholder"] as ModalKind[]) {
+    for (const kind of ["title", "label", "description", "placeholder", "optionLabel", "optionDescription"] as ModalKind[]) {
       const list = byKind.get(kind);
       if (!list || list.length === 0) continue;
       console.log(`\n${KIND_HEADERS[kind]}:`);

@@ -320,6 +320,7 @@ function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): str
  * @param uncensorOptions - Optional uncensor cleanup flags (output side)
  * @param botNameAliases - Additional names the active persona answers to (e.g. lore/default name),
  *   used to strip a leaked multi-name opening label chain ("Tomori: Lilya: ...")
+ * @param personaMentionMap - Map of known persona handles to canonical trigger words
  * @returns Cleaned text suitable for Discord messages
  */
 export function cleanLLMOutput(
@@ -334,6 +335,7 @@ export function cleanLLMOutput(
     sanitizeEnabled?: boolean;
   },
   botNameAliases: string[] = [],
+  personaMentionMap?: ReadonlyMap<string, string>,
 ): string {
   const preserveUnresolvedEmojiShortcodes = shouldPreserveUnresolvedEmojiShortcodes();
   let cleanedText = applyUncensorOutputTransforms(text, uncensorOptions)
@@ -432,7 +434,7 @@ export function cleanLLMOutput(
     cleanedText = cleanedText.trim();
   }
 
-  cleanedText = replaceMentionHandles(cleanedText, mentionMap, mentionIdSet);
+  cleanedText = replaceMentionHandles(cleanedText, mentionMap, mentionIdSet, personaMentionMap);
 
   return cleanedText.replace(/\n([^:]+):$/, "");
 }

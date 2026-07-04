@@ -47,7 +47,7 @@ export interface ProcessedChunk {
  * Provider-specific error with normalized format
  */
 export interface ProviderError {
-  type: "api_error" | "rate_limit" | "content_blocked" | "timeout" | "provider_overloaded" | "unknown";
+  type: "api_error" | "rate_limit" | "content_blocked" | "timeout" | "provider_overloaded" | "model_error" | "unknown";
   message: string;
   code?: string;
   retryable: boolean;

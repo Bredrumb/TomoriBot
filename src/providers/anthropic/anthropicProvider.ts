@@ -23,6 +23,7 @@ import type {
   Message,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { anthropicProviderInfo } from "@/providers/anthropic/providerInfo";
 import { AnthropicStreamAdapter, type AnthropicStreamConfig } from "@/providers/anthropic/anthropicStreamAdapter";
 import { getAnthropicToolAdapter } from "@/providers/anthropic/anthropicToolAdapter";
@@ -353,7 +354,8 @@ export class AnthropicProvider
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
 
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "anthropic",
         channel,
         client,
         initialInteraction,
@@ -363,24 +365,13 @@ export class AnthropicProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "anthropic",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-        forcedMentions: streamingContext?.forcedMentions,
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-        recordTurnOutputMessage: streamingContext?.recordTurnOutputMessage,
-      };
+      });
 
       const orchestrator = new StreamOrchestrator();
       const adapter = new AnthropicStreamAdapter();

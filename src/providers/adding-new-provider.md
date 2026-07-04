@@ -2,12 +2,12 @@
 
 The canonical provider implementation guide now lives in:
 
-- `docs/guides/adding-new-provider.md`
+- `docs/contributing/adding-new-provider.md`
 
 Read these together:
 
-- `docs/guides/adding-new-provider.md`
-- `docs/pipelines/provider/` (architecture overview)
+- `docs/contributing/adding-new-provider.md`
+- `docs/architecture/pipelines/provider/` (architecture overview)
 
 Reason:
 

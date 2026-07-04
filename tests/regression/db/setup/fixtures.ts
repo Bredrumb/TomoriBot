@@ -112,6 +112,10 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
     VALUES (${personaId}, ARRAY['_rt_trigger']::TEXT[])
     ON CONFLICT (persona_id) DO UPDATE SET trigger_words = EXCLUDED.trigger_words
   `;
+  await db`DELETE FROM persona_context_note_configs WHERE persona_id = ${personaId}`;
+  await db`DELETE FROM persona_voice_configs WHERE persona_id = ${personaId}`;
+  await db`DELETE FROM persona_imagegen_configs WHERE persona_id = ${personaId}`;
+  await db`DELETE FROM persona_textgen_configs WHERE persona_id = ${personaId}`;
 
   // 5. Test user
   const [userRow] = await db`
@@ -120,12 +124,36 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
     ON CONFLICT (user_disc_id) DO UPDATE
     SET
       user_nickname = EXCLUDED.user_nickname,
-      privacy_level = 0,
-      shortterm_cache_crossserver_opt_in = false,
-      personal_dtm = 'follow'
+      privacy_level = 0
     RETURNING user_id
   `;
   const userId: number = userRow.user_id;
+
+  await db`
+    INSERT INTO user_personalization_configs (
+      user_id,
+      shortterm_cache_crossserver_opt_in,
+      physical_appearance_tags,
+      nai_char_ref_url,
+      impersonation_prompt,
+      personal_dtm
+    ) VALUES (
+      ${userId},
+      false,
+      ARRAY[]::TEXT[],
+      NULL,
+      NULL,
+      'follow'
+    )
+    ON CONFLICT (user_id) DO UPDATE
+    SET
+      shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
+      physical_appearance_tags = EXCLUDED.physical_appearance_tags,
+      nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+      impersonation_prompt = EXCLUDED.impersonation_prompt,
+      personal_dtm = EXCLUDED.personal_dtm,
+      updated_at = NOW()
+  `;
 
   return { serverId, personaId, personaLineageId, userId };
 }
