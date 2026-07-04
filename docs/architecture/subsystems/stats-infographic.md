@@ -108,6 +108,13 @@ never imports it — it stays pure. `personalCardGatherer.ts` re-exports
 `extractPersonalCardPalette` as a backward-compatible alias of
 `extractCardPalette`.
 
+Persona avatar resolution for stats lives in `personaAvatar.ts`. A persona-owned
+`webhook_avatar_url` wins; if a preset-pointer persona has no stored avatar (the
+normal main-persona state, because Discord delivery uses the guild member
+avatar), stats cards fall back to the preset's shared
+`preset_avatar_shared_url`. This keeps the normal webhook/guild-avatar delivery
+path unchanged while still giving image cards a stable avatar to embed.
+
 The palette extractor samples the hero image at 64px after alpha filtering and
 creates an accessible light-mode palette with two roles:
 

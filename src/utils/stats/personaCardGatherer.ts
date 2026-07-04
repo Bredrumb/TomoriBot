@@ -9,6 +9,7 @@ import { statRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
+import { loadStatsPersonaAvatarDataUri, loadStatsPresetAvatarLookup } from "@/utils/stats/personaAvatar";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import type { BreakdownSegment, EmojiIcon, PersonaCardData } from "@/utils/stats/statsInfographic";
 
@@ -75,13 +76,14 @@ export async function gatherPersonaCardData(args: GatherPersonaCardArgs): Promis
   let personaName = `Persona #${lineageId}`;
   let personaAvatarDataUri: string | null = null;
   try {
-    const personas = await getCachedAllPersonas(guildDiscId);
+    const [personas, presetAvatars] = await Promise.all([
+      getCachedAllPersonas(guildDiscId),
+      loadStatsPresetAvatarLookup(),
+    ]);
     const persona = personas.find((candidate) => candidate.persona_lineage_id === lineageId);
     if (persona) {
       personaName = persona.persona_nickname;
-      personaAvatarDataUri = persona.webhook_avatar_url
-        ? await loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)
-        : null;
+      personaAvatarDataUri = await loadStatsPersonaAvatarDataUri(persona, presetAvatars);
     }
   } catch (error) {
     log.warn("personaCardGatherer: persona resolution failed", error as Error);

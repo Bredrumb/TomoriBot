@@ -17,6 +17,7 @@ import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
 import { extractAvatarAccentColor, extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
+import { loadStatsPersonaAvatarDataUri, loadStatsPresetAvatarLookup } from "@/utils/stats/personaAvatar";
 import type {
   PersonIcon,
   ServerCardData,
@@ -103,14 +104,15 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
   let topPersonas: ServerPersonaBar[] = [];
   let totalPersonas = 0;
   try {
-    const personas = await getCachedAllPersonas(guildDiscId);
+    const [personas, presetAvatars] = await Promise.all([
+      getCachedAllPersonas(guildDiscId),
+      loadStatsPresetAvatarLookup(),
+    ]);
     totalPersonas = personas.length;
     topPersonas = await Promise.all(
       personaTokenCosts.map(async (entry, index) => {
         const persona = personas.find((candidate) => candidate.persona_lineage_id === entry.lineageId);
-        const avatarDataUri = persona?.webhook_avatar_url
-          ? await loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)
-          : null;
+        const avatarDataUri = persona ? await loadStatsPersonaAvatarDataUri(persona, presetAvatars) : null;
         const accent = await extractAvatarAccentColor(avatarDataUri, palette.accent);
         return {
           name: persona?.persona_nickname ?? `Persona #${entry.lineageId}`,
