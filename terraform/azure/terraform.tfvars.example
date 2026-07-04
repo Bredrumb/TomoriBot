@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and fill in your values.
+# Never commit terraform.tfvars - it is gitignored.
+
+azure_subscription_id = "00000000-0000-0000-0000-000000000000"
+azure_location        = "eastus"
+
+# Public half of the dedicated Phase 0 deploy keypair.
+vm_admin_ssh_public_key = "ssh-ed25519 AAAA... gh-actions-deploy"
+
+# PostgreSQL password - store this securely; it is also used in TOMORI_SECRETS_JSON.
+postgres_admin_password = "change-me"
+
+# Optional single IPv4 address for direct admin access to PostgreSQL.
+admin_ip = null
