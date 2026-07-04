@@ -11,8 +11,19 @@ function pointerKey(lineageId: number, language: string): string {
   return `${lineageId}:${language}`;
 }
 
-function normalizeLineageId(value: number | null | undefined): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+function normalizeLineageId(value: unknown): number | null {
+  let normalized: number;
+  if (typeof value === "number") {
+    normalized = value;
+  } else if (typeof value === "bigint") {
+    normalized = Number(value);
+  } else if (typeof value === "string" && value.trim() !== "") {
+    normalized = Number(value);
+  } else {
+    return null;
+  }
+
+  return Number.isSafeInteger(normalized) && normalized >= 0 ? normalized : null;
 }
 
 export function buildStatsPresetAvatarLookup(presets: TomoriPresetRow[] | null | undefined): StatsPresetAvatarLookup {

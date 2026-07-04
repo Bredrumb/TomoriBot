@@ -55,6 +55,17 @@ describe("resolveStatsPersonaAvatarReference", () => {
     expect(resolveStatsPersonaAvatarReference(persona({ preset_language: "ja" }), lookup)).toBe(sharedAvatar);
   });
 
+  it("normalizes raw string lineage ids from repository rows", () => {
+    const sharedAvatar = "https://storage.googleapis.com/bucket/avatars/presets/4/en-US/avatar-hash.png";
+    const rawPreset = {
+      ...preset({ preset_avatar_shared_url: sharedAvatar }),
+      preset_lineage_id: "4",
+    } as unknown as TomoriPresetRow;
+    const lookup = buildStatsPresetAvatarLookup([rawPreset]);
+
+    expect(resolveStatsPersonaAvatarReference(persona(), lookup)).toBe(sharedAvatar);
+  });
+
   it("falls back by lineage when the pointer language has no exact preset row", () => {
     const sharedAvatar = "https://storage.googleapis.com/bucket/avatars/presets/4/en-US/avatar-hash.png";
     const lookup = buildStatsPresetAvatarLookup([preset({ preset_avatar_shared_url: sharedAvatar })]);
