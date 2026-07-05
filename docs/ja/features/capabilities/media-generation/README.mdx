@@ -1,0 +1,24 @@
+---
+title: "メディア生成"
+sidebar:
+  label: "概要"
+  groupLabel: "メディア生成"
+  order: 3
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBotは、チャット内で直接メディアを作成できます。**画像、短い動画、そして音声メッセージ**です。「…を描いて」「それを音声メッセージで送って」など、自然な言葉でお願いするか、`/generate`コマンドを使用してください。利用できる機能は、設定されているプロバイダーによって異なります。[プロバイダーとモデル](/ja/features/setup-administration/providers-and-models/)を参照してください。
+
+<CardGrid>
+  <LinkCard title="画像生成" href="/ja/features/capabilities/media-generation/image-generation/"
+    description="テキストからの画像生成と画像からの画像生成。添付ファイル、アバター、スタンプ、絵文字からの参照画像に対応。" />
+  <LinkCard title="動画生成" href="/ja/features/capabilities/media-generation/video-generation/"
+    description="カスタマイズ可能なアスペクト比で、テキストからの短い動画や、画像からの動画クリップを生成。" />
+  <LinkCard title="音声: TTS & STT" href="/ja/features/capabilities/media-generation/tts-and-stt/"
+    description="ネイティブのDiscord音声メッセージ（テキスト読み上げ）と音声の文字起こし（音声認識）。" />
+</CardGrid>
+
+:::note
+すべてのプロバイダーがすべての機能をサポートしているわけではありません。ローカル生成（ComfyUI、ローカル音声サーバー）は、セルフホストのインスタンスで利用可能です。[セルフホスト](/ja/self-hosting/)を参照してください。
+:::

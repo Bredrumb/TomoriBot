@@ -1,0 +1,96 @@
+---
+title: "TomoriBotとは？"
+# Keyword-rich <title> for search results; replaces Starlight's default
+# "{title} | TomoriBot" for this page only. H1 and sidebar keep the plain title.
+head:
+  - tag: title
+    content: "TomoriBot | Discord用オープンソースAIエージェント・ロールプレイBot"
+  # JSON-LD structured data: tells search engines this page describes a software
+  # product, enabling rich results. Google requires `offers` (or aggregateRating)
+  # alongside `name` for SoftwareApplication rich-result eligibility.
+  - tag: script
+    attrs:
+      type: "application/ld+json"
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TomoriBot",
+        "url": "https://docs.tomoribot.app/",
+        "image": "https://docs.tomoribot.app/img/social-banner.png",
+        "description": "Discord用の無料かつオープンソースのAIエージェントおよびロールプレイシステムです。永続的なメモリー、複数のペルソナ、メディア生成、マルチプロバイダーLLMサポートを備えています。",
+        "applicationCategory": "CommunicationApplication",
+        "operatingSystem": "Web",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "sameAs": [
+          "https://github.com/Bredrumb/TomoriBot",
+          "https://discord.gg/bjCfHm9QsB"
+        ]
+      }
+sidebar:
+  groupLabel: "はじめに"
+  order: 1
+---
+
+import { LinkButton } from "@astrojs/starlight/components";
+import FeatureCard from "/src/components/FeatureCard.astro";
+
+**TomoriBot**は、Discord用の無料かつオープンソースのAIエージェントおよびロールプレイシステムです。このプロジェクトは、SillyTavernや、提供が終了したDiscordのClydeにインスパイアされており、パーソナルAIコンパニオンやロールプレイキャラクターをDiscordサーバーに直接もたらすことを目的としています。簡単に言えば、トモリはDiscordに組み込まれたAIのためのエージェント兼ロールプレイ用の仕組みです。
+
+![トモリの構成要素](/img/docs/intro/00-tomori-formula.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>Discord、SillyTavern、そしてOpenClawの恐るべき三位一体のようなものです</small>
+
+Tomo(友)-Ri(里)、大まかに「友の家」を意味する読み方をし、トモリはDMやDiscordサーバーのメンバー全員のために、あなた自身の実用的なアシスタント、カスタマイズ可能なコンパニオン、そして/あるいはロールプレイパートナーのための居場所となります。トモリは初心者を念頭に置いて構築されているため、AIエージェントに初めて触れる人でも、トモリと一緒に学ぶことができます。
+
+公開されているインスタンスを今すぐ招待することもできますし、データを完全に制御するために独自のインスタンスをセルフホストすることもできます（詳細は[クイックスタート](/ja/introduction/quickstart/)をご覧ください）。
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **TomoriBotを招待**
+  </LinkButton>
+  <LinkButton href="/ja/self-hosting/" variant="secondary">
+    **TomoriBotをセルフホスト**
+  </LinkButton>
+</div>
+
+## TomoriBotでできることは？
+
+
+<div class="feature-grid">
+  <FeatureCard title="複数のペルソナ" img="/img/docs/intro/01-multiple-personas.png" href="/ja/features/chatting-personality/multiple-personas/">
+    1つのサーバー内で複数のカスタムキャラクターを実行でき、それぞれが独自の設定、メモリー、アバターを持っています。彼らが互いに連携したり（あるいはふざけ合ったりする）様子を見てみましょう！
+  </FeatureCard>
+  <FeatureCard title="永続的なメモリー" img="/img/docs/intro/02-memory.png" href="/ja/features/knowledge/memory/">
+    人々やサーバーに関する事実を教えることで、トモリを成長させましょう。トモリは会話をまたいで記憶し、個人的なメモリーはサーバー間でも引き継がれます。
+  </FeatureCard>
+  <FeatureCard title="メディア生成" img="/img/docs/intro/03-media-generation.png" href="/ja/features/capabilities/media-generation/">
+    プロンプトや参照画像から、チャット内で直接、画像、短い動画、音声メッセージを生成・編集できます。
+  </FeatureCard>
+  <FeatureCard title="エージェントツール" img="/img/docs/intro/04-agentic-tools.png" href="/ja/features/capabilities/tools-and-extensions/">
+    TomoriBotは自律的にウェブ検索、リマインダーのスケジュール設定、ユーザーのブロック、カスタムMCPツールの利用などを行うことができます。
+  </FeatureCard>
+  <FeatureCard title="完全ローカルセットアップ" img="/img/docs/intro/05-fully-local-setup.png" href="/ja/self-hosting/local-endpoints/">
+    ローカルLLM、ComfyUI、SearXNG、ローカル音声サーバー、MCPを使用して、自分だけのプライベートなセットアップを構築できます。
+  </FeatureCard>
+  <FeatureCard title="サーバーモデレーション" img="/img/docs/intro/06-server-moderation.png" href="/ja/features/setup-administration/server-moderation/">
+    コストと安全性のための管理者制御を追加できます。クオータ、チャンネルおよびロールのホワイトリスト、思考ログ、BYOK要件などがあります。
+  </FeatureCard>
+  <FeatureCard title="200以上のコマンド" img="/img/docs/intro/07-command-reference.png" href="/ja/features/command-reference/">
+    使用されるプロンプトから付与される権限まで、より深いカスタマイズのための何百ものネイティブDiscordスラッシュコマンドを備えています。
+  </FeatureCard>
+  <FeatureCard title="SillyTavernサポート" img="/img/docs/intro/08-sillytavern-support.png" href="/ja/features/integrations/sillytavern-support/">
+    SillyTavernのプロンプトプリセットやキャラクターカードをインポートして、既存の指示やキャラクターをそのままDiscordに持ち込むことができます。
+  </FeatureCard>
+</div>
+
+## 次のステップ
+
+- **今すぐ使ってみたいですか？** [クイックスタート](/ja/introduction/quickstart/)を確認し、[機能](/ja/features/)ツアーをご覧ください。
+- **独自のTomoriBotインスタンスを稼働させたいですか？** [セルフホスト](/ja/self-hosting/)に向かいましょう。
+- **コードに貢献したいですか？** [アーキテクチャ](/ja/architecture/)の概要と[コントリビューティング](/ja/contributing/)ガイドをご覧ください。
+- **プロジェクトの継続を支援したいですか？** [GitHub](https://github.com/Bredrumb/TomoriBot)のリポジトリにスターを付けたり、Bredrumbの[Ko-Fi](https://ko-fi.com/J3J71O7NE6)に寄付したり、さらに良いこととして、このページのリンクを使ってトモリを友達にシェアしてください！すべて大変感謝しています。

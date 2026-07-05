@@ -1,5 +1,15 @@
 ---
 title: "Multiple Personas"
+# Keyword-rich <title> targeting "AI companion Discord" queries; replaces
+# Starlight's default "{title} | TomoriBot" for this page only. H1 and sidebar
+# keep the plain title. The homepage title bets on "AI agent" + "roleplay" —
+# this page carries the "companion" keyword instead.
+head:
+  - tag: title
+    content: "TomoriBot | AI Companions & Personas for Your Discord Server"
+# Hand-written search snippet; overrides the auto-derived description from
+# routeData.ts middleware.
+description: "Run multiple AI companions in one Discord server. Custom personas with their own avatars, triggers, and speaking styles. Free and open-source."
 sidebar:
   order: 2
 ---

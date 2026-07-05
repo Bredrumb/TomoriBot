@@ -1,0 +1,77 @@
+---
+title: "ローカルおよびセルフホストエンドポイント"
+sidebar:
+  label: "概要"
+  groupLabel: "ローカルおよびセルフホストエンドポイント"
+  order: 4
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+テキスト生成からMCPユーティリティまで、すべてをローカルに配置してTomoriBotインスタンスを実行することは十分に可能です。以下のすべてのエンドポイントはOpenAI互換、または小さなリファレンスラッパーであり、`/provider custom-endpoint`コマンドを通じて登録され、データベースに暗号化されて保存されます（`.env`は必要ありません）。
+セットアップする機能を選択してください。
+
+## テキストと埋め込み
+
+<CardGrid>
+  <LinkCard title="ローカルLLM" href="/ja/self-hosting/local-endpoints/setup-local-llm/"
+    description="テキスト生成や埋め込み用のOllama、KoboldCPP、LM Studio、vLLM、LiteLLMなどのOpenAI互換サーバー。" />
+  <LinkCard title="ChatMock経由のCodex CLI" href="/ja/self-hosting/local-endpoints/setup-chatmock/"
+    description="TomoriBotでCodex CLIモデルを使用できるようにするローカルのOpenAI互換ブリッジ。" />
+</CardGrid>
+
+## 画像と動画
+
+<CardGrid>
+  <LinkCard title="ComfyUI" href="/ja/self-hosting/local-endpoints/setup-comfyui/"
+    description="APIフォーマットのワークフローを使用して、自身のComfyUIインスタンスで画像や短い動画を生成します。" />
+</CardGrid>
+
+## 音声
+
+<CardGrid>
+  <LinkCard title="音声合成 (TTS)" href="/ja/self-hosting/local-endpoints/text-to-speech/"
+    description="ネイティブなDiscord音声メッセージと音声クローニングのためのローカルTTSエンジン（Chatterbox、Qwen3-TTS、IrodoriTTS）。" />
+  <LinkCard title="音声認識 (STT)" href="/ja/self-hosting/local-endpoints/speech-to-text/"
+    description="WhisperX、whisper.cpp、またはKoboldCPPを使用して、音声添付ファイルをローカルで文字起こしします。" />
+</CardGrid>
+
+## Web検索と取得
+
+<CardGrid>
+  <LinkCard title="SearXNG" href="/ja/self-hosting/local-endpoints/setup-searxng/"
+    description="公開レート制限を回避するための、ローカルのweb_searchツールとしてのプライバシーを尊重するメタ検索プロキシ。" />
+  <LinkCard title="Crawl4AI" href="/ja/self-hosting/local-endpoints/setup-crawl4ai/"
+    description="JSを多用するサイト向けにブラウザでレンダリングされたマークダウン抽出を行い、fetch_urlツールを強化します。" />
+</CardGrid>
+
+## カスタムツール
+
+<CardGrid>
+  <LinkCard title="ローカルMCPサーバー" href="/ja/self-hosting/local-endpoints/setup-local-mcp/"
+    description="ローカルのMCPサーバーを実行し、独自のツールでTomoriBotを拡張します（セルフホストインスタンスのみ）。" />
+</CardGrid>
+
+## `bun run launch`でのサイドカーの起動
+
+サイドカーサービスを手動で開始する代わりに、`bun run launch`を使用します。これにより、要求されたサイドカーが開始され、それらの準備が整うのを待ってから、ボットが自動的にウォッチモードで起動されます。
+
+```sh
+# Bot only, identical to bun run dev
+bun run launch
+
+# With SearXNG and Crawl4AI Docker sidecars
+bun run launch --searxng --crawl4ai
+
+# With a local TTS server (venv must be set up first — see the Text-to-Speech guide below)
+bun run launch --qwen3tts
+
+# See all available flags
+bun run launch --help
+```
+
+利用可能なフラグ: `--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--whisperx`
+
+Dockerサイドカー（`--searxng`、`--crawl4ai`）は初回実行時に作成され、その後の実行でも再利用されます。PythonのTTS/STTサイドカーは、事前に一度venvをセットアップしておく必要があります。個別のセットアップガイドについては、[音声合成 (TTS)](/ja/self-hosting/local-endpoints/text-to-speech/)および[音声認識 (STT)](/ja/self-hosting/local-endpoints/speech-to-text/)を参照してください。
+
+**Ctrl+C**を押すと、ボットとすべてのPythonサイドカープロセスが停止します。Dockerコンテナは意図的に実行されたままになります。完了したら、`docker stop searxng` / `docker stop crawl4ai`を使用して手動で停止してください。

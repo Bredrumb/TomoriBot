@@ -7,22 +7,98 @@
 //   2. The note wording lives in exactly one place (below), trivially editable.
 //   3. Opt-out is a single frontmatter flag, defaulted to true in the schema.
 //
+// Locale awareness: Japanese pages under docs/ja/ are machine translations, so
+// they get Japanese wording. A translation whose ENGLISH source is
+// human-written (`aiGenerated: false` in the EN frontmatter) shows a lighter
+// "AI-translated" notice instead of the full AI-drafts disclaimer — the
+// content was authored by a human; only the translation is AI. Setting
+// `aiGenerated: false` in the ja file itself (after human review of the
+// translation) hides the notice entirely, same as on English pages.
+//
 // The default MarkdownContent is just <div class="sl-markdown-content"><slot/></div>,
 // so we render it and place the <Aside> as the first child — this keeps the note
 // inside the markdown content flow, inheriting the correct prose spacing.
 import Default from "@astrojs/starlight/components/MarkdownContent.astro";
 import { Aside } from "@astrojs/starlight/components";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// Content root (the src/content/docs junction pointing at repo-root docs/).
+// Anchored to process.cwd() (the apps/docs project root during build) rather
+// than import.meta.url: compiled .astro modules execute from dist/.prerender/,
+// so a module-relative path would point at a directory that does not exist.
+const docsRoot = join(process.cwd(), "src/content/docs");
+
+// Reader-facing "AI translation of a human-written page" notice, disabled by
+// default so unreviewed translations don't alarm readers. Review state is
+// still tracked in frontmatter regardless (a ja page without
+// `aiGenerated: false` is an unreviewed machine translation). Set
+// DOCS_SHOW_TRANSLATION_NOTICE=true in the docs build environment to render it.
+const showTranslationNotice =
+  process.env.DOCS_SHOW_TRANSLATION_NOTICE?.trim().toLowerCase() === "true";
+
+const { entry } = Astro.locals.starlightRoute;
 
 // Opt-out flag from frontmatter. Schema defaults it to true, so a page is
 // treated as AI-generated unless it explicitly sets `aiGenerated: false`.
-const showDisclaimer = Astro.locals.starlightRoute.entry.data.aiGenerated !== false;
+const showDisclaimer = entry.data.aiGenerated !== false;
+
+// Translated pages live under the ja/ id prefix. Fallback routes reuse the
+// English entry (no prefix), so they correctly get the English treatment.
+const isJaSource = entry.id === "ja" || entry.id.startsWith("ja/");
+const baseId = entry.id.replace(/^ja\/?/, "");
+
+/**
+ * Checks whether the English source of a translated page is human-written,
+ * i.e. its frontmatter contains `aiGenerated: false`. Mirrors the id→file
+ * scheme from content.config.ts (`index` ids come from README/index files).
+ */
+function enSourceIsHumanWritten(id) {
+  const base = join(docsRoot, id);
+  const candidates =
+    id === "index" || id.endsWith("/index")
+      ? ["README.md", "README.mdx", "index.md", "index.mdx"].map((name) => join(base, "..", name))
+      : [`${base}.md`, `${base}.mdx`];
+  const file = candidates.find((candidate) => existsSync(candidate));
+  if (!file) return false;
+  const frontmatter = readFileSync(file, "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
+  return /^aiGenerated:\s*false\s*$/m.test(frontmatter);
+}
+
+// English page URL for the "see the original" link in the translation notice.
+const enUrl = `/${baseId.replace(/(^|\/)index$/, "")}${baseId === "index" ? "" : "/"}`.replace(
+  /\/+$/,
+  "/",
+);
+
+const mode = !showDisclaimer
+  ? "none"
+  : isJaSource
+    ? enSourceIsHumanWritten(baseId)
+      ? "ja-translated"
+      : "ja-drafts"
+    : "en-drafts";
 ---
 
 <Default>
   {
-    showDisclaimer && (
+    mode === "en-drafts" && (
       <Aside type="note" title="Disclaimer">
         This specific page uses temporary drafts written and maintained by Generative AI. While verified to be accurate, please cross-verify with source code.
+      </Aside>
+    )
+  }
+  {
+    mode === "ja-drafts" && (
+      <Aside type="note" title="免責事項">
+        このページは生成AIによって作成された下書きです。内容は確認済みですが、正確な情報はソースコードもあわせてご確認ください。
+      </Aside>
+    )
+  }
+  {
+    mode === "ja-translated" && showTranslationNotice && (
+      <Aside type="note" title="翻訳について">
+        このページは<a href={enUrl}>英語版</a>を生成AIが翻訳したものです。不明な点がある場合は英語版をご確認ください。
       </Aside>
     )
   }

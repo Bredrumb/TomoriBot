@@ -9,6 +9,10 @@
 # Site root → introduction (the root page is only a redirect stub).
 / /introduction/ 301
 
+# Japanese locale root → Japanese introduction (mirrors the root rule).
+/ja /ja/introduction/ 301
+/ja/ /ja/introduction/ 301
+
 # /features/ restructure: flat pages moved into task-based sub-categories.
 /features/chatting-and-triggers /features/chatting-personality/chatting-and-triggers/ 301
 /features/chatting-and-triggers/ /features/chatting-personality/chatting-and-triggers/ 301

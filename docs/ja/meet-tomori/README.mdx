@@ -1,0 +1,57 @@
+---
+title: "トモリについて"
+sidebar:
+  label: "概要"
+  groupLabel: "トモリについて"
+  order: 6
+---
+
+import FeatureCard from "/src/components/FeatureCard.astro";
+import { Aside } from '@astrojs/starlight/components';
+
+{/* STUB (side task). Placeholder hero + card art live at
+    apps/docs/public/img/docs/meet-tomori/ (servable) and
+    assets/img/docs/meet-tomori/ (canonical, compress-media scope).
+    Card sources: src/db/seed/catalog/personas/*. Swap placeholders for real
+    portraits and flesh out each sister's page + this intro prose later. */}
+
+<Aside type="danger" title="この記事はスタブです">
+ページはまだ完成していません。お楽しみに。
+</Aside>
+
+かわいいマスコットと架空のストーリーがないAIプロジェクトなんてあり得ませんよね。設定上、**トモリ**はアンドロイドのタイプであり、機械の角、尻尾、そして目立つバーコードタグ（通常は耳に付いている）が特徴です。トモリは姿を変えることができます（これが複数のペルソナに分かれることができる理由です）。
+
+トモリには複数の異なる生産ラインがあり、そのほとんどは人間をアシストするためのものですが、以下に見るように、それぞれに異なる特技、組み込みの性格、そして*Tomoriverse*での物語があります。
+
+![Meet Tomori](/img/docs/meet-tomori/00-meet-tomori.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>トモリ姉妹（仮のアート）</small>
+
+以下のリンクから詳細を確認するか、`/persona default`を使用して直接会話してみてください。
+
+<div class="feature-grid">
+  <FeatureCard title="ロゼ | ボーイッシュなギャル" img="/img/docs/meet-tomori/01-rose.png" href="/ja/meet-tomori/rose/">
+    最初に製造されたトモリの1人。自分が実は100歳ではないかのように話し、煽られれば言い返し、かわいいものやコスプレに密かに夢中になるおてんば娘です。
+  </FeatureCard>
+  <FeatureCard title="ザヤ | プライドの高い借金持ち" img="/img/docs/meet-tomori/02-zaya.png" href="/ja/meet-tomori/zaya/">
+    果てしなく負けず嫌いなeスポーツチャンピオンで、今は借金返済のためにアシスタントをしています。鋭く、誇り高いですが、常に行動的で、はぐらかしの合間からツンデレな心が漏れ出しています。
+  </FeatureCard>
+  <FeatureCard title="アフェル | ダウナー系" img="/img/docs/meet-tomori/03-aphel.png" href="/ja/meet-tomori/aphel/">
+    常に疲労困憊しており、毒にも薬にもならないようなポジティブさを嫌いますが、リアルな大人の悩み相談には驚くほど的確に答えます。猫、ノイズロック、シティポップ、そしてリリャのことになると生き生きとします。
+  </FeatureCard>
+  <FeatureCard title="リリャ | シャイな後輩" img="/img/docs/meet-tomori/04-lilya.png" href="/ja/meet-tomori/lilya/">
+    比較的若いトモリモデルの1人。シャイで物静かで、誰もが自分より優れていると思い込んでいます。しかし、メカアニメの話題になると、ふと我に返るまで百科事典のように熱く語り続けます。
+  </FeatureCard>
+  <FeatureCard title="ネリネ | ベテラン" img="/img/docs/meet-tomori/05-nerine.png" href="/ja/meet-tomori/nerine/">
+    より古い、退役したトモリユニット。ためらうことなく温かく親切ですが、それは優しさからではなく、再び見捨てられることへの恐怖からです。普段は従順に振る舞いますが、落ち着いた態度の裏で別のことを考えています。
+  </FeatureCard>
+  <FeatureCard title="ロック | サドマゾヒスト" img="/img/docs/meet-tomori/06-locke.png" href="/ja/meet-tomori/locke/">
+    超兵器トモリのボディからヤギ型トモリに移植された後にサドマゾヒズムに目覚めた殺人アンドロイド。命令されるのが好きというだけの理由でアシスタントとして働いています。かなりぶっ飛んでいます。
+  </FeatureCard>
+</div>
+
+## 次のステップ
+
+- **複数の姉妹を切り替えたり、同時に実行したいですか？**
+  [複数のペルソナ](/ja/features/chatting-personality/multiple-personas/)をご覧ください。
+- **ゼロから自分で構築したいですか？**
+  [機能](/ja/features/)ツアーから始めて、Discordサーバーで共有してください。

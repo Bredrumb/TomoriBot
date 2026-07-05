@@ -1,0 +1,56 @@
+---
+title: "Text-to-Speech（ローカルエンジン）"
+sidebar:
+  label: "概要"
+  groupLabel: "Text-to-Speech"
+  order: 7
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBotは、speechをカスタムエンドポイント機能として扱います。ローカルエンジンはボットの外部でHTTPサーバーとして動作し、`POST /synthesize`を実装します。ほとんどのクローンエンジンは、テキストに加えて設定された参照音声サンプルを受信します。
+
+## 利用可能なエンジン
+
+<CardGrid>
+  <LinkCard title="Chatterbox TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/"
+    description="Chatterbox-Turboによる高速なローカルボイスクローニングです。表現豊かな音声のためのブラケット配信タグをサポートしています。" />
+  <LinkCard title="Qwen3-TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
+    description="クローンモードとVoiceDesignモードを備えた多言語ローカルTTSです。最大サイズですが最高の品質を誇ります。" />
+  <LinkCard title="IrodoriTTS" href="/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/"
+    description="感情制御のためにUnicode絵文字マークアップを保持する、日本語に特化したボイスクローニングです。" />
+</CardGrid>
+
+## セットアップ手順
+
+1. 上記のカードからエンジンを1つ選び、`servers/tts/`からそのラッパーを起動します。
+2. `/provider custom-endpoint add`を実行し、capabilityに`speech`を、api styleに`tts-clone`を使用して登録します。
+3. 登録モーダルで、そのエンジンのガイドに記載されている音声ソースモード（voice source mode）とスクリプトマークアップ（script markup）を選択します。
+
+登録すると、エンドポイントはすぐに有効になります。今後、登録済みのTTSエンドポイントを切り替える場合にのみ`/model speech`を使用します。
+
+## ペルソナ音声の流れ
+
+クローンエンジンの場合、ペルソナごとに1つの音声サンプルを追加して割り当てます。
+
+1. 背景音楽のない、1人の話者による10〜20秒のクリアなクリップを準備します。
+2. `/speech voice-add`を実行してサンプルをアップロードします。任意の音声形式を使用できます。TomoriBotはそれをモノラルのWAVに変換します。
+3. `/speech voice-assign`を実行し、ペルソナと音声サンプルを選択します。
+
+Qwen3-TTSのVoiceDesignの場合、音声サンプルはスキップし、代わりに各ペルソナに対して`/speech voice-design set`を実行します。
+
+ElevenLabsのユーザーは`/speech elevenlabs`を使用する必要があります。これにより、speechとtranscriptionのエンドポイントが一緒に登録されます。
+
+TomoriBotは、生成する前に音声スクリプトからDiscordのカスタム絵文字構文（`:pepega:`や`<:pepega:123456789012345678>`など）を削除します。speechエンドポイントがIrodoriTTS向けに意図された絵文字マークアップを使用しない限り、Unicode絵文字も削除されます。
+
+## ハードウェア要件
+
+ローカルのTTSエンジンは**LLMよりもはるかに軽量**です。これらは小さなモデル（約0.5B〜1.7Bパラメーター）です。一般的なNVIDIA GPU（数GBのVRAMで十分です）でも、これらのいずれかを快適に実行し、合成を高速に保つことができます。音声クリップは短いため、速度は落ちますが**CPU**でも動作します。
+
+| エンジン | モデルサイズ | 備考 |
+|---|---|---|
+| Chatterbox | 約0.5B (Turbo) | 現在最も高速なオプションです。 |
+| Qwen3-TTS | 1.7B (12 Hz) | 個別のクローン + VoiceDesignモデル。一度に1つだけ読み込まれます。 |
+| IrodoriTTS | 500M (v2) | 日本語に特化。GPUでは`bf16`、CPUでは`fp32`。 |
+
+起動後（またはQwen3-TTSがオートモードでモデルを入れ替えた後）の最初の合成は、モデルがメモリに読み込まれるため遅くなりますが、それ以降のリクエストは高速になります。TomoriBotは各レスポンスを最大`TTS_SYNTHESIZE_TIMEOUT_MS`（デフォルトは240000ミリ秒）待機します。

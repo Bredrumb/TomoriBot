@@ -1,5 +1,14 @@
 ---
 title: "SillyTavern Support"
+# Keyword-rich <title> targeting "SillyTavern character cards in Discord"
+# queries; replaces Starlight's default for this page only. H1 and sidebar
+# keep the plain title.
+head:
+  - tag: title
+    content: "TomoriBot | Use SillyTavern Character Cards in Discord"
+# Hand-written search snippet; overrides the auto-derived description from
+# routeData.ts middleware.
+description: "Import SillyTavern character cards (PNG, v2, v3 JSON) and Prompt Manager presets into Discord with TomoriBot. Bring your existing characters to your server."
 sidebar:
   order: 2
 ---

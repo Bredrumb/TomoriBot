@@ -1,0 +1,19 @@
+---
+title: "知識"
+sidebar:
+  groupLabel: "知識"
+  order: 2
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+トモリが知っていることと保持しているもの。記憶している事実、個人に追従する設定、そして保存されたデータの完全な制御について説明します。
+
+<CardGrid>
+  <LinkCard title="メモリー" href="/ja/features/knowledge/memory/"
+    description="個人およびサーバーの記憶、タグ付け、短期記憶、そしてドキュメントベースの知識ベースです。" />
+  <LinkCard title="パーソナライゼーション" href="/ja/features/knowledge/personalization/"
+    description="個人のプロバイダー（BYOK）、タイムゾーン、プロンプト、パーソナルスポットライト、そしてプライバシー設定です。" />
+  <LinkCard title="データの取り扱い" href="/ja/features/knowledge/data-handling/"
+    description="データのエクスポート、インポート、削除の方法と、保存される内容の詳細です。" />
+</CardGrid>

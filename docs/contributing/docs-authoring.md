@@ -63,6 +63,29 @@ Common fields:
 Filenames and folder names are URL slugs. Keep them short, lowercase, and stable. Use
 `title` and `groupLabel` for human-facing names.
 
+### The `aiGenerated` disclaimer and translations
+
+The disclaimer note is injected at render time by the `MarkdownContent.astro` override in
+`apps/docs` (never written into markdown files), and it is locale-aware. Which notice a
+page shows:
+
+| Page | EN source `aiGenerated` | Notice shown |
+|---|---|---|
+| English page, flag unset or `true` | n/a | English "Disclaimer" (AI drafts) |
+| English page, flag `false` | n/a | None |
+| Japanese page under `docs/ja/`, flag unset | unset or `true` | Japanese 免責事項 (AI drafts + translation) |
+| Japanese page under `docs/ja/`, flag unset | `false` (human-written) | Japanese 翻訳について (AI translation of a human page, links to the English version). Hidden by default; see below |
+| Japanese page with its own `aiGenerated: false` | any | None (translation has been human-reviewed) |
+
+The 翻訳について notice is reader-facing only when `DOCS_SHOW_TRANSLATION_NOTICE=true` is
+set in the docs build environment; it defaults to hidden. Review state is tracked in
+frontmatter either way: a `docs/ja/` page without `aiGenerated: false` is an unreviewed
+machine translation (`grep -rL "aiGenerated: false" docs/ja/` lists them).
+
+Practical rules: machine-translated pages must NOT carry `aiGenerated: false` (delete the
+line when translating a page that has it). After a human reviews and corrects a
+translation, set `aiGenerated: false` in the translated file to clear its notice.
+
 ## SEO
 
 The docs site handles most SEO automatically:

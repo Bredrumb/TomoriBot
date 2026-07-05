@@ -1,5 +1,37 @@
 ---
 title: "What is TomoriBot?"
+# Keyword-rich <title> for search results; replaces Starlight's default
+# "{title} | TomoriBot" for this page only. H1 and sidebar keep the plain title.
+head:
+  - tag: title
+    content: "TomoriBot | Open-Source AI Agent & Roleplay Bot for Discord"
+  # JSON-LD structured data: tells search engines this page describes a software
+  # product, enabling rich results. Google requires `offers` (or aggregateRating)
+  # alongside `name` for SoftwareApplication rich-result eligibility.
+  - tag: script
+    attrs:
+      type: "application/ld+json"
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TomoriBot",
+        "url": "https://docs.tomoribot.app/",
+        "image": "https://docs.tomoribot.app/img/social-banner.png",
+        "description": "Free and open-source AI agent and roleplaying system for Discord, with persistent memory, multiple personas, media generation, and multi-provider LLM support.",
+        "applicationCategory": "CommunicationApplication",
+        "operatingSystem": "Web",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "sameAs": [
+          "https://github.com/Bredrumb/TomoriBot",
+          "https://discord.gg/bjCfHm9QsB"
+        ]
+      }
 aiGenerated: false
 sidebar:
   groupLabel: "Introduction"
@@ -9,7 +41,7 @@ sidebar:
 import { LinkButton } from "@astrojs/starlight/components";
 import FeatureCard from "/src/components/FeatureCard.astro";
 
-**TomoriBot** is a free and open-source project that aims to bring personal AI agents and role-playing systems right into Discord servers, inspired by SillyTavern and Discord's discontinued Clyde. Simply put, she (or *it*) is an agentic+roleplaying harness for AIs put into Discord:
+**TomoriBot** is a free and open-source AI agent and roleplaying system for Discord. The project aims to bring personal AI companions and role-play characters right into Discord servers, inspired by SillyTavern and Discord's discontinued Clyde. Simply put, she (or *it*) is an agentic + roleplaying harness for AIs put into Discord:
 
 ![Tomori Formula](/img/docs/intro/00-tomori-formula.png)
 <small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>Like an unholy trinity of Discord, SillyTavern, and OpenClaw</small>
@@ -68,4 +100,4 @@ You can invite the public instance now or self-host your own for full control ov
 - **Want to run your own TomoriBot instance?** Head to [Self-Hosting](/self-hosting/).
 - **Want to contribute to the code?** See the [Architecture](/architecture/) overview
   and the [Contributing](/contributing/) guides.
-- **Want to help the project stay afloat?** Star her repository on [GitHub](https://github.com/Bredrumb/TomoriBot) donate to Bredrumb's [Ko-Fi](https://ko-fi.com/J3J71O7NE6), or even better, share her with your friends! Its all very much appreciated.
+- **Want to help the project stay afloat?** Star her repository on [GitHub](https://github.com/Bredrumb/TomoriBot) donate to Bredrumb's [Ko-Fi](https://ko-fi.com/J3J71O7NE6), or even better, share her with your friends using this page's link! Its all very much appreciated.

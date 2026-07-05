@@ -1,7 +1,7 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Starlight's autogenerate resolves pages by stripping the hardcoded
@@ -51,12 +51,39 @@ function buildSidebarSection(directory) {
   const dirPath = resolve(docsTarget, directory);
   const readmePath = getReadmePath(dirPath);
   const readmeData = readmePath ? readFrontmatter(readmePath) : {};
+  const jaLabel = getJaGroupLabel(dirPath, directory);
 
   return {
     label: getGroupLabel(readmeData, directory),
     collapsed: true,
     items: buildDirectoryItems(dirPath, directory).map((node) => node.item),
+    ...(jaLabel ? { translations: { ja: jaLabel } } : {}),
   };
+}
+
+// Japanese sidebar labels: when a translated counterpart exists under docs/ja/,
+// attach its title as a `translations.ja` entry so Starlight shows Japanese
+// labels while browsing /ja/ pages. Pages without a translation keep the
+// English label (and Starlight's locale fallback serves the English content).
+function readJaCounterpartData(filePath) {
+  const jaPath = join(docsTarget, "ja", relative(docsTarget, filePath));
+  return existsSync(jaPath) ? readFrontmatter(jaPath) : undefined;
+}
+
+// Fallback Japanese labels for sidebar groups whose content is untranslated
+// (no docs/ja/ README to pull a label from). Keeps the /ja/ sidebar uniformly
+// Japanese at the top level even while those sections serve English fallback
+// pages.
+const jaGroupLabelFallbacks = {
+  architecture: "アーキテクチャ",
+  contributing: "コントリビュート",
+};
+
+function getJaGroupLabel(dirPath, dirName) {
+  const jaReadmePath = getReadmePath(join(docsTarget, "ja", relative(docsTarget, dirPath)));
+  if (!jaReadmePath) return dirName ? jaGroupLabelFallbacks[dirName.toLowerCase()] : undefined;
+  const jaData = readFrontmatter(jaReadmePath);
+  return jaData.sidebar?.groupLabel ?? jaData.groupLabel ?? jaData.title;
 }
 
 function buildDirectoryItems(dirPath, slugPrefix) {
@@ -85,11 +112,14 @@ function buildGroupNode(dirPath, dirName, slugPrefix) {
   const children = buildDirectoryItems(dirPath, slugPrefix);
   const childOrder = Math.min(...children.map((child) => child.order), maxOrder);
 
+  const jaLabel = getJaGroupLabel(dirPath);
+
   return {
     item: {
       label: getGroupLabel(readmeData, dirName),
       collapsed: true,
       items: children.map((child) => child.item),
+      ...(jaLabel ? { translations: { ja: jaLabel } } : {}),
     },
     order: readmeData.sidebar?.order ?? childOrder,
     sortKey: slugPrefix,
@@ -99,11 +129,14 @@ function buildGroupNode(dirPath, dirName, slugPrefix) {
 
 function buildPageNode(filePath, slug) {
   const data = readFrontmatter(filePath);
+  const jaData = readJaCounterpartData(filePath);
+  const jaLabel = jaData?.sidebar?.label ?? jaData?.title;
 
   return {
     item: {
       label: data.sidebar?.label ?? data.title ?? prettySegmentLabel(basename(slug)),
       link: `/${slug}/`,
+      ...(jaLabel ? { translations: { ja: jaLabel } } : {}),
     },
     order: data.sidebar?.order ?? maxOrder,
     sortKey: slug,
@@ -275,6 +308,15 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "TomoriBot",
+      // i18n: `root` keeps every existing English URL unchanged (no /en/ prefix,
+      // no index reset for search engines). Japanese pages live under docs/ja/
+      // mirroring the English tree; untranslated pages fall back to English
+      // content served at the /ja/ URL with a translation notice.
+      defaultLocale: "root",
+      locales: {
+        root: { label: "English", lang: "en" },
+        ja: { label: "日本語", lang: "ja" },
+      },
       // Fallback meta description for pages without one (see routeMiddleware
       // below, which auto-derives per-page descriptions from page content).
       description:
@@ -286,14 +328,31 @@ export default defineConfig({
       favicon: "/favicon.ico",
       head: [
         {
+          // 1200×630 social banner (Open Graph standard size). Served from
+          // apps/docs/public/img/social-banner.png.
           tag: "meta",
-          attrs: { property: "og:image", content: "https://docs.tomoribot.app/tomoricon.png" },
+          attrs: { property: "og:image", content: "https://docs.tomoribot.app/img/social-banner.png" },
         },
         {
-          // "summary" (small square card) rather than "summary_large_image":
-          // the og:image is a square logo, which large-image cards stretch.
           tag: "meta",
-          attrs: { name: "twitter:card", content: "summary" },
+          attrs: { property: "og:image:width", content: "1200" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:height", content: "630" },
+        },
+        {
+          tag: "meta",
+          attrs: {
+            property: "og:image:alt",
+            content: "TomoriBot | Open-Source AI Agent & Roleplay Bot for Discord",
+          },
+        },
+        {
+          // Large-image card: the og:image is a proper 1200×630 banner now,
+          // so the stretched-square concern no longer applies.
+          tag: "meta",
+          attrs: { name: "twitter:card", content: "summary_large_image" },
         },
         {
           tag: "link",
