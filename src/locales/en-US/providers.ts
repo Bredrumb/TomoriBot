@@ -90,7 +90,7 @@ export default {
       "403_predict_permission_message": `This key can't call Vertex AI Express models. Use an Express-mode key, or use the separate \`vertex\` provider for full Google Cloud projects.`,
     },
     novelai: {
-      "400_default_message": `Invalid request format or parameters`,
+      "400_default_message": `Invalid request format or parameters. Please ensure you inputted the correct API key.`,
       "400_trial_message": `Your trial account requires recaptcha verification for generations. API access requires a paid NovelAI subscription. Please upgrade your account at https://novelai.net/`,
       "401_default_message": `Your NovelAI API key is invalid or expired`,
       "402_default_message": `You don't have enough Anlas credits`,

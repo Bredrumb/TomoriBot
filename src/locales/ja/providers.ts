@@ -90,7 +90,7 @@ export default {
       "403_predict_permission_message": `このキーでは Vertex AI Express モデルを呼び出せません。Express Mode のキーを使うか、フル Google Cloud プロジェクトなら別プロバイダーの \`vertex\` を使ってください。`,
     },
     novelai: {
-      "400_default_message": `無効なリクエスト形式またはパラメータ`,
+      "400_default_message": `無効なリクエスト形式またはパラメータです。正しいAPIキーを入力したか確認してください。`,
       "400_trial_message": `トライアルアカウントでは生成にrecaptcha認証が必要です。API経由のアクセスには有料のNovelAIサブスクリプションが必要です。https://novelai.net/ でアカウントをアップグレードしてください`,
       "401_default_message": `NovelAIのAPIキーが無効または期限切れです`,
       "402_default_message": `Anlasクレジットが不足しています`,

@@ -110,7 +110,7 @@ When moving docs:
 2. Update links in `docs/`, `README.md`, `.github/`, and release notes when relevant.
 3. Update `docs/README.md` when section structure changes.
 4. When old URLs should keep working, add both an entry in the `redirects` map in
-   `apps/docs/astro.config.mjs` (meta-refresh fallback page) and matching 301 rules in
+   `apps/docs/astro.config.mts` (meta-refresh fallback page) and matching 301 rules in
    `apps/docs/public/_redirects` (real redirects on Cloudflare, listed with and without
    the trailing slash).
 5. Run the docs build:

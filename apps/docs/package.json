@@ -9,6 +9,7 @@
   "devDependencies": {
     "@astrojs/starlight": "^0.40.0",
     "astro": "^6.4.6",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "starlight-llms-txt": "0.10.0"
   }
 }

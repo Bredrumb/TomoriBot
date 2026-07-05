@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightLlmsTxt from "starlight-llms-txt";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -321,6 +322,23 @@ export default defineConfig({
       // below, which auto-derives per-page descriptions from page content).
       description:
         "Documentation for TomoriBot, a self-hostable AI Discord bot with persistent memory, multiple personas, media generation, and multi-provider LLM support.",
+      plugins: [
+        starlightLlmsTxt({
+          exclude: ["wiki", "wiki/**"],
+          customSets: [
+            {
+              label: "User and self-hosting documentation",
+              description: "public user, feature, persona, and self-hosting docs for TomoriBot",
+              paths: ["introduction/**", "features/**", "self-hosting/**", "meet-tomori/**"],
+            },
+            {
+              label: "Contributor and architecture documentation",
+              description: "developer implementation guides and code-level architecture references for TomoriBot",
+              paths: ["contributing/**", "architecture/**"],
+            },
+          ],
+        }),
+      ],
       // SEO head tags: auto-derives per-page meta descriptions from each
       // page's first paragraph and noindexes internal wiki/ pages.
       routeMiddleware: "./src/routeData.ts",

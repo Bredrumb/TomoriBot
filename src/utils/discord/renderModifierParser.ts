@@ -78,9 +78,13 @@ export function parseLeadingRenderModifier(
 ): LeadingRenderModifierMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
-  for (const sourceName of collectRenderModifierSourceNames("", sourceNames)) {
+  const collectedSourceNames = collectRenderModifierSourceNames("", sourceNames);
+  const labelChainAlternation = buildSourceLabelAlternation(collectedSourceNames);
+  const labelChainPrefix = labelChainAlternation ? `(?:(?:${labelChainAlternation})\\s*[:：][ \\t]*)*` : "";
+
+  for (const sourceName of collectedSourceNames) {
     const pattern = new RegExp(
-      `^\\s*(${escapeRegExp(sourceName)})\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`,
+      `^\\s*${labelChainPrefix}(${escapeRegExp(sourceName)})\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`,
       "iu",
     );
     const match = pattern.exec(text);
@@ -97,6 +101,11 @@ export function parseLeadingRenderModifier(
   }
 
   return null;
+}
+
+function buildSourceLabelAlternation(sourceNames: readonly string[]): string | null {
+  const escapedNames = sourceNames.map((sourceName) => escapeRegExp(sourceName.trim())).filter(Boolean);
+  return escapedNames.length > 0 ? `(?:${escapedNames.join("|")})` : null;
 }
 
 export function isAllowedRenderModifierSpeakerLabel(label: string, sourceNames: readonly string[]): boolean {
