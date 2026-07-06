@@ -194,14 +194,16 @@ export class ImportRepository {
             language_pref,
             privacy_level,
             personal_deliberate_tool_mode,
-            timezone_offset
+            timezone_offset,
+            pluralkit_enabled
           ) VALUES (
             ${userDiscId},
             ${importData.user_nickname},
             ${importData.language_pref},
             ${importData.privacy_level ?? 0},
             ${importData.personal_deliberate_tool_mode ?? "follow"},
-            ${importData.timezone_offset ?? null}
+            ${importData.timezone_offset ?? null},
+            ${importData.pluralkit_enabled ?? false}
           )
           ON CONFLICT (user_disc_id) DO UPDATE
           SET
@@ -209,7 +211,8 @@ export class ImportRepository {
             language_pref = EXCLUDED.language_pref,
             privacy_level = COALESCE(${importData.privacy_level ?? null}, users.privacy_level),
             personal_deliberate_tool_mode = COALESCE(${importData.personal_deliberate_tool_mode ?? null}, users.personal_deliberate_tool_mode),
-            timezone_offset = COALESCE(${importData.timezone_offset ?? null}, users.timezone_offset)
+            timezone_offset = COALESCE(${importData.timezone_offset ?? null}, users.timezone_offset),
+            pluralkit_enabled = COALESCE(${importData.pluralkit_enabled ?? null}, users.pluralkit_enabled)
           RETURNING user_id
         `;
 
@@ -260,6 +263,7 @@ export class ImportRepository {
       if (importData.personal_deliberate_tool_mode !== undefined) fieldsCount++;
       if (importData.shortterm_cache_crossserver_opt_in !== undefined) fieldsCount++;
       if (importData.timezone_offset !== undefined) fieldsCount++;
+      if (importData.pluralkit_enabled !== undefined) fieldsCount++;
 
       return { success: true, itemsImported: { configFieldsCount: fieldsCount } };
     } catch (error) {

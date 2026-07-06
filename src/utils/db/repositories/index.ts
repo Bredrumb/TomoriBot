@@ -17,6 +17,7 @@ import { personaUserBlockRepository } from "./PersonaUserBlockRepository";
 import { personaSpriteMessageRepository } from "./PersonaSpriteMessageRepository";
 import { personaSpriteRepository } from "./PersonaSpriteRepository";
 import { personaRepository } from "./PersonaRepository";
+import { pluralKitRepository } from "./PluralKitRepository";
 import { presetRepository } from "./PresetRepository";
 import { ragRepository } from "./RagRepository";
 import { serverMemoryRepository } from "./ServerMemoryRepository";
@@ -48,6 +49,7 @@ export {
   personaSpriteMessageRepository,
   personaSpriteRepository,
   personaRepository,
+  pluralKitRepository,
   presetRepository,
   ragRepository,
   serverMemoryRepository,

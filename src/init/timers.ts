@@ -87,6 +87,23 @@ export function initTimers(client: Client): void {
     log.error("Failed to schedule preset avatar fan-out", error as Error);
   }
 
+  log.section("Initializing PluralKit Index Pruner...");
+  try {
+    // Age-based retention sweep over pluralkit_message_index (startup + daily).
+    import("@/timers/pluralkitIndexPruner")
+      .then(({ initializePluralKitIndexPruner }) => {
+        client.once("clientReady", () => {
+          initializePluralKitIndexPruner();
+          log.success("PluralKit index pruner initialized");
+        });
+      })
+      .catch((error: Error) => {
+        log.error("Failed to initialize PluralKit index pruner", error);
+      });
+  } catch (error) {
+    log.error("Failed to initialize PluralKit index pruner", error as Error);
+  }
+
   log.section("Initializing Upload Quota System...");
   try {
     import("@/utils/security/rateLimiter")
