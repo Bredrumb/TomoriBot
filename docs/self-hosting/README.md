@@ -23,7 +23,6 @@ Start running your own TomoriBot instance through any of these install paths:
 1. [`setup-wizard`](./setup-wizard) : guided `bun run setup` install
 2. [`manual-setup`](./manual-setup) : the manual procedure, for technical users
 3. [`docker-compose`](./docker-compose) : containerized bot + database, no host Bun/PostgreSQL
-4. [`azure-vm`](./azure-vm) : production VM compose contract for Azure migrations
 
 Optional modules (local LLMs, ComfyUI, SearXNG, Crawl4AI, local TTS/STT, ChatMock,
 local MCP servers) each have their own page, see
@@ -31,4 +30,3 @@ local MCP servers) each have their own page, see
 
 Once she's up and running, [`maintenance`](./maintenance) covers the host-side scripts, updating,
 and backing up/restoring your database.
-
