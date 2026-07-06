@@ -3,6 +3,7 @@ import type { TomoriState, UserRow } from "@/types/db/schema";
 import { CooldownType, PrivacyLevel } from "@/types/db/schema";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { isExternalUserId } from "@/utils/bridges";
 import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
@@ -703,14 +704,16 @@ async function enforceTurnGuards(
 
   if (!incoming.isStopResponse && !incoming.isPersonaJob && !isSelfMessage && textCredentialSource !== "personal") {
     const cooldownUserDiscId = admission.cooldownUserDiscId ?? userDiscId;
-    const cooldownMember =
-      cooldownUserDiscId === message.author.id
-        ? message.member
-        : ((await admission.guild?.members.fetch(cooldownUserDiscId).catch(() => null)) ?? null);
-    const cooldownAuthor =
-      cooldownUserDiscId === message.author.id
-        ? message.author
-        : await admission.client.users.fetch(cooldownUserDiscId).catch(() => message.author);
+    // External IDs (Matrix "@user:server", "pk:{uuid}") are never Discord
+    // snowflakes — fetching them is a guaranteed API error, so reuse the
+    // message's own member/author fallbacks instead of burning two REST calls.
+    const shouldFetchCooldownUser = cooldownUserDiscId !== message.author.id && !isExternalUserId(cooldownUserDiscId);
+    const cooldownMember = shouldFetchCooldownUser
+      ? ((await admission.guild?.members.fetch(cooldownUserDiscId).catch(() => null)) ?? null)
+      : message.member;
+    const cooldownAuthor = shouldFetchCooldownUser
+      ? await admission.client.users.fetch(cooldownUserDiscId).catch(() => message.author)
+      : message.author;
     const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
       serverDiscId: message.guild?.id ?? message.author.id,
       userDiscId: cooldownUserDiscId,

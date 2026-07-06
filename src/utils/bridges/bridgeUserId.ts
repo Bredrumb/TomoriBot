@@ -22,6 +22,47 @@ export function isBridgeUserId(id: string): boolean {
 }
 
 /**
+ * Returns true if the given string is a PluralKit synthetic user ID.
+ * PluralKit member rows use real `users` records keyed as `pk:{member_uuid}`.
+ *
+ * @param id - The string to test
+ * @returns true if the string is a PluralKit synthetic user ID
+ */
+export function isPluralKitUserId(id: string): boolean {
+  return /^pk:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
+/**
+ * Formats a canonical PluralKit member UUID as the synthetic `users.user_disc_id`.
+ *
+ * @param memberUuid - Canonical PluralKit member UUID
+ * @returns Synthetic user ID for the member
+ */
+export function toPluralKitUserId(memberUuid: string): string {
+  return `pk:${memberUuid}`;
+}
+
+/**
+ * Extracts the canonical PluralKit member UUID from a synthetic user ID.
+ *
+ * @param id - Synthetic user ID
+ * @returns Member UUID, or null if the ID is not a PluralKit user ID
+ */
+export function extractPluralKitMemberUuid(id: string): string | null {
+  return isPluralKitUserId(id) ? id.slice(3) : null;
+}
+
+/**
+ * Returns true if the provided ID is an external/non-Discord user identity.
+ *
+ * @param id - User ID candidate
+ * @returns true when the ID must not be treated as a Discord snowflake
+ */
+export function isExternalUserId(id: string): boolean {
+  return isBridgeUserId(id) || isPluralKitUserId(id);
+}
+
+/**
  * Strips the bridge prefix from a webhook username, returning only the display name.
  * Bridge webhook usernames follow the format: "[BridgeName|userId] DisplayName"
  *

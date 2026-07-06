@@ -2,7 +2,7 @@ import { ChannelType, type Guild, type GuildMember, type GuildTextBasedChannel }
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { userRepository } from "@/utils/db/repositories";
-import { isBridgeUserId } from "@/utils/bridges";
+import { isBridgeUserId, isExternalUserId, isPluralKitUserId } from "@/utils/bridges";
 
 export type ResolvedUserTarget = {
   status: "resolved";
@@ -414,6 +414,19 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
     }
   }
 
+  if (isPluralKitUserId(rawInput)) {
+    const pluralKitReference = conversationReferences.find((reference) => reference.targetId === rawInput);
+    if (pluralKitReference) {
+      return {
+        status: "resolved",
+        targetId: pluralKitReference.targetId,
+        displayLabel: pluralKitReference.displayLabel,
+        isBridgeUser: false,
+        source: "legacy_id",
+      };
+    }
+  }
+
   if (isDiscordSnowflake(rawInput)) {
     const guild = await getContextGuild(context);
     if (guild) {
@@ -469,7 +482,11 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
   const dbNicknameRows = await userRepository.findByNormalizedNickname(normalizedInput);
   if (dbNicknameRows.length > 0) {
     const dbNicknameMembers = (
-      await Promise.all(dbNicknameRows.map(async (row) => guild.members.fetch(row.user_disc_id).catch(() => null)))
+      await Promise.all(
+        dbNicknameRows
+          .filter((row) => !isExternalUserId(row.user_disc_id))
+          .map(async (row) => guild.members.fetch(row.user_disc_id).catch(() => null)),
+      )
     ).filter((member): member is GuildMember => member !== null && !member.user.bot);
 
     const dedupedMatches = dedupeUserCandidates(

@@ -70,7 +70,7 @@ describe("PluralKit proxy expectations", () => {
       waitResult = result;
     });
 
-    await sleep(proxyExpectation.PLURALKIT_PROXY_WAIT_MS + 10);
+    await sleep(proxyExpectation.getPluralKitProxyWaitMs() + 10);
     expect(waitResult).toBeNull();
 
     endLookup();
@@ -86,7 +86,7 @@ describe("PluralKit proxy expectations", () => {
       originalReference: null,
     });
 
-    await sleep(proxyExpectation.PLURALKIT_EXPECTATION_TTL_MS + 10);
+    await sleep(proxyExpectation.getPluralKitExpectationTtlMs() + 10);
 
     expect(proxyExpectation.hasLivePluralKitProxyExpectations("channel_ttl")).toBe(false);
   });

@@ -47,17 +47,20 @@ function parseIntegerEnv(value: string | undefined, defaultValue: number, minimu
   return Math.max(parsed, minimum);
 }
 
-export const PLURALKIT_PROXY_WAIT_MS = parseIntegerEnv(process.env.PLURALKIT_PROXY_WAIT_MS, 2000, 0);
-export const PLURALKIT_EXPECTATION_TTL_MS = parseIntegerEnv(
-  process.env.PLURALKIT_EXPECTATION_TTL_MS,
-  10000,
-  Math.max(PLURALKIT_PROXY_WAIT_MS, 1),
-);
+// Timing envs are read lazily (per use, not at module load) so import order
+// never bakes stale values in — chat modules pull this file in transitively,
+// which would otherwise freeze defaults before test files can set overrides.
+export function getPluralKitProxyWaitMs(): number {
+  return parseIntegerEnv(process.env.PLURALKIT_PROXY_WAIT_MS, 2000, 0);
+}
 
-const CONFIRMED_PROXY_MESSAGE_TTL_MS = Math.max(
-  PLURALKIT_EXPECTATION_TTL_MS,
-  parseIntegerEnv(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000),
-);
+export function getPluralKitExpectationTtlMs(): number {
+  return parseIntegerEnv(process.env.PLURALKIT_EXPECTATION_TTL_MS, 10000, Math.max(getPluralKitProxyWaitMs(), 1));
+}
+
+function getConfirmedProxyMessageTtlMs(): number {
+  return Math.max(getPluralKitExpectationTtlMs(), parseIntegerEnv(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000));
+}
 
 const expectationsByChannel = new Map<string, Map<string, InternalPluralKitProxyExpectation>>();
 const proxyMessagesById = new Map<string, InternalPluralKitProxyMessageRecord>();
@@ -73,6 +76,8 @@ export function createPluralKitProxyExpectation(args: {
   deletePluralKitProxyExpectation(args.channelId, args.originalMessageId);
 
   const createdAt = Date.now();
+  const proxyWaitMs = getPluralKitProxyWaitMs();
+  const expectationTtlMs = getPluralKitExpectationTtlMs();
   let resolveWaitPromise: (result: PluralKitProxyWaitResult) => void = () => {};
   const waitPromise = new Promise<PluralKitProxyWaitResult>((resolve) => {
     resolveWaitPromise = resolve;
@@ -84,11 +89,11 @@ export function createPluralKitProxyExpectation(args: {
     senderDiscId: args.senderDiscId,
     state: "pending",
     createdAt,
-    expiresAt: createdAt + PLURALKIT_EXPECTATION_TTL_MS,
+    expiresAt: createdAt + expectationTtlMs,
     originalReference: args.originalReference,
     waitPromise,
     waitResolved: false,
-    waitDeadline: createdAt + PLURALKIT_PROXY_WAIT_MS,
+    waitDeadline: createdAt + proxyWaitMs,
     waitTimer: null,
     ttlTimer: null,
     resolveWait: (result) => {
@@ -105,7 +110,7 @@ export function createPluralKitProxyExpectation(args: {
   schedulePluralKitProxyWaitTimer(expectation);
   expectation.ttlTimer = setTimeout(() => {
     deletePluralKitProxyExpectation(expectation.channelId, expectation.originalMessageId);
-  }, PLURALKIT_EXPECTATION_TTL_MS);
+  }, expectationTtlMs);
 
   let channelExpectations = expectationsByChannel.get(args.channelId);
   if (!channelExpectations) {
@@ -196,20 +201,21 @@ export function rememberPluralKitProxyMessage(args: {
   deletePluralKitProxyMessageRecord(args.messageDiscId);
 
   const createdAt = Date.now();
+  const confirmedProxyMessageTtlMs = getConfirmedProxyMessageTtlMs();
   const record: InternalPluralKitProxyMessageRecord = {
     messageDiscId: args.messageDiscId,
     channelId: args.channelId,
     originalMessageId: args.expectation.originalMessageId,
     senderDiscId: args.expectation.senderDiscId,
     createdAt,
-    expiresAt: createdAt + CONFIRMED_PROXY_MESSAGE_TTL_MS,
+    expiresAt: createdAt + confirmedProxyMessageTtlMs,
     originalReference: args.expectation.originalReference,
     ttlTimer: null,
   };
 
   record.ttlTimer = setTimeout(() => {
     deletePluralKitProxyMessageRecord(record.messageDiscId);
-  }, CONFIRMED_PROXY_MESSAGE_TTL_MS);
+  }, confirmedProxyMessageTtlMs);
   proxyMessagesById.set(args.messageDiscId, record);
   return record;
 }

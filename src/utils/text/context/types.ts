@@ -4,6 +4,11 @@ import type { RequestSnapshot } from "@/types/misc/context";
 import type { PersonaUserBlockRow, ServerEmojiRow, ServerStickerRow, AssembledServerConfig } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 
+export type PluralKitConversationUser = {
+  displayName: string;
+  senderDiscId: string;
+};
+
 /**
  * Simplified message structure received from tomoriChat.ts.
  * This is an internal representation before converting to StructuredContextItem.
@@ -93,6 +98,8 @@ export interface BuildContextParams {
   matrixUsers?: Map<string, string>;
   /** Synthetic participants surfaced as user-like entries. */
   syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
+  /** PluralKit synthetic users seen in this history window. */
+  pluralKitUsers?: Map<string, PluralKitConversationUser>;
   /** Active persona-scoped user mutes/blocks for the responding persona. */
   personaUserBlocks?: PersonaUserBlockRow[];
   includeTimestamps?: boolean;

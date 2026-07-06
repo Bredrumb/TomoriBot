@@ -22,15 +22,23 @@ import {
 } from "@/utils/tools/deliberateToolMode";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import type { PluralKitConversationUser } from "@/utils/text/context/types";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
+import {
+  stripBridgePrefix,
+  extractBridgeUserId,
+  isMatrixBridgeWebhookUsername,
+  isBridgeUserId,
+  toPluralKitUserId,
+} from "@/utils/bridges";
 import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
 import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
+import { getPluralKitProxyMessageRecord } from "@/utils/chat/pluralkit/proxyExpectation";
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
@@ -54,12 +62,21 @@ import {
 } from "@/utils/chat/contextMedia";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
+import { getCachedMessageLookup } from "@/utils/pluralkit/pkApi";
+import { getPluralKitMemberDisplayName } from "@/utils/pluralkit/pkIdentity";
+import { pluralKitRepository } from "@/utils/db/repositories/PluralKitRepository";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
+
+type PluralKitHistoryIdentity = {
+  userDiscId: string;
+  displayName: string;
+  senderDiscId: string;
+};
 
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
@@ -279,6 +296,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     userList: Array.from(history.userIds),
     matrixUsers: history.matrixUsers,
     syntheticUsers: history.syntheticUsers,
+    pluralKitUsers: history.pluralKitUsers,
     personaUserBlocks: history.activeUserBlocks,
     channelDesc: turn.channelDescription,
     channelName: turn.channelName,
@@ -412,6 +430,7 @@ async function buildSimplifiedHistory(
   userIds: Set<string>;
   matrixUsers: Map<string, string>;
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
+  pluralKitUsers: Map<string, PluralKitConversationUser>;
   rawMessages: Message[];
   activeUserBlocks: PersonaUserBlockRow[];
 }> {
@@ -449,6 +468,7 @@ async function buildSimplifiedHistory(
     messages = messages.slice(startIndex);
   }
 
+  const pluralKitIdentitiesByMessageId = await resolvePluralKitMessageIdentitiesForHistory(messages);
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
   // notice that includes the remaining block duration (from expires_at). 'mute'
@@ -466,7 +486,9 @@ async function buildSimplifiedHistory(
   // below, which iterates the full (unfiltered) `messages` list instead.
   const visibleRawMessages =
     blockedContextUserIds.size > 0
-      ? messages.filter((msg) => !blockedContextUserIds.has(getBlockComparableAuthorId(msg)))
+      ? messages.filter(
+          (msg) => !blockedContextUserIds.has(getBlockComparableAuthorId(msg, pluralKitIdentitiesByMessageId)),
+        )
       : messages;
 
   // Pre-populate the voice transcript cache for historical audio messages (Fix #5).
@@ -494,6 +516,7 @@ async function buildSimplifiedHistory(
   const userIds = new Set<string>();
   const matrixUsers = new Map<string, string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
+  const pluralKitUsers = new Map<string, PluralKitConversationUser>();
   const personaByName = new Map(
     turn.allPersonas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
   );
@@ -511,13 +534,14 @@ async function buildSimplifiedHistory(
   // Iterate the full message list (not visibleRawMessages): blocked authors are
   // rendered as notices here rather than dropped.
   for (const msg of messages) {
-    if ((await getCachedPrivacyLevel(msg.author.id)) === PrivacyLevel.FULL) {
+    const pluralKitIdentity = pluralKitIdentitiesByMessageId.get(msg.id);
+    if ((await getCachedPrivacyLevel(pluralKitIdentity?.senderDiscId ?? msg.author.id)) === PrivacyLevel.FULL) {
       continue;
     }
 
     // 0. Blocked-author short-circuit: replace this user's live message with a
     //    single system notice instead of running the full simplify pipeline.
-    const blockComparableId = getBlockComparableAuthorId(msg);
+    const blockComparableId = getBlockComparableAuthorId(msg, pluralKitIdentitiesByMessageId);
     const activeContextBlock = blockedContextBlocksById.get(blockComparableId);
     if (activeContextBlock) {
       // Collapse a run of messages from the same blocked user into one notice.
@@ -548,6 +572,8 @@ async function buildSimplifiedHistory(
       messageIdMap,
       syntheticUsers,
       matrixUsers,
+      pluralKitIdentitiesByMessageId,
+      pluralKitUsers,
       reactionBudgetState,
       blockedContextUserIds,
     );
@@ -663,9 +689,60 @@ async function buildSimplifiedHistory(
     userIds,
     matrixUsers,
     syntheticUsers,
+    pluralKitUsers,
     rawMessages: visibleRawMessages,
     activeUserBlocks,
   };
+}
+
+async function resolvePluralKitMessageIdentitiesForHistory(
+  messages: Message[],
+): Promise<Map<string, PluralKitHistoryIdentity>> {
+  const identities = new Map<string, PluralKitHistoryIdentity>();
+  const messageById = new Map(messages.map((message) => [message.id, message]));
+  const dbLookupIds: string[] = [];
+  const seenDbLookupIds = new Set<string>();
+
+  for (const message of messages) {
+    if (!message.webhookId) continue;
+
+    const cachedLookup = getCachedMessageLookup(message.id);
+    if (cachedLookup?.member && cachedLookup.system && getPluralKitProxyMessageRecord(message.id)) {
+      identities.set(message.id, {
+        userDiscId: toPluralKitUserId(cachedLookup.member.uuid),
+        displayName:
+          getPluralKitMemberDisplayName(cachedLookup) ?? getWebhookDisplayName(message, cachedLookup.member.id),
+        senderDiscId: cachedLookup.sender,
+      });
+      continue;
+    }
+
+    if (!seenDbLookupIds.has(message.id)) {
+      seenDbLookupIds.add(message.id);
+      dbLookupIds.push(message.id);
+    }
+  }
+
+  const dbIdentities = await pluralKitRepository.getMessageIdentitiesByMessageIds(dbLookupIds);
+  if (!dbIdentities) {
+    return identities;
+  }
+
+  for (const [messageDiscId, identity] of dbIdentities.entries()) {
+    const message = messageById.get(messageDiscId);
+    identities.set(messageDiscId, {
+      userDiscId: identity.userDiscId,
+      displayName: identity.displayName ?? getWebhookDisplayName(message, identity.memberHid),
+      senderDiscId: identity.senderDiscId,
+    });
+  }
+
+  return identities;
+}
+
+function getWebhookDisplayName(message: Message | undefined, fallback: string): string {
+  const username = message?.author.username ?? "";
+  return stripBridgePrefix(username).trim() || username.trim() || fallback;
 }
 
 async function simplifyMessage(
@@ -675,6 +752,8 @@ async function simplifyMessage(
   messageIdMap: MessageIdMap,
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>,
   matrixUsers: Map<string, string>,
+  pluralKitIdentitiesByMessageId: Map<string, PluralKitHistoryIdentity>,
+  pluralKitUsers: Map<string, PluralKitConversationUser>,
   reactionBudgetState: ReactionContextBudgetState,
   blockedContextUserIds: Set<string>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
@@ -686,7 +765,15 @@ async function simplifyMessage(
     : isDebug
       ? msg.content.slice(2)
       : msg.content;
-  const replyContext = await withReplyContext(turn, msg, content, messageIdMap, personaByName, blockedContextUserIds);
+  const replyContext = await withReplyContext(
+    turn,
+    msg,
+    content,
+    messageIdMap,
+    personaByName,
+    blockedContextUserIds,
+    pluralKitIdentitiesByMessageId,
+  );
   content = replyContext.content;
   content = await withReactionContext(turn, msg, content, reactionBudgetState);
 
@@ -733,16 +820,27 @@ async function simplifyMessage(
       personaName = matchedPersona.persona_nickname;
       syntheticUsers.set(authorId, { displayName: authorName, type: "persona" });
     } else {
-      authorId = msg.webhookId ?? msg.author.id;
-      authorName = webhookName || msg.author.username;
-      const cachedImpersonatedUserId = getCachedImpersonatedUserIdForWebhook(msg.webhookId);
-      if (cachedImpersonatedUserId) {
-        authorId = cachedImpersonatedUserId;
-      }
-      const matrixId = extractBridgeUserId(msg.author.username);
-      if (matrixId) matrixUsers.set(matrixId, authorName);
-      if (!isMatrixBridgeWebhookUsername(msg.author.username) && !cachedImpersonatedUserId) {
+      const pluralKitIdentity = pluralKitIdentitiesByMessageId.get(msg.id);
+      if (pluralKitIdentity) {
+        authorId = pluralKitIdentity.userDiscId;
+        authorName = pluralKitIdentity.displayName;
         syntheticUsers.set(authorId, { displayName: authorName, type: "webhook" });
+        pluralKitUsers.set(authorId, {
+          displayName: authorName,
+          senderDiscId: pluralKitIdentity.senderDiscId,
+        });
+      } else {
+        authorId = msg.webhookId ?? msg.author.id;
+        authorName = webhookName || msg.author.username;
+        const cachedImpersonatedUserId = getCachedImpersonatedUserIdForWebhook(msg.webhookId);
+        if (cachedImpersonatedUserId) {
+          authorId = cachedImpersonatedUserId;
+        }
+        const matrixId = extractBridgeUserId(msg.author.username);
+        if (matrixId) matrixUsers.set(matrixId, authorName);
+        if (!isMatrixBridgeWebhookUsername(msg.author.username) && !cachedImpersonatedUserId) {
+          syntheticUsers.set(authorId, { displayName: authorName, type: "webhook" });
+        }
       }
     }
   } else {
@@ -852,6 +950,7 @@ async function withReplyContext(
   messageIdMap: MessageIdMap,
   personaByNickname: Map<string, ChatTurn["persona"]>,
   blockedContextUserIds: Set<string>,
+  pluralKitIdentitiesByMessageId: Map<string, PluralKitHistoryIdentity>,
 ): Promise<{ content: string; referencedMessage?: Message }> {
   if (msg.reference?.type === MessageReferenceType.Forward || !("messages" in msg.channel)) {
     return { content };
@@ -867,7 +966,7 @@ async function withReplyContext(
     }
     const referenced =
       msg.channel.messages.cache.get(referenceMessageId) ?? (await msg.channel.messages.fetch(referenceMessageId));
-    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced))) {
+    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced, pluralKitIdentitiesByMessageId))) {
       return { content };
     }
     const annotation = await buildReplyReferenceContextAnnotation({
@@ -895,7 +994,14 @@ async function loadActivePersonaUserBlocks(turn: ChatTurn): Promise<PersonaUserB
   return getCachedActiveBlocksForPersona(turn.persona.server_id, turn.persona.persona_id);
 }
 
-function getBlockComparableAuthorId(msg: Message): string {
+function getBlockComparableAuthorId(
+  msg: Message,
+  pluralKitIdentitiesByMessageId?: Map<string, PluralKitHistoryIdentity>,
+): string {
+  const pluralKitIdentity = pluralKitIdentitiesByMessageId?.get(msg.id);
+  if (pluralKitIdentity) {
+    return pluralKitIdentity.senderDiscId;
+  }
   if (msg.webhookId) {
     return getCachedImpersonatedUserIdForWebhook(msg.webhookId) ?? msg.author.id;
   }

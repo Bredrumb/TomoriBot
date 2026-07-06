@@ -1,6 +1,7 @@
 import { GatewayIntentBits, type Client, type Guild, type GuildMember } from "discord.js";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
+import { pluralKitRepository, type PluralKitMemberContext } from "@/utils/db/repositories/PluralKitRepository";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { log } from "@/utils/misc/logger";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
@@ -12,6 +13,7 @@ import {
 } from "@/utils/text/timezoneHelper";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
 import { PrivacyLevel, type AssembledServerConfig, type ReminderRow, type TomoriState } from "@/types/db/schema";
+import { isPluralKitUserId } from "@/utils/bridges";
 import { getUserPresenceDetails } from "./history";
 import type { MentionConverter } from "./templates";
 
@@ -79,6 +81,7 @@ export async function buildUsersInConversationContextItem(params: {
   impersonatedIdentityName: string | null;
   matrixUsers?: Map<string, string>;
   syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
+  pluralKitUsers?: Map<string, import("./types").PluralKitConversationUser>;
   publicPersonaAttributes?: Array<{ personaId: number; personaName: string; attributes: string[] }>;
   toolPromptMacroResolver: { expand(text: string): Promise<string> };
   conversationCorpus: string | null;
@@ -123,10 +126,12 @@ export async function buildUsersInConversationContextItem(params: {
       continue;
     }
 
+    const isPluralKitConversationUser = isPluralKitUserId(userIdToProcess);
     let userRow = await userRepository.loadByDiscordId(userIdToProcess).catch(() => null);
     if (!userRow) {
       const guild = params.client.guilds.cache.get(params.guildId);
-      const member = guild ? await guild.members.fetch(userIdToProcess).catch(() => null) : null;
+      const member =
+        guild && !isPluralKitConversationUser ? await guild.members.fetch(userIdToProcess).catch(() => null) : null;
       if (guild && member) {
         const userLanguage = guild.preferredLocale.startsWith("ja") ? "ja" : "en-US";
         const registrationDisplayName = resolvePreferredDiscordDisplayName({
@@ -157,31 +162,53 @@ export async function buildUsersInConversationContextItem(params: {
     }
 
     const guild = params.client.guilds.cache.get(params.guildId);
-    const member = guild ? await guild.members.fetch(userIdToProcess).catch(() => null) : null;
-    const fallbackUser = member ? null : await params.client.users.fetch(userIdToProcess).catch(() => null);
+    const isPluralKitUser = isPluralKitUserId(userRow.user_disc_id);
+    const pluralKitContext = isPluralKitUser
+      ? await pluralKitRepository.getMemberContextByUserDiscId(userRow.user_disc_id)
+      : null;
+    const member = guild && !isPluralKitUser ? await guild.members.fetch(userIdToProcess).catch(() => null) : null;
+    const fallbackUser =
+      member || isPluralKitUser ? null : await params.client.users.fetch(userIdToProcess).catch(() => null);
     const serverPersonalizationEnabled = params.tomoriConfig.personal_memories_enabled ?? true;
     const isTriggererId = params.snapshot?.triggererUserRow?.user_disc_id === userRow.user_disc_id;
-    const userIsBlacklisted = isTriggererId
+    let userIsBlacklisted = isTriggererId
       ? (params.snapshot?.isTriggererBlacklisted ?? false)
       : await userRepository.isBlacklisted(params.guildId, userRow.user_disc_id);
-    const userPrivacyLevel = isTriggererId
+    let userPrivacyLevel = isTriggererId
       ? (params.snapshot?.triggererPrivacyLevel ?? PrivacyLevel.MINIMAL)
       : await userRepository.getPrivacyLevel(userRow.user_disc_id);
+    if (isPluralKitUser) {
+      const preferredHostDiscId = params.pluralKitUsers?.get(userRow.user_disc_id)?.senderDiscId;
+      const hostDiscIds = getPluralKitHostDiscIds(pluralKitContext, preferredHostDiscId);
+      const hostPrivacyFull = await hasAnyHostPrivacyLevel(hostDiscIds, PrivacyLevel.FULL);
+      const hostBlacklisted = await hasAnyHostBlacklisted(hostDiscIds, params.guildId);
+      if (hostPrivacyFull) userPrivacyLevel = PrivacyLevel.FULL;
+      userIsBlacklisted = userIsBlacklisted || hostBlacklisted;
+    }
 
     const customNickname = userRow.user_nickname;
     const serverNickname = member?.nickname;
     const username = member?.user.username ?? fallbackUser?.username ?? null;
     const globalName = member?.user.globalName ?? fallbackUser?.globalName ?? null;
-    const canUseCustomNickname =
-      customNickname && serverPersonalizationEnabled && !userIsBlacklisted && userPrivacyLevel !== PrivacyLevel.FULL;
+    const pluralKitWindowName = isPluralKitUser ? params.pluralKitUsers?.get(userRow.user_disc_id)?.displayName : null;
+    const pluralKitDisplayName = isPluralKitUser
+      ? (pluralKitWindowName ?? pluralKitContext?.displayName ?? customNickname ?? userRow.user_disc_id)
+      : null;
+    const canUseCustomNickname = Boolean(
+      customNickname && serverPersonalizationEnabled && !userIsBlacklisted && userPrivacyLevel !== PrivacyLevel.FULL,
+    );
     const shouldIncludeCustomNicknameAlias =
       customNickname && serverPersonalizationEnabled && !userIsBlacklisted && (!serverNickname || canUseCustomNickname);
 
-    let displayName = canUseCustomNickname
-      ? customNickname
-      : serverNickname
-        ? serverNickname
-        : `<@${userRow.user_disc_id}>`;
+    let displayName = isPluralKitUser
+      ? canUseCustomNickname && customNickname
+        ? (pluralKitDisplayName ?? customNickname)
+        : (pluralKitDisplayName ?? customNickname ?? userRow.user_disc_id)
+      : canUseCustomNickname && customNickname
+        ? customNickname
+        : serverNickname
+          ? serverNickname
+          : `<@${userRow.user_disc_id}>`;
     if (
       params.isUserImpersonation &&
       userRow.user_disc_id === params.impersonatedUserId &&
@@ -199,6 +226,7 @@ export async function buildUsersInConversationContextItem(params: {
       serverPersonalizationEnabled,
       userIsBlacklisted,
       userPrivacyLevel,
+      pluralKitContext,
     });
 
     const aliasSet = new Set<string>();
@@ -209,19 +237,26 @@ export async function buildUsersInConversationContextItem(params: {
     ) {
       addAlias(aliasCounts, aliasSet, params.impersonatedIdentityName);
     }
-    if (shouldIncludeCustomNicknameAlias) addAlias(aliasCounts, aliasSet, customNickname);
-    if (serverNickname) addAlias(aliasCounts, aliasSet, serverNickname);
-    if (globalName) addAlias(aliasCounts, aliasSet, globalName);
-    if (username) addAlias(aliasCounts, aliasSet, username);
+    if (isPluralKitUser) {
+      addAlias(aliasCounts, aliasSet, pluralKitDisplayName);
+      addAlias(aliasCounts, aliasSet, customNickname);
+    } else {
+      if (shouldIncludeCustomNicknameAlias) addAlias(aliasCounts, aliasSet, customNickname);
+      if (serverNickname) addAlias(aliasCounts, aliasSet, serverNickname);
+      if (globalName) addAlias(aliasCounts, aliasSet, globalName);
+      if (username) addAlias(aliasCounts, aliasSet, username);
+    }
 
     const primaryAlias =
       params.isUserImpersonation &&
       userRow.user_disc_id === params.impersonatedUserId &&
       params.impersonatedIdentityName
         ? params.impersonatedIdentityName
-        : canUseCustomNickname
-          ? customNickname
-          : (serverNickname ?? globalName ?? username ?? userRow.user_disc_id);
+        : isPluralKitUser
+          ? (pluralKitDisplayName ?? customNickname ?? userRow.user_disc_id)
+          : canUseCustomNickname && customNickname
+            ? customNickname
+            : (serverNickname ?? globalName ?? username ?? userRow.user_disc_id);
     if (aliasSet.size === 0) {
       addAlias(aliasCounts, aliasSet, primaryAlias);
     }
@@ -237,7 +272,7 @@ export async function buildUsersInConversationContextItem(params: {
       isBot: false,
       mentionAliases: Array.from(aliasSet),
       primaryAlias,
-      mentionable: true,
+      mentionable: !isPluralKitUser,
       resolvableTargetId: userRow.user_disc_id,
     });
   }
@@ -278,13 +313,26 @@ async function buildUserDetailLines(
     serverPersonalizationEnabled: boolean;
     userIsBlacklisted: boolean;
     userPrivacyLevel: PrivacyLevel;
+    pluralKitContext: PluralKitMemberContext | null;
   },
 ): Promise<string[]> {
   const detailLines: string[] = [];
+  const isPluralKitUser = isPluralKitUserId(params.userRow.user_disc_id);
+
+  if (isPluralKitUser) {
+    detailLines.push(...(await buildPluralKitDetailLines(params)));
+  }
 
   if (params.userPrivacyLevel === PrivacyLevel.MINIMAL) {
     const hasPresenceIntent = params.client.options.intents?.has(GatewayIntentBits.GuildPresences);
-    if (params.isDMChannel) {
+    if (isPluralKitUser) {
+      const preferredHostDiscId = params.pluralKitUsers?.get(params.userRow.user_disc_id)?.senderDiscId;
+      const hostDiscId = getPluralKitHostDiscIds(params.pluralKitContext, preferredHostDiscId)[0];
+      if (hasPresenceIntent && hostDiscId) {
+        const presenceInfo = await getUserPresenceDetails(params.client, hostDiscId, params.guildId);
+        detailLines.push(`- Host Status: ${presenceInfo}`);
+      }
+    } else if (params.isDMChannel) {
       detailLines.push("- Status: Online (Direct Message)");
     } else if (hasPresenceIntent) {
       const presenceInfo =
@@ -363,7 +411,11 @@ async function buildUserDetailLines(
           return formatMemoryWithId(memoryRow.personal_memory_id ?? index + 1, processedMemory, memoryRow.tags ?? []);
         }),
       );
-      detailLines.push(`- Memories: ${processedMemories.join("; ")}`);
+      detailLines.push(
+        isPluralKitUser
+          ? `- ${params.displayName}'s memories: ${processedMemories.join("; ")}`
+          : `- Memories: ${processedMemories.join("; ")}`,
+      );
     }
   }
 
@@ -380,6 +432,90 @@ async function buildUserDetailLines(
   }
 
   return detailLines;
+}
+
+async function buildPluralKitDetailLines(params: Parameters<typeof buildUserDetailLines>[0]): Promise<string[]> {
+  const pluralKitContext = params.pluralKitContext;
+  if (!pluralKitContext) {
+    return [];
+  }
+
+  const detailLines = [
+    `- Member of ${formatPluralKitSystemLabel(pluralKitContext)}; messages from this system's members arrive through the same Discord account`,
+  ];
+  const preferredHostDiscId = params.pluralKitUsers?.get(params.userRow.user_disc_id)?.senderDiscId;
+  const hostDiscIds = getPluralKitHostDiscIds(pluralKitContext, preferredHostDiscId);
+  if (hostDiscIds.length > 0) {
+    const hostLabels = await Promise.all(hostDiscIds.map((hostDiscId) => resolveHostAccountLabel(params, hostDiscId)));
+    detailLines.push(`- Host account: ${hostLabels.join(", ")}`);
+  }
+  return detailLines;
+}
+
+function formatPluralKitSystemLabel(pluralKitContext: PluralKitMemberContext): string {
+  const systemName = pluralKitContext.systemName?.trim();
+  if (systemName) {
+    return `the "${systemName}" plural system`;
+  }
+
+  const systemTag = pluralKitContext.systemTag?.trim();
+  if (systemTag) {
+    return `${systemTag} plural system`;
+  }
+
+  return "a plural system";
+}
+
+function getPluralKitHostDiscIds(
+  pluralKitContext: PluralKitMemberContext | null,
+  preferredHostDiscId?: string | null,
+): string[] {
+  const ordered = new Set<string>();
+  if (preferredHostDiscId?.trim()) {
+    ordered.add(preferredHostDiscId.trim());
+  }
+  for (const hostDiscId of pluralKitContext?.hostUserDiscIds ?? []) {
+    const trimmed = hostDiscId.trim();
+    if (trimmed) ordered.add(trimmed);
+  }
+  return Array.from(ordered);
+}
+
+async function hasAnyHostPrivacyLevel(hostDiscIds: string[], privacyLevel: PrivacyLevel): Promise<boolean> {
+  for (const hostDiscId of hostDiscIds) {
+    if ((await userRepository.getPrivacyLevel(hostDiscId)) === privacyLevel) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function hasAnyHostBlacklisted(hostDiscIds: string[], guildId: string): Promise<boolean> {
+  for (const hostDiscId of hostDiscIds) {
+    if (await userRepository.isBlacklisted(guildId, hostDiscId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function resolveHostAccountLabel(
+  params: Parameters<typeof buildUserDetailLines>[0],
+  hostDiscId: string,
+): Promise<string> {
+  const member = params.guild ? await params.guild.members.fetch(hostDiscId).catch(() => null) : null;
+  const fallbackUser = member ? null : await params.client.users.fetch(hostDiscId).catch(() => null);
+  const userRow = await userRepository.loadByDiscordId(hostDiscId).catch(() => null);
+  const displayName =
+    member?.displayName?.trim() ||
+    userRow?.user_nickname?.trim() ||
+    fallbackUser?.globalName?.trim() ||
+    fallbackUser?.username?.trim() ||
+    `<@${hostDiscId}>`;
+  const username = member?.user.username?.trim() ?? fallbackUser?.username?.trim() ?? null;
+  return username && displayName.toLowerCase() !== username.toLowerCase()
+    ? `${displayName} (@${username})`
+    : displayName;
 }
 
 function appendMatrixAndSyntheticUsers(

@@ -8,6 +8,7 @@ import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema }
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
+import { getPluralKitHostProtection } from "@/utils/pluralkit/hostProtection";
 
 /**
  * Tool for remembering and learning new information during conversations
@@ -414,6 +415,28 @@ export class MemoryTool extends BaseTool {
           };
         }
         const targetUserDisplayName = resolvedTargetUserLabel || targetUserRow.user_nickname;
+        const contextServerDiscId = "guild" in context.channel ? context.channel.guild.id : context.userId;
+        const pluralKitHostProtection = await getPluralKitHostProtection(
+          resolvedTargetUserId as string,
+          contextServerDiscId,
+        );
+        if (pluralKitHostProtection.protected) {
+          log.info(
+            `Self-teach blocked: PluralKit member ${resolvedTargetUserId} is shielded by host ${pluralKitHostProtection.hostUserDiscId} (${pluralKitHostProtection.reason})`,
+          );
+          return {
+            success: false,
+            error: `Cannot save personal memory: ${targetUserDisplayName} has privacy restrictions.`,
+            data: {
+              status: "memory_save_failed_privacy_restricted",
+              scope: "target_user",
+              reason:
+                pluralKitHostProtection.reason === "host_blacklisted"
+                  ? `The host account for ${targetUserDisplayName} is blacklisted in this server. I cannot save personal memories for their PluralKit members.`
+                  : `The host account for ${targetUserDisplayName} has full privacy enabled. I cannot save personal memories for their PluralKit members.`,
+            },
+          };
+        }
 
         // Check if user has opted out of personalization (privacy setting)
         const { PrivacyLevel } = await import("../../types/db/schema");
@@ -491,7 +514,8 @@ export class MemoryTool extends BaseTool {
             throw new Error("Critical security error: No valid server or user ID available for blacklist checking");
           }
           const targetUserIsBlacklisted =
-            (await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false;
+            ((await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false) ||
+            (await getPluralKitHostProtection(resolvedTargetUserId as string, serverDiscId)).protected;
 
           let personalMemoryFooterKey: string;
           if (!personalizationEnabled) {

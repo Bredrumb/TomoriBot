@@ -11,7 +11,13 @@ import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHel
 import { sendUserTranscriptViaWebhook } from "@/utils/discord/webhook/webhookCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
-import { doesMessageMatchTrigger, isMatrixRelayMessage, isRealUserLikeMessage } from "@/utils/chat/triggerProcessor";
+import {
+  doesMessageMatchTrigger,
+  isMatrixRelayMessage,
+  isRealUserLikeMessage,
+  isSelfTriggerMessage,
+} from "@/utils/chat/triggerProcessor";
+import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
 import { isActiveNaturalStopTurn, selfReplySuppressionUntil } from "@/utils/chat/channelQueue";
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
@@ -34,6 +40,9 @@ import {
 } from "@/utils/chat/selfReplyState";
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
 import { fetchMessage } from "@/utils/pluralkit/pkApi";
+import type { PkMessageLookup } from "@/utils/pluralkit/pkApi";
+import { toPluralKitMemberIdentityInput } from "@/utils/pluralkit/pkIdentity";
+import { pluralKitRepository } from "@/utils/db/repositories/PluralKitRepository";
 import type { Message } from "discord.js";
 
 export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
@@ -315,6 +324,24 @@ async function resolvePluralKitProxyRecord(
     return null;
   }
 
+  // Client-owned webhooks (persona replies, user impersonation) can never be
+  // PluralKit reposts. Skipping them matters: the lookup below burns PK's
+  // shared 5 rps budget on guaranteed 404s, stalls this message's admission
+  // for the full retry cap, and extends live speedbump waits (in-flight
+  // lookups pause the channel's wait timers). Tradeoff: a PK member whose
+  // display name exactly matches a persona nickname is misclassified as self
+  // and falls back to plain-webhook behavior — same pre-existing hazard class
+  // as Matrix users named after personas in shouldBotReply.
+  if (getCachedImpersonatedUserIdForWebhook(message.webhookId)) {
+    return null;
+  }
+  if (message.guildId) {
+    const allPersonas = await getCachedAllPersonas(message.guildId);
+    if (isSelfTriggerMessage(message, allPersonas)) {
+      return null;
+    }
+  }
+
   const endLookup = beginPluralKitProxyLookup(message.channelId);
   const lookup = await fetchMessage(message.id).finally(endLookup);
   if (!lookup?.member || !lookup.system) {
@@ -325,6 +352,8 @@ async function resolvePluralKitProxyRecord(
   if (!expectation) {
     return null;
   }
+
+  await persistPluralKitLookupIdentity(message.id, lookup);
 
   markPluralKitProxyExpectationProxied(expectation);
   const record = rememberPluralKitProxyMessage({
@@ -338,6 +367,22 @@ async function resolvePluralKitProxyRecord(
     `Confirmed PluralKit proxy message ${message.id} for original ${expectation.originalMessageId} in channel ${message.channelId}`,
   );
   return record;
+}
+
+async function persistPluralKitLookupIdentity(messageDiscId: string, lookup: PkMessageLookup): Promise<void> {
+  const identityInput = toPluralKitMemberIdentityInput(lookup);
+  if (!identityInput) {
+    return;
+  }
+
+  const identity = await pluralKitRepository.upsertMemberIdentity(identityInput);
+  if (!identity?.member.external_identity_id || !identity.system.pk_system_id) {
+    log.warn(`PluralKit identity upsert failed for proxy message ${messageDiscId}; continuing without DB identity`);
+    return;
+  }
+
+  await pluralKitRepository.linkHostAccount(identity.system.pk_system_id, lookup.sender);
+  await pluralKitRepository.recordMessageIndex(messageDiscId, identity.member.external_identity_id, lookup.sender);
 }
 
 async function evaluatePluralKitOriginalSpeedbump(args: {

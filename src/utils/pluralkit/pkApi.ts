@@ -202,3 +202,15 @@ export async function fetchMessage(messageId: string): Promise<PkMessageLookup |
   inFlightLookups.set(messageId, lookupPromise);
   return lookupPromise;
 }
+
+/**
+ * Returns a successful in-process PluralKit message lookup without making any
+ * network request. Context rebuilding uses this before falling back to the
+ * durable DB index; it must never call the PluralKit API.
+ *
+ * @param messageId - Discord webhook/proxy message ID
+ * @returns Cached lookup, or null when this process has not resolved it
+ */
+export function getCachedMessageLookup(messageId: string): PkMessageLookup | null {
+  return identityCache.get(messageId) ?? null;
+}
