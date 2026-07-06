@@ -42,6 +42,7 @@ import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatI
 import { fetchMessage } from "@/utils/pluralkit/pkApi";
 import type { PkMessageLookup } from "@/utils/pluralkit/pkApi";
 import { toPluralKitMemberIdentityInput } from "@/utils/pluralkit/pkIdentity";
+import { seedPluralKitMemberBio } from "@/utils/pluralkit/bioSeeding";
 import { pluralKitRepository } from "@/utils/db/repositories/PluralKitRepository";
 import type { Message } from "discord.js";
 
@@ -353,7 +354,7 @@ async function resolvePluralKitProxyRecord(
     return null;
   }
 
-  await persistPluralKitLookupIdentity(message.id, lookup);
+  await persistPluralKitLookupIdentity(message.id, lookup, message.guildId ?? null);
 
   markPluralKitProxyExpectationProxied(expectation);
   const record = rememberPluralKitProxyMessage({
@@ -369,7 +370,11 @@ async function resolvePluralKitProxyRecord(
   return record;
 }
 
-async function persistPluralKitLookupIdentity(messageDiscId: string, lookup: PkMessageLookup): Promise<void> {
+async function persistPluralKitLookupIdentity(
+  messageDiscId: string,
+  lookup: PkMessageLookup,
+  serverDiscId: string | null,
+): Promise<void> {
   const identityInput = toPluralKitMemberIdentityInput(lookup);
   if (!identityInput) {
     return;
@@ -383,6 +388,19 @@ async function persistPluralKitLookupIdentity(messageDiscId: string, lookup: PkM
 
   await pluralKitRepository.linkHostAccount(identity.system.pk_system_id, lookup.sender);
   await pluralKitRepository.recordMessageIndex(messageDiscId, identity.member.external_identity_id, lookup.sender);
+
+  // Fire-and-forget: the one-time bio seed (§7.7) must never delay this reply's
+  // admission, and a seeding failure must never surface to the conversation.
+  if (identity.userRow.user_id) {
+    void seedPluralKitMemberBio({
+      isNewMember: identity.isNewMember,
+      memberUserDiscId: identity.userRow.user_disc_id,
+      memberUserId: identity.userRow.user_id,
+      memberDisplayName: identityInput.displayName ?? identityInput.memberHid,
+      description: lookup.member?.description,
+      serverDiscId,
+    }).catch((error) => log.warn(`PluralKit bio seed failed for ${identity.userRow.user_disc_id}`, error));
+  }
 }
 
 async function evaluatePluralKitOriginalSpeedbump(args: {

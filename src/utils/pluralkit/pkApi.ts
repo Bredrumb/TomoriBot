@@ -45,6 +45,8 @@ export interface PkMemberInfo {
   name: string;
   /** Cosmetic display name; falls back to `name` when unset */
   display_name?: string | null;
+  /** Member bio text; used only for one-time seeding (§7.7), never live-injected */
+  description?: string | null;
 }
 
 /** Resolved PluralKit identity behind a proxied webhook message */
