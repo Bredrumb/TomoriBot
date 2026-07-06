@@ -2,7 +2,7 @@ import type { AnyThreadChannel, Guild } from "discord.js";
 import { BaseGuildTextChannel, ChannelType, DMChannel, EmbedBuilder } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
-import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
@@ -16,11 +16,24 @@ import { isActiveNaturalStopTurn, selfReplySuppressionUntil } from "@/utils/chat
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
 import {
+  applyPluralKitProxyReference,
+  beginPluralKitProxyLookup,
+  createPluralKitProxyExpectation,
+  findMatchingPluralKitProxyExpectation,
+  getPluralKitProxyMessageRecord,
+  hasLivePluralKitProxyExpectations,
+  markPluralKitProxyExpectationProxied,
+  rememberPluralKitProxyMessage,
+  waitForPluralKitProxyExpectation,
+  type PluralKitProxyMessageRecord,
+} from "@/utils/chat/pluralkit/proxyExpectation";
+import {
   getSelfReplyChainOriginUser,
   setSelfReplyChainOriginUser,
   updateSelfReplyChainState,
 } from "@/utils/chat/selfReplyState";
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
+import { fetchMessage } from "@/utils/pluralkit/pkApi";
 import type { Message } from "discord.js";
 
 export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
@@ -78,7 +91,9 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   const isInteractionResponse = Boolean(message.interaction);
   const isFromClientUser = Boolean(client.user && message.author.id === client.user.id);
   const isMatrixRelay = isMatrixRelayMessage(message);
-  const isLikelySelfMessage = !isMatrixRelay && (isFromClientUser || isWebhookMessage);
+  const pluralKitProxyRecord = await resolvePluralKitProxyRecord(message, isWebhookMessage, isMatrixRelay);
+  const isPluralKitProxy = Boolean(pluralKitProxyRecord);
+  const isLikelySelfMessage = !isMatrixRelay && !isPluralKitProxy && (isFromClientUser || isWebhookMessage);
   const isRealUserMessage = isRealUserLikeMessage(message);
   const isActiveNaturalStopMessage =
     !incoming.isStopResponse &&
@@ -183,7 +198,11 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
 
   const chainOriginUserDiscId =
     !incoming.isManuallyTriggered && isLikelySelfMessage ? getSelfReplyChainOriginUser(channel.id) : null;
-  const userDiscId = incoming.manualTriggerInvoker?.userDiscId ?? chainOriginUserDiscId ?? message.author.id;
+  const userDiscId =
+    incoming.manualTriggerInvoker?.userDiscId ??
+    pluralKitProxyRecord?.senderDiscId ??
+    chainOriginUserDiscId ??
+    message.author.id;
   const matrixRelayUserId = isMatrixRelay ? extractBridgeUserId(message.author.username) : undefined;
   const cooldownUserDiscId = matrixRelayUserId ?? userDiscId;
 
@@ -216,6 +235,16 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     if (!canSend) {
       return blocked("cannot_send_in_channel");
     }
+  }
+
+  const pluralKitOriginalDisposition = await evaluatePluralKitOriginalSpeedbump({
+    incoming,
+    userDiscId,
+    isRealUserMessage,
+    ignored,
+  });
+  if (pluralKitOriginalDisposition) {
+    return pluralKitOriginalDisposition;
   }
 
   const { earlyTomoriState, earlyAllPersonas } = await loadEarlyTomoriState(channelScope.serverDiscId, channel.id);
@@ -269,6 +298,88 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     allPersonas: earlyAllPersonas,
     cooldownUserDiscId,
   };
+}
+
+async function resolvePluralKitProxyRecord(
+  message: Message,
+  isWebhookMessage: boolean,
+  isMatrixRelay: boolean,
+): Promise<PluralKitProxyMessageRecord | null> {
+  const knownRecord = getPluralKitProxyMessageRecord(message.id);
+  if (knownRecord) {
+    applyPluralKitProxyReference(message);
+    return knownRecord;
+  }
+
+  if (!isWebhookMessage || isMatrixRelay || !hasLivePluralKitProxyExpectations(message.channelId)) {
+    return null;
+  }
+
+  const endLookup = beginPluralKitProxyLookup(message.channelId);
+  const lookup = await fetchMessage(message.id).finally(endLookup);
+  if (!lookup?.member || !lookup.system) {
+    return null;
+  }
+
+  const expectation = findMatchingPluralKitProxyExpectation(message.channelId, lookup);
+  if (!expectation) {
+    return null;
+  }
+
+  markPluralKitProxyExpectationProxied(expectation);
+  const record = rememberPluralKitProxyMessage({
+    messageDiscId: message.id,
+    channelId: message.channelId,
+    expectation,
+  });
+  applyPluralKitProxyReference(message);
+
+  log.info(
+    `Confirmed PluralKit proxy message ${message.id} for original ${expectation.originalMessageId} in channel ${message.channelId}`,
+  );
+  return record;
+}
+
+async function evaluatePluralKitOriginalSpeedbump(args: {
+  incoming: ChatIncoming;
+  userDiscId: string;
+  isRealUserMessage: boolean;
+  ignored: (reason: string) => NonRunnableChatAdmission;
+}): Promise<NonRunnableChatAdmission | null> {
+  const { incoming, userDiscId, isRealUserMessage, ignored } = args;
+  const { message } = incoming;
+  if (
+    incoming.isFromQueue ||
+    incoming.isManuallyTriggered ||
+    incoming.isStopResponse ||
+    incoming.reminderRecipientID ||
+    incoming.reminderData?.self_reminder ||
+    incoming.isPersonaJob ||
+    !isRealUserMessage ||
+    message.author.bot ||
+    message.webhookId ||
+    !message.guild
+  ) {
+    return null;
+  }
+
+  const userRow = await getCachedUserRow(userDiscId);
+  if (!userRow?.pluralkit_enabled) {
+    return null;
+  }
+
+  const expectation = createPluralKitProxyExpectation({
+    channelId: message.channelId,
+    originalMessageId: message.id,
+    senderDiscId: userDiscId,
+    originalReference: message.reference,
+  });
+  const waitResult = await waitForPluralKitProxyExpectation(expectation);
+  if (waitResult === "proxied") {
+    return ignored("pluralkit_proxied");
+  }
+
+  return null;
 }
 
 async function evaluateAudioTranscriptionAdmission(args: {

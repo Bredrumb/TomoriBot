@@ -4,6 +4,7 @@ import type {
   GuildMember,
   Interaction,
   Message,
+  PartialMessage,
   PermissionsBitField,
   Presence,
   VoiceState,
@@ -70,6 +71,7 @@ export type EventArg =
   | GuildMember
   | Interaction
   | Message
+  | PartialMessage
   | GuildEmoji
   | Sticker;
 

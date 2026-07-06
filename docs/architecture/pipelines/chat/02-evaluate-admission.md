@@ -58,6 +58,13 @@ non-runnable dispositions.
 - **Persona-job mutation** — if the message is a likely-self message and not
   manually triggered, sets `incoming.isPersonaJob = true` so downstream stages
   can distinguish persona-driven self-replies from user messages.
+- **PluralKit proxy speedbump** — for users with `users.pluralkit_enabled`,
+  normal guild messages create a short-lived proxy expectation and wait up to
+  `PLURALKIT_PROXY_WAIT_MS`. A matching `messageDelete` event marks the
+  original as proxied and returns `ignore: "pluralkit_proxied"`. A matching
+  webhook repost is confirmed through the PluralKit message API, inherits the
+  original reply reference, and is admitted as a real user message. Privacy,
+  cooldown, quota, and access checks key on the host account (`sender`).
 
 ## Invariants
 
@@ -70,6 +77,9 @@ After this stage runs:
 - An audio transcript that succeeded leaves a `voice_transcript` cache entry
   keyed by message ID (legacy mode) or a posted webhook message (chat mode),
   not both.
+- PluralKit API lookups are only attempted while a live channel-scoped
+  expectation exists; unrelated webhooks outside that window keep the normal
+  persona/self-message behavior.
 
 ## Extension points
 
@@ -79,6 +89,7 @@ Extensibility lives in the helpers it calls:
 | Helper | File | What it does | Plugin-relevance |
 |---|---|---|---|
 | `isMatrixRelayMessage`, `isRealUserLikeMessage` | `triggerProcessor.ts` | Trigger-source classification | A new bridge plugin would extend trigger detection here |
+| `createPluralKitProxyExpectation`, `beginPluralKitProxyLookup` | `pluralkit/proxyExpectation.ts` | In-memory PluralKit original/repost matching and wait-window lifecycle | Internal — coupled to Discord delete/repost ordering and PK API lookup timing |
 | `transcribeMessageAudioAttachment` | `audioAttachmentTranscription.ts` | STT dispatch | STT providers register via `customEndpointService` — existing mechanism, not chat-specific |
 | `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree; includes cross-persona trigger guard that bypasses the follow-up path when the incoming message explicitly targets a different persona than the active one | → plugin plan candidate if plugins want to add admission policies |
 | `getSelfReplyChainOriginUser`, `updateSelfReplyChainState` | `selfReplyState.ts` | Self-reply chain memory | Internal — tightly coupled to cascade-trigger limit semantics |

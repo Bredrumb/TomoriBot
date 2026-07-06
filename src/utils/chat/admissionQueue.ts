@@ -387,7 +387,7 @@ async function evaluateEarlyAccessState(args: {
     isSelfMessage: args.isSelfMessage,
     isAutochatOverride: isAutochatOverrideChannel(args.tomoriState.config, args.channelIds.effectiveChannelId),
     guildDiscId: args.channelScope.guild.id,
-    fallbackUserDiscId: args.incoming.message.author.id,
+    fallbackUserDiscId: args.userDiscId,
     message: args.incoming.message,
     memberRoleDiscIds: args.incoming.manualTriggerInvoker?.member
       ? args.incoming.manualTriggerInvoker.member.roles.cache.map((role) => role.id)

@@ -37,6 +37,7 @@ import {
   isAutochatOverrideChannel,
   isAutochatQualifyingMessage,
   isMatrixRelayMessage,
+  isPluralKitProxyMessage,
   isSelfTriggerMessage,
 } from "@/utils/chat/triggerProcessor";
 import { getLastRespondedPersonaId, getSelfReplyChainState } from "@/utils/chat/selfReplyState";
@@ -97,11 +98,13 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   admission.allPersonas = allPersonas;
 
   const isSelfMessage = isSelfTriggerMessage(message, allPersonas);
+  const isPluralKitProxy = isPluralKitProxyMessage(message);
   if (
     (message.author.bot || message.webhookId) &&
     !isSelfMessage &&
     !incoming.isManuallyTriggered &&
-    !isMatrixRelayMessage(message)
+    !isMatrixRelayMessage(message) &&
+    !isPluralKitProxy
   ) {
     return { lockedTurn, turns: [] };
   }
@@ -152,7 +155,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     isSelfMessage,
     isAutochatOverride,
     guildDiscId: guild?.id ?? message.author.id,
-    fallbackUserDiscId: message.author.id,
+    fallbackUserDiscId: userDiscId,
     message,
     memberRoleDiscIds: incoming.manualTriggerInvoker?.member
       ? incoming.manualTriggerInvoker.member.roles.cache.map((role) => role.id)
@@ -459,7 +462,9 @@ async function updateAutochatCounter(message: Message, tomoriState: TomoriState,
 }
 
 function isRealUserMessage(message: Message): boolean {
-  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message);
+  return (
+    (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isPluralKitProxyMessage(message)
+  );
 }
 
 function resolveChannelScope(message: Message): { effectiveChannelId: string; parentChannelId?: string } {
@@ -697,17 +702,26 @@ async function enforceTurnGuards(
   }
 
   if (!incoming.isStopResponse && !incoming.isPersonaJob && !isSelfMessage && textCredentialSource !== "personal") {
+    const cooldownUserDiscId = admission.cooldownUserDiscId ?? userDiscId;
+    const cooldownMember =
+      cooldownUserDiscId === message.author.id
+        ? message.member
+        : ((await admission.guild?.members.fetch(cooldownUserDiscId).catch(() => null)) ?? null);
+    const cooldownAuthor =
+      cooldownUserDiscId === message.author.id
+        ? message.author
+        : await admission.client.users.fetch(cooldownUserDiscId).catch(() => message.author);
     const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
       serverDiscId: message.guild?.id ?? message.author.id,
-      userDiscId: admission.cooldownUserDiscId ?? userDiscId,
+      userDiscId: cooldownUserDiscId,
       channelId: message.channelId,
       cooldownType: tomoriState.config.cooldown_type ?? CooldownType.OFF,
-      member: message.member,
+      member: cooldownMember,
       isAutochatOverride: isAutochatOverrideChannel(
         tomoriState.config,
         resolveChannelScope(message).effectiveChannelId,
       ),
-      author: message.author,
+      author: cooldownAuthor,
       locale: admission.locale,
       botName: tomoriState.persona_nickname,
       notifyUser: shouldSurfaceUserErrors,
@@ -716,11 +730,11 @@ async function enforceTurnGuards(
 
     await setMessageTriggerCooldownForAdmission({
       serverDiscId: message.guild?.id ?? message.author.id,
-      userDiscId: admission.cooldownUserDiscId ?? userDiscId,
+      userDiscId: cooldownUserDiscId,
       channelId: message.channelId,
       cooldownType: tomoriState.config.cooldown_type ?? CooldownType.OFF,
       cooldownLength: tomoriState.config.cooldown_length ?? 5,
-      member: message.member,
+      member: cooldownMember,
     });
   }
 
