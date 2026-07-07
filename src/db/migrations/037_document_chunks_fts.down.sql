@@ -1,4 +1,4 @@
--- Rollback 034: remove FTS support from document_chunks.
+-- Rollback 037: remove FTS support from document_chunks.
 --
 -- WARNING: dropping these removes the GIN index, the tsv column, and the
 -- auto-update trigger. Re-running the forward migration will re-add and

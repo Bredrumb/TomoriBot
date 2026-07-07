@@ -114,6 +114,32 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 
   /**
+   * Returns memory content and tags for in-character history extraction context.
+   * The caller owns any channel-tag filtering because it has the import channel set.
+   *
+   * @param serverId         - Internal server DB ID
+   * @param personaLineageId - Persona lineage scope
+   * @returns Newest-first rows containing content and optional tags
+   */
+  async loadServerMemoryContentTags(
+    serverId: number,
+    personaLineageId: number,
+  ): Promise<Array<{ content: string; tags: string[] | null }>> {
+    try {
+      return await sql<Array<{ content: string; tags: string[] | null }>>`
+        SELECT content, tags
+        FROM server_memories
+        WHERE server_id = ${serverId}
+          AND persona_lineage_id = ${personaLineageId}
+        ORDER BY created_at DESC
+      `;
+    } catch (error) {
+      log.error(`Error loading server memory content/tags for server ${serverId}:`, error);
+      return [];
+    }
+  }
+
+  /**
    * Returns true if a document with the given name already exists in the scope.
    * Used for duplicate-name checking before insert.
    *

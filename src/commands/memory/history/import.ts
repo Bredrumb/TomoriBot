@@ -49,7 +49,6 @@ import { ragRepository } from "@/utils/db/repositories";
 import type { RetrievedDocumentChunk } from "@/utils/documents/documentService";
 import type { HistoryMemoryEntry } from "@/providers/utils/historyExtractionSchema";
 import type { EmbeddingModelRow, ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
 import { extractHistoryWindowForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
@@ -132,13 +131,7 @@ async function loadInCharacterMemoryLines(
 ): Promise<string[]> {
   if (personaLineageId == null) return [];
 
-  const rows = await sql<Array<{ content: string; tags: string[] | null }>>`
-    SELECT content, tags
-    FROM server_memories
-    WHERE server_id = ${serverId}
-      AND persona_lineage_id = ${personaLineageId}
-    ORDER BY created_at DESC
-  `;
+  const rows = await serverMemoryRepository.loadServerMemoryContentTags(serverId, personaLineageId);
 
   const lowerFilter = filterChannelTags.map((t) => t.toLowerCase());
 

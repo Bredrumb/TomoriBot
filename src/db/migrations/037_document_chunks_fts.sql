@@ -1,4 +1,4 @@
--- Migration 034: Full-text search on document_chunks for hybrid retrieval.
+-- Migration 037: Full-text search on document_chunks for hybrid retrieval.
 --
 -- Adds a tsvector column (tsv) to document_chunks so that vector similarity
 -- search and keyword/FTS search can be merged with Reciprocal Rank Fusion.
