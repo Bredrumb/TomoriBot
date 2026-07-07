@@ -94,11 +94,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Parses a `Retry-After` header (seconds) into milliseconds; null if missing/invalid */
+/**
+ * Parses a `Retry-After` header (seconds) into milliseconds; null if missing
+ * or insane. Zero counts as insane: PK's rate limiter is known to accidentally
+ * send `Retry-After: 0` (per the domain expert), and honoring it would mean retrying a
+ * rate-limited endpoint immediately — fall back to the backoff schedule instead.
+ */
 function parseRetryAfterMs(header: string | null): number | null {
   if (!header) return null;
   const seconds = Number.parseFloat(header);
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
 }
 
 function toMessageLookup(raw: PkApiMessageResponse, messageId: string): PkMessageLookup {

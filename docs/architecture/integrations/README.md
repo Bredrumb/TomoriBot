@@ -16,3 +16,4 @@ that TomoriBot connects to.
 - [`novelai/`](./novelai/) — NovelAI-specific tool and generation behavior
 - [`sillytavern/`](./sillytavern/) — SillyTavern card and preset import support
 - [`voice/`](./voice/) — speech-to-text and text-to-speech integrations
+- [`pluralkit.md`](./pluralkit) — PluralKit proxy-aware triggers + per-member identity

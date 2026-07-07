@@ -412,6 +412,11 @@ export class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
+  async setPluralKitEnabled(userId: number, enabled: boolean): Promise<boolean> {
+    const updated = await this.update(userId, { pluralkit_enabled: enabled });
+    return updated !== null;
+  }
+
   // ── Personal spotlight ────────────────────────────────────────────────────
 
   /**

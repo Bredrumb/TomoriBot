@@ -76,15 +76,38 @@ describe("pkApi.fetchMessage", () => {
     let calls = 0;
     const fetchMock = mock(async () => {
       calls++;
+      if (calls === 1) return jsonResponse(429, {}, { "Retry-After": "0.05" });
+      return jsonResponse(200, { original: "777", sender: "888", system: null, member: null });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const start = Date.now();
+    const result = await fetchMessage("msg-retry-429");
+
+    expect(calls).toBe(2);
+    expect(result?.sender).toBe("888");
+    // Honored the 50ms header, not the ~800ms first backoff step
+    expect(Date.now() - start).toBeLessThan(700);
+  });
+
+  it("ignores PK's buggy Retry-After: 0 on 429 and falls back to the backoff schedule", async () => {
+    let calls = 0;
+    const fetchMock = mock(async () => {
+      calls++;
       if (calls === 1) return jsonResponse(429, {}, { "Retry-After": "0" });
       return jsonResponse(200, { original: "777", sender: "888", system: null, member: null });
     });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const result = await fetchMessage("msg-retry-429");
+    const start = Date.now();
+    const result = await fetchMessage("msg-retry-429-zero");
 
     expect(calls).toBe(2);
     expect(result?.sender).toBe("888");
+    // A zero header must NOT mean an instant retry against a rate-limited
+    // endpoint — the ~800ms first backoff step applies instead (per the domain expert:
+    // PK's rate limiter accidentally sends 0).
+    expect(Date.now() - start).toBeGreaterThanOrEqual(750);
   });
 
   it("gives up once the retry budget is exhausted and returns null", async () => {

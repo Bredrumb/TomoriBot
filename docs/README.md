@@ -44,6 +44,7 @@ Pages are bucketed into task-based sub-categories, each with a landing card-grid
 - **Integrations** — [`integrations/`](./features/integrations/)
   - [`matrix-bridge.md`](./features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./features/integrations/sillytavern-support/)
+  - [`pluralkit-support.md`](./features/integrations/pluralkit-support/)
 - [`features/command-reference.md`](./features/command-reference/) — generated from command locales (Phase 3)
 
 ## Self-Hosting (order 3)
@@ -122,7 +123,9 @@ Supporting services that pipelines depend on.
 ### Integrations
 
 - [`architecture/integrations/`](./architecture/integrations/) — Discord platform, Matrix bridge,
-  NovelAI, SillyTavern, and voice pipeline internals
+  NovelAI, SillyTavern, PluralKit, and voice pipeline internals
+- [`architecture/integrations/pluralkit.md`](./architecture/integrations/pluralkit) — proxy-aware
+  triggers + per-member identity for plural systems
 
 ## Meet Tomori (order 6)
 

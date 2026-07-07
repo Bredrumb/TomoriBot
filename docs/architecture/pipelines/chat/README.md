@@ -77,6 +77,11 @@ tomoriChat(TomoriChatInput)
 - **Per-turn stage 04 (post-turn effects)** writes to
   [memory](../memory/) and may schedule cross-channel
   work via the boomerang mechanism in `crossChannelMessageTool`.
+- **Stage 02 (admission)** runs the PluralKit proxy speedbump for opted-in
+  users — see [`02-evaluate-admission.md`](./02-evaluate-admission) for the
+  admission-side mechanics and
+  [`architecture/integrations/pluralkit.md`](../../integrations/pluralkit)
+  for the full flow, identity model, and API etiquette.
 
 ## Concurrency model
 

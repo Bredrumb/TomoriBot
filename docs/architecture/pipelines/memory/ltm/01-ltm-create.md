@@ -96,7 +96,24 @@ After a successful write:
 |---|---|---|
 | `target_user` resolves to the bot itself | `server_wide` | Bot can't have personal memories about itself |
 | `target_user` is a Matrix bridge user | `server_wide` | Bridge users are not stored in `users` table with full identity |
+| `target_user` is a PluralKit member (`pk:{uuid}`) | `target_user` (**no fallback**) | Unlike Matrix bridge users, a PK member has a real synthetic `users` row (see [`integrations/pluralkit.md`](../../../integrations/pluralkit)), so `resolveUserTarget()` and this tool's happy path need zero PK-specific changes |
 | `target_user` has `PrivacyLevel.PARTIAL/FULL` | Error (no fallback) | Privacy restriction; user must change setting |
+
+Authorization still checks the PK member's **host** Discord account for
+`PrivacyLevel.FULL`/blacklist shielding (`getPluralKitHostProtection()`) in
+addition to the member's own row — see the integration doc's
+[authorization/identity split table](../../../integrations/pluralkit#authorization-vs-identity-split).
+
+### One-time PluralKit bio seed (a separate write path)
+
+`src/utils/pluralkit/bioSeeding.ts` writes a personal memory directly via
+`personalMemoryRepository.add()` — it does **not** go through
+`create_long_term_memory` or this tool. It fires once, fire-and-forget, right
+after a PluralKit member's first-ever identity registration, using
+`persona_lineage_id = 0` (the global personal namespace) rather than a normal
+lineage ID, since the fact describes the person, not one persona. See the
+integration doc's [bio seeding section](../../../integrations/pluralkit#one-time-bio-seeding)
+for the truncation/consent/snapshot-not-sync rules.
 
 ## Extension points
 

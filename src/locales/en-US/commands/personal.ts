@@ -434,5 +434,19 @@ You can change this anytime using \`/personal privacy\`.`,
     "deliberate-tool-mode": {
       description: `Set your personal deliberate tool mode preference.`,
     },
+    pluralkit: {
+      description: `Enable or disable PluralKit-aware message handling for your account.`,
+      enabled_description: `Turn PluralKit integration on (true) or off (false) for your account.`,
+      already_enabled_title: `No Changes Made`,
+      already_enabled_description: `PluralKit integration is already enabled for your account.`,
+      already_disabled_title: `No Changes Made`,
+      already_disabled_description: `PluralKit integration is already disabled for your account.`,
+      enabled_success_title: `PluralKit Integration Enabled`,
+      enabled_success_description: `PluralKit integration is now **enabled** for your account.
+
+When I see a message from you, I'll wait about {delay_seconds}s before responding, in case PluralKit deletes and reposts it through a proxy webhook. The first time I see one of your system's members, any public bio text they've set on PluralKit may be saved as a starting memory for them.`,
+      disabled_success_title: `PluralKit Integration Disabled`,
+      disabled_success_description: `PluralKit integration is now **disabled** for your account. Your messages will be handled normally, without waiting for a possible PluralKit proxy repost.`,
+    },
   },
 };

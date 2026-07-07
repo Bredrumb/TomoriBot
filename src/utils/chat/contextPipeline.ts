@@ -695,6 +695,24 @@ async function buildSimplifiedHistory(
   };
 }
 
+// Negative cache for webhook message IDs the DB confirmed have no PluralKit
+// identity (e.g. Tomori's own alter-persona webhooks, other bots' webhooks).
+// message->identity is immutable once resolved, so a miss stays a miss —
+// caching it stops every subsequent history rebuild from re-querying the same
+// non-PK webhook message IDs. Capped and FIFO-evicted (Set preserves
+// insertion order) rather than left unbounded.
+const NO_PLURALKIT_IDENTITY_CACHE_MAX_ENTRIES = 2000;
+const messageIdsWithNoPluralKitIdentity = new Set<string>();
+
+function rememberNoPluralKitIdentity(messageDiscId: string): void {
+  if (messageIdsWithNoPluralKitIdentity.has(messageDiscId)) return;
+  if (messageIdsWithNoPluralKitIdentity.size >= NO_PLURALKIT_IDENTITY_CACHE_MAX_ENTRIES) {
+    const oldest = messageIdsWithNoPluralKitIdentity.values().next().value;
+    if (oldest !== undefined) messageIdsWithNoPluralKitIdentity.delete(oldest);
+  }
+  messageIdsWithNoPluralKitIdentity.add(messageDiscId);
+}
+
 async function resolvePluralKitMessageIdentitiesForHistory(
   messages: Message[],
 ): Promise<Map<string, PluralKitHistoryIdentity>> {
@@ -705,6 +723,7 @@ async function resolvePluralKitMessageIdentitiesForHistory(
 
   for (const message of messages) {
     if (!message.webhookId) continue;
+    if (messageIdsWithNoPluralKitIdentity.has(message.id)) continue;
 
     const cachedLookup = getCachedMessageLookup(message.id);
     if (cachedLookup?.member && cachedLookup.system && getPluralKitProxyMessageRecord(message.id)) {
@@ -725,7 +744,14 @@ async function resolvePluralKitMessageIdentitiesForHistory(
 
   const dbIdentities = await pluralKitRepository.getMessageIdentitiesByMessageIds(dbLookupIds);
   if (!dbIdentities) {
+    // null means query failure, not "confirmed no identity" — never negative-cache this.
     return identities;
+  }
+
+  for (const messageDiscId of dbLookupIds) {
+    if (!dbIdentities.has(messageDiscId)) {
+      rememberNoPluralKitIdentity(messageDiscId);
+    }
   }
 
   for (const [messageDiscId, identity] of dbIdentities.entries()) {
