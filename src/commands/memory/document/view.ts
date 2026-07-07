@@ -550,7 +550,13 @@ export async function execute(
       }
 
       if (btnInteraction.customId === BTN_CLOSE) {
-        await btnInteraction.update({ embeds: [], components: [] });
+        await btnInteraction.deferUpdate();
+        try {
+          await modalSubmitInteraction.deleteReply();
+        } catch (closeError) {
+          log.warn("Failed to delete /memory document view reply on close; disabling controls instead", closeError);
+          await modalSubmitInteraction.editReply({ components: [] });
+        }
         break;
       }
 
@@ -869,20 +875,27 @@ export async function execute(
     };
     await log.error(`Unexpected error in /memory document view for user ${userData.user_disc_id}`, error, context);
 
-    const errorTarget =
-      personaSelectionInteraction && (personaSelectionInteraction.deferred || personaSelectionInteraction.replied)
-        ? personaSelectionInteraction
-        : interaction.deferred || interaction.replied
-          ? interaction
-          : null;
+    const errorEmbed = new EmbedBuilder()
+      .setTitle(localizer(locale, "general.errors.unknown_error_title"))
+      .setDescription(localizer(locale, "general.errors.unknown_error_description"))
+      .setColor(ColorCode.ERROR);
 
-    if (errorTarget) {
-      await replyInfoEmbed(errorTarget, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({
+          embeds: [errorEmbed],
+          flags: MessageFlags.Ephemeral,
+        });
+      } else {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    } catch (replyError) {
+      await log.error("Failed to report /memory document view error to user", replyError, context);
     }
   }
 }

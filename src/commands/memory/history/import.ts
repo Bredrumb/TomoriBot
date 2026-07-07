@@ -4,7 +4,7 @@
  *
  * Inspired by SimpleMem's "Semantic Structured Compression" approach:
  * instead of summarizing chat into a blob, extract self-contained atomic facts
- * with resolved pronouns and absolute timestamps.
+ * with resolved pronouns.
  *
  * Supports three scopes:
  * - persona: Store facts for a specific persona (user selects via paginated buttons)

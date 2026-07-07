@@ -10,26 +10,8 @@ import { z } from "zod";
  * Each entry represents one self-contained piece of information with resolved references.
  */
 export const HistoryMemoryEntrySchema = z.object({
-  /** The self-contained restatement with all pronouns resolved and absolute timestamps */
+  /** The self-contained restatement with all pronouns resolved */
   lossless_restatement: z.string().min(10).max(1000),
-
-  /** Keywords for indexing and retrieval */
-  keywords: z.array(z.string()),
-
-  /** Absolute timestamp if mentioned or inferable, null otherwise */
-  timestamp: z.string().nullable(),
-
-  /** Location/setting if mentioned, null otherwise */
-  location: z.string().nullable(),
-
-  /** People/characters involved (with resolved names, no pronouns) */
-  persons: z.array(z.string()),
-
-  /** Named entities (items, places, events, etc.) */
-  entities: z.array(z.string()),
-
-  /** High-level topic category */
-  topic: z.string().nullable(),
 });
 
 /** Type for a single extracted memory entry */
@@ -62,41 +44,10 @@ export function buildHistoryExtractionResponseSchema(): Record<string, unknown> 
           properties: {
             lossless_restatement: {
               type: "string" as const,
-              description:
-                "Self-contained restatement of a fact with all pronouns resolved to proper names and absolute timestamps where possible",
-            },
-            keywords: {
-              type: "array" as const,
-              items: { type: "string" as const },
-              description: "Keywords for retrieval (names, topics, important terms)",
-            },
-            timestamp: {
-              type: "string" as const,
-              nullable: true,
-              description: "Absolute timestamp (ISO 8601) if mentioned or inferable, null otherwise",
-            },
-            location: {
-              type: "string" as const,
-              nullable: true,
-              description: "Location or setting if mentioned, null otherwise",
-            },
-            persons: {
-              type: "array" as const,
-              items: { type: "string" as const },
-              description: "People or characters involved, with resolved names (no pronouns)",
-            },
-            entities: {
-              type: "array" as const,
-              items: { type: "string" as const },
-              description: "Named entities: items, places, events, abilities, etc.",
-            },
-            topic: {
-              type: "string" as const,
-              nullable: true,
-              description: "High-level topic category for the fact",
+              description: "Self-contained restatement of a fact with pronouns resolved to proper names",
             },
           },
-          required: ["lossless_restatement", "keywords", "timestamp", "location", "persons", "entities", "topic"],
+          required: ["lossless_restatement"],
         },
       },
     },

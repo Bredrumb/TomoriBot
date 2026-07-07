@@ -175,7 +175,6 @@ export function buildExtractionUserPrompt(formattedMessages: string, previousRes
 
   // 3. Add extraction requirements
   prompt += `Requirements:
-- Absolute timestamps: use ISO 8601 format when timestamps are available
 - Skip trivial chat: ignore simple greetings, acknowledgments, or filler
 - Self-contained: each item must make sense completely on its own`;
 
