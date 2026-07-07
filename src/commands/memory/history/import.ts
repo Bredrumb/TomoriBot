@@ -4,7 +4,7 @@
  *
  * Inspired by SimpleMem's "Semantic Structured Compression" approach:
  * instead of summarizing chat into a blob, extract self-contained atomic facts
- * with resolved pronouns and absolute timestamps.
+ * with resolved pronouns.
  *
  * Supports three scopes:
  * - persona: Store facts for a specific persona (user selects via paginated buttons)
@@ -15,27 +15,41 @@
 import type {
   ChatInputCommandInteraction,
   ButtonInteraction,
+  ModalSubmitInteraction,
   Client,
+  Message,
   SlashCommandSubcommandBuilder,
   TextBasedChannel,
 } from "discord.js";
-import { MessageFlags, EmbedBuilder } from "discord.js";
+import { MessageFlags, EmbedBuilder, TextInputStyle } from "discord.js";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { llmModelRepo, personaRepository, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { memoryGuard, reserveDocumentQuota } from "@/utils/security/rateLimiter";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
-import { fetchHistoryUntilMarker } from "@/utils/discord/historyFetcher";
+import { fetchHistoryAfter } from "@/utils/discord/historyFetcher";
 import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
-import { buildExtractionSystemPrompt, buildExtractionUserPrompt } from "@/utils/documents/historyExtractionPrompt";
+import { createDocumentRecord, appendDocumentChunks, finalizeDocumentContent } from "@/utils/documents/documentService";
+import {
+  buildExtractionUserPrompt,
+  composeInCharacterSystemPrompt,
+  EXTRACTION_CONVERSATION_SYSTEM_PROMPT,
+  EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT,
+  EXTRACTION_ROLEPLAY_SYSTEM_PROMPT,
+  substituteInCharacterFraming,
+  type ExtractionPromptMode,
+} from "@/utils/documents/historyExtractionPrompt";
+import { ragRepository } from "@/utils/db/repositories";
+import type { RetrievedDocumentChunk } from "@/utils/documents/documentService";
 import type { HistoryMemoryEntry } from "@/providers/utils/historyExtractionSchema";
-import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
-import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
+import type { EmbeddingModelRow, ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
+import { sql } from "@/utils/db/client";
 import { extractHistoryWindowForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
@@ -57,7 +71,157 @@ const HISTORY_EXTRACTION_WINDOW_SIZE = Number.parseInt(process.env.HISTORY_EXTRA
 /** Number of previous restatements to pass as dedup context between windows */
 const DEDUP_CONTEXT_COUNT = 3;
 
+/** Max retrieved document chunks injected into the in-character system prompt per window */
+const HISTORY_INCHARACTER_RAG_MAX_RESULTS = (() => {
+  const parsed = Number.parseInt(process.env.HISTORY_INCHARACTER_RAG_MAX_RESULTS || "16", 10);
+  return Number.isFinite(parsed) ? Math.max(1, parsed) : 16;
+})();
+
+/** Minimum similarity score for chunks pulled into in-character context (loose; we're seeding awareness) */
+const HISTORY_INCHARACTER_RAG_MIN_SIMILARITY = 0.3;
+
 type HistoryScope = "persona" | "automatic" | "global";
+
+/** Target document for incremental per-window chunk writes */
+interface WriteTarget {
+  documentId: number;
+  dbServerId: number;
+  personaId: number | null;
+}
+
+/**
+ * Builds the localized footer appended to every terminal embed: range timestamps,
+ * last-processed message ID, jump link, and channel-end status.
+ */
+function buildFooter(params: {
+  firstMessage: Message;
+  lastMessage: Message;
+  reachedEnd: boolean;
+  guildId: string | null;
+  channelId: string;
+  locale: string;
+}): string {
+  const { firstMessage, lastMessage, reachedEnd, guildId, channelId, locale } = params;
+  const jumpLink = `https://discord.com/channels/${guildId ?? "@me"}/${channelId}/${lastMessage.id}`;
+  const endStatusKey = reachedEnd
+    ? "commands.memory.history.import.end_status_reached_end"
+    : "commands.memory.history.import.end_status_more_available";
+  return localizer(locale, "commands.memory.history.import.success_footer", {
+    first_unix: Math.floor(firstMessage.createdTimestamp / 1000).toString(),
+    last_unix: Math.floor(lastMessage.createdTimestamp / 1000).toString(),
+    last_message_id: lastMessage.id,
+    jump_link: jumpLink,
+    end_status: localizer(locale, endStatusKey),
+  });
+}
+
+/**
+ * Loads existing server memories for a persona, filtered by channel tags.
+ * Untagged memories (no `#tag` entries) are always included; tagged memories must
+ * match at least one of the provided filter tags. Tag quotes are stripped before
+ * comparison (server_memories tags are stored with surrounding quotes).
+ *
+ * @param serverId Internal server id
+ * @param personaLineageId Persona lineage id (cross-version persona identity)
+ * @param filterChannelTags Channel tag names without `#` prefix (e.g. ["general", "dev"])
+ */
+async function loadInCharacterMemoryLines(
+  serverId: number,
+  personaLineageId: number | null,
+  filterChannelTags: string[],
+): Promise<string[]> {
+  if (personaLineageId == null) return [];
+
+  const rows = await sql<Array<{ content: string; tags: string[] | null }>>`
+    SELECT content, tags
+    FROM server_memories
+    WHERE server_id = ${serverId}
+      AND persona_lineage_id = ${personaLineageId}
+    ORDER BY created_at DESC
+  `;
+
+  const lowerFilter = filterChannelTags.map((t) => t.toLowerCase());
+
+  return rows
+    .filter((row) => {
+      const normalized = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
+      const channelTags = normalized.filter((t) => t.startsWith("#"));
+      if (channelTags.length === 0) return true;
+      if (lowerFilter.length === 0) return true;
+      return channelTags.some((t) => lowerFilter.includes(t.slice(1).toLowerCase()));
+    })
+    .map((row) => row.content.trim())
+    .filter((content) => content.length > 0);
+}
+
+/**
+ * Retrieves document chunks relevant to a query, looping over multiple channel
+ * filter tags and merging results. Each tag-filtered call returns chunks from
+ * documents tagged with that channel (plus untagged documents). Results are
+ * deduped by (document_id, chunk_index) and the highest-similarity copy is kept.
+ *
+ * NB: this makes one embedding round-trip per tag. With 16-results × 3 tags,
+ * that's 3 embedding calls per extraction window. The user opted into "luxury".
+ */
+async function retrieveInCharacterChunks(params: {
+  serverId: number;
+  personaId: number | null;
+  query: string;
+  embeddingModel: EmbeddingModelRow;
+  embeddingApiKey: string;
+  filterChannelTags: string[];
+  maxResults: number;
+}): Promise<RetrievedDocumentChunk[]> {
+  const { serverId, personaId, query, embeddingModel, embeddingApiKey, filterChannelTags, maxResults } = params;
+
+  if (!query.trim()) return [];
+
+  const tagsToQuery = filterChannelTags.length > 0 ? filterChannelTags : [null];
+  const merged = new Map<string, RetrievedDocumentChunk>();
+
+  for (const tag of tagsToQuery) {
+    const chunks = await ragRepository.retrieveRelevantChunks({
+      serverId,
+      personaId,
+      query,
+      embeddingModel,
+      apiKey: embeddingApiKey,
+      maxResults,
+      minSimilarity: HISTORY_INCHARACTER_RAG_MIN_SIMILARITY,
+      channelName: tag,
+    });
+
+    for (const chunk of chunks) {
+      const key = `${chunk.document_id}:${chunk.chunk_index}`;
+      const existing = merged.get(key);
+      if (!existing || chunk.similarity > existing.similarity) {
+        merged.set(key, chunk);
+      }
+    }
+  }
+
+  return Array.from(merged.values())
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, maxResults);
+}
+
+/** Shows the "no facts extracted from this batch" embed with the pagination footer. */
+async function showNoFactsExtractedEmbed(
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  locale: string,
+  footer: string,
+): Promise<void> {
+  await replyInteraction.editReply({
+    embeds: [
+      new EmbedBuilder()
+        .setTitle(localizer(locale, "commands.memory.history.import.no_facts_extracted_title"))
+        .setDescription(
+          `${localizer(locale, "commands.memory.history.import.no_facts_extracted_description")}\n\n${footer}`,
+        )
+        .setColor(ColorCode.WARN),
+    ],
+  });
+}
 
 /**
  * Configures the /memory history import subcommand options.
@@ -95,37 +259,118 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     )
     .addStringOption((option) =>
       option
+        .setName("start_message_id")
+        .setDescription(localizer("en-US", "commands.memory.history.import.start_message_id_description"))
+        .setRequired(true)
+        .setMinLength(15)
+        .setMaxLength(25),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("end_message_id")
+        .setDescription(localizer("en-US", "commands.memory.history.import.end_message_id_description"))
+        .setRequired(false)
+        .setMinLength(15)
+        .setMaxLength(25),
+    )
+    .addStringOption((option) =>
+      option
         .setName("channels")
         .setDescription(localizer("en-US", "commands.memory.history.import.channels_description"))
         .setRequired(false)
         .setMaxLength(200),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("prompt")
+        .setDescription(localizer("en-US", "commands.memory.history.import.prompt_description"))
+        .setRequired(false)
+        .addChoices(
+          {
+            name: localizer("en-US", "commands.memory.history.import.prompt_choice_conversation"),
+            value: "conversation",
+          },
+          {
+            name: localizer("en-US", "commands.memory.history.import.prompt_choice_roleplay"),
+            value: "roleplay",
+          },
+          {
+            name: localizer("en-US", "commands.memory.history.import.prompt_choice_in_character"),
+            value: "in_character",
+          },
+        ),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("limit")
+        .setDescription(localizer("en-US", "commands.memory.history.import.limit_description"))
+        .setRequired(false)
+        .setMinValue(50)
+        .setMaxValue(100),
     );
+
+const EXTRACTION_PROMPT_MODAL_ID = "memory_history_import_prompt_modal";
+const EXTRACTION_PROMPT_FIELD_ID = "system_prompt";
+
+/**
+ * Shows a modal pre-filled with the chosen system prompt template, lets the user edit it,
+ * and returns the submit interaction and final system prompt string. For in_character
+ * mode the framing template is shown with {persona_nickname} already substituted; the
+ * runtime context blocks (attributes, memories, retrieved chunks) are NOT shown in the
+ * modal and are appended later by composeInCharacterSystemPrompt.
+ */
+async function promptForExtractionSystem(
+  host: ChatInputCommandInteraction | ButtonInteraction,
+  locale: string,
+  mode: ExtractionPromptMode,
+  personaForInCharacter?: TomoriState | null,
+): Promise<{ submitInteraction: ModalSubmitInteraction; systemPrompt: string } | null> {
+  let defaultPrompt: string;
+  if (mode === "in_character") {
+    defaultPrompt = substituteInCharacterFraming(
+      EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT,
+      personaForInCharacter?.persona_nickname ?? "",
+    );
+  } else if (mode === "roleplay") {
+    defaultPrompt = EXTRACTION_ROLEPLAY_SYSTEM_PROMPT;
+  } else {
+    defaultPrompt = EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
+  }
+
+  const modalResult = await promptWithRawModal(host, locale, {
+    modalCustomId: EXTRACTION_PROMPT_MODAL_ID,
+    modalTitleKey: "commands.memory.history.import.prompt_modal_title",
+    components: [
+      {
+        customId: EXTRACTION_PROMPT_FIELD_ID,
+        style: TextInputStyle.Paragraph,
+        labelKey: "commands.memory.history.import.prompt_modal_label",
+        placeholder: "commands.memory.history.import.prompt_modal_placeholder",
+        required: false,
+        maxLength: 4000,
+        value: defaultPrompt,
+      },
+    ],
+  });
+
+  if (modalResult.outcome !== "submit" || !modalResult.interaction) return null;
+  const systemPrompt = modalResult.values?.[EXTRACTION_PROMPT_FIELD_ID]?.trim() || defaultPrompt;
+  return { submitInteraction: modalResult.interaction, systemPrompt };
+}
 
 /**
  * Splits an array of formatted message lines into windows of the configured size.
- *
- * @param lines - Array of formatted message lines
- * @param windowSize - Maximum lines per window
- * @returns Array of joined-text windows
  */
 function splitIntoWindows(lines: string[], windowSize: number): string[] {
   const windows: string[] = [];
   for (let i = 0; i < lines.length; i += windowSize) {
-    const windowLines = lines.slice(i, i + windowSize);
-    windows.push(windowLines.join("\n"));
+    windows.push(lines.slice(i, i + windowSize).join("\n"));
   }
   return windows;
 }
 
 /**
- * Runs the LLM extraction for a single text window using the server's configured provider.
- *
- * @param windowText - Formatted message text for this window
- * @param previousRestatements - Dedup context from previous window
- * @param provider - LLM provider name (google, openrouter)
- * @param model - LLM model codename
- * @param apiKey - Decrypted API key
- * @returns Array of extracted memory entries, or empty array on failure
+ * Runs the LLM extraction for a single text window.
  */
 async function extractWindow(
   windowText: string,
@@ -133,9 +378,9 @@ async function extractWindow(
   provider: string,
   model: string,
   apiKey: string,
+  systemPrompt: string,
   endpointUrl?: string,
 ): Promise<HistoryMemoryEntry[]> {
-  const systemPrompt = buildExtractionSystemPrompt();
   const userPrompt = buildExtractionUserPrompt(windowText, previousRestatements);
   return await extractHistoryWindowForProvider({
     providerName: provider,
@@ -150,29 +395,27 @@ async function extractWindow(
 }
 
 /**
- * Shared processing pipeline for all scopes.
- * Fetches messages, extracts facts, generates embeddings, and stores documents.
- *
- * @returns Object with extracted data or null on failure (error already replied)
+ * Fetches messages after a starting anchor and formats them for extraction.
+ * Returns null only when the raw fetch yields zero messages (channel-end reached);
+ * otherwise returns the formatted result alongside batch boundary metadata so the
+ * caller can build the pagination footer and handle empty-after-filtering cases.
  */
-async function runExtractionPipeline(params: {
+async function fetchAndFormatMessages(params: {
   channel: TextBasedChannel;
-  messageFetchLimit: number;
-  provider: string;
-  model: string;
-  apiKey: string;
-  endpointUrl?: string;
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction;
-  locale: string;
-  serverId: string;
+  startMessageId: string;
+  endMessageId: string | null;
+  limit: number;
   allPersonas: TomoriState[];
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+  locale: string;
 }): Promise<{
-  entries: HistoryMemoryEntry[];
   formattedResult: ReturnType<typeof formatMessagesForExtraction>;
+  firstMessage: Message;
+  lastMessage: Message;
+  reachedEnd: boolean;
 } | null> {
-  const { channel, provider, model, apiKey, endpointUrl, replyInteraction, locale } = params;
+  const { channel, startMessageId, endMessageId, limit, allPersonas, replyInteraction, locale } = params;
 
-  // 1. Update progress: fetching messages
   await replyInteraction.editReply({
     embeds: [
       new EmbedBuilder()
@@ -181,131 +424,115 @@ async function runExtractionPipeline(params: {
     ],
   });
 
-  // 2. Fetch messages
-  const fetchResult = await fetchHistoryUntilMarker(channel, params.messageFetchLimit);
+  // When endMessageId is set we override the user limit and reach the full 100 so we can
+  // find the anchor anywhere in the window; the trim below shrinks back to the real span.
+  const effectiveLimit = endMessageId ? 100 : limit;
+  const fetchResult = await fetchHistoryAfter(channel, startMessageId, effectiveLimit);
   if (fetchResult.messages.length === 0) {
     await replyInteraction.editReply({
       embeds: [
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.memory.history.import.no_messages_title"))
           .setDescription(localizer(locale, "commands.memory.history.import.no_messages_description"))
-          .setColor(ColorCode.ERROR),
+          .setColor(ColorCode.WARN),
       ],
     });
     return null;
   }
 
-  // 3. Format messages for extraction
-  const formattedResult = formatMessagesForExtraction(fetchResult.messages, params.allPersonas);
-  if (formattedResult.messageCount === 0) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.no_messages_title"))
-          .setDescription(localizer(locale, "commands.memory.history.import.no_messages_description"))
-          .setColor(ColorCode.ERROR),
-      ],
-    });
-    return null;
-  }
+  let messages = fetchResult.messages;
+  let reachedEnd = fetchResult.reachedEnd;
 
-  // 4. Split into extraction windows
-  const messageLines = formattedResult.text.split("\n");
-  const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
-
-  // 5. Extract facts from each window
-  const allEntries: HistoryMemoryEntry[] = [];
-  let previousRestatements: string[] = [];
-
-  for (let i = 0; i < windows.length; i++) {
-    // Update progress
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setDescription(
-            localizer(locale, "commands.memory.history.import.progress_extracting", {
-              message_count: formattedResult.messageCount.toString(),
-              current: (i + 1).toString(),
-              total: windows.length.toString(),
-            }),
-          )
-          .setColor(ColorCode.INFO),
-      ],
-    });
-
-    const windowEntries = await extractWindow(windows[i], previousRestatements, provider, model, apiKey, endpointUrl);
-
-    allEntries.push(...windowEntries);
-
-    // Update dedup context for next window
-    if (windowEntries.length > 0) {
-      previousRestatements = windowEntries.slice(-DEDUP_CONTEXT_COUNT).map((e) => e.lossless_restatement);
+  if (endMessageId) {
+    const endIdx = messages.findIndex((m) => m.id === endMessageId);
+    if (endIdx === -1) {
+      await replyInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.memory.history.import.end_too_far_title"))
+            .setDescription(
+              localizer(locale, "commands.memory.history.import.end_too_far_description", {
+                end_message_id: endMessageId,
+              }),
+            )
+            .setColor(ColorCode.ERROR),
+        ],
+      });
+      return null;
     }
+    messages = messages.slice(0, endIdx + 1);
+    // User-defined endpoint; channel may have more after it, so don't claim channel-end.
+    reachedEnd = false;
   }
 
-  // 6. Check if any facts were extracted
-  if (allEntries.length === 0) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.no_facts_extracted_title"))
-          .setDescription(localizer(locale, "commands.memory.history.import.no_facts_extracted_description"))
-          .setColor(ColorCode.ERROR),
-      ],
-    });
-    return null;
-  }
+  const formattedResult = formatMessagesForExtraction(messages, allPersonas);
 
-  return { entries: allEntries, formattedResult };
+  return {
+    formattedResult,
+    firstMessage: messages[0],
+    lastMessage: messages[messages.length - 1],
+    reachedEnd,
+  };
 }
 
 /**
- * Stores extracted facts as a document with embedded chunks.
- *
- * @returns Object with documentId and chunkCount, or null on limit errors (already replied)
+ * Reserves a document quota slot at the point of commitment. Called right before
+ * each scope branch's document creation so that preflight validation (creds,
+ * embedding model, scope checks) doesn't burn the user's daily slot.
+ * Returns false and posts a rate-limit message if denied.
  */
-async function storeExtractedFacts(params: {
-  entries: HistoryMemoryEntry[];
+async function reserveDocumentQuotaForImport(
+  userId: string,
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  locale: string,
+): Promise<boolean> {
+  const quotaReserve = reserveDocumentQuota(userId);
+  if (quotaReserve.allowed) return true;
+
+  const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
+  await replyInfoEmbed(replyInteraction, locale, {
+    titleKey: "rate_limit.error_quota_exceeded_title",
+    descriptionKey: "rate_limit.error_quota_exceeded_description",
+    descriptionVars: { reset_time: resetTime },
+    color: ColorCode.ERROR,
+    flags: MessageFlags.Ephemeral,
+  });
+  return false;
+}
+
+/**
+ * Checks document count limit and duplicate name, then creates the document record.
+ * Returns the new document_id or null (error already replied).
+ */
+async function createDocumentForImport(params: {
   documentName: string;
   serverId: number;
   personaId: number | null;
   uploaderUserId: number | null;
-  embeddingModelId: number;
-  embeddingFamily: string;
-  embeddingProvider: string;
-  embeddingCodename: string;
-  apiKey: string;
-  scopeLabel: string;
   channelTags: string[];
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction;
+  scopeLabel: string;
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
   locale: string;
-  guildId: string;
-}): Promise<{ documentId: number; chunkCount: number } | null> {
-  const {
-    entries,
-    documentName,
-    serverId,
-    personaId,
-    uploaderUserId,
-    embeddingModelId,
-    embeddingFamily,
-    embeddingProvider,
-    embeddingCodename,
-    apiKey,
-    scopeLabel,
-    channelTags,
-    replyInteraction,
-    locale,
-    guildId,
-  } = params;
+}): Promise<number | null> {
+  const { documentName, serverId, personaId, uploaderUserId, channelTags, scopeLabel, replyInteraction, locale } =
+    params;
 
   const memoryLimits = getMemoryLimits();
 
-  // 1. Build chunks from lossless_restatement fields
-  const chunks = entries.map((e) => e.lossless_restatement);
-  const textContent = chunks.join("\n\n");
+  if (await serverMemoryRepository.documentExistsByName(serverId, personaId, documentName)) {
+    await replyInteraction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
+          .setDescription(
+            localizer(locale, "commands.memory.history.import.duplicate_description", { name: documentName }),
+          )
+          .setColor(ColorCode.ERROR),
+      ],
+    });
+    return null;
+  }
 
-  // 2. Check document count limit
   const docCount = await serverMemoryRepository.countDocumentsScoped(serverId, personaId);
   if (docCount >= memoryLimits.maxDocumentsPerServer) {
     await replyInteraction.editReply({
@@ -325,17 +552,16 @@ async function storeExtractedFacts(params: {
     return null;
   }
 
-  // 3. Check chunk count limit
   const currentChunkCount = await serverMemoryRepository.countChunksScoped(serverId, personaId);
-  if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
+  if (currentChunkCount >= memoryLimits.maxDocumentChunksPerServer) {
     await replyInteraction.editReply({
       embeds: [
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.memory.history.import.server_chunk_limit_title"))
           .setDescription(
             localizer(locale, "commands.memory.history.import.server_chunk_limit_description", {
-              max_chunks: memoryLimits.maxDocumentChunksPerServer.toString(),
               scope: scopeLabel,
+              max_chunks: memoryLimits.maxDocumentChunksPerServer.toString(),
             }),
           )
           .setColor(ColorCode.ERROR),
@@ -344,52 +570,143 @@ async function storeExtractedFacts(params: {
     return null;
   }
 
-  // 4. Update progress: embedding
-  await replyInteraction.editReply({
-    embeds: [
-      new EmbedBuilder()
-        .setDescription(
-          localizer(locale, "commands.memory.history.import.progress_embedding", {
-            fact_count: chunks.length.toString(),
-          }),
-        )
-        .setColor(ColorCode.INFO),
-    ],
-  });
-
-  // 5. Generate embeddings
-  const embeddings = await generateEmbeddingsBatched({
-    provider: embeddingProvider,
-    apiKey,
-    model: embeddingCodename,
-    modelId: embeddingModelId,
-    inputs: chunks,
-    taskType: (await providerSupportsEmbeddingTaskType(embeddingProvider)) ? "RETRIEVAL_DOCUMENT" : undefined,
-    batchSize: 16,
-  });
-
-  // 6. Insert document with chunks
-  const documentId = await ragRepository.insertWithChunks({
+  return await createDocumentRecord({
     serverId,
     personaId,
     uploaderUserId,
     documentName,
-    fileName: null,
-    mimeType: null,
-    fileSizeBytes: null,
-    textContent,
-    chunks,
-    embeddings,
-    embeddingModelId,
-    embeddingFamily,
     sourceType: "history",
     channelTags,
   });
+}
 
-  // 7. Invalidate cache
-  invalidateTomoriStateCache(guildId);
+/**
+ * Runs incremental LLM extraction over message windows, embedding and persisting each
+ * window's facts immediately after extraction to avoid interaction token timeouts.
+ *
+ * @returns Total fact count and joined chunk text for document finalization, or null
+ *          if no facts were extracted (error already replied, caller should clean up documents).
+ */
+async function runIncrementalExtraction(params: {
+  formattedResult: ReturnType<typeof formatMessagesForExtraction>;
+  provider: string;
+  model: string;
+  apiKey: string;
+  endpointUrl?: string;
+  /** Composes the system prompt for a given window. For static prompts (conversation/roleplay) this returns a constant; for in_character it does per-window RAG. */
+  composeSystemPrompt: (windowText: string, windowIndex: number) => Promise<string>;
+  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+  locale: string;
+  writeTargets: WriteTarget[];
+  embeddingModelId: number;
+  embeddingFamily: string;
+  embeddingProvider: string;
+  embeddingCodename: string;
+  embeddingApiKey: string;
+}): Promise<{ totalFactCount: number; allChunkText: string } | null> {
+  const {
+    formattedResult,
+    provider,
+    model,
+    apiKey,
+    endpointUrl,
+    composeSystemPrompt,
+    replyInteraction,
+    locale,
+    writeTargets,
+    embeddingModelId,
+    embeddingFamily,
+    embeddingProvider,
+    embeddingCodename,
+    embeddingApiKey,
+  } = params;
 
-  return { documentId, chunkCount: chunks.length };
+  const memoryLimits = getMemoryLimits();
+  const messageLines = formattedResult.text.split("\n");
+  const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
+  const allChunks: string[] = [];
+  let previousRestatements: string[] = [];
+  const chunkStartIndex = new Map<number, number>();
+  for (const t of writeTargets) chunkStartIndex.set(t.documentId, 0);
+
+  const baselineChunkCounts = new Map<number, number>();
+  for (const t of writeTargets) {
+    baselineChunkCounts.set(t.documentId, await serverMemoryRepository.countChunksScoped(t.dbServerId, t.personaId));
+  }
+
+  for (let i = 0; i < windows.length; i++) {
+    await replyInteraction.editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setDescription(
+            localizer(locale, "commands.memory.history.import.progress_extracting", {
+              message_count: formattedResult.messageCount.toString(),
+              current: (i + 1).toString(),
+              total: windows.length.toString(),
+            }),
+          )
+          .setColor(ColorCode.INFO),
+      ],
+    });
+
+    const composedSystemPrompt = await composeSystemPrompt(windows[i], i);
+    const windowEntries = await extractWindow(
+      windows[i],
+      previousRestatements,
+      provider,
+      model,
+      apiKey,
+      composedSystemPrompt,
+      endpointUrl,
+    );
+
+    if (windowEntries.length > 0) {
+      const windowChunks = windowEntries.map((e) => e.lossless_restatement);
+
+      const wouldExceedLimit = writeTargets.some((t) => {
+        const baseline = baselineChunkCounts.get(t.documentId) ?? 0;
+        return baseline + allChunks.length + windowChunks.length > memoryLimits.maxDocumentChunksPerServer;
+      });
+      if (wouldExceedLimit) {
+        log.warn(`Chunk limit reached during history import; stopping after ${allChunks.length} chunks`);
+        break;
+      }
+
+      allChunks.push(...windowChunks);
+
+      const embeddings = await generateEmbeddingsBatched({
+        provider: embeddingProvider,
+        apiKey: embeddingApiKey,
+        model: embeddingCodename,
+        modelId: embeddingModelId,
+        inputs: windowChunks,
+        taskType: (await providerSupportsEmbeddingTaskType(embeddingProvider)) ? "RETRIEVAL_DOCUMENT" : undefined,
+        batchSize: 16,
+      });
+
+      for (const target of writeTargets) {
+        const startIdx = chunkStartIndex.get(target.documentId) ?? 0;
+        await appendDocumentChunks({
+          documentId: target.documentId,
+          serverId: target.dbServerId,
+          embeddingModelId,
+          embeddingFamily,
+          startIndex: startIdx,
+          chunks: windowChunks,
+          embeddings,
+        });
+        chunkStartIndex.set(target.documentId, startIdx + windowChunks.length);
+      }
+
+      previousRestatements = windowEntries.slice(-DEDUP_CONTEXT_COUNT).map((e) => e.lossless_restatement);
+    }
+  }
+
+  if (allChunks.length === 0) {
+    return null;
+  }
+
+  return { totalFactCount: allChunks.length, allChunkText: allChunks.join("\n\n") };
 }
 
 /**
@@ -402,7 +719,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -415,9 +731,9 @@ export async function execute(
 
   let tomoriState: TomoriState | null = null;
   let personaSelectionInteraction: ButtonInteraction | null = null;
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
 
   try {
-    // 2. Check RAG is enabled
     if (!isRagAvailable()) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.memory.history.import.rag_disabled_title",
@@ -428,7 +744,6 @@ export async function execute(
       return;
     }
 
-    // 3. Check memory guard
     const memCheck = memoryGuard.checkMemory();
     if (memCheck.status === "critical") {
       await interaction.reply({
@@ -443,21 +758,6 @@ export async function execute(
       return;
     }
 
-    // 4. Reserve document quota
-    const quotaReserve = reserveDocumentQuota(interaction.user.id);
-    if (!quotaReserve.allowed) {
-      const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "rate_limit.error_quota_exceeded_title",
-        descriptionKey: "rate_limit.error_quota_exceeded_description",
-        descriptionVars: { reset_time: resetTime },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    // 5. Check ManageGuild permission
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
@@ -469,7 +769,6 @@ export async function execute(
       return;
     }
 
-    // 6. Load server's Tomori state
     const guildId = interaction.guild?.id ?? interaction.user.id;
     tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
@@ -484,7 +783,6 @@ export async function execute(
     const overlayResult = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
     tomoriState = overlayResult.tomoriState;
 
-    // 7. Check model supports structured output
     if (!tomoriState.llm.supports_structoutput) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.memory.history.import.model_incompatible_title",
@@ -505,7 +803,6 @@ export async function execute(
       return;
     }
 
-    // 8. Validate embedding model
     let textCreds: ResolvedCredentials;
     let embeddingCreds: ResolvedCredentials;
     try {
@@ -564,12 +861,88 @@ export async function execute(
       return;
     }
 
-    // 9. Get command options
     const nameInput = interaction.options.getString("name", true).trim();
     const scopeInput = interaction.options.getString("scope");
     const scope: HistoryScope =
       scopeInput === "automatic" ? "automatic" : scopeInput === "global" ? "global" : "persona";
+    const startMessageId = interaction.options.getString("start_message_id", true).trim();
+    const endMessageId = interaction.options.getString("end_message_id")?.trim() || null;
     const channelsInput = interaction.options.getString("channels");
+    const promptModeInput = interaction.options.getString("prompt");
+    const promptMode: ExtractionPromptMode =
+      promptModeInput === "roleplay"
+        ? "roleplay"
+        : promptModeInput === "in_character"
+          ? "in_character"
+          : "conversation";
+    const messageFetchLimit = interaction.options.getInteger("limit") ?? 100;
+
+    // In-character extraction requires a single persona's identity to do its job —
+    // reject global/automatic combinations rather than silently degrading.
+    if (promptMode === "in_character" && scope !== "persona") {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.memory.history.import.in_character_scope_invalid_title",
+        descriptionKey: "commands.memory.history.import.in_character_scope_invalid_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    // Validate the start message ID exists in this channel before doing any further setup,
+    // so users with a typo get immediate feedback instead of sitting through the persona/modal flow.
+    try {
+      await interaction.channel.messages.fetch(startMessageId);
+    } catch {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.memory.history.import.invalid_start_id_title",
+        descriptionKey: "commands.memory.history.import.invalid_start_id_description",
+        descriptionVars: { start_message_id: startMessageId },
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (endMessageId) {
+      try {
+        await interaction.channel.messages.fetch(endMessageId);
+      } catch {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.memory.history.import.invalid_end_id_title",
+          descriptionKey: "commands.memory.history.import.invalid_end_id_description",
+          descriptionVars: { end_message_id: endMessageId },
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      // Snowflake ordering: high bits encode timestamp, so BigInt compare gives strict chronology.
+      let startSnowflake: bigint;
+      let endSnowflake: bigint;
+      try {
+        startSnowflake = BigInt(startMessageId);
+        endSnowflake = BigInt(endMessageId);
+      } catch {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.memory.history.import.invalid_end_id_title",
+          descriptionKey: "commands.memory.history.import.invalid_end_id_description",
+          descriptionVars: { end_message_id: endMessageId },
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      if (endSnowflake <= startSnowflake) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.memory.history.import.end_not_after_start_title",
+          descriptionKey: "commands.memory.history.import.end_not_after_start_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+    }
     const channelTags: string[] = channelsInput
       ? channelsInput
           .split(",")
@@ -586,17 +959,23 @@ export async function execute(
           .map((c) => `#${c}`)
       : [];
 
-    // 10. Decrypt API key
     const provider = tomoriState.llm.llm_provider.toLowerCase();
     const model = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
     const endpointUrl = tomoriState.config.custom_endpoint_url ?? undefined;
-    const messageFetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
 
-    // Load all personas for formatting and detection
     const allPersonas = await personaRepository.loadAllForServer(guildId);
 
+    // Shared embedding params passed to runIncrementalExtraction
+    const embeddingParams = {
+      embeddingModelId,
+      embeddingFamily: embeddingModel.model_family,
+      embeddingProvider: embeddingModel.provider as string,
+      embeddingCodename: embeddingModel.codename,
+      embeddingApiKey: embeddingCreds.apiKey,
+    };
+
     // ====================================================================
-    // SCOPE: PERSONA — Pattern 4 → Pattern 2 hybrid (persona selector first)
+    // SCOPE: PERSONA
     // ====================================================================
     if (scope === "persona") {
       if (allPersonas.length === 0) {
@@ -609,7 +988,6 @@ export async function execute(
         return;
       }
 
-      // Show persona selector (acknowledges interaction)
       const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
         personas: allPersonas,
         color: ColorCode.INFO,
@@ -637,152 +1015,144 @@ export async function execute(
         persona_name: selectedPersona.persona_nickname,
       });
 
-      // Defer the button interaction for long processing
-      await personaSelectionInteraction.deferReply({
-        flags: MessageFlags.Ephemeral,
+      const promptModalResult = await promptForExtractionSystem(
+        personaSelectionInteraction,
+        locale,
+        promptMode,
+        selectedPersona,
+      );
+      if (!promptModalResult) return;
+      modalSubmitInteraction = promptModalResult.submitInteraction;
+      const personaSystemPrompt = promptModalResult.systemPrompt;
+
+      await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      const fetchResult = await fetchAndFormatMessages({
+        channel: interaction.channel,
+        startMessageId,
+        endMessageId,
+        limit: messageFetchLimit,
+        allPersonas,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+      });
+      if (!fetchResult) return;
+
+      // For in-character mode, precompute the channel-filtered existing memories once.
+      // The retrieval-and-compose closure handles per-window RAG below.
+      const inCharacterFilterTags =
+        channelTags.length > 0
+          ? channelTags.map((t) => t.replace(/^#/, ""))
+          : interaction.channel && "name" in interaction.channel && interaction.channel.name
+            ? [interaction.channel.name.toLowerCase()]
+            : [];
+
+      // Capture into a const so TypeScript can narrow inside the async closure below.
+      const personaServerId = tomoriState.server_id;
+
+      const inCharacterExistingMemories =
+        promptMode === "in_character"
+          ? await loadInCharacterMemoryLines(
+              personaServerId,
+              selectedPersona.persona_lineage_id ?? null,
+              inCharacterFilterTags,
+            )
+          : [];
+
+      const composeSystemPrompt =
+        promptMode === "in_character"
+          ? async (windowText: string): Promise<string> => {
+              const retrievedChunks = await retrieveInCharacterChunks({
+                serverId: personaServerId,
+                personaId: targetPersonaId,
+                query: windowText,
+                embeddingModel,
+                embeddingApiKey: embeddingCreds.apiKey,
+                filterChannelTags: inCharacterFilterTags,
+                maxResults: HISTORY_INCHARACTER_RAG_MAX_RESULTS,
+              });
+              return composeInCharacterSystemPrompt({
+                framingTemplate: personaSystemPrompt,
+                personaNickname: selectedPersona.persona_nickname,
+                personaPrompt: selectedPersona.persona_prompt ?? null,
+                attributes: selectedPersona.attribute_list ?? [],
+                existingMemoryLines: inCharacterExistingMemories,
+                retrievedChunks,
+              });
+            }
+          : async (): Promise<string> => personaSystemPrompt;
+
+      const footer = buildFooter({
+        firstMessage: fetchResult.firstMessage,
+        lastMessage: fetchResult.lastMessage,
+        reachedEnd: fetchResult.reachedEnd,
+        guildId: interaction.guild?.id ?? null,
+        channelId: interaction.channel.id,
+        locale,
       });
 
-      // Check duplicate name
-      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, targetPersonaId, nameInput)) {
-        await personaSelectionInteraction.editReply({
+      if (fetchResult.formattedResult.messageCount === 0) {
+        await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
+              .setTitle(localizer(locale, "commands.memory.history.import.no_extractable_content_title"))
               .setDescription(
-                localizer(locale, "commands.memory.history.import.duplicate_description", { name: nameInput }),
+                `${localizer(locale, "commands.memory.history.import.no_extractable_content_description")}\n\n${footer}`,
               )
-              .setColor(ColorCode.ERROR),
+              .setColor(ColorCode.WARN),
           ],
         });
         return;
       }
 
-      // Run extraction pipeline
-      const pipelineResult = await runExtractionPipeline({
-        channel: interaction.channel,
-        messageFetchLimit,
-        provider,
-        model,
-        apiKey: textCreds.apiKey,
-        endpointUrl,
-        replyInteraction: personaSelectionInteraction,
-        locale,
-        serverId: guildId,
-        allPersonas,
-      });
-      if (!pipelineResult) return;
+      if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
 
-      // Store facts
-      const storeResult = await storeExtractedFacts({
-        entries: pipelineResult.entries,
+      const documentId = await createDocumentForImport({
         documentName: nameInput,
         serverId: tomoriState.server_id,
         personaId: targetPersonaId,
         uploaderUserId: userData.user_id ?? null,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        embeddingProvider: embeddingModel.provider as string,
-        embeddingCodename: embeddingModel.codename,
-        apiKey: embeddingCreds.apiKey,
-        scopeLabel,
         channelTags,
-        replyInteraction: personaSelectionInteraction,
+        scopeLabel,
+        replyInteraction: modalSubmitInteraction,
         locale,
-        guildId,
       });
-      if (!storeResult) return;
+      if (documentId === null) return;
 
-      // Success reply
-      await personaSelectionInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
-            .setDescription(
-              localizer(locale, "commands.memory.history.import.success_description", {
-                fact_count: pipelineResult.entries.length.toString(),
-                message_count: pipelineResult.formattedResult.messageCount.toString(),
-                name: nameInput,
-                chunk_count: storeResult.chunkCount.toString(),
-                scope: scopeLabel,
-              }),
-            )
-            .setColor(ColorCode.SUCCESS),
-        ],
-      });
-      return;
-    }
-
-    // ====================================================================
-    // SCOPE: GLOBAL — Pattern 2 (Defer Required)
-    // ====================================================================
-    if (scope === "global") {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-      const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
-
-      // Check duplicate name (serverwide scope = persona_id IS NULL)
-      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
-        await interaction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
-              .setDescription(
-                localizer(locale, "commands.memory.history.import.duplicate_description", { name: nameInput }),
-              )
-              .setColor(ColorCode.ERROR),
-          ],
-        });
-        return;
-      }
-
-      // Run extraction pipeline
-      const pipelineResult = await runExtractionPipeline({
-        channel: interaction.channel,
-        messageFetchLimit,
+      const extractResult = await runIncrementalExtraction({
+        formattedResult: fetchResult.formattedResult,
         provider,
         model,
         apiKey: textCreds.apiKey,
         endpointUrl,
-        replyInteraction: interaction,
+        composeSystemPrompt,
+        replyInteraction: modalSubmitInteraction,
         locale,
-        serverId: guildId,
-        allPersonas,
+        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: targetPersonaId }],
+        ...embeddingParams,
       });
-      if (!pipelineResult) return;
 
-      // Store facts
-      const storeResult = await storeExtractedFacts({
-        entries: pipelineResult.entries,
-        documentName: nameInput,
-        serverId: tomoriState.server_id,
-        personaId: null,
-        uploaderUserId: userData.user_id ?? null,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        embeddingProvider: embeddingModel.provider as string,
-        embeddingCodename: embeddingModel.codename,
-        apiKey: embeddingCreds.apiKey,
-        scopeLabel,
-        channelTags,
-        replyInteraction: interaction,
-        locale,
-        guildId,
-      });
-      if (!storeResult) return;
+      if (!extractResult) {
+        await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, targetPersonaId);
+        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
+        return;
+      }
 
-      // Success reply
-      await interaction.editReply({
+      await finalizeDocumentContent(documentId, extractResult.allChunkText);
+      invalidateTomoriStateCache(guildId);
+
+      await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
             .setDescription(
-              localizer(locale, "commands.memory.history.import.success_description", {
-                fact_count: pipelineResult.entries.length.toString(),
-                message_count: pipelineResult.formattedResult.messageCount.toString(),
+              `${localizer(locale, "commands.memory.history.import.success_description", {
+                fact_count: extractResult.totalFactCount.toString(),
+                message_count: fetchResult.formattedResult.messageCount.toString(),
                 name: nameInput,
-                chunk_count: storeResult.chunkCount.toString(),
+                chunk_count: extractResult.totalFactCount.toString(),
                 scope: scopeLabel,
-              }),
+              })}\n\n${footer}`,
             )
             .setColor(ColorCode.SUCCESS),
         ],
@@ -791,75 +1161,100 @@ export async function execute(
     }
 
     // ====================================================================
-    // SCOPE: AUTOMATIC — Pattern 2 (Defer Required)
-    // Detect personas from webhook authors, create per-persona documents
+    // SCOPE: GLOBAL
     // ====================================================================
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    // Run extraction pipeline (extracts facts + detects personas)
-    const pipelineResult = await runExtractionPipeline({
-      channel: interaction.channel,
-      messageFetchLimit,
-      provider,
-      model,
-      apiKey: textCreds.apiKey,
-      endpointUrl,
-      replyInteraction: interaction,
-      locale,
-      serverId: guildId,
-      allPersonas,
-    });
-    if (!pipelineResult) return;
-
-    const { entries, formattedResult } = pipelineResult;
-    const detectedTomoriIds = formattedResult.detectedPersonaTomoriIds;
-
-    // If no personas detected, fallback to global
-    if (detectedTomoriIds.length === 0) {
+    if (scope === "global") {
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
-      // Check duplicate name in global scope
-      if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, null, nameInput)) {
-        await interaction.editReply({
+      const promptModalResult = await promptForExtractionSystem(interaction, locale, promptMode);
+      if (!promptModalResult) return;
+      modalSubmitInteraction = promptModalResult.submitInteraction;
+      const globalSystemPrompt = promptModalResult.systemPrompt;
+
+      await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      const fetchResult = await fetchAndFormatMessages({
+        channel: interaction.channel,
+        startMessageId,
+        endMessageId,
+        limit: messageFetchLimit,
+        allPersonas,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+      });
+      if (!fetchResult) return;
+
+      const footer = buildFooter({
+        firstMessage: fetchResult.firstMessage,
+        lastMessage: fetchResult.lastMessage,
+        reachedEnd: fetchResult.reachedEnd,
+        guildId: interaction.guild?.id ?? null,
+        channelId: interaction.channel.id,
+        locale,
+      });
+
+      if (fetchResult.formattedResult.messageCount === 0) {
+        await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
+              .setTitle(localizer(locale, "commands.memory.history.import.no_extractable_content_title"))
               .setDescription(
-                localizer(locale, "commands.memory.history.import.duplicate_description", { name: nameInput }),
+                `${localizer(locale, "commands.memory.history.import.no_extractable_content_description")}\n\n${footer}`,
               )
-              .setColor(ColorCode.ERROR),
+              .setColor(ColorCode.WARN),
           ],
         });
         return;
       }
 
-      const storeResult = await storeExtractedFacts({
-        entries,
+      if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
+
+      const documentId = await createDocumentForImport({
         documentName: nameInput,
         serverId: tomoriState.server_id,
         personaId: null,
         uploaderUserId: userData.user_id ?? null,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        embeddingProvider: embeddingModel.provider as string,
-        embeddingCodename: embeddingModel.codename,
-        apiKey: embeddingCreds.apiKey,
-        scopeLabel,
         channelTags,
-        replyInteraction: interaction,
+        scopeLabel,
+        replyInteraction: modalSubmitInteraction,
         locale,
-        guildId,
       });
-      if (!storeResult) return;
+      if (documentId === null) return;
 
-      await interaction.editReply({
+      const extractResult = await runIncrementalExtraction({
+        formattedResult: fetchResult.formattedResult,
+        provider,
+        model,
+        apiKey: textCreds.apiKey,
+        endpointUrl,
+        composeSystemPrompt: async () => globalSystemPrompt,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: null }],
+        ...embeddingParams,
+      });
+
+      if (!extractResult) {
+        await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, null);
+        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
+        return;
+      }
+
+      await finalizeDocumentContent(documentId, extractResult.allChunkText);
+      invalidateTomoriStateCache(guildId);
+
+      await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
             .setDescription(
-              localizer(locale, "commands.memory.history.import.success_automatic_global_fallback", {
+              `${localizer(locale, "commands.memory.history.import.success_description", {
+                fact_count: extractResult.totalFactCount.toString(),
+                message_count: fetchResult.formattedResult.messageCount.toString(),
                 name: nameInput,
-              }),
+                chunk_count: extractResult.totalFactCount.toString(),
+                scope: scopeLabel,
+              })}\n\n${footer}`,
             )
             .setColor(ColorCode.SUCCESS),
         ],
@@ -867,64 +1262,216 @@ export async function execute(
       return;
     }
 
-    // Create per-persona documents
-    const personaResults: string[] = [];
+    // ====================================================================
+    // SCOPE: AUTOMATIC
+    // Detect personas from webhook authors, create per-persona documents
+    // before extraction starts so chunks are written incrementally.
+    // ====================================================================
+    const autoPromptModalResult = await promptForExtractionSystem(interaction, locale, promptMode);
+    if (!autoPromptModalResult) return;
+    modalSubmitInteraction = autoPromptModalResult.submitInteraction;
+    const autoSystemPrompt = autoPromptModalResult.systemPrompt;
+
+    await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const fetchResult = await fetchAndFormatMessages({
+      channel: interaction.channel,
+      startMessageId,
+      endMessageId,
+      limit: messageFetchLimit,
+      allPersonas,
+      replyInteraction: modalSubmitInteraction,
+      locale,
+    });
+    if (!fetchResult) return;
+
+    const { formattedResult } = fetchResult;
+    const detectedTomoriIds = formattedResult.detectedPersonaTomoriIds;
+
+    const footer = buildFooter({
+      firstMessage: fetchResult.firstMessage,
+      lastMessage: fetchResult.lastMessage,
+      reachedEnd: fetchResult.reachedEnd,
+      guildId: interaction.guild?.id ?? null,
+      channelId: interaction.channel.id,
+      locale,
+    });
+
+    if (formattedResult.messageCount === 0) {
+      await modalSubmitInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.memory.history.import.no_extractable_content_title"))
+            .setDescription(
+              `${localizer(locale, "commands.memory.history.import.no_extractable_content_description")}\n\n${footer}`,
+            )
+            .setColor(ColorCode.WARN),
+        ],
+      });
+      return;
+    }
+
+    if (detectedTomoriIds.length === 0) {
+      // No personas detected — fall back to global scope
+      const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
+
+      if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
+
+      const documentId = await createDocumentForImport({
+        documentName: nameInput,
+        serverId: tomoriState.server_id,
+        personaId: null,
+        uploaderUserId: userData.user_id ?? null,
+        channelTags,
+        scopeLabel,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+      });
+      if (documentId === null) return;
+
+      const extractResult = await runIncrementalExtraction({
+        formattedResult,
+        provider,
+        model,
+        apiKey: textCreds.apiKey,
+        endpointUrl,
+        composeSystemPrompt: async () => autoSystemPrompt,
+        replyInteraction: modalSubmitInteraction,
+        locale,
+        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: null }],
+        ...embeddingParams,
+      });
+
+      if (!extractResult) {
+        await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, null);
+        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
+        return;
+      }
+
+      await finalizeDocumentContent(documentId, extractResult.allChunkText);
+      invalidateTomoriStateCache(guildId);
+
+      await modalSubmitInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
+            .setDescription(
+              `${localizer(locale, "commands.memory.history.import.success_automatic_global_fallback", {
+                name: nameInput,
+              })}\n\n${footer}`,
+            )
+            .setColor(ColorCode.SUCCESS),
+        ],
+      });
+      return;
+    }
+
+    if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
+
+    // Create per-persona document records before extraction starts
+    const memoryLimits = getMemoryLimits();
+    const personaTargets: Array<{ target: WriteTarget; personaNickname: string; docName: string }> = [];
 
     for (const personaId of detectedTomoriIds) {
       const persona = allPersonas.find((p) => p.persona_id === personaId);
       if (!persona) continue;
 
       const docName = `${nameInput} (${persona.persona_nickname})`;
-      const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
-        persona_name: persona.persona_nickname,
-      });
 
-      // Check duplicate name for this persona
       if (await serverMemoryRepository.documentExistsByName(tomoriState.server_id, personaId, docName)) {
         log.warn(`Skipping duplicate document "${docName}" for persona ${personaId} during automatic scope`);
         continue;
       }
 
-      const storeResult = await storeExtractedFacts({
-        entries,
-        documentName: docName,
+      const docCount = await serverMemoryRepository.countDocumentsScoped(tomoriState.server_id, personaId);
+      if (docCount >= memoryLimits.maxDocumentsPerServer) {
+        log.warn(`Document limit exceeded for persona ${personaId}, skipping`);
+        continue;
+      }
+
+      const chunkCount = await serverMemoryRepository.countChunksScoped(tomoriState.server_id, personaId);
+      if (chunkCount >= memoryLimits.maxDocumentChunksPerServer) {
+        log.warn(`Chunk limit exceeded for persona ${personaId}, skipping`);
+        continue;
+      }
+
+      const documentId = await createDocumentRecord({
         serverId: tomoriState.server_id,
         personaId,
         uploaderUserId: userData.user_id ?? null,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        embeddingProvider: embeddingModel.provider as string,
-        embeddingCodename: embeddingModel.codename,
-        apiKey: embeddingCreds.apiKey,
-        scopeLabel,
+        documentName: docName,
+        sourceType: "history",
         channelTags,
-        replyInteraction: interaction,
-        locale,
-        guildId,
       });
 
-      if (storeResult) {
-        personaResults.push(
-          localizer(locale, "commands.memory.history.import.success_automatic_persona_line", {
-            persona_name: persona.persona_nickname,
-            doc_name: docName,
-            chunk_count: storeResult.chunkCount.toString(),
-          }),
-        );
+      personaTargets.push({
+        target: { documentId, dbServerId: tomoriState.server_id, personaId },
+        personaNickname: persona.persona_nickname,
+        docName,
+      });
+    }
+
+    if (personaTargets.length === 0) {
+      await modalSubmitInteraction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
+            .setDescription(
+              localizer(locale, "commands.memory.history.import.duplicate_description", { name: nameInput }),
+            )
+            .setColor(ColorCode.ERROR),
+        ],
+      });
+      return;
+    }
+
+    // Run extraction once, writing each window's chunks to all persona documents
+    const extractResult = await runIncrementalExtraction({
+      formattedResult,
+      provider,
+      model,
+      apiKey: textCreds.apiKey,
+      endpointUrl,
+      composeSystemPrompt: async () => autoSystemPrompt,
+      replyInteraction: modalSubmitInteraction,
+      locale,
+      writeTargets: personaTargets.map((pt) => pt.target),
+      ...embeddingParams,
+    });
+
+    for (const { target } of personaTargets) {
+      if (!extractResult) {
+        await serverMemoryRepository.removeDocument(target.documentId, tomoriState.server_id, target.personaId);
+      } else {
+        await finalizeDocumentContent(target.documentId, extractResult.allChunkText);
       }
     }
 
-    // Final success reply
-    await interaction.editReply({
+    if (!extractResult) {
+      await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
+      return;
+    }
+
+    invalidateTomoriStateCache(guildId);
+
+    const personaResultLines = personaTargets.map(({ personaNickname, docName }) =>
+      localizer(locale, "commands.memory.history.import.success_automatic_persona_line", {
+        persona_name: personaNickname,
+        doc_name: docName,
+        chunk_count: extractResult.totalFactCount.toString(),
+      }),
+    );
+
+    await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
           .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
           .setDescription(
-            localizer(locale, "commands.memory.history.import.success_automatic_description", {
-              fact_count: entries.length.toString(),
+            `${localizer(locale, "commands.memory.history.import.success_automatic_description", {
+              fact_count: extractResult.totalFactCount.toString(),
               message_count: formattedResult.messageCount.toString(),
-              persona_list: personaResults.join("\n"),
-            }),
+              persona_list: personaResultLines.join("\n"),
+            })}\n\n${footer}`,
           )
           .setColor(ColorCode.SUCCESS),
       ],
@@ -944,11 +1491,13 @@ export async function execute(
     await log.error("Error in /memory history import command", error, context);
 
     const errorReplyTarget =
-      personaSelectionInteraction && (personaSelectionInteraction.deferred || personaSelectionInteraction.replied)
-        ? personaSelectionInteraction
-        : interaction.deferred || interaction.replied
-          ? interaction
-          : null;
+      modalSubmitInteraction && (modalSubmitInteraction.deferred || modalSubmitInteraction.replied)
+        ? modalSubmitInteraction
+        : personaSelectionInteraction && (personaSelectionInteraction.deferred || personaSelectionInteraction.replied)
+          ? personaSelectionInteraction
+          : interaction.deferred || interaction.replied
+            ? interaction
+            : null;
 
     if (errorReplyTarget) {
       await replyInfoEmbed(errorReplyTarget, locale, {
