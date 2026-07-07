@@ -21,7 +21,7 @@ export default {
         scope_choice_serverwide: `サーバー全体`,
       },
       view: {
-        description: `保存されたドキュメントをチャンクごとに閲覧します。`,
+        description: `保存されたドキュメントをチャンクごとに閲覧し、編集・削除も可能です。`,
         scope_description: `ペルソナのドキュメントかサーバー全体のドキュメントかを選択します。`,
         scope_choice_persona: `ペルソナ`,
         scope_choice_serverwide: `サーバー全体`,

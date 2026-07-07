@@ -21,7 +21,7 @@ export default {
         scope_choice_serverwide: `Serverwide`,
       },
       view: {
-        description: `Browse a stored document chunk by chunk.`,
+        description: `Browse a stored document chunk by chunk, allowing you to edit or delete each chunk as well.`,
         scope_description: `Choose whether to browse a persona document or a serverwide document.`,
         scope_choice_persona: `Persona`,
         scope_choice_serverwide: `Serverwide`,

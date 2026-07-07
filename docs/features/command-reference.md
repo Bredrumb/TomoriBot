@@ -156,7 +156,7 @@ Manage stored memories and documents.
 |---|---|
 | `/memory document add` | Add a document to memory. |
 | `/memory document remove` | Remove a document from memory. |
-| `/memory document view` | Browse a stored document chunk by chunk. |
+| `/memory document view` | Browse a stored document chunk by chunk, allowing you to edit or delete each chunk as well. |
 | `/memory history import` | Extract knowledge from this channel's message history using AI. |
 | `/memory history remove` | Remove a history-extracted document from memory. |
 | `/memory personal add` | Add a personal memory. |
