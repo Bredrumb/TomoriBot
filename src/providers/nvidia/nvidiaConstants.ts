@@ -20,6 +20,11 @@ export const NVIDIA_STRUCTURED_OUTPUT_MODELS = new Set([
 export const NVIDIA_STRUCTURED_OUTPUT_VISION_MODELS = new Set(["qwen/qwen3.5-397b-a17b"]);
 
 /**
+ * NVIDIA currently runs these models with speculative decoding backends that reject `min_p`.
+ */
+export const NVIDIA_MIN_P_UNSUPPORTED_MODELS = new Set(["nvidia/nemotron-3-ultra-550b-a55b"]);
+
+/**
  * Models that require extended-thinking parameters injected at request time.
  * These receive `reasoning_budget` and `chat_template_kwargs: { enable_thinking: true }`
  * in addition to the standard chat-completion body.

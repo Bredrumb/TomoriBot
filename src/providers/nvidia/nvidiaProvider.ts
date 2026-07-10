@@ -17,6 +17,7 @@ import {
   NVIDIA_DEFAULT_EMBEDDING_MODEL,
   NVIDIA_DEFAULT_TEXT_MODEL,
   NVIDIA_EMBEDDINGS_URL,
+  NVIDIA_MIN_P_UNSUPPORTED_MODELS,
   NVIDIA_MODELS_URL,
 } from "@/providers/nvidia/nvidiaConstants";
 import {
@@ -353,6 +354,10 @@ export class NvidiaProvider
 
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<NvidiaProviderConfig> {
     const samplingParams = buildActiveSamplingParams(tomoriState.config);
+    if (NVIDIA_MIN_P_UNSUPPORTED_MODELS.has(tomoriState.llm.llm_codename)) {
+      delete samplingParams.minP;
+    }
+
     const config: NvidiaProviderConfig = {
       model: tomoriState.llm.llm_codename,
       apiKey,

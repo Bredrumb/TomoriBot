@@ -378,6 +378,10 @@ export default defineConfig({
         },
         {
           tag: "link",
+          attrs: { rel: "icon", type: "image/png", href: "/tomoricon.png" },
+        },
+        {
+          tag: "link",
           attrs: { rel: "apple-touch-icon", href: "/tomoricon.png" },
         },
       ],

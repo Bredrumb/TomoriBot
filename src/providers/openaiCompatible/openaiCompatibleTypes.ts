@@ -97,6 +97,7 @@ export interface OpenAICompatibleStreamAdapterOptions {
   version?: string;
   localeNamespace: string;
   errorMessagePrefix: string;
+  appendErrorDetailsForCodes?: readonly string[];
   placeholderApiKey?: string;
   enableSpeakerGuard?: boolean;
   /**

@@ -280,7 +280,7 @@ export async function retrieveRelevantDocumentChunks(params: {
 
   const channelFilter =
     channelName != null
-      ? sql`AND (array_length(d.channel_tags, 1) IS NULL OR ${"#" + channelName.toLowerCase()} = ANY(d.channel_tags))`
+      ? sql`AND (array_length(d.channel_tags, 1) IS NULL OR ${`#${channelName.toLowerCase()}`} = ANY(d.channel_tags))`
       : sql``;
 
   const personaFilter =
