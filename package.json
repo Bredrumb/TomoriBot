@@ -1,6 +1,6 @@
 {
   "name": "tomoribot",
-  "version": "0.7.9996",
+  "version": "0.7.9997",
   "description": "Customizable AI Assistant Discord Bot",
   "main": "./src/index.ts",
   "type": "module",
@@ -114,6 +114,7 @@
     "jws": "^3.2.2",
     "lodash": "^4.18.1",
     "minimatch": ">=10.2.3",
+    "morgan": "1.11.0",
     "qs": "6.15.2",
     "axios": "^1.16.1",
     "hono": "$hono",
