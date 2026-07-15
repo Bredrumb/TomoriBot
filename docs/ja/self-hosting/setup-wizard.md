@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::note
-Docker Composeを使用したいユーザーはこのウィザードをスキップし、コンテナ化されたインストールパスについては[Docker Compose](./docker-compose)を参照してください。
+Docker Composeを使用したいユーザーはこのウィザードをスキップし、コンテナ化されたインストールパスについては[Docker Compose](/ja/self-hosting/docker-compose/)を参照してください。
 :::
 
 `bun run setup` は、ローカルでのBunベースのインストールに推奨されるセルフホストパスです。`.env` を作成し、`CRYPTO_SECRET` を生成し、Discordボットのトークンを尋ね、PostgreSQLを設定し、`bun.lock` に記録された正確な依存関係をインタラクティブにインストールするため、プロンプトに従うだけで済みます。再実行しても安全です。既存の `.env` の値は、再設定を選択しない限り保持されます。
@@ -33,7 +33,7 @@ bun run setup
 - **データベース。** TomoriBotはすべてをPostgreSQLに保存します。ウィザードが自動で行うため、手動で設定する必要はありません。PostgreSQLがすでにインストールされている場合はそれを使用し、インストールされていない場合は[Docker](https://www.docker.com/)上で実行します。始める前に、どちらか一方がインストールされていることだけを確認してください。
 
 :::caution
-- **バンドルされているDocker版PostgreSQLは、データベースのみをDockerで実行します。** ボット自体、スタートアップバックアップ、`bun run backup`、および `restore-backup` は、引き続きホストのBunとホストのPostgreSQLクライアントツールを通じて実行されます。すべてをDockerで実行したい場合は、代わりに[Docker Compose](./docker-compose)を使用してください。
+- **バンドルされているDocker版PostgreSQLは、データベースのみをDockerで実行します。** ボット自体、スタートアップバックアップ、`bun run backup`、および `restore-backup` は、引き続きホストのBunとホストのPostgreSQLクライアントツールを通じて実行されます。すべてをDockerで実行したい場合は、代わりに[Docker Compose](/ja/self-hosting/docker-compose/)を使用してください。
 :::
 
 `psql` が見つからない場合やプロビジョニングに失敗した場合、ウィザードは手動で実行するためのSQLを出力します。いずれにせよ、TomoriBotは初回起動時にスキーマ、シード、移行、`pgcrypto`、およびRAGスキーマを自動的に初期化します。
@@ -49,7 +49,7 @@ bun run setup
 | トークナイザーアセット | モデルを意識したロジットバイアス用のローカルのトークナイザーアセット。 |
 | URL Fetch MCP | バンドルされている `fetch_url` のフォールバック用のPython `mcp-server-fetch`。 |
 
-これらを手動でインストールする場合は、[オプションの追加機能（手動での「フルインストール」）](./manual-setup#オプションの追加機能手動でのフルインストール)を参照してください。
+これらを手動でインストールする場合は、[オプションの追加機能（手動での「フルインストール」）](/ja/self-hosting/manual-setup/#オプションの追加機能手動でのフルインストール)を参照してください。
 
 ## セットアップ後
 
@@ -64,4 +64,4 @@ bun run launch --searxng --crawl4ai  # ボットとサイドカー（bun run lau
 
 バックアップ優先のアップデーターコマンドである `bun run update` を使用してください。
 
-これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install --frozen-lockfile` が実行されます。`dist/` から実行する場合は `--build` を、Composeデプロイメントの場合は `--docker` を追加してください。詳細については[メンテナンスとバックアップ](./maintenance)ページを参照してください。
+これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install --frozen-lockfile` が実行されます。`dist/` から実行する場合は `--build` を、Composeデプロイメントの場合は `--docker` を追加してください。詳細については[メンテナンスとバックアップ](/ja/self-hosting/maintenance/)ページを参照してください。

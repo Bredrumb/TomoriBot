@@ -5,10 +5,10 @@ sidebar:
 ---
 
 :::note
-Docker Composeを使用したいユーザーはこのウィザードをスキップし、コンテナ化されたインストールパスについては[Docker Compose](./docker-compose)を参照してください。
+Docker Composeを使用したいユーザーはこのウィザードをスキップし、コンテナ化されたインストールパスについては[Docker Compose](/ja/self-hosting/docker-compose/)を参照してください。
 :::
 
-これは、ガイド付きウィザードを使用したくない技術的なユーザー向けの手動インストール手順です。手厚いガイドラインが必要な場合は、代わりに[セットアップウィザード](./setup-wizard)を使用してください。ウィザードが `.env` を作成し、安全な `CRYPTO_SECRET` を生成し、PostgreSQLを設定し、インストールを実行してくれます。
+これは、ガイド付きウィザードを使用したくない技術的なユーザー向けの手動インストール手順です。手厚いガイドラインが必要な場合は、代わりに[セットアップウィザード](/ja/self-hosting/setup-wizard/)を使用してください。ウィザードが `.env` を作成し、安全な `CRYPTO_SECRET` を生成し、PostgreSQLを設定し、インストールを実行してくれます。
 
 ## 前提条件
 
@@ -49,7 +49,7 @@ docker run -d --name tomori-db \
   -p 5432:5432 pgvector/pgvector:pg16
 ```
 
-その後、`POSTGRES_HOST=localhost`、`POSTGRES_PORT=5432`、および上記のユーザー/パスワード/DBを設定します。`pgvector/pgvector` イメージにはRAG拡張機能がプレインストールされています。ドキュメント/RAGメモリーが不要な場合は、`postgres:16` に変更してください。これはデータベースのみをDockerで実行するものであり、ボット自体は引き続きホストのBunで実行されます。ボットとデータベースを完全にコンテナ化したい場合は、代わりに[Docker Compose](./docker-compose)を使用してください。
+その後、`POSTGRES_HOST=localhost`、`POSTGRES_PORT=5432`、および上記のユーザー/パスワード/DBを設定します。`pgvector/pgvector` イメージにはRAG拡張機能がプレインストールされています。ドキュメント/RAGメモリーが不要な場合は、`postgres:16` に変更してください。これはデータベースのみをDockerで実行するものであり、ボット自体は引き続きホストのBunで実行されます。ボットとデータベースを完全にコンテナ化したい場合は、代わりに[Docker Compose](/ja/self-hosting/docker-compose/)を使用してください。
 :::
 
 オプションの調整値は `.env.optional.example` にあります。カスタマイズしたい値（制限、タイムアウト、機能トグル、サイドカーURLなど）をコピーしてください。
@@ -71,22 +71,38 @@ bun run launch --help        # すべてのフラグを表示
 
 ## オプションの追加機能（手動での「フルインストール」）
 
-[セットアップウィザード](./setup-wizard)の**フルインストール**パスでは、基本インストールの上に4つの軽量な追加機能がレイヤー化されます。ボットの実行に必須のものはありませんが、それぞれが特定の機能をアンロックします。手動でインストールする場合は、必要なものを追加してください。
+[セットアップウィザード](/ja/self-hosting/setup-wizard/)の**フルインストール**パスでは、基本インストールの上に4つの軽量な追加機能がレイヤー化されます。ボットの実行に必須のものはありませんが、それぞれが特定の機能をアンロックします。手動でインストールする場合は、必要なものを追加してください。
 
 ### `pgvector` : ドキュメント/RAGメモリー
 
-RAG（ドキュメントのアップロードとチャンネル間のリコール）は、エンベディングを `vector` カラムに保存するため、[pgvector](https://github.com/pgvector/pgvector)拡張機能が必要です。お使いのPostgreSQLのメジャーバージョンに合わせてインストールし、データベースで一度有効にします。
+RAG（ドキュメントのアップロードとチャンネル間のリコール）は、エンベディングを `vector` カラムに保存するため、[pgvector](https://github.com/pgvector/pgvector)拡張機能が必要です。お使いのPostgreSQLのメジャーバージョンに合わせてインストールします。
 
 ```sh
 # Debian/Ubuntu（例: PostgreSQL 16の場合）
 sudo apt-get install -y postgresql-16-pgvector
 ```
 
+次に、データベースで一度だけ有効にします。`.env` の `POSTGRES_*` の値を使って `psql` で接続します（`POSTGRES_PASSWORD` の入力を求められます）。
+
+```sh
+# ネイティブ / ホストのpsql（POSTGRES_USER と POSTGRES_DB はご自身の値に置き換えてください）:
+psql -h localhost -p 5432 -U tomori -d tomodb
+
+# または、データベースをステップ2のDockerコンテナで実行している場合:
+docker exec -it tomori-db psql -U tomori -d tomori
+```
+
+接続したら、次を実行します。
+
 ```sql
 CREATE EXTENSION vector;
 ```
 
-pgvectorがなくてもボットは動作しますが、RAG機能は完全に利用できなくなります。この拡張機能は、バックアップを復元する前にターゲットデータベースにも必要です。詳細については[安全な移行](./safe-migration)を参照してください。
+:::note[Windows]
+ネイティブのWindows版PostgreSQL向けにビルド済みのpgvectorパッケージは存在しません。インストールするには、Visual StudioのC++と `nmake` を使い、お使いのPostgreSQLのバージョンに合わせてソースからビルドする必要があります（pgvectorの[Windows向け手順](https://github.com/pgvector/pgvector#windows)を参照）。Windowsでのより簡単な方法は、上記の[設定](#2-設定)に示した `pgvector/pgvector` コンテナでデータベースを実行することです。このイメージには拡張機能がプレインストールされています。
+:::
+
+pgvectorがなくてもボットは動作しますが、RAG機能は完全に利用できなくなります。この拡張機能は、バックアップを復元する前にターゲットデータベースにも必要です。詳細については[安全な移行](/ja/self-hosting/safe-migration/)を参照してください。
 
 ### `pg_cron` : スケジュールされたクリーンアップジョブ
 
@@ -151,4 +167,4 @@ DuckDuckGo/Feloの `web_search` は別物であり、`bun install --frozen-lockf
 
 ## メンテナンス、更新とバックアップ
 
-インストールが完了したら、ホスト側のスクリプト（`bun run update`、`bun run backup`、`bun run restore-backup`、`bun run nuke-db`、`bun run rotate-keys` など）、および更新とバックアップの手順はすべて[メンテナンスとバックアップ](./maintenance)ページにあります。新しいバージョンをプルする前に、まずは[安全な移行](./safe-migration)から始めてください。
+インストールが完了したら、ホスト側のスクリプト（`bun run update`、`bun run backup`、`bun run restore-backup`、`bun run nuke-db`、`bun run rotate-keys` など）、および更新とバックアップの手順はすべて[メンテナンスとバックアップ](/ja/self-hosting/maintenance/)ページにあります。新しいバージョンをプルする前に、まずは[安全な移行](/ja/self-hosting/safe-migration/)から始めてください。

@@ -105,8 +105,8 @@ After this stage runs:
 ## Related docs
 
 - Tool-prompt macros: covered in
-  [native-assembly README](./README.md#shared-helpers-used-across-contributors).
+  [native-assembly README](/architecture/pipelines/context-build/02-native-assembly/#shared-helpers-used-across-contributors).
 - Mention conversion: covered in
-  [native-assembly README](./README.md#shared-helpers-used-across-contributors).
+  [native-assembly README](/architecture/pipelines/context-build/02-native-assembly/#shared-helpers-used-across-contributors).
 - SillyTavern preset reassembly: → preset-routing stage
   [`01-preset-routing.md`](../01-preset-routing)

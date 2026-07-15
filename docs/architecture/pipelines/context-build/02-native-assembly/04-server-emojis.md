@@ -89,7 +89,7 @@ the native-assembly README's extension-point discussion for the
 
 ## Related docs
 
-- Sticker contributor: [`05-server-stickers.md`](./05-server-stickers)
+- Sticker contributor: [`05-server-stickers.md`](/architecture/pipelines/context-build/02-native-assembly/05-server-stickers/)
 - Emoji metadata sources: → no dedicated doc; the `/refresh` command
   and `refreshEmojis` event handler populate it
 - Persona asset pre-loading (chat pipeline):

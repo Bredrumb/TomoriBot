@@ -69,4 +69,4 @@ channel link") would either:
 ## Related docs
 
 - Mention conversion: covered in
-  [native-assembly README](./README.md#shared-helpers-used-across-contributors).
+  [native-assembly README](/architecture/pipelines/context-build/02-native-assembly/#shared-helpers-used-across-contributors).

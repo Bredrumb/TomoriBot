@@ -9,7 +9,7 @@ how to back up and restore your database. These are host-side operations — you
 shell, not from Discord. For the in-Discord, per-user export/import/delete flows, see
 [Data Handling](/features/knowledge/data-handling/) instead.
 
-If you're about to `git pull` a new version, read [Safe Migration](./safe-migration) first —
+If you're about to `git pull` a new version, read [Safe Migration](/self-hosting/safe-migration/) first —
 it covers backing up *before* the on-boot migration runner touches your schema.
 
 ## Maintenance scripts
@@ -71,7 +71,7 @@ and **cannot** be used with `restore-backup` (that would cause primary-key confl
 
 TomoriBot also takes **automatic startup backups** in non-production environments, and a full
 restore requires the `pgvector` extension to be present on the target database. Both are
-covered in detail under [Safe Migration](./safe-migration), along with a manual `pg_dump` /
+covered in detail under [Safe Migration](/self-hosting/safe-migration/), along with a manual `pg_dump` /
 `pg_restore` procedure if you prefer to drive the tooling directly.
 
 ## Docker Compose backups
@@ -115,6 +115,6 @@ want a clean slate you can still roll back from — never run it without a curre
 
 ## See also
 
-- [Safe Migration](./safe-migration) — backing up before pulling, and the `pgvector` restore prerequisite
+- [Safe Migration](/self-hosting/safe-migration/) — backing up before pulling, and the `pgvector` restore prerequisite
 - [Data Handling](/features/knowledge/data-handling/) — per-user, in-Discord export/import/delete
-- [Setup Wizard](./setup-wizard) — the guided `bun run setup` install
+- [Setup Wizard](/self-hosting/setup-wizard/) — the guided `bun run setup` install

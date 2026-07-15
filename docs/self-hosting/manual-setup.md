@@ -7,11 +7,11 @@ sidebar:
 
 :::note
 Users who want to use Docker Compose should skip this wizard, see
-[Docker Compose](./docker-compose) for the containerized install path.
+[Docker Compose](/self-hosting/docker-compose/) for the containerized install path.
 :::
 
 This is the manual install procedure for technical users who'd rather not use the guided
-wizard. If you want the hand-held path, use the [setup wizard](./setup-wizard) instead as it
+wizard. If you want the hand-held path, use the [setup wizard](/self-hosting/setup-wizard/) instead as it
 creates `.env`, generates a safe `CRYPTO_SECRET`, configures PostgreSQL, and runs the install
 for you.
 
@@ -60,7 +60,7 @@ Then set `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432`, and the user/password/
 The `pgvector/pgvector` image ships the RAG extension pre-installed; swap it for `postgres:16`
 if you don't need document/RAG memory. This runs only the database in Docker and the bot
 still runs on host Bun. For a fully containerized bot and database, use
-[Docker Compose](./docker-compose) instead.
+[Docker Compose](/self-hosting/docker-compose/) instead.
 :::
 
 Optional tuning lives in `.env.optional.example`. Copy over any values you want to
@@ -85,7 +85,7 @@ bun run launch --help        # see all flags
 
 ## Optional extras (the manual "Full Install")
 
-The [setup wizard](./setup-wizard)'s **Full Install** path layers four lightweight extras on
+The [setup wizard](/self-hosting/setup-wizard/)'s **Full Install** path layers four lightweight extras on
 top of the base install. None are required to run the bot, but each unlocks a feature. If
 you're installing by hand, add whichever you want:
 
@@ -93,12 +93,33 @@ you're installing by hand, add whichever you want:
 
 RAG (document uploads and cross-channel recall) stores embeddings in a `vector` column, which
 needs the [pgvector](https://github.com/pgvector/pgvector) extension. Install it for your
-PostgreSQL major version, then enable it once on your database:
+PostgreSQL major version:
 
 ```sh
 # Debian/Ubuntu, e.g. for PostgreSQL 16
 sudo apt-get install -y postgresql-16-pgvector
 ```
+
+Then enable it once on your database. Connect with `psql` using the `POSTGRES_*` values from
+your `.env` — it prompts for `POSTGRES_PASSWORD`:
+
+:::note[Windows]
+There is no prebuilt pgvector package for native Windows PostgreSQL. Installing it means
+building from source against your exact PostgreSQL version with Visual Studio C++ and `nmake`
+(see pgvector's [Windows instructions](https://github.com/pgvector/pgvector#windows)). The
+simpler path on Windows is to run the database in the `pgvector/pgvector` container shown under
+[Configure](#2-configure) above, which ships the extension pre-installed.
+:::
+
+```sh
+# Native / host psql (substitute your own POSTGRES_USER and POSTGRES_DB):
+psql -h localhost -p 5432 -U tomori -d tomodb
+
+# Or, if the database runs in the Docker container from step 2:
+docker exec -it tomori-db psql -U tomori -d tomori
+```
+
+Once connected, run:
 
 ```sql
 CREATE EXTENSION vector;
@@ -106,7 +127,7 @@ CREATE EXTENSION vector;
 
 Without pgvector the bot still runs but RAG features become completely unavailable. This extension is
 also required on the target database before restoring a backup; see
-[Safe Migration](./safe-migration) for details.
+[Safe Migration](/self-hosting/safe-migration/) for details.
 
 ### `pg_cron` : scheduled cleanup jobs
 
@@ -178,5 +199,5 @@ DuckDuckGo/Felo `web_search` is separate and ships with `bun install --frozen-lo
 
 Once you're installed, the host-side scripts (`bun run update`, `bun run backup`,
 `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, …) and the update and
-backup procedures all live on the [Maintenance & Backups](./maintenance) page. If you're about
-to pull a new version, start with [Safe Migration](./safe-migration).
+backup procedures all live on the [Maintenance & Backups](/self-hosting/maintenance/) page. If you're about
+to pull a new version, start with [Safe Migration](/self-hosting/safe-migration/).

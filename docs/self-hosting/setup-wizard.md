@@ -8,7 +8,7 @@ sidebar:
 
 :::note
 Users who want to use Docker Compose should skip this wizard, see
-[Docker Compose](./docker-compose) for the containerized install path.
+[Docker Compose](/self-hosting/docker-compose/) for the containerized install path.
 :::
 
 `bun run setup` is the recommended self-host path for local Bun-based installs. It creates your `.env`, generates a `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, and installs the exact dependencies from `bun.lock` interactively, so just follow the prompts. It's safe
@@ -43,7 +43,7 @@ bun run setup
 - **Bundled Docker PostgreSQL runs only the database in Docker.** The bot itself, startup
   backups, `bun run backup`, and `restore-backup` still run through host Bun and host
   PostgreSQL client tools. If you'd rather run everything in Docker, use
-  [Docker Compose](./docker-compose) instead.
+  [Docker Compose](/self-hosting/docker-compose/) instead.
 :::
 
 If `psql` is missing or provisioning fails, the wizard prints the SQL to run by hand. Either
@@ -63,7 +63,7 @@ prints the command or guide to finish manually and keeps going:
 | URL Fetch MCP | Python `mcp-server-fetch` for the bundled `fetch_url` fallback. |
 
 To install any of these by hand, see the
-[Manual Setup extras](./manual-setup#optional-extras-the-manual-full-install).
+[Manual Setup extras](/self-hosting/manual-setup/#optional-extras-the-manual-full-install).
 
 ## After setup
 
@@ -81,4 +81,4 @@ Use the backup-first updater command: `bun run update`
 This runs `bun run backup`, then
 `git pull --rebase --autostash`, then `bun install --frozen-lockfile`. Add `--build` if you run from `dist/`,
 or `--docker` for a Compose deployment. Full details on the
-[Maintenance & Backups](./maintenance) page.
+[Maintenance & Backups](/self-hosting/maintenance/) page.
