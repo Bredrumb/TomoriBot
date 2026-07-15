@@ -28,7 +28,7 @@ PostgreSQL schema, `pgcrypto`, seeds, and migrations initialize automatically on
 ```sh
 git clone https://github.com/Bredrumb/TomoriBot.git
 cd TomoriBot
-bun install
+bun install --frozen-lockfile
 ```
 
 ## 2. Configure
@@ -172,7 +172,7 @@ pip install --break-system-packages mcp-server-fetch
 # ...or install it inside a virtualenv.
 ```
 
-DuckDuckGo/Felo `web_search` is separate and ships with `bun install` so no extra step needed.
+DuckDuckGo/Felo `web_search` is separate and ships with `bun install --frozen-lockfile` so no extra step needed.
 
 ## Maintenance, updating & backups
 

@@ -11,7 +11,7 @@ Users who want to use Docker Compose should skip this wizard, see
 [Docker Compose](./docker-compose) for the containerized install path.
 :::
 
-`bun run setup` is the recommended self-host path for local Bun-based installs. It creates your `.env`, generates a `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, and installs dependencies interactively, so just follow the prompts. It's safe
+`bun run setup` is the recommended self-host path for local Bun-based installs. It creates your `.env`, generates a `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, and installs the exact dependencies from `bun.lock` interactively, so just follow the prompts. It's safe
 to re-run; existing `.env` values are kept unless you choose to reconfigure them.
 
 ## Choose a path
@@ -79,6 +79,6 @@ When the bot is online, run `/config setup` in Discord to add your AI provider k
 Use the backup-first updater command: `bun run update` 
 
 This runs `bun run backup`, then
-`git pull --rebase --autostash`, then `bun install`. Add `--build` if you run from `dist/`,
+`git pull --rebase --autostash`, then `bun install --frozen-lockfile`. Add `--build` if you run from `dist/`,
 or `--docker` for a Compose deployment. Full details on the
 [Maintenance & Backups](./maintenance) page.

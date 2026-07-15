@@ -53,6 +53,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify runtime dependency imports
+        run: bun run check-runtime-imports
+
       - name: Run linting and type checks
         run: bun run lint && bun run check
 

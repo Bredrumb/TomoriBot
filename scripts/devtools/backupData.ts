@@ -237,7 +237,7 @@ async function runRestore(bundlePath: string): Promise<void> {
   log.section("✅ Restore Complete!");
   log.info("Next steps:");
   log.info("  1. Update POSTGRES_*, DISCORD_TOKEN, and CRYPTO_SECRET in .env if they differ on this machine.");
-  log.info("  2. Run `bun install` to ensure dependencies are up to date.");
+  log.info("  2. Run `bun install --frozen-lockfile` to restore the locked dependencies.");
   log.info("  3. Start the bot with `bun run dev` or `bun run start`.");
 }
 

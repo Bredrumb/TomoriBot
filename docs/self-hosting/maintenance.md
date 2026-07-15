@@ -36,14 +36,14 @@ Stop the running bot first, then use the backup-first updater:
 bun run update
 ```
 
-This runs `bun run backup`, then `git pull --rebase --autostash`, then `bun install`. The
+This runs `bun run backup`, then `git pull --rebase --autostash`, then `bun install --frozen-lockfile`. The
 backup bundle is written to `backups/` and includes both the database dump and `.env`. Add
 `--skip-backup` to skip the pre-update backup. Manual fallback:
 
 ```sh
 bun run backup
 git pull --rebase --autostash
-bun install
+bun install --frozen-lockfile
 ```
 
 Running from `dist/`? Use `bun run update --build`. Running Docker Compose? Use

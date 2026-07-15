@@ -31,12 +31,12 @@ sidebar:
 bun run update
 ```
 
-これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install` が実行されます。バックアップバンドルは `backups/` に書き込まれ、データベースダンプと `.env` の両方が含まれます。更新前のバックアップをスキップするには `--skip-backup` を追加します。手動でのフォールバック手順は以下の通りです。
+これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install --frozen-lockfile` が実行されます。バックアップバンドルは `backups/` に書き込まれ、データベースダンプと `.env` の両方が含まれます。更新前のバックアップをスキップするには `--skip-backup` を追加します。手動でのフォールバック手順は以下の通りです。
 
 ```sh
 bun run backup
 git pull --rebase --autostash
-bun install
+bun install --frozen-lockfile
 ```
 
 `dist/` から実行していますか？その場合は `bun run update --build` を使用してください。Docker Composeを実行していますか？その場合は `bun run update --docker` を使用してください。

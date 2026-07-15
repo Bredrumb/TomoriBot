@@ -23,7 +23,7 @@ PostgreSQLスキーマ、`pgcrypto`、シード、および移行は、ボット
 ```sh
 git clone https://github.com/Bredrumb/TomoriBot.git
 cd TomoriBot
-bun install
+bun install --frozen-lockfile
 ```
 
 ## 2. 設定
@@ -147,7 +147,7 @@ pip install --break-system-packages mcp-server-fetch
 # ...または仮想環境（virtualenv）内にインストールしてください。
 ```
 
-DuckDuckGo/Feloの `web_search` は別物であり、`bun install` とともに同梱されているため、追加の手順は必要ありません。
+DuckDuckGo/Feloの `web_search` は別物であり、`bun install --frozen-lockfile` とともに同梱されているため、追加の手順は必要ありません。
 
 ## メンテナンス、更新とバックアップ
 

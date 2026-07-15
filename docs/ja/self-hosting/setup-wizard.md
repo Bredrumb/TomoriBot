@@ -9,7 +9,7 @@ sidebar:
 Docker Composeを使用したいユーザーはこのウィザードをスキップし、コンテナ化されたインストールパスについては[Docker Compose](./docker-compose)を参照してください。
 :::
 
-`bun run setup` は、ローカルでのBunベースのインストールに推奨されるセルフホストパスです。`.env` を作成し、`CRYPTO_SECRET` を生成し、Discordボットのトークンを尋ね、PostgreSQLを設定し、依存関係をインタラクティブにインストールするため、プロンプトに従うだけで済みます。再実行しても安全です。既存の `.env` の値は、再設定を選択しない限り保持されます。
+`bun run setup` は、ローカルでのBunベースのインストールに推奨されるセルフホストパスです。`.env` を作成し、`CRYPTO_SECRET` を生成し、Discordボットのトークンを尋ね、PostgreSQLを設定し、`bun.lock` に記録された正確な依存関係をインタラクティブにインストールするため、プロンプトに従うだけで済みます。再実行しても安全です。既存の `.env` の値は、再設定を選択しない限り保持されます。
 
 ## パスの選択
 
@@ -64,4 +64,4 @@ bun run launch --searxng --crawl4ai  # ボットとサイドカー（bun run lau
 
 バックアップ優先のアップデーターコマンドである `bun run update` を使用してください。
 
-これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install` が実行されます。`dist/` から実行する場合は `--build` を、Composeデプロイメントの場合は `--docker` を追加してください。詳細については[メンテナンスとバックアップ](./maintenance)ページを参照してください。
+これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install --frozen-lockfile` が実行されます。`dist/` から実行する場合は `--build` を、Composeデプロイメントの場合は `--docker` を追加してください。詳細については[メンテナンスとバックアップ](./maintenance)ページを参照してください。

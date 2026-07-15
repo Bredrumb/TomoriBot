@@ -375,6 +375,7 @@ const CATEGORIES = {
   CODE: (r: ResultItem) =>
     r.name.includes("Type Check") ||
     r.name.includes("Linting") ||
+    r.name.includes("Runtime Imports") ||
     r.name.includes("SQL Audit") ||
     r.name.includes("Media Size"),
   SECURITY: (r: ResultItem) => r.name.includes("Dependency Audit"),
@@ -393,6 +394,7 @@ async function main() {
   const [
     typeCheckResult,
     lintResult,
+    runtimeImportsResult,
     auditResult,
     sqlAuditResult,
     mediaSizeResult,
@@ -407,6 +409,7 @@ async function main() {
   ] = await Promise.all([
     runCheck("Type Check (bun run check)", ["bun", "run", "check"], true),
     runLint(),
+    runCheck("Runtime Imports (bun run check-runtime-imports)", ["bun", "run", "check-runtime-imports"], true),
     runAudit(),
     runCheck("SQL Audit (bun run audit-sql)", ["bun", "run", "audit-sql"], true),
     runCheck("Media Size (bun run check-media-size)", ["bun", "run", "check-media-size"], true),
@@ -441,6 +444,7 @@ async function main() {
   const results: ResultItem[] = [
     typeCheckResult,
     lintResult,
+    runtimeImportsResult,
     auditResult,
     sqlAuditResult,
     mediaSizeResult,
@@ -467,8 +471,10 @@ async function main() {
   const HINTS: Record<string, string> = {
     "Type Check": "Run `bun run check` locally to see TypeScript errors.",
     "Linting (bun run lint)": "Review the warning or commit the auto-fixed files.",
+    "Runtime Imports":
+      "Run `bun install --frozen-lockfile`, then `bun run check-runtime-imports`. Confirm bun.lock resolves gaxios to uuid@9.",
     "Dependency Audit":
-      "Find the vulnerable package in the audit log and pin a safe version in the `overrides` field of package.json, or run `bun update <package-name>` to update it specifically.",
+      "Update the parent dependency or run `bun update <package-name>` specifically. Only use a global override when the replacement stays within every dependent package's declared version range.",
     "SQL Audit":
       "Ensure all raw SQL queries are inside the 'src/utils/db/repositories/' folder or exempt them in the script.",
     "Media Size":
