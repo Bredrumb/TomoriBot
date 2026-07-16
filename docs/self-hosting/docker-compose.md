@@ -5,8 +5,8 @@ sidebar:
 ---
 
 Docker Compose builds and runs TomoriBot **plus** PostgreSQL as containers. It's the
-third install path alongside the [setup wizard](./setup-wizard) and
-[manual setup](./manual-setup) — pick it when you'd rather run everything in Docker than
+third install path alongside the [setup wizard](/self-hosting/setup-wizard/) and
+[manual setup](/self-hosting/manual-setup/) — pick it when you'd rather run everything in Docker than
 install Bun and PostgreSQL on the host. It does **not** use the setup wizard; the database
 connection is auto-configured for you.
 
@@ -14,7 +14,7 @@ connection is auto-configured for you.
 Running the bot and database in Docker does not containerize the maintenance scripts.
 `bun run backup`, `bun run restore-backup`, `bun run update`, `bun run rotate-keys`, and
 friends still run through host Bun and the host PostgreSQL client tools. See
-[Maintenance & Backups](./maintenance) for the Compose-specific procedures.
+[Maintenance & Backups](/self-hosting/maintenance/) for the Compose-specific procedures.
 :::
 
 ## 1. Required `.env` values
@@ -64,12 +64,12 @@ Sidecars are opt-in via Compose profiles, so you only run what you need:
 docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
-See [SearXNG](./local-endpoints/setup-searxng), [Crawl4AI](./local-endpoints/setup-crawl4ai),
-and [Local Monitoring](./local-monitoring) for per-sidecar details.
+See [SearXNG](/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/),
+and [Local Monitoring](/self-hosting/local-monitoring/) for per-sidecar details.
 
 ## Maintenance, updating & backups
 
 Use `bun run update --docker` for the backup-first update procedure on a Compose
 deployment. Backing up and restoring the Compose database (including running host scripts
-against it) is covered on the [Maintenance & Backups](./maintenance) page. Before pulling a
-new version, start with [Safe Migration](./safe-migration).
+against it) is covered on the [Maintenance & Backups](/self-hosting/maintenance/) page. Before pulling a
+new version, start with [Safe Migration](/self-hosting/safe-migration/).

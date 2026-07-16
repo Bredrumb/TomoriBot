@@ -89,7 +89,7 @@ After this stage runs:
 
 ## Related docs
 
-- Emoji contributor: [`04-server-emojis.md`](./04-server-emojis)
+- Emoji contributor: [`04-server-emojis.md`](/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/)
 - Sticker tool execution: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
 - Tool-prompt macros: covered in
-  [native-assembly README](./README.md#shared-helpers-used-across-contributors).
+  [native-assembly README](/architecture/pipelines/context-build/02-native-assembly/#shared-helpers-used-across-contributors).

@@ -75,11 +75,13 @@ export function collectRenderModifierSourceNames(activeName: string, aliases: re
 export function parseLeadingRenderModifier(
   text: string,
   sourceNames: readonly string[],
+  chainSourceNames: readonly string[] = sourceNames,
 ): LeadingRenderModifierMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
   const collectedSourceNames = collectRenderModifierSourceNames("", sourceNames);
-  const labelChainAlternation = buildSourceLabelAlternation(collectedSourceNames);
+  const collectedChainSourceNames = collectRenderModifierSourceNames("", chainSourceNames);
+  const labelChainAlternation = buildSourceLabelAlternation(collectedChainSourceNames);
   const labelChainPrefix = labelChainAlternation ? `(?:(?:${labelChainAlternation})\\s*[:：][ \\t]*)*` : "";
 
   for (const sourceName of collectedSourceNames) {

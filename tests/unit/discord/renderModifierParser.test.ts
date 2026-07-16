@@ -39,6 +39,31 @@ describe("render modifier parser", () => {
     });
   });
 
+  it("allows a known previous-persona chain before the active persona render-modifier syntax", () => {
+    const result = parseLeadingRenderModifier(
+      "Lilya: Aphel (embarrassed): Can you not?",
+      ["Aphel", "Tomori"],
+      ["Aphel", "Tomori", "Lilya"],
+    );
+
+    expect(result).toEqual({
+      sourceName: "Aphel",
+      modifier: "embarrassed",
+      body: "Can you not?",
+      matchedPrefix: "Lilya: Aphel (embarrassed): ",
+    });
+  });
+
+  it("does not let a chain-only persona become the active render-modifier source", () => {
+    const result = parseLeadingRenderModifier(
+      "Lilya (embarrassed): Can you not?",
+      ["Aphel", "Tomori"],
+      ["Aphel", "Tomori", "Lilya"],
+    );
+
+    expect(result).toBeNull();
+  });
+
   it("parses unresolved modifiers so callers can strip the parenthetical label", () => {
     const result = parseLeadingRenderModifier("Ren (unknown): hi", ["Ren"]);
 

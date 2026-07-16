@@ -244,27 +244,14 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         context,
       });
 
-      const effectiveTemperatureLabel = "temperature" in requestBody ? String(config.temperature) : "omitted";
-      const effectiveTopPLabel =
-        openAICompatibleConfig.topP !== undefined && "top_p" in requestBody
-          ? String(openAICompatibleConfig.topP)
-          : "omitted";
-      const effectiveTopKLabel =
-        openAICompatibleConfig.topK !== undefined && "top_k" in requestBody
-          ? String(openAICompatibleConfig.topK)
-          : "omitted";
+      const effectiveTemperatureLabel = "temperature" in requestBody ? String(requestBody.temperature) : "omitted";
+      const effectiveTopPLabel = "top_p" in requestBody ? String(requestBody.top_p) : "omitted";
+      const effectiveTopKLabel = "top_k" in requestBody ? String(requestBody.top_k) : "omitted";
       const effectiveFrequencyPenaltyLabel =
-        openAICompatibleConfig.frequencyPenalty !== undefined && "frequency_penalty" in requestBody
-          ? String(openAICompatibleConfig.frequencyPenalty)
-          : "omitted";
+        "frequency_penalty" in requestBody ? String(requestBody.frequency_penalty) : "omitted";
       const effectivePresencePenaltyLabel =
-        openAICompatibleConfig.presencePenalty !== undefined && "presence_penalty" in requestBody
-          ? String(openAICompatibleConfig.presencePenalty)
-          : "omitted";
-      const effectiveMinPLabel =
-        openAICompatibleConfig.minP !== undefined && "min_p" in requestBody
-          ? String(openAICompatibleConfig.minP)
-          : "omitted";
+        "presence_penalty" in requestBody ? String(requestBody.presence_penalty) : "omitted";
+      const effectiveMinPLabel = "min_p" in requestBody ? String(requestBody.min_p) : "omitted";
       log.info(
         `${this.options.adapterName}: Sampling params - temp: ${effectiveTemperatureLabel}, top_p: ${effectiveTopPLabel}, top_k: ${effectiveTopKLabel}, freq_penalty: ${effectiveFrequencyPenaltyLabel}, pres_penalty: ${effectivePresencePenaltyLabel}, rep_penalty: ${openAICompatibleConfig.repetitionPenalty ?? "default"}, min_p: ${effectiveMinPLabel}, logit_bias: ${Object.keys(openAICompatibleConfig.logitBias ?? {}).length}`,
       );
@@ -629,6 +616,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       localeNamespace: this.options.localeNamespace,
       fallbackMessage: localizer(locale, `${this.options.localeNamespace}.unknown_default_message`),
       connectionRefusedMessage: localizer(locale, `${this.options.localeNamespace}.connection_refused`),
+      appendDetailsForCodes: this.options.appendErrorDetailsForCodes,
     });
   }
 

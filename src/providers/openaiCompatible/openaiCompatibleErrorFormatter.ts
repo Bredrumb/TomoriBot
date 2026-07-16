@@ -11,6 +11,7 @@ interface CreateErrorDescriptionOptions {
   localeNamespace: string;
   fallbackMessage: string;
   connectionRefusedMessage?: string;
+  appendDetailsForCodes?: readonly string[];
 }
 
 interface NormalizeProviderErrorOptions {
@@ -129,7 +130,7 @@ export function createOpenAICompatibleErrorDescription(
       messageKey = "408_default_message";
       break;
     case "provider_overloaded":
-      messageKey = "503_default_message";
+      messageKey = `${errorCode}_default_message`;
       break;
     case "api_error":
       messageKey = `${errorCode}_default_message`;
@@ -141,6 +142,7 @@ export function createOpenAICompatibleErrorDescription(
 
   const localeKey = `${options.localeNamespace}.${messageKey}`;
   let message = localizer(locale, localeKey);
+  let detailsAppended = false;
 
   if (error.type === "model_error") {
     const details = getProviderErrorDisplayMessage(error);
@@ -149,21 +151,45 @@ export function createOpenAICompatibleErrorDescription(
     }
     if (details && !message.includes(details)) {
       message += `\n\n**Details:**\n${details}`;
+      detailsAppended = true;
     }
-  } else if (message === localeKey) {
-    message = localizer(locale, `${options.localeNamespace}.unknown_default_message`);
-
-    if (message === `${options.localeNamespace}.unknown_default_message`) {
-      message = options.fallbackMessage;
+  } else {
+    if (message === localeKey && error.type === "provider_overloaded" && messageKey !== "503_default_message") {
+      const providerOverloadedKey = `${options.localeNamespace}.503_default_message`;
+      const providerOverloadedMessage = localizer(locale, providerOverloadedKey);
+      if (providerOverloadedMessage !== providerOverloadedKey) {
+        message = providerOverloadedMessage;
+      }
     }
 
-    const maxErrorLength = 500;
-    const errorSnippet =
-      error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-    message += `\n\n**Details:**\n${errorSnippet}`;
+    if (message === localeKey) {
+      message = localizer(locale, `${options.localeNamespace}.unknown_default_message`);
+
+      if (message === `${options.localeNamespace}.unknown_default_message`) {
+        message = options.fallbackMessage;
+      }
+
+      message = appendProviderErrorDetails(message, error);
+      detailsAppended = true;
+    }
+  }
+
+  if (!detailsAppended && options.appendDetailsForCodes?.includes(errorCode)) {
+    message = appendProviderErrorDetails(message, error);
   }
 
   return `Error Code ${errorCode}: ${message}`;
+}
+
+function appendProviderErrorDetails(message: string, error: ProviderError): string {
+  const maxErrorLength = 500;
+  const detail = error.message.trim();
+  if (!detail || message.includes(detail)) {
+    return message;
+  }
+
+  const errorSnippet = detail.length > maxErrorLength ? `${detail.substring(0, maxErrorLength)}...` : detail;
+  return `${message}\n\n**Details:**\n${errorSnippet}`;
 }
 
 function parseOpenAICompatibleErrorPayload(errorText: string): ParsedOpenAICompatibleErrorPayload {

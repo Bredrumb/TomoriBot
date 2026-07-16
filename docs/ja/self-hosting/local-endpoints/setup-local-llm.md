@@ -131,7 +131,7 @@ TomoriBotは送信時に接続を検証します。エンドポイントに到�
 ### ChatMock (ChatGPTアカウント / Codex CLI)
 
 システムプロンプトの回避策があるため、独自の専用ガイドがあります:
-**[セットアップ: ChatMock](./setup-chatmock)**。
+**[セットアップ: ChatMock](/ja/self-hosting/local-endpoints/setup-chatmock/)**。
 
 ## Hugging Faceからのモデルの選択
 

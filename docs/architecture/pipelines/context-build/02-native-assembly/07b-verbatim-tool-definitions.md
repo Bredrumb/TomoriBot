@@ -22,7 +22,7 @@ and parameter schemas in-band.
 This is the *schema* half of the workaround. The *behavioral* half — the
 instruction on how to emit a verbatim call — is the
 `VERBATIM_TOOL_CALLING_NUDGE` injected near the dialogue tail (stage 11,
-[`11-dialogue-history.md`](./11-dialogue-history)). Both are gated by the
+[`11-dialogue-history.md`](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)). Both are gated by the
 same predicate so they always switch on together.
 
 ## Input
@@ -91,7 +91,7 @@ After this stage runs:
 
 ## Related docs
 
-- Verbatim nudge (behavioral half): → [`11-dialogue-history.md`](./11-dialogue-history)
+- Verbatim nudge (behavioral half): → [`11-dialogue-history.md`](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)
 - Verbatim parsing at stream time: → [`provider/03-chunk-normalization.md`](../../provider/03-chunk-normalization)
 - Provider tool assembly reference: → `/tool prompt snapshot` (`src/commands/tool/prompt/snapshot.ts`)
 - Workaround config plumbing: → `src/utils/discord/workaroundConfigMapping.ts`

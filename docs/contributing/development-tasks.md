@@ -10,16 +10,16 @@ Each guide below is self-contained with steps, notes, and a quality gate.
 
 | Task | Guide |
 |---|---|
-| Add a slash command | [`adding-slash-command.md`](./adding-slash-command) |
-| Add an event handler | [`adding-event-handler.md`](./adding-event-handler) |
-| Add a built-in tool | [`adding-builtin-tool.md`](./adding-builtin-tool) |
-| Add a DB column | [`adding-db-column.md`](./adding-db-column) |
-| Add a Full Install setup module | [`adding-setup-module.md`](./adding-setup-module) |
-| Add a locale | [`adding-locale.md`](./adding-locale) |
-| Add a new AI provider | [`adding-new-provider.md`](./adding-new-provider) |
-| Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](./adding-feature-flag-tool) |
-| Add a persona preset | [`adding-persona-preset.md`](./adding-persona-preset) |
-| Add or move docs pages | [`docs-authoring.md`](./docs-authoring) |
+| Add a slash command | [`adding-slash-command.md`](/contributing/adding-slash-command/) |
+| Add an event handler | [`adding-event-handler.md`](/contributing/adding-event-handler/) |
+| Add a built-in tool | [`adding-builtin-tool.md`](/contributing/adding-builtin-tool/) |
+| Add a DB column | [`adding-db-column.md`](/contributing/adding-db-column/) |
+| Add a Full Install setup module | [`adding-setup-module.md`](/contributing/adding-setup-module/) |
+| Add a locale | [`adding-locale.md`](/contributing/adding-locale/) |
+| Add a new AI provider | [`adding-new-provider.md`](/contributing/adding-new-provider/) |
+| Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/) |
+| Add a persona preset | [`adding-persona-preset.md`](/contributing/adding-persona-preset/) |
+| Add or move docs pages | [`docs-authoring.md`](/contributing/docs-authoring/) |
 
 ## Development Checklist
 

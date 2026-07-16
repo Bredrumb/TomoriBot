@@ -22,6 +22,8 @@
  *   - sticker_used      → sticker name/id
  *   - active_hour       → hour-of-day "0".."23"
  *   - text_generated    → "" (one per completed chat turn)
+ *   - user_impersonation_triggered → impersonated Discord user id (one per
+ *                                    completed user-impersonation chat turn)
  *   - image_generated   → model codename (one per successful image generation; keyed
  *                         so the total is SUM(count) over keys while still exposing a
  *                         per-model breakdown that cannot be backfilled later)
@@ -48,6 +50,7 @@ export const STAT_METRICS = [
   "sticker_used",
   "active_hour",
   "text_generated",
+  "user_impersonation_triggered",
   "image_generated",
   "video_generated",
   "audio_generated",

@@ -42,9 +42,9 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
 /**
  * Records per-turn usage stats at the single post-turn chokepoint:
  * message_sent, active_hour, model_used, tokens_in/tokens_out (estimated),
- * emoji_used, sprite_shown, and sprite_emotion (non-identity sprites only). Only
- * counts turns that actually produced a persona response. DMs are skipped
- * (stat_counters.server_id is a NOT NULL FK).
+ * user_impersonation_triggered, emoji_used, sprite_shown, and sprite_emotion
+ * (non-identity sprites only). Only counts turns that actually produced a persona
+ * response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
  *
  * Tokens prefer REAL provider usage when available: the orchestrator normalizes
  * each provider's reported usage onto `StreamResult.usage`, and these are summed
@@ -123,6 +123,20 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     }
     // 4c. One text_generated increment per completed turn (persona-scoped to the answering persona).
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "text_generated" });
+
+    // 4d. Preserve the target identity for successful user-impersonation turns.
+    // user_id remains the triggering actor; metric_key is the stable Discord id of
+    // the impersonated user. Keeping the answering lineage makes this queryable by
+    // actor, target, server, persona, and daily bucket without changing card reads.
+    if (context.isUserImpersonation && context.impersonatedUserId) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "user_impersonation_triggered",
+        metricKey: context.impersonatedUserId,
+      });
+    }
 
     // 5. Token volume keyed by model id, attributed to the answering persona.
     //    Prefer REAL provider usage summed across the turn's stream segments

@@ -17,7 +17,7 @@ function printHelp(): void {
 ${pc.bold("bun run update")} - backup-first TomoriBot updater
 
 ${pc.bold("Usage:")}
-  bun run update                  Backup, git pull, bun install
+  bun run update                  Backup, git pull, bun install --frozen-lockfile
   bun run update --build          Also run bun run build after install
   bun run update --docker         Backup, git pull, docker compose build, docker compose up -d
   bun run update --skip-backup    Skip the pre-update backup step
@@ -158,7 +158,7 @@ async function main(): Promise<void> {
     await run("docker", ["compose", "up", "-d"]);
   } else {
     log.section("Install dependencies");
-    await run("bun", ["install"]);
+    await run("bun", ["install", "--frozen-lockfile"]);
 
     if (build) {
       log.section("Build");

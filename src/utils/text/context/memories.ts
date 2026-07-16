@@ -75,9 +75,11 @@ export async function buildServerMemoryContextItem(params: {
         if (!channelAllowed) return false;
       }
 
-      // Content tags: if corpus filtering is active, memories must have a matching content tag
-      if (params.conversationCorpus) {
-        if (contentTags.length === 0) return false;
+      // Content tags: if corpus filtering is active and the memory has content tags,
+      // at least one must appear in the corpus. Memories with no content tags are
+      // unfiltered by keyword (per /help memory-tagging: "memories without keyword
+      // tags will always be active").
+      if (params.conversationCorpus != null && contentTags.length > 0) {
         return contentTags.some((tag) => params.conversationCorpus?.includes(tag.toLowerCase()));
       }
 

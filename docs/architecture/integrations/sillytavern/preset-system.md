@@ -14,7 +14,7 @@ SillyTavern presets are JSON files that define:
 4. **Template macros** — variables like `{{setvar::X::Y}}` / `{{getvar::X}}` for dynamic content
 5. **Per-node enable/disable** — users toggle individual prompt nodes on or off
 
-This is distinct from [SillyTavern Card Import](./card-support), which imports character data (description, personality, sample dialogues). Presets control *how the prompt is structured*, not *what character data exists*.
+This is distinct from [SillyTavern Card Import](/architecture/integrations/sillytavern/card-support/), which imports character data (description, personality, sample dialogues). Presets control *how the prompt is structured*, not *what character data exists*.
 
 ## How It Works (User Perspective)
 

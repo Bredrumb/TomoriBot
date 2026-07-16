@@ -294,7 +294,7 @@ Rules:
 - submit writes the full selected set back to storage, not just the latest delta intent
 - if the eligible option set exceeds one modal (`>50`), show a page-selection message first and launch page-scoped checkbox modals from there
 - durable server-scoped settings added through this pattern should also be surfaced in `/tool status`
-- keep [`status-command.md`](./status-command) in sync when `/tool status` coverage changes
+- keep [`status-command.md`](/architecture/subsystems/status-command/) in sync when `/tool status` coverage changes
 
 ### Pattern 3C: Modal -> Review Prompt -> Modal
 

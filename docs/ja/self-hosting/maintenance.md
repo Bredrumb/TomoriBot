@@ -6,7 +6,7 @@ sidebar:
 
 セルフホストインスタンスの日常的な運用として、メンテナンススクリプト、更新方法、データベースのバックアップと復元方法について説明します。これらはホスト側の操作であり、Discordからではなくシェルから実行します。Discord内でのユーザーごとのエクスポート/インポート/削除フローについては、代わりに[データの取り扱い](/ja/features/knowledge/data-handling/)を参照してください。
 
-新しいバージョンを `git pull` しようとしている場合は、まず[安全な移行](./safe-migration)をお読みください。起動時の移行ランナーがスキーマに変更を加える*前*にバックアップを取る方法について説明しています。
+新しいバージョンを `git pull` しようとしている場合は、まず[安全な移行](/ja/self-hosting/safe-migration/)をお読みください。起動時の移行ランナーがスキーマに変更を加える*前*にバックアップを取る方法について説明しています。
 
 ## メンテナンススクリプト
 
@@ -31,12 +31,12 @@ sidebar:
 bun run update
 ```
 
-これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install` が実行されます。バックアップバンドルは `backups/` に書き込まれ、データベースダンプと `.env` の両方が含まれます。更新前のバックアップをスキップするには `--skip-backup` を追加します。手動でのフォールバック手順は以下の通りです。
+これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install --frozen-lockfile` が実行されます。バックアップバンドルは `backups/` に書き込まれ、データベースダンプと `.env` の両方が含まれます。更新前のバックアップをスキップするには `--skip-backup` を追加します。手動でのフォールバック手順は以下の通りです。
 
 ```sh
 bun run backup
 git pull --rebase --autostash
-bun install
+bun install --frozen-lockfile
 ```
 
 `dist/` から実行していますか？その場合は `bun run update --build` を使用してください。Docker Composeを実行していますか？その場合は `bun run update --docker` を使用してください。
@@ -57,7 +57,7 @@ bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 
 `bun run backup:personas` はより絞り込まれたエクスポートであり、すべてのサーバーにまたがるペルソナのプリセットとペルソナごとのサーバーメモリーのみが対象です。これは `/persona import` 経由で手動で再インポートする**必要があり**、`restore-backup` と一緒には**使用できません**（プライマリキーの競合を引き起こすため）。
 
-また、TomoriBotは本番環境以外では**自動スタートアップバックアップ**を取得します。完全な復元には、ターゲットデータベースに `pgvector` 拡張機能が存在している必要があります。両方の詳細については、[安全な移行](./safe-migration)で説明しています。ツールを直接操作したい場合の、手動での `pg_dump` / `pg_restore` 手順も併せて記載しています。
+また、TomoriBotは本番環境以外では**自動スタートアップバックアップ**を取得します。完全な復元には、ターゲットデータベースに `pgvector` 拡張機能が存在している必要があります。両方の詳細については、[安全な移行](/ja/self-hosting/safe-migration/)で説明しています。ツールを直接操作したい場合の、手動での `pg_dump` / `pg_restore` 手順も併せて記載しています。
 
 ## Docker Composeのバックアップ
 
@@ -95,6 +95,6 @@ POSTGRES_DB=tomodb
 
 ## 関連項目
 
-- [安全な移行](./safe-migration)：プル前のバックアップ、および `pgvector` 復元の前提条件
+- [安全な移行](/ja/self-hosting/safe-migration/)：プル前のバックアップ、および `pgvector` 復元の前提条件
 - [データの取り扱い](/ja/features/knowledge/data-handling/)：Discord内でのユーザーごとのエクスポート/インポート/削除
-- [セットアップウィザード](./setup-wizard)：ガイド付きの `bun run setup` インストール
+- [セットアップウィザード](/ja/self-hosting/setup-wizard/)：ガイド付きの `bun run setup` インストール

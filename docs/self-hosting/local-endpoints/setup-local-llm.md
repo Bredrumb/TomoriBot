@@ -158,7 +158,7 @@ All of these use the same flow, only the URL and a couple of notes change.
 ### ChatMock (ChatGPT account / Codex CLI)
 
 Has its own dedicated guide because of a system-prompt workaround:
-**[Setup: ChatMock](./setup-chatmock)**.
+**[Setup: ChatMock](/self-hosting/local-endpoints/setup-chatmock/)**.
 
 ## Picking models from Hugging Face
 

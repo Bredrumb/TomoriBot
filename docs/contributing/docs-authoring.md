@@ -102,6 +102,18 @@ The docs site handles most SEO automatically:
 - **robots.txt / sitemap**: `apps/docs/public/robots.txt` advertises the auto-generated
   `sitemap-index.xml`. No per-page action needed.
 
+## Internal Links
+
+Always link between docs pages with **root-absolute** URLs (leading `/`, trailing slash),
+e.g. `[Manual Setup](/self-hosting/manual-setup/)` or with an anchor
+`[…](/self-hosting/manual-setup/#optional-extras-the-manual-full-install)`.
+
+Do **not** use relative `./sibling` links from a normal (non-index) page. Pages deploy in
+directory format (`/self-hosting/manual-setup/`), and the build does not rewrite relative
+links, so `./setup-wizard` from that page resolves to
+`/self-hosting/manual-setup/setup-wizard` — a 404. Only `README.md` index pages, which deploy
+at their directory root, may use `./child` links.
+
 ## Moving Pages
 
 When moving docs:

@@ -3,7 +3,7 @@ title: "Adding a Feature Flag-Controlled Tool"
 ---
 
 This guide covers the extra wiring needed to gate a built-in tool behind a server config toggle.
-Read [`docs/guides/adding-builtin-tool.md`](./adding-builtin-tool) first for the base tool steps.
+Read [`docs/guides/adding-builtin-tool.md`](/contributing/adding-builtin-tool/) first for the base tool steps.
 
 ## Steps
 
@@ -38,5 +38,5 @@ Then verify: toggle the config off → tool should not appear in the LLM's avail
 
 ## Related Docs
 
-- [`docs/guides/adding-builtin-tool.md`](./adding-builtin-tool) — base tool creation steps
+- [`docs/guides/adding-builtin-tool.md`](/contributing/adding-builtin-tool/) — base tool creation steps
 - [`docs/architecture/pipelines/tool-loop/`](../pipelines/tool-loop/) — how feature flags are checked before tools are offered to the LLM

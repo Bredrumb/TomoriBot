@@ -22,7 +22,6 @@ sidebar:
 1. [`setup-wizard`](./setup-wizard) : ガイド付きの `bun run setup` によるインストール
 2. [`manual-setup`](./manual-setup) : 技術的なユーザー向けの手動手順
 3. [`docker-compose`](./docker-compose) : コンテナ化されたボットとデータベース。ホストにBunやPostgreSQLは不要
-4. [`azure-vm`](./azure-vm) : Azure移行用の本番環境VMのCompose契約
 
 オプションモジュール（ローカルLLM、ComfyUI、SearXNG、Crawl4AI、ローカルTTS/STT、ChatMock、ローカルMCPサーバー）についてはそれぞれ独自のページがあります。全ディレクトリについては[`local-endpoints`](./local-endpoints)を参照してください。
 

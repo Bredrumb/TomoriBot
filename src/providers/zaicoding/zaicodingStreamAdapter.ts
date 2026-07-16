@@ -1,5 +1,6 @@
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
 import type { OpenAICompatibleStreamConfig } from "@/providers/openaiCompatible/openaiCompatibleTypes";
+import { normalizeZaiRequestSamplingParams } from "@/providers/zai/zaiRequestParams";
 import { buildZaiThinkingRequest } from "@/utils/provider/thinkingControl";
 
 export interface ZaicodingStreamConfig extends OpenAICompatibleStreamConfig {
@@ -35,6 +36,7 @@ export class ZaicodingStreamAdapter extends OpenAICompatibleStreamAdapter {
           delete requestBody.presence_penalty;
           delete requestBody.frequency_penalty;
         }
+        normalizeZaiRequestSamplingParams(requestBody);
 
         if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
           requestBody.tool_stream = true;

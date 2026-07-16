@@ -20,7 +20,7 @@ This guide sets up TomoriBot locally with Bun + PostgreSQL.
 ## 1. Install Dependencies
 
 ```bash
-bun install
+bun install --frozen-lockfile
 ```
 
 ## 2. Create Local Environment File
@@ -115,6 +115,7 @@ bun run build
 bun run start
 bun run lint
 bun run check
+bun run check-runtime-imports
 bun run vl
 bun run nuke-db
 bun run backup
@@ -124,6 +125,10 @@ bun run check-limits
 bun run check-media-size
 bun run compress-media
 ```
+
+`bun run check-runtime-imports` verifies that critical runtime dependencies load and that
+`bun.lock` preserves their compatible transitive versions. It also runs as a fatal check in
+`bun run vl` and CI.
 
 `bun run check-media-size` (also bundled into `bun run vl`) rejects tracked media
 over a per-file budget (default 1 MiB, set via `MEDIA_SIZE_LIMIT_BYTES`). It scans

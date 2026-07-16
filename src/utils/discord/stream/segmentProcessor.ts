@@ -64,10 +64,11 @@ export class StreamSegmentProcessor {
     }
 
     const renderModifierSourceNames = collectRenderModifierSourceNames(textConfig.botName, textConfig.botNameAliases);
+    const renderModifierChainSourceNames = collectRenderModifierChainSourceNames(textConfig, renderModifierSourceNames);
     let deliveryOptions: StreamDeliveryOptions | undefined;
     const canUseRenderModifier = !state.isInsideCodeBlock && !isUserImpersonationStreamContext(context);
     const renderModifierMatch = canUseRenderModifier
-      ? parseLeadingRenderModifier(workingSegment, renderModifierSourceNames)
+      ? parseLeadingRenderModifier(workingSegment, renderModifierSourceNames, renderModifierChainSourceNames)
       : null;
     if (renderModifierMatch) {
       const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
@@ -418,4 +419,18 @@ export class StreamSegmentProcessor {
 
     return "";
   }
+}
+
+function collectRenderModifierChainSourceNames(
+  textConfig: TextProcessingConfig,
+  activeSourceNames: readonly string[],
+): string[] {
+  const knownPersonaLabels: string[] = [];
+  if (textConfig.personaMentionMap) {
+    for (const [alias, trigger] of textConfig.personaMentionMap) {
+      knownPersonaLabels.push(alias, trigger);
+    }
+  }
+
+  return collectRenderModifierSourceNames(textConfig.botName, [...activeSourceNames, ...knownPersonaLabels]);
 }

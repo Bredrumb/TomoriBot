@@ -130,6 +130,20 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(await readCount("command_used", "config", lineageA, refs.userId)).toBe(0);
   });
 
+  it("user impersonation counters retain actor, target, and answering persona", async () => {
+    statRepository.recordStat({
+      serverId: refs.serverId,
+      userId: refs.userId,
+      lineageId: lineageA,
+      metric: "user_impersonation_triggered",
+      metricKey: FIXTURE_IDS.altUserDiscId,
+    });
+    await statRepository.flush();
+
+    expect(await readCount("user_impersonation_triggered", FIXTURE_IDS.altUserDiscId, lineageA, refs.userId)).toBe(1);
+    expect(await readCount("user_impersonation_triggered", FIXTURE_IDS.altUserDiscId, 0, refs.userId)).toBe(0);
+  });
+
   it("tokens_in/tokens_out accumulate token deltas (not 1) and cost applies per-direction price exactly", async () => {
     statRepository.recordStat({
       serverId: refs.serverId,

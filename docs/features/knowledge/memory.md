@@ -59,7 +59,25 @@ Server admins can give her documents to reference:
   relevant content when answering.
 - She can also read file attachments shared directly in chat (PDF, source code, Markdown,
   JSON, YAML, and more) — just ask her to read it.
-- Remove stored documents with `/memory document remove` or `/memory history remove`.
+- `/memory document view` — browse stored documents chunk by chunk. Server admins can
+  edit individual chunks, update document channel tags, or delete a single chunk without
+  removing the whole document.
+- Remove any stored document with `/memory document remove`. `/memory history remove` is
+  a filtered shortcut that only lists documents created by `/memory history import`.
+
+### History Import Prompts
+
+When importing channel history, the `prompt` option changes how TomoriBot extracts
+memories:
+
+- **Conversation** extracts standalone facts from normal chat. It resolves pronouns and uses absolute timestamps when dates or times are mentioned or can be inferred.
+- **Roleplay** looks for scenes, lore, relationships, and memorable events without trying to preserve every small beat.
+- **In-Character** extracts memories from the selected persona's point of view, using that persona's prompt, attributes, existing memories, and relevant documents as context.
+
+The prompt is shown before import so you can adjust it for the channel or scene.
+
+History imports are stored as documents, so `/memory document view` and
+`/memory document remove` work on them too.
 
 **Requires an embedding model**, configured with `/model embedding`. See
 [Providers & Models](/features/setup-administration/providers-and-models/).

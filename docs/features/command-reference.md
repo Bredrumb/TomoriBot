@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **27**. Runnable slash commands: **231**.
+Top-level command groups: **27**. Runnable slash commands: **233**.
 
 ## `/bot`
 
@@ -156,6 +156,7 @@ Manage stored memories and documents.
 |---|---|
 | `/memory document add` | Add a document to memory. |
 | `/memory document remove` | Remove a document from memory. |
+| `/memory document view` | Browse a stored document chunk by chunk, allowing you to edit or delete each chunk as well. |
 | `/memory history import` | Extract knowledge from this channel's message history using AI. |
 | `/memory history remove` | Remove a history-extracted document from memory. |
 | `/memory personal add` | Add a personal memory. |
@@ -168,6 +169,7 @@ Manage stored memories and documents.
 | `/memory server export` | Export server memories to JSON. |
 | `/memory server import` | Import server memories from JSON. |
 | `/memory server remove` | Remove a server memory. |
+| `/memory server vectorize` | Convert a server memory into a searchable document. |
 | `/memory tagging set` | Switch to tagged memory mode |
 
 ## `/model`

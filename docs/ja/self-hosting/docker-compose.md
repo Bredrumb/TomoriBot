@@ -4,10 +4,10 @@ sidebar:
   order: 3
 ---
 
-Docker Composeは、TomoriBot**と**PostgreSQLをコンテナとしてビルドおよび実行します。これは[セットアップウィザード](./setup-wizard)および[手動セットアップ](./manual-setup)と並ぶ3つ目のインストール方法です。ホストにBunやPostgreSQLをインストールするよりも、すべてをDockerで実行したい場合に選択してください。セットアップウィザードは使用し**ません**。データベース接続は自動的に設定されます。
+Docker Composeは、TomoriBot**と**PostgreSQLをコンテナとしてビルドおよび実行します。これは[セットアップウィザード](/ja/self-hosting/setup-wizard/)および[手動セットアップ](/ja/self-hosting/manual-setup/)と並ぶ3つ目のインストール方法です。ホストにBunやPostgreSQLをインストールするよりも、すべてをDockerで実行したい場合に選択してください。セットアップウィザードは使用し**ません**。データベース接続は自動的に設定されます。
 
 :::caution[ホスト側のスクリプトには依然としてホストツールが必要です]
-ボットとデータベースをDockerで実行しても、メンテナンススクリプトはコンテナ化されません。`bun run backup`、`bun run restore-backup`、`bun run update`、`bun run rotate-keys` などは、引き続きホストのBunとホストのPostgreSQLクライアントツールを通じて実行されます。Compose固有の手順については、[メンテナンスとバックアップ](./maintenance)を参照してください。
+ボットとデータベースをDockerで実行しても、メンテナンススクリプトはコンテナ化されません。`bun run backup`、`bun run restore-backup`、`bun run update`、`bun run rotate-keys` などは、引き続きホストのBunとホストのPostgreSQLクライアントツールを通じて実行されます。Compose固有の手順については、[メンテナンスとバックアップ](/ja/self-hosting/maintenance/)を参照してください。
 :::
 
 ## 1. 必要な `.env` の値
@@ -50,8 +50,8 @@ docker compose up      # ボットとデータベース
 docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
-各サイドカーの詳細については、[SearXNG](./local-endpoints/setup-searxng)、[Crawl4AI](./local-endpoints/setup-crawl4ai)、および[ローカルモニタリング](./local-monitoring)を参照してください。
+各サイドカーの詳細については、[SearXNG](/ja/self-hosting/local-endpoints/setup-searxng/)、[Crawl4AI](/ja/self-hosting/local-endpoints/setup-crawl4ai/)、および[ローカルモニタリング](/ja/self-hosting/local-monitoring/)を参照してください。
 
 ## メンテナンス、更新とバックアップ
 
-Composeデプロイメントでのバックアップ優先の更新手順には `bun run update --docker` を使用します。Composeデータベースのバックアップと復元（ホストスクリプトの実行を含む）については、[メンテナンスとバックアップ](./maintenance)ページで説明されています。新しいバージョンをプルする前に、まずは[安全な移行](./safe-migration)から始めてください。
+Composeデプロイメントでのバックアップ優先の更新手順には `bun run update --docker` を使用します。Composeデータベースのバックアップと復元（ホストスクリプトの実行を含む）については、[メンテナンスとバックアップ](/ja/self-hosting/maintenance/)ページで説明されています。新しいバージョンをプルする前に、まずは[安全な移行](/ja/self-hosting/safe-migration/)から始めてください。
