@@ -183,6 +183,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - Persona names are constrained unique per server (case-insensitive, trimmed).
 - Exactly one non-alter persona (`is_alter = false`) per server is enforced by partial unique index `personas_one_main_per_server ON personas(server_id) WHERE is_alter = false` (added in Phase 6 Step #14.6, migration `012`). This hardens the invariant that was previously enforced only at the command layer.
 - `persona_configs.reward_conditioning_enabled` and `persona_configs.punish_conditioning_enabled` are persona-scoped prompt-injection toggles for conditioning memory.
+- `persona_configs.humanizer_degree` (nullable, migration `047`) is a per-persona humanizer override managed by `/config humanizer` with `scope: Persona`; NULL inherits `server_chat_configs.humanizer_degree`. The value is overlaid onto the persona's assembled `config.humanizer_degree` at state-load time.
 
 ### Server config scoping
 

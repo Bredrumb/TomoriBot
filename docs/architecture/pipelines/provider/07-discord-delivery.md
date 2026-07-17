@@ -119,7 +119,10 @@ contexts, not stylistic prose.
 ### Humanizer interaction
 
 `HumanizerDegree` (a `TomoriState.config` field) controls how the resulting blocks emit as
-messages after parsing:
+messages after parsing. The value is per-answering-persona: a persona-level override
+(`persona_configs.humanizer_degree`, set via `/config humanizer` with `scope: Persona`) is
+overlaid onto that persona's `config.humanizer_degree` at state-load time, falling back to
+the server-wide `server_chat_configs` value when NULL:
 
 | Degree | Behavior |
 |---|---|

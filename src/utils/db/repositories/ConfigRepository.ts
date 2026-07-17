@@ -919,6 +919,16 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   // ── reads for split tables (used where TomoriState cache is unavailable) ──
 
+  async getChatConfig(serverId: number): Promise<ServerChatConfigRow | null> {
+    try {
+      const [row] = await sql`SELECT * FROM server_chat_configs WHERE server_id = ${serverId}`;
+      return (row as unknown as ServerChatConfigRow) ?? null;
+    } catch (error) {
+      log.error(`Error loading server_chat_configs for server ${serverId}:`, error);
+      return null;
+    }
+  }
+
   async getModelConfig(serverId: number): Promise<ServerModelConfigRow | null> {
     try {
       const [row] = await sql`SELECT * FROM server_model_configs WHERE server_id = ${serverId}`;

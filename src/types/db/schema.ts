@@ -914,6 +914,7 @@ export const personaConfigSchema = z.object({
   reward_conditioning_enabled: z.boolean().default(true),
   punish_conditioning_enabled: z.boolean().default(true),
   llm_id: z.number().int().nullable().optional(), // Added March 2026 - Persona-specific LLM model override
+  humanizer_degree: z.number().int().min(0).max(3).nullable().optional(), // Added July 2026 - Persona humanizer override; NULL inherits server_chat_configs
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -1523,6 +1524,7 @@ export type TomoriState = TomoriRow &
     persona_attributes: PersonaAttributeRow[]; // Ordered persona attributes with public/private visibility
     reward_conditioning_enabled: boolean; // Persona-scoped reward conditioning injection toggle
     punish_conditioning_enabled: boolean; // Persona-scoped punish conditioning injection toggle
+    humanizer_degree_override: number | null; // Persona-scoped humanizer override; when set, load-time overlay writes it onto config.humanizer_degree
     server_memories: string[]; // Changed to string array to match implementation
     rotation_keys?: ApiKeyRotationRow[]; // Optional: API key rotation pool for load balancing/failover
     persona_llm?: LlmRow; // Added March 2026 - Persona-specific model override (highest priority in chain)
@@ -1546,6 +1548,7 @@ export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSche
   persona_attributes: z.array(personaAttributeSchema).default([]),
   reward_conditioning_enabled: z.boolean().default(true),
   punish_conditioning_enabled: z.boolean().default(true),
+  humanizer_degree_override: z.number().int().min(0).max(3).nullable().default(null), // Persona humanizer override; NULL = inherit global
   server_memories: z.array(z.string()).default([]), // Changed to array of strings
   rotation_keys: z.array(apiKeyRotationSchema).optional(), // API key rotation pool
   persona_llm: llmSchema.optional(), // Added March 2026 - Persona-specific model override

@@ -34,6 +34,7 @@ Key columns:
 
 Per-persona configuration (one row per persona in `personas`):
 - `trigger_words`: trigger words for this persona — **all personas use this column** (Phase 6 F1 merged the former `personas.alter_triggers` column here; the old `is_alter ? alter_triggers : trigger_words` ternary is gone).
+- `humanizer_degree` (nullable, migration `047`): per-persona humanizer override set via `/config humanizer` with `scope: Persona`. NULL inherits the server-wide `server_chat_configs.humanizer_degree`. When set, persona state loading overlays the value onto that persona's assembled `config.humanizer_degree`, so providers, the stream buffer, and HEAVY-degree context transforms all see the persona-scoped degree with no call-site awareness. Like the persona LLM override (and unlike content edits), setting it does **not** materialize a preset-pointer persona.
 
 ### `persona_sprites`
 
