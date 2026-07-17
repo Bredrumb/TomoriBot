@@ -60,6 +60,9 @@ import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLa
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
+import { statRepository } from "@/utils/db/repositories";
+import { buildReunionNote } from "@/utils/text/context/timeAwareness";
+import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
 
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
@@ -271,6 +274,30 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     ? await getCachedChannelContextNote(effectivePersona.server_id, channel.id)
     : null;
 
+  // Reunion state is deliberately cross-server: the lineage is the persona's
+  // cross-server identity anchor (same as personal_memories), so prior activity
+  // and today's grace count pool across every server sharing the lineage.
+  let reunionNote: { note: string } | null = null;
+  const reunionLineageId = effectivePersona.persona_lineage_id;
+  if (
+    effectivePersona.config.time_awareness_enabled !== false &&
+    !incoming.isUserImpersonation &&
+    typeof turn.userRow.user_id === "number" &&
+    Number.isInteger(turn.userRow.user_id) &&
+    typeof reunionLineageId === "number" &&
+    Number.isInteger(reunionLineageId) &&
+    reunionLineageId >= 0
+  ) {
+    const reunionInfo = await statRepository.getUserPersonaReunionInfo(turn.userRow.user_id, reunionLineageId);
+    const note = buildReunionNote({
+      ...reunionInfo,
+      personalOffset: turn.userRow.timezone_offset,
+      serverOffset: effectivePersona.config.timezone_offset,
+      displayName: turn.triggererName,
+    });
+    if (note) reunionNote = { note };
+  }
+
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
     serverName: turn.serverName,
@@ -294,6 +321,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     tomoriConfig: effectivePersona.config,
     channelPromptOverride,
     channelContextNote,
+    reunionNote,
     personaPrompt: effectivePersona.persona_prompt ?? null,
     personaLineageId: effectivePersona.persona_lineage_id,
     isDMChannel: turn.isDMChannel,
@@ -584,13 +612,20 @@ async function buildSimplifiedHistory(
       previousEntry.authorName === simplified.authorName &&
       previousEntryWasDebug === isDebug;
     const shouldKeepSeparateMediaTurn = currentHasMedia || previousHasMedia;
+    const crossesTimeAwarenessDayBoundary =
+      turn.persona.config.time_awareness_enabled !== false &&
+      previousEntry?.createdAt !== undefined &&
+      simplified.createdAt !== undefined &&
+      getCalendarDayWithOffset(previousEntry.createdAt, turn.persona.config.timezone_offset ?? 0) !==
+        getCalendarDayWithOffset(simplified.createdAt, turn.persona.config.timezone_offset ?? 0);
 
     if (
       previousEntry &&
       isSameEffectiveAuthor &&
       simplified.content &&
       previousHasContent &&
-      !shouldKeepSeparateMediaTurn
+      !shouldKeepSeparateMediaTurn &&
+      !crossesTimeAwarenessDayBoundary
     ) {
       // 2. Merge: lazily promote the previous entry into a combined entry, then
       //    append. The combined* tracking fields let reveal_message_metadata still

@@ -1,0 +1,230 @@
+import { describe, expect, it } from "bun:test";
+import type { Client } from "discord.js";
+import { HumanizerDegree, type AssembledServerConfig } from "@/types/db/schema";
+import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
+import { buildDateSpacer, buildReunionNote, SPACER_TEMPLATE } from "@/utils/text/context/timeAwareness";
+import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
+import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
+
+const NOW = Date.parse("2026-07-15T12:00:00Z");
+const EXPANDED_TEMPLATE = SPACER_TEMPLATE.replace("{message_metadata_tool}", "`reveal_message_metadata`");
+
+function makeMessage(id: string, createdAt?: number): SimplifiedMessageForContext {
+  return {
+    id,
+    authorId: `user-${id}`,
+    authorName: "Eli",
+    authorType: "user",
+    content: id,
+    createdAt,
+    imageAttachments: [],
+    videoAttachments: [],
+  };
+}
+
+function makeConfig(timezoneOffset = 0): AssembledServerConfig {
+  return {
+    message_fetch_limit: 80,
+    context_note: null,
+    context_note_depth: 0,
+    humanizer_degree: HumanizerDegree.NONE,
+    personal_memories_enabled: true,
+    uncensor_unicode_space_enabled: false,
+    uncensor_sanitize_enabled: false,
+    timezone_offset: timezoneOffset,
+    time_awareness_enabled: true,
+    verbatim_tool_calling_enabled: false,
+  } as AssembledServerConfig;
+}
+
+function itemText(item: { parts: Array<{ type: string; text?: string }> }): string {
+  return item.parts.map((part) => (part.type === "text" ? (part.text ?? "") : "")).join("");
+}
+
+describe("time awareness calendar helpers", () => {
+  it("computes calendar-day differences across month and year boundaries", () => {
+    const dec31 = getCalendarDayWithOffset(Date.parse("2025-12-31T23:30:00Z"), 0);
+    const jan1 = getCalendarDayWithOffset(Date.parse("2026-01-01T00:30:00Z"), 0);
+    expect(jan1 - dec31).toBe(1);
+  });
+
+  it("applies negative offsets before choosing the calendar day", () => {
+    const beforeMidnight = getCalendarDayWithOffset(Date.parse("2026-01-01T00:30:00Z"), -1);
+    const afterMidnight = getCalendarDayWithOffset(Date.parse("2026-01-01T02:00:00Z"), -1);
+    expect(afterMidnight - beforeMidnight).toBe(1);
+  });
+});
+
+describe("buildReunionNote", () => {
+  it("covers first-timer, recent, reunion, and grace-expired conditions", () => {
+    expect(
+      buildReunionNote({
+        lastPreviousDayAt: null,
+        todayCount: 0,
+        displayName: "Eli",
+        nowMs: NOW,
+        reunionDays: 3,
+        graceTriggers: 3,
+      }),
+    ).toBe(
+      "[System: Eli is talking to you for the very first time! If you haven't already, welcome them naturally and ask something friendly to get to know them.]",
+    );
+
+    expect(
+      buildReunionNote({
+        lastPreviousDayAt: new Date("2026-07-14T12:00:00Z"),
+        todayCount: 0,
+        displayName: "Eli",
+        nowMs: NOW,
+        reunionDays: 3,
+        graceTriggers: 3,
+      }),
+    ).toBeNull();
+
+    expect(
+      buildReunionNote({
+        lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
+        todayCount: 2,
+        displayName: "Eli",
+        nowMs: NOW,
+        reunionDays: 3,
+        graceTriggers: 3,
+      }),
+    ).toBe(
+      "[System: Eli is talking to you again for the first time since July 12, 2026. It's been 3 days! If you haven't already, acknowledge their return naturally and ask what they've been up to.]",
+    );
+
+    expect(
+      buildReunionNote({
+        lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
+        todayCount: 3,
+        displayName: "Eli",
+        nowMs: NOW,
+        reunionDays: 3,
+        graceTriggers: 3,
+      }),
+    ).toBeNull();
+  });
+
+  it("uses personal, then server, then UTC timezone fallback", () => {
+    const args = {
+      lastPreviousDayAt: new Date("2026-07-12T23:30:00Z"),
+      todayCount: 0,
+      displayName: "Eli",
+      nowMs: Date.parse("2026-07-15T00:30:00Z"),
+      reunionDays: 3,
+      graceTriggers: 3,
+    };
+
+    expect(buildReunionNote({ ...args, personalOffset: 2, serverOffset: 0 })).toBeNull();
+    expect(buildReunionNote({ ...args, personalOffset: null, serverOffset: 0 })).toContain("July 12, 2026");
+    expect(buildReunionNote({ ...args, personalOffset: null, serverOffset: null })).toContain("July 12, 2026");
+  });
+
+  it("skips synthetic impersonation turns", () => {
+    expect(
+      buildReunionNote({
+        lastPreviousDayAt: null,
+        todayCount: 0,
+        displayName: "Synthetic User",
+        isUserImpersonation: true,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("buildDateSpacer", () => {
+  it("returns null within one server calendar day", () => {
+    expect(
+      buildDateSpacer(
+        Date.parse("2026-07-12T10:00:00Z"),
+        Date.parse("2026-07-12T23:00:00Z"),
+        0,
+        EXPANDED_TEMPLATE,
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
+  it("emits an absolute date and preserves the already-expanded tool macro", () => {
+    const spacer = buildDateSpacer(
+      Date.parse("2026-07-12T23:30:00Z"),
+      Date.parse("2026-07-13T00:30:00Z"),
+      0,
+      EXPANDED_TEMPLATE,
+      NOW,
+    );
+    expect(spacer).toContain("July 12, 2026");
+    expect(spacer).toContain("3 days ago");
+    expect(spacer).toContain("`reveal_message_metadata`");
+    expect(spacer).not.toContain("{message_metadata_tool}");
+  });
+
+  it("detects a boundary caused only by the server offset", () => {
+    const previous = Date.parse("2026-07-12T14:30:00Z");
+    const next = Date.parse("2026-07-12T15:30:00Z");
+    expect(buildDateSpacer(previous, next, 0, EXPANDED_TEMPLATE, NOW)).toBeNull();
+    expect(buildDateSpacer(previous, next, 9, EXPANDED_TEMPLATE, NOW)).toContain("July 12, 2026");
+  });
+});
+
+describe("appendDialogueHistoryContext — time-awareness injections", () => {
+  it("injects a producer-supplied reunion note at depth 1", async () => {
+    const contextItems = [];
+    await appendDialogueHistoryContext({
+      contextItems,
+      client: {} as Client,
+      guildId: "guild-1",
+      simplifiedMessageHistory: [makeMessage("one"), makeMessage("two"), makeMessage("three")],
+      botName: "Tomori",
+      tomoriConfig: makeConfig(),
+      tomoriState: null,
+      reunionNote: { note: "[System: Eli is talking to you for the very first time!]" },
+      includeTimestamps: false,
+      isUserImpersonation: false,
+      uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
+      convertMentions: async (text) => text,
+    });
+
+    const noteIndex = contextItems.findIndex((item) => itemText(item).includes("very first time"));
+    const lastMessageIndex = contextItems.findIndex((item) => item.messageId === "three");
+    expect(noteIndex).toBe(lastMessageIndex - 1);
+    expect(itemText(contextItems[noteIndex])).not.toContain("[System: [System:");
+  });
+
+  it("emits exactly one spacer per boundary across a multi-day history", async () => {
+    const contextItems = [];
+    await appendDialogueHistoryContext({
+      contextItems,
+      client: {} as Client,
+      guildId: "guild-1",
+      simplifiedMessageHistory: [
+        makeMessage("one", Date.parse("2026-07-11T10:00:00Z")),
+        makeMessage("two", Date.parse("2026-07-11T20:00:00Z")),
+        makeMessage("three", Date.parse("2026-07-12T10:00:00Z")),
+        makeMessage("four", Date.parse("2026-07-13T10:00:00Z")),
+      ],
+      botName: "Tomori",
+      tomoriConfig: makeConfig(),
+      tomoriState: null,
+      dateSpacerTemplate: EXPANDED_TEMPLATE,
+      includeTimestamps: false,
+      isUserImpersonation: false,
+      uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
+      convertMentions: async (text) => text,
+    });
+
+    const spacers = contextItems.filter((item) => item.messageId?.startsWith("date_spacer_"));
+    expect(spacers).toHaveLength(2);
+    expect(itemText(spacers[0])).toContain("July 11, 2026");
+    expect(itemText(spacers[1])).toContain("July 12, 2026");
+  });
+
+  it("keeps the producer-to-native-builder reunion field wired", async () => {
+    const producer = await Bun.file("src/utils/chat/contextPipeline.ts").text();
+    const nativeBuilder = await Bun.file("src/utils/text/context/nativeBuilder.ts").text();
+    expect(producer).toContain("reunionNote,");
+    expect(nativeBuilder).toContain("reunionNote,");
+    expect(nativeBuilder).toContain("dateSpacerTemplate,");
+  });
+});

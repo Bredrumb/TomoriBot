@@ -206,6 +206,12 @@ export interface StreakInfo {
   lastActiveDate: string | null;
 }
 
+/** Previous-day activity plus today's persisted grace counter for one persona lineage. */
+export interface UserPersonaReunionInfo {
+  lastPreviousDayAt: Date | null;
+  todayCount: number;
+}
+
 /** Generation totals from the canonical stat_counters telemetry table. */
 export interface GenerationTotals {
   textGenerations: number;
@@ -438,6 +444,43 @@ export class StatRepository implements IRepository<null> {
   // infographic entry points await flush() before these reads, so user-facing
   // snapshots include every successfully buffered increment. All windowing is
   // `bucket >= from` + SUM, never finer.
+
+  /**
+   * Reads the triggering user's prior-day activity and today's persisted message
+   * count for one persona lineage. Today's row is deliberately invisible to the
+   * gap lookup, making the grace window restart-safe and self-expiring at the DB
+   * day rollover.
+   *
+   * Known tolerances: buffered stat writes can extend the grace window by one
+   * trigger, and the UTC DB bucket can differ cosmetically from the user-facing
+   * timezone around midnight. A failed read expires the grace window rather than
+   * producing a false first-timer note.
+   */
+  async getUserPersonaReunionInfo(userId: number, lineageId: number): Promise<UserPersonaReunionInfo> {
+    try {
+      const [row] = await sql<
+        Array<{
+          last_previous_day_at: Date | string | null;
+          today_count: number | string;
+        }>
+      >`
+        SELECT
+          MAX(last_at) FILTER (WHERE bucket < CURRENT_DATE) AS last_previous_day_at,
+          COALESCE(SUM(count) FILTER (WHERE bucket = CURRENT_DATE), 0) AS today_count
+        FROM stat_counters
+        WHERE user_id = ${userId}
+          AND persona_lineage_id = ${lineageId}
+          AND metric = 'message_sent'
+      `;
+      return {
+        lastPreviousDayAt: row?.last_previous_day_at ? new Date(row.last_previous_day_at) : null,
+        todayCount: Number(row?.today_count ?? 0),
+      };
+    } catch (error) {
+      log.error(`StatRepository.getUserPersonaReunionInfo: failed for user ${userId}, lineage ${lineageId}`, error);
+      return { lastPreviousDayAt: null, todayCount: Number.MAX_SAFE_INTEGER };
+    }
+  }
 
   /**
    * Per-persona message share for a user, highest first. Powers favorite-persona

@@ -13,6 +13,7 @@ import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 const TEST_MODEL = "_rt_stat_model";
+const REUNION_OTHER_SERVER_DISC_ID = "_rt_stat_reunion_other_server";
 
 /** YYYY-MM-DD for `n` days before today (UTC) — matches StatRepository's bucket grain. */
 function dayOffset(n: number): string {
@@ -46,6 +47,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
   afterAll(async () => {
     await statRepository.shutdown();
     await testSql`DELETE FROM llms WHERE llm_codename = ${TEST_MODEL}`;
+    await testSql`DELETE FROM servers WHERE server_disc_id = ${REUNION_OTHER_SERVER_DISC_ID}`;
     await cleanupFixtures(testSql);
   });
 
@@ -57,6 +59,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await testSql`DELETE FROM image_quotas WHERE server_id = ${refs.serverId}`;
     await testSql`DELETE FROM video_quotas WHERE server_id = ${refs.serverId}`;
     await testSql`DELETE FROM text_quotas WHERE server_id = ${refs.serverId}`;
+    await testSql`DELETE FROM servers WHERE server_disc_id = ${REUNION_OTHER_SERVER_DISC_ID}`;
   });
 
   /** Reads a single counter row's count for the fixture server. */
@@ -228,6 +231,28 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
   });
 
   // ── aggregation reads ──────────────────────────────────────────────────────
+
+  it("getUserPersonaReunionInfo reads prior activity and today's grace count across servers", async () => {
+    const previousAt = new Date(`${dayOffset(4)}T18:30:00Z`);
+    const [otherServer] = await testSql<{ server_id: number }[]>`
+      INSERT INTO servers (server_disc_id)
+      VALUES (${REUNION_OTHER_SERVER_DISC_ID})
+      RETURNING server_id
+    `;
+    await testSql`
+      INSERT INTO stat_counters
+        (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
+      VALUES
+        (${otherServer.server_id}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(4)}::date, 2,
+         ${previousAt}, ${previousAt}),
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(0)}::date, 3,
+         NOW(), NOW())
+    `;
+
+    const reunion = await statRepository.getUserPersonaReunionInfo(refs.userId, lineageA);
+    expect(reunion.lastPreviousDayAt?.toISOString()).toBe(previousAt.toISOString());
+    expect(reunion.todayCount).toBe(3);
+  });
 
   it("getFavoritePersona ranks by message share and computes loyalty %", async () => {
     for (let i = 0; i < 3; i++) {

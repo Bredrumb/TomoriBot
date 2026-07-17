@@ -10,6 +10,24 @@
 export const UTC_OFFSET_MIN = -12;
 export const UTC_OFFSET_MAX = 14;
 
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+const MILLISECONDS_PER_HOUR = 3_600_000;
+const MILLISECONDS_PER_DAY = 86_400_000;
+
 /**
  * Validates that a value is a usable UTC offset in hours
  * @param value - The value to validate (accepts fractional offsets like 5.5 for UTC+5:30)
@@ -66,34 +84,18 @@ export function formatUTCOffset(offset: number): string {
  * ```
  */
 export function getCurrentTimeWithOffset(offsetHours: number): string {
-  // 1. Month names for formatting
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-
-  // 2. Get current UTC time and apply offset
+  // 1. Get current UTC time and apply offset
   const now = new Date();
   // getTime() already returns UTC milliseconds, so we just add the offset directly
-  const offsetTime = new Date(now.getTime() + offsetHours * 3600000); // Apply offset in milliseconds
+  const offsetTime = new Date(now.getTime() + offsetHours * MILLISECONDS_PER_HOUR);
 
-  // 3. Extract date components
+  // 2. Extract date components
   const weekday = getDayOfWeek(offsetTime);
   const day = offsetTime.getUTCDate();
   const year = offsetTime.getUTCFullYear();
-  const month = monthNames[offsetTime.getUTCMonth()];
+  const month = MONTH_NAMES[offsetTime.getUTCMonth()];
 
-  // 4. Format time (12-hour format with AM/PM)
+  // 3. Format time (12-hour format with AM/PM)
   let hour = offsetTime.getUTCHours();
   const minutes = offsetTime.getUTCMinutes().toString().padStart(2, "0");
   let meridiem = "AM";
@@ -110,8 +112,27 @@ export function getCurrentTimeWithOffset(offsetHours: number): string {
     meridiem = "PM";
   }
 
-  // 5. Return formatted string
+  // 4. Return formatted string
   return `${month} ${day}, ${year} | ${hour}:${minutes} ${meridiem} | ${weekday}`;
+}
+
+/**
+ * Returns a stable integer for the calendar day containing an instant after a
+ * fixed UTC offset is applied. Subtract two returned values to get a calendar-
+ * day difference without relying on elapsed 24-hour periods.
+ */
+export function getCalendarDayWithOffset(epochMs: number, offsetHours: number): number {
+  const offsetDate = new Date(epochMs + offsetHours * MILLISECONDS_PER_HOUR);
+  return Math.floor(
+    Date.UTC(offsetDate.getUTCFullYear(), offsetDate.getUTCMonth(), offsetDate.getUTCDate()) / MILLISECONDS_PER_DAY,
+  );
+}
+
+/** Formats an instant as an English absolute date after a fixed UTC offset. */
+export function formatDateWithOffset(epochMs: number, offsetHours: number): string {
+  const offsetDate = new Date(epochMs + offsetHours * MILLISECONDS_PER_HOUR);
+  const month = MONTH_NAMES[offsetDate.getUTCMonth()];
+  return `${month} ${offsetDate.getUTCDate()}, ${offsetDate.getUTCFullYear()}`;
 }
 
 /**
@@ -142,7 +163,7 @@ function getDayOfWeek(date: Date): string {
 export function formatTimeWithOffset(date: Date, offsetHours: number, options?: Intl.DateTimeFormatOptions): string {
   // 1. Apply offset to the date
   const utcTime = date.getTime();
-  const offsetTime = new Date(utcTime + offsetHours * 3600000);
+  const offsetTime = new Date(utcTime + offsetHours * MILLISECONDS_PER_HOUR);
 
   // 2. Use default formatting if no options provided
   const defaultOptions: Intl.DateTimeFormatOptions = {
@@ -198,7 +219,7 @@ export function parseTimeWithOffset(timeStr: string, offsetHours: number): Date 
   const localDate = Date.UTC(year, month, day, hour, minute, 0, 0);
 
   // 5. Convert to UTC by subtracting the offset
-  const utcDate = new Date(localDate - offsetHours * 3600000);
+  const utcDate = new Date(localDate - offsetHours * MILLISECONDS_PER_HOUR);
 
   return utcDate;
 }
@@ -216,7 +237,7 @@ export function parseTimeWithOffset(timeStr: string, offsetHours: number): Date 
  * ```
  */
 export function addHoursToDate(date: Date, hours: number): Date {
-  return new Date(date.getTime() + hours * 3600000);
+  return new Date(date.getTime() + hours * MILLISECONDS_PER_HOUR);
 }
 
 /**
@@ -234,7 +255,7 @@ export function getTimeOfDayPhrase(offsetHours: number): string {
   // 1. Get current time with offset applied
   const now = new Date();
   // getTime() already returns UTC milliseconds, so we just add the offset directly
-  const offsetTime = new Date(now.getTime() + offsetHours * 3600000);
+  const offsetTime = new Date(now.getTime() + offsetHours * MILLISECONDS_PER_HOUR);
   const hour = offsetTime.getUTCHours();
 
   // 2. Determine time of day based on hour ranges

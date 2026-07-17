@@ -16,6 +16,7 @@ import { buildServerInfoContextItem } from "./serverInfo";
 import { buildConditioningContextItem, buildPromptContextItems, buildSampleDialogueContextItems } from "./templates";
 import { buildVerbatimToolDefinitionsContextItem } from "./toolDefinitions";
 import type { BuildContextParams } from "./types";
+import { SPACER_TEMPLATE } from "./timeAwareness";
 
 export type NativeBuildContextResult = {
   contextItems: StructuredContextItem[];
@@ -45,6 +46,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     tomoriConfig,
     channelPromptOverride,
     channelContextNote,
+    reunionNote,
     personaPrompt,
     personaLineageId,
     triggererUserId,
@@ -108,6 +110,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
           }
         : undefined,
   });
+  const dateSpacerTemplate =
+    tomoriConfig.time_awareness_enabled !== false ? await toolPromptMacroResolver.expand(SPACER_TEMPLATE) : null;
   const explicitLongTermMemoryIntent =
     explicitLongTermMemoryIntentOverride ??
     hasExplicitLongTermMemoryIntent(
@@ -316,6 +320,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     tomoriConfig,
     tomoriState,
     channelContextNote,
+    reunionNote,
+    dateSpacerTemplate,
     mediaContextWindow,
     includeTimestamps,
     isUserImpersonation,

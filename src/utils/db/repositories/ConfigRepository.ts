@@ -73,6 +73,7 @@ export type ServerCapabilitiesConfigsRow = {
   videogen_enabled: boolean;
   voice_message_enabled: boolean;
   user_blocking_enabled: boolean;
+  time_awareness_enabled: boolean;
   tool_use_enabled: boolean;
   verbatim_tool_calling_enabled: boolean;
 };
@@ -1081,7 +1082,8 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       const [row] = await sql`
         SELECT emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
                manage_message_enabled, thread_creation_enabled, imagegen_enabled,
-               videogen_enabled, voice_message_enabled, user_blocking_enabled, tool_use_enabled,
+               videogen_enabled, voice_message_enabled, user_blocking_enabled, time_awareness_enabled,
+               tool_use_enabled,
                verbatim_tool_calling_enabled
         FROM server_capabilities_configs
         WHERE server_id = ${serverId}
@@ -1158,13 +1160,15 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       INSERT INTO server_capabilities_configs (
         server_id, emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
         manage_message_enabled, thread_creation_enabled, imagegen_enabled,
-        videogen_enabled, voice_message_enabled, user_blocking_enabled, tool_use_enabled,
+        videogen_enabled, voice_message_enabled, user_blocking_enabled, time_awareness_enabled,
+        tool_use_enabled,
         verbatim_tool_calling_enabled
       ) VALUES (
         ${serverId}, ${row.emoji_usage_enabled}, ${row.sticker_usage_enabled},
         ${row.web_search_enabled}, ${row.manage_message_enabled}, ${row.thread_creation_enabled},
         ${row.imagegen_enabled}, ${row.videogen_enabled}, ${row.voice_message_enabled},
-        ${row.user_blocking_enabled}, ${row.tool_use_enabled}, ${row.verbatim_tool_calling_enabled ?? false}
+        ${row.user_blocking_enabled}, ${row.time_awareness_enabled}, ${row.tool_use_enabled},
+        ${row.verbatim_tool_calling_enabled ?? false}
       )
       ON CONFLICT (server_id) DO UPDATE SET
         emoji_usage_enabled    = EXCLUDED.emoji_usage_enabled,
@@ -1176,6 +1180,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         videogen_enabled       = EXCLUDED.videogen_enabled,
         voice_message_enabled  = EXCLUDED.voice_message_enabled,
         user_blocking_enabled  = EXCLUDED.user_blocking_enabled,
+        time_awareness_enabled = EXCLUDED.time_awareness_enabled,
         tool_use_enabled       = EXCLUDED.tool_use_enabled,
         verbatim_tool_calling_enabled = EXCLUDED.verbatim_tool_calling_enabled,
         updated_at             = NOW()

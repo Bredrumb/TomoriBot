@@ -714,6 +714,7 @@ export const serverCapabilitiesConfigSchema = z.object({
   videogen_enabled: z.boolean().default(false),
   voice_message_enabled: z.boolean().default(true),
   user_blocking_enabled: z.boolean().default(true),
+  time_awareness_enabled: z.boolean().default(true),
   tool_use_enabled: z.boolean().default(true),
   verbatim_tool_calling_enabled: z.boolean().default(false),
   created_at: z.date().optional(),
