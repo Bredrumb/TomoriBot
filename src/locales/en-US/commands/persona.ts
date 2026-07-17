@@ -257,7 +257,7 @@ Click **Confirm** to edit it.`,
     export: {
       description: `Export current personality as a shareable PNG file`,
       export_json_select_label: `Export JSON`,
-      export_json_select_description: `Optional: export a readable JSON file`,
+      export_json_select_description: `Optional: export an importable JSON file instead (no avatar image)`,
       persona_modal_title: `Select Persona`,
       persona_select_label: `Persona`,
       persona_select_description: `Choose which persona to export.`,
@@ -266,10 +266,10 @@ Click **Confirm** to edit it.`,
       alter_persona_description: `Alter Persona`,
       success_title: `🟢 Persona Exported Successfully`,
       success_description: `Current persona **{nickname}** has been exported! Share this PNG file with others to spread this personality configuration.`,
-      success_description_json: `Current persona **{nickname}** has been exported as a readable JSON file.
+      success_description_json: `Current persona **{nickname}** has been exported as a JSON file.
 
-**Note:** This JSON export is for reference only and cannot be imported.`,
-      json_non_importable_note: `This JSON export is for reference only and cannot be imported.`,
+**Note:** This JSON can be re-imported with \`/persona import\`. It does not include the avatar image — use the PNG export to share the avatar too.`,
+      json_importable_note: `This JSON export can be imported with /persona import. It does not include the avatar image; use the PNG export to share the avatar too.`,
       failed_title: `🔴 Export Failed`,
       avatar_failed_title: `🔴 Avatar Download Failed`,
       avatar_failed_description: `Failed to download the persona avatar. Please try again later.`,

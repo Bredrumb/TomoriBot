@@ -500,7 +500,7 @@ Behavior:
 ### `/persona import`
 
 - `type: main` replaces main persona.
-- Accepts native Tomori PNG exports plus supported SillyTavern PNG / JSON character cards.
+- Accepts native Tomori PNG exports, native Tomori JSON exports, plus supported SillyTavern PNG / JSON character cards.
 - `type: alter` creates a new alter persona:
   - Unique triggers enforced (no overlaps).
   - Avatar reference stored in `webhook_avatar_url` (production URL or non-production local path).

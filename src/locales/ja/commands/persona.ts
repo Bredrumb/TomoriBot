@@ -257,7 +257,7 @@ export default {
     export: {
       description: `の人格を共有可能なPNGファイルとしてエクスポートする`,
       export_json_select_label: `JSONをエクスポート`,
-      export_json_select_description: `任意：読み取り用JSONファイルとしてエクスポート`,
+      export_json_select_description: `任意：インポート可能なJSONファイルとしてエクスポート（アバター画像なし）`,
       persona_modal_title: `ペルソナを選択`,
       persona_select_label: `ペルソナ`,
       persona_select_description: `エクスポートするペルソナを選択してください。`,
@@ -266,10 +266,10 @@ export default {
       alter_persona_description: `オルタペルソナ`,
       success_title: `🟢 ペルソナのエクスポートに成功しました`,
       success_description: `ペルソナ **{nickname}** がエクスポートされました！このPNGファイルを他の人と共有して、人格設定を広めましょう。`,
-      success_description_json: `ペルソナ **{nickname}** が読み取り用JSONファイルとしてエクスポートされました。
+      success_description_json: `ペルソナ **{nickname}** がJSONファイルとしてエクスポートされました。
 
-**注意:** このJSONエクスポートは参照用のみで、インポートはできません。`,
-      json_non_importable_note: `このJSONエクスポートは参照用のみで、インポートはできません。`,
+**注意:** このJSONは \`/persona import\` で再インポートできます。アバター画像は含まれないため、アバターも共有したい場合はPNGエクスポートをご利用ください。`,
+      json_importable_note: `このJSONエクスポートは /persona import でインポートできます。アバター画像は含まれないため、アバターも共有したい場合はPNGエクスポートをご利用ください。`,
       failed_title: `🔴 エクスポートに失敗しました`,
       avatar_failed_title: `🔴 アバターのダウンロードに失敗しました`,
       avatar_failed_description: `ペルソナアバターのダウンロードに失敗しました。後でもう一度お試しください。`,

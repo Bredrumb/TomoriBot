@@ -1,6 +1,7 @@
 /**
  * Preset Export Command
- * Exports TomoriBot's personality as a PNG file with embedded metadata
+ * Exports TomoriBot's personality as a PNG file with embedded metadata,
+ * or as an importable JSON file (same payload, no avatar image)
  */
 
 import type {
@@ -152,33 +153,25 @@ export async function execute(
       const timestamp = Date.now();
       const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.json`;
 
-      const readableJsonExport = {
-        export_type: "persona_readable",
-        import_compatible: false,
-        exported_at: new Date().toISOString(),
-        note: localizer(locale, "commands.persona.export.json_non_importable_note"),
-        persona: {
-          persona_id: selectedPersona.persona_id ?? null,
-          persona_nickname: nickname,
+      // Canonical PresetExport payload (identical to the PNG tEXt chunk) so the
+      // file round-trips through /persona import's validatePresetFile() path.
+      // The `note` and `readable` extras are for humans only: the import Zod
+      // schemas use non-strict z.object(), which strips unknown keys on parse.
+      const importableJsonExport = {
+        ...presetData,
+        note: localizer(locale, "commands.persona.export.json_importable_note"),
+        readable: {
           is_alter: selectedPersona.is_alter === true,
-          persona_lineage_id: presetData.data.persona_lineage_id,
-          preset_lineage_id: presetData.data.preset_lineage_id ?? null,
-          trigger_words: presetData.data.trigger_words,
-          persona_prompt: presetData.data.persona_prompt,
-          attribute_list: presetData.data.attribute_list,
-          sample_dialogues_in: presetData.data.sample_dialogues_in,
-          sample_dialogues_out: presetData.data.sample_dialogues_out,
+          webhook_avatar_url: selectedPersona.webhook_avatar_url ?? null,
           sample_dialogues: presetData.data.sample_dialogues_in.map((input, index) => ({
             user_input: input,
             persona_output: presetData.data.sample_dialogues_out[index] ?? "",
           })),
-          webhook_avatar_url: selectedPersona.webhook_avatar_url ?? null,
-          physical_appearance_tags: selectedPersona.physical_appearance_tags ?? [],
         },
       };
 
       const attachment = new AttachmentBuilder(
-        Buffer.from(`${JSON.stringify(readableJsonExport, null, 2)}\n`, "utf8"),
+        Buffer.from(`${JSON.stringify(importableJsonExport, null, 2)}\n`, "utf8"),
         {
           name: filename,
         },
@@ -199,7 +192,7 @@ export async function execute(
       });
 
       log.success(
-        `Successfully exported readable JSON preset for ${interaction.guild ? "guild" : "DM"} ${serverDiscId}: ${nickname}`,
+        `Successfully exported importable JSON preset for ${interaction.guild ? "guild" : "DM"} ${serverDiscId}: ${nickname}`,
       );
       return;
     }
