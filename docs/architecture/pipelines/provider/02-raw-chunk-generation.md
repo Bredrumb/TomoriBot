@@ -66,10 +66,18 @@ provider's SSRF-guarded remote fetch.
 3. When an error message names known parameters that are present in the failing body, insert a
    targeted retry ahead of the remaining queue. All named parameters are removed together, so a
    joint rejection such as `min_p` plus `logit_bias` does not fall through to the minimal payload.
+   A message that names droppable parameters justifies the retry on its own — it does not also
+   need to match one of the classifier's status/wording heuristics.
 
 Targeted retries are deduplicated by serialized request body and capped at three per request. The
 result is not cached: routing or backend capabilities can differ on the next request, so degradation
 applies only to the current stream.
+
+A 502 is treated as a degradation signal only by OpenRouter (`degradeOn502`): its router may have
+selected a backend that rejects the parameter combination, so retrying with fewer parameters can
+land on a working configuration. For direct OpenAI-compatible providers a 502 is a genuine outage
+that degradation cannot fix, so those adapters fail fast and let key rotation and model fallback
+(chat pipeline stage 06) take over instead of walking the ladder against a dead endpoint.
 
 An SSE error can restart transparently only before the attempt commits. The commitment point is the
 first meaningful chunk yielded to the consumer: visible text, reasoning, a tool-call delta, or usage.

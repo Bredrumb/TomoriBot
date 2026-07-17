@@ -52,6 +52,13 @@ export type ExtraDegradationClassifier = (error: DegradableErrorInput) => boolea
 
 export interface ClassifyDegradableErrorOptions extends DegradableErrorInput {
   extraClassifiers?: readonly ExtraDegradationClassifier[];
+  /**
+   * Treat any 502 as a parameter-incompatibility signal. Only router-style
+   * providers (OpenRouter) should enable this: their 502s often mean "the
+   * selected backend rejected the request", whereas a direct provider's 502
+   * is almost always a genuine outage that degradation cannot fix.
+   */
+  degradeOn502?: boolean;
 }
 
 export interface BuildDegradationAttemptsOptions {
@@ -102,6 +109,7 @@ export function classifyDegradableError({
   statusCode,
   message,
   extraClassifiers = [],
+  degradeOn502 = false,
 }: ClassifyDegradableErrorOptions): DegradableErrorKind | null {
   if (statusCode === 400 && isLikelyGenericErrorMessage(message)) {
     return "generic_400";
@@ -112,7 +120,7 @@ export function classifyDegradableError({
   if (statusCode === 404 && message.toLowerCase().includes("no endpoints found")) {
     return "no_endpoints_404";
   }
-  if (statusCode === 502) {
+  if (statusCode === 502 && degradeOn502) {
     return "backend_incompatible_502";
   }
   if (extraClassifiers.some((classifier) => classifier({ statusCode, message }))) {

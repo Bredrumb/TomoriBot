@@ -339,15 +339,19 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
 
           if (!response.ok) {
             const responseErrorText = await response.text();
-            queueTargetedAttempt(i, attempt.body, responseErrorText);
+            // A message that names a droppable request param is sufficient evidence on
+            // its own — retry even when the generic status/wording classifier misses.
+            // `degradeOn502` stays off: a direct provider's 502 is an outage, not a
+            // parameter incompatibility, and should fail fast into key/model fallback.
+            const queuedTargeted = queueTargetedAttempt(i, attempt.body, responseErrorText);
             const degradationKind = classifyDegradableError({
               statusCode: response.status,
               message: responseErrorText,
               extraClassifiers,
             });
-            if (degradationKind && i < attempts.length - 1) {
+            if ((degradationKind || queuedTargeted) && i < attempts.length - 1) {
               log.warn(
-                `${this.options.adapterName}: Endpoint returned ${this.describeDegradationKind(degradationKind)} on attempt '${attempt.label}', trying fallback payload`,
+                `${this.options.adapterName}: Endpoint returned ${degradationKind ? this.describeDegradationKind(degradationKind) : "an error naming request parameters"} on attempt '${attempt.label}', trying fallback payload`,
                 { model: config.model, errorMessage: responseErrorText },
               );
               continue;
@@ -367,14 +371,16 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
             const midStreamError = this.getMidStreamError(chunk);
             if (midStreamError && !committedToAttempt) {
-              queueTargetedAttempt(i, attempt.body, midStreamError.message);
+              // Same rule as the fetch path: a message naming droppable params
+              // justifies a retry even without a generic classifier match.
+              const queuedTargeted = queueTargetedAttempt(i, attempt.body, midStreamError.message);
               const degradationKind = classifyDegradableError({
                 ...midStreamError,
                 extraClassifiers,
               });
-              if (degradationKind && i < attempts.length - 1) {
+              if ((degradationKind || queuedTargeted) && i < attempts.length - 1) {
                 log.warn(
-                  `${this.options.adapterName}: Received ${this.describeDegradationKind(degradationKind)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                  `${this.options.adapterName}: Received ${degradationKind ? this.describeDegradationKind(degradationKind) : "an error naming request parameters"} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
                   { model: config.model, errorMessage: midStreamError.message },
                 );
                 currentController.abort();

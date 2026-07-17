@@ -106,12 +106,19 @@ describe("classifyDegradableError", () => {
     [400, "Bad request", "generic_400"],
     [400, "Unsupported parameter: min_p", "parameter_rejection_400"],
     [404, "No endpoints found that support these parameters", "no_endpoints_404"],
-    [502, "Bad gateway", "backend_incompatible_502"],
+    [502, "Bad gateway", null],
     [401, "Unauthorized", null],
     [429, "Rate limit", null],
     [500, "Internal server error", null],
   ] as const)("classifies status %i", (statusCode, message, expected) => {
     expect(classifyDegradableError({ statusCode, message })).toBe(expected);
+  });
+
+  it("treats 502 as degradable only when degradeOn502 is enabled (router-style providers)", () => {
+    expect(classifyDegradableError({ statusCode: 502, message: "Bad gateway", degradeOn502: true })).toBe(
+      "backend_incompatible_502",
+    );
+    expect(classifyDegradableError({ statusCode: 502, message: "Bad gateway" })).toBeNull();
   });
 
   it("supports provider-specific classifiers", () => {

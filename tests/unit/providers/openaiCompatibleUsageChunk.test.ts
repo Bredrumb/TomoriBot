@@ -140,6 +140,40 @@ describe("OpenAICompatibleStreamAdapter parameter degradation", () => {
     expect(chunks[1]?.data).toMatchObject({ error: { code: 502, message: "Unsupported parameter: min_p" } });
   });
 
+  it("fails fast on a bare 502 outage instead of walking the ladder", async () => {
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      return new Response("Bad gateway", { status: 502, statusText: "Bad Gateway" });
+    }) as typeof fetch;
+
+    const chunks = await collectRawChunks(makeAdapter());
+
+    expect(fetchCalls).toBe(1);
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]?.data).toMatchObject({ error: {} });
+  });
+
+  it("retries when the error names a parameter even if no classifier heuristic matches", async () => {
+    const requestBodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_input, init) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      if (requestBodies.length === 1) {
+        // Wording that matches none of the classifier substrings — only the
+        // targeted param extraction can justify this retry.
+        return new Response("min_p cannot be used with this model", { status: 400, statusText: "Bad Request" });
+      }
+      return makeSseResponse([{ choices: [{ index: 0, delta: { content: "Recovered" } }] }]);
+    }) as typeof fetch;
+
+    const chunks = await collectRawChunks(makeAdapter());
+
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies[1]).not.toHaveProperty("min_p");
+    expect(requestBodies[1]).toHaveProperty("logit_bias");
+    expect(chunks[0]?.data).toMatchObject({ choices: [{ delta: { content: "Recovered" } }] });
+  });
+
   it("uses the shared ladder for fetch-time parameter rejection", async () => {
     const requestBodies: Array<Record<string, unknown>> = [];
     globalThis.fetch = (async (_input, init) => {

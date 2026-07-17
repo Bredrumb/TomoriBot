@@ -770,14 +770,17 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               attempt.label,
             );
 
-            queueTargetedAttempt(i, attempt.body, parsedError.errorMessage);
+            // A message that names a droppable request param is sufficient evidence on
+            // its own — retry even when the generic status/wording classifier misses.
+            const queuedTargeted = queueTargetedAttempt(i, attempt.body, parsedError.errorMessage);
             const degradationKind = classifyDegradableError({
               statusCode: parsedError.statusCode,
               message: parsedError.errorMessage,
+              degradeOn502: true,
             });
-            if (degradationKind && i < attempts.length - 1) {
+            if ((degradationKind || queuedTargeted) && i < attempts.length - 1) {
               log.warn(
-                `OpenRouter returned ${this.describeDegradationKind(degradationKind)} on attempt '${attempt.label}', trying fallback payload`,
+                `OpenRouter returned ${degradationKind ? this.describeDegradationKind(degradationKind) : "an error naming request parameters"} on attempt '${attempt.label}', trying fallback payload`,
                 { model: config.model, errorMessage: parsedError.errorMessage },
               );
               continue;
@@ -863,11 +866,13 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
               const midStreamError = this.getMidStreamError(normalizedChunk);
               if (midStreamError && !committedToAttempt) {
-                queueTargetedAttempt(i, attempt.body, midStreamError.message);
-                const degradationKind = classifyDegradableError(midStreamError);
-                if (degradationKind && i < attempts.length - 1) {
+                // Same rule as the fetch path: a message naming droppable params
+                // justifies a retry even without a generic classifier match.
+                const queuedTargeted = queueTargetedAttempt(i, attempt.body, midStreamError.message);
+                const degradationKind = classifyDegradableError({ ...midStreamError, degradeOn502: true });
+                if ((degradationKind || queuedTargeted) && i < attempts.length - 1) {
                   log.warn(
-                    `OpenRouter received ${this.describeDegradationKind(degradationKind)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                    `OpenRouter received ${degradationKind ? this.describeDegradationKind(degradationKind) : "an error naming request parameters"} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
                     { model: config.model, errorMessage: midStreamError.message },
                   );
                   const cancelPromise = reader.cancel().catch(() => undefined);
