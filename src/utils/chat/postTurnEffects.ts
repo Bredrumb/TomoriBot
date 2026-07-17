@@ -1,6 +1,7 @@
 import { PrivacyLevel } from "@/types/db/schema";
 import { storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
@@ -29,6 +30,7 @@ const EMPTY_RESPONSE_RETRY_DELAY_MS = 1000;
  * Runs side effects that must happen after a generation attempt finishes.
  */
 export async function runPostTurnEffects(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  await sendSelectedSticker(context, result);
   await maybeScheduleEmptyResponseRetry(context, result);
   await consumeTextQuota(context, result);
   updateSelfReplyBookkeeping(context, result);
@@ -37,6 +39,58 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   scheduleBoomerangFollowUp(context);
   // Fire-and-forget so stat tracking never adds latency to the response path.
   void recordUsageStats(context, result);
+}
+
+async function sendSelectedSticker(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  const sticker = result.selectedSticker;
+  if (!sticker || result.status !== "completed") return;
+
+  let stickerSent = false;
+  const webhook = context.responseTarget?.webhook;
+  const personaUsername = context.responseTarget?.personaUsername;
+  const personaAvatarUrl = context.responseTarget?.personaAvatarUrl;
+
+  if (context.currentPersona.is_alter && webhook && personaUsername) {
+    const threadId = context.channel.isThread() ? context.channel.id : undefined;
+    try {
+      await sendWebhookMessageWithIdentity(
+        webhook,
+        {
+          content: sticker.url,
+          ...(threadId ? { threadId } : {}),
+        },
+        {
+          username: personaUsername,
+          avatarUrl: personaAvatarUrl,
+          avatarDataUri: personaAvatarUrl?.startsWith("data:image/") ? personaAvatarUrl : undefined,
+        },
+      );
+      stickerSent = true;
+      log.info(`Sent sticker URL for '${sticker.name}' via webhook.`);
+    } catch (error) {
+      log.warn("Failed to send sticker URL via webhook, falling back to bot sticker send", error);
+    }
+  }
+
+  if (stickerSent) return;
+
+  try {
+    if (context.isFromQueue) {
+      await context.message.reply({ stickers: [sticker.id] });
+    } else {
+      if (!("send" in context.channel) || typeof context.channel.send !== "function") {
+        throw new Error(`Channel ${context.channel.id} does not support sticker sends.`);
+      }
+      await context.channel.send({ stickers: [sticker.id] });
+    }
+    log.info(`Sent selected sticker '${sticker.name}' after stream.`);
+  } catch (error) {
+    log.error("Failed to send selected sticker after stream:", error, {
+      serverId: context.tomoriState.server_id,
+      errorType: "StickerSendError",
+      metadata: { stickerId: sticker.id },
+    });
+  }
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { Sticker } from "discord.js";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
@@ -26,6 +27,7 @@ import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/
 const MAX_FUNCTION_CALL_ITERATIONS = parseIntegerEnvFlag(process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS, 100, 1);
 const SOFT_WARN_ITERATION_THRESHOLD = 20;
 const MAX_CONSECUTIVE_TOOL_ERRORS = parseIntegerEnvFlag(process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS, 5, 1);
+const NAI_TOOL_FAILURE_RETRY_THRESHOLD = parseIntegerEnvFlag(process.env.NAI_TOOL_FAILURE_RETRY_THRESHOLD, 3, 1);
 const STREAM_SDK_CALL_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120000, 10000);
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
@@ -52,6 +54,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let finalText = "";
   let detailsText = "";
   let consecutiveToolErrors = 0;
+  let naiConsecutiveToolFailures = 0;
+  let selectedStickerToSend: Sticker | null = null;
   let thoughtLog: GenerationTurnResult["thoughtLog"];
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
@@ -76,7 +80,15 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         resetChannelFollowUpCount(params.context.channel.id);
         finalText = streamResult.accumulatedText ?? finalText;
         detailsText = mergeDetails(detailsText, streamResult.detailsContent);
-        return buildResult("completed", params.context, streamResults, finalText, detailsText, thoughtLog);
+        return buildResult(
+          "completed",
+          params.context,
+          streamResults,
+          finalText,
+          detailsText,
+          thoughtLog,
+          selectedStickerToSend ?? undefined,
+        );
       case "error":
       case "timeout":
         resetChannelFollowUpCount(params.context.channel.id);
@@ -96,6 +108,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         const toolOutcome = await executeToolCall(params, streamResult, iteration);
         if (toolOutcome.kind === "restart") {
           consecutiveToolErrors = 0;
+          naiConsecutiveToolFailures = 0;
           continue;
         }
         if (toolOutcome.kind === "abort") {
@@ -103,8 +116,12 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         }
 
         functionHistory.push(toolOutcome.historyEntry);
+        if (toolOutcome.stickerSelection !== undefined) {
+          selectedStickerToSend = toolOutcome.stickerSelection;
+        }
         if (toolOutcome.success) {
           consecutiveToolErrors = 0;
+          naiConsecutiveToolFailures = 0;
         } else {
           consecutiveToolErrors += 1;
           if (consecutiveToolErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) {
@@ -113,7 +130,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           }
         }
 
-        if (toolOutcome.endTurn || shouldEndAfterPreToolText(params.provider, streamResult, toolOutcome.functionName)) {
+        if (toolOutcome.endTurn) {
           return buildResult(
             "completed",
             params.context,
@@ -121,7 +138,59 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             streamResult.accumulatedText ?? finalText,
             detailsText,
             thoughtLog,
+            selectedStickerToSend ?? undefined,
           );
+        }
+
+        const hasPreToolText = (streamResult.accumulatedText ?? "").trim().length > 0;
+        const providerName = params.provider.getInfo().name;
+        if (!toolOutcome.success && hasPreToolText && providerIsApiFamily(providerName, "novelai")) {
+          naiConsecutiveToolFailures += 1;
+          if (naiConsecutiveToolFailures >= NAI_TOOL_FAILURE_RETRY_THRESHOLD) {
+            log.warn(
+              `NovelAI GLM: Tool "${toolOutcome.functionName}" failed ${naiConsecutiveToolFailures} consecutive times after text was sent — showing error embed and ending turn`,
+            );
+            await emitNaiToolRetryExhausted(params.context);
+            return buildResult(
+              "completed",
+              params.context,
+              streamResults,
+              streamResult.accumulatedText ?? finalText,
+              detailsText,
+              thoughtLog,
+              selectedStickerToSend ?? undefined,
+            );
+          }
+
+          params.context.streamingContext.suppressTextOutput = true;
+          log.info(
+            `NovelAI GLM: Tool "${toolOutcome.functionName}" failed (attempt ${naiConsecutiveToolFailures}/${NAI_TOOL_FAILURE_RETRY_THRESHOLD}) — suppressing text output for retry`,
+          );
+          continue;
+        }
+
+        if (
+          toolOutcome.success &&
+          (await shouldEndAfterPreToolText(
+            params.provider,
+            streamResult,
+            toolOutcome.functionName,
+            params.tomoriState.server_id,
+          ))
+        ) {
+          return buildResult(
+            "completed",
+            params.context,
+            streamResults,
+            streamResult.accumulatedText ?? finalText,
+            detailsText,
+            thoughtLog,
+            selectedStickerToSend ?? undefined,
+          );
+        }
+
+        if (toolOutcome.success && hasPreToolText && providerIsApiFamily(providerName, "novelai")) {
+          params.context.streamingContext.suppressTextOutput = false;
         }
         break;
       }
@@ -140,6 +209,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       footerKey: "genai.generic_error_footer",
     });
   }
+  selectedStickerToSend = null;
   return buildResult("timeout", params.context, streamResults, finalText, detailsText, thoughtLog);
 }
 
@@ -246,6 +316,7 @@ async function executeToolCall(
       functionName: string;
       success: boolean;
       endTurn: boolean;
+      stickerSelection?: Sticker | null;
       historyEntry: ToolHistoryEntry;
     }
 > {
@@ -260,7 +331,7 @@ async function executeToolCall(
     return { kind: "abort", status: "error" };
   }
 
-  if (StreamOrchestrator.hasStopRequest(params.context.channel.id)) {
+  if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
     return { kind: "abort", status: "stopped_by_user" };
   }
 
@@ -340,7 +411,7 @@ async function executeToolCall(
       ]);
 
   // If /bot kill fired, exit the turn immediately — don't feed the failed result back to the model.
-  if (StreamOrchestrator.hasStopRequest(params.context.channel.id)) {
+  if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
     return { kind: "abort", status: "stopped_by_user" };
   }
 
@@ -425,6 +496,22 @@ async function executeToolCall(
     return { kind: "restart" };
   }
 
+  if (functionName === "update_short_term_memory" && toolResult.success) {
+    params.context.streamingContext.disableShortTermMemoryUpdate = true;
+    log.info("Short-term memory updated — disabling further STM calls for this turn");
+  }
+
+  let stickerSelection: Sticker | null | undefined;
+  if (functionName === "select_sticker_for_response") {
+    const stickerData = toolResult.data as { status?: string; sticker_id?: string; sticker_name?: string } | undefined;
+    if (stickerData?.status === "sticker_selected_successfully") {
+      stickerSelection = params.context.guild?.stickers.cache.get(stickerData.sticker_id ?? "") ?? null;
+      log.success(`Sticker '${stickerData.sticker_name}' selected for sending`);
+    } else {
+      stickerSelection = null;
+    }
+  }
+
   const functionResponse = toolResult.success
     ? ((toolResult.data as Record<string, unknown>) ?? { status: "completed" })
     : {
@@ -433,11 +520,21 @@ async function executeToolCall(
         tool_name: functionName,
       };
 
+  // Preserve any visible text streamed before this tool call so the follow-up
+  // provider call knows it was already sent to Discord and doesn't repeat it.
+  const preToolCallTextParts = buildPreToolCallTextParts(streamResult);
+  if (preToolCallTextParts) {
+    log.info(
+      `Preserving ${preToolCallTextParts.length} pre-tool-call text part(s) in function history to prevent repetition`,
+    );
+  }
+
   return {
     kind: "history",
     functionName,
     success: toolResult.success,
     endTurn: toolResult.endTurn === true,
+    stickerSelection,
     historyEntry: {
       functionCall,
       functionResponse: {
@@ -447,8 +544,22 @@ async function executeToolCall(
         },
       },
       imageMetadata: toolResult.imageMetadata,
+      preToolCallTextParts,
     },
   };
+}
+
+/**
+ * Builds the pre-tool-call text parts for a function-call history entry.
+ *
+ * `streamResult.accumulatedText` is this stream iteration's visible text at the
+ * function-call boundary (each iteration gets a fresh stream state, so earlier
+ * iterations' text is carried by their own history entries). Provider adapters
+ * merge these parts into the synthetic assistant tool-call turn on the next call.
+ */
+function buildPreToolCallTextParts(streamResult: StreamResult): Array<Record<string, unknown>> | undefined {
+  const text = streamResult.accumulatedText;
+  return text?.trim() ? [{ type: "text", text }] : undefined;
 }
 
 async function emitFailedToolCallThoughtLog(
@@ -544,11 +655,48 @@ function handleEnhancedContextRestart(params: ToolLoopParams, data: unknown): bo
   return true;
 }
 
-function shouldEndAfterPreToolText(provider: LLMProvider, streamResult: StreamResult, functionName: string): boolean {
+async function shouldEndAfterPreToolText(
+  provider: LLMProvider,
+  streamResult: StreamResult,
+  functionName: string,
+  serverId: number | undefined,
+): Promise<boolean> {
   const hasPreToolText = (streamResult.accumulatedText ?? "").trim().length > 0;
   if (!hasPreToolText) return false;
   const providerName = provider.getInfo().name;
-  return providerIsApiFamily(providerName, "novelai") || TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT.has(functionName);
+  const applies =
+    providerIsApiFamily(providerName, "novelai") || TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT.has(functionName);
+  if (!applies) return false;
+  if (functionName === "update_short_term_memory") return true;
+  return !(await ToolRegistry.requiresFollowUp(functionName, providerName, serverId));
+}
+
+async function emitNaiToolRetryExhausted(context: ChatTurnContext): Promise<void> {
+  await sendStandardEmbed(
+    context.channel as Parameters<typeof sendStandardEmbed>[0],
+    context.locale,
+    {
+      color: ColorCode.ERROR,
+      titleKey: "genai.nai_tool_retry_exhausted_title",
+      descriptionKey: "genai.nai_tool_retry_exhausted_description",
+    },
+    {
+      webhook: context.responseTarget?.webhook,
+      personaUsername: context.responseTarget?.personaUsername,
+      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
+    },
+  );
+}
+
+function shouldAbortToolCallForStopRequest(channelId: string): boolean {
+  if (!StreamOrchestrator.hasStopRequest(channelId)) return false;
+  if (!StreamOrchestrator.isFollowUpRequest(channelId)) return true;
+
+  log.info(
+    `Follow-up request found during tool execution for channel ${channelId}. Clearing interrupt to preserve tool chain progress — follow-up is queued.`,
+  );
+  StreamOrchestrator.clearStopRequest(channelId);
+  return false;
 }
 
 async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
@@ -600,6 +748,7 @@ function buildResult(
   responseText: string,
   detailsText: string,
   thoughtLog: GenerationTurnResult["thoughtLog"],
+  selectedSticker?: Sticker,
 ): GenerationTurnResult {
   const text = detailsText.trim()
     ? `${responseText.trim()}\n\n[Scene Metadata]\n${detailsText.trim()}`
@@ -620,6 +769,7 @@ function buildResult(
         : [],
     thoughtLog,
     thoughtLogOwner: thoughtLog ? resolveThoughtLogOwner(context) : undefined,
+    selectedSticker,
   };
 }
 

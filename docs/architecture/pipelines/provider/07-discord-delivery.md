@@ -13,6 +13,15 @@ Delivers a normalized text segment to Discord, applying typing simulation and ro
 This is the final stage of the provider pipeline: text that has passed through stages 05 and 06
 is delivered to Discord. Two classes share the responsibility:
 
+Sticker tools use a post-turn companion path rather than this text pipeline.
+`runToolLoop` carries the latest successful cached `Sticker` only on a
+completed `GenerationTurnResult`; `runPostTurnEffects` then sends it after the
+streamed text. Alter personas send the sticker URL through their identity
+webhook (including the thread ID when applicable). Main personas send the
+native Discord sticker as a reply for queued turns or directly to the channel
+otherwise. Webhook failure falls back to the native bot sticker send, and a
+final sticker-send failure is logged without failing the completed turn.
+
 **`StreamMessageDelivery.sendSegment()`** makes the delivery-mode decision:
 
 - **Aggregated mode** (`HumanizerDegree.NONE`) — the segment is queued into
@@ -155,6 +164,9 @@ message ID), or `null` if the send was skipped (stop request, limit reached, emp
 
 - **Discord message sent** — the primary side effect; one or more Discord messages are created in
   `context.channel` (or via `context.webhook`).
+- **Post-turn sticker sent** — when a completed tool loop selects a sticker,
+  `postTurnEffects.ts` appends a webhook sticker URL or native Discord sticker
+  after text delivery; this is intentionally outside stream message counts.
 - **`state.messageSentCount`** — incremented per message sent.
 - **`state.accumulatedText`** — appended with the text of each sent message (used for STM write
   at pipeline end). Render-modifier sends append the visible `SourcePersona (modifier): ` label once
