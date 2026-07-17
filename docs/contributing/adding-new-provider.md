@@ -636,7 +636,11 @@ Good first extraction candidates from `customToolAdapter.ts`: OpenAI function de
 
 ### What Not To Extract From `openrouter` Yet
 
-`src/providers/openrouter/` is useful as a reference but should stay separate in phase 1. It has provider-specific capability cache usage, parameter probe-drop retry logic, `reasoning_details` preservation, assistant-turn image role rewriting, and stricter request shaping for upstream vendors.
+`src/providers/openrouter/` is useful as a reference but remains a separate adapter family. It has
+provider-specific capability cache usage, `reasoning_details` preservation, assistant-turn image
+role rewriting, and stricter request shaping for upstream vendors. Parameter degradation is shared
+through `src/providers/utils/paramDegradation.ts`; providers extending
+`OpenAICompatibleStreamAdapter` inherit the fetch-time and pre-commit SSE retry ladder automatically.
 
 ### Capability Rules For New Providers
 

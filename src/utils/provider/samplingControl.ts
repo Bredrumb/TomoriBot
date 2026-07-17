@@ -29,23 +29,8 @@ export interface AnthropicSamplingSelection {
 export const ANTHROPIC_TEMPERATURE_DEFAULT = 1.0;
 export const ANTHROPIC_TOP_P_DEFAULT = 0.95;
 
-// NVIDIA's current default NIM text model rejects min_p, so new saved provider snapshots omit it.
-const PROVIDER_DEFAULT_MIN_P_OVERRIDES: ReadonlyMap<string, number> = new Map([["nvidia", 0]]);
-
 export function isParamDisabled(disabledParams: readonly string[] | null | undefined, param: SupportedParam): boolean {
   return disabledParams?.includes(param) ?? false;
-}
-
-export function resolveSavedProviderDefaultMinP(
-  provider: string,
-  baseMinP: number,
-  existingMinP?: number | null,
-): number {
-  if (existingMinP != null) {
-    return existingMinP;
-  }
-
-  return PROVIDER_DEFAULT_MIN_P_OVERRIDES.get(provider.toLowerCase()) ?? baseMinP;
 }
 
 export function getActiveTemperature(

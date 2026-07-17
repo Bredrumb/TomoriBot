@@ -16,7 +16,6 @@ import {
   supportsVideoCapability,
   supportsVisionCapability,
 } from "@/utils/provider/providerInfoRegistry";
-import { resolveSavedProviderDefaultMinP } from "@/utils/provider/samplingControl";
 
 export type SavedProviderCapability = "text" | "embedding" | "image" | "video" | "vision";
 
@@ -122,11 +121,7 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
     llm_top_k: existingConfig?.llm_top_k ?? params.baseConfig.llm_top_k,
     llm_frequency_penalty: existingConfig?.llm_frequency_penalty ?? params.baseConfig.llm_frequency_penalty,
     llm_presence_penalty: existingConfig?.llm_presence_penalty ?? params.baseConfig.llm_presence_penalty,
-    llm_min_p: resolveSavedProviderDefaultMinP(
-      normalizedProvider,
-      params.baseConfig.llm_min_p,
-      existingConfig?.llm_min_p,
-    ),
+    llm_min_p: existingConfig?.llm_min_p ?? params.baseConfig.llm_min_p,
     llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig.llm_disabled_params ?? [],
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig.llm_logit_biases ?? [],
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig.thinking_level,
@@ -165,11 +160,7 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     llm_top_k: existingConfig?.llm_top_k ?? params.baseConfig.llm_top_k,
     llm_frequency_penalty: existingConfig?.llm_frequency_penalty ?? params.baseConfig.llm_frequency_penalty,
     llm_presence_penalty: existingConfig?.llm_presence_penalty ?? params.baseConfig.llm_presence_penalty,
-    llm_min_p: resolveSavedProviderDefaultMinP(
-      normalizedProvider,
-      params.baseConfig.llm_min_p,
-      existingConfig?.llm_min_p,
-    ),
+    llm_min_p: existingConfig?.llm_min_p ?? params.baseConfig.llm_min_p,
     llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig.llm_disabled_params ?? [],
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig.llm_logit_biases ?? [],
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig.thinking_level,
