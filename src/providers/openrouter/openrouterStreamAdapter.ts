@@ -40,6 +40,15 @@ import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
 import { assistantMediaRelocationNotice, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
+import {
+  buildDegradationAttempts,
+  buildTargetedAttempt,
+  classifyDegradableError,
+  extractRejectedParams,
+  MAX_TARGETED_DEGRADATION_ATTEMPTS,
+  type DegradableErrorInput,
+  type DegradableErrorKind,
+} from "@/providers/utils/paramDegradation";
 import type {
   ProcessedChunk,
   ProviderError,
@@ -155,26 +164,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     // (empty - pony-alpha removed as deprecated)
   ]);
 
-  /**
-   * Priority order for probe-drop attempts on parameter rejection errors.
-   * Sampling params come first (most likely culprits), followed by generation
-   * params, with capability params (tools) last since they're pre-filtered
-   * by the model capability cache and rarely cause these errors.
-   * Keys not in this list are probed after all listed keys, in original order.
-   */
-  private static readonly PROBE_DROP_PRIORITY: readonly string[] = [
-    "top_p",
-    "top_k",
-    "min_p",
-    "frequency_penalty",
-    "presence_penalty",
-    "repetition_penalty",
-    "logit_bias",
-    "temperature",
-    "max_tokens",
-    "stop",
-    // "tools" intentionally omitted — goes last as an unlisted key
-  ];
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
@@ -233,48 +222,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   ): boolean {
     if (!supportedParameters) return true;
     return supportedParameters.has(param) || aliases.some((alias) => supportedParameters.has(alias));
-  }
-
-  private isLikelyGenericErrorMessage(message: string): boolean {
-    const normalized = message.trim().toLowerCase();
-    return (
-      normalized.length === 0 ||
-      normalized === "error" ||
-      normalized === "bad request" ||
-      normalized === "request failed"
-    );
-  }
-
-  /**
-   * Detects upstream provider errors that explicitly reject a request parameter.
-   * These non-generic messages are still parameter-related and benefit from probe-drop
-   * retries just as much as generic 400s do.
-   */
-  private isParameterRejectionError(message: string): boolean {
-    const normalized = message.toLowerCase();
-    return (
-      normalized.includes("invalid api parameter") ||
-      normalized.includes("unsupported parameter") ||
-      normalized.includes("unknown parameter") ||
-      normalized.includes("parameter not supported")
-    );
-  }
-
-  /**
-   * Detects OpenRouter's "No endpoints found" 404 — this means no provider backend
-   * supports the requested model with the given parameter combination, not that the
-   * model itself is missing. Retrying with fewer params can recover the request.
-   */
-  private isNoEndpointsFound(message: string): boolean {
-    return message.toLowerCase().includes("no endpoints found");
-  }
-
-  private cloneWithoutKeys(input: Record<string, unknown>, keysToRemove: string[]): Record<string, unknown> {
-    const cloned: Record<string, unknown> = { ...input };
-    for (const key of keysToRemove) {
-      delete cloned[key];
-    }
-    return cloned;
   }
 
   /**
@@ -362,6 +309,57 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return totalChars;
   }
 
+  /** Reset every mutable field that can be touched before an SSE attempt commits. */
+  private resetPerAttemptState(personaSpeakerLabelRegex: RegExp | null): void {
+    this.toolCallAccumulator.clear();
+    this.reasoningDetailsAccumulator = [];
+    this.speakerGuardPendingTail = "";
+    this.streamedTextTail = "";
+    this.servingProvider = undefined;
+    this.reasoningContentSpillGuard.reset();
+    this.thinkBlockStripper.reset(personaSpeakerLabelRegex);
+  }
+
+  private getMidStreamError(chunk: OpenrouterStreamChunk): DegradableErrorInput | null {
+    if (!chunk.error) return null;
+    const code = chunk.error.code;
+    const numericCode = typeof code === "number" ? code : Number(code);
+    return {
+      statusCode: Number.isFinite(numericCode) ? numericCode : null,
+      message: chunk.error.message ?? "OpenRouter API error",
+    };
+  }
+
+  /** Text, reasoning, tool-call deltas, and usage are the stream commitment point. */
+  private isMeaningfulCommitmentChunk(chunk: OpenrouterStreamChunk): boolean {
+    if (chunk.usage) return true;
+    const delta = chunk.choices?.[0]?.delta;
+    if (!delta) return false;
+    return Boolean(
+      (typeof delta.content === "string" && delta.content.length > 0) ||
+        (typeof delta.reasoning === "string" && delta.reasoning.length > 0) ||
+        (delta.toolCalls && delta.toolCalls.length > 0) ||
+        (delta.tool_calls && delta.tool_calls.length > 0) ||
+        (delta.reasoning_details && delta.reasoning_details.length > 0) ||
+        (delta.reasoningDetails && delta.reasoningDetails.length > 0),
+    );
+  }
+
+  private describeDegradationKind(kind: DegradableErrorKind): string {
+    switch (kind) {
+      case "generic_400":
+        return "generic HTTP 400";
+      case "parameter_rejection_400":
+        return "parameter rejection (400)";
+      case "no_endpoints_404":
+        return "no endpoints found (404)";
+      case "backend_incompatible_502":
+        return "backend incompatible with parameters (502)";
+      case "provider_specific":
+        return "provider-specific parameter rejection";
+    }
+  }
+
   private parseHttpErrorFromResponse(
     responseStatus: number,
     responseStatusText: string,
@@ -399,7 +397,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     const requestParamKeys = Object.keys(requestBody).sort().join(", ");
     const rawErrorBody = rawErrorBodyFromMetadata || errorText;
     const rawErrorBodySnippet = rawErrorBody.length > 3000 ? `${rawErrorBody.substring(0, 3000)}...` : rawErrorBody;
-    const shouldAppendRawBody = this.isLikelyGenericErrorMessage(errorMessage) && Boolean(rawErrorBodySnippet);
+    const shouldAppendRawBody =
+      classifyDegradableError({ statusCode: 400, message: errorMessage }) === "generic_400" &&
+      Boolean(rawErrorBodySnippet);
 
     return {
       error: new Error(
@@ -681,302 +681,273 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         headers.Authorization = `Bearer ${config.apiKey}`;
       }
 
-      controller = new AbortController();
-
-      // Link external abort signal (SDK call timeout) to the internal controller
-      if (context.abortSignal) {
-        if (context.abortSignal.aborted) {
-          controller.abort();
-        } else {
-          context.abortSignal.addEventListener("abort", () => controller?.abort(), { once: true });
-        }
+      const inactivityTimeoutMs = config.inactivityTimeoutMs ?? 120000;
+      const mandatoryKeys = new Set(["model", "messages", "stream"]);
+      const attempts = buildDegradationAttempts(requestBody, {
+        mandatoryKeys,
+        stripImages: (attemptMessages) =>
+          Array.isArray(attemptMessages)
+            ? this.stripImagesFromMessages(attemptMessages as Array<Record<string, unknown>>)
+            : attemptMessages,
+      });
+      const probeCandidates = attempts
+        .filter((attempt) => attempt.label.startsWith("probe_drop_"))
+        .map((attempt) => attempt.label.replace("probe_drop_", ""));
+      if (probeCandidates.length > 0) {
+        log.info(`OpenRouter probe candidates (${config.model}): ${probeCandidates.join(", ")}`);
       }
 
-      const inactivityTimeoutMs = config.inactivityTimeoutMs ?? 120000;
-
-      const attempts: Array<{ label: string; body: Record<string, unknown> }> = [];
-      const seenSerializedBodies = new Set<string>();
-      const addAttempt = (label: string, body: Record<string, unknown>) => {
-        const serialized = JSON.stringify(body);
-        if (!seenSerializedBodies.has(serialized)) {
-          seenSerializedBodies.add(serialized);
-          attempts.push({ label, body });
+      const attemptedSerializedBodies = new Set<string>();
+      let targetedAttemptCount = 0;
+      const queueTargetedAttempt = (
+        currentIndex: number,
+        currentBody: Record<string, unknown>,
+        errorMessage: string,
+      ): boolean => {
+        if (targetedAttemptCount >= MAX_TARGETED_DEGRADATION_ATTEMPTS) {
+          return false;
         }
+
+        const rejectedParams = extractRejectedParams(errorMessage, currentBody);
+        if (rejectedParams.length === 0) return false;
+
+        const targetedAttempt = buildTargetedAttempt(currentBody, rejectedParams);
+        const serialized = JSON.stringify(targetedAttempt.body);
+        if (attemptedSerializedBodies.has(serialized)) return false;
+
+        const duplicateIndex = attempts.findIndex(
+          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+        );
+        if (duplicateIndex !== -1) {
+          attempts.splice(duplicateIndex, 1);
+        }
+        attempts.splice(currentIndex + 1, 0, targetedAttempt);
+        targetedAttemptCount += 1;
+        return true;
       };
 
-      addAttempt("default", requestBody);
-
-      // Baseline for probing hidden incompatibilities:
-      // remove stream_options first so per-parameter probes isolate other fields.
-      const probeBaseline =
-        "stream_options" in requestBody ? this.cloneWithoutKeys(requestBody, ["stream_options"]) : { ...requestBody };
-      addAttempt("no_stream_options", probeBaseline);
-
-      const mandatoryKeys = new Set(["model", "messages", "stream"]);
-      // Sort candidates so sampling params are probed first — they're the most
-      // likely culprits for parameter rejection errors. Unlisted keys (e.g. tools)
-      // fall to the end, preserving their relative insertion order among themselves.
-      const probeCandidateKeys = Object.keys(probeBaseline)
-        .filter((key) => !mandatoryKeys.has(key))
-        .sort((a, b) => {
-          const aIdx = OpenrouterStreamAdapter.PROBE_DROP_PRIORITY.indexOf(a);
-          const bIdx = OpenrouterStreamAdapter.PROBE_DROP_PRIORITY.indexOf(b);
-          if (aIdx === -1 && bIdx === -1) return 0;
-          if (aIdx === -1) return 1;
-          if (bIdx === -1) return -1;
-          return aIdx - bIdx;
-        });
-      if (probeCandidateKeys.length > 0) {
-        log.info(`OpenRouter probe candidates (${config.model}): ${probeCandidateKeys.join(", ")}`);
-        for (const key of probeCandidateKeys) {
-          addAttempt(`probe_drop_${key}`, this.cloneWithoutKeys(probeBaseline, [key]));
-        }
-      }
-
-      // For routing models (e.g., openrouter/free): after sampling params,
-      // try stripping images before tools. Vision support varies more than tool support,
-      // so preserve tools for auto-router to use for model selection if possible.
-      let strippedMessages = messages;
-      const probeWithoutImages = { ...probeBaseline };
-      if (Array.isArray(probeBaseline.messages as unknown[])) {
-        strippedMessages = this.stripImagesFromMessages(probeBaseline.messages as Array<Record<string, unknown>>);
-        probeWithoutImages.messages = strippedMessages;
-      }
-      addAttempt("strip_images", probeWithoutImages);
-
-      // Then try dropping tools while keeping images (less common than tools-only models)
-      if ("tools" in probeBaseline) {
-        addAttempt("probe_drop_tools", this.cloneWithoutKeys(probeBaseline, ["tools"]));
-      }
-
-      // Finally, minimal text-only payload with stripped images
-      addAttempt("minimal_payload", {
-        model: config.model,
-        messages: strippedMessages,
-        stream: true,
-      });
-
-      let response: Response | null = null;
-      for (let i = 0; i < attempts.length; i++) {
+      let completedAttempt = false;
+      attemptLoop: for (let i = 0; i < attempts.length; i++) {
         const attempt = attempts[i];
         const isRetry = i > 0;
+        attemptedSerializedBodies.add(JSON.stringify(attempt.body));
 
         if (isRetry) {
           log.warn(`OpenRouter request retry with degraded payload: ${attempt.label} (${config.model})`);
+        }
+
+        controller = new AbortController();
+        const currentController = controller;
+        const externalAbortListener = () => currentController.abort();
+        if (context.abortSignal?.aborted) {
+          currentController.abort();
+        } else {
+          context.abortSignal?.addEventListener("abort", externalAbortListener, { once: true });
         }
 
         const requestInit: RequestInit & { verbose?: boolean } = {
           method: "POST",
           headers,
           body: JSON.stringify(attempt.body),
-          signal: controller.signal,
+          signal: currentController.signal,
         };
 
         if (OPENROUTER_VERBOSE_FETCH) {
           requestInit.verbose = true;
         }
 
-        const attemptResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", requestInit);
-
-        if (attemptResponse.ok) {
-          response = attemptResponse;
-          if (isRetry) {
-            log.warn(`OpenRouter request recovered after retry: ${attempt.label} (${config.model})`);
-            if (attempt.label.startsWith("probe_drop_")) {
-              const droppedParam = attempt.label.replace("probe_drop_", "");
-              log.warn(`OpenRouter probe indicates likely incompatible parameter for ${config.model}: ${droppedParam}`);
-            }
-          }
-          break;
-        }
-
-        const errorText = await attemptResponse.text();
-        const parsedError = this.parseHttpErrorFromResponse(
-          attemptResponse.status,
-          attemptResponse.statusText,
-          errorText,
-          attempt.body,
-          config.model,
-          attempt.label,
-        );
-
-        const hasMoreAttempts = i < attempts.length - 1;
-        const isGeneric400 =
-          parsedError.statusCode === 400 && this.isLikelyGenericErrorMessage(parsedError.errorMessage);
-        // Upstream provider explicitly rejected a parameter — probe-drop can isolate which one.
-        const isParamRejection400 =
-          parsedError.statusCode === 400 && this.isParameterRejectionError(parsedError.errorMessage);
-        // "No endpoints found" 404 means no backend supports the model+params combo,
-        // not that the model is missing. Probe-drop retries can find a working subset.
-        const isNoEndpoints404 = parsedError.statusCode === 404 && this.isNoEndpointsFound(parsedError.errorMessage);
-        // 502 Bad Gateway from routing models (e.g., openrouter/free) may indicate
-        // the selected backend doesn't support the requested parameters.
-        // Probe-drop can find a compatible parameter subset.
-        const isBackendIncompatible502 = parsedError.statusCode === 502;
-
-        if ((isGeneric400 || isParamRejection400 || isNoEndpoints404 || isBackendIncompatible502) && hasMoreAttempts) {
-          const reason = isNoEndpoints404
-            ? "no endpoints found (404)"
-            : isParamRejection400
-              ? "parameter rejection (400)"
-              : isBackendIncompatible502
-                ? "backend incompatible with parameters (502)"
-                : "generic HTTP 400";
-          log.warn(`OpenRouter returned ${reason} on attempt '${attempt.label}', trying fallback payload`, {
-            model: config.model,
-            errorMessage: parsedError.errorMessage,
-          });
-          continue;
-        }
-
-        throw parsedError.error;
-      }
-
-      if (!response) {
-        throw new Error("OpenRouter request failed before obtaining a response");
-      }
-
-      if (!response.body) {
-        throw new Error("Response body is null");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let lastMeaningfulAt = Date.now();
-
-      const readWithTimeout = async () => {
-        let timeoutId: NodeJS.Timeout | null = null;
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(new Error("OpenRouter stream timed out while waiting for data"));
-          }, inactivityTimeoutMs);
-        });
-
         try {
-          return await Promise.race([reader.read(), timeoutPromise]);
-        } finally {
-          if (timeoutId) clearTimeout(timeoutId);
-        }
-      };
+          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", requestInit);
 
-      while (true) {
-        const readResult = (await readWithTimeout()) as {
-          done: boolean;
-          value?: Uint8Array;
-        };
-
-        if (readResult.done) break;
-
-        if (!readResult.value) continue;
-
-        buffer += decoder.decode(readResult.value, { stream: true });
-
-        // Process complete SSE lines
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-
-          // Skip empty lines and SSE comments
-          if (!trimmedLine || trimmedLine.startsWith(":")) continue;
-
-          if (!trimmedLine.startsWith("data:")) continue;
-
-          const data = trimmedLine.slice(5).trim();
-
-          if (!data) continue;
-
-          if (data === "[DONE]") {
-            log.info("OpenrouterStreamAdapter: Stream completed [DONE]");
-            // Continue reading until stream closes naturally
-            continue;
-          }
-
-          let parsed: unknown;
-          try {
-            parsed = JSON.parse(data);
-          } catch (parseError) {
-            log.warn(`OpenrouterStreamAdapter: Failed to parse SSE data: ${data}`, {
-              error: parseError instanceof Error ? parseError.message : String(parseError),
-            });
-            continue;
-          }
-
-          const normalizedChunk = this.normalizeOpenrouterChunk(parsed);
-          if (!normalizedChunk) continue;
-
-          const chunksToEmit = this.splitChunkWithTextAndToolSignals(normalizedChunk);
-
-          for (const chunkToEmit of chunksToEmit) {
-            const strippedChunk = this.stripThinkBlocksFromChunkContent(chunkToEmit);
-            const spillGuardedChunk = this.applyReasoningContentSpillGuard(strippedChunk);
-            const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(spillGuardedChunk);
-            const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
-
-            if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
-              yield {
-                data: {
-                  choices: [
-                    {
-                      index: 0,
-                      delta: {
-                        content: this.speakerGuardPendingTail,
-                      },
-                    },
-                  ],
-                } satisfies OpenrouterStreamChunk,
-                provider: "openrouter",
-                metadata: {
-                  timestamp: Date.now(),
-                  model: config.model,
-                },
-              };
-              this.speakerGuardPendingTail = "";
-            }
-
-            const hasMeaningfulData = Boolean(
-              guardResult.chunk.error ||
-                guardResult.chunk.usage ||
-                (guardResult.chunk.choices && guardResult.chunk.choices.length > 0),
+          if (!response.ok) {
+            const errorText = await response.text();
+            const parsedError = this.parseHttpErrorFromResponse(
+              response.status,
+              response.statusText,
+              errorText,
+              attempt.body,
+              config.model,
+              attempt.label,
             );
 
-            if (!hasMeaningfulData) {
-              if (guardResult.stopTriggered) {
-                log.warn(
-                  `OpenRouter speaker guard: generation stopped at detected speaker label "${guardResult.matchedSpeaker ?? "unknown"}"`,
-                );
-                return;
-              }
+            queueTargetedAttempt(i, attempt.body, parsedError.errorMessage);
+            const degradationKind = classifyDegradableError({
+              statusCode: parsedError.statusCode,
+              message: parsedError.errorMessage,
+            });
+            if (degradationKind && i < attempts.length - 1) {
+              log.warn(
+                `OpenRouter returned ${this.describeDegradationKind(degradationKind)} on attempt '${attempt.label}', trying fallback payload`,
+                { model: config.model, errorMessage: parsedError.errorMessage },
+              );
               continue;
             }
 
-            lastMeaningfulAt = Date.now();
+            throw parsedError.error;
+          }
 
-            yield {
-              data: guardResult.chunk,
-              provider: "openrouter",
-              metadata: {
-                timestamp: Date.now(),
-                model: config.model,
-              },
+          if (!response.body) {
+            throw new Error("Response body is null");
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let lastMeaningfulAt = Date.now();
+          let committedToAttempt = false;
+          let recoveryLogged = false;
+
+          const logRecovery = () => {
+            if (!isRetry || recoveryLogged) return;
+            recoveryLogged = true;
+            log.warn(`OpenRouter request recovered after retry: ${attempt.label} (${config.model})`);
+            if (attempt.label.startsWith("probe_drop_") || attempt.label.startsWith("targeted_drop_")) {
+              const droppedParams = attempt.label.replace(/^(?:probe|targeted)_drop_/, "");
+              log.warn(
+                `OpenRouter probe indicates likely incompatible parameter for ${config.model}: ${droppedParams}`,
+              );
+            }
+          };
+
+          const readWithTimeout = async () => {
+            let timeoutId: NodeJS.Timeout | null = null;
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              timeoutId = setTimeout(() => {
+                reject(new Error("OpenRouter stream timed out while waiting for data"));
+              }, inactivityTimeoutMs);
+            });
+
+            try {
+              return await Promise.race([reader.read(), timeoutPromise]);
+            } finally {
+              if (timeoutId) clearTimeout(timeoutId);
+            }
+          };
+
+          while (true) {
+            const readResult = (await readWithTimeout()) as {
+              done: boolean;
+              value?: Uint8Array;
             };
 
-            if (guardResult.stopTriggered) {
-              log.warn(
-                `OpenRouter speaker guard: generation stopped at detected speaker label "${guardResult.matchedSpeaker ?? "unknown"}"`,
-              );
-              return;
+            if (readResult.done) break;
+            if (!readResult.value) continue;
+
+            buffer += decoder.decode(readResult.value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (!trimmedLine || trimmedLine.startsWith(":") || !trimmedLine.startsWith("data:")) continue;
+
+              const data = trimmedLine.slice(5).trim();
+              if (!data) continue;
+              if (data === "[DONE]") {
+                log.info("OpenrouterStreamAdapter: Stream completed [DONE]");
+                continue;
+              }
+
+              let parsed: unknown;
+              try {
+                parsed = JSON.parse(data);
+              } catch (parseError) {
+                log.warn(`OpenrouterStreamAdapter: Failed to parse SSE data: ${data}`, {
+                  error: parseError instanceof Error ? parseError.message : String(parseError),
+                });
+                continue;
+              }
+
+              const normalizedChunk = this.normalizeOpenrouterChunk(parsed);
+              if (!normalizedChunk) continue;
+
+              const midStreamError = this.getMidStreamError(normalizedChunk);
+              if (midStreamError && !committedToAttempt) {
+                queueTargetedAttempt(i, attempt.body, midStreamError.message);
+                const degradationKind = classifyDegradableError(midStreamError);
+                if (degradationKind && i < attempts.length - 1) {
+                  log.warn(
+                    `OpenRouter received ${this.describeDegradationKind(degradationKind)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                    { model: config.model, errorMessage: midStreamError.message },
+                  );
+                  const cancelPromise = reader.cancel().catch(() => undefined);
+                  currentController.abort();
+                  await cancelPromise;
+                  this.resetPerAttemptState(personaSpeakerLabelRegex);
+                  continue attemptLoop;
+                }
+              }
+
+              const chunksToEmit = this.splitChunkWithTextAndToolSignals(normalizedChunk);
+              for (const chunkToEmit of chunksToEmit) {
+                const strippedChunk = this.stripThinkBlocksFromChunkContent(chunkToEmit);
+                const spillGuardedChunk = this.applyReasoningContentSpillGuard(strippedChunk);
+                const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(spillGuardedChunk);
+                const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
+                const commitsStream = this.isMeaningfulCommitmentChunk(guardResult.chunk);
+                if (commitsStream && !committedToAttempt) {
+                  committedToAttempt = true;
+                  logRecovery();
+                }
+
+                if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
+                  yield {
+                    data: {
+                      choices: [{ index: 0, delta: { content: this.speakerGuardPendingTail } }],
+                    } satisfies OpenrouterStreamChunk,
+                    provider: "openrouter",
+                    metadata: { timestamp: Date.now(), model: config.model },
+                  };
+                  this.speakerGuardPendingTail = "";
+                }
+
+                const hasMeaningfulData = Boolean(
+                  guardResult.chunk.error ||
+                    guardResult.chunk.usage ||
+                    (guardResult.chunk.choices && guardResult.chunk.choices.length > 0),
+                );
+                if (!hasMeaningfulData) {
+                  if (guardResult.stopTriggered) {
+                    log.warn(
+                      `OpenRouter speaker guard: generation stopped at detected speaker label "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                    );
+                    return;
+                  }
+                  continue;
+                }
+
+                lastMeaningfulAt = Date.now();
+                yield {
+                  data: guardResult.chunk,
+                  provider: "openrouter",
+                  metadata: { timestamp: Date.now(), model: config.model },
+                };
+
+                if (guardResult.stopTriggered) {
+                  log.warn(
+                    `OpenRouter speaker guard: generation stopped at detected speaker label "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                  );
+                  return;
+                }
+              }
+            }
+
+            if (Date.now() - lastMeaningfulAt > inactivityTimeoutMs) {
+              currentController.abort();
+              throw new Error("OpenRouter stream timed out due to inactivity");
             }
           }
-        }
 
-        // Timeout based on meaningful chunks, even if keepalives are flowing
-        if (Date.now() - lastMeaningfulAt > inactivityTimeoutMs) {
-          controller.abort();
-          throw new Error("OpenRouter stream timed out due to inactivity");
+          logRecovery();
+          completedAttempt = true;
+          break;
+        } finally {
+          context.abortSignal?.removeEventListener("abort", externalAbortListener);
         }
+      }
+
+      if (!completedAttempt) {
+        throw new Error("OpenRouter request failed before completing a response stream");
       }
 
       const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk();
@@ -1425,7 +1396,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         return { error: rawObj.error };
       }
 
-      const message = typeof errorObj.message === "string" ? errorObj.message : "OpenRouter API error";
+      const metadata =
+        errorObj.metadata && typeof errorObj.metadata === "object"
+          ? (errorObj.metadata as Record<string, unknown>)
+          : null;
+      const message =
+        (typeof metadata?.raw === "string" && metadata.raw) ||
+        (typeof errorObj.message === "string" && errorObj.message) ||
+        "OpenRouter API error";
       const codeValue = errorObj.code;
       return {
         error: {
