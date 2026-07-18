@@ -140,14 +140,20 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       const novelaiAdapter = new NovelaiStreamAdapter();
       const providerError = novelaiAdapter.handleProviderError(error);
 
-      await log.error("API key validation failed", error, {
-        errorType: "APIKeyValidationError",
-        metadata: {
-          provider: "novelai",
-          errorCode: providerError.code,
-          errorType: providerError.type,
-        },
-      });
+      const isUserError = providerError.type === "api_error";
+
+      if (!isUserError) {
+        await log.error("API key validation failed", error, {
+          errorType: "APIKeyValidationError",
+          metadata: {
+            provider: "novelai",
+            errorCode: providerError.code,
+            errorType: providerError.type,
+          },
+        });
+      } else {
+        log.warn(`NovelAI API key validation failed (user input error): ${providerError.message}`);
+      }
       return { valid: false, error: providerError };
     }
   }

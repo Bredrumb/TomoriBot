@@ -98,4 +98,4 @@ that exists).
 - Conditioning system: → no dedicated doc;
   `src/utils/conditioning/conditioning.ts` helper only
 - Conditioning tools (reward/punish actions): tool registry (→ [tool-loop pipeline](../../../tool-loop/))
-- Server memories (parallel): [`03-server-memories.md`](./03-server-memories)
+- Server memories (parallel): [`03-server-memories.md`](/architecture/pipelines/context-build/02-native-assembly/03-server-memories/)

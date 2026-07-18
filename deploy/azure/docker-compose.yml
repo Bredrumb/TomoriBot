@@ -1,0 +1,38 @@
+name: tomoribot-azure
+
+services:
+  tomoribot:
+    image: ${TOMORIBOT_IMAGE:?TOMORIBOT_IMAGE is required}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      RUN_ENV: production
+      PORT: "8081"
+      SECRET_FILE: /run/secrets/tomoribot.json
+      CONTAINER_MEMORY_LIMIT_MB: "1536"
+      SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-}
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - /etc/tomoribot/secrets.json:/run/secrets/tomoribot.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  searxng:
+    image: ${SEARXNG_IMAGE:-searxng/searxng:latest}
+    profiles:
+      - searxng
+    restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-}
+      SEARXNG_BASE_URL: http://localhost:8080/
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

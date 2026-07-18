@@ -1,3 +1,6 @@
+> [!NOTE]
+> This README is a quick overview. For the full, up-to-date documentation (setup guides, feature walkthroughs, provider info, and more) visit **[docs.tomoribot.app](https://docs.tomoribot.app/)**.
+
 <br />
 <div align="center">
 
@@ -46,9 +49,6 @@ English | [日本語](README_ja.md)
 
   
 </div>
-
-> [!NOTE]
-> This README is a quick overview. For the full, up-to-date documentation (setup guides, feature walkthroughs, provider info, and more) visit **[docs.tomoribot.app](https://docs.tomoribot.app/)**.
 
 <!-- ABOUT THE PROJECT -->
 ## About the Project
@@ -166,7 +166,7 @@ Choose one install path:
 - **A. Local Bun Setup (Recommended):** requires [Bun](https://bun.sh/), Node.js v20+ for MCP tooling, and either PostgreSQL or Docker for the database.
 - **B. Docker Compose Setup:** requires Docker only for running the bot/database, but host-side maintenance scripts still need host tooling.
 
-The recommended path for most self-hosters is the local Bun setup wizard. Its default **Full Install** path creates `.env`, generates a safe `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, runs `bun install`, then attempts the lightweight database and AI helper extras.
+The recommended path for most self-hosters is the local Bun setup wizard. Its default **Full Install** path creates `.env`, generates a safe `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, runs `bun install --frozen-lockfile`, then attempts the lightweight database and AI helper extras.
 
 ## A. Local Bun Setup
 

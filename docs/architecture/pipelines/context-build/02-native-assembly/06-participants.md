@@ -158,9 +158,9 @@ collapse-when-many-users, show-roles-only-for-mods) would either:
 
 ## Related docs
 
-- Server memories (parallel): [`03-server-memories.md`](./03-server-memories)
+- Server memories (parallel): [`03-server-memories.md`](/architecture/pipelines/context-build/02-native-assembly/03-server-memories/)
 - User presence (helper, `history.ts`): covered in
-  [native-assembly README](./README.md#shared-helpers-used-across-contributors).
+  [native-assembly README](/architecture/pipelines/context-build/02-native-assembly/#shared-helpers-used-across-contributors).
 - Display-name resolution: → no dedicated doc;
   `src/utils/discord/displayName.ts` helper only
 - Reminder system: → no dedicated doc;

@@ -23,12 +23,16 @@ Primary files:
 
 Behavior:
 - Non-production (or `TEST_PRODUCTION=true`): secrets load from `.env`.
-- Production (`RUN_ENV=production`): secrets load from AWS Secrets Manager (`tomoribot/production`, region from `AWS_REGION`, default `us-east-1`).
+- Production (`RUN_ENV=production`): secrets load from `SECRET_FILE` when set, then
+  `GCP_SECRET_FILE` for the legacy Cloud Run mount, then AWS Secrets Manager
+  (`tomoribot/production`, region from `AWS_REGION`, default `us-east-1`).
 - Required secrets are validated at startup:
   - `DISCORD_TOKEN`
   - `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
   - `CRYPTO_SECRET`
 - After loading, secrets are mapped to `process.env` and `keyManager.initialize()` is called.
+  This includes S3-compatible storage credentials such as `S3_ENDPOINT`,
+  `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`.
 
 Key takeaway: encryption key initialization happens only after secrets are loaded.
 
@@ -215,7 +219,7 @@ Critical memory behavior:
 
 TomoriBot implements several controls to mitigate supply chain risks during development and deployment:
 
-- **Lockfiles and Pinning:** Always use `--frozen-lockfile` (or `bun install --frozen-lockfile` in CI) to ensure deterministic builds. Never use floating tags like `@latest` in the `Dockerfile`, workflow actions, dependency overrides, or bundled MCP server configs.
+- **Lockfiles and Pinning:** Always use `--frozen-lockfile` to ensure deterministic builds. Never use floating tags like `@latest` in the `Dockerfile`, workflow actions, dependency overrides, or bundled MCP server configs. A global dependency override must remain within every dependent package's declared version range; update or patch the parent dependency instead of forcing an incompatible major version.
 - **Pinned Runtime Images and Actions:** Production Docker builds pin the Bun base image by digest, and deployment workflows pin third-party GitHub Actions by commit SHA.
 - **Bundled MCP Packages:** Built-in npm MCP servers are pinned in `package.json`/`bun.lock`; production uses installed binaries instead of runtime `bunx` package resolution.
 - **Dependency Auditing:** The CI/CD pipeline enforces `bun audit` (failing on high/critical) and container scanning (Trivy).

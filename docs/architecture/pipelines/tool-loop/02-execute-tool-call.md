@@ -4,7 +4,7 @@ title: "02: Execute Tool Call"
 
 Validate, gate, dispatch, and record one tool call from the provider.
 
-**File:** `src/utils/chat/toolLoop.ts:197-331`
+**File:** `src/utils/chat/toolLoop.ts:237-475`
 
 ## Mission
 
@@ -38,6 +38,7 @@ A discriminated union:
     functionName: string;
     success: boolean;
     endTurn: boolean;
+    stickerSelection?: Sticker | null;
     historyEntry: ToolHistoryEntry;
   }
 ```
@@ -57,10 +58,11 @@ Steps in execution order:
    no `name`, returns `{kind: "abort", status: "error"}` and logs the
    malformed result.
 
-2. **Stop-request check** — calls
-   `StreamOrchestrator.hasStopRequest(params.context.channel.id)`. If a stop
-   is pending, returns `{kind: "abort", status: "stopped_by_user"}` before any
-   tool runs.
+2. **Stop-request check** — a regular stop returns
+   `{kind: "abort", status: "stopped_by_user"}` before any tool runs. A stale
+   follow-up interrupt is different: the follow-up is already queued, so the
+   interrupt is cleared and the active tool chain continues. The same
+   distinction is checked again after tool execution.
 
 3. **Build `ToolContext`** — assembles the context object passed to every tool.
    Key fields derived from `ChatTurnContext`:
@@ -118,17 +120,38 @@ Steps in execution order:
 
 8. **Enhanced-context restart check** — calls
    [`handleEnhancedContextRestart`](03-enhanced-context-restart.md)
-   (`toolLoop.ts:333-364`) with `toolResult.data`. If it returns `true`,
+   (`toolLoop.ts:537-568`) with `toolResult.data`. If it returns `true`,
    returns `{kind: "restart"}`.
 
-9. **Build function response** — wraps `toolResult.data` (success) or a
+9. **Reactivate one-shot STM guard** — a successful
+   `update_short_term_memory` sets
+   `streamingContext.disableShortTermMemoryUpdate = true`, so the tool's own
+   availability and execution guards reject a second update in this turn.
+
+10. **Capture sticker selection** — `select_sticker_for_response` maps a
+    successful `sticker_id` through the guild sticker cache and returns it as
+    `stickerSelection`. Any other result from that tool returns `null`, so the
+    latest sticker call wins and a miss clears an earlier selection.
+
+11. **Build function response** — wraps `toolResult.data` (success) or a
    standardized error object (failure) into the `functionResponse` shape:
    ```ts
    { functionResponse: { name, response: { result: … } } }
    ```
 
-10. **Return `{kind: "history"}`** with `historyEntry` (the paired
-    `functionCall` + `functionResponse` + optional `imageMetadata`).
+12. **Preserve pre-tool text** — `buildPreToolCallTextParts` converts
+    `streamResult.accumulatedText` (the visible text this stream iteration
+    already delivered to Discord before the function call) into
+    `preToolCallTextParts` on the history entry. Whitespace-only text yields
+    `undefined`. Provider adapters merge these parts into the synthetic
+    assistant tool-call turn on the follow-up call, so the model knows it
+    already said that text and does not repeat it. Each iteration's entry
+    carries only that iteration's text (stream state is fresh per
+    `streamOnce` call).
+
+13. **Return `{kind: "history"}`** with `historyEntry` (the paired
+    `functionCall` + `functionResponse` + optional `imageMetadata` +
+    optional `preToolCallTextParts`).
 
 ## Invariants
 
@@ -146,6 +169,10 @@ After this stage runs:
   tool result.
 - A tool timeout (no `/bot kill`) returns `kind === "history"` with
   `success: false` — the model is informed and can decide how to proceed.
+- A queued follow-up never converts an in-progress tool chain into
+  `stopped_by_user`; only a genuine stop does.
+- After a successful STM update, the live streaming context prevents another
+  STM update in the same turn.
 - Tool execution duration is logged at `INFO` level
   (`"Function call completed: ${name} (${ms}ms)"`).
 

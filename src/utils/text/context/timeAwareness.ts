@@ -1,0 +1,86 @@
+import { formatDateWithOffset, getCalendarDayWithOffset, isValidUtcOffset } from "@/utils/text/timezoneHelper";
+
+function readIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 3);
+export const TIME_AWARENESS_GRACE_TRIGGERS = readIntEnv("TIME_AWARENESS_GRACE_TRIGGERS", 3);
+
+export const SPACER_TEMPLATE =
+  "[System: The messages above were sent on {date} ({relative}, server time). Use the {message_metadata_tool} tool to learn the exact times of each message, if needed.]";
+
+export interface BuildReunionNoteArgs {
+  lastPreviousDayAt: Date | null;
+  todayCount: number;
+  personalOffset?: number | null;
+  serverOffset?: number | null;
+  displayName: string;
+  isUserImpersonation?: boolean;
+  nowMs?: number;
+  reunionDays?: number;
+  graceTriggers?: number;
+}
+
+/**
+ * Builds the short-lived persona-reunion note. The note remains truthful for
+ * the entire grace window, including turns after the first response today.
+ */
+export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
+  const reunionDays = args.reunionDays ?? TIME_AWARENESS_REUNION_DAYS;
+  const graceTriggers = args.graceTriggers ?? TIME_AWARENESS_GRACE_TRIGGERS;
+  if (args.isUserImpersonation || args.todayCount >= graceTriggers) return null;
+
+  const offsetHours = resolvePersonalTimezoneOffset(args.personalOffset, args.serverOffset);
+  if (args.lastPreviousDayAt === null) {
+    return `[System: ${args.displayName} is talking to you for the very first time! If you haven't already, welcome them naturally and ask something friendly to get to know them.]`;
+  }
+
+  const nowMs = args.nowMs ?? Date.now();
+  const dayGap =
+    getCalendarDayWithOffset(nowMs, offsetHours) -
+    getCalendarDayWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
+  if (dayGap < reunionDays) return null;
+
+  const lastDate = formatDateWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
+  return `[System: ${args.displayName} is talking to you again for the first time since ${lastDate}. It's been ${dayGap} days! If you haven't already, acknowledge their return naturally and ask what they've been up to.]`;
+}
+
+/**
+ * Builds a separator for a server-calendar-day boundary. The tool macro must
+ * already be expanded by the caller; this function only fills date fields.
+ */
+export function buildDateSpacer(
+  prevCreatedAt: number,
+  nextCreatedAt: number,
+  serverOffset: number | null | undefined,
+  expandedTemplate: string,
+  nowMs = Date.now(),
+): string | null {
+  const offsetHours = isValidUtcOffset(serverOffset) ? serverOffset : 0;
+  const previousDay = getCalendarDayWithOffset(prevCreatedAt, offsetHours);
+  const nextDay = getCalendarDayWithOffset(nextCreatedAt, offsetHours);
+  if (previousDay === nextDay) return null;
+
+  const dayGap = getCalendarDayWithOffset(nowMs, offsetHours) - previousDay;
+  return expandedTemplate
+    .replaceAll("{date}", formatDateWithOffset(prevCreatedAt, offsetHours))
+    .replaceAll("{relative}", formatRelativeDay(dayGap));
+}
+
+function resolvePersonalTimezoneOffset(personalOffset?: number | null, serverOffset?: number | null): number {
+  if (isValidUtcOffset(personalOffset)) return personalOffset;
+  if (isValidUtcOffset(serverOffset)) return serverOffset;
+  return 0;
+}
+
+function formatRelativeDay(dayGap: number): string {
+  if (dayGap === 0) return "today";
+  if (dayGap === 1) return "yesterday";
+  if (dayGap > 1) return `${dayGap} days ago`;
+  if (dayGap === -1) return "tomorrow";
+  return `${Math.abs(dayGap)} days from now`;
+}

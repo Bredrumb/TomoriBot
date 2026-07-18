@@ -44,4 +44,49 @@ describe("openAI-compatible provider error formatting", () => {
     expect(description).toContain("Unsupported model `Deepseek`");
     expect(description).toContain("Supported IDs: `deepseek-auto`");
   });
+
+  it("uses generic unknown fallbacks for OpenAI-compatible provider namespaces", () => {
+    for (const localeNamespace of ["genai.custom", "genai.deepseek", "genai.zai", "genai.nvidia"]) {
+      const description = createOpenAICompatibleErrorDescription(
+        {
+          type: "api_error",
+          message: "Provider returned an unexpected failure",
+          code: "599",
+          retryable: false,
+        },
+        "en-US",
+        {
+          localeNamespace,
+          fallbackMessage: "Fallback should not be needed",
+        },
+      );
+
+      expect(description).toContain("An unexpected error occurred");
+      expect(description).not.toContain(`${localeNamespace}.unknown_default_message`);
+    }
+  });
+
+  it("uses NVIDIA 500 parameter guidance and keeps provider details visible", () => {
+    const description = createOpenAICompatibleErrorDescription(
+      {
+        type: "provider_overloaded",
+        message:
+          "NVIDIA API error: HTTP 500: ValueError: The min_p and logit_bias sampling parameters are not yet supported with speculative decoding.",
+        code: "500",
+        retryable: false,
+      },
+      "en-US",
+      {
+        localeNamespace: "genai.nvidia",
+        fallbackMessage: "Fallback should not be needed",
+        appendDetailsForCodes: ["500"],
+      },
+    );
+
+    expect(description).toContain("NVIDIA rejected one or more request parameters");
+    expect(description).toContain("set them to `0` with `/model parameters`");
+    expect(description).toContain("`/model logit-bias remove`");
+    expect(description).toContain("**Details:**");
+    expect(description).toContain("min_p and logit_bias");
+  });
 });

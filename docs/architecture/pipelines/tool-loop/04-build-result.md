@@ -30,6 +30,9 @@ terminal-status exits (completed, error, timeout, etc.) and the post-tool
   `streamResult.detailsContent` fields across tool-call iterations.
 - `thoughtLog: GenerationTurnResult["thoughtLog"] | undefined` — the last
   thought log payload emitted by any iteration, or `undefined`.
+- `selectedSticker?: Sticker` — the latest successful sticker selection. The
+  loop supplies it only on completed exits; timeout/error/stop paths and the
+  max-iterations exit omit it.
 
 ## Output
 
@@ -42,6 +45,7 @@ terminal-status exits (completed, error, timeout, etc.) and the post-tool
   personaResponses: ChatPersonaResponse[];   // empty if no text
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
+  selectedSticker?: Sticker;
 }
 ```
 
@@ -102,12 +106,14 @@ After this stage runs:
 - `personaResponses.length === 0` when there is nothing to display;
   `responseSink.finalize` (caller of `runGenerationTurn`) handles this case.
 - If `thoughtLog` is present, `thoughtLogOwner` is also present.
+- `selectedSticker` is present only when post-turn effects may safely deliver
+  it after a completed text stream.
 
 ## Extension points
 
 | Surface | Plugin-relevance |
 |---|---|
-| `ChatPersonaResponse` shape | Internal — the shape is consumed by `responseSink.finalize` and post-turn effects; changing it requires updating both consumers |
+| `ChatPersonaResponse` / `selectedSticker` result shape | Internal — the shape is consumed by `responseSink.finalize` and post-turn effects; changing it requires updating both consumers |
 | `resolveThoughtLogOwner` identity types | Internal — `"user_impersonation"`, `"persona"`, `"default"` map to distinct display behaviors in the stream orchestrator |
 | `mergeDetails` scene-metadata format | Internal — the `[Scene Metadata]` block format is NovelAI-specific; no plugin surface |
 

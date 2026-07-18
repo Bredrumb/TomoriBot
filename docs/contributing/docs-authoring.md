@@ -63,6 +63,29 @@ Common fields:
 Filenames and folder names are URL slugs. Keep them short, lowercase, and stable. Use
 `title` and `groupLabel` for human-facing names.
 
+### The `aiGenerated` disclaimer and translations
+
+The disclaimer note is injected at render time by the `MarkdownContent.astro` override in
+`apps/docs` (never written into markdown files), and it is locale-aware. Which notice a
+page shows:
+
+| Page | EN source `aiGenerated` | Notice shown |
+|---|---|---|
+| English page, flag unset or `true` | n/a | English "Disclaimer" (AI drafts) |
+| English page, flag `false` | n/a | None |
+| Japanese page under `docs/ja/`, flag unset | unset or `true` | Japanese 免責事項 (AI drafts + translation) |
+| Japanese page under `docs/ja/`, flag unset | `false` (human-written) | Japanese 翻訳について (AI translation of a human page, links to the English version). Hidden by default; see below |
+| Japanese page with its own `aiGenerated: false` | any | None (translation has been human-reviewed) |
+
+The 翻訳について notice is reader-facing only when `DOCS_SHOW_TRANSLATION_NOTICE=true` is
+set in the docs build environment; it defaults to hidden. Review state is tracked in
+frontmatter either way: a `docs/ja/` page without `aiGenerated: false` is an unreviewed
+machine translation (`grep -rL "aiGenerated: false" docs/ja/` lists them).
+
+Practical rules: machine-translated pages must NOT carry `aiGenerated: false` (delete the
+line when translating a page that has it). After a human reviews and corrects a
+translation, set `aiGenerated: false` in the translated file to clear its notice.
+
 ## SEO
 
 The docs site handles most SEO automatically:
@@ -79,6 +102,18 @@ The docs site handles most SEO automatically:
 - **robots.txt / sitemap**: `apps/docs/public/robots.txt` advertises the auto-generated
   `sitemap-index.xml`. No per-page action needed.
 
+## Internal Links
+
+Always link between docs pages with **root-absolute** URLs (leading `/`, trailing slash),
+e.g. `[Manual Setup](/self-hosting/manual-setup/)` or with an anchor
+`[…](/self-hosting/manual-setup/#optional-extras-the-manual-full-install)`.
+
+Do **not** use relative `./sibling` links from a normal (non-index) page. Pages deploy in
+directory format (`/self-hosting/manual-setup/`), and the build does not rewrite relative
+links, so `./setup-wizard` from that page resolves to
+`/self-hosting/manual-setup/setup-wizard` — a 404. Only `README.md` index pages, which deploy
+at their directory root, may use `./child` links.
+
 ## Moving Pages
 
 When moving docs:
@@ -87,7 +122,7 @@ When moving docs:
 2. Update links in `docs/`, `README.md`, `.github/`, and release notes when relevant.
 3. Update `docs/README.md` when section structure changes.
 4. When old URLs should keep working, add both an entry in the `redirects` map in
-   `apps/docs/astro.config.mjs` (meta-refresh fallback page) and matching 301 rules in
+   `apps/docs/astro.config.mts` (meta-refresh fallback page) and matching 301 rules in
    `apps/docs/public/_redirects` (real redirects on Cloudflare, listed with and without
    the trailing slash).
 5. Run the docs build:

@@ -1,6 +1,6 @@
 {
   "name": "tomoribot",
-  "version": "0.7.999",
+  "version": "0.7.9998",
   "description": "Customizable AI Assistant Discord Bot",
   "main": "./src/index.ts",
   "type": "module",
@@ -32,6 +32,7 @@
     "find-stale-translations": "bun run scripts/devtools/findStaleTranslations.ts",
     "check-limits": "bun run scripts/checks/checkDiscordLimits.ts",
     "check-media-size": "bun run scripts/checks/checkMediaSize.ts",
+    "check-runtime-imports": "bun run scripts/checks/checkRuntimeImports.ts",
     "compress-media": "bun run scripts/devtools/compressMedia.ts",
     "audit-keys": "bun run scripts/devtools/auditKeyVersions.ts",
     "audit-sql": "bun run scripts/checks/audit_sql.ts",
@@ -113,6 +114,7 @@
     "jws": "^3.2.2",
     "lodash": "^4.18.1",
     "minimatch": ">=10.2.3",
+    "morgan": "1.11.0",
     "qs": "6.15.2",
     "axios": "^1.16.1",
     "hono": "$hono",
@@ -135,7 +137,6 @@
     "esbuild": ">=0.28.1",
     "ip-address": ">=10.2.0",
     "request": "npm:@cypress/request@^3.0.0",
-    "uuid": ">=11.1.1",
     "ws": ">=8.20.1"
   },
   "patchedDependencies": {

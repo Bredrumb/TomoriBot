@@ -56,7 +56,7 @@ export default {
       streaming_failed_description: `応答をストリーミング中に問題が発生しました。`,
       provider_error_interaction: `ストリーム応答がブロック/停止されました。理由: {reason}。`,
       api_error_title: `🔴 プロバイダーAPIエラー`,
-      api_error_tip: `APIキーを確認して再度お試しください。このエラーが解決しない場合は、\`/support discord\`で報告してください。`,
+      api_error_tip: `APIキーを確認して再度お試しください。このエラーが解決しない場合は、\`/support discord\`で報告するか、別のモデル/プロバイダーに切り替えてください。`,
       model_error_title: `🔴 モデル設定エラー`,
       model_error_description: `選択されたモデルがプロバイダーに拒否されました。設定されているモデル名を確認し、プロバイダーが対応しているモデルIDに変更してください。`,
       model_error_tip: `\`/model text\`、\`/personal provider model-text\`、またはカスタムエンドポイント設定で対応モデルIDを選んでください。`,
@@ -88,9 +88,10 @@ export default {
     },
     vertexexpress: {
       "403_predict_permission_message": `このキーでは Vertex AI Express モデルを呼び出せません。Express Mode のキーを使うか、フル Google Cloud プロジェクトなら別プロバイダーの \`vertex\` を使ってください。`,
+      unknown_default_message: `予期しないエラーが発生しました`,
     },
     novelai: {
-      "400_default_message": `無効なリクエスト形式またはパラメータ`,
+      "400_default_message": `無効なリクエスト形式またはパラメータです。正しいAPIキーを入力したか確認してください。`,
       "400_trial_message": `トライアルアカウントでは生成にrecaptcha認証が必要です。API経由のアクセスには有料のNovelAIサブスクリプションが必要です。https://novelai.net/ でアカウントをアップグレードしてください`,
       "401_default_message": `NovelAIのAPIキーが無効または期限切れです`,
       "402_default_message": `Anlasクレジットが不足しています`,
@@ -131,8 +132,19 @@ export default {
       temperature_top_p_conflict_message: `Anthropic は Temperature と Top-P を同時に受け付けません。\`/config parameters\` を使って、そのプロバイダーの **Temperature** か **Top P** のどちらかを調整してください。`,
       unknown_default_message: `Anthropicとの通信中に予期しないエラーが発生しました。`,
     },
+    custom: {
+      unknown_default_message: `予期しないエラーが発生しました`,
+    },
+    deepseek: {
+      unknown_default_message: `予期しないエラーが発生しました`,
+    },
+    zai: {
+      unknown_default_message: `予期しないエラーが発生しました`,
+    },
     nvidia: {
       "404_default_message": `リクエストされた NVIDIA NIM モデルが見つかりません。NVIDIAによって非推奨にされた可能性があります。\`/model text\` で別のモデルに切り替えてください。`,
+      "500_default_message": `NVIDIA はこのモデルで一部のリクエストパラメータを拒否しました。詳細に \`min_p\` などの未対応サンプラーパラメータが表示されている場合は、\`/model parameters\` で \`0\` に設定して無効にしてください。詳細に \`logit_bias\` が表示されている場合は、\`/model logit-bias remove\` で保存済みエントリを削除してください。`,
+      unknown_default_message: `予期しないエラーが発生しました`,
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname}が新しいことを学びました！`,

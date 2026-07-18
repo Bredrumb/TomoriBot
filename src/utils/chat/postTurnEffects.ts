@@ -1,6 +1,7 @@
 import { PrivacyLevel } from "@/types/db/schema";
 import { storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
+import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
@@ -29,6 +30,7 @@ const EMPTY_RESPONSE_RETRY_DELAY_MS = 1000;
  * Runs side effects that must happen after a generation attempt finishes.
  */
 export async function runPostTurnEffects(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  await sendSelectedSticker(context, result);
   await maybeScheduleEmptyResponseRetry(context, result);
   await consumeTextQuota(context, result);
   updateSelfReplyBookkeeping(context, result);
@@ -40,12 +42,64 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   void recordUsageStats(context, result);
 }
 
+async function sendSelectedSticker(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  const sticker = result.selectedSticker;
+  if (!sticker || result.status !== "completed") return;
+
+  let stickerSent = false;
+  const webhook = context.responseTarget?.webhook;
+  const personaUsername = context.responseTarget?.personaUsername;
+  const personaAvatarUrl = context.responseTarget?.personaAvatarUrl;
+
+  if (context.currentPersona.is_alter && webhook && personaUsername) {
+    const threadId = context.channel.isThread() ? context.channel.id : undefined;
+    try {
+      await sendWebhookMessageWithIdentity(
+        webhook,
+        {
+          content: sticker.url,
+          ...(threadId ? { threadId } : {}),
+        },
+        {
+          username: personaUsername,
+          avatarUrl: personaAvatarUrl,
+          avatarDataUri: personaAvatarUrl?.startsWith("data:image/") ? personaAvatarUrl : undefined,
+        },
+      );
+      stickerSent = true;
+      log.info(`Sent sticker URL for '${sticker.name}' via webhook.`);
+    } catch (error) {
+      log.warn("Failed to send sticker URL via webhook, falling back to bot sticker send", error);
+    }
+  }
+
+  if (stickerSent) return;
+
+  try {
+    if (context.isFromQueue) {
+      await context.message.reply({ stickers: [sticker.id] });
+    } else {
+      if (!("send" in context.channel) || typeof context.channel.send !== "function") {
+        throw new Error(`Channel ${context.channel.id} does not support sticker sends.`);
+      }
+      await context.channel.send({ stickers: [sticker.id] });
+    }
+    log.info(`Sent selected sticker '${sticker.name}' after stream.`);
+  } catch (error) {
+    log.error("Failed to send selected sticker after stream:", error, {
+      serverId: context.tomoriState.server_id,
+      errorType: "StickerSendError",
+      metadata: { stickerId: sticker.id },
+    });
+  }
+}
+
 /**
  * Records per-turn usage stats at the single post-turn chokepoint:
  * message_sent, active_hour, model_used, tokens_in/tokens_out (estimated),
- * emoji_used, sprite_shown, and sprite_emotion (non-identity sprites only). Only
- * counts turns that actually produced a persona response. DMs are skipped
- * (stat_counters.server_id is a NOT NULL FK).
+ * user_impersonation_triggered, emoji_used, sprite_shown, and sprite_emotion
+ * (non-identity sprites only). Only counts turns that actually produced a persona
+ * response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
  *
  * Tokens prefer REAL provider usage when available: the orchestrator normalizes
  * each provider's reported usage onto `StreamResult.usage`, and these are summed
@@ -124,6 +178,20 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     }
     // 4c. One text_generated increment per completed turn (persona-scoped to the answering persona).
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "text_generated" });
+
+    // 4d. Preserve the target identity for successful user-impersonation turns.
+    // user_id remains the triggering actor; metric_key is the stable Discord id of
+    // the impersonated user. Keeping the answering lineage makes this queryable by
+    // actor, target, server, persona, and daily bucket without changing card reads.
+    if (context.isUserImpersonation && context.impersonatedUserId) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "user_impersonation_triggered",
+        metricKey: context.impersonatedUserId,
+      });
+    }
 
     // 5. Token volume keyed by model id, attributed to the answering persona.
     //    Prefer REAL provider usage summed across the turn's stream segments

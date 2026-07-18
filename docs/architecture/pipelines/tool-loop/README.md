@@ -126,27 +126,36 @@ the growing conversation.
 | Variable | Type | Role |
 |---|---|---|
 | `streamResults` | `StreamResult[]` | Accumulated per-iteration stream results (included in final `GenerationTurnResult`) |
-| `functionHistory` | `ToolHistoryEntry[]` | Paired call/response records passed back to the provider on each subsequent iteration |
+| `functionHistory` | `ToolHistoryEntry[]` | Paired call/response records passed back to the provider on each subsequent iteration; each entry also carries `preToolCallTextParts` — the visible text that iteration streamed before its tool call — so the follow-up call knows the text was already sent and does not repeat it |
 | `accumulatedModelParts` | `Record<string, unknown>[]` | Provider-native model turn parts accumulated across function-call iterations |
 | `finalText` / `detailsText` | `string` | Last non-empty accumulated text and NovelAI scene-metadata suffix; updated on `completed` or `function_call` with pre-tool text |
 | `consecutiveToolErrors` | `number` | Reset on success or restart; abort when it reaches `MAX_CONSECUTIVE_TOOL_ERRORS` |
+| `naiConsecutiveToolFailures` | `number` | Counts NovelAI tool failures after visible pre-tool text; retries with text delivery suppressed, then emits the localized retry-exhausted embed |
+| `selectedStickerToSend` | `Sticker \| null` | Latest sticker-tool selection; later sticker misses clear it, and only completed results carry it to post-turn delivery |
 | `thoughtLog` | `ThoughtLogPayload \| undefined` | Carried from whichever iteration last emitted one |
 
 ### `shouldEndAfterPreToolText` — pre-tool-text exit policy
 
-When the provider emits text *before* a tool call (`streamResult.accumulatedText`
-is non-empty) and `executeToolCall` returns `{kind: "history"}`, the loop checks
-`shouldEndAfterPreToolText` before deciding to continue:
+When a successful tool follows already-visible text,
+`shouldEndAfterPreToolText` applies the original four-case policy:
 
-- Always exits for **NovelAI** (`providerIsApiFamily(provider, "novelai")`).
-- Always exits when `functionName` is in
-  `TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT` (currently:
-  `"update_short_term_memory"`).
+| Provider/tool case | Result |
+|---|---|
+| NovelAI + `update_short_term_memory` | End immediately; STM is always silent |
+| NovelAI + `ToolRegistry.requiresFollowUp(...) === true` | Continue so search/fetch/MCP results can be presented; clear any retry text suppression |
+| NovelAI + any other successful tool | End with the pre-tool text |
+| Non-NovelAI tool in `TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT` | Continue only when the registry says the tool requires follow-up; otherwise end |
 
-When triggered, the loop returns `buildResult("completed")` using the
-pre-tool text rather than continuing to a follow-up generation.
+Other providers/tools continue normally. Their visible pre-tool text remains in
+`preToolCallTextParts` (see [stage 02](02-execute-tool-call.md)), preventing a
+follow-up provider call from repeating text already delivered to Discord.
 
-**File:** `src/utils/chat/toolLoop.ts:366-371`
+NovelAI failures use a separate branch before this success policy: failures
+after pre-tool text set `suppressTextOutput` and retry. At
+`NAI_TOOL_FAILURE_RETRY_THRESHOLD`, the loop sends the localized tool-error
+embed and ends with the already-delivered text.
+
+**File:** `src/utils/chat/toolLoop.ts` (`shouldEndAfterPreToolText`)
 
 ### Iteration guards
 
@@ -155,5 +164,6 @@ pre-tool text rather than continuing to a follow-up generation.
 | `MAX_FUNCTION_CALL_ITERATIONS` | `BOT_MAX_FUNCTION_CALL_ITERATIONS` env | `100` | Hard ceiling; loop exits with `buildResult("timeout")` |
 | `SOFT_WARN_ITERATION_THRESHOLD` | Hardcoded | `20` | Sends "still working" embed once at this iteration if `shouldSurfaceUserErrors` |
 | `MAX_CONSECUTIVE_TOOL_ERRORS` | `BOT_MAX_CONSECUTIVE_TOOL_ERRORS` env | `5` | Consecutive tool failures before `emitToolErrorLoop` + `buildResult("error")` |
+| `NAI_TOOL_FAILURE_RETRY_THRESHOLD` | `NAI_TOOL_FAILURE_RETRY_THRESHOLD` env | `3` | NovelAI failures after visible pre-tool text before the retry-exhausted embed ends the turn |
 | `STREAM_SDK_CALL_TIMEOUT_MS` | `STREAM_SDK_CALL_TIMEOUT_MS` env | `120000` | Per-call SDK inactivity timeout (rolling; see stage 01) |
 | `TOOL_EXECUTION_TIMEOUT_MS` | `TOOL_EXECUTION_TIMEOUT_MS` env | `300000` | Per-tool execution timeout; fresh per tool call — chains are unaffected (see stage 02) |

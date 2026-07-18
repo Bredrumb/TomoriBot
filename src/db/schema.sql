@@ -544,6 +544,10 @@ ON CONFLICT (persona_id) DO NOTHING;
 SELECT add_column_if_not_exists('persona_configs', 'reward_conditioning_enabled', 'BOOLEAN', 'true');
 SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled', 'BOOLEAN', 'true');
 
+-- Add per-persona humanizer degree override (July 2026).
+-- NULL inherits the server-wide server_chat_configs.humanizer_degree.
+SELECT add_column_if_not_exists('persona_configs', 'humanizer_degree', 'INT', NULL, 'CHECK (humanizer_degree BETWEEN 0 AND 3)');
+
 -- Add server_id column for server-scoped configs (January 2026)
 
 -- Add hide_impersonation_embeds permission (February 2026)
@@ -2659,6 +2663,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   videogen_enabled       BOOLEAN NOT NULL DEFAULT false,
   voice_message_enabled  BOOLEAN NOT NULL DEFAULT true,
   user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
+  time_awareness_enabled BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
   verbatim_tool_calling_enabled BOOLEAN NOT NULL DEFAULT false,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),

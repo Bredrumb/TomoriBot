@@ -389,7 +389,7 @@ These modals use a String Select with a small, fixed, mutually exclusive option 
 
 | Command                   | File                         | Custom ID              | Current Input | Options                                   | Why Radio Group                                     |
 | ------------------------- | ---------------------------- | ---------------------- | ------------- | ----------------------------------------- | --------------------------------------------------- |
-| `/config humanizer`       | `config/humanizer.ts`        | `humanizer_select`     | String Select | 4 (none/light/moderate/heavy)             | Fixed set of 4 mutually exclusive degrees           |
+| `/config humanizer`       | `config/humanizer.ts`        | `humanizer_select`     | String Select | 4-5 (none/light/moderate/heavy; + inherit with `scope: Persona`) | Fixed set of mutually exclusive degrees             |
 | `/config setup`           | `config/setup.ts`            | `humanizer_degree`     | String Select | 4 (none/light/default/heavy)              | Same fixed humanizer degree set as above            |
 | `/personal privacy`       | `personal/privacy.ts`        | `privacy_select`       | String Select | 3 (minimal/partial/full)                  | Fixed set of 3 mutually exclusive levels            |
 | `/generate image`         | `generate/image.ts`          | `aspect_ratio_select`  | String Select | 10 (1:1, 2:3, 3:2, 3:4, 4:3, etc.)      | Fixed set of 10 aspect ratios — at the limit        |

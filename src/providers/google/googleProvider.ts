@@ -278,15 +278,21 @@ export class GoogleProvider
       const googleAdapter = new GoogleStreamAdapter();
       const providerError = googleAdapter.handleProviderError(error);
 
-      // Log the specific error during validation failure
-      await log.error("API key validation failed", error, {
-        errorType: "APIKeyValidationError",
-        metadata: {
-          provider: "google",
-          errorCode: providerError.code,
-          errorType: providerError.type,
-        },
-      });
+      const isUserError = providerError.type === "api_error";
+
+      if (!isUserError) {
+        // Log the specific error during validation failure
+        await log.error("API key validation failed", error, {
+          errorType: "APIKeyValidationError",
+          metadata: {
+            provider: "google",
+            errorCode: providerError.code,
+            errorType: providerError.type,
+          },
+        });
+      } else {
+        log.warn(`Google API key validation failed (user input error): ${providerError.message}`);
+      }
       return { valid: false, error: providerError };
     }
   }

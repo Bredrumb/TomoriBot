@@ -5,7 +5,7 @@ import { z } from "astro/zod";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Base points to src/content/docs/ — a junction/symlink created by astro.config.mjs
+// Base points to src/content/docs/ — a junction/symlink created by astro.config.mts
 // at startup that points to the repo-root docs/ directory. Using this local path
 // (rather than the external ../../docs URL) keeps filePath values in the form
 // "src/content/docs/..." so Starlight's autogenerate prefix-strip works correctly.

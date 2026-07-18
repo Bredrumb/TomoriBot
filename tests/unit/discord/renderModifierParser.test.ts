@@ -28,6 +28,42 @@ describe("render modifier parser", () => {
     });
   });
 
+  it("parses a self-label chain before active persona render-modifier syntax", () => {
+    const result = parseLeadingRenderModifier("Tomori: Aphel (done): Rose is fine.", ["Aphel", "Tomori"]);
+
+    expect(result).toEqual({
+      sourceName: "Aphel",
+      modifier: "done",
+      body: "Rose is fine.",
+      matchedPrefix: "Tomori: Aphel (done): ",
+    });
+  });
+
+  it("allows a known previous-persona chain before the active persona render-modifier syntax", () => {
+    const result = parseLeadingRenderModifier(
+      "Lilya: Aphel (embarrassed): Can you not?",
+      ["Aphel", "Tomori"],
+      ["Aphel", "Tomori", "Lilya"],
+    );
+
+    expect(result).toEqual({
+      sourceName: "Aphel",
+      modifier: "embarrassed",
+      body: "Can you not?",
+      matchedPrefix: "Lilya: Aphel (embarrassed): ",
+    });
+  });
+
+  it("does not let a chain-only persona become the active render-modifier source", () => {
+    const result = parseLeadingRenderModifier(
+      "Lilya (embarrassed): Can you not?",
+      ["Aphel", "Tomori"],
+      ["Aphel", "Tomori", "Lilya"],
+    );
+
+    expect(result).toBeNull();
+  });
+
   it("parses unresolved modifiers so callers can strip the parenthetical label", () => {
     const result = parseLeadingRenderModifier("Ren (unknown): hi", ["Ren"]);
 
@@ -37,6 +73,7 @@ describe("render modifier parser", () => {
 
   it("does not parse other speakers", () => {
     expect(parseLeadingRenderModifier("Other (bredrumb): hi", ["Ren"])).toBeNull();
+    expect(parseLeadingRenderModifier("Other: Ren (bredrumb): hi", ["Ren", "Tomori"])).toBeNull();
   });
 
   it("ignores code-block and list-like starts", () => {

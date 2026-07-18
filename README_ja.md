@@ -1,3 +1,6 @@
+> [!NOTE]
+> このREADMEは簡単な概要です。完全で最新のドキュメント（セットアップガイド、機能の解説、プロバイダー情報など）については **[docs.tomoribot.app](https://docs.tomoribot.app/)** をご覧ください。
+
 <br />
 <div align="center">
 
@@ -44,9 +47,6 @@ Discord向けの自ホスト可能でカスタマイズ自在な個人AIアシ�
 
 
 </div>
-
-> [!NOTE]
-> このREADMEは簡単な概要です。完全で最新のドキュメント（セットアップガイド、機能の解説、プロバイダー情報など）については **[docs.tomoribot.app](https://docs.tomoribot.app/)** をご覧ください。
 
 <!-- ABOUT THE PROJECT -->
 ## プロジェクトについて
@@ -163,7 +163,7 @@ TomoriBotには多彩なビルトインツール（Web検索、メモリー管�
 - **A. ローカルBunセットアップ（推奨）:** [Bun](https://bun.sh/)、MCPツール用のNode.js v20+、そしてデータベース用にPostgreSQLまたはDockerのいずれかが必要です。
 - **B. Docker Composeセットアップ:** ボット/データベースの実行にはDockerのみが必要ですが、ホスト側のメンテナンススクリプトには依然としてホストのツールが必要です。
 
-ほとんどのセルフホスターにおすすめなのは、ローカルBunのセットアップウィザードです。デフォルトの**フルインストール**では、`.env`の作成、安全な`CRYPTO_SECRET`の生成、Discordボットトークンの入力、PostgreSQLの設定、`bun install`の実行を行い、続いて軽量なデータベースおよびAIヘルパーの追加機能のインストールを試みます。
+ほとんどのセルフホスターにおすすめなのは、ローカルBunのセットアップウィザードです。デフォルトの**フルインストール**では、`.env`の作成、安全な`CRYPTO_SECRET`の生成、Discordボットトークンの入力、PostgreSQLの設定、`bun install --frozen-lockfile`の実行を行い、続いて軽量なデータベースおよびAIヘルパーの追加機能のインストールを試みます。
 
 ## A. ローカルBunセットアップ
 

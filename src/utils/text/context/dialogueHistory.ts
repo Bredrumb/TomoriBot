@@ -29,6 +29,7 @@ import {
 import { normalizeCustomEmojisForLlm, splitLeadingSystemBlocks } from "./mentionNormalizer";
 import type { MentionConverter } from "./templates";
 import type { SimplifiedMessageForContext } from "./types";
+import { buildDateSpacer } from "./timeAwareness";
 
 export async function appendDialogueHistoryContext(params: {
   contextItems: StructuredContextItem[];
@@ -39,6 +40,8 @@ export async function appendDialogueHistoryContext(params: {
   tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null;
   channelContextNote?: { note: string; depth: number } | null;
+  reunionNote?: { note: string } | null;
+  dateSpacerTemplate?: string | null;
   mediaContextWindow?: number;
   includeTimestamps: boolean;
   isUserImpersonation: boolean;
@@ -69,7 +72,7 @@ export async function appendDialogueHistoryContext(params: {
   const personaNoteText = params.tomoriState?.context_note?.trim() || null;
   const channelNoteText = params.channelContextNote?.note?.trim() || null;
 
-  const activeNotes: Array<{ text: string; targetIndex: number; emitted: boolean }> = [];
+  const activeNotes: Array<{ text: string; targetIndex: number; emitted: boolean; isSystemBlock?: boolean }> = [];
 
   if (personaNoteText) {
     const depth = params.tomoriState?.context_note_depth ?? 0;
@@ -93,8 +96,18 @@ export async function appendDialogueHistoryContext(params: {
       emitted: false,
     });
   }
+  const reunionNoteText = params.reunionNote?.note?.trim();
+  if (reunionNoteText) {
+    activeNotes.push({
+      text: reunionNoteText,
+      targetIndex: Math.max(0, totalMessages - 1),
+      emitted: false,
+      isSystemBlock: true,
+    });
+  }
 
   const botNameLower = params.botName.toLowerCase();
+  let previousCreatedAt: number | undefined;
   for (const [index, msg] of params.simplifiedMessageHistory.entries()) {
     const isPersonaMessage = msg.authorType === "persona" && !!msg.personaName;
     const isCurrentPersonaMessage = isPersonaMessage && msg.personaName?.toLowerCase() === botNameLower;
@@ -109,12 +122,30 @@ export async function appendDialogueHistoryContext(params: {
       type: msg.authorType,
     };
 
+    if (params.dateSpacerTemplate && previousCreatedAt !== undefined && msg.createdAt !== undefined) {
+      const spacer = buildDateSpacer(
+        previousCreatedAt,
+        msg.createdAt,
+        params.tomoriConfig.timezone_offset,
+        params.dateSpacerTemplate,
+      );
+      if (spacer) {
+        pushDialogueHistoryContextItem(
+          params.contextItems,
+          "user",
+          [{ type: "text", text: spacer }],
+          `date_spacer_${msg.id}`,
+        );
+      }
+    }
+    if (msg.createdAt !== undefined) previousCreatedAt = msg.createdAt;
+
     for (const note of activeNotes) {
       if (!note.emitted && index === note.targetIndex) {
         pushDialogueHistoryContextItem(
           params.contextItems,
           "user",
-          [{ type: "text", text: `[System: ${note.text}]` }],
+          [{ type: "text", text: note.isSystemBlock ? note.text : `[System: ${note.text}]` }],
           "context_note_injection",
           ContextItemTag.CONTEXT_NOTE_INJECTION,
         );
@@ -181,7 +212,7 @@ export async function appendDialogueHistoryContext(params: {
       pushDialogueHistoryContextItem(
         params.contextItems,
         "user",
-        [{ type: "text", text: `[System: ${note.text}]` }],
+        [{ type: "text", text: note.isSystemBlock ? note.text : `[System: ${note.text}]` }],
         "context_note_injection",
         ContextItemTag.CONTEXT_NOTE_INJECTION,
       );

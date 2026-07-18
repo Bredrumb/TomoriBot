@@ -275,15 +275,21 @@ export class OpenrouterProvider
       const openrouterAdapter = new OpenrouterStreamAdapter();
       const providerError = openrouterAdapter.handleProviderError(error);
 
-      // Log the specific error during validation failure
-      await log.error("API key validation failed", error, {
-        errorType: "APIKeyValidationError",
-        metadata: {
-          provider: "openrouter",
-          errorCode: providerError.code,
-          errorType: providerError.type,
-        },
-      });
+      const isUserError = providerError.type === "api_error";
+
+      if (!isUserError) {
+        // Log the specific error during validation failure
+        await log.error("API key validation failed", error, {
+          errorType: "APIKeyValidationError",
+          metadata: {
+            provider: "openrouter",
+            errorCode: providerError.code,
+            errorType: providerError.type,
+          },
+        });
+      } else {
+        log.warn(`OpenRouter API key validation failed (user input error): ${providerError.message}`);
+      }
       return { valid: false, error: providerError };
     }
   }

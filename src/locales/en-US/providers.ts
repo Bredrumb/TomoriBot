@@ -56,7 +56,7 @@ export default {
       streaming_failed_description: `An issue while trying to stream the response.`,
       provider_error_interaction: `Stream response blocked/stopped. Reason: {reason}.`,
       api_error_title: `🔴 Provider API Error`,
-      api_error_tip: `Please verify your API key and try again. If this error persists, report through \`/support discord\``,
+      api_error_tip: `Please verify your API key and try again. If this error persists, report through \`/support discord\` or switch to a different model/provider.`,
       model_error_title: `🔴 Model Configuration Error`,
       model_error_description: `The selected model was rejected by the provider. Check the configured model name and switch to one of the provider's supported model IDs.`,
       model_error_tip: `Use \`/model text\`, \`/personal provider model-text\`, or your custom endpoint settings to choose a supported model ID.`,
@@ -88,9 +88,10 @@ export default {
     },
     vertexexpress: {
       "403_predict_permission_message": `This key can't call Vertex AI Express models. Use an Express-mode key, or use the separate \`vertex\` provider for full Google Cloud projects.`,
+      unknown_default_message: `An unexpected error occurred`,
     },
     novelai: {
-      "400_default_message": `Invalid request format or parameters`,
+      "400_default_message": `Invalid request format or parameters. Please ensure you inputted the correct API key.`,
       "400_trial_message": `Your trial account requires recaptcha verification for generations. API access requires a paid NovelAI subscription. Please upgrade your account at https://novelai.net/`,
       "401_default_message": `Your NovelAI API key is invalid or expired`,
       "402_default_message": `You don't have enough Anlas credits`,
@@ -131,8 +132,19 @@ The selected model requires allowing data for paid model training, but your Open
       temperature_top_p_conflict_message: `Anthropic rejected this request because both Temperature and Top-P were sent. Use \`/config parameters\` and adjust either **Temperature** or **Top P** for that provider.`,
       unknown_default_message: `An unexpected error occurred while communicating with Anthropic.`,
     },
+    custom: {
+      unknown_default_message: `An unexpected error occurred`,
+    },
+    deepseek: {
+      unknown_default_message: `An unexpected error occurred`,
+    },
+    zai: {
+      unknown_default_message: `An unexpected error occurred`,
+    },
     nvidia: {
       "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA. Try switching models with \`/model text\`.`,
+      "500_default_message": `NVIDIA rejected one or more request parameters for this model. If the details name unsupported sampler parameters such as \`min_p\`, set them to \`0\` with \`/model parameters\` to turn them off. If the details name \`logit_bias\`, clear saved entries with \`/model logit-bias remove\`.`,
+      unknown_default_message: `An unexpected error occurred`,
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname} Learned Something New!`,

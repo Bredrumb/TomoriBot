@@ -74,7 +74,7 @@ plugin work goes there, not here.
 
 ## Related docs
 
-- Native assembly: [`02-native-assembly/`](./02-native-assembly/)
+- Native assembly: [`02-native-assembly/`](/architecture/pipelines/context-build/02-native-assembly/)
 - SillyTavern preset system:
   [`docs/architecture/integrations/sillytavern/preset-system.md`](../../../integrations/sillytavern/preset-system)
 - Random-choice macros: → folded into this doc; no dedicated page (small

@@ -347,6 +347,9 @@ export class ImportRepository {
         ...(config.user_blocking_enabled !== undefined && {
           user_blocking_enabled: config.user_blocking_enabled,
         }),
+        ...(config.time_awareness_enabled !== undefined && {
+          time_awareness_enabled: config.time_awareness_enabled,
+        }),
         ...(config.tool_use_enabled !== undefined && { tool_use_enabled: config.tool_use_enabled }),
         ...(config.verbatim_tool_calling_enabled !== undefined && {
           verbatim_tool_calling_enabled: config.verbatim_tool_calling_enabled,

@@ -50,6 +50,45 @@ Errors from the provider SDK are caught and yielded as error chunks via
 `BaseStreamAdapter.createProviderErrorChunk()` rather than thrown, so the orchestrator's
 error path (stage 04) handles them uniformly.
 
+## Shared parameter degradation
+
+OpenRouter and providers based on `OpenAICompatibleStreamAdapter` (NVIDIA, DeepSeek, Z.ai, and
+Custom) may reject a request either as a non-successful HTTP response or as an error event after
+returning `200 OK` and opening the SSE stream. Both adapter families use the pure helpers in
+`src/providers/utils/paramDegradation.ts` and the same per-request degradation queue. The
+OpenAI-compatible family keeps its adapter-specific fetch implementation, including the Custom
+provider's SSRF-guarded remote fetch.
+
+1. Send the default payload, then try without `stream_options`.
+2. Probe single optional parameters in the shared priority order. OpenRouter then has an
+   adapter-specific image-stripping attempt; both families include the tools-only fallback and a
+   mandatory-keys-only payload last.
+3. When an error message names known parameters that are present in the failing body, insert a
+   targeted retry ahead of the remaining queue. All named parameters are removed together, so a
+   joint rejection such as `min_p` plus `logit_bias` does not fall through to the minimal payload.
+   A message that names droppable parameters justifies the retry on its own — it does not also
+   need to match one of the classifier's status/wording heuristics.
+
+Targeted retries are deduplicated by serialized request body and capped at three per request. The
+result is not cached: routing or backend capabilities can differ on the next request, so degradation
+applies only to the current stream.
+
+A 502 is treated as a degradation signal only by OpenRouter (`degradeOn502`): its router may have
+selected a backend that rejects the parameter combination, so retrying with fewer parameters can
+land on a working configuration. For direct OpenAI-compatible providers a 502 is a genuine outage
+that degradation cannot fix, so those adapters fail fast and let key rotation and model fallback
+(chat pipeline stage 06) take over instead of walking the ladder against a dead endpoint.
+
+An SSE error can restart transparently only before the attempt commits. The commitment point is the
+first meaningful chunk yielded to the consumer: visible text, reasoning, a tool-call delta, or usage.
+Keepalives and empty chunks do not commit. On a degradable pre-commit error, the adapter cancels and
+aborts that response, resets all per-attempt accumulators and output guards, and starts the next
+degraded attempt without yielding the error. Once committed, errors are yielded normally; restarting
+then could duplicate output or tool activity already observed by the consumer.
+
+Degradation and recovery are operator-visible through structured terminal logs only. They do not add
+thought-log entries or user-facing Discord notices.
+
 ## Input
 
 Continuation from stage 01. The HTTP streaming connection is already open. No new inputs.
@@ -74,7 +113,9 @@ generator until it returns.
   `streamedTextTail`) across chunk boundaries — these fields are reset at the start of each
   `startStream()` call so they are scoped to a single stream lifetime.
 - **Error chunks:** `BaseStreamAdapter.onProviderError()` is called when an error is caught
-  (no-op in base class; available for subclass override).
+  (no-op in base class; available for subclass override). OpenRouter and OpenAI-compatible adapters
+  suppress only degradable SSE errors received before commitment while transparently retrying the
+  current request.
 
 ## Invariants
 
@@ -84,7 +125,9 @@ After each `yield`:
   (stage 03) knows how to parse — no cross-adapter chunk shapes are ever mixed.
 - If the speaker guard triggered, the chunk yielded before return has `text` truncated to the
   boundary and the generator returns without further yields.
-- SDK errors are always yielded as error chunks, never thrown through the generator boundary.
+- Terminal SDK/provider errors are yielded as error chunks, never thrown through the generator
+  boundary. A degradable OpenRouter or OpenAI-compatible error before commitment is consumed by the
+  bounded retry loop.
 
 ## Extension points
 

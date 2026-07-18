@@ -14,7 +14,7 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 - **Shared config**: all personas in a server share the same server-scoped config tables (`server_*_configs`).
 - **Sequential responses**: if multiple personas match a trigger, they respond one-by-one via the channel queue.
 
-Official bundled character presets have their own pointer behavior for seeded text, sprites, and avatars. Pointer alters live-resolve a shared preset avatar; the main persona's guild avatar is fanned out by a hash-gated background reconciler. See [Persona Presets](./persona-presets).
+Official bundled character presets have their own pointer behavior for seeded text, sprites, and avatars. Pointer alters live-resolve a shared preset avatar; the main persona's guild avatar is fanned out by a hash-gated background reconciler. See [Persona Presets](/architecture/subsystems/persona-presets/).
 
 ## Data Model
 
@@ -27,13 +27,14 @@ Key columns:
 - `webhook_avatar_url`: stored alter avatar reference.
   - Production: stable public URL (S3 / CloudFront).
   - Non-production: stable local path under `data/avatars/...`, or a legacy HTTP URL until lazy migration runs.
-  - **NULL for an unforked preset-pointer alter**: it live-resolves the shared `persona_presets.preset_avatar_shared_url` into its cached state at load time, so one image is shared across servers and catalog avatar edits fan out on reseed (see [Persona Presets](./persona-presets) → *Avatar syncing*).
+  - **NULL for an unforked preset-pointer alter**: it live-resolves the shared `persona_presets.preset_avatar_shared_url` into its cached state at load time, so one image is shared across servers and catalog avatar edits fan out on reseed (see [Persona Presets](/architecture/subsystems/persona-presets/) → *Avatar syncing*).
 - `applied_avatar_hash`: for a main preset-pointer persona, the `preset_avatar_hash` last PATCHed onto this guild's member avatar by the fan-out reconciler. NULL = never synced.
 
 ### `persona_configs`
 
 Per-persona configuration (one row per persona in `personas`):
 - `trigger_words`: trigger words for this persona — **all personas use this column** (Phase 6 F1 merged the former `personas.alter_triggers` column here; the old `is_alter ? alter_triggers : trigger_words` ternary is gone).
+- `humanizer_degree` (nullable, migration `047`): per-persona humanizer override set via `/config humanizer` with `scope: Persona`. NULL inherits the server-wide `server_chat_configs.humanizer_degree`. When set, persona state loading overlays the value onto that persona's assembled `config.humanizer_degree`, so providers, the stream buffer, and HEAVY-degree context transforms all see the persona-scoped degree with no call-site awareness. Like the persona LLM override (and unlike content edits), setting it does **not** materialize a preset-pointer persona.
 
 ### `persona_sprites`
 
@@ -499,7 +500,7 @@ Behavior:
 ### `/persona import`
 
 - `type: main` replaces main persona.
-- Accepts native Tomori PNG exports plus supported SillyTavern PNG / JSON character cards.
+- Accepts native Tomori PNG exports, native Tomori JSON exports, plus supported SillyTavern PNG / JSON character cards.
 - `type: alter` creates a new alter persona:
   - Unique triggers enforced (no overlaps).
   - Avatar reference stored in `webhook_avatar_url` (production URL or non-production local path).

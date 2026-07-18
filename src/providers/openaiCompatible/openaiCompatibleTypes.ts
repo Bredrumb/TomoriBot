@@ -97,6 +97,7 @@ export interface OpenAICompatibleStreamAdapterOptions {
   version?: string;
   localeNamespace: string;
   errorMessagePrefix: string;
+  appendErrorDetailsForCodes?: readonly string[];
   placeholderApiKey?: string;
   enableSpeakerGuard?: boolean;
   /**
@@ -115,6 +116,7 @@ export interface OpenAICompatibleStreamAdapterOptions {
   resolveApiUrl: (config: OpenAICompatibleStreamConfig) => string;
   mutateRequestBody?: (args: OpenAICompatibleRequestMutationArgs) => Promise<void> | void;
   mutateHeaders?: (args: OpenAICompatibleHeaderMutationArgs) => Promise<void> | void;
+  /** Provider-specific signal folded into the shared parameter-degradation classifier. */
   shouldRetryWithoutStop?: (statusCode: number, errorText: string) => boolean;
   /**
    * Return `false` to signal that this endpoint does not accept OpenAI-style

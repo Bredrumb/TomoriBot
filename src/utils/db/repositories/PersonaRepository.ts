@@ -671,6 +671,32 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   /**
+   * Sets or clears the per-persona humanizer degree override in persona_configs.
+   * Operational setting (like the persona LLM override): does NOT materialize
+   * pointer-preset personas, since no preset content is edited.
+   * Upserts so the write is self-healing if the persona_configs row is missing.
+   *
+   * @param personaId - Internal persona DB ID
+   * @param humanizerDegree - Override value 0-3, or null to inherit the server-wide setting
+   * @returns True when the write succeeded
+   */
+  async setHumanizerOverride(personaId: number, humanizerDegree: number | null): Promise<boolean> {
+    try {
+      const result = await sql`
+        INSERT INTO persona_configs (persona_id, humanizer_degree)
+        VALUES (${personaId}, ${humanizerDegree})
+        ON CONFLICT (persona_id) DO UPDATE
+        SET humanizer_degree = EXCLUDED.humanizer_degree
+        RETURNING *
+      `;
+      return result.length > 0;
+    } catch (e) {
+      log.error(`Error setting humanizer override for persona ${personaId}:`, e);
+      return false;
+    }
+  }
+
+  /**
    * Set the NovelAI ATTG (Author/Title/Tags/Genre/Stars) metadata for a persona.
    *
    * @param personaId - Internal persona DB ID
@@ -1931,6 +1957,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
         scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
+        scaps.time_awareness_enabled,
         scaps.tool_use_enabled, scaps.verbatim_tool_calling_enabled,
         -- 5. server_notice_embeds_configs
         snec.tool_notice_hidden_keys,
@@ -2036,6 +2063,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
         scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
+        scaps.time_awareness_enabled,
         scaps.tool_use_enabled, scaps.verbatim_tool_calling_enabled,
         -- 5. server_notice_embeds_configs
         snec.tool_notice_hidden_keys,
@@ -2667,6 +2695,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         ? resolvePresetPersonaPrompt(pointerPreset)
         : (personaConfig?.persona_prompt ?? null);
 
+      // Per-persona humanizer override: overlay onto a copy of the server config at
+      // load time so every runtime consumer of config.humanizer_degree (providers,
+      // stream buffer, context templates) sees the persona-scoped value unchanged.
+      const humanizerOverride = personaConfig?.humanizer_degree ?? null;
+
       // 11. Combine and validate the full state
       const combinedState = {
         ...tomoriData,
@@ -2676,12 +2709,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         sample_dialogues_in: sampleDialoguesIn,
         sample_dialogues_out: sampleDialoguesOut,
         persona_attributes: personaAttributes,
-        config: configData,
+        config: humanizerOverride !== null ? { ...configData, humanizer_degree: humanizerOverride } : configData,
         llm: llmData,
         trigger_words: triggerWords,
         persona_prompt: personaPrompt,
         reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
         punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
+        humanizer_degree_override: humanizerOverride,
         ...autochRuntime,
         server_memories: serverMemories,
         rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
@@ -3032,6 +3066,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
               ? resolvePresetPersonaPrompt(pointerPreset)
               : (personaConfig?.persona_prompt ?? null);
 
+            // Per-persona humanizer override: overlay onto a copy of the shared server
+            // config so only this persona's state sees the overridden degree. Each
+            // state is Zod-parsed below, so the shared configData base stays untouched.
+            const humanizerOverride = personaConfig?.humanizer_degree ?? null;
+
             const combinedState = {
               ...tomoriRow,
               // Pointer alters live-resolve the shared preset avatar (see helper).
@@ -3040,12 +3079,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
               sample_dialogues_in: sampleDialoguesIn,
               sample_dialogues_out: sampleDialoguesOut,
               persona_attributes: personaAttributes,
-              config: configData,
+              config: humanizerOverride !== null ? { ...configData, humanizer_degree: humanizerOverride } : configData,
               llm: llmData,
               trigger_words: triggerWords,
               persona_prompt: personaPrompt,
               reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
               punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
+              humanizer_degree_override: humanizerOverride,
               server_memories: serverMemories,
               rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
               ...autochRuntime,

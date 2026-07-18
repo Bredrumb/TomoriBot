@@ -78,6 +78,8 @@ export interface BuildContextParams {
    * only used when neither persona nor channel has one set.
    */
   channelContextNote?: { note: string; depth: number } | null;
+  /** Precomputed persona-reunion system note for the triggering user. */
+  reunionNote?: { note: string } | null;
   personaPrompt?: string | null;
   personaLineageId?: number;
   isDMChannel?: boolean;

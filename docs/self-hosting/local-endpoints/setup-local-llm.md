@@ -15,7 +15,7 @@ is half the fun of running your own AI.
 
 :::note[No env vars needed]
 Local models are registered through Discord slash commands and stored encrypted in the
-database — there's no `.env` setting for them. See the [local endpoints hub](/self-hosting/local-endpoints/).
+database. There's no `.env` setting for them. See the [local endpoints hub](/self-hosting/local-endpoints/).
 :::
 
 ## 1. Run your model server
@@ -158,7 +158,7 @@ All of these use the same flow, only the URL and a couple of notes change.
 ### ChatMock (ChatGPT account / Codex CLI)
 
 Has its own dedicated guide because of a system-prompt workaround:
-**[Setup: ChatMock](./setup-chatmock)**.
+**[Setup: ChatMock](/self-hosting/local-endpoints/setup-chatmock/)**.
 
 ## Picking models from Hugging Face
 

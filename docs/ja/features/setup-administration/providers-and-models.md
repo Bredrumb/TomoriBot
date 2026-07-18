@@ -1,0 +1,109 @@
+---
+title: "プロバイダーとモデル"
+sidebar:
+  order: 1
+---
+
+TomoriBotには組み込みのAIの脳はありません。ご自身で接続する必要があります。**プロバイダー**とはAIサービス（Google Gemini、OpenRouter、NovelAI、ローカルエンドポイントなど）のことであり、**モデル**はそのプロバイダー上の特定のモデルを指します。トモリを利用するには、少なくとも1つのプロバイダーが必要です。
+
+## APIキー
+
+初回のセットアップ時に`/config setup`でプロバイダーのキーを追加するか、後から`/config api-key set`で追加します。キーは**保存時に暗号化**されるため、サーバー管理者を含め、誰も読み取ることはできません。
+
+各プロバイダーには独自のキー生成手順があります。正確な手順を確認するには、**`/help api-key`**を実行してプロバイダーを選択するか、以下の開始点を参照してください。
+
+| プロバイダー | メモ | キーの取得 |
+|---|---|---|
+| **Google Gemini** | 無料枠あり、全機能が動作。最初のセットアップにおすすめ。 | [AI Studio](https://aistudio.google.com/apikey) |
+| **OpenRouter** | 1つのキーで多数のモデルを利用（一部無料）。 | [OpenRouter keys](https://openrouter.ai/settings/keys) |
+| **NovelAI** | サブスクリプション。無修正のストーリーテリング・ロールプレイ（テキストのみ）。 | [NovelAI](https://novelai.net/) |
+| **DeepSeek** | 従量課金制の推論モデル。 | [DeepSeek](https://platform.deepseek.com/api_keys) |
+| **NVIDIA NIM** | ホスト型のテキスト、埋め込み、および画像。 | [NVIDIA Build](https://build.nvidia.com/) |
+| **Anthropic** | API経由のClaudeモデル（Claude Codeではありません）。 | — |
+| **Z.ai** | GLMファミリー。⚠️ 利用規約によりコーディング・エージェントのシナリオに限定。 | [Z.ai](https://z.ai/) |
+| **Vertex AI** | `gcloud` ADC経由のGoogle Cloud。ローカル実行や開発用セットアップに最適。 | 下記参照 |
+| **Vertex AI Express** | Google Cloud APIキーのBYOK（プレビュー版、Geminiのサブセット）。 | [Express Mode](https://console.cloud.google.com/expressmode) |
+| **カスタム** | 任意のOpenAI互換エンドポイント（Ollama、vLLM、LiteLLMなど）。 | [カスタムエンドポイント](#custom-endpoints)を参照 |
+
+:::caution
+APIキーは絶対に他人と共有しないでください。カスタムエンドポイントでは、`/config api-key set`でセットアップした後にBearer認証トークンを追加できます。
+:::
+
+**Vertex AI**は、保存されたシークレットではなくアプリケーションのデフォルト認証情報（Application Default Credentials）で認証を行うため、短い`gcloud` CLIの設定が必要です。詳細な手順は`/help api-key provider:Google Vertex AI`にあります。⚠️ `gen-lang-client-`で始まるプロジェクト（AI Studioで自動作成されたもの）はVertexでは動作しません。適切なプロジェクトを作成してください。
+
+### オプション：Brave Searchキー
+
+Brave SearchはAIプロバイダーとは別であり、ウェブ検索を強化するだけのものです（画像、動画、ニュースの検索を追加します）。`/optional-key brave set`で設定します。⚠️ Braveには月額5ドルの無料クレジットが含まれています。料金の発生を防ぐため、Braveのダッシュボードで5ドルの利用制限を設定してください。
+
+## モデルの選択
+
+プロバイダーを設定した後、各機能で使用するモデルを選択します。
+
+- `/model text`：メインのチャットモデル
+- `/model vision`：ビジョンモデル（チャットモデルが画像を読み取れない場合に画像を読み取るため）
+- `/model image`：画像生成（[画像生成](/ja/features/capabilities/media-generation/image-generation/)を参照）
+- `/model video`：動画生成
+- `/model embedding`：[ドキュメントナレッジベース](/ja/features/knowledge/memory/#document-knowledge-base-rag)用の埋め込み（embeddings）
+- `/model speech` / `/model transcription`：[音声](/ja/features/capabilities/media-generation/tts-and-stt/)
+
+また、`/config api-key rotation`を使用して、自動フェイルオーバーと負荷分散用のバックアップキーを管理することもできます。
+
+## カスタムエンドポイント
+
+カスタムエンドポイントを使用すると、セルフホストまたはプロキシベースのサービス（Ollama、LM Studio、LiteLLM、vLLM、ComfyUI、ローカルのTTS/STTなど）を**ラベル付きのプロバイダーバンドル**として登録できます。
+
+- **サーバー全体：** `/provider custom-endpoint add` / `remove`。
+- **個人用：** `/personal custom-endpoint add` / `remove`（あなた専用です。[パーソナライゼーション](/ja/features/knowledge/personalization/#your-own-providers)を参照）。
+
+**ラベル**は、すべての機能を1つのバンドルにグループ化します。登録後、`/model text`、`/model image`、`/model video`などからラベルを選択します。ラベルに機能ごとの複数のモデルがある場合は、ピッカーから選択できます。同じラベルと機能で、異なるモデル名を指定して追加コマンドを再実行すると、その接続に追加のモデルを登録できます（URLとAPIスタイルは継承されます）。
+
+サーバーの実行に関する完全な手順については、以下をご覧ください。
+
+- [セットアップ：ローカルLLM](/ja/self-hosting/local-endpoints/setup-local-llm/)：Ollama、KoboldCPP、LM Studio、vLLM、LiteLLM。
+- [セットアップ：ComfyUI](/ja/self-hosting/local-endpoints/setup-comfyui/)：ローカルの画像・動画生成。
+- [セットアップ：ChatMock](/ja/self-hosting/local-endpoints/setup-chatmock/)：ChatGPTアカウント / Codex CLI。
+
+## サポートされているプロバイダー
+
+モデルをホストするためのハードウェアがない場合でも、TomoriBotは幅広いサービスをサポートしています。すべての機能がすべてのプロバイダーで利用できるわけではありません。
+
+### LLMプロバイダー
+
+| プロバイダー | ストリーミング | ツール呼び出し | 画像入力 | 埋め込み | メモ |
+|---|---|---|---|---|---|
+| **Google Gemini** | ✅ | ✅ | ✅ | ✅ | 無料モデルあり |
+| **OpenRouter** | ✅ | ✅ | ✅ | ✅ | 無料モデルあり |
+| **Anthropic (API)** | ✅ | ✅ | ✅ | – | Claude Codeではありません |
+| **NovelAI** | ✅ | ✅ | – | – | GLM 4.6のみツールを使用可能 |
+| **NVIDIA NIM** | ✅ | ✅ | ✅ | ✅ | 無料モデルあり |
+| **DeepSeek** | ✅ | ✅ | – | – | – |
+| **Z.ai** | ✅ | ✅ | ✅ | – | 無料モデルあり。⚠️ 利用規約 = コーディング・エージェント使用のみ |
+| **Z.ai Coding** | ✅ | ✅ | – | – | サブスクリプションプラン |
+| **Google Vertex AI** | ✅ | ✅ | ✅ | ✅ | 「無料」のExpress版を含む |
+| **Codex CLI (ChatMock経由)** | ✅ | ✅ | ✅ | – | [セットアップ](/ja/self-hosting/local-endpoints/setup-chatmock/) |
+
+### 画像生成
+
+| プロバイダー | テキストからの画像生成 | 画像からの画像生成 | インペインティング | メモ |
+|---|---|---|---|---|
+| **Google** | ✅ | ✅ | – | – |
+| **OpenRouter** | ✅ | ✅ | – | – |
+| **NovelAI** | ✅ | ✅ | ✅ | 他のプロバイダーと組み合わせ可能 |
+| **NVIDIA** | ✅ | ✅ | – | – |
+| **Z.ai** | ✅ | – | – | – |
+
+### 動画生成
+
+| プロバイダー | テキストからの動画生成 | 画像からの動画生成 | メモ |
+|---|---|---|---|
+| **Google** | ✅ | ✅ | 非同期のポーリングワークフロー |
+| **OpenRouter** | ✅ | ✅ | 非同期のポーリングワークフロー |
+| **Z.ai** | ✅ | ✅ | 非同期のポーリングワークフロー |
+
+### 音声とオーディオ
+
+| プロバイダー | テキストからの音声生成 | 音声からテキストへの変換 |
+|---|---|---|
+| **ElevenLabs** | ✅ | ✅ |
+
+ローカルの音声エンジンについては、[セルフホスト](/ja/self-hosting/)で説明されています。組み込みのウェブ検索およびURL取得エンジンについては、[ツールと拡張機能](/ja/features/capabilities/tools-and-extensions/#web-search--url-reading)をご覧ください。

@@ -9,10 +9,11 @@ Side-effect sequence after generation completes.
 ## Mission
 
 Run the post-generation side effects that depend on the produced result.
-Six ordered steps: empty-response retry, text-quota consumption, self-reply
-chain bookkeeping, short-term memory write, thought-log emission, boomerang
-follow-up scheduling. Each step is independent — failures in one are logged
-but do not block the others.
+Eight ordered steps: selected-sticker delivery, empty-response retry,
+text-quota consumption, self-reply chain bookkeeping, short-term memory write,
+thought-log emission, boomerang follow-up scheduling, and fire-and-forget usage
+statistics. Recoverable delivery/storage failures are logged without breaking
+the completed turn.
 
 ## Input
 
@@ -27,7 +28,19 @@ but do not block the others.
 
 Steps run in this order:
 
-### 1. `maybeScheduleEmptyResponseRetry`
+### 1. `sendSelectedSticker`
+
+If a completed `GenerationTurnResult` carries `selectedSticker`:
+
+- An alter persona first sends the sticker URL through its identity webhook,
+  forwarding the thread ID where applicable.
+- If that fails, or the active persona is not an alter, a queued turn replies
+  to the trigger message with the native sticker; a non-queued turn sends it
+  directly to the channel.
+- Final delivery failures are logged with the server and sticker IDs and do
+  not propagate.
+
+### 2. `maybeScheduleEmptyResponseRetry`
 
 If `result.status === "empty_response"` and `incoming.retryCount <
 MAX_EMPTY_RESPONSE_RETRIES` (default 2):
@@ -40,7 +53,7 @@ MAX_EMPTY_RESPONSE_RETRIES` (default 2):
   `selectedPersonaId` pinned to the same persona, and the OpenRouter
   finish-reason-length flag forwarded so stage 03 can trim history.
 
-### 2. `consumeTextQuota`
+### 3. `consumeTextQuota`
 
 If `shouldApplyTextQuota` was true, quota state exists, it wasn't already
 consumed, and the response was non-empty:
@@ -49,7 +62,7 @@ consumed, and the response was non-empty:
 - Marks the quota state consumed and writes it back to
   `textQuotaTriggerStates`.
 
-### 3. `updateSelfReplyBookkeeping`
+### 4. `updateSelfReplyBookkeeping`
 
 If the response was non-empty:
 
@@ -59,7 +72,7 @@ If the response was non-empty:
   non-stop real responses. If the message was a self-message, also sets
   `lastWasSelf = true`.
 
-### 4. `writeShortTermMemory`
+### 5. `writeShortTermMemory`
 
 If not a stop response, history is non-empty, user is not privacy-FULL, and
 the response was non-empty:
@@ -70,7 +83,7 @@ the response was non-empty:
   `null` if no persona IDs are known).
 - Failures are logged but don't propagate.
 
-### 5. `emitThoughtLog`
+### 6. `emitThoughtLog`
 
 If a `thought_log_channel_disc_id` is configured, the source channel isn't
 DM, and the source channel isn't in the persona's `private_channel_ids`:
@@ -83,7 +96,7 @@ DM, and the source channel isn't in the persona's `private_channel_ids`:
   provider.
 - Else: no-op.
 
-### 6. `scheduleBoomerangFollowUp`
+### 7. `scheduleBoomerangFollowUp`
 
 Schedules a `setImmediate` callback:
 
@@ -94,6 +107,12 @@ Schedules a `setImmediate` callback:
   from triggering its own self-reply detection, and re-enters
   `tomoriChat()` against the source channel with the boomerang's persona +
   injected context.
+
+### 8. `recordUsageStats`
+
+Starts fire-and-forget recording for completed persona responses: turn/model,
+token, impersonation, emoji, and sprite metrics. Sticker-use statistics remain
+at successful tool selection, matching the tool-dispatch timing.
 
 ## Invariants
 
@@ -107,6 +126,8 @@ After this stage runs:
 - Short-term memory entries are scoped per-persona-ID (so each persona has
   its own conversational continuity in the cache).
 - A pending boomerang from this turn is consumed exactly once.
+- A selected sticker is delivered only for a completed result and always after
+  the provider text stream has finalized.
 - Recursive re-entries (empty-response retry, boomerang) are *scheduled*
   with the appropriate flags (`skipLock=true` for retry,
   `suppressNextSelfReply` for boomerang) so they do not interfere with the
@@ -120,19 +141,21 @@ extend or replace:
 
 | Step | Named helper | Plugin-relevance |
 |---|---|---|
+| Sticker delivery | `sendSelectedSticker` | Post-stream media companion path; alter identity webhook with native-sticker fallback |
 | Empty-response retry | `maybeScheduleEmptyResponseRetry` | Retry policy (provider-specific) — extension via per-provider hook |
 | Text-quota consumption | `incrementTextQuota` | Quota-manager subsystem; plugins shipping their own quotas would add hooks here |
 | Self-reply bookkeeping | `setLastRespondedPersona`, `getSelfReplyChainState` | Cascade-trigger limit semantics; coupled to stage 05 |
 | Short-term memory write | `storeShortTermMemory` | → [memory pipeline — STM Stage 01](../../memory/stm/01-passive-capture) |
 | Thought-log emission | `sendThoughtLogEmbed`, `sendAttributionOnlyEmbed` | New "logging channel kinds" plug in here |
 | Boomerang follow-up | `consumePendingBoomerang`, `buildBoomerangContext` | Cross-channel-tool-specific; one plugin (the cross-channel tool) owns the pending-boomerang state |
+| Usage statistics | `recordUsageStats` | Post-turn metrics chokepoint; intentionally fire-and-forget |
 
-**The sequencing matters**: empty-response retry runs *first* so it can
-short-circuit the rest (a retry skips the other steps because the original
-result was empty); quota consumption runs *before* memory write so quota
+**The sequencing matters**: sticker delivery runs first but is completed-turn
+only; an empty result therefore proceeds directly to retry handling. Quota
+consumption runs *before* memory write so quota
 exhaustion doesn't pollute the memory cache; boomerang runs *last* via
-`setImmediate` so the outer lock has released before the cross-channel
-re-entry attempts to acquire its own lock.
+`setImmediate` (before the non-blocking stats dispatch) so the outer lock has
+released before the cross-channel re-entry attempts to acquire its own lock.
 
 A future plugin extension for "add a new post-turn hook" would likely take
 the form of a hook list (`postTurnHooks: PostTurnHook[]`) where each hook

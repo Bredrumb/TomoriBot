@@ -7,6 +7,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { loadUserNaiProfileByDiscordId } from "@/tools/functionCalls/generateImageNaiTool";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache } from "@/utils/cache/userCache";
 import { exportRepository, importRepository, userRepository } from "@/utils/db/repositories";
@@ -43,6 +44,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
 
     const updated = await userRepository.update(refs.userId, {
       physical_appearance_tags: ["silver hair", "green eyes"],
+      nai_char_ref_url: "https://example.invalid/split-profile.png",
     });
     expect(updated?.physical_appearance_tags).toEqual(["silver hair", "green eyes"]);
 
@@ -64,6 +66,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
 
     const reloaded = await userRepository.loadByDiscordId(FIXTURE_IDS.userDiscId);
     expect(reloaded?.physical_appearance_tags).toEqual(["silver hair", "green eyes"]);
+
+    const naiProfile = await loadUserNaiProfileByDiscordId(FIXTURE_IDS.userDiscId);
+    expect(naiProfile).toEqual({
+      tags: ["silver hair", "green eyes"],
+      refUrl: "https://example.invalid/split-profile.png",
+    });
   });
 
   it("defaults all five personalization fields and the opt-in fast path when a split row is missing", async () => {

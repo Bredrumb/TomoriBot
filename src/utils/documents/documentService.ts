@@ -56,6 +56,91 @@ function toPgTextArray(values: string[]): string {
   return `{${values.map((v) => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")}}`;
 }
 
+/**
+ * Creates a document record without chunks. Use with appendDocumentChunks for
+ * incremental writes across long-running extraction pipelines.
+ */
+export async function createDocumentRecord(params: {
+  serverId: number;
+  personaId: number | null;
+  uploaderUserId: number | null;
+  documentName: string;
+  sourceType?: string;
+  channelTags?: string[];
+}): Promise<number> {
+  const { serverId, personaId, uploaderUserId, documentName, sourceType = "upload", channelTags = [] } = params;
+  const [row] = await sql`
+    INSERT INTO documents (
+      server_id, persona_id, uploader_user_id, document_name,
+      file_name, mime_type, file_size_bytes, text_content, source_type, channel_tags
+    ) VALUES (
+      ${serverId}, ${personaId}, ${uploaderUserId}, ${documentName},
+      NULL, NULL, NULL, '', ${sourceType}, ${toPgTextArray(channelTags)}::text[]
+    )
+    RETURNING document_id
+  `;
+  if (!row?.document_id) throw new Error("Failed to insert document row");
+  return Number(row.document_id);
+}
+
+/**
+ * Appends a batch of chunks (with embeddings) to an existing document starting
+ * at the given chunk index.
+ */
+export async function appendDocumentChunks(params: {
+  documentId: number;
+  serverId: number;
+  embeddingModelId: number;
+  embeddingFamily: string;
+  startIndex: number;
+  chunks: string[];
+  embeddings: number[][];
+}): Promise<void> {
+  const { documentId, serverId, embeddingModelId, embeddingFamily, startIndex, chunks, embeddings } = params;
+  if (chunks.length !== embeddings.length) {
+    throw new Error(`Chunk/embedding count mismatch: ${chunks.length} vs ${embeddings.length}`);
+  }
+  await sql.transaction(async (tx) => {
+    for (let i = 0; i < chunks.length; i++) {
+      const embeddingVector = formatVector(embeddings[i]);
+      await tx`
+        INSERT INTO document_chunks (
+          document_id, server_id, embedding_model_id, embedding_family,
+          chunk_index, content, embedding
+        ) VALUES (
+          ${documentId}, ${serverId}, ${embeddingModelId}, ${embeddingFamily},
+          ${startIndex + i}, ${chunks[i]}, ${embeddingVector}::vector
+        )
+      `;
+    }
+  });
+}
+
+/**
+ * Sets the text_content column on a document after all chunks have been appended.
+ * Required for reembedServerDocuments to work correctly on history imports.
+ */
+export async function finalizeDocumentContent(documentId: number, textContent: string): Promise<void> {
+  await sql`UPDATE documents SET text_content = ${textContent} WHERE document_id = ${documentId}`;
+}
+
+/**
+ * Rebuilds a document's text_content column from its current chunks (ordered by
+ * chunk_index, joined by blank lines). Call this after any edit/delete that
+ * mutates chunk content so reembedServerDocuments stays consistent with the
+ * stored chunk set.
+ */
+export async function rebuildDocumentTextContent(documentId: number): Promise<void> {
+  const rows = await sql<Array<{ content: string }>>`
+    SELECT content
+    FROM document_chunks
+    WHERE document_id = ${documentId}
+    ORDER BY chunk_index ASC
+  `;
+  const joined = rows.map((r) => r.content).join("\n\n");
+  await sql`UPDATE documents SET text_content = ${joined} WHERE document_id = ${documentId}`;
+}
+
 export async function insertDocumentWithChunks(params: {
   serverId: number;
   personaId: number | null;
@@ -190,69 +275,98 @@ export async function retrieveRelevantDocumentChunks(params: {
   }
 
   const queryVector = formatVector(queryEmbeddings[0]);
+  // Cast a wide net so RRF has enough candidates from each ranked list to merge well.
+  const candidateLimit = maxResults * 4;
 
   const channelFilter =
     channelName != null
       ? sql`AND (array_length(d.channel_tags, 1) IS NULL OR ${`#${channelName.toLowerCase()}`} = ANY(d.channel_tags))`
       : sql``;
 
-  const rows =
+  const personaFilter =
     personaId === null || personaId === undefined
-      ? await sql<
-          Array<{
-            document_id: number;
-            document_name: string;
-            chunk_index: number;
-            content: string;
-            distance: number | string;
-          }>
-        >`
-					SELECT dc.document_id,
-					       d.document_name,
-					       dc.chunk_index,
-					       dc.content,
-					       (dc.embedding <=> ${queryVector}::vector) AS distance
-					FROM document_chunks dc
-					JOIN documents d ON d.document_id = dc.document_id
-					WHERE dc.server_id = ${serverId}
-					  AND dc.embedding_family = ${embeddingModel.model_family}
-					  AND d.persona_id IS NULL
-					  ${channelFilter}
-					ORDER BY dc.embedding <=> ${queryVector}::vector
-					LIMIT ${maxResults}
-				`
-      : await sql<
-          Array<{
-            document_id: number;
-            document_name: string;
-            chunk_index: number;
-            content: string;
-            distance: number | string;
-          }>
-        >`
-					SELECT dc.document_id,
-					       d.document_name,
-					       dc.chunk_index,
-					       dc.content,
-					       (dc.embedding <=> ${queryVector}::vector) AS distance
-					FROM document_chunks dc
-					JOIN documents d ON d.document_id = dc.document_id
-					WHERE dc.server_id = ${serverId}
-					  AND dc.embedding_family = ${embeddingModel.model_family}
-					  AND (
-						d.persona_id = ${personaId}
-						OR d.persona_id IS NULL
-					  )
-					  ${channelFilter}
-					ORDER BY dc.embedding <=> ${queryVector}::vector
-					LIMIT ${maxResults}
-				`;
+      ? sql`AND d.persona_id IS NULL`
+      : sql`AND (d.persona_id = ${personaId} OR d.persona_id IS NULL)`;
+
+  // Hybrid retrieval: vector similarity + full-text search merged via Reciprocal Rank Fusion.
+  //
+  // RRF score = Σ 1/(k + rank_i) for each ranked list a chunk appears in (k=60 is standard).
+  // Chunks that score well in both lists rank higher than single-list results, which is
+  // especially effective for proper-noun-heavy content where embeddings can miss exact name
+  // matches. fts_candidates is a no-op when plainto_tsquery returns an empty tsquery
+  // (all stop words), so pure vector ranking applies transparently as the fallback.
+  const rows = await sql<
+    Array<{
+      document_id: number;
+      document_name: string;
+      chunk_index: number;
+      content: string;
+      distance: number | string;
+      fts_rank: number | string | null;
+      vector_rank: number | string | null;
+    }>
+  >`
+    WITH fts_q AS (
+      SELECT plainto_tsquery('english', ${query}::text) AS q
+    ),
+    vector_candidates AS (
+      SELECT dc.document_chunk_id,
+             ROW_NUMBER() OVER (ORDER BY dc.embedding <=> ${queryVector}::vector) AS rnk
+      FROM document_chunks dc
+      JOIN documents d ON d.document_id = dc.document_id
+      WHERE dc.server_id = ${serverId}
+        AND dc.embedding_family = ${embeddingModel.model_family}
+        ${personaFilter}
+        ${channelFilter}
+      ORDER BY dc.embedding <=> ${queryVector}::vector
+      LIMIT ${candidateLimit}
+    ),
+    fts_candidates AS (
+      SELECT dc.document_chunk_id,
+             ROW_NUMBER() OVER (ORDER BY ts_rank(dc.tsv, fts_q.q) DESC) AS rnk
+      FROM document_chunks dc
+      JOIN documents d ON d.document_id = dc.document_id
+      CROSS JOIN fts_q
+      WHERE dc.server_id = ${serverId}
+        AND dc.embedding_family = ${embeddingModel.model_family}
+        ${personaFilter}
+        ${channelFilter}
+        AND dc.tsv IS NOT NULL
+        AND fts_q.q::text != ''
+        AND dc.tsv @@ fts_q.q
+      ORDER BY ts_rank(dc.tsv, fts_q.q) DESC
+      LIMIT ${candidateLimit}
+    ),
+    rrf_merged AS (
+      SELECT document_chunk_id,
+             SUM(1.0 / (60.0 + rnk)) AS rrf_score,
+             MIN(CASE WHEN src = 'fts' THEN rnk END) AS fts_rank,
+             MIN(CASE WHEN src = 'vec' THEN rnk END) AS vector_rank
+      FROM (
+        SELECT document_chunk_id, rnk, 'vec'::text AS src FROM vector_candidates
+        UNION ALL
+        SELECT document_chunk_id, rnk, 'fts'::text AS src FROM fts_candidates
+      ) combined
+      GROUP BY document_chunk_id
+    )
+    SELECT dc.document_id, d.document_name, dc.chunk_index, dc.content,
+           (dc.embedding <=> ${queryVector}::vector) AS distance,
+           r.fts_rank, r.vector_rank
+    FROM rrf_merged r
+    JOIN document_chunks dc ON dc.document_chunk_id = r.document_chunk_id
+    JOIN documents d ON d.document_id = dc.document_id
+    ORDER BY r.rrf_score DESC
+    LIMIT ${maxResults}
+  `;
 
   const results: RetrievedDocumentChunk[] = [];
   for (const row of rows) {
     const distance = typeof row.distance === "string" ? Number.parseFloat(row.distance) : Number(row.distance);
     const similarity = Number.isFinite(distance) ? 1 - distance : 0;
-    if (similarity < minSimilarity) {
+    // FTS hits bypass the cosine floor: verbose chunks have dilute centroids that under-rate
+    // contextual queries, so the lexical match is the trusted signal for those rows.
+    const ftsMatched = row.fts_rank != null;
+    if (similarity < minSimilarity && !ftsMatched) {
       continue;
     }
     results.push({

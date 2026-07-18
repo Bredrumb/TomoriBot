@@ -530,11 +530,11 @@ async function maybeStartDockerDatabase(scan: PrereqScan): Promise<void> {
 }
 
 async function runBunInstall(): Promise<void> {
-  if (!(await confirm("Run bun install now?", true))) {
-    log.info("Skipped dependency install. Run `bun install` before starting TomoriBot.");
+  if (!(await confirm("Run bun install --frozen-lockfile now?", true))) {
+    log.info("Skipped dependency install. Run `bun install --frozen-lockfile` before starting TomoriBot.");
     return;
   }
-  await runInherited("bun", ["install"]);
+  await runInherited("bun", ["install", "--frozen-lockfile"]);
 }
 
 function printSetupComplete(title: string): void {

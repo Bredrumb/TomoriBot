@@ -118,5 +118,5 @@ bun run vl          # full validation suite (includes both of the above)
 
 - [`docs/architecture/subsystems/database-schema.md`](../subsystems/database-schema) — schema reference and column index
 - [`docs/architecture/subsystems/caching.md`](../subsystems/caching) — cache map and invalidation APIs
-- [`contributor-guides/adding-db-column.md`](./adding-db-column) — adding a column and wiring repository usage
-- [`contributor-guides/testing-db-changes.md`](./testing-db-changes) — running the DB test harness
+- [`contributor-guides/adding-db-column.md`](/contributing/adding-db-column/) — adding a column and wiring repository usage
+- [`contributor-guides/testing-db-changes.md`](/contributing/testing-db-changes/) — running the DB test harness

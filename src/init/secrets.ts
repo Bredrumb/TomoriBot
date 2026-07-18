@@ -32,10 +32,22 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
 
   if (secrets.DISCORD_WEBHOOK_URL) process.env.DISCORD_WEBHOOK_URL = secrets.DISCORD_WEBHOOK_URL;
 
+  if (secrets.AWS_ACCESS_KEY_ID) process.env.AWS_ACCESS_KEY_ID = secrets.AWS_ACCESS_KEY_ID;
+  if (secrets.AWS_SECRET_ACCESS_KEY) process.env.AWS_SECRET_ACCESS_KEY = secrets.AWS_SECRET_ACCESS_KEY;
+  if (secrets.S3_ENDPOINT) process.env.S3_ENDPOINT = secrets.S3_ENDPOINT;
+
   if (secrets.AVATAR_S3_BUCKET) process.env.AVATAR_S3_BUCKET = secrets.AVATAR_S3_BUCKET;
   if (secrets.AVATAR_S3_REGION) process.env.AVATAR_S3_REGION = secrets.AVATAR_S3_REGION;
   if (secrets.AVATAR_S3_PREFIX) process.env.AVATAR_S3_PREFIX = secrets.AVATAR_S3_PREFIX;
   if (secrets.AVATAR_PUBLIC_BASE_URL) process.env.AVATAR_PUBLIC_BASE_URL = secrets.AVATAR_PUBLIC_BASE_URL;
+
+  if (secrets.VOICE_SAMPLE_GCS_BUCKET) process.env.VOICE_SAMPLE_GCS_BUCKET = secrets.VOICE_SAMPLE_GCS_BUCKET;
+  if (secrets.VOICE_SAMPLE_GCS_PREFIX) process.env.VOICE_SAMPLE_GCS_PREFIX = secrets.VOICE_SAMPLE_GCS_PREFIX;
+  if (secrets.VOICE_SAMPLE_S3_BUCKET) process.env.VOICE_SAMPLE_S3_BUCKET = secrets.VOICE_SAMPLE_S3_BUCKET;
+  if (secrets.VOICE_SAMPLE_S3_REGION) process.env.VOICE_SAMPLE_S3_REGION = secrets.VOICE_SAMPLE_S3_REGION;
+  if (secrets.VOICE_SAMPLE_S3_PREFIX) process.env.VOICE_SAMPLE_S3_PREFIX = secrets.VOICE_SAMPLE_S3_PREFIX;
+  if (secrets.VOICE_SAMPLE_PUBLIC_BASE_URL)
+    process.env.VOICE_SAMPLE_PUBLIC_BASE_URL = secrets.VOICE_SAMPLE_PUBLIC_BASE_URL;
 
   if (secrets.CHARREF_S3_BUCKET) process.env.CHARREF_S3_BUCKET = secrets.CHARREF_S3_BUCKET;
   if (secrets.CHARREF_S3_REGION) process.env.CHARREF_S3_REGION = secrets.CHARREF_S3_REGION;
@@ -56,7 +68,13 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   if (secrets.CONTAINER_MEMORY_LIMIT_MB) process.env.CONTAINER_MEMORY_LIMIT_MB = secrets.CONTAINER_MEMORY_LIMIT_MB;
 
   const secretsSource =
-    environment === "production" && process.env.TEST_PRODUCTION !== "true" ? "AWS Secrets Manager" : ".env file";
+    environment !== "production" || process.env.TEST_PRODUCTION === "true"
+      ? ".env file"
+      : process.env.SECRET_FILE
+        ? "mounted JSON secret file"
+        : process.env.GCP_SECRET_FILE
+          ? "GCP Secret Manager file"
+          : "AWS Secrets Manager";
   log.success(`Secrets loaded successfully from ${secretsSource}`);
 
   // Initialize encryption key manager after process.env is fully populated

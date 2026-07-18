@@ -11,7 +11,8 @@ bottom of the prompt, immediately above the LLM's next response.
 
 Iterate `simplifiedMessageHistory` (built by the chat pipeline's
 `buildSimplifiedHistory`, which has **already collapsed runs of consecutive
-same-author pure-text messages** into single entries) and append one or more
+same-author pure-text messages within the same server-calendar day** into single
+entries; Better Time Awareness keeps cross-day messages separate) and append one or more
 context items per message with three orthogonal concerns interleaved:
 
 1. **Role mapping** — persona-authored → `model`; user impersonation flips
@@ -28,6 +29,8 @@ context items per message with three orthogonal concerns interleaved:
    `[System: ${note}]` at `context_note_depth` messages from the end of
    history. The default-off verbatim tool-calling workaround adds a separate
    depth-3 system note when enabled and the effective LLM has tools.
+4. **Better Time Awareness** — when enabled, inject a depth-1 reunion note for
+   a returning triggerer and date separators at server-calendar-day boundaries.
 
 ## Input
 
@@ -46,6 +49,8 @@ Substantial — see signature in `dialogueHistory.ts:25-44`. Notable:
 - `messageIdMap` — compact ID ↔ Discord message ID, populated as media
   hints emit
 - `uncensorInputOptions`, `convertMentions`
+- `reunionNote` — precomputed by the chat pipeline after the indexed stats read
+- `dateSpacerTemplate` — pre-expanded once by `nativeBuilder`; `null` disables spacers
 
 ## Output
 
@@ -109,6 +114,11 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - **Detached system parts** — system hints that should not be merged with
   the message text are split into a separate `user`-role item via
   `pushDialogueHistoryContextItem`.
+- **Date spacers** — before a message whose server-calendar day differs from
+  the preceding timestamped message, emits an absolute-date `[System: ...]`
+  separator. Messages without `createdAt` neither create nor advance a boundary.
+  The `{message_metadata_tool}` macro is expanded once before this loop, so the
+  emitted hint names `reveal_message_metadata` without introducing async work per message.
 
 **Context-note injection (once per build):**
 
@@ -122,8 +132,25 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   `CONTEXT_NOTE_INJECTION` at depth 3. This nudge tells Custom endpoint models
   how to emit the strict code-span/fenced verbatim tool-call syntax. The
   matching tool *schemas* are dumped earlier in the prompt by stage 07b
-  ([`07b-verbatim-tool-definitions.md`](./07b-verbatim-tool-definitions)),
+  ([`07b-verbatim-tool-definitions.md`](/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/)),
   gated by the same predicate.
+- A producer-supplied reunion note reuses the same `activeNotes` mechanism at
+  depth 1, immediately above the most recent message. The chat pipeline omits
+  it for user impersonation and when no internal user id is available. First-time
+  and returning-user variants include an "if you haven't already" social nudge,
+  which encourages a warm question without repeating it throughout the grace window.
+
+**Reunion grace is stateless.** `StatRepository.getUserPersonaReunionInfo`
+reads the last `message_sent` timestamp from buckets before `CURRENT_DATE` and
+today's persisted count for the `(user, persona lineage)` tuple across all servers. Today's
+writes cannot erase the detected gap; the note expires when today's count
+reaches `TIME_AWARENESS_GRACE_TRIGGERS`, and the next DB day resets it naturally.
+The stat buffer can extend the grace window by one trigger, an accepted cosmetic tolerance.
+
+| Injection | Calendar timezone | Reason |
+|---|---|---|
+| Reunion note | Personal → server → UTC | Describes the returning user's lived days |
+| Date spacer | Server → UTC | Represents a shared channel history boundary |
 
 ## Invariants
 
@@ -145,6 +172,8 @@ After this stage runs:
 - Verbatim tool-calling nudge injection is opt-in and independent of
   persona/channel/global context notes; adding the workaround must not suppress
   the global context-note fallback.
+- Capability OFF passes neither a reunion note nor a spacer template, preserving
+  the pre-feature dialogue context for both injections.
 - `messageIdMap.register(...)` is called for every media reference the
   LLM might ask about after resolution (so `increase_media_context`,
   `image_analysis_tool`, and media-reference tools have stable IDs).
@@ -155,6 +184,8 @@ After this stage runs:
 |---|---|---|
 | `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
 | `PERSONA_USER_BLOCK_CACHE_TTL_SECONDS` | `60` | TTL for active persona user block lookups |
+| `TIME_AWARENESS_REUNION_DAYS` | `3` | Minimum personal-calendar-day reunion gap |
+| `TIME_AWARENESS_GRACE_TRIGGERS` | `3` | Persisted same-day triggers that retain a reunion note |
 
 | Source | Field | Effect |
 |---|---|---|
@@ -162,6 +193,8 @@ After this stage runs:
 | `tomoriConfig` | `humanizer_degree` | HEAVY+ applies humanizer to model items |
 | `tomoriConfig` | `context_note`, `context_note_depth` | Context-note injection |
 | `tomoriConfig` | `verbatim_tool_calling_enabled` | Enables the depth-3 verbatim tool-calling nudge when the effective LLM has tools |
+| `tomoriConfig` | `time_awareness_enabled` | Opt-out gate for reunion notes and date spacers |
+| `tomoriConfig` | `timezone_offset` | Server-calendar boundary for date spacers |
 | `tomoriConfig` | `uncensor_unicode_space_enabled`, `uncensor_sanitize_enabled` | Drives uncensor transforms |
 | `tomoriState` | `context_note`, `context_note_depth` | Persona-level override of tomoriConfig values |
 | Memory pressure | `memoryGuard.getMediaWindow()` | Dynamic media-window shrink under load |
@@ -189,7 +222,7 @@ the role mapping + text/media emission. → plugin plan candidate.
 ## Related docs
 
 - History helpers (`history.ts`): covered in
-  [native-assembly README](./README.md#shared-helpers-used-across-contributors).
+  [native-assembly README](/architecture/pipelines/context-build/02-native-assembly/#shared-helpers-used-across-contributors).
 - Message-ID map: → no dedicated doc; `messageIdMap.ts` helper only
 - Image-analysis tool: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
 - `increase_media_context` tool: tool registry (same source)

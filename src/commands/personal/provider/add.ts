@@ -12,7 +12,11 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
-import { getAllProviderChoices, getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import {
+  getAllProviderChoices,
+  getProviderAddChoiceDescriptionKey,
+  getProviderDisplayName,
+} from "@/utils/provider/providerInfoRegistry";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
@@ -73,10 +77,14 @@ export async function execute(
     (await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id)).map((row) => row.provider),
   );
   const existingSuffix = localizer(locale, "commands.personal.provider.add.already_existing_suffix");
-  const providerOptions: SelectOption[] = providerChoices.map((choice) => ({
-    label: existingProviders.has(choice.value) ? `${choice.name} (${existingSuffix})` : choice.name,
-    value: choice.value,
-  }));
+  const providerOptions: SelectOption[] = providerChoices.map((choice) => {
+    const descriptionKey = getProviderAddChoiceDescriptionKey(choice.value);
+    return {
+      label: existingProviders.has(choice.value) ? `${choice.name} (${existingSuffix})` : choice.name,
+      value: choice.value,
+      description: descriptionKey ? localizer(locale, descriptionKey) : undefined,
+    };
+  });
   providerOptions.push({
     label: getProviderDisplayName("custom"),
     value: "custom",

@@ -22,6 +22,7 @@ import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
 import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
 import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
+import { loadStatsPersonaAvatarDataUri, loadStatsPresetAvatarLookup } from "@/utils/stats/personaAvatar";
 import type { PersonalCardData, PersonalFavoritePersona } from "@/utils/stats/statsInfographic";
 
 /**
@@ -70,16 +71,17 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
 
   let favoritePersonas: PersonalFavoritePersona[] = [];
   try {
-    const personas = await getCachedAllPersonas(guildDiscId);
+    const [personas, presetAvatars] = await Promise.all([
+      getCachedAllPersonas(guildDiscId),
+      loadStatsPresetAvatarLookup(),
+    ]);
     // Ranked by total tokens (desc) so the list order matches the card's
     // Tokens/Spent columns. `getPersonaTokenCostBreakdown` already orders the
     // whole population by tokens, so the top five are the genuine token leaders.
     favoritePersonas = await Promise.all(
       personaTokenCosts.slice(0, 5).map(async (entry) => {
         const persona = personas.find((candidate) => candidate.persona_lineage_id === entry.lineageId);
-        const avatarDataUri = persona?.webhook_avatar_url
-          ? await loadStoredPersonaAvatarDataUri(persona.webhook_avatar_url)
-          : null;
+        const avatarDataUri = persona ? await loadStatsPersonaAvatarDataUri(persona, presetAvatars) : null;
         return {
           name: persona?.persona_nickname ?? `Persona #${entry.lineageId}`,
           avatarDataUri,

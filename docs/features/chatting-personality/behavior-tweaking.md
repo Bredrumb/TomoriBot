@@ -21,7 +21,9 @@ can't do it, no matter what a user asks.
 
 - `/model parameters` — sampling parameters (temperature, top-p, …): creativity/randomness.
   Higher temperature is more varied.
-- `/config humanizer` — how human-like her responses read.
+- `/config humanizer` — how human-like her responses read. The optional `scope` option
+  applies the degree server-wide (`Global`, the default) or to a single persona
+  (`Persona`), handy when one persona should text casually at degree 3 while another texts like a novel. A persona's "Inherit" choice clears its override.
 - `/config message-fetch-limit` — how many recent messages she pulls as context per trigger.
   A useful lever: raise it for more conversational awareness, lower it to cut token cost.
 
