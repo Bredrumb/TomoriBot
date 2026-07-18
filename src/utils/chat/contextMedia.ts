@@ -338,7 +338,6 @@ export function appendStickersFromMessage(
 }
 
 type ForwardedMessageSnapshot = {
-  id?: string;
   channelId?: string | null;
   content?: string | null;
   attachments: Message["attachments"];
@@ -423,12 +422,15 @@ export function buildForwardContext(args: {
     );
 
     if (args.imageAttachments.length > preForwardImageCount || args.videoAttachments.length > preForwardVideoCount) {
-      const forwardedMessageId = snapshot.id ?? args.message.reference.messageId;
-      if (forwardedMessageId) {
-        mediaSourceMessageIds.push(forwardedMessageId);
-        remoteMediaSourceKind = "forwarded";
-        args.messageIdMap.register(forwardedMessageId, "media");
+      // Register the WRAPPER message id, not the original's: the original message
+      // lives in the source channel, so tools resolving media IDs against the
+      // current channel could never fetch it. The wrapper resolves in-channel and
+      // carries the same media inside its messageSnapshots.
+      if (!mediaSourceMessageIds.includes(args.message.id)) {
+        mediaSourceMessageIds.push(args.message.id);
       }
+      remoteMediaSourceKind = "forwarded";
+      args.messageIdMap.register(args.message.id, "media");
     }
   }
 

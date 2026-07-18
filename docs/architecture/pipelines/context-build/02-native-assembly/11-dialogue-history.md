@@ -97,8 +97,14 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
     example img2img/inpaint/image-to-video) can target the source message.
     Previously that blind + out-of-window combination emitted no line, which
     hid the fact that media existed at all.
-- **Media attribution hint** — when media is referenced from a reply or
-  forward, `[System: These images (Media IDs: X, Y) were sent by Z]`.
+- **Media attribution hint** — `[System: These images (Media IDs: X, Y) were
+  sent by Z]`, with dedicated wording for reply-referenced media ("included in
+  the message being replied to") and forwarded media ("attached to the
+  forwarded message described above"). Forwarded media registers the forward
+  *wrapper's* own message ID as its media ID: the original message lives in the
+  source channel, so only the wrapper ID is resolvable by media-ID tools
+  fetching from the current channel (the shared image extractor scans the
+  wrapper's `messageSnapshots` to find the media).
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.

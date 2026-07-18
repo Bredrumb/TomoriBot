@@ -867,7 +867,9 @@ async function simplifyMessage(
       mediaSourceMessageIds:
         imageAttachments.length > 0 || videoAttachments.length > 0
           ? hasLocalMedia
-            ? [msg.id, ...mediaSourceMessageIds]
+            ? // Forwarded media registers the wrapper id (= msg.id), so dedupe
+              // against the local-media entry to avoid listing it twice.
+              [...new Set([msg.id, ...mediaSourceMessageIds])]
             : mediaSourceMessageIds.length > 0
               ? mediaSourceMessageIds
               : undefined

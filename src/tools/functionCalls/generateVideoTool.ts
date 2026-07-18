@@ -317,8 +317,14 @@ export class GenerateVideoTool extends BaseTool {
       const message = await context.channel.messages.fetch(messageId);
       if (!message) return null;
 
+      // A forwarded wrapper carries its media inside messageSnapshots (its own
+      // attachment/embed lists are empty), so scan the snapshots as well.
+      const sources = [message, ...message.messageSnapshots.values()];
+
       // Check attachments first
-      const imageAttachment = message.attachments.find((a) => a.contentType?.startsWith("image/"));
+      const imageAttachment = sources
+        .flatMap((source) => [...source.attachments.values()])
+        .find((a) => a.contentType?.startsWith("image/"));
 
       let imageUrl: string | undefined;
       let mimeType = "image/png";
@@ -328,7 +334,7 @@ export class GenerateVideoTool extends BaseTool {
         mimeType = imageAttachment.contentType ?? "image/png";
       } else {
         // Fallback to embed images
-        const embedImage = message.embeds.find((e) => e.image?.url || e.thumbnail?.url);
+        const embedImage = sources.flatMap((source) => source.embeds).find((e) => e.image?.url || e.thumbnail?.url);
         imageUrl = embedImage?.image?.url ?? embedImage?.thumbnail?.url;
       }
 

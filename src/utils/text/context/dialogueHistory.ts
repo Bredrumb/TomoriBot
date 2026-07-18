@@ -366,10 +366,15 @@ async function buildMediaAttributionHint(
   const thisOrThese = totalMediaCount === 1 ? "This" : "These";
   const wasSent = totalMediaCount === 1 ? "was" : "were";
 
+  // Forwarded media registers the wrapper message's own id (so tools can resolve
+  // it in the current channel), so it would pass the includes() check below —
+  // branch on the source kind first to keep the forwarded attribution wording.
+  if (params.msg.remoteMediaSourceKind === "forwarded") {
+    return `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} attached to the forwarded message described above]`;
+  }
+
   if (!mediaMessageIds.includes(params.msg.id)) {
-    return params.msg.remoteMediaSourceKind === "forwarded"
-      ? `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} attached to the forwarded message described above]`
-      : `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} included in the message being replied to]`;
+    return `[System: ${thisOrThese} ${mediaWord} (${idLabel}: ${idList}) ${wasSent} included in the message being replied to]`;
   }
 
   const resolvedHintAuthorName = await params.convertMentions(

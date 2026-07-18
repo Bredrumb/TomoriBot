@@ -99,6 +99,89 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
   return emojiUrls;
 }
 
+/** The subset of Message fields an image can live in — satisfied by both a full
+ *  Message and a forwarded MessageSnapshot. */
+type MessageImageSource = Pick<Message, "attachments" | "embeds" | "stickers" | "content" | "components">;
+
+/**
+ * Walk one message-like source (a full message or a forwarded snapshot) and feed
+ * every discovered image URL to the collector.
+ *
+ * @param source - Message or snapshot to scan
+ * @param addImageUrl - Deduplicating collector provided by the caller
+ * @param labelPrefix - Prepended to `source` labels for logging (e.g. "forwarded ")
+ */
+function collectImageUrlsFromSource(
+  source: MessageImageSource,
+  addImageUrl: (info: ImageUrlInfo) => void,
+  labelPrefix = "",
+): void {
+  // 1. Direct attachments
+  const imageAttachments = source.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
+
+  for (const attachment of imageAttachments.values()) {
+    addImageUrl({
+      url: attachment.url,
+      proxyUrl: attachment.proxyURL,
+      mimeType: attachment.contentType || inferImageMimeType(attachment.name || attachment.url || ""),
+      source: `${labelPrefix}attachment: ${attachment.name}`,
+    });
+  }
+
+  // 2. Embed images and thumbnails
+  for (const embed of source.embeds) {
+    if (embed.image?.url) {
+      addImageUrl({
+        url: embed.image.url,
+        mimeType: "image/jpeg", // Embeds don't provide explicit MIME type
+        source: `${labelPrefix}embed.image: ${embed.url || "unknown"}`,
+      });
+    }
+
+    if (embed.thumbnail?.url) {
+      addImageUrl({
+        url: embed.thumbnail.url,
+        mimeType: "image/jpeg",
+        source: `${labelPrefix}embed.thumbnail: ${embed.url || "unknown"}`,
+      });
+    }
+  }
+
+  // 3. Discord stickers
+  if (source.stickers.size > 0) {
+    for (const sticker of source.stickers.values()) {
+      addImageUrl({
+        url: sticker.url,
+        mimeType: "image/png", // Discord serves stickers as PNG
+        source: `${labelPrefix}sticker: ${sticker.name}`,
+      });
+    }
+  }
+
+  // 4. Custom emojis from message text
+  if (source.content) {
+    for (const emoji of extractCustomEmojis(source.content)) {
+      addImageUrl({ ...emoji, source: `${labelPrefix}${emoji.source}` });
+    }
+  }
+
+  // 5. Components V2 media (Media Gallery / Thumbnail / File). Reuses the same
+  //    component-walking + attachment-resolution logic the context pipeline uses
+  //    so bot-generated images (referenced only inside a component) are found.
+  const componentImages: SimplifiedMessageForContext["imageAttachments"] = [];
+  const componentVideosIgnored: SimplifiedMessageForContext["videoAttachments"] = [];
+  appendComponentMediaFromMessage(source, componentImages, componentVideosIgnored);
+
+  for (const componentImage of componentImages) {
+    addImageUrl({
+      url: componentImage.url,
+      proxyUrl: componentImage.proxyUrl,
+      mimeType: componentImage.mimeType || inferImageMimeType(componentImage.filename || componentImage.url),
+      source: `${labelPrefix}component: ${componentImage.filename}`,
+    });
+  }
+}
+
 /**
  * Discover every image URL in a Discord message, without downloading anything.
  *
@@ -111,6 +194,9 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
  * 6. Components V2 media (Media Gallery / Thumbnail / File items) — required for
  *    bot-generated images, whose attachment is referenced only inside a component
  *    and therefore never appears in the top-level attachment/embed sources above.
+ * 7. Forwarded message snapshots — a forward wrapper has EMPTY top-level
+ *    content/attachments/embeds; all its media lives inside `messageSnapshots`,
+ *    which is re-scanned with sources 1-6.
  *
  * This is the single source of truth for "where can an image live in a message",
  * shared by every tool that needs to re-fetch image bytes by message/media ID.
@@ -121,7 +207,7 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
 export function collectImageUrlsFromMessage(message: Message): ImageUrlInfo[] {
   const imageUrls: ImageUrlInfo[] = [];
   // Track URLs already added so the same media discovered via two paths
-  // (e.g. a Components V2 attachment also matched as a component candidate) is
+  // (e.g. a Components V2 attachment also listed as a candidate) is
   // only downloaded once.
   const seenUrls = new Set<string>();
 
@@ -132,69 +218,11 @@ export function collectImageUrlsFromMessage(message: Message): ImageUrlInfo[] {
     imageUrls.push(info);
   };
 
-  // 1. Direct attachments
-  const imageAttachments = message.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
+  collectImageUrlsFromSource(message, addImageUrl);
 
-  for (const attachment of imageAttachments.values()) {
-    addImageUrl({
-      url: attachment.url,
-      proxyUrl: attachment.proxyURL,
-      mimeType: attachment.contentType || inferImageMimeType(attachment.name || attachment.url || ""),
-      source: `attachment: ${attachment.name}`,
-    });
-  }
-
-  // 2. Embed images and thumbnails
-  for (const embed of message.embeds) {
-    if (embed.image?.url) {
-      addImageUrl({
-        url: embed.image.url,
-        mimeType: "image/jpeg", // Embeds don't provide explicit MIME type
-        source: `embed.image: ${embed.url || "unknown"}`,
-      });
-    }
-
-    if (embed.thumbnail?.url) {
-      addImageUrl({
-        url: embed.thumbnail.url,
-        mimeType: "image/jpeg",
-        source: `embed.thumbnail: ${embed.url || "unknown"}`,
-      });
-    }
-  }
-
-  // 3. Discord stickers
-  if (message.stickers.size > 0) {
-    for (const sticker of message.stickers.values()) {
-      addImageUrl({
-        url: sticker.url,
-        mimeType: "image/png", // Discord serves stickers as PNG
-        source: `sticker: ${sticker.name}`,
-      });
-    }
-  }
-
-  // 4. Custom emojis from message text
-  if (message.content) {
-    for (const emoji of extractCustomEmojis(message.content)) {
-      addImageUrl(emoji);
-    }
-  }
-
-  // 5. Components V2 media (Media Gallery / Thumbnail / File). Reuses the same
-  //    component-walking + attachment-resolution logic the context pipeline uses
-  //    so bot-generated images (referenced only inside a component) are found.
-  const componentImages: SimplifiedMessageForContext["imageAttachments"] = [];
-  const componentVideosIgnored: SimplifiedMessageForContext["videoAttachments"] = [];
-  appendComponentMediaFromMessage(message, componentImages, componentVideosIgnored);
-
-  for (const componentImage of componentImages) {
-    addImageUrl({
-      url: componentImage.url,
-      proxyUrl: componentImage.proxyUrl,
-      mimeType: componentImage.mimeType || inferImageMimeType(componentImage.filename || componentImage.url),
-      source: `component: ${componentImage.filename}`,
-    });
+  // Forwarded messages: scan each snapshot with the same source walk.
+  for (const snapshot of message.messageSnapshots.values()) {
+    collectImageUrlsFromSource(snapshot, addImageUrl, "forwarded ");
   }
 
   return imageUrls;

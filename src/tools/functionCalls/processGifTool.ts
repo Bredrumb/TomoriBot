@@ -170,15 +170,24 @@ export class ProcessGifTool extends BaseTool {
       );
 
       let gifAttachment: { url: string; size: number } | null = null;
-      for (const attachment of targetMessage.attachments.values()) {
-        if (attachment.contentType?.startsWith("image/gif")) {
-          gifAttachment = {
-            url: attachment.url,
-            size: attachment.size,
-          };
-          log.info(`ProcessGifTool: Found GIF attachment - URL: ${attachment.url}, Size: ${attachment.size} bytes`);
-          break;
+      // A forwarded message carries its attachments inside messageSnapshots (the
+      // wrapper's own attachment list is empty), so scan those too.
+      const attachmentSources = [
+        targetMessage.attachments,
+        ...targetMessage.messageSnapshots.map((snapshot) => snapshot.attachments),
+      ];
+      for (const attachments of attachmentSources) {
+        for (const attachment of attachments.values()) {
+          if (attachment.contentType?.startsWith("image/gif")) {
+            gifAttachment = {
+              url: attachment.url,
+              size: attachment.size,
+            };
+            log.info(`ProcessGifTool: Found GIF attachment - URL: ${attachment.url}, Size: ${attachment.size} bytes`);
+            break;
+          }
         }
+        if (gifAttachment) break;
       }
 
       if (!gifAttachment) {

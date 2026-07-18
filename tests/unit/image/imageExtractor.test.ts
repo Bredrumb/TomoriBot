@@ -13,6 +13,8 @@ function makeMessage(overrides: {
   stickers?: Array<{ id: string; name: string; url: string }>;
   content?: string;
   components?: unknown[];
+  /** Forwarded message snapshots, each built with the same shape as a message. */
+  snapshots?: Message[];
 }): Message {
   const attachments = new Collection<string, unknown>();
   for (const attachment of overrides.attachments ?? []) {
@@ -24,12 +26,18 @@ function makeMessage(overrides: {
     stickers.set(sticker.id, sticker);
   }
 
+  const messageSnapshots = new Collection<string, unknown>();
+  for (const [index, snapshot] of (overrides.snapshots ?? []).entries()) {
+    messageSnapshots.set(String(index), snapshot);
+  }
+
   return {
     attachments,
     stickers,
     embeds: overrides.embeds ?? [],
     content: overrides.content ?? "",
     components: overrides.components ?? [],
+    messageSnapshots,
   } as unknown as Message;
 }
 
@@ -82,6 +90,33 @@ describe("collectImageUrlsFromMessage", () => {
     const urls = collectImageUrlsFromMessage(message);
     expect(urls).toHaveLength(1);
     expect(urls[0]?.source).toContain("attachment:");
+  });
+
+  test("discovers images inside forwarded message snapshots", () => {
+    // Regression: a forward wrapper has EMPTY top-level content/attachments — all
+    // media lives in messageSnapshots. Discovery must scan the snapshots, or every
+    // media-ID tool (image analysis, reference images) fails on forwarded images.
+    const message = makeMessage({
+      snapshots: [
+        makeMessage({
+          attachments: [
+            {
+              id: "30",
+              name: "forwarded.png",
+              url: "https://cdn.discordapp.com/attachments/3/4/forwarded.png",
+              proxyURL: "https://media.discordapp.net/attachments/3/4/forwarded.png",
+              contentType: "image/png",
+            },
+          ],
+        }),
+      ],
+    });
+
+    const urls = collectImageUrlsFromMessage(message);
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]?.url).toBe("https://cdn.discordapp.com/attachments/3/4/forwarded.png");
+    expect(urls[0]?.source).toBe("forwarded attachment: forwarded.png");
   });
 
   test("does not double-count media present as both an attachment and a component reference", () => {
