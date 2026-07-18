@@ -32,6 +32,7 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{task_tool}": "create_task",
   "{task_update_tool}": "update_task",
   "{cross_channel_tool}": "cross_channel_message",
+  "{create_thread_tool}": "create_thread",
   "{sticker_tool}": "select_sticker_for_response",
   "{manage_message_tool}": "manage_message",
   "{pin_tool}": "manage_message",

@@ -55,7 +55,7 @@ English | [日本語](README_ja.md)
 
 TomoriBot is a free and open-source self-hosted personal AI assistant and role-playing system for Discord, inspired by SillyTavern and Discord's discontinued Clyde. It can be used as a practical assistant, customizable companion, and role-play partner for yourself in DMs, or for everyone in your Discord server. 
 
-TomoriBot supports long-term memory, multi-persona behavior, web and MCP tools, in-chat media generation, 100+ Discord slash commands, and [multiple providers](#supported-providers) including custom proxies and self-hosting your own models for everything from text generation to video generation.
+TomoriBot supports long-term memory, multi-persona behavior, web and MCP tools, in-chat media generation, 100+ Discord slash commands, and [multiple providers](#supported-api-providers) including custom proxies and self-hosting your own models for everything from text generation to video generation.
 
 You can [invite the public TomoriBot](https://discord.com/oauth2/authorize?client_id=841644102059556915) to your Discord server, or [self-host your own instance](#self-hosting) if you prefer full control over your privacy and API keys. TomoriBot uses best security practices and encryption that keeps data safe, but self-hosting ensures that all data remain entirely on your device. 
 
@@ -113,26 +113,26 @@ If you're enjoying TomoriBot, please consider giving her a ⭐ on GitHub or supp
 
 TomoriBot supports a wide range of LLM providers, image generation APIs, voice services, and search tools out of the box. This includes popular providers like Google Gemini, OpenRouter, Anthropic, NovelAI, Nvidia, Deepseek, and more. 
 
-**[Read the full list of Supported Providers here](docs/features/setup-administration/providers-and-models.md#supported-providers)**
+**[Read the full list of Supported Providers here](https://docs.tomoribot.app/features/setup-administration/providers-and-models/#supported-providers)**
 
 ## Local & Self-Hosted Endpoints
 
 Besides APIs, you can also connect TomoriBot to your own self-hosted models. She supports local LLMs (via Ollama, KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch Docker sidecars.
 
-**[Read the Local & Self-Hosted Endpoints guide here](docs/self-hosting/local-endpoints/README.mdx)**
+**[Read the Local & Self-Hosted Endpoints guide here](https://docs.tomoribot.app/self-hosting/local-endpoints/)**
 
 ## Security & Threat Models
 
 TomoriBot employs encryption and security best practices to keep data and API keys completely safe (as well as your wallet through configurable per-member/server rate limits), giving you full control and privacy when self-hosting:
 
-**[Read the full Security & Threat Models guide here](docs/wiki/threat-models.md)**
+**[Read the full Security & Threat Models here](https://docs.tomoribot.app/wiki/threat-models/)**
 
 
 ## Tool Macros for Prompt Customization
 
 TomoriBot comes with a variety of built-in tools (such as web search, memory management, image generation, cross-channel messaging, and more), which you can directly refer to in your prompts with macros:
 
-**[Read the complete Built-In Tool Reference here](docs/features/capabilities/tools-and-extensions.md)**
+**[Read the complete Built-In Tool Reference here](https://docs.tomoribot.app/features/capabilities/tools-and-extensions/)**
 
 ### Sample Prompts with Tools
 
@@ -176,7 +176,7 @@ The recommended path for most self-hosters is the local Bun setup wizard. Its de
    cd TomoriBot
    ```
 
-2. **Run the setup wizard**
+2. **Run the setup wizard** (more info at **[Setup Wizard guide](https://docs.tomoribot.app/self-hosting/setup-wizard/)**)
    ```sh
    bun run setup
    ```
@@ -187,35 +187,6 @@ The recommended path for most self-hosters is the local Bun setup wizard. Its de
     ```
 
 Once you see `TomoriBot up and running!`, run `/config setup` in Discord.
-
-### Setup Notes
-
-The setup wizard handles local vs. bundled Docker PostgreSQL, database initialization, encryption secrets, and optional extras (`pgvector`, `pg_cron`, tokenizer assets, the URL Fetch MCP package) automatically. For the full breakdown including sidecar integrations (SearXNG, Crawl4AI, voice, Grafana, Matrix) and manual fallback steps, see the **[Setup Wizard guide](https://docs.tomoribot.app/self-hosting/setup-wizard/)**.
-
-### Optional Sidecars
-
-If you want to run optional sidecar services alongside the bot such as SearXNG for web search, Crawl4AI for browser-rendered page fetches, or a local TTS/STT server, use `bun run launch` instead of `bun run dev`:
-
-```sh
-bun run launch
-
-# With SearXNG and Crawl4AI Docker sidecars
-bun run launch --searxng --crawl4ai
-
-# With a local TTS server after following the voice setup docs
-bun run launch --qwen3tts
-
-# See all available flags
-bun run launch --help
-```
-
-Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`, `--help`
-
-Docker sidecars (`--searxng`, `--crawl4ai`) are created on first run and reused on subsequent runs, no manual `docker run` needed. Python TTS/STT sidecars require their venv to be set up once beforehand; see the individual setup guides in `docs/self-hosting/local-endpoints/text-to-speech/` and `docs/self-hosting/local-endpoints/speech-to-text/`.
-
-**Hot reload** applies only to the bot (`src/`). Sidecar servers are unaffected by file changes and stay running until you stop them manually.
-
-**Ctrl+C** stops the bot and any Python sidecar processes. Docker containers (`--searxng`, `--crawl4ai`) are intentionally left running, stop them manually with `docker stop searxng` / `docker stop crawl4ai` when you're done.
 
 ## B. Docker Compose Setup
 
@@ -235,11 +206,28 @@ docker compose up --build
 
 For later starts, `docker compose up` is enough unless you changed code or dependencies.
 
-**Note:** Docker Compose automatically configures the database connection. The PostgreSQL service runs in development mode (no SSL) and connects to the internal Docker network.
+## C. Optional Sidecars & Servers
 
-### Optional Docker Sidecars
+TomoriBot supports opt-in sidecar/server services alongside either setup path to enhance her tools and add local monitoring: SearXNG for web search, Crawl4AI for browser-rendered page fetches, local TTS/STT voice servers, and Grafana dashboards.
 
-TomoriBot supports optional Docker sidecars to enhance her tools and add local monitoring. All sidecars are opt-in via Docker Compose profiles:
+**With the local Bun setup (A)**, use `bun run launch` instead of `bun run dev`, example runs:
+
+```sh
+# With SearXNG and Crawl4AI Docker sidecars
+bun run launch --searxng --crawl4ai
+
+# With a local TTS server after following the voice setup docs
+bun run launch --qwen3tts
+
+# See all available flags
+bun run launch --help
+```
+
+Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`, `--help`
+
+**Ctrl+C** stops the bot and any Python sidecar processes. Docker containers (`--searxng`, `--crawl4ai`) are intentionally left running, stop them manually with `docker stop searxng` / `docker stop crawl4ai` when you're done.
+
+**With Docker Compose (B)**, sidecars are opt-in via Compose profiles instead:
 
 ```sh
 # + SearXNG web search (self-hosted metasearch)
@@ -254,18 +242,37 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 See the guides below for full setup details:
 
-- **[SearXNG Web Search Sidecar](docs/self-hosting/local-endpoints/setup-searxng.md)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
-- **[Crawl4AI Sidecar](docs/self-hosting/local-endpoints/setup-crawl4ai.md)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
-- **[Local Grafana Monitoring](docs/self-hosting/local-monitoring.md)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
+- **[SearXNG Web Search Sidecar](https://docs.tomoribot.app/self-hosting/local-endpoints/setup-searxng/)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
+- **[Crawl4AI Sidecar](https://docs.tomoribot.app/self-hosting/local-endpoints/setup-crawl4ai/)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[Text-to-Speech](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/)** / **[Speech-to-Text](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/)** - Python voice servers for TomoriBot's voice messages; their venv must be set up once beforehand.
+- **[Local Grafana Monitoring](https://docs.tomoribot.app/self-hosting/local-monitoring/)** - Instructions on how to spin up a local Grafana dashboard to monitor TomoriBot's performance and database metrics.
 
-> If using `bun run dev` instead of Docker Compose, use `bun run launch --searxng --crawl4ai` — it handles the Docker container lifecycle for you automatically. See the [Optional Sidecars](#optional-sidecars) section above.
+# Updating TomoriBot
 
-### Maintenance & Updates
+To update your self-hosted instance to the latest version, stop the bot first (so the backup and any migrations run against a quiet database), then run the backup-first updater:
 
-The host-side maintenance scripts (`bun run update`, `bun run backup`, `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, and more), the backup-first update procedure, and database backup/restore for both local and Docker Compose deployments are all documented in the guides:
+```sh
+bun run update
+```
 
-- **[Maintenance & Backups](docs/self-hosting/maintenance.md)** - maintenance scripts, updating, and backing up/restoring your database.
-- **[Safe Migration](docs/self-hosting/safe-migration.md)** - how to protect your data before pulling a new version.
+The command runs this sequence, stopping immediately if any step fails:
+
+1. **`bun run backup`** - takes a full database backup *before* touching any code. If the backup fails, the update aborts with your deployment completely unchanged.
+2. **`git pull --rebase --autostash`**
+3. **`bun install --frozen-lockfile`**
+
+Then restart TomoriBot with `bun run dev` or `bun run launch`
+
+Useful flags:
+
+| Flag | Effect |
+|---|---|
+| `--build` | Also runs `bun run build` after installing dependencies |
+| `--docker` | Docker Compose path: replaces step 3 with `docker compose build` + `docker compose up -d` |
+| `--skip-backup` | Skips the pre-update backup (not recommended) |
+| `--yes` | Skips the confirmation prompt before starting |
+
+The other host-side maintenance scripts (`bun run backup`, `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, and more) and database backup/restore for both local and Docker Compose deployments are all [documented](https://docs.tomoribot.app/self-hosting/maintenance/), but do note that TomoriBot already automatically backs-up your data locally in `/backups/`.
 
 <!-- AFTER SETUP -->
 ## After Inviting / Setup
@@ -278,7 +285,7 @@ The host-side maintenance scripts (`bun run update`, `bun run backup`, `bun run 
 - `/memory server add` / `/memory server remove` - Add / remove server-wide memories
 - `/server whitelist` / `/server user-blacklist` - Add / remove permissions from TomoriBot
 
-See the full **[Command Reference](docs/features/command-reference.md)** for every slash command.
+See the full **[Command Reference](https://docs.tomoribot.app/features/command-reference/)** for every slash command.
 
 ### Chat Interaction
 
@@ -309,7 +316,7 @@ Or slide into TomoriBot's DMs and say hi!
 - [ ] Web dashboard for configuration
 - [x] Create "easy install" file for non-technical users wishing to host their own TomoriBot
 
-See the [open issues](https://github.com/Bredrumb/TomoriBot/issues) for a full list of proposed features and known issues.
+See the [Official GitHub Project](https://github.com/users/Bredrumb/projects/1/views/1) for a full list of proposed features and known issues.
 
 <!-- CONTRIBUTING -->
 ## Contributing
@@ -340,7 +347,7 @@ Since TomoriBot is still in Beta, any contributions made are **greatly appreciat
 
 ### To contribute new features
 
-The TomoriBot wiki for contributors is still WIP but there are already comprehensive documentation available at `/docs/` that can help you understand TomoriBot's architecture more. Please make sure that `bun run check`, `bun run lint`, `bun run check-locales`, and `bun run db:lifecycle` do not return any errors before doing a pull request of a new feature.
+The TomoriBot wiki for contributors is still WIP, but comprehensive documentation is already available **[HERE](https://docs.tomoribot.app/contributing/)**. Please follow the [Contributing Guidelines](.github/CONTRIBUTING.md) before opening a pull request. They cover branching, quality gate checks, and the scope of contributions welcomed without prior discussion.
 
 <!-- LEGAL -->
 ## Legal & License
@@ -352,7 +359,9 @@ For users of the official hosted TomoriBot instance:
 These documents are also accessible within Discord using `/legal terms` and `/legal privacy` commands. If you're self-hosting TomoriBot, these documents serve as reference templates. You control of your own data and are responsible for your deployment's compliance under the [**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE).
 
 <!-- CONTACT -->
-## Contact
+## Contact & Links
+
+**Official Website**: [https://docs.tomoribot.app](https://docs.tomoribot.app/)
 
 **Project Link**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

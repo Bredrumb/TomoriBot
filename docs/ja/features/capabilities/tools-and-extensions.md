@@ -10,29 +10,29 @@ TomoriBotは自律エージェントです。単なるチャットを超えて�
 
 ツールの使用は、有効なプロバイダーやモデルがツール呼び出しをサポートしているかどうかに依存します。また、多くのツールは機能フラグ（`/capabilities`の切り替え）、Discordの権限、モデルの機能、またはオプションのAPIキーによって制限されています。
 
-| ツール | 必要なもの | 説明 |
-|---|---|---|
-| Review capabilities | — | 回答する前に、現在のチャットの機能、コマンド、または設定を確認します。 |
-| Create / update long-term memory | `self_teaching_enabled` | サーバーの永続的な事実やユーザーの好みを保存または上書きします。 |
-| Update short-term memory | — (NovelAIでは使用不可) | 現在のチャンネルやストーリー展開に関する一時的な作業メモリーを保存します。 |
-| Create / update task | — | リマインダーやセルフタスクをスケジュールまたは編集します（[スケジュール済みタスク](/ja/features/capabilities/scheduled-tasks/)を参照）。 |
-| Cross-channel message | — (NovelAIでは使用不可) | 別のチャンネルやスレッドで行動し、オプションで報告を返します。 |
-| Create thread | `thread_creation_enabled` + スレッド権限 | 公開スレッドを作成し、開始メッセージを投稿します。 |
-| Select sticker | `sticker_usage_enabled` | 返信に一致するサーバーのスタンプを追加します。 |
-| Manage message | `manage_message_enabled` | 最近のメッセージをピン留め、編集、または削除します（ピン留めには「メッセージの管理」権限が必要です）。 |
-| Block / unblock user | `user_blocking_enabled` | ユーザーのペルソナごとのミュートやブロックを行います（メモリーには影響しません）。 |
-| Interact with recent message | — | 最近のメッセージにリアクションを付けたり、短い返信を送信したりします。 |
-| Peek profile picture | ビジョンモデルまたは`vision_llm` | ユーザーやペルソナのアバターを調べます。 |
-| Read document | — | PDFや**任意の**UTF-8テキストファイルからテキストを抽出します。ソースコード（`.py`/`.ts`/`.rs`/…）、`.json`、`.yaml`、`.md`、`.txt`、およびバイナリ以外の添付ファイルに対応しています。 |
-| Reveal message metadata | — | 正確なターゲティングのために、最近の会話にハンドルネームとタイムスタンプの注釈を付けます。 |
-| Increase media context | ビジョンモデル | コンテキストから外れた古い画像や動画をコンテキスト内に引き戻します。 |
-| Process YouTube video | 動画対応モデル | 要求に応じて、特定のYouTubeリンクを分析します。 |
-| Analyze image | 設定済みの`vision_llm` | 画像の理解を専用のビジョンモデルに委任します。 |
-| Generate image / anime image | `imagegen_enabled` + 対応プロバイダー | 画像を生成または編集します（[メディア生成](/ja/features/capabilities/media-generation/)を参照）。 |
-| Generate voice message | ElevenLabsキー + ペルソナの音声 + `voice_message_enabled` | 音声によるDiscordボイスメッセージの返信を送信します。 |
+| ツール | プロンプトマクロ | 必要なもの | 説明 |
+|---|---|---|---|
+| Review capabilities | `{capabilities_tool}` | — | 回答する前に、現在のチャットの機能、コマンド、または設定を確認します。 |
+| Create / update long-term memory | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | サーバーの永続的な事実やユーザーの好みを保存または上書きします。 |
+| Update short-term memory | `{short_term_memory_tool}` | — (NovelAIでは使用不可) | 現在のチャンネルやストーリー展開に関する一時的な作業メモリーを保存します。 |
+| Create / update task | `{task_tool}` / `{task_update_tool}` | — | リマインダーやセルフタスクをスケジュールまたは編集します（[スケジュール済みタスク](/ja/features/capabilities/scheduled-tasks/)を参照）。 |
+| Cross-channel message | `{cross_channel_tool}` | — (NovelAIでは使用不可) | 別のチャンネルやスレッドで行動し、オプションで報告を返します。 |
+| Create thread | `{create_thread_tool}` | `thread_creation_enabled` + スレッド権限 | 公開スレッドを作成し、開始メッセージを投稿します。 |
+| Select sticker | `{sticker_tool}` | `sticker_usage_enabled` | 返信に一致するサーバーのスタンプを追加します。 |
+| Manage message | `{manage_message_tool}` | `manage_message_enabled` | 最近のメッセージをピン留め、編集、または削除します（ピン留めには「メッセージの管理」権限が必要です）。 |
+| Block / unblock user | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | ユーザーのペルソナごとのミュートやブロックを行います（メモリーには影響しません）。 |
+| Interact with recent message | `{message_interaction_tool}` | — | 最近のメッセージにリアクションを付けたり、短い返信を送信したりします。 |
+| Peek profile picture | `{profile_picture_tool}` | ビジョンモデルまたは`vision_llm` | ユーザーやペルソナのアバターを調べます。 |
+| Read document | `{document_tool}` | — | PDFや**任意の**UTF-8テキストファイルからテキストを抽出します。ソースコード（`.py`/`.ts`/`.rs`/…）、`.json`、`.yaml`、`.md`、`.txt`、およびバイナリ以外の添付ファイルに対応しています。 |
+| Reveal message metadata | `{message_metadata_tool}` | — | 正確なターゲティングのために、最近の会話にハンドルネームとタイムスタンプの注釈を付けます。 |
+| Increase media context | `{media_context_tool}` | ビジョンモデル | コンテキストから外れた古い画像や動画をコンテキスト内に引き戻します。 |
+| Process YouTube video | `{youtube_tool}` | 動画対応モデル | 要求に応じて、特定のYouTubeリンクを分析します。 |
+| Analyze image | `{image_analysis_tool}` | 設定済みの`vision_llm` | 画像の理解を専用のビジョンモデルに委任します。 |
+| Generate image / anime image | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + 対応プロバイダー | 画像を生成または編集します（[メディア生成](/ja/features/capabilities/media-generation/)を参照）。 |
+| Generate voice message | `{voice_message_tool}` | ElevenLabsキー + ペルソナの音声 + `voice_message_enabled` | 音声によるDiscordボイスメッセージの返信を送信します。 |
 
 :::note[プロンプト作成者向け]
-システムプロンプトやペルソナの指示をカスタマイズする際は、ツールの名前をハードコーディングするのではなく、**プロンプトマクロ**（例：`{memory_tool}`、`{web_search_tool}`）で参照してください。これらのマクロは、コンテキスト構築時に正しい名前に展開され、ツールが使用できない場合でも適切にフォールバックされます。
+システムプロンプトやペルソナの指示をカスタマイズする際は、ツールの名前をハードコーディングするのではなく、上記の表にある**プロンプトマクロ**で参照してください。これらのマクロは、コンテキスト構築時に正しい名前に展開され、ツールが使用できない場合でも適切にフォールバックされます。`{pin_tool}`と`{timestamp_refresh_tool}`は、それぞれ`{manage_message_tool}`と`{message_metadata_tool}`の互換エイリアスとして引き続き使用できます。以下のウェブ検索およびURL関連ツールにもマクロがあります：`{web_search_tool}`、`{image_search_tool}`、`{video_search_tool}`、`{news_search_tool}`、`{url_fetch_tool}`、`{url_metadata_tool}`。これらは、ギルドMCPによる置き換えを含め、利用可能な最適なエンジンに動的に解決されます。
 :::
 
 ## ウェブ検索とURLの読み込み

@@ -15,32 +15,36 @@ Tools depend on the active provider/model supporting tool calling, and many are 
 a feature flag (a `/capabilities` toggle), a Discord permission, a model capability, or
 an optional API key.
 
-| Tool | Requires | What it does |
-|---|---|---|
-| Review capabilities | — | Check current chat abilities, commands, or settings before answering. |
-| Create / update long-term memory | `self_teaching_enabled` | Save or replace a stable server fact or user preference. |
-| Update short-term memory | — (not on NovelAI) | Save temporary working memory for the current channel/story arc. |
-| Create / update task | — | Schedule or edit reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
-| Cross-channel message | — (not on NovelAI) | Act in another channel/thread, with an optional report-back. |
-| Create thread | `thread_creation_enabled` + thread perms | Open a public thread and post its starter message. |
-| Select sticker | `sticker_usage_enabled` | Add a matching server sticker to a reply. |
-| Manage message | `manage_message_enabled` | Pin, edit, or delete recent messages (pin needs `Manage Messages`). |
-| Block / unblock user | `user_blocking_enabled` | Persona-scoped mute/block of a user (does not touch memories). |
-| Interact with recent message | — | React to or send a short reply to a recent message. |
-| Peek profile picture | vision model or `vision_llm` | Inspect a user's or the persona's avatar. |
-| Read document | — | Extract text from a PDF or **any** UTF-8 text file — source code (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt`, and any non-binary attachment. |
-| Reveal message metadata | — | Annotate recent turns with handles/timestamps for precise targeting. |
-| Increase media context | vision model | Pull older windowed-out images/videos back into context. |
-| Process YouTube video | model with video support | Analyze a specific YouTube link on demand. |
-| Analyze image | configured `vision_llm` | Delegate image understanding to a separate vision model. |
-| Generate image / anime image | `imagegen_enabled` + capable provider | Generate or edit images (see [Media Generation](/features/capabilities/media-generation/)). |
-| Generate voice message | ElevenLabs key + persona voice + `voice_message_enabled` | Send a spoken Discord voice reply. |
+| Tool | Prompt macro | Requires | What it does |
+|---|---|---|---|
+| Review capabilities | `{capabilities_tool}` | — | Check current chat abilities, commands, or settings before answering. |
+| Create / update long-term memory | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | Save or replace a stable server fact or user preference. |
+| Update short-term memory | `{short_term_memory_tool}` | — (not on NovelAI) | Save temporary working memory for the current channel/story arc. |
+| Create / update task | `{task_tool}` / `{task_update_tool}` | — | Schedule or edit reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
+| Cross-channel message | `{cross_channel_tool}` | — (not on NovelAI) | Act in another channel/thread, with an optional report-back. |
+| Create thread | `{create_thread_tool}` | `thread_creation_enabled` + thread perms | Open a public thread and post its starter message. |
+| Select sticker | `{sticker_tool}` | `sticker_usage_enabled` | Add a matching server sticker to a reply. |
+| Manage message | `{manage_message_tool}` | `manage_message_enabled` | Pin, edit, or delete recent messages (pin needs `Manage Messages`). |
+| Block / unblock user | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Persona-scoped mute/block of a user (does not touch memories). |
+| Interact with recent message | `{message_interaction_tool}` | — | React to or send a short reply to a recent message. |
+| Peek profile picture | `{profile_picture_tool}` | vision model or `vision_llm` | Inspect a user's or the persona's avatar. |
+| Read document | `{document_tool}` | — | Extract text from a PDF or **any** UTF-8 text file — source code (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt`, and any non-binary attachment. |
+| Reveal message metadata | `{message_metadata_tool}` | — | Annotate recent turns with handles/timestamps for precise targeting. |
+| Increase media context | `{media_context_tool}` | vision model | Pull older windowed-out images/videos back into context. |
+| Process YouTube video | `{youtube_tool}` | model with video support | Analyze a specific YouTube link on demand. |
+| Analyze image | `{image_analysis_tool}` | configured `vision_llm` | Delegate image understanding to a separate vision model. |
+| Generate image / anime image | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + capable provider | Generate or edit images (see [Media Generation](/features/capabilities/media-generation/)). |
+| Generate voice message | `{voice_message_tool}` | ElevenLabs key + persona voice + `voice_message_enabled` | Send a spoken Discord voice reply. |
 
 :::note[For prompt authors]
 When customizing her system prompt or persona instructions, reference tools by their **prompt
-macros** (e.g. `{memory_tool}`, `{web_search_tool}`) rather than hardcoding tool names — the
-macros expand to the correct names at context-assembly time and degrade gracefully when a
-tool isn't available.
+macros** from the table above rather than hardcoding tool names — the macros expand to the
+correct names at context-assembly time and degrade gracefully when a tool isn't available.
+`{pin_tool}` and `{timestamp_refresh_tool}` still work as compatibility aliases for
+`{manage_message_tool}` and `{message_metadata_tool}`. The web search and URL tools below
+have macros too: `{web_search_tool}`, `{image_search_tool}`, `{video_search_tool}`,
+`{news_search_tool}`, `{url_fetch_tool}`, and `{url_metadata_tool}` — these resolve
+dynamically to the best available engine, including guild MCP replacements.
 :::
 
 ## Web Search & URL Reading

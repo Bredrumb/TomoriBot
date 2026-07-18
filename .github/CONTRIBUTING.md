@@ -1,20 +1,23 @@
 # Contributing to TomoriBot
 
-Thanks for your interest in contributing! This guide covers what you need to know before opening a PR. For local setup (database, providers, Discord token), see [`docs/architecture/getting-started.md`](../docs/architecture/getting-started.md).
+Thanks for your interest in contributing! This guide covers what you need to know before opening a PR.
 
 ## Branching
 
 | Branch | Purpose |
 |---|---|
 | `main` | Default branch, fork from here, target PRs **here** |
-| `release` | Deploy gate, maintainers cut this from `main`. Do not target it. |
-| `dev` | Maintainer's personal (unstable) development branch, not a contribution target |
+| `release` | Deploy gate, stable versions that reflect the public deployed TomoriBot.|
+| `dev` | Maintainer's personal (unstable) development branch. |
 
 ## Quality Gates
 
-The project has no strict coding standards other than what the automated tools enforce. Please refer to the [Pull Request Template](./pull_request_template.md) for the exact list of local checks you should run before submitting a PR.
+The project has no strict coding standards other than what the automated tools enforce. Please refer to the [Pull Request Template](./pull_request_template.md) for the exact list of local checks you should run before submitting a PR. CI handles these automatically, but running them locally and fixing any problems saves time.
 
-CI handles these automatically, but running them locally and fixing any problems saves time.
+If your PR is too big (around ~1000 lines of changes/additions), please split it up into multiple, smaller PRs instead if possible so it is easier to discuss and test.
+
+### AI-Generated Code
+This project accepts code and documentation created/assisted by AI tools. But just like all tools, the one using it (you) is responsible for it. Please test and review before committing, and be ready to discuss and fix problems that the maintainer(s) find, if any.
 
 ## Scope of Contributions
 
