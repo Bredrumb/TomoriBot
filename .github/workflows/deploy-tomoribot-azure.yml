@@ -703,7 +703,7 @@ jobs:
             "sudo docker login --username '$DOCKERHUB_USERNAME' --password-stdin"
 
           ssh -i "$SSH_KEY" "$SSH_TARGET" \
-            "cd /etc/tomoribot && sudo TOMORIBOT_IMAGE='$TOMORIBOT_IMAGE' SEARXNG_IMAGE='$SEARXNG_IMAGE' docker compose -f docker-compose.yml pull tomoribot && sudo TOMORIBOT_IMAGE='$TOMORIBOT_IMAGE' SEARXNG_IMAGE='$SEARXNG_IMAGE' docker compose -f docker-compose.yml up -d tomoribot"
+            "sudo TOMORIBOT_IMAGE='$TOMORIBOT_IMAGE' SEARXNG_IMAGE='$SEARXNG_IMAGE' docker compose -f /etc/tomoribot/docker-compose.yml pull tomoribot && sudo TOMORIBOT_IMAGE='$TOMORIBOT_IMAGE' SEARXNG_IMAGE='$SEARXNG_IMAGE' docker compose -f /etc/tomoribot/docker-compose.yml up -d tomoribot"
 
   verify-vm-deployment:
     runs-on: ubuntu-24.04
