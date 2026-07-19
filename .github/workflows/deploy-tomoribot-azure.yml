@@ -534,6 +534,38 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Detect initial PostgreSQL bootstrap
+        id: postgres_bootstrap
+        # A manual first deployment has no previous Git ref, so the normal
+        # migration guard would scan the complete historical migration set.
+        # Skip it only while the protected server does not exist. Every later
+        # deployment retains the normal checkpoint/backup requirement.
+        run: |
+          set -euo pipefail
+          error_file=$(mktemp)
+          set +e
+          server_id=$(az postgres flexible-server show \
+            --resource-group tomoribot-rg \
+            --name tomoribot-postgres \
+            --query id \
+            --output tsv \
+            --only-show-errors 2>"$error_file")
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "is_initial_bootstrap=false" >> "$GITHUB_OUTPUT"
+            echo "Azure PostgreSQL server already exists: $server_id"
+          elif grep -Eq "ResourceNotFound|ResourceGroupNotFound|could not be found" "$error_file"; then
+            echo "is_initial_bootstrap=true" >> "$GITHUB_OUTPUT"
+            echo "Azure PostgreSQL server does not exist; treating this as initial bootstrap."
+          else
+            cat "$error_file" >&2
+            exit "$status"
+          fi
+
+          rm -f "$error_file"
+
       - name: Destructive migration gate
         # Blocks deploys that introduce destructive migrations (DROP TABLE / COLUMN /
         # CONSTRAINT, ALTER COLUMN ... TYPE, TRUNCATE, unfiltered DELETE) unless the
@@ -542,6 +574,7 @@ jobs:
         # docs/guides/safe-migration.md.
         if: |
           !(
+            steps.postgres_bootstrap.outputs.is_initial_bootstrap == 'true' ||
             (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
             (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
           )

@@ -131,7 +131,7 @@ Drops the deprecated tomori_configs table after Phase 6 backfill.
 Snapshot is required because the migration is destructive.
 ```
 
-The `(Checkpoint)` token can appear anywhere in the subject or body — it's matched case-sensitively against the head commit's message. Manual workflow dispatch with `create_db_snapshot: true` is the same lever for ad-hoc cases.
+The `(Checkpoint)` token can appear anywhere in the subject or body — it's matched case-sensitively against the head commit's message. Manual workflow dispatch with the workflow's backup input enabled is the same lever for ad-hoc cases.
 
 ## What to do if a migration fails partway
 
