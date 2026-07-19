@@ -18,7 +18,12 @@ on:
           - production
         default: test
       create_db_backup:
-        description: "Create a pre-deploy Azure PostgreSQL backup"
+        description: "Create a pre-deploy Azure PostgreSQL backup (unsupported on the B1ms migration SKU)"
+        required: false
+        type: boolean
+        default: false
+      initial_db_bootstrap:
+        description: "Allow first application startup only when the Azure database is known to be blank (no backup)"
         required: false
         type: boolean
         default: false
@@ -539,7 +544,9 @@ jobs:
         # A manual first deployment has no previous Git ref, so the normal
         # migration guard would scan the complete historical migration set.
         # Skip it only while the protected server does not exist. Every later
-        # deployment retains the normal checkpoint/backup requirement.
+        # deployment retains the normal checkpoint/backup requirement. B1ms
+        # does not support customer on-demand backups, so a failed first app
+        # startup can be retried only through the explicit blank-DB input.
         run: |
           set -euo pipefail
           error_file=$(mktemp)
@@ -575,6 +582,7 @@ jobs:
         if: |
           !(
             steps.postgres_bootstrap.outputs.is_initial_bootstrap == 'true' ||
+            (github.event_name == 'workflow_dispatch' && inputs.initial_db_bootstrap == true) ||
             (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
             (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
           )
@@ -588,6 +596,9 @@ jobs:
           fi
 
       - name: Optional Azure PostgreSQL backup (manual or (Checkpoint) commit)
+        # Azure PostgreSQL B1ms rejects customer on-demand backups. Keep this
+        # path for future non-Burstable SKUs; never enable it for the migration
+        # plan's B1ms server.
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
           (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
