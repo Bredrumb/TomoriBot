@@ -12,7 +12,7 @@ variable "azure_subscription_id" {
 variable "azure_location" {
   description = "Azure region for all regional resources."
   type        = string
-  default     = "eastus"
+  default     = "japanwest"
 }
 
 variable "environment" {

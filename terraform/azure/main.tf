@@ -2,7 +2,7 @@
  * Terraform configuration and Azure provider setup.
  * Azure Blob Storage backend stores state in resources you must create manually
  * during Phase 4 before first init:
- *   az group create --name tomoribot-tfstate-rg --location eastus
+ *   az group create --name tomoribot-tfstate-rg --location japanwest
  *   az storage account create --resource-group tomoribot-tfstate-rg --name <globally-unique-name> --sku Standard_LRS
  *   az storage container create --account-name <globally-unique-name> --name tfstate
  *

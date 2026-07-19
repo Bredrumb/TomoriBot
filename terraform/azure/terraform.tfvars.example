@@ -2,7 +2,7 @@
 # Never commit terraform.tfvars - it is gitignored.
 
 azure_subscription_id = "00000000-0000-0000-0000-000000000000"
-azure_location        = "eastus"
+azure_location        = "japanwest"
 
 # Public half of the dedicated Phase 0 deploy keypair.
 vm_admin_ssh_public_key = "ssh-ed25519 AAAA... gh-actions-deploy"

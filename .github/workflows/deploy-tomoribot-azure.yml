@@ -504,6 +504,9 @@ jobs:
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_USE_OIDC: "true"
+      # The Terraform backend uses Microsoft Entra ID for Blob data-plane access.
+      # This requires Storage Blob Data Contributor on the tfstate container.
+      ARM_USE_AZUREAD: "true"
       # Variable names must match terraform/azure/variables.tf (all three are
       # required inputs with no default — see terraform.ci.tfvars header).
       TF_VAR_azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
