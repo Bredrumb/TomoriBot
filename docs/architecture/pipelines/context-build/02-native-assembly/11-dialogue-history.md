@@ -190,7 +190,7 @@ After this stage runs:
 |---|---|---|
 | `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
 | `PERSONA_USER_BLOCK_CACHE_TTL_SECONDS` | `60` | TTL for active persona user block lookups |
-| `TIME_AWARENESS_REUNION_DAYS` | `3` | Minimum personal-calendar-day reunion gap |
+| `TIME_AWARENESS_REUNION_DAYS` | `7` | Minimum personal-calendar-day reunion gap |
 | `TIME_AWARENESS_GRACE_TRIGGERS` | `3` | Persisted same-day triggers that retain a reunion note |
 
 | Source | Field | Effect |

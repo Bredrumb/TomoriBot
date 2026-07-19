@@ -7,7 +7,7 @@ function readIntEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-export const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 3);
+export const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 7);
 export const TIME_AWARENESS_GRACE_TRIGGERS = readIntEnv("TIME_AWARENESS_GRACE_TRIGGERS", 3);
 
 export const SPACER_TEMPLATE =

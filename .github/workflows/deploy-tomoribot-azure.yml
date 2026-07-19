@@ -589,8 +589,17 @@ jobs:
         run: |
           PREV_REF="${{ github.event.before }}"
           if [ -z "$PREV_REF" ] || [ "$PREV_REF" = "0000000000000000000000000000000000000000" ]; then
-            echo "No previous-ref available; scanning all up-migrations as a conservative fallback."
-            bun run scripts/checks/checkPendingMigrations.ts --all
+            # workflow_dispatch has no event.before. The repository is checked
+            # out with full history, so compare the selected commit to its
+            # parent rather than treating all historic migrations as pending.
+            PREV_REF=$(git rev-parse HEAD^ 2>/dev/null || true)
+            if [ -z "$PREV_REF" ]; then
+              echo "No parent commit available; scanning all up-migrations as a conservative fallback."
+              bun run scripts/checks/checkPendingMigrations.ts --all
+            else
+              echo "No event previous-ref available; scanning migrations changed since parent $PREV_REF."
+              bun run scripts/checks/checkPendingMigrations.ts --changed-since "$PREV_REF"
+            fi
           else
             bun run scripts/checks/checkPendingMigrations.ts --changed-since "$PREV_REF"
           fi
@@ -700,7 +709,7 @@ jobs:
           scp -i "$SSH_KEY" deploy/azure/docker-compose.yml "${SSH_TARGET}:/tmp/docker-compose.yml"
 
           ssh -i "$SSH_KEY" "$SSH_TARGET" \
-            "sudo install -m 700 -d /etc/tomoribot && sudo install -m 600 -o root -g root /tmp/tomori-secrets.json /etc/tomoribot/secrets.json && sudo install -m 644 -o root -g root /tmp/docker-compose.yml /etc/tomoribot/docker-compose.yml && rm -f /tmp/tomori-secrets.json /tmp/docker-compose.yml"
+            "sudo install -m 700 -d /etc/tomoribot && sudo install -m 640 -o root -g 1001 /tmp/tomori-secrets.json /etc/tomoribot/secrets.json && sudo install -m 644 -o root -g root /tmp/docker-compose.yml /etc/tomoribot/docker-compose.yml && rm -f /tmp/tomori-secrets.json /tmp/docker-compose.yml"
 
       - name: Pull image and restart compose service
         env:
@@ -785,11 +794,14 @@ jobs:
 
           ssh -i "$SSH_KEY" "$SSH_TARGET" <<'REMOTE'
           set -euo pipefail
-          container_id=$(sudo docker compose -f /etc/tomoribot/docker-compose.yml ps -q tomoribot || true)
+          # Do not invoke Compose here: TOMORIBOT_IMAGE is injected only by the
+          # deploy job, and Compose interpolation would hide the actual app log.
+          container_id=$(sudo docker ps -aq --filter "label=com.docker.compose.service=tomoribot" | head -n 1)
           if [ -n "$container_id" ]; then
             sudo docker logs --tail 50 "$container_id"
           else
-            sudo docker logs --tail 50 tomoribot || true
+            echo "TomoriBot container was not created. Docker container list:"
+            sudo docker ps -a
           fi
           REMOTE
 
