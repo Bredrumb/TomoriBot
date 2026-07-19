@@ -60,14 +60,25 @@ OpenAI-compatible family keeps its adapter-specific fetch implementation, includ
 provider's SSRF-guarded remote fetch.
 
 1. Send the default payload, then try without `stream_options`.
-2. Probe single optional parameters in the shared priority order. OpenRouter then has an
-   adapter-specific image-stripping attempt; both families include the tools-only fallback and a
-   mandatory-keys-only payload last.
+2. Probe single optional parameters in the shared priority order. Both families then include an
+   image-stripping attempt, the tools-only fallback, and a mandatory-keys-only payload last.
 3. When an error message names known parameters that are present in the failing body, insert a
    targeted retry ahead of the remaining queue. All named parameters are removed together, so a
    joint rejection such as `min_p` plus `logit_bias` does not fall through to the minimal payload.
    A message that names droppable parameters justifies the retry on its own — it does not also
    need to match one of the classifier's status/wording heuristics.
+4. When an error message rejects multimodal/image input rather than a parameter (e.g. a vLLM
+   backend launched without `--enable-multimodal`, surfaced as a 500), insert a targeted
+   image-strip retry ahead of the remaining queue instead of walking the sampler probes, since
+   every payload still carrying image blocks would fail identically. Like the parameter-naming
+   rule, this signal justifies the retry on its own.
+
+Image stripping is notice-injecting, not silent: `stripImageBlocksWithNotice()` replaces each
+message's removed image blocks with one `[System: ...]` text notice so the model stays aware an
+image was attached and does not hallucinate or ignore it. Capability flags remain the correct
+steady state — a model whose endpoint is known to reject images should carry `sees_images = false`
+so context build routes attachments through the vision-tool/notice path with media IDs and no
+wasted first request; the degradation rung is the safety net for wrong or stale flags.
 
 Targeted retries are deduplicated by serialized request body and capped at three per request. The
 result is not cached: routing or backend capabilities can differ on the next request, so degradation

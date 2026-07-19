@@ -100,10 +100,12 @@ async function runBackup(): Promise<void> {
 async function runRestore(bundlePath: string): Promise<void> {
   log.section("♻️ TRANSFER RESTORE");
 
-  // 1. Ensure DATABASE_URL is set so the sql tag can connect for the pre-restore check
-  if (!process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = resolveDatabaseUrl();
-  }
+  // 1. Resolve and pin the target before restoring config from the source bundle.
+  // The bundled config may contain source-machine POSTGRES_* values, but both the
+  // preflight query and psql must continue targeting the database selected when
+  // this process started (including values injected by runWithSecrets.ts).
+  const targetDatabaseUrl = resolveDatabaseUrl();
+  process.env.DATABASE_URL = targetDatabaseUrl;
 
   // 2. Validate bundle directory
   const bundleDir = resolve(bundlePath);
@@ -216,15 +218,20 @@ async function runRestore(bundlePath: string): Promise<void> {
   copyFileSync(envBackupPath, localEnvPath);
   log.success(".env restored from bundle.");
 
-  // Re-load env so DATABASE_URL picks up the restored values
-  config({ override: true });
-
   // 5. Restore database
-  const dbUrl = resolveDatabaseUrl();
   log.info("Restoring database from dump (running psql)...");
   try {
     const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
-    await runExternalCommand("psql", ["--quiet", "-o", nullDevice, dbUrl, "-v", "ON_ERROR_STOP=1", "-f", dbDumpPath]);
+    await runExternalCommand("psql", [
+      "--quiet",
+      "-o",
+      nullDevice,
+      targetDatabaseUrl,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-f",
+      dbDumpPath,
+    ]);
     log.success("Database restored successfully.");
   } catch (_error) {
     log.error("psql restore failed. Ensure psql is installed and in your PATH.");

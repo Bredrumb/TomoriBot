@@ -42,10 +42,13 @@ import { assistantMediaRelocationNotice, relocateAssistantMediaContextItems } fr
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import {
   buildDegradationAttempts,
+  buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
   extractRejectedParams,
+  isMultimodalRejectionError,
   MAX_TARGETED_DEGRADATION_ATTEMPTS,
+  stripImageBlocksWithNotice,
   type DegradableErrorInput,
   type DegradableErrorKind,
 } from "@/providers/utils/paramDegradation";
@@ -228,32 +231,12 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
    * Strips image content from messages for fallback requests
    * Used when auto-routers select models that don't support vision
    *
-   * Handles both:
-   * - Simple string content: "text only"
-   * - Array content: [{ type: "text", text: "..." }, { type: "image_url", ... }]
-   *
-   * Removes any content blocks with type: "image_url" or "image"
+   * Delegates to the shared notice-injecting helper: each affected message
+   * keeps a text notice in place of its removed image blocks so the model
+   * stays aware an image was attached instead of silently losing it.
    */
   private stripImagesFromMessages(messages: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-    return messages.map((message) => {
-      const content = message.content;
-      // If content is an array, filter out image blocks
-      if (Array.isArray(content)) {
-        const filteredContent = content.filter((block: unknown) => {
-          if (typeof block !== "object" || block === null) return true;
-          const blockObj = block as Record<string, unknown>;
-          const type = blockObj.type;
-          // Remove image_url and image content types
-          return type !== "image_url" && type !== "image";
-        });
-        // Only return modified message if content actually changed
-        if (filteredContent.length < content.length) {
-          return { ...message, content: filteredContent };
-        }
-      }
-      // Return unchanged if content is string or no images found
-      return message;
-    });
+    return stripImageBlocksWithNotice(messages);
   }
 
   /**
@@ -358,6 +341,13 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       case "provider_specific":
         return "provider-specific parameter rejection";
     }
+  }
+
+  /** Log label for whichever signal made the failed attempt eligible for a retry. */
+  private describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
+    if (kind) return this.describeDegradationKind(kind);
+    if (queuedImageStrip) return "a multimodal/image-input rejection";
+    return "an error naming request parameters";
   }
 
   private parseHttpErrorFromResponse(
@@ -725,6 +715,36 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         targetedAttemptCount += 1;
         return true;
       };
+      // A multimodal rejection means every payload still carrying image blocks
+      // fails identically (e.g. the router landed on a text-only backend), so
+      // jump straight to the image-strip attempt instead of walking the
+      // sampler-probe rungs first.
+      let imageStripAttemptQueued = false;
+      const queueImageStripAttempt = (
+        currentIndex: number,
+        currentBody: Record<string, unknown>,
+        errorMessage: string,
+      ): boolean => {
+        if (imageStripAttemptQueued || !isMultimodalRejectionError(errorMessage)) {
+          return false;
+        }
+
+        const imageStripAttempt = buildImageStripAttempt(currentBody);
+        if (!imageStripAttempt) return false;
+
+        const serialized = JSON.stringify(imageStripAttempt.body);
+        if (attemptedSerializedBodies.has(serialized)) return false;
+
+        const duplicateIndex = attempts.findIndex(
+          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+        );
+        if (duplicateIndex !== -1) {
+          attempts.splice(duplicateIndex, 1);
+        }
+        attempts.splice(currentIndex + 1, 0, imageStripAttempt);
+        imageStripAttemptQueued = true;
+        return true;
+      };
 
       let completedAttempt = false;
       attemptLoop: for (let i = 0; i < attempts.length; i++) {
@@ -773,14 +793,15 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             // A message that names a droppable request param is sufficient evidence on
             // its own — retry even when the generic status/wording classifier misses.
             const queuedTargeted = queueTargetedAttempt(i, attempt.body, parsedError.errorMessage);
+            const queuedImageStrip = queueImageStripAttempt(i, attempt.body, parsedError.errorMessage);
             const degradationKind = classifyDegradableError({
               statusCode: parsedError.statusCode,
               message: parsedError.errorMessage,
               degradeOn502: true,
             });
-            if ((degradationKind || queuedTargeted) && i < attempts.length - 1) {
+            if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
               log.warn(
-                `OpenRouter returned ${degradationKind ? this.describeDegradationKind(degradationKind) : "an error naming request parameters"} on attempt '${attempt.label}', trying fallback payload`,
+                `OpenRouter returned ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} on attempt '${attempt.label}', trying fallback payload`,
                 { model: config.model, errorMessage: parsedError.errorMessage },
               );
               continue;
@@ -869,10 +890,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 // Same rule as the fetch path: a message naming droppable params
                 // justifies a retry even without a generic classifier match.
                 const queuedTargeted = queueTargetedAttempt(i, attempt.body, midStreamError.message);
+                const queuedImageStrip = queueImageStripAttempt(i, attempt.body, midStreamError.message);
                 const degradationKind = classifyDegradableError({ ...midStreamError, degradeOn502: true });
-                if ((degradationKind || queuedTargeted) && i < attempts.length - 1) {
+                if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
                   log.warn(
-                    `OpenRouter received ${degradationKind ? this.describeDegradationKind(degradationKind) : "an error naming request parameters"} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                    `OpenRouter received ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
                     { model: config.model, errorMessage: midStreamError.message },
                   );
                   const cancelPromise = reader.cancel().catch(() => undefined);

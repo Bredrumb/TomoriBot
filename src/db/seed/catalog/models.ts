@@ -1259,7 +1259,10 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isReasoning: true,
         hasTools: true,
         isDefault: true,
-        seesImages: true,
+        // NVIDIA's hosted endpoint serves this model via vLLM without
+        // --enable-multimodal, so image parts are rejected with a 500 even
+        // though degradation now recovers by stripping them. Keep sees_images
+        // off so images route through the vision_llm/notice path instead.
         supportsStructoutput: true,
         isFree: true,
         desc: "Nemotron 3 Ultra 550B — open hybrid Mamba-Transformer MoE with 1M context for agentic reasoning, coding, and planning",

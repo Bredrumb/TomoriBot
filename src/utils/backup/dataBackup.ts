@@ -360,7 +360,17 @@ export async function runDataBackup(options: DataBackupOptions = {}): Promise<Da
   const dbUrl = resolveDatabaseUrl();
   log.info("Running pg_dump...");
   try {
-    await runExternalCommand("pg_dump", [dbUrl, "--clean", "--if-exists", "-f", dbDumpPath]);
+    // --no-owner/--no-privileges keep dumps restorable across role names (e.g. Cloud SQL
+    // `postgres` → Azure `tomoriadmin`); objects are owned by whichever role runs the restore.
+    await runExternalCommand("pg_dump", [
+      dbUrl,
+      "--clean",
+      "--if-exists",
+      "--no-owner",
+      "--no-privileges",
+      "-f",
+      dbDumpPath,
+    ]);
     log.success("Database dump completed.");
   } catch (error) {
     await log.error("pg_dump failed. No database changes were made.", error);

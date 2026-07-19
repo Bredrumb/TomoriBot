@@ -91,19 +91,16 @@ function validateImage(attachment: AvatarAttachment): {
 }
 
 /**
- * Converts an image attachment to a base64 data URI with timeout protection
- * @param attachment - Discord attachment to convert
- * @returns Promise resolving to SafeDownloadResult-like object with dataUri or error
+ * Downloads an image attachment into a buffer with timeout protection
+ * @param attachment - Discord attachment to download
+ * @returns Promise resolving to SafeDownloadResult-like object with buffer or error
  */
-async function attachmentToBase64DataUri(attachment: AvatarAttachment): Promise<{
+async function downloadAttachmentBuffer(attachment: AvatarAttachment): Promise<{
   success: boolean;
-  dataUri?: string;
   buffer?: Buffer;
   error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
   details?: string;
 }> {
-  const contentType = "contentType" in attachment ? attachment.contentType : attachment.content_type;
-
   // 1. Use safeDownload with 15s timeout and 8MB size limit
   const downloadResult = await safeDownload(attachment.url, {
     maxSizeMB: 8,
@@ -120,14 +117,8 @@ async function attachmentToBase64DataUri(attachment: AvatarAttachment): Promise<
     };
   }
 
-  // 3. Convert buffer to base64 data URI
-  const base64 = downloadResult.buffer?.toString("base64");
-  const mimeType = contentType || "image/png";
-  const dataUri = `data:${mimeType};base64,${base64}`;
-
   return {
     success: true,
-    dataUri,
     buffer: downloadResult.buffer,
   };
 }
@@ -443,8 +434,8 @@ export async function execute(
       return;
     }
 
-    // 10. Convert image to base64 data URI with timeout protection
-    const downloadResult = await attachmentToBase64DataUri(imageAttachment);
+    // 10. Download the image into a buffer with timeout protection
+    const downloadResult = await downloadAttachmentBuffer(imageAttachment);
     if (!downloadResult.success) {
       let errorKey: string;
       if (downloadResult.error === "size_exceeded") {
@@ -465,9 +456,28 @@ export async function execute(
 
     if (isMainPersona) {
       // biome-ignore lint/style/noNonNullAssertion: Download result is checked in success condition
-      const avatarDataUri = downloadResult.dataUri!;
+      const downloadedBuffer = downloadResult.buffer!;
 
-      // 11. Update guild avatar for main persona via Discord API with timeout protection
+      // 11. Re-encode to PNG before uploading. Discord returns 200 OK for
+      // structurally corrupt files (e.g. exported preset PNGs with a bad tEXt
+      // chunk length) but stores an unservable asset — the CDN 415s and clients
+      // silently keep the old avatar. Re-encoding guarantees a clean PNG, same
+      // as the alter path below.
+      let pngBuffer: Buffer;
+      try {
+        pngBuffer = await convertToPNG(downloadedBuffer);
+      } catch (error) {
+        log.warn("Failed to convert selected main avatar image to PNG", error);
+        await replyInfoEmbed(responseInteraction, locale, {
+          titleKey: "commands.persona.avatar.conversion_error_title",
+          descriptionKey: "commands.persona.avatar.conversion_error_description",
+          color: ColorCode.ERROR,
+        });
+        return;
+      }
+      const avatarDataUri = `data:image/png;base64,${pngBuffer.toString("base64")}`;
+
+      // 12. Update guild avatar for main persona via Discord API with timeout protection
       const updateResult = await updateGuildAvatar(interaction.guild.id, avatarDataUri);
 
       if (updateResult.success) {

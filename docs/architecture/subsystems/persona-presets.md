@@ -92,6 +92,8 @@ For `type=alter`, `/persona default` creates an alter pointer from the preset an
 
 Preset-application avatar writes for the main persona are one-time operational Discord updates and do not materialize a pointer: `/config setup`, `/persona default`, and `/persona import` can establish or preserve the pointer while patching the guild avatar. Direct `/server avatar` edits are different; setting or resetting a persona avatar is deliberate customization and materializes a pointer before the avatar write.
 
+All main-persona avatar uploads are re-encoded to PNG before the guild-member PATCH, same as alter avatars. Discord returns 200 OK for structurally corrupt image files but stores an unservable asset (the CDN returns 415 and clients silently keep the old avatar), so raw user bytes are never sent as-is.
+
 ## Materialization
 
 The first local content edit forks a pointer into an independent copy. Materialization preserves `persona_id` and `persona_lineage_id`, copies the current live preset content into `personas`, `persona_attributes`, `persona_configs`, and `persona_sprites`, then sets `is_pointer = false`. Preset sprites are copied **by reference** — the new `persona_sprites` rows reuse the shared `presets/` image URL (no byte duplication), so the immutable-delete guard still protects them. A sprite edit (`/persona sprites add|edit|remove|import`) forks through this same path, so the user keeps the default sprite set and layers their changes on top. An alter's avatar is likewise copied by reference: if a forking alter had no avatar of its own (`webhook_avatar_url` NULL), materialization stamps it with `preset_avatar_shared_url` so it keeps the same shared image after forking.
