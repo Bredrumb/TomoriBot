@@ -22,6 +22,13 @@ resource "azurerm_postgresql_flexible_server" "main" {
   public_network_access_enabled = true
 
   tags = local.common_tags
+
+  # Azure selects an availability zone when none is configured. Preserve that
+  # provider-assigned zone on later applies; changing it requires a coordinated
+  # standby-zone exchange that this single-server deployment does not use.
+  lifecycle {
+    ignore_changes = [zone]
+  }
 }
 
 resource "azurerm_postgresql_flexible_server_database" "tomoribot" {
