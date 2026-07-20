@@ -9,14 +9,6 @@ on:
       - release
   workflow_dispatch:
     inputs:
-      environment:
-        description: "Deployment environment"
-        required: false
-        type: choice
-        options:
-          - test
-          - production
-        default: test
       create_db_backup:
         description: "Create a pre-deploy Azure PostgreSQL backup (unsupported on the B1ms migration SKU)"
         required: false
@@ -538,6 +530,7 @@ jobs:
           !(
             steps.postgres_bootstrap.outputs.is_initial_bootstrap == 'true' ||
             (github.event_name == 'workflow_dispatch' && inputs.run_database_bootstrap == true) ||
+            vars.RUN_DATABASE_BOOTSTRAP == 'true' ||
             (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
             (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
           )
@@ -653,7 +646,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Bootstrap database role and schema
-        if: github.event_name == 'workflow_dispatch' && inputs.run_database_bootstrap == true
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.run_database_bootstrap == true) ||
+          vars.RUN_DATABASE_BOOTSTRAP == 'true'
         env:
           VM_NAME: ${{ steps.tf_outputs.outputs.vm_name }}
           RESOURCE_GROUP: ${{ steps.tf_outputs.outputs.resource_group_name }}

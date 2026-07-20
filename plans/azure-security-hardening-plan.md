@@ -8,7 +8,7 @@
 >
 > **Handoff note:** This plan is explicitly unignored by `.gitignore` so its evidence and remaining live steps travel with the hardening change.
 >
-> **Cutover readiness (2026-07-20):** The implementation, documentation, local quality gates, and required PR validation are complete on PR #51. The remaining unchecked work requires the protected `release` path or live Azure changes: populate the `production` environment secrets, merge, run the database bootstrap/deployment/host-lockdown sequence, remove fallback credentials and roles, and collect the final runtime evidence. Do not merge, push to `release`, or start the Azure workflow without the operator's explicit go-ahead.
+> **Cutover readiness (2026-07-20):** The implementation, documentation, local quality gates, and required PR validation are complete on PR #51. The remaining unchecked work requires the protected `release` path or live Azure changes: populate the `production` environment secrets, set the one-time `RUN_DATABASE_BOOTSTRAP=true` environment variable, merge, clear that variable after the successful bootstrap/deployment, run host lockdown, remove fallback credentials and roles, and collect the final runtime evidence. Do not merge, push to `release`, or start the Azure workflow without the operator's explicit go-ahead.
 
 ## Goal
 

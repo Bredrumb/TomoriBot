@@ -34,6 +34,13 @@ Store these Azure-only values in the `production` environment, not as repository
 - `TOMORI_SECRETS_JSON`
 - `GRAFANA_EGRESS_IP` as an environment variable
 
+The first merge to `release` starts the deployment workflow immediately, before a manual dispatch
+can use the newly merged workflow. For that one cutover only, set the `production` environment
+variable `RUN_DATABASE_BOOTSTRAP=true` before merging. The merge-triggered job then performs the
+idempotent database bootstrap before installing the non-administrator runtime bundle. Delete the
+variable immediately after that run succeeds so ordinary release pushes cannot bootstrap schema or
+roles. Do not use this flag for recurring deployments.
+
 Docker Hub and release-notification credentials may remain repository-scoped because the retained
 AWS/GCP workflows also use them. Delete `PAT_TOKEN` and `AZURE_VM_SSH_PRIVATE_KEY` only after the
 environment-scoped Run Command deployment succeeds.
@@ -44,7 +51,8 @@ The workflow deliberately separates recurring releases from one-time lifecycle o
 
 ### Database bootstrap
 
-For the first non-administrator cutover, manually dispatch the Azure workflow from `release` with
+For the first non-administrator cutover, set the one-time environment flag described above before
+merging. Later operator-requested reruns can be manually dispatched from `release` with
 `run_database_bootstrap=true`. The idempotent
 [`bootstrap-database.sh`](../../../deploy/azure/bootstrap-database.sh) operation:
 
