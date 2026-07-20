@@ -7,6 +7,8 @@
 > **Checkbox evidence:** `(live)` means verified in the deployed Azure/GitHub environment; `(working tree)` means implemented or verified only in the current unmerged checkout; `(decision)` records an intentional simplification that needs no implementation. Phase gates remain unchecked until their stated end-to-end proof is complete.
 >
 > **Handoff note:** This plan is explicitly unignored by `.gitignore` so its evidence and remaining live steps travel with the hardening change.
+>
+> **Cutover readiness (2026-07-20):** The implementation, documentation, local quality gates, and required PR validation are complete on PR #51. The remaining unchecked work requires the protected `release` path or live Azure changes: populate the `production` environment secrets, merge, run the database bootstrap/deployment/host-lockdown sequence, remove fallback credentials and roles, and collect the final runtime evidence. Do not merge, push to `release`, or start the Azure workflow without the operator's explicit go-ahead.
 
 ## Goal
 
@@ -113,7 +115,7 @@ Rationale: recurring releases should not silently rotate database roles or mutat
 ### Phase 1 gate
 
 - [ ] A reviewed production deployment succeeds through OIDC and Run Command.
-- [ ] Only the Terraform job can request an Azure OIDC token.
+- [x] Only the Terraform job can request an Azure OIDC token. `(working tree: deploy-with-terraform is the Azure workflow's sole id-token: write job; actionlint passes)`
 - [ ] Port 22 is removed from the NSG and the deploy user is not in the `docker` group.
 - [ ] The old branch credential, subscription-wide role, PAT, and SSH private-key secret are removed.
 
@@ -148,13 +150,13 @@ The current **token panel** is a local Grafana visualization of aggregate input/
 - [x] Verify the separate `grafana` login has `CONNECT`, schema `USAGE`, and `SELECT` on all 84 current application tables. `(live)`
 - [x] Verify matching default `SELECT` privileges exist for future tables created by the migration owner. `(live)`
 - [x] Verify `default_transaction_read_only=on` and no schema creation, table mutation, role creation, database creation, replication, bypass-RLS, or superuser privileges. Default `PUBLIC` execution remains on 162 `public`-schema functions; none is `SECURITY DEFINER`, so revoking them is deferred as unnecessary complexity. `(live)`
-- [ ] Confirm Grafana does not use the application runtime or PostgreSQL administrator credential.
-- [ ] Confirm the Grafana PostgreSQL datasource performs TLS certificate and hostname verification.
+- [x] Confirm Grafana does not use the application runtime or PostgreSQL administrator credential. `(live local Grafana metadata: Azure-PostgreSQL uses the separate grafana login)`
+- [x] Confirm the Grafana PostgreSQL datasource performs TLS certificate and hostname verification. `(live local Grafana sslmode=verify-full; independent hostname verification negotiated TLS 1.3 with verify code 0)`
 - [x] Restrict PostgreSQL ingress to the exact current Grafana egress `/32`. `(live)`
 - [x] Represent the Grafana firewall exception explicitly in Terraform with an operator-supplied IPv4 value; do not restore broad or ad hoc rules. `(working tree and imported live state)`
 - [x] Remove the locally added `tokenMetricsLogger` source/test/timer initialization. `(working tree)`
 - [ ] Remove the stale `Custom-TomoriBotTokenMetrics_CL` output flow from the DCR. The source/test/timer and custom table are already removed; only the DCR flow remains.
-- [ ] Preserve the existing Azure Monitor VM, error-log, and cache panels alongside direct PostgreSQL statistics panels.
+- [x] Preserve the existing Azure Monitor VM, error-log, and cache panels alongside direct PostgreSQL statistics panels. `(live local Grafana dashboard metadata)`
 
 Rationale: a narrowly authenticated read-only SQL datasource is simpler and more flexible than duplicating PostgreSQL aggregates into a custom Log Analytics pipeline. The read-only role can see application data, so its credential and `/32` network exception are treated as operator access, not public application access.
 
@@ -261,7 +263,7 @@ Rationale: a narrowly authenticated read-only SQL datasource is simpler and more
 
 ## Phase 6 — Reviewed Deployment and Final Proof
 
-- [ ] Open a PR from a hardening branch and let the required `validate` check pass.
+- [x] Open a PR from a hardening branch and let the required `validate` check pass. `(PR #51; required validate check passed. Two optional pull_request_target jobs are rejected because the release-base copies still use movable action tags; the PR head pins those actions, so no second PR is needed.)`
 - [ ] Merge through the protected branch; do not bypass the ruleset.
 - [ ] Complete one environment-gated production deployment through OIDC and Run Command.
 - [ ] Verify `/healthz`, Discord connectivity, private database access/TLS, Vertex WIF, URL-fetch blocking, and one representative slash command.
