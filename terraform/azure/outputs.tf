@@ -27,11 +27,6 @@ output "postgres_admin_login" {
   value       = azurerm_postgresql_flexible_server.main.administrator_login
 }
 
-output "postgres_private_ip" {
-  description = "Private endpoint address used to verify VNet-only PostgreSQL resolution."
-  value       = azurerm_private_endpoint.postgres.private_service_connection[0].private_ip_address
-}
-
 output "vm_name" {
   description = "VM name consumed by the Azure Run Command deployment path."
   value       = azurerm_linux_virtual_machine.tomoribot.name

@@ -68,11 +68,8 @@ case "$runtime_user" in
     ;;
 esac
 
-resolved_database_ip=$(getent ahostsv4 "$postgres_host" | awk 'NR == 1 { print $1 }')
-if [[ ! "$resolved_database_ip" =~ ^10\. ]] && \
-  [[ ! "$resolved_database_ip" =~ ^172\.(1[6-9]|2[0-9]|3[01])\. ]] && \
-  [[ ! "$resolved_database_ip" =~ ^192\.168\. ]]; then
-  echo "PostgreSQL hostname did not resolve to a private address." >&2
+if [[ ! "$postgres_host" =~ \.postgres\.database\.azure\.com$ ]]; then
+  echo "PostgreSQL host must be the Azure Flexible Server public FQDN." >&2
   exit 1
 fi
 
@@ -110,6 +107,23 @@ if [ -z "$container_id" ] || \
   [ "$(docker exec "$container_id" id -u)" != "1001" ] || \
   [ "$(docker exec "$container_id" id -g)" != "1001" ]; then
   echo "TomoriBot container UID/GID invariant failed." >&2
+  exit 1
+fi
+
+# Verify the public PostgreSQL path with the same production client and
+# certificate/hostname validation used by the application. This query also
+# proves the exact-address firewall rule and runtime credentials are valid.
+if ! docker exec "$container_id" bun -e '
+  const secrets = await Bun.file("/run/secrets/tomoribot.json").json();
+  for (const key of ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB"]) {
+    process.env[key] = String(secrets[key]);
+  }
+  process.env.RUN_ENV = "production";
+  const { sql } = await import("./src/utils/db/client.ts");
+  await sql`SELECT 1`;
+  await sql.close();
+' >/dev/null; then
+  echo "PostgreSQL public-FQDN TLS connectivity check failed." >&2
   exit 1
 fi
 

@@ -20,14 +20,6 @@ resource "azurerm_subnet" "vm" {
   address_prefixes     = [var.vm_subnet_address_prefix]
 }
 
-resource "azurerm_subnet" "postgres_private_endpoint" {
-  name                              = "${var.name_prefix}-postgres-pe-subnet"
-  resource_group_name               = azurerm_resource_group.main.name
-  virtual_network_name              = azurerm_virtual_network.main.name
-  address_prefixes                  = [var.postgres_private_endpoint_subnet_address_prefix]
-  private_endpoint_network_policies = "Disabled"
-}
-
 resource "azurerm_public_ip" "vm" {
   name                = "${var.name_prefix}-vm-pip"
   location            = azurerm_resource_group.main.location

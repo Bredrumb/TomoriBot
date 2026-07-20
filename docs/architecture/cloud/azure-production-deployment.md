@@ -88,8 +88,8 @@ only these responsibilities:
 - reject administrator runtime users and non-digest image references;
 - authenticate to Docker Hub only long enough to pull the immutable image digests, then log out;
 - start the TomoriBot Compose service without an implicit pull; and
-- verify UID/GID `1001:1001`, private PostgreSQL DNS, root-owned configuration modes, and
-  `http://localhost:8081/healthz`.
+- verify UID/GID `1001:1001`, a database query over verified TLS to the public Azure PostgreSQL
+  FQDN, root-owned configuration modes, and `http://localhost:8081/healthz`.
 
 The runtime container sets `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`, so startup verifies database
 connectivity but cannot execute migrations or `pg_cron` administration.
@@ -104,9 +104,10 @@ inbound allow rules. Continue using VM Run Command for administration and health
 
 ## Database and Grafana boundary
 
-The application resolves the Azure PostgreSQL hostname through the linked private DNS zone and
-connects through the private endpoint with certificate and hostname verification. Public database
-access exists only for the Terraform-managed `GRAFANA_EGRESS_IP` exact address.
+PostgreSQL uses its public Azure FQDN, but its firewall permits only two exact source addresses: the
+VM's Terraform-managed static public IP and `GRAFANA_EGRESS_IP`. The application and Grafana both
+connect with TLS certificate and hostname verification. Do not add `0.0.0.0`, enable access from all
+Azure services, or widen either firewall rule.
 
 Grafana must use its dedicated `grafana` login, never `tomoribot_runtime` or the PostgreSQL
 administrator. Configure the PostgreSQL datasource with TLS mode `verify-full`, the Azure server
@@ -128,7 +129,7 @@ unpublished, and digest-pinned.
 This is a singleton: automatic platform patching or an operator reboot causes a short, expected bot
 outage while the VM and `restart: unless-stopped` container return. Schedule disruptive maintenance
 when a brief Discord disconnect is acceptable, then verify `/healthz`, Discord connectivity,
-private database access, and Vertex WIF after the reboot.
+public-FQDN database access over verified TLS, and Vertex WIF after the reboot.
 
 Docker uses `json-file` rotation with three 10 MiB files, live restore, and daemon-level
 `no-new-privileges`. Application error JSONL remains on `/var/log/tomoribot`; Azure Monitor retains
@@ -139,7 +140,7 @@ ingested records for 30 days. Backup and application-data mounts remain under
 
 A production hardening rollout is proven only after the protected `validate` check passes, the PR
 is merged without bypass, and the environment-scoped workflow succeeds through OIDC and Run
-Command. Smoke-test `/healthz`, Discord connectivity, private PostgreSQL/TLS, Vertex WIF, URL-fetch
+Command. Smoke-test `/healthz`, Discord connectivity, public-FQDN PostgreSQL/TLS, Vertex WIF, URL-fetch
 IMDS blocking, `/stats generate`, and one representative slash command.
 
 Application rollback means redeploying a previously reviewed immutable image digest with the same

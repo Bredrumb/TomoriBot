@@ -47,12 +47,6 @@ variable "vm_subnet_address_prefix" {
   default     = "10.80.1.0/24"
 }
 
-variable "postgres_private_endpoint_subnet_address_prefix" {
-  description = "CIDR block for the PostgreSQL private endpoint subnet."
-  type        = string
-  default     = "10.80.2.0/24"
-}
-
 # --- VM ---
 
 variable "vm_admin_ssh_public_key" {

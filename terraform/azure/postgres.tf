@@ -1,9 +1,10 @@
 /**
  * Azure Database for PostgreSQL Flexible Server.
  *
- * Private Link and private DNS keep application traffic inside the production
- * VNet. Public access remains enabled solely for one Terraform-managed Grafana
- * operator address using a separate read-only database login.
+ * Public access is deny-by-default and restricted to the VM's static outbound
+ * address plus one Terraform-managed Grafana operator address. Both clients use
+ * TLS with certificate and hostname verification and separate least-privilege
+ * database roles.
  * pgvector still needs CREATE EXTENSION vector inside the database after the
  * Azure allowlist below is applied.
  */
@@ -39,48 +40,18 @@ resource "azurerm_postgresql_flexible_server_database" "tomoribot" {
   collation = "en_US.utf8"
 }
 
+resource "azurerm_postgresql_flexible_server_firewall_rule" "vm" {
+  name             = "allow-tomoribot-vm"
+  server_id        = azurerm_postgresql_flexible_server.main.id
+  start_ip_address = azurerm_public_ip.vm.ip_address
+  end_ip_address   = azurerm_public_ip.vm.ip_address
+}
+
 resource "azurerm_postgresql_flexible_server_firewall_rule" "grafana" {
   name             = "allow-grafana-operator"
   server_id        = azurerm_postgresql_flexible_server.main.id
   start_ip_address = var.grafana_egress_ip
   end_ip_address   = var.grafana_egress_ip
-}
-
-resource "azurerm_private_dns_zone" "postgres" {
-  name                = "privatelink.postgres.database.azure.com"
-  resource_group_name = azurerm_resource_group.main.name
-  tags                = local.common_tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
-  name                  = "${var.name_prefix}-postgres-dns-link"
-  resource_group_name   = azurerm_resource_group.main.name
-  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
-  virtual_network_id    = azurerm_virtual_network.main.id
-  registration_enabled  = false
-  tags                  = local.common_tags
-}
-
-resource "azurerm_private_endpoint" "postgres" {
-  name                = "${var.name_prefix}-postgres-pe"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  subnet_id           = azurerm_subnet.postgres_private_endpoint.id
-  tags                = local.common_tags
-
-  private_service_connection {
-    name                           = "${var.name_prefix}-postgres-private-connection"
-    private_connection_resource_id = azurerm_postgresql_flexible_server.main.id
-    subresource_names              = ["postgresqlServer"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "default"
-    private_dns_zone_ids = [azurerm_private_dns_zone.postgres.id]
-  }
-
-  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
 }
 
 # azure.extensions REPLACES the allowlist wholesale, so every extension the app
