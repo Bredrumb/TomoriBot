@@ -43,6 +43,19 @@ export type CommandExecuteFunction = (
 export type CommandExecutionMap = Map<string, Map<string, CommandExecuteFunction>>;
 
 /**
+ * One row of the command catalog (the full universe of registered commands).
+ * `commandName` is the space-joined full path — identical to what
+ * `handleCommands.ts` records as `stat_counters.metric_key` for `command_used` —
+ * so the catalog JOINs directly against the stat table with no remapping.
+ */
+export interface CommandCatalogEntry {
+  /** Space-joined full path, e.g. "update", "config humanizer", "server welcome-channel set". */
+  commandName: string;
+  /** Top-level command/category name (first path segment). */
+  category: string;
+}
+
+/**
  * Map for command cooldowns (category -> duration)
  */
 export type CommandCooldownMap = Map<string, number>;
@@ -432,6 +445,42 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
       });
   }
   return cachedCommandDataPromise;
+}
+
+/**
+ * Flattens the execution map into the full list of registered command paths.
+ *
+ * Produces exactly the space-joined format `handleCommands.ts` records for the
+ * `command_used` metric, so the resulting catalog JOINs 1:1 against
+ * `stat_counters.metric_key`:
+ *   - root command      → `category`                     (e.g. "update")
+ *   - flat subcommand   → `category subcommand`          (e.g. "config humanizer")
+ *   - grouped subcommand→ `category group subcommand`    (e.g. "server welcome-channel set")
+ *
+ * This is the single source of truth for "which commands exist", derived from the
+ * loaded modules — never a hardcoded list — so the persisted catalog cannot drift.
+ *
+ * @param executionMap - The runtime execution map from {@link loadCommandData}.
+ * @returns One {@link CommandCatalogEntry} per registered (sub)command.
+ */
+export function getCommandCatalogEntries(executionMap: CommandExecutionMap): CommandCatalogEntry[] {
+  const entries: CommandCatalogEntry[] = [];
+
+  for (const [category, subMap] of executionMap) {
+    for (const subKey of subMap.keys()) {
+      // 1. Root commands live under a single sentinel key; the path is just the name.
+      if (subKey === ROOT_COMMAND_EXECUTION_KEY) {
+        entries.push({ commandName: category, category });
+        continue;
+      }
+      // 2. Grouped subcommands use a "group.subcommand" key (exactly one dot);
+      //    flat subcommands have no dot. Replacing the first dot with a space
+      //    yields the space-joined path for both shapes.
+      entries.push({ commandName: `${category} ${subKey.replace(".", " ")}`, category });
+    }
+  }
+
+  return entries;
 }
 
 async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {

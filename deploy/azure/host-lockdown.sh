@@ -29,6 +29,9 @@ chmod 0644 "$sshd_drop_in"
 chown root:root "$sshd_drop_in"
 mv -f "$sshd_drop_in" /etc/ssh/sshd_config.d/99-tomoribot-lockdown.conf
 
+# Ubuntu's sshd syntax check requires its ephemeral privilege-separation
+# directory even when the service has not started since the latest boot.
+install -d -o root -g root -m 0755 /run/sshd
 /usr/sbin/sshd -t
 gpasswd -d "$deployUsername" docker >/dev/null 2>&1 || true
 ufw default deny incoming >/dev/null

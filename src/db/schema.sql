@@ -2955,3 +2955,19 @@ CREATE INDEX IF NOT EXISTS idx_stat_counters_user_metric_bucket
   ON stat_counters(user_id, metric, bucket);
 CREATE INDEX IF NOT EXISTS idx_stat_counters_user_lineage_metric
   ON stat_counters(user_id, persona_lineage_id, metric);
+
+-- ============================================================================
+-- command_catalog — dimension table holding the full universe of registered
+-- commands (see migration 049). stat_counters only gains a command_used row once
+-- a command is invoked, so never-used commands are absent there; this table lets
+-- a LEFT JOIN report every command with COALESCE(count, 0). command_name is the
+-- same space-joined full path stat_counters.metric_key stores. The bot
+-- self-populates it on startup from loadCommandData() (04_syncCommandCatalog +
+-- StatRepository.syncCommandCatalog), so it never drifts from the code.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS command_catalog (
+  command_name   TEXT        PRIMARY KEY,          -- space-joined full path (= stat_counters.metric_key)
+  category       TEXT        NOT NULL,             -- top-level command/category name
+  first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_synced_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

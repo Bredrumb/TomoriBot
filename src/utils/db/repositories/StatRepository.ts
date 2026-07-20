@@ -597,6 +597,61 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
+   * Reconciles the `command_catalog` dimension table with the current set of
+   * registered commands. Called once at startup (04_syncCommandCatalog handler)
+   * with the paths from {@link getCommandCatalogEntries}.
+   *
+   * The catalog is the DIMENSION that lets Grafana surface never-used commands:
+   * `command_used` in stat_counters is a fact table with no row for an unused
+   * command, so a LEFT JOIN from this catalog is the only way to report every
+   * command with COALESCE(count, 0). `command_name` is stored in the same
+   * space-joined format as `stat_counters.metric_key`, so the JOIN is direct.
+   *
+   * Reconciliation is upsert-then-prune inside one transaction:
+   *   1. Upsert every current command (refreshing category + last_synced_at,
+   *      preserving first_seen_at on existing rows).
+   *   2. Delete rows whose command_name is no longer registered, so renamed or
+   *      removed commands drop out automatically.
+   *
+   * An empty input list is treated as a failed/no-op load and skips the prune,
+   * so a transient loader failure can never wipe the catalog.
+   *
+   * @param entries - Current command paths + categories (see getCommandCatalogEntries).
+   */
+  async syncCommandCatalog(entries: { commandName: string; category: string }[]): Promise<void> {
+    // 1. Never prune against an empty set — a failed load must not empty the catalog.
+    if (entries.length === 0) {
+      log.warn("StatRepository.syncCommandCatalog: received no commands, leaving catalog untouched");
+      return;
+    }
+
+    try {
+      const rows = entries.map((entry) => ({ command_name: entry.commandName, category: entry.category }));
+      const names = rows.map((row) => row.command_name);
+
+      await sql.begin(async (tx: SQL) => {
+        // 2. Upsert current commands. first_seen_at is set on insert only; ON
+        //    CONFLICT refreshes the mutable columns without touching it.
+        await tx`
+          INSERT INTO command_catalog ${tx(rows, "command_name", "category")}
+          ON CONFLICT (command_name) DO UPDATE SET
+            category       = EXCLUDED.category,
+            last_synced_at = now()
+        `;
+        // 3. Prune commands that no longer exist in the codebase.
+        await tx`
+          DELETE FROM command_catalog
+          WHERE NOT (command_name = ANY(${sql.array(names, "text")}))
+        `;
+      });
+
+      log.success(`StatRepository.syncCommandCatalog: catalog reconciled to ${rows.length} commands`);
+    } catch (error) {
+      log.error("StatRepository.syncCommandCatalog: failed", error);
+    }
+  }
+
+  /**
    * Model usage breakdown (model_used) for a user or server, highest first.
    * Powers favorite model/provider and model-diversity reads. Provide at least
    * one of userId / serverId.
