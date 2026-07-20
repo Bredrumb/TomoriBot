@@ -34,6 +34,13 @@ export interface ExtractedImage {
   data: string;
 }
 
+/** Image URLs resolved from either the requested message or its direct reply target. */
+export interface ResolvedMessageImageUrls {
+  imageUrls: ImageUrlInfo[];
+  /** The message that actually owns the returned images. */
+  sourceMessageId: string;
+}
+
 /**
  * Build a Discord CDN URL for a custom emoji.
  * Always uses PNG so animated emojis fall back to their first frame.
@@ -226,6 +233,67 @@ export function collectImageUrlsFromMessage(message: Message): ImageUrlInfo[] {
   }
 
   return imageUrls;
+}
+
+/**
+ * Resolve image URLs from a Discord message, falling back to the message it replies to.
+ *
+ * Reply messages often contain only text while using the referenced message's image as
+ * their visual context. The vision tool can receive the reply's media ID in that case,
+ * so this fallback makes the referenced image available without requiring the model to
+ * know the underlying Discord message ID.
+ *
+ * The fallback is intentionally one level deep: Discord replies directly identify the
+ * message whose media they are discussing, and a bounded lookup avoids surprising walks
+ * through long reply chains.
+ *
+ * @param messageId - Discord message snowflake ID to fetch
+ * @param context - Tool execution context providing channel access
+ * @returns Image URL descriptors and the ID of the message that owns them
+ * @throws Error if the requested message cannot be fetched or neither message has images
+ */
+export async function resolveMessageImageUrls(
+  messageId: string,
+  context: ToolContext,
+): Promise<ResolvedMessageImageUrls> {
+  const message = await context.channel.messages.fetch(messageId);
+  const directImageUrls = collectImageUrlsFromMessage(message);
+
+  if (directImageUrls.length > 0) {
+    return { imageUrls: directImageUrls, sourceMessageId: messageId };
+  }
+
+  const repliedToMessageId = message.reference?.messageId;
+  if (!repliedToMessageId) {
+    throw new Error(
+      `No images found in message ${messageId} (checked attachments, embeds, stickers, custom emojis, and components)`,
+    );
+  }
+
+  let repliedToMessage: Message;
+  try {
+    repliedToMessage = await context.channel.messages.fetch(repliedToMessageId);
+  } catch (error) {
+    log.warn(
+      `Failed to fetch replied-to message ${repliedToMessageId} while resolving images for ${messageId}:`,
+      error,
+    );
+    throw new Error(
+      `No images found in message ${messageId}, and replied-to message ${repliedToMessageId} could not be fetched`,
+    );
+  }
+
+  const repliedToImageUrls = collectImageUrlsFromMessage(repliedToMessage);
+  if (repliedToImageUrls.length === 0) {
+    throw new Error(
+      `No images found in message ${messageId} or replied-to message ${repliedToMessageId} (checked attachments, embeds, stickers, custom emojis, and components)`,
+    );
+  }
+
+  log.info(
+    `Using ${repliedToImageUrls.length} image(s) from replied-to message ${repliedToMessageId} for ${messageId}`,
+  );
+  return { imageUrls: repliedToImageUrls, sourceMessageId: repliedToMessageId };
 }
 
 /**

@@ -21,7 +21,7 @@ import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/ut
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
-import { collectImageUrlsFromMessage } from "@/utils/image/imageExtractor";
+import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 
 /**
  * Provider-to-chat-completions-URL mapping for OpenAI-compatible providers.
@@ -43,6 +43,13 @@ const DEFAULT_VISION_PROMPT =
 
 /** Maximum total size of all images in bytes (8 MB) to avoid API rejections */
 const MAX_TOTAL_IMAGE_BYTES = MEDIA_LIMITS.MAX_MEDIA_SIZE_MB * 1024 * 1024;
+
+/** Maximum wall-clock time for image extraction and vision inference (default: 60 seconds). */
+const parsedVisionAnalysisTimeoutMs = Number.parseInt(process.env.VISION_ANALYSIS_TIMEOUT_MS ?? "", 10);
+const VISION_ANALYSIS_TIMEOUT_MS =
+  Number.isFinite(parsedVisionAnalysisTimeoutMs) && parsedVisionAnalysisTimeoutMs > 0
+    ? parsedVisionAnalysisTimeoutMs
+    : 60_000;
 
 /**
  * Built-in tool that analyzes images using a dedicated vision model.
@@ -127,6 +134,9 @@ export class AnalyzeImageTool extends BaseTool {
       };
     }
 
+    const timeoutSignal = AbortSignal.timeout(VISION_ANALYSIS_TIMEOUT_MS);
+    const analysisSignal = context.abortSignal ? AbortSignal.any([context.abortSignal, timeoutSignal]) : timeoutSignal;
+
     try {
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "vision", {
         userId: context.internalUserId ?? null,
@@ -159,7 +169,7 @@ export class AnalyzeImageTool extends BaseTool {
       );
 
       // 4. Extract images from the Discord message
-      const images = await this.extractImagesFromMessage(messageId, context);
+      const images = await this.extractImagesFromMessage(messageId, context, analysisSignal);
 
       const apiKey = creds.apiKey;
 
@@ -174,11 +184,18 @@ export class AnalyzeImageTool extends BaseTool {
       let analysisResult: string;
 
       if (provider === "google") {
-        analysisResult = await this.callGoogleVision(apiKey, apiModelName, images, prompt);
+        analysisResult = await this.callGoogleVision(apiKey, apiModelName, images, prompt, analysisSignal);
       } else {
         // OpenAI-compatible providers (openrouter, zai, zaicoding, deepseek, custom)
         const endpointUrl = this.getEndpointUrl(provider, context, creds.customEndpoint?.endpoint_url ?? null);
-        analysisResult = await this.callOpenAICompatibleVision(apiKey, apiModelName, endpointUrl, images, prompt);
+        analysisResult = await this.callOpenAICompatibleVision(
+          apiKey,
+          apiModelName,
+          endpointUrl,
+          images,
+          prompt,
+          analysisSignal,
+        );
       }
 
       log.info(`Vision analysis completed: ${images.length} image(s) analyzed via ${provider}/${apiModelName}`);
@@ -189,7 +206,12 @@ export class AnalyzeImageTool extends BaseTool {
         message: analysisResult,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const timedOut = timeoutSignal.aborted && !context.abortSignal?.aborted;
+      const errorMessage = timedOut
+        ? `Image analysis timed out after ${VISION_ANALYSIS_TIMEOUT_MS}ms`
+        : error instanceof Error
+          ? error.message
+          : String(error);
       log.error(`Vision analysis failed for message ${messageId}:`, error as Error);
       return {
         success: false,
@@ -227,6 +249,7 @@ export class AnalyzeImageTool extends BaseTool {
    * @param model - Model name without provider prefix
    * @param images - Array of base64-encoded image data
    * @param prompt - User prompt/question for the vision model
+   * @param signal - Combined turn-cancellation and vision-analysis timeout signal
    * @returns Text description from the vision model
    */
   private async callOpenAICompatibleVision(
@@ -235,6 +258,7 @@ export class AnalyzeImageTool extends BaseTool {
     endpointUrl: string,
     images: Array<{ mimeType: string; data: string }>,
     prompt: string,
+    signal: AbortSignal,
   ): Promise<string> {
     // Build the content array with text prompt and image parts
     const contentParts: Array<Record<string, unknown>> = [{ type: "text", text: prompt }];
@@ -266,6 +290,7 @@ export class AnalyzeImageTool extends BaseTool {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
+      signal,
     });
 
     if (!response.ok) {
@@ -293,6 +318,7 @@ export class AnalyzeImageTool extends BaseTool {
    * @param model - Model name (e.g., "gemini-2.0-flash")
    * @param images - Array of base64-encoded image data
    * @param prompt - User prompt/question for the vision model
+   * @param signal - Combined turn-cancellation and vision-analysis timeout signal
    * @returns Text description from the vision model
    */
   private async callGoogleVision(
@@ -300,6 +326,7 @@ export class AnalyzeImageTool extends BaseTool {
     model: string,
     images: Array<{ mimeType: string; data: string }>,
     prompt: string,
+    signal: AbortSignal,
   ): Promise<string> {
     const genAI = new GoogleGenAI({ apiKey });
 
@@ -317,6 +344,7 @@ export class AnalyzeImageTool extends BaseTool {
     const result = await genAI.models.generateContent({
       model,
       contents: [{ role: "user", parts }],
+      config: { abortSignal: signal },
     });
 
     const text = result.text;
@@ -330,37 +358,27 @@ export class AnalyzeImageTool extends BaseTool {
   /**
    * Extract images from a Discord message and convert to base64 format.
    *
-   * Discovery is delegated to the shared {@link collectImageUrlsFromMessage} helper
-   * (attachments, embeds, stickers, custom emojis, and Components V2 media), so this
-   * tool can analyze bot-generated images whose attachment lives only inside a
-   * Media Gallery component. The download loop below stays local because vision
-   * payloads enforce a cumulative byte budget and skip re-optimization.
+   * Discovery is delegated to the shared {@link resolveMessageImageUrls} helper,
+   * which scans attachments, embeds, stickers, custom emojis, Components V2 media,
+   * and the direct reply target when needed. The download loop below stays local
+   * because vision payloads enforce a cumulative byte budget and skip re-optimization.
    * @param messageId - Discord message ID to fetch images from
    * @param context - Tool execution context with channel access
+   * @param signal - Combined turn-cancellation and vision-analysis timeout signal
    * @returns Array of objects with mimeType and base64 data
    */
   private async extractImagesFromMessage(
     messageId: string,
     context: ToolContext,
+    signal: AbortSignal,
   ): Promise<Array<{ mimeType: string; data: string }>> {
-    // 1. Fetch the Discord message
-    const message = await context.channel.messages.fetch(messageId);
-    if (!message) {
-      throw new Error(`Message ${messageId} not found`);
-    }
+    // 1. Discover images on the message, or on its direct reply target when the
+    //    reply itself is text-only.
+    const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
 
-    // 2. Discover every image URL in the message (shared logic, incl. Components V2)
-    const imageUrls = collectImageUrlsFromMessage(message);
+    log.info(`Found ${imageUrls.length} image(s) in message ${sourceMessageId} for vision analysis`);
 
-    if (imageUrls.length === 0) {
-      throw new Error(
-        `No images found in message ${messageId} (checked attachments, embeds, stickers, custom emojis, and components)`,
-      );
-    }
-
-    log.info(`Found ${imageUrls.length} image(s) in message ${messageId} for vision analysis`);
-
-    // 3. Convert each image URL to base64, respecting size limit
+    // 2. Convert each image URL to base64, respecting size limit
     const inlineDataArray: Array<{ mimeType: string; data: string }> = [];
     let totalBytes = 0;
 
@@ -369,7 +387,7 @@ export class AnalyzeImageTool extends BaseTool {
         const imageResponse = await safeDownload(imageInfo.url, {
           maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
           timeoutMs: 15_000,
-          externalSignal: context.abortSignal,
+          externalSignal: signal,
         });
         if (!imageResponse.success || !imageResponse.buffer) {
           log.warn(`Failed to fetch image from ${imageInfo.source}: ${imageResponse.details ?? imageResponse.error}`);
@@ -399,7 +417,7 @@ export class AnalyzeImageTool extends BaseTool {
     }
 
     if (inlineDataArray.length === 0) {
-      throw new Error(`Failed to process any images from message ${messageId}`);
+      throw new Error(`Failed to process any images from message ${sourceMessageId}`);
     }
 
     return inlineDataArray;

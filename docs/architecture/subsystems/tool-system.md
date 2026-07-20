@@ -18,6 +18,8 @@ Runtime validation remains required. Assembly prevents the LLM from seeing unsup
 
 Image generation progress notices are also backend-aware. They only announce default negative tags when a negative-prompt channel is active, always include the image-tags setup hint, list saved user/persona image tags detected in the current context, and call out avatar references separately from message image references.
 
+`analyze_image` resolves images from the requested Discord message first. If that message is a text-only reply, it falls back one level to the directly referenced message so it can analyze the image being discussed. The tool also applies the configurable `VISION_ANALYSIS_TIMEOUT_MS` deadline (default 60 seconds) across image downloads and vision-provider inference so a stalled vision request returns a failed tool result before the outer chat timeout.
+
 ## Persona User Blocking
 
 `block_user` and `unblock_user` are built-in Discord tools gated by `user_blocking_enabled` in `/capabilities manage`. They write to `persona_user_blocks`, scoped to the active persona rather than the whole server.
