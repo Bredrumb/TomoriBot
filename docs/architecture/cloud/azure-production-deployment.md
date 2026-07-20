@@ -143,6 +143,20 @@ Before declaring the datasource cutover complete, inspect the saved datasource c
 run a read query such as the daily `stat_counters` aggregation. Confirm a write fails and that a
 connection from outside `GRAFANA_EGRESS_IP/32` is rejected before password authentication.
 
+### Connection-pool hygiene on the public endpoint
+
+Because the application now reaches PostgreSQL over the public Azure gateway rather than a private
+endpoint, the runtime client sets pool-recycling options (`src/utils/db/client.ts`). Azure's public
+gateway silently reaps idle TCP connections after roughly four minutes without sending a RST; a
+pooled connection reaped this way becomes a black hole, so the next query hangs until an application
+timeout fires (~3 minutes). Chat turns exhibited this — but lightweight slash commands, which touch
+the pool more opportunistically, largely did not. `POSTGRES_IDLE_TIMEOUT_SECONDS` (default 30)
+recycles idle connections before the gateway can reap them, `POSTGRES_MAX_LIFETIME_SECONDS`
+(default 600) caps total connection age, and `POSTGRES_CONNECTION_TIMEOUT_SECONDS` (default 10)
+turns a dead-path hang into a fast, retryable failure. Defaults are production-safe; tune only during
+an incident. This was fixed at the client layer deliberately, so the private endpoint stays removed
+and the free-tier cost target holds.
+
 ## Container and host operations
 
 The Compose service runs as `1001:1001` with a read-only root filesystem, all Linux capabilities

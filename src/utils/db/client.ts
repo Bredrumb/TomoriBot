@@ -4,6 +4,59 @@ import { join } from "node:path";
 import { log } from "@/utils/misc/logger";
 
 /**
+ * Parse an integer environment flag with a default and enforced minimum.
+ * Mirrors the local helper used across the chat modules for consistency.
+ *
+ * @param value - Raw environment string (may be undefined)
+ * @param defaultValue - Fallback when unset or unparseable
+ * @param minimum - Lower clamp to keep pathological values out
+ * @returns Parsed integer, never below `minimum`
+ */
+function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
+  if (typeof value !== "string") return defaultValue;
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return defaultValue;
+  return Math.max(minimum, parsed);
+}
+
+export interface PostgresPoolOptions {
+  idleTimeout: number;
+  maxLifetime: number;
+  connectionTimeout: number;
+}
+
+/**
+ * Connection-pool hygiene for remote/managed PostgreSQL (in seconds).
+ *
+ * Any networked PostgreSQL fronted by a gateway, proxy, or load-balancer — managed
+ * cloud endpoints, RDS Proxy, PgBouncer, a NAT/LB in the path — may silently reap
+ * idle TCP connections without sending a RST. A pooled connection reaped this way
+ * becomes a black hole: the next query hangs into it until an app timeout fires,
+ * which surfaces most on longer, less frequent work (e.g. chat turns) rather than
+ * on lightweight, frequent queries that keep the pool warm.
+ *
+ * The client is responsible for connection liveness rather than trusting the network
+ * path to hold idle sockets open. `idleTimeout` recycles idle connections before any
+ * intermediary can reap them, `maxLifetime` caps total connection age as a backstop,
+ * and `connectionTimeout` turns a dead-path hang into a fast, retryable failure.
+ * Defaults are safe for all managed providers; overridable via env for incident-time
+ * tuning without a rebuild. (Azure Flexible Server's public endpoint, whose gateway
+ * reaps at ~4 minutes, is one such path — see plans/azure-free-tier-cost-plan.md.)
+ *
+ * @returns Pool options resolved from env with production-safe defaults
+ */
+function resolveProductionPoolOptions(): PostgresPoolOptions {
+  return {
+    // 1. Close idle pooled connections after 30s — before any gateway/proxy can reap them.
+    idleTimeout: parseIntegerEnvFlag(process.env.POSTGRES_IDLE_TIMEOUT_SECONDS, 30, 5),
+    // 2. Hard age cap so no connection lingers indefinitely even under steady load.
+    maxLifetime: parseIntegerEnvFlag(process.env.POSTGRES_MAX_LIFETIME_SECONDS, 600, 30),
+    // 3. Fail fast on a dead path instead of hanging into a downstream turn timeout.
+    connectionTimeout: parseIntegerEnvFlag(process.env.POSTGRES_CONNECTION_TIMEOUT_SECONDS, 10, 1),
+  };
+}
+
+/**
  * Creates and configures a PostgreSQL client using Bun's SQL constructor.
  *
  * SSL behaviour:
@@ -40,6 +93,10 @@ function createDatabaseClient(): SQL {
 
   // Production: verified TLS for TCP connections; no TLS for unix sockets (Cloud SQL Auth Proxy)
   if (isProduction) {
+    // Connection-pool hygiene applied to every production connection so a stale
+    // pooled socket can't black-hole a subsequent query (see helper docs).
+    const poolOptions = resolveProductionPoolOptions();
+
     // Unix socket path (e.g. /cloudsql/<connection-name>) — Cloud SQL Auth Proxy handles TLS
     // internally; the client connects via a local socket and must not add a second TLS layer.
     if (host.startsWith("/")) {
@@ -49,6 +106,7 @@ function createDatabaseClient(): SQL {
         username: user,
         password: password,
         database: database,
+        ...poolOptions,
         // biome-ignore lint/suspicious/noExplicitAny: `path` is a valid Bun SQL unix socket option not yet reflected in the type definitions
       } as any);
     }
@@ -62,6 +120,7 @@ function createDatabaseClient(): SQL {
       password: password,
       database: database,
       tls,
+      ...poolOptions,
     });
   }
 
