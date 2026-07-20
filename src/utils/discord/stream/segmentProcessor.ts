@@ -4,7 +4,11 @@ import { log } from "@/utils/misc/logger";
 import { cleanLLMOutput, truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { filterDuplicateCustomEmojis } from "@/utils/text/emojiPenalty";
 import { extractMarkdownTableSegments } from "@/utils/text/markdownTable";
-import { ORPHAN_PUNCTUATION_REGEX, PREFILL_WHITESPACE_SENTINEL } from "@/utils/discord/stream/constants";
+import {
+  MAX_EMPTY_RESPONSE_RETRIES,
+  ORPHAN_PUNCTUATION_REGEX,
+  PREFILL_WHITESPACE_SENTINEL,
+} from "@/utils/discord/stream/constants";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { resolveGuildMentions } from "@/utils/discord/stream/mentionResolver";
 import type {
@@ -15,9 +19,13 @@ import type {
 import {
   collectRenderModifierSourceNames,
   isAllowedRenderModifierSpeakerLabel,
+  type LeadingGenericSpeakerLabelMatch,
+  matchesRenderModifierName,
+  parseLeadingGenericSpeakerLabel,
   parseLeadingRenderModifier,
 } from "@/utils/discord/renderModifierParser";
 import {
+  collectKnownSpeakerNames,
   resolveCopiedRenderModifierTarget,
   resolveSpriteRenderModifierTarget,
 } from "@/utils/discord/renderModifierResolver";
@@ -122,6 +130,41 @@ export class StreamSegmentProcessor {
         identityOverride: state.activeRenderModifier.identity,
         spriteRecord: state.activeRenderModifier.spriteRecord,
       };
+    }
+
+    // Opening-label leak guard: a response that OPENS with a speaker label the render-modifier
+    // parse refused (e.g. "Chris (smug): ..." — a user name in the persona's decorated-label
+    // grammar) would otherwise reach Discord verbatim, because the generic speaker guard
+    // exempts the opening line and stripLeakedOwnNameLabels only covers the active persona.
+    // Runs regardless of llm_stop_speaker_pattern_enabled: the shapes it fires on are
+    // unambiguous leaks, unlike the broader mid-text guard.
+    if (
+      !renderModifierMatch &&
+      canUseRenderModifier &&
+      !state.accumulatedText.trim() &&
+      !state.pendingAggregatedText.trim()
+    ) {
+      const leak = await this.matchLeadingSpeakerLeak(workingSegment, context, renderModifierSourceNames);
+      if (leak) {
+        const retryCount = context.emptyResponseRetryCount ?? 0;
+        if (retryCount < MAX_EMPTY_RESPONSE_RETRIES) {
+          // 1. Budget remains: discard the whole attempt. The speaker_guard stop with nothing
+          //    sent classifies the turn as empty_response, and maybeScheduleEmptyResponseRetry
+          //    regenerates with the "reply only as {persona}" directive injected.
+          log.warn(
+            `Stream opening-label leak guard: discarding response opening with "${leak.matchedPrefix.trim()}" (retry ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES} will be scheduled)`,
+          );
+          this.deps.requestStop(context.channel.id, "speaker_guard");
+          return;
+        }
+        // 2. Budget exhausted: better a stripped reply than silence — drop the leaked label
+        //    and deliver the body as the active persona.
+        log.warn(
+          `Stream opening-label leak guard: retry budget exhausted, stripping leaked label "${leak.matchedPrefix.trim()}" and delivering body`,
+        );
+        workingSegment = leak.body;
+        if (!workingSegment.trim()) return;
+      }
     }
 
     const wasPrefillInjected = state.prefillInjected;
@@ -306,6 +349,52 @@ export class StreamSegmentProcessor {
       return identity;
     }
     return { ...identity, username: decoratedUsername };
+  }
+
+  /**
+   * Detects a leaked speaker label at the start of a response segment — a label the
+   * render-modifier parse already refused (its source name is not the active persona/aliases).
+   *
+   * Firing rules, per shape:
+   * 1. Decorated "Name (modifier):" — always a leak. The parenthetical grammar belongs
+   *    exclusively to the active persona (sprites, copied identities), so ANY other name using
+   *    it is the model cross-breeding history label formats ("Chris (smug): ...").
+   * 2. Plain "Name:" — a leak only when Name is a known conversation participant (another
+   *    persona or a user in the conversation). Ordinary prose openings ("Note:", "TL;DR:")
+   *    never match a participant and pass through untouched.
+   *
+   * A leading chain of the persona's own plain labels ("Tomori: Chris (smug): hi") is peeled
+   * before deciding, since those are stripped later by cleanLLMOutput anyway.
+   *
+   * @param segment - Segment text at response start (nothing accumulated or sent yet)
+   * @param context - Stream context (guild + conversation participants for the known-name check)
+   * @param allowedSourceNames - Active persona name + aliases (labels these own are not leaks)
+   * @returns The leaked-label match (body = text after the label), or null when clean
+   */
+  private async matchLeadingSpeakerLeak(
+    segment: string,
+    context: StreamContext,
+    allowedSourceNames: readonly string[],
+  ): Promise<LeadingGenericSpeakerLabelMatch | null> {
+    // 1. Peel allowed plain self-labels ("Tomori:") so a leak hiding behind them is still seen.
+    let working = segment;
+    let match = parseLeadingGenericSpeakerLabel(working);
+    while (match && !match.modifier && matchesRenderModifierName(match.sourceName, allowedSourceNames)) {
+      working = match.body;
+      match = parseLeadingGenericSpeakerLabel(working);
+    }
+    if (!match) return null;
+
+    // 2. A decorated label with an allowed source name is upstream's business (the render-modifier
+    //    parse consumes it, including failed sprite resolutions) — never treat it as a leak here.
+    if (matchesRenderModifierName(match.sourceName, allowedSourceNames)) return null;
+
+    // 3. Decorated + disallowed name: unambiguous leak.
+    if (match.modifier) return match;
+
+    // 4. Plain label: only a leak when the name belongs to a known conversation participant.
+    const knownNames = await collectKnownSpeakerNames(context);
+    return matchesRenderModifierName(match.sourceName, knownNames) ? match : null;
   }
 
   public async prepareOutputPrefill(

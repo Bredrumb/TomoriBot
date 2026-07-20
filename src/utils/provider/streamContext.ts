@@ -108,6 +108,9 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     // 7. External abort signal for SDK call timeout cancellation
     abortSignal: streamingContext?.abortSignal,
 
+    // 7b. Empty-response retry count for the opening-label leak guard's budget decision
+    emptyResponseRetryCount: streamingContext?.emptyResponseRetryCount,
+
     // 8. Opaque message ID map for snowflake ID abstraction in LLM-visible text
     messageIdMap: streamingContext?.messageIdMap,
   };

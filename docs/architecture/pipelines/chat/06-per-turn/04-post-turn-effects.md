@@ -53,6 +53,14 @@ MAX_EMPTY_RESPONSE_RETRIES` (default 2):
   `selectedPersonaId` pinned to the same persona, and the OpenRouter
   finish-reason-length flag forwarded so stage 03 can trim history.
 
+The `"speaker_guard"` reason is produced both by the config-gated mid-text
+speaker guard and by the always-on opening-label leak guard (a response
+opening with a foreign speaker label like `Chris (smug):` — see provider
+stage 06). The stream side reads `incoming.retryCount` (threaded through
+`StreamingContext.emptyResponseRetryCount`) to strip-and-deliver instead of
+discarding once this retry budget is exhausted, so leak turns degrade to a
+label-stripped reply rather than silence.
+
 ### 3. `consumeTextQuota`
 
 If `shouldApplyTextQuota` was true, quota state exists, it wasn't already
@@ -166,7 +174,7 @@ runs after the built-in steps with the same `(context, result)` signature.
 
 | Constant | Default | Purpose |
 |---|---|---|
-| `MAX_EMPTY_RESPONSE_RETRIES` | `2` | Cap on empty-response retry chain (file-local constant) |
+| `MAX_EMPTY_RESPONSE_RETRIES` | `2` | Cap on empty-response retry chain (shared constant in `src/utils/discord/stream/constants.ts`; also read by the stage 06 opening-label leak guard) |
 | `EMPTY_RESPONSE_RETRY_DELAY_MS` | `1000` | Backoff between retries (file-local constant) |
 
 Both are currently file-local — promoting to env vars would be a small

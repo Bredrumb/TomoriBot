@@ -38,13 +38,33 @@ The transformation pipeline runs in this order:
    normal output. This path is line-scoped across stream splits and ignored inside code blocks
    and list-like starts.
 
-3. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
+3. **Opening-label leak guard** (`matchLeadingSpeakerLeak` + `parseLeadingGenericSpeakerLabel`) —
+   runs only at response start (nothing accumulated or sent yet) on segments the render-modifier
+   capture refused, and **regardless of `llm_stop_speaker_pattern_enabled`**. It catches the model
+   cross-breeding history label formats into a foreign speaker label the other guards all miss:
+   the decorated grammar with a non-persona name (`Chris (smug): …` — any name outside the active
+   persona/aliases using the parenthetical form is unambiguously a leak), or a plain
+   `Name:` opening where `Name` is a known conversation participant (another persona, or a user
+   from `KNOWLEDGE_USERS_IN_CONVERSATION` via `collectKnownSpeakerNames`). Prose openings
+   (`Note:`, `TL;DR:`), list items, blockquotes, headings, code fences, and bracketed starts
+   (links/mentions/timestamps) never fire. On detection:
+   - **Retry budget remaining** (`context.emptyResponseRetryCount < MAX_EMPTY_RESPONSE_RETRIES`,
+     threaded from `incoming.retryCount` through `StreamingContext` → `buildStreamContext`): the
+     attempt is discarded via `requestStop(channelId, "speaker_guard")` with nothing sent, which
+     classifies the turn as `empty_response` so `maybeScheduleEmptyResponseRetry` regenerates it
+     with the "reply only as {persona}" directive injected.
+   - **Budget exhausted**: the leaked label is stripped and the body delivered as the active
+     persona — a stripped reply beats silence.
+   Deliberate impersonation (`Tomori (Chris): …`) is unaffected: the render-modifier capture
+   consumes it before this guard runs.
+
+4. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
    shortcode (`:name:`) from the segment if the same emoji was already used in a recent bot
    message (lookback window controlled by `EMOJI_UNIQUE_LOOKBACK`, default 5). History is stored
    in converted Discord format (`<:name:id>`), so the filter normalises that form to shortcodes
    before comparison.
 
-4. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
+5. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
    writes it (e.g., `"Tomori: hello"` → `"hello"`), converts `:name:` shortcodes to full Discord
    custom emoji syntax (`<:name:id>`) using the server emoji list, strips unresolved shortcodes by
    default, optionally preserves unresolved shortcodes when
@@ -57,24 +77,26 @@ The transformation pipeline runs in this order:
    extra names; the leaked-preamble and later-boundary passes stay scoped to the active name so
    mid-prose `"Name:"` usages are preserved.
 
-5. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
+6. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
    in the text (e.g., `@alice`) to Discord snowflake mentions (`<@1234567890>`) using the mention
    map built at stream init from `ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION` items.
 
-6. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`) — when
+7. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`) — when
    `context.outputPrefill` is set (hybrid prefix streaming for NAI), the first segment strips the
    model-echoed prefill from its start and the cleaned prefill is prepended to the outgoing
    segment (injected exactly once; subsequent segments are unmodified).
 
-7. **Speaker guard** (`truncateBeforeGenericSpeakerLine`) — if `llm_stop_speaker_pattern_enabled`
+8. **Speaker guard** (`truncateBeforeGenericSpeakerLine`) — if `llm_stop_speaker_pattern_enabled`
    is true and a speaker-label line (e.g., `User:`) appears in the segment, the text is truncated
    before it and `requestStop(channelId, "speaker_guard")` is queued. The segment is sent with
    the truncated content; the stop is processed by the stage 04 orchestrator on the next
    iteration. Active render-modifier labels such as `Ren (mad):` or `Ren (target):` are explicitly
    allowed through both the provider-level fallback guard and this segment-level guard so they can
-   be resolved instead of treated as foreign speaker turns.
+   be resolved instead of treated as foreign speaker turns. This guard skips the response's opening
+   line (`includeStart` only turns on once text has accumulated) — that position is covered by the
+   always-on opening-label leak guard in step 3.
 
-8. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
+9. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
    rendered Markdown table, the segment is split into text parts and table parts. Table parts are
    routed to `StreamMessageDelivery.sendRenderedMarkdownTable()` which renders the table to a PNG
    via `renderMarkdownTableToPng()` and sends it as a Discord file attachment.
@@ -118,7 +140,9 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
   identical username and still group. Identity sprites are excluded (their decorated name is already
   distinct).
 - **`requestStop(channelId, "speaker_guard")`** — queued if the speaker guard fires; the stop
-  is consumed by the stage 04 orchestrator on the next loop iteration.
+  is consumed by the stage 04 orchestrator on the next loop iteration. The opening-label leak
+  guard (step 3) queues the same stop with nothing sent, which the state machine classifies as
+  `empty_response` / `speaker_guard` so post-turn effects schedule a regeneration.
 - **PNG attachment** — when a Markdown table is detected and rendered successfully, a Discord file
   attachment is sent and the table's raw Markdown is cached in `markdownTableCache` (keyed by
   message ID) for subsequent reference.
@@ -147,6 +171,7 @@ After this stage (per segment):
 | `filterDuplicateCustomEmojis()` | `src/utils/text/emojiPenalty.ts`. Internal — emoji deduplication heuristic; no plugin-relevant seam. |
 | `extractMarkdownTableSegments()` + `renderMarkdownTableToPng()` | `src/utils/text/markdownTable.ts` + `src/utils/image/markdownTableRenderer.ts`. The table renderer path is the only place in the stream pipeline where image attachments are sent during streaming (as opposed to tool results). **A plugin adding other attachment types mid-stream would extend here.** → plugin plan candidate |
 | Speaker guard (`truncateBeforeGenericSpeakerLine`) | `src/utils/text/processors/llmOutputProcessor.ts`. Internal — speaker-label detection runs in both the adapter (stage 02) and the segment processor. The `llm_stop_speaker_pattern_enabled` DB flag is the configuration surface. |
+| Opening-label leak guard (`parseLeadingGenericSpeakerLabel` + `collectKnownSpeakerNames`) | `src/utils/discord/renderModifierParser.ts` + `src/utils/discord/renderModifierResolver.ts`. Internal — always-on response-start companion to the speaker guard; no configuration surface by design (the shapes it fires on are unambiguous leaks). |
 | Output prefill (`context.outputPrefill`) | Internal — NAI-specific hybrid prefix streaming mechanism; not a general extension point. |
 
 ## Configuration

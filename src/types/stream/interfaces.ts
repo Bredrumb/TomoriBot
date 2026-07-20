@@ -143,6 +143,10 @@ export interface StreamContext {
   // External abort signal — allows the SDK call timeout to cancel the underlying HTTP request
   abortSignal?: AbortSignal;
 
+  // Empty-response retry count of the current chat turn — lets the opening-label leak guard
+  // discard-and-retry while budget remains, then strip-and-deliver on the final attempt
+  emptyResponseRetryCount?: number;
+
   // Progress callback for outer watchdog timers (provider chunk received or Discord send succeeded)
   onStreamProgress?: () => void;
 

@@ -7,6 +7,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
 import { localizer } from "@/utils/text/localizer";
 import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
+import { MAX_EMPTY_RESPONSE_RETRIES } from "@/utils/discord/stream/constants";
 import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
 import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/utils/chat/contextAnnotations";
 import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
@@ -23,7 +24,6 @@ import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/util
  */
 const RESOLVED_CUSTOM_EMOJI_RE = /<a?:([A-Za-z0-9_~]+):\d+>/g;
 
-const MAX_EMPTY_RESPONSE_RETRIES = 2;
 const EMPTY_RESPONSE_RETRY_DELAY_MS = 1000;
 
 /**

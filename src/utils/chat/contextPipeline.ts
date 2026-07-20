@@ -85,6 +85,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     suppressUserErrors: !turn.shouldSurfaceUserErrors,
     disableAllTools: incoming.isUserImpersonation,
     naiContinuationPrefill: incoming.naiContinuationPrefill,
+    emptyResponseRetryCount: incoming.retryCount,
     messageIdMap,
     forcedMentions: await resolveForcedMentions(turn),
   };

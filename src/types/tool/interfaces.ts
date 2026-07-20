@@ -100,6 +100,12 @@ export interface StreamingContext {
   naiContinuationPrefill?: string;
   /** AbortSignal to cancel the underlying HTTP request when the SDK call timeout fires */
   abortSignal?: AbortSignal;
+  /**
+   * Empty-response retry count of the current chat turn (incoming.retryCount). The stream
+   * segment processor's opening-label leak guard uses it to decide between discard-and-retry
+   * (budget remaining) and strip-and-deliver (budget exhausted).
+   */
+  emptyResponseRetryCount?: number;
   /** Called when streaming makes visible or provider-side progress, so outer watchdogs can refresh their timers. */
   onStreamProgress?: () => void;
   /**
