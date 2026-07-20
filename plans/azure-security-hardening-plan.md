@@ -8,7 +8,7 @@
 >
 > **Handoff note:** This plan is explicitly unignored by `.gitignore` so its evidence and remaining live steps travel with the hardening change.
 >
-> **Cutover readiness (2026-07-20):** The implementation, documentation, local quality gates, and required PR validation are complete on PR #51. The remaining unchecked work requires the protected `release` path or live Azure changes: populate the `production` environment secrets, set the one-time `RUN_DATABASE_BOOTSTRAP=true` environment variable, merge, clear that variable after the successful bootstrap/deployment, run host lockdown, remove fallback credentials and roles, and collect the final runtime evidence. Do not merge, push to `release`, or start the Azure workflow without the operator's explicit go-ahead.
+> **Cutover readiness (2026-07-20):** The implementation, documentation, local quality gates, required PR validation, and production-environment secret migration are complete on PR #51. The remaining unchecked work requires the protected `release` path or live Azure changes: set the one-time `RUN_DATABASE_BOOTSTRAP=true` environment variable, merge, clear that variable after the successful bootstrap/deployment, run host lockdown, remove fallback credentials and roles, and collect the final runtime evidence. Do not merge, push to `release`, or start the Azure workflow without the operator's explicit go-ahead.
 
 ## Goal
 
@@ -87,7 +87,7 @@ These decisions are part of the plan, not unfinished security work.
 - [x] Remove unnecessary Docker Hub logins from build/scan jobs. `(working tree)`
 - [x] Add non-cancelling production deployment concurrency. `(working tree)`
 - [x] Stop printing raw production container logs to public Actions output. `(working tree)`
-- [ ] Move Azure-only deployment values and the runtime application JSON to the `production` environment. The environment currently contains only `GRAFANA_EGRESS_IP`; deployment secrets remain repository-scoped.
+- [x] Move Azure-only deployment values and the runtime application JSON to the `production` environment. The six environment secrets and `GRAFANA_EGRESS_IP` variable are present, and the six repository-scoped source copies are deleted. `(live)`
 - [ ] After the replacement workflows are merged, delete the repository PAT and obsolete Azure SSH private-key secret.
 
 ### Azure authorization
