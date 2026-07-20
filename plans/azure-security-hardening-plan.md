@@ -173,7 +173,7 @@ Rationale: a narrowly authenticated read-only SQL datasource is simpler and more
 - [ ] The app runs as `tomoribot_runtime`, not `tomoriadmin`.
 - [x] The application uses the private endpoint; the only public PostgreSQL firewall rule is the explicit Grafana `/32`. `(live)`
 - [x] Private DNS and verified TLS work from the VM. `(live)`
-- [ ] Grafana's Azure Monitor and direct read-only PostgreSQL panels work without an administrator or application-runtime credential.
+- [x] Grafana's Azure Monitor and direct read-only PostgreSQL panels work without an administrator or application-runtime credential. `(live local Grafana API: datasource health OK; representative PostgreSQL statistics and Azure Monitor VM CPU queries each returned a data frame; original admin credential state restored)`
 
 ---
 
