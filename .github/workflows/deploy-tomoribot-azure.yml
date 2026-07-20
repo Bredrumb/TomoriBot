@@ -281,8 +281,8 @@ jobs:
     outputs:
       deploy: ${{ steps.dockerhub_tags.outputs.deploy }}
       version: ${{ steps.package_version.outputs.version }}
-      image_ref: ${{ steps.dockerhub_tags.outputs.image_ref }}
-      searxng_image_ref: ${{ steps.searxng_image.outputs.image_ref }}
+      image_digest: ${{ steps.dockerhub_tags.outputs.image_digest }}
+      searxng_image_digest: ${{ steps.searxng_image.outputs.image_digest }}
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -413,8 +413,11 @@ jobs:
           echo "deploy=${SHOULD_DEPLOY}" >> "$GITHUB_OUTPUT"
 
           IMAGE_DIGEST=$(docker buildx imagetools inspect "${IMAGE_BASE}:${IMAGE_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
-          test -n "$IMAGE_DIGEST"
-          echo "image_ref=${IMAGE_BASE}@${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+          if [[ ! "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "TomoriBot image digest is invalid." >&2
+            exit 1
+          fi
+          echo "image_digest=${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push custom SearXNG image
         id: searxng_image
@@ -435,8 +438,11 @@ jobs:
           echo "Pushed custom SearXNG image: ${SEARXNG_BASE}:${IMAGE_TAG}"
 
           SEARXNG_DIGEST=$(docker buildx imagetools inspect "${SEARXNG_BASE}:${IMAGE_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
-          test -n "$SEARXNG_DIGEST"
-          echo "image_ref=${SEARXNG_BASE}@${SEARXNG_DIGEST}" >> "$GITHUB_OUTPUT"
+          if [[ ! "$SEARXNG_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "SearXNG image digest is invalid." >&2
+            exit 1
+          fi
+          echo "image_digest=${SEARXNG_DIGEST}" >> "$GITHUB_OUTPUT"
 
   deploy-with-terraform:
     runs-on: ubuntu-24.04
@@ -721,7 +727,7 @@ jobs:
           BOOTSTRAP_SCRIPT_B64: ${{ steps.payloads.outputs.bootstrap_script_b64 }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN_B64: ${{ steps.payloads.outputs.docker_token_b64 }}
-          TOMORIBOT_IMAGE: ${{ needs.push-to-docker-hub.outputs.image_ref }}
+          TOMORIBOT_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tomoribot@${{ needs.push-to-docker-hub.outputs.image_digest }}
           TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
           POSTGRES_ADMIN_LOGIN: ${{ steps.tf_outputs.outputs.postgres_admin_login }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
@@ -783,8 +789,8 @@ jobs:
           DEPLOY_SCRIPT_B64: ${{ steps.payloads.outputs.deploy_script_b64 }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN_B64: ${{ steps.payloads.outputs.docker_token_b64 }}
-          TOMORIBOT_IMAGE: ${{ needs.push-to-docker-hub.outputs.image_ref }}
-          SEARXNG_IMAGE: ${{ needs.push-to-docker-hub.outputs.searxng_image_ref }}
+          TOMORIBOT_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tomoribot@${{ needs.push-to-docker-hub.outputs.image_digest }}
+          SEARXNG_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tomoribot-searxng@${{ needs.push-to-docker-hub.outputs.searxng_image_digest }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2016
