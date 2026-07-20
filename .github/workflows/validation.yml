@@ -8,12 +8,47 @@ on:
     branches:
       - release
   workflow_dispatch:
+    inputs:
+      migrate_azure_secrets_to_production:
+        description: "One-time copy of Azure deployment secrets into the production environment"
+        required: false
+        type: boolean
+        default: false
   workflow_call:
 
 permissions:
   contents: read
 
 jobs:
+  migrate-azure-secrets:
+    if: github.event_name == 'workflow_dispatch' && inputs.migrate_azure_secrets_to_production == true
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Copy Azure deployment secrets to production
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+          AZURE_VM_SSH_PUBLIC_KEY: ${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}
+          TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
+        run: |
+          set -euo pipefail
+          for secret_name in \
+            AZURE_CLIENT_ID \
+            AZURE_TENANT_ID \
+            AZURE_SUBSCRIPTION_ID \
+            AZURE_POSTGRES_ADMIN_PASSWORD \
+            AZURE_VM_SSH_PUBLIC_KEY \
+            TOMORI_SECRETS_JSON; do
+            test -n "${!secret_name}"
+            printf '%s' "${!secret_name}" |
+              gh secret set "$secret_name" \
+                --env production \
+                --repo "$GITHUB_REPOSITORY"
+          done
+
   validate:
     runs-on: ubuntu-24.04
     services:
