@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { isCloudMetadataAddress } from "@/utils/security/cloudMetadata";
 
 export type McpUrlValidationFailureCode =
   | "INVALID_FORMAT"
@@ -223,6 +224,11 @@ export interface ValidateRemoteMcpUrlOptions {
   /** Always enforce the private/link-local/loopback blocklist, regardless of RUN_ENV.
    *  Use for user-scoped (personal) endpoints where the operator cannot vet the target. */
   strict?: boolean;
+  /** Permit private/internal targets even in production, mirroring the `fetch_url`
+   *  `FETCH_URL_ALLOW_PRIVATE_NETWORK` opt-in so both SSRF gates stay aligned.
+   *  The always-on cloud-metadata denylist is NOT bypassed by this. Ignored when
+   *  `strict` is set (strict always wins). */
+  allowPrivateNetwork?: boolean;
 }
 
 export async function validateRemoteMcpUrl(
@@ -230,7 +236,9 @@ export async function validateRemoteMcpUrl(
   options?: ValidateRemoteMcpUrlOptions,
 ): Promise<McpUrlValidationResult> {
   const isProduction = isProductionRuntime();
-  const enforceBlocklist = isProduction || options?.strict === true;
+  // strict always enforces; otherwise enforce in production unless the caller
+  // explicitly opts into private-network targets (fetch_url alignment).
+  const enforceBlocklist = options?.strict === true || (isProduction && options?.allowPrivateNetwork !== true);
 
   let parsedUrl: URL;
   try {
@@ -301,6 +309,24 @@ export async function validateRemoteMcpUrl(
       failureCode: "DNS_RESOLUTION_FAILED",
       hostname,
       details: `Failed to resolve hostname '${hostname}': no IP addresses found.`,
+    };
+  }
+
+  // Always-on floor: cloud-metadata / link-local addresses are never valid
+  // targets, even when the general blocklist is relaxed (development, or a
+  // production private-network opt-in). They are the primary SSRF credential-
+  // theft target, so this check runs independently of `enforceBlocklist`.
+  const metadataAddress = resolvedAddresses.find((entry) => isCloudMetadataAddress(entry.address));
+  if (metadataAddress) {
+    return {
+      valid: false,
+      failureCode: "PRODUCTION_BLOCKED_ADDRESS",
+      hostname,
+      blockedAddress: metadataAddress.address,
+      resolvedAddresses: resolvedAddresses.map((entry) => entry.address),
+      details:
+        `Resolved address '${metadataAddress.address}' for '${hostname}' is a cloud instance-metadata ` +
+        "or link-local endpoint, which is always blocked and cannot be enabled by any opt-in.",
     };
   }
 

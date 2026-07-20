@@ -34,6 +34,15 @@ Store these Azure-only values in the `production` environment, not as repository
 - `TOMORI_SECRETS_JSON`
 - `GRAFANA_EGRESS_IP` as an environment variable
 
+If the first cutover finds that the existing `TOMORI_SECRETS_JSON` still contains the PostgreSQL
+administrator login, create a temporary `AZURE_POSTGRES_RUNTIME_PASSWORD` environment secret with
+a new random value of at least 32 characters. The payload step overlays only `POSTGRES_USER` and
+`POSTGRES_PASSWORD`, persists the complete corrected JSON back to `TOMORI_SECRETS_JSON`, and uses
+that same bundle for bootstrap and deployment. Delete `AZURE_POSTGRES_RUNTIME_PASSWORD` after the
+successful cutover. This recovery path preserves every unrelated application credential without
+making the write-only GitHub secret visible. A preflight checks the source bundle and migration
+credential before Terraform planning or apply, so configuration errors cannot mutate Azure first.
+
 The first merge to `release` starts the deployment workflow immediately, before a manual dispatch
 can use the newly merged workflow. For that one cutover only, set the `production` environment
 variable `RUN_DATABASE_BOOTSTRAP=true` before merging. The merge-triggered job then performs the

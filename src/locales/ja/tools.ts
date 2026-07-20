@@ -129,7 +129,7 @@ export default {
     fetch: {
       fetch_url_title: `🌐 Webページを読み取り中...`,
       fetch_failed_description: `そのページを取得できませんでした: {error}`,
-      private_network_blocked_description: `そのページはプライベートまたは内部ネットワークのアドレスを指しているため取得できませんでした。TomoriBotは既定で \`FETCH_URL_ALLOW_PRIVATE_NETWORK=false\` により、そのようなURLの取得をブロックします。{error}`,
+      private_network_blocked_description: `そのページはプライベートまたは内部ネットワークのアドレスを指しているため取得できませんでした。TomoriBotは本番環境では、ホストが \`FETCH_URL_ALLOW_PRIVATE_NETWORK=true\` を設定しない限り、そのようなURLの取得をブロックします。{error}`,
       reading_title: `🌐 Webページを読み取り中...`,
       reading_title_page: `🌐 Webページを読み取り中（{page}ページ目）...`,
       reading_description: `{url} を取得して内容を読み取っています`,

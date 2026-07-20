@@ -149,9 +149,14 @@ function buildRedirectRequestInit(requestInit: RequestInit, status: number): Req
   };
 }
 
-export async function resolveValidatedUserRedirect(currentUrl: URL, location: string, strict: boolean): Promise<URL> {
+export async function resolveValidatedUserRedirect(
+  currentUrl: URL,
+  location: string,
+  strict: boolean,
+  allowPrivateNetwork = false,
+): Promise<URL> {
   const nextUrl = new URL(location, currentUrl);
-  const validation = await validateRemoteMcpUrl(nextUrl.toString(), { strict });
+  const validation = await validateRemoteMcpUrl(nextUrl.toString(), { strict, allowPrivateNetwork });
   if (!validation.valid) {
     throw new Error(validation.details ?? `Remote redirect validation failed for '${nextUrl.hostname}'.`);
   }
@@ -163,9 +168,10 @@ async function fetchUserRemoteUrlInternal(
   init: RequestInit | undefined,
   redirectCount: number,
   strict: boolean,
+  allowPrivateNetwork: boolean,
 ): Promise<Response> {
   const { url, requestInit } = await normalizeRequestInput(input, init);
-  const validation = await validateRemoteMcpUrl(url.toString(), { strict });
+  const validation = await validateRemoteMcpUrl(url.toString(), { strict, allowPrivateNetwork });
   if (!validation.valid) {
     throw new Error(validation.details ?? `Remote URL validation failed for '${url.hostname}'.`);
   }
@@ -209,12 +215,13 @@ async function fetchUserRemoteUrlInternal(
       throw new Error(`Redirect response from '${url.toString()}' did not include a Location header.`);
     }
 
-    const nextUrl = await resolveValidatedUserRedirect(url, location, strict);
+    const nextUrl = await resolveValidatedUserRedirect(url, location, strict, allowPrivateNetwork);
     return await fetchUserRemoteUrlInternal(
       nextUrl,
       buildRedirectRequestInit(requestInit, response.status),
       redirectCount + 1,
       strict,
+      allowPrivateNetwork,
     );
   } finally {
     if (dispatcher) {
@@ -227,6 +234,10 @@ export interface FetchUserRemoteUrlOptions {
   /** Enforce the private/link-local/loopback blocklist even outside production.
    *  Pass true for personal (user-scoped) endpoint calls. */
   strict?: boolean;
+  /** Permit private/internal targets even in production, aligning with the
+   *  `fetch_url` `FETCH_URL_ALLOW_PRIVATE_NETWORK` opt-in. The always-on
+   *  cloud-metadata denylist still applies. Ignored when `strict` is set. */
+  allowPrivateNetwork?: boolean;
 }
 
 export async function fetchUserRemoteUrl(
@@ -234,7 +245,13 @@ export async function fetchUserRemoteUrl(
   init?: RequestInit,
   options?: FetchUserRemoteUrlOptions,
 ): Promise<Response> {
-  return await fetchUserRemoteUrlInternal(input, init, 0, options?.strict === true);
+  return await fetchUserRemoteUrlInternal(
+    input,
+    init,
+    0,
+    options?.strict === true,
+    options?.allowPrivateNetwork === true,
+  );
 }
 
 export const fetchUserRemoteUrlUndici: typeof undiciFetch = async (

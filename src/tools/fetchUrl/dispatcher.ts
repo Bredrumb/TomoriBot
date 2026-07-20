@@ -4,6 +4,7 @@ import { log } from "@/utils/misc/logger";
 import { Crawl4aiEngine } from "./crawl4aiEngine";
 import { SafeHttpFetchEngine } from "./mcpFetchEngine";
 import type { FetchEngine, FetchEngineName, FetchOpts } from "./types";
+import { isPrivateNetworkFetchAllowed } from "./urlSafety";
 
 const DEFAULT_ENGINE_ORDER: readonly FetchEngineName[] = ["safe_http"];
 const REQUIRED_FALLBACK_ENGINE: FetchEngineName = "safe_http";
@@ -40,11 +41,14 @@ export function parseFetchUrlEngineOrder(raw = process.env.FETCH_URL_ENGINE_ORDE
       continue;
     }
 
-    // Crawl4AI follows redirects outside this process. Only enable it when an
-    // operator explicitly accepts private-network fetches; the secure default
-    // always uses the per-hop validated in-process engine.
-    if (normalizedName === "crawl4ai" && process.env.FETCH_URL_ALLOW_PRIVATE_NETWORK !== "true") {
-      log.warn("Ignoring crawl4ai fetch_url engine while FETCH_URL_ALLOW_PRIVATE_NETWORK is not true");
+    // Crawl4AI follows redirects outside this process, so it is only admitted
+    // where private-network fetches are permitted: any non-production runtime,
+    // or production with an explicit FETCH_URL_ALLOW_PRIVATE_NETWORK opt-in.
+    // Elsewhere the secure default uses the per-hop validated in-process engine.
+    if (normalizedName === "crawl4ai" && !isPrivateNetworkFetchAllowed()) {
+      log.warn(
+        "Ignoring crawl4ai fetch_url engine: private-network fetching is disabled (production without FETCH_URL_ALLOW_PRIVATE_NETWORK)",
+      );
       continue;
     }
 

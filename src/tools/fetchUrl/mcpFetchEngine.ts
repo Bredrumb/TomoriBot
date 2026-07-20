@@ -3,6 +3,7 @@ import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { FETCH_LIMITS } from "@/utils/security/rateLimiter";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import type { FetchEngine, FetchOpts } from "./types";
+import { isPrivateNetworkFetchAllowed } from "./urlSafety";
 
 const MAX_CONTENT_LENGTH = Math.max(
   1,
@@ -83,13 +84,20 @@ export class SafeHttpFetchEngine implements FetchEngine {
     const startTime = Date.now();
     const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     const signal = context.abortSignal ? AbortSignal.any([context.abortSignal, timeoutSignal]) : timeoutSignal;
-    const response = await fetchUserRemoteUrl(url, {
-      headers: {
-        Accept: "text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5",
-        "User-Agent": "TomoriBot/1.0 (+https://github.com/Bredrumb/TomoriBot)",
+    const response = await fetchUserRemoteUrl(
+      url,
+      {
+        headers: {
+          Accept: "text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5",
+          "User-Agent": "TomoriBot/1.0 (+https://github.com/Bredrumb/TomoriBot)",
+        },
+        signal,
       },
-      signal,
-    });
+      // Keep gate 2 aligned with gate 1: honor the same private-network policy
+      // (dev auto-relax / production opt-in). The always-on cloud-metadata
+      // denylist inside gate 2 is not affected by this.
+      { allowPrivateNetwork: isPrivateNetworkFetchAllowed() },
+    );
 
     if (!response.ok) {
       return {

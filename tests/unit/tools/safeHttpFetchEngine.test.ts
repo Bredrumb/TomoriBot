@@ -9,21 +9,36 @@ import {
 } from "@/utils/security/userRemoteFetch";
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
+const RUN_ENV_NAME = "RUN_ENV";
+const originalRunEnv = process.env[RUN_ENV_NAME];
 
 describe("safe HTTP fetch engine", () => {
   afterEach(() => {
     delete process.env[PRIVATE_NETWORK_ENV];
+    if (originalRunEnv === undefined) {
+      delete process.env[RUN_ENV_NAME];
+    } else {
+      process.env[RUN_ENV_NAME] = originalRunEnv;
+    }
   });
 
   it("uses only the guarded in-process engine by default", () => {
+    process.env[RUN_ENV_NAME] = "production";
     expect(parseFetchUrlEngineOrder(undefined)).toEqual(["safe_http"]);
     expect(parseFetchUrlEngineOrder("mcp_fetch")).toEqual(["safe_http"]);
   });
 
-  it("does not enable the external browser fetcher without an explicit private-network opt-in", () => {
+  it("does not enable the external browser fetcher in production without an explicit opt-in", () => {
+    process.env[RUN_ENV_NAME] = "production";
     expect(parseFetchUrlEngineOrder("crawl4ai,safe_http")).toEqual(["safe_http"]);
 
     process.env[PRIVATE_NETWORK_ENV] = "true";
+    expect(parseFetchUrlEngineOrder("crawl4ai,safe_http")).toEqual(["crawl4ai", "safe_http"]);
+  });
+
+  it("admits the external browser fetcher outside production without an opt-in", () => {
+    delete process.env[RUN_ENV_NAME];
+    delete process.env[PRIVATE_NETWORK_ENV];
     expect(parseFetchUrlEngineOrder("crawl4ai,safe_http")).toEqual(["crawl4ai", "safe_http"]);
   });
 
