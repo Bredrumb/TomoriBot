@@ -27,12 +27,13 @@ import type { ProviderNativeVideoResolution } from "@/types/provider/featureInte
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
+import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
 
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 const DEFAULT_VIDEO_DURATION_SECONDS = 5;
 const MAX_VIDEO_DURATION_SECONDS = 20;
-const DEFAULT_VIDEO_RESOLUTION: ProviderNativeVideoResolution = "480p";
+const DEFAULT_VIDEO_RESOLUTION: ProviderNativeVideoResolution = "720p";
 
 /**
  * Tool for generating videos using the active provider's native video API.
@@ -72,7 +73,7 @@ export class GenerateVideoTool extends BaseTool {
       resolution: {
         type: "string",
         description:
-          "Optional: Target video resolution. Defaults to '480p'. Supported values are '480p' (SD), '720p' (HD), and '1080p' (FHD). Providers may fall back to the nearest supported resolution.",
+          "Optional: Target video resolution. Defaults to '720p'. Supported values are '480p' (SD), '720p' (HD), and '1080p' (FHD). Providers may fall back to the nearest supported resolution.",
         enum: ["480p", "720p", "1080p"],
       },
       generate_audio: {
@@ -701,6 +702,21 @@ export class GenerateVideoTool extends BaseTool {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.error("Video generation failed:", error as Error);
+
+      if (isOpenRouterVideoCapabilityError(error)) {
+        const localizedMessage = localizer(
+          context.locale,
+          error.code === "last_frame_unsupported"
+            ? "tools.generate_video.loop_unsupported"
+            : "tools.generate_video.reference_unsupported",
+          { model: error.model },
+        );
+        return {
+          success: false,
+          error: localizedMessage,
+          message: localizedMessage,
+        };
+      }
 
       // Check for common error patterns
       if (errorMessage.includes("timed out")) {

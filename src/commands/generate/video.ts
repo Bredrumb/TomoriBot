@@ -34,6 +34,7 @@ import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/p
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
 
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "generate_video_modal";
@@ -618,11 +619,19 @@ export async function execute(
     const errorEmbed = new EmbedBuilder()
       .setTitle(localizer(locale, "commands.generate.video.error_title"))
       .setDescription(
-        errorMessage.includes("timed out")
-          ? localizer(locale, "commands.generate.video.timeout_description")
-          : errorMessage.includes("content") || errorMessage.includes("safety") || errorMessage.includes("blocked")
-            ? localizer(locale, "commands.generate.video.blocked_description")
-            : localizer(locale, "commands.generate.video.generic_error_description"),
+        isOpenRouterVideoCapabilityError(error)
+          ? localizer(
+              locale,
+              error.code === "last_frame_unsupported"
+                ? "commands.generate.video.loop_unsupported_description"
+                : "commands.generate.video.reference_unsupported_description",
+              { model: error.model },
+            )
+          : errorMessage.includes("timed out")
+            ? localizer(locale, "commands.generate.video.timeout_description")
+            : errorMessage.includes("content") || errorMessage.includes("safety") || errorMessage.includes("blocked")
+              ? localizer(locale, "commands.generate.video.blocked_description")
+              : localizer(locale, "commands.generate.video.generic_error_description"),
       )
       .setColor(ColorCode.ERROR);
 

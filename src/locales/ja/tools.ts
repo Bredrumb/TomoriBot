@@ -19,6 +19,8 @@ export default {
       quota_resets_in_days: `クォータは {days} 日後にリセットされます。`,
       quota_remaining: `本日はあと {remaining} 本の動画を生成できます。`,
       file_too_large: `生成された動画（{size_mb} MB）がDiscordの25 MBファイルサイズ制限を超えています。`,
+      reference_unsupported: `選択したOpenRouterモデル \`{model}\` は、画像を正確な最初のフレームとして使用できません。参照画像を外すか、対応する動画モデルを選択してください。`,
+      loop_unsupported: `選択したOpenRouterモデル \`{model}\` は、ループ動画の最後のフレーム指定に対応していません。ループを無効にするか、対応する動画モデルを選択してください。`,
     },
     generate_image_nai: {
       no_google_api_key: `インペインティングには画像セグメンテーション用のGoogleプロバイダー認証情報が必要です。\`/provider add\` で追加するか、Googleプロバイダーに切り替えてください。`,

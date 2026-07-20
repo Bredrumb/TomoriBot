@@ -93,6 +93,8 @@ export default {
       file_too_large_description: `The generated video ({size_mb} MB) exceeds Discord's 25 MB file size limit. Try a shorter prompt or different aspect ratio.`,
       invalid_image_title: `🔴 Invalid Image`,
       invalid_image_description: `The uploaded reference image could not be processed. Please try a different image.`,
+      reference_unsupported_description: `The selected OpenRouter model \`{model}\` does not support first-frame image-to-video generation. Remove the reference image or choose a compatible video model.`,
+      loop_unsupported_description: `The selected OpenRouter model \`{model}\` does not support the last-frame control required for a looping video. Disable looping or choose a compatible video model.`,
       timeout_description: `Video generation timed out. The provider may be experiencing high load. Please try again later.`,
       blocked_description: `Video generation was blocked by the provider's content safety filter. Please try a different prompt.`,
       generic_error_description: `An unexpected error occurred during video generation. Please try again later.`,
