@@ -6,6 +6,12 @@ set -euo pipefail
 : "${dockerHubUsername:?dockerHubUsername is required}"
 : "${dockerHubTokenB64:?dockerHubTokenB64 is required}"
 : "${tomoribotImage:?tomoribotImage is required}"
+: "${initializeSchema:?initializeSchema is required}"
+
+if [ "$initializeSchema" != "true" ] && [ "$initializeSchema" != "false" ]; then
+  echo "initializeSchema must be true or false." >&2
+  exit 1
+fi
 
 if [[ ! "$tomoribotImage" =~ @sha256:[0-9a-f]{64}$ ]]; then
   echo "TomoriBot image must be an immutable sha256 image reference." >&2
@@ -108,16 +114,20 @@ SELECT format(
 \gexec
 SQL
 
-docker run --rm \
-  --user 1001:1001 \
-  --read-only \
-  --cap-drop ALL \
-  --security-opt no-new-privileges:true \
-  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001 \
-  -e RUN_ENV=production \
-  -e SECRET_FILE=/run/secrets/tomoribot.json \
-  -v "$stage_dir/migration-secrets.json:/run/secrets/tomoribot.json:ro" \
-  "$tomoribotImage" bun run src/db/initializeCli.ts >/dev/null
+if [ "$initializeSchema" = "true" ]; then
+  docker run --rm \
+    --user 1001:1001 \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges:true \
+    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001 \
+    -e RUN_ENV=production \
+    -e SECRET_FILE=/run/secrets/tomoribot.json \
+    -v "$stage_dir/migration-secrets.json:/run/secrets/tomoribot.json:ro" \
+    "$tomoribotImage" bun run src/db/initializeCli.ts
+else
+  echo "Existing PostgreSQL server detected; skipping schema initialization."
+fi
 
 psql_admin --set runtime_user="$runtime_user" <<'SQL'
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;

@@ -769,6 +769,7 @@ jobs:
               "dockerHubUsername=$DOCKERHUB_USERNAME" \
               "dockerHubTokenB64=$DOCKERHUB_TOKEN_B64" \
               "tomoribotImage=$TOMORIBOT_IMAGE" \
+              "initializeSchema=${{ steps.postgres_bootstrap.outputs.is_initial_bootstrap }}" \
             --query 'value[0].message' \
             --output tsv \
             --only-show-errors)

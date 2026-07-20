@@ -67,13 +67,17 @@ merging. Later operator-requested reruns can be manually dispatched from `releas
 
 1. creates or updates `tomoribot_runtime` as `NOINHERIT`, `NOSUPERUSER`, `NOCREATEDB`,
    `NOCREATEROLE`, `NOREPLICATION`, and `NOBYPASSRLS`;
-2. runs schema initialization and migrations once with the administrator bundle;
+2. runs schema initialization and migrations with the database-only administrator bundle only
+   when the workflow detected that the PostgreSQL server did not exist before Terraform apply;
 3. grants only database `CONNECT`, schema `USAGE`, table DML, sequence access, and function
    execution, plus matching default privileges; and
 4. verifies the runtime role cannot create databases or objects in `public`.
 
 The administrator bundle contains only PostgreSQL connection fields, is staged for the one-shot
 container, and is deleted when Run Command exits. It is never installed as `/etc/tomoribot/secrets.json`.
+For an existing PostgreSQL server, bootstrap skips all schema and seed operations and changes only
+the runtime role and its privileges. Schema-container failures are retained in the access-controlled
+Azure Run Command record without exposing that output in the public Actions log.
 
 ### Recurring deployment
 

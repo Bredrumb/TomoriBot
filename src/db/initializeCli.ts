@@ -1,15 +1,17 @@
 import { config } from "dotenv";
-import { loadSecrets } from "@/init/secrets";
-import { resolveEnvironment } from "@/types/config";
+import { loadDatabaseSecretsFromFile } from "@/utils/db/databaseSecrets";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
 import { log } from "@/utils/misc/logger";
 
 config({ quiet: true });
 
-const environment = resolveEnvironment();
-
 try {
-  await loadSecrets(environment);
+  const secretFile = process.env.SECRET_FILE?.trim();
+  if (!secretFile) {
+    throw new Error("SECRET_FILE is required for database schema initialization.");
+  }
+
+  await loadDatabaseSecretsFromFile(secretFile);
   await initializeDatabase();
   log.success("Production schema initialization and migrations completed");
   process.exit(0);
