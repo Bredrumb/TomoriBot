@@ -1,4 +1,8 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+# LEGACY ROLLBACK REFERENCE: production infrastructure moved to Azure and the
+# GCP stack was destroyed on 2026-07-20. The retained tomoribot-vertex project
+# is for outbound Vertex AI calls only. Keep ACTIVE_PROVIDER=azure. Restoring
+# this workflow requires intentionally recreating state and deployment secrets.
 # GitHub Actions Workflow: Deploy TomoriBot to GCP Cloud Run
 
 name: Deploy TomoriBot (GCP)
@@ -34,6 +38,7 @@ jobs:
 
   validate-secrets:
     runs-on: ubuntu-24.04
+    # Legacy gate retained for rollback knowledge; normal production uses Azure.
     if: vars.ACTIVE_PROVIDER == 'gcp' || vars.ACTIVE_PROVIDER == ''
     steps:
       - name: Validate GCP deployment secrets

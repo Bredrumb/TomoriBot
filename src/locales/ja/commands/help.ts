@@ -571,7 +571,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       vertex_title: `Google Vertex AIの設定`,
       vertex_description: `Google Vertex AIは、Google Cloudを通じてGeminiモデルへのエンタープライズグレードのアクセスを提供します。
 - 認証にApplication Default Credentials（ADC）を使用、APIキーの管理が不要
-- TomoriBotをローカル（PC）で実行している開発者やユーザーに最適
+- ローカルのgcloud ADC、またはホスト環境のワークロードID・サービスアカウントを使用
 - [Vertex AIドキュメント](https://cloud.google.com/vertex-ai/docs)`,
       vertex_getting_key_title: `設定手順：`,
       vertex_getting_key_description: `**手順1: [Google Cloud CLI](https://cloud.google.com/cli)をインストール**
@@ -599,8 +599,8 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - 例：\`my-vertex-project-12345::global\``,
       vertex_important_title: `重要な注意事項：`,
       vertex_important_description: `- 保存される値は**設定情報**（プロジェクト＋ロケーション）であり、認証情報ではありません
-- すべてのVertexリクエストはPCのGoogle Cloud CLI IDを使用します
-- ⚠️ \`gen-lang-client-\` で始まるプロジェクトはGoogle AI Studioが自動生成したもので、Vertex AIでは**使用できません**。上記の手順でプロジェクトを作成してください。
+- すべてのVertexリクエストはホストのApplication Default Credentials IDを使用します
+- AI StudioのAPIキーだけではこのプロバイダーを認証できません。プロジェクトで請求とVertex AI APIを有効にし、ホストIDにVertexアクセス権を付与してください。
 - チャット、ツール呼び出し、ストリーミング、構造化出力、圧縮、埋め込み、プリセット生成に対応`,
       vertex_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
       vertexexpress_title: `Google Vertex AI Expressの設定`,

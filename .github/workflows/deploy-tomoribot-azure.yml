@@ -693,7 +693,7 @@ jobs:
           ssh -i "$SSH_KEY" "$SSH_TARGET" \
             "timeout 600s cloud-init status --wait && sudo docker --version && sudo docker compose version"
 
-      - name: Upload secrets and compose file
+      - name: Upload secrets, Vertex federation config, and compose file
         env:
           TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
         run: |
@@ -706,10 +706,11 @@ jobs:
           jq -e type tomori-secrets.json >/dev/null
 
           scp -i "$SSH_KEY" tomori-secrets.json "${SSH_TARGET}:/tmp/tomori-secrets.json"
+          scp -i "$SSH_KEY" deploy/azure/google-vertex-wif.json "${SSH_TARGET}:/tmp/google-vertex-wif.json"
           scp -i "$SSH_KEY" deploy/azure/docker-compose.yml "${SSH_TARGET}:/tmp/docker-compose.yml"
 
           ssh -i "$SSH_KEY" "$SSH_TARGET" \
-            "sudo install -m 700 -d /etc/tomoribot && sudo install -m 640 -o root -g 1001 /tmp/tomori-secrets.json /etc/tomoribot/secrets.json && sudo install -m 644 -o root -g root /tmp/docker-compose.yml /etc/tomoribot/docker-compose.yml && rm -f /tmp/tomori-secrets.json /tmp/docker-compose.yml"
+            "sudo install -m 700 -d /etc/tomoribot && sudo install -m 640 -o root -g 1001 /tmp/tomori-secrets.json /etc/tomoribot/secrets.json && sudo install -m 640 -o root -g 1001 /tmp/google-vertex-wif.json /etc/tomoribot/google-vertex-wif.json && sudo install -m 644 -o root -g root /tmp/docker-compose.yml /etc/tomoribot/docker-compose.yml && rm -f /tmp/tomori-secrets.json /tmp/google-vertex-wif.json /tmp/docker-compose.yml"
 
       - name: Pull image and restart compose service
         env:

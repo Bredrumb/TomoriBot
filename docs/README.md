@@ -129,6 +129,7 @@ Production infrastructure on cloud provider services (Azure, AWS, GCP).
 
 - [`architecture/cloud/`](./architecture/cloud/) — deployment and operations on cloud providers
   - [`cloud/azure-application-logs.md`](./architecture/cloud/azure-application-logs) — shipping error logs to Azure Log Analytics + Grafana
+  - [`cloud/azure-vertex-auth.md`](./architecture/cloud/azure-vertex-auth) — keyless Azure VM authentication to Google Vertex AI
 
 ## Meet Tomori (order 6)
 

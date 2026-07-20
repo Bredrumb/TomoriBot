@@ -18,6 +18,13 @@ resource "azurerm_linux_virtual_machine" "tomoribot" {
     admin_username = var.vm_admin_username
   }))
 
+  # Used for keyless Google Workload Identity Federation. Google trusts only
+  # this VM resource path and exchanges its short-lived Entra token for the
+  # dedicated TomoriBot Vertex service account.
+  identity {
+    type = "SystemAssigned"
+  }
+
   admin_ssh_key {
     username   = var.vm_admin_username
     public_key = var.vm_admin_ssh_public_key

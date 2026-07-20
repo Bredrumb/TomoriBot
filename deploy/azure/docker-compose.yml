@@ -9,6 +9,7 @@ services:
       RUN_ENV: production
       PORT: "8081"
       SECRET_FILE: /run/secrets/tomoribot.json
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-vertex-wif.json
       CONTAINER_MEMORY_LIMIT_MB: "1536"
       SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-}
       # Mirror production JSON logs (level >= 50) to an append-only JSONL file
@@ -18,6 +19,7 @@ services:
       - "127.0.0.1:8081:8081"
     volumes:
       - /etc/tomoribot/secrets.json:/run/secrets/tomoribot.json:ro
+      - /etc/tomoribot/google-vertex-wif.json:/run/secrets/google-vertex-wif.json:ro
       # Host directory is created by the deploy workflow with UID/GID 1001 (container
       # user "tomori") before compose starts; masks the image's /app/logs at runtime.
       - /var/log/tomoribot:/app/logs

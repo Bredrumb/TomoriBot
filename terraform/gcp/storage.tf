@@ -14,7 +14,8 @@ resource "google_storage_bucket" "avatars" {
   name                        = local.avatars_bucket_name
   location                    = var.avatar_bucket_location
   uniform_bucket_level_access = true
-  force_destroy               = false
+  # Phase 6 teardown: the authoritative asset copies now live in R2.
+  force_destroy = true
 
   depends_on = [google_project_service.apis]
 }
@@ -38,7 +39,8 @@ resource "google_storage_bucket" "voice_samples" {
   name                        = local.voice_samples_bucket_name
   location                    = var.voice_samples_bucket_location
   uniform_bucket_level_access = true
-  force_destroy               = false
+  # Phase 6 teardown: the authoritative asset copies now live in R2.
+  force_destroy = true
 
   depends_on = [google_project_service.apis]
 }
