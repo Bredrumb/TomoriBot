@@ -19,24 +19,38 @@
  * These reuse the existing VM Insights action group (email notifications),
  * referenced as a data source because it is not managed here.
  *
- * NOTE: the live rules already existed (created by VM Insights, then pruned and
- * re-thresholded via `az`). Bring them under Terraform with `terraform import`
- * before the next apply so it does not attempt to recreate them:
+ * ADOPTION: the live rules already existed (created by VM Insights, then pruned
+ * and re-thresholded via `az`), so a plain apply would fail with "resource
+ * already exists". The `import` blocks below let the pipeline adopt them into
+ * state during `terraform plan`/`apply` — no out-of-band `terraform import`
+ * step. The metric-alert resource ID is built from the managed resource group
+ * (`.../resourceGroups/tomoribot-rg/providers/Microsoft.Insights/metricAlerts/<name>`)
+ * so the subscription ID stays out of source control.
  *
- *   terraform import 'azurerm_monitor_metric_alert.vm_availability' \
- *     '/subscriptions/0264170d-06fd-47eb-87ec-2a1c385da660/resourceGroups/tomoribot-rg/providers/Microsoft.Insights/metricAlerts/VM Availability - tomoribot-vm'
- *   terraform import 'azurerm_monitor_metric_alert.vm_cpu' \
- *     '/subscriptions/0264170d-06fd-47eb-87ec-2a1c385da660/resourceGroups/tomoribot-rg/providers/Microsoft.Insights/metricAlerts/Percentage CPU - tomoribot-vm'
- *   terraform import 'azurerm_monitor_metric_alert.vm_memory' \
- *     '/subscriptions/0264170d-06fd-47eb-87ec-2a1c385da660/resourceGroups/tomoribot-rg/providers/Microsoft.Insights/metricAlerts/Available Memory Bytes - tomoribot-vm'
- *
- * After import, `terraform plan` should report no changes for these resources.
+ * Once the first apply has imported all three into state, these `import` blocks
+ * become no-ops (Terraform skips resources already in state) and may be removed
+ * on a later cleanup pass; leaving them is harmless and keeps re-runs robust.
  */
 
 # Existing VM Insights action group (email notifications); not managed here.
 data "azurerm_monitor_action_group" "vmi" {
   name                = "VMI-ActionGroup-tomoribot-vm"
   resource_group_name = azurerm_resource_group.main.name
+}
+
+import {
+  to = azurerm_monitor_metric_alert.vm_availability
+  id = "${azurerm_resource_group.main.id}/providers/Microsoft.Insights/metricAlerts/VM Availability - tomoribot-vm"
+}
+
+import {
+  to = azurerm_monitor_metric_alert.vm_cpu
+  id = "${azurerm_resource_group.main.id}/providers/Microsoft.Insights/metricAlerts/Percentage CPU - tomoribot-vm"
+}
+
+import {
+  to = azurerm_monitor_metric_alert.vm_memory
+  id = "${azurerm_resource_group.main.id}/providers/Microsoft.Insights/metricAlerts/Available Memory Bytes - tomoribot-vm"
 }
 
 # 1. Host availability: fires when the VM platform availability drops below 1
