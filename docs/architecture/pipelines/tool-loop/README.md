@@ -127,7 +127,7 @@ the growing conversation.
 |---|---|---|
 | `streamResults` | `StreamResult[]` | Accumulated per-iteration stream results (included in final `GenerationTurnResult`) |
 | `functionHistory` | `ToolHistoryEntry[]` | Paired call/response records passed back to the provider on each subsequent iteration; each entry also carries `preToolCallTextParts` — the visible text that iteration streamed before its tool call — so the follow-up call knows the text was already sent and does not repeat it |
-| `accumulatedModelParts` | `Record<string, unknown>[]` | Provider-native model turn parts accumulated across function-call iterations |
+| `accumulatedModelParts` | `Record<string, unknown>[]` | Provider-native model turn parts used for restarts/prefill; cleared after a normal tool history entry takes ownership of its pre-tool text |
 | `finalText` / `detailsText` | `string` | Last non-empty accumulated text and NovelAI scene-metadata suffix; updated on `completed` or `function_call` with pre-tool text |
 | `consecutiveToolErrors` | `number` | Reset on success or restart; abort when it reaches `MAX_CONSECUTIVE_TOOL_ERRORS` |
 | `naiConsecutiveToolFailures` | `number` | Counts NovelAI tool failures after visible pre-tool text; retries with text delivery suppressed, then emits the localized retry-exhausted embed |

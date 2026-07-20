@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { fetch as undiciFetch } from "undici/index.js";
 import { parseFetchUrlEngineOrder } from "@/tools/fetchUrl/dispatcher";
-import { convertFetchedContent } from "@/tools/fetchUrl/mcpFetchEngine";
+import { convertFetchedContent, SafeHttpFetchEngine } from "@/tools/fetchUrl/mcpFetchEngine";
+import type { ToolContext } from "@/types/tool/interfaces";
 import {
-  closePinnedDispatcher,
-  createPinnedDispatcher,
+  createPinnedFetchRequest,
+  fetchUserRemoteUrl,
   resolveValidatedUserRedirect,
 } from "@/utils/security/userRemoteFetch";
 
@@ -53,19 +53,116 @@ describe("safe HTTP fetch engine", () => {
     expect(markdown).not.toContain("metadata_secret");
   });
 
-  it("connects through the validated address instead of resolving the hostname again", async () => {
+  it("pins the transport URL while preserving the origin Host and TLS name", () => {
+    const request = createPinnedFetchRequest(
+      new URL("https://example.com:8443/path?q=1"),
+      { headers: { Accept: "text/plain" } },
+      "203.0.113.10",
+    );
+
+    expect(request.url.toString()).toBe("https://203.0.113.10:8443/path?q=1");
+    expect(new Headers(request.init.headers).get("host")).toBe("example.com:8443");
+    expect(new Headers(request.init.headers).get("accept")).toBe("text/plain");
+    expect(request.init.tls?.serverName).toBe("example.com");
+  });
+
+  it("returns a streaming response before its body finishes", async () => {
+    process.env[RUN_ENV_NAME] = "development";
+    let finishBody: (() => void) | undefined;
+    const finishResponseBody = (): void => {
+      const finish = finishBody;
+      finishBody = undefined;
+      finish?.();
+    };
     const server = Bun.serve({
-      hostname: "127.0.0.1",
+      hostname: "::",
       port: 0,
-      fetch: () => new Response("dns-pinned"),
+      fetch: () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("first"));
+              finishBody = () => {
+                controller.enqueue(new TextEncoder().encode("-second"));
+                controller.close();
+              };
+            },
+          }),
+        ),
     });
-    const dispatcher = createPinnedDispatcher([{ address: "127.0.0.1", family: 4, ttl: 1 }]);
+    const responsePromise = fetchUserRemoteUrl(`http://localhost:${server.port}/stream`);
+    const timeoutMarker = Symbol("response timeout");
 
     try {
-      const response = await undiciFetch(`http://unresolvable.invalid:${server.port}`, { dispatcher });
-      expect(await response.text()).toBe("dns-pinned");
+      const response = await Promise.race([
+        responsePromise,
+        new Promise<typeof timeoutMarker>((resolve) => setTimeout(() => resolve(timeoutMarker), 1_000)),
+      ]);
+
+      expect(response).not.toBe(timeoutMarker);
+      finishResponseBody();
+      if (response !== timeoutMarker) {
+        expect(await response.text()).toBe("first-second");
+      }
     } finally {
-      await closePinnedDispatcher(dispatcher);
+      // Release the old blocking implementation too, so a failing regression
+      // test does not leave an active request behind.
+      finishResponseBody();
+      await responsePromise.catch(() => undefined);
+      server.stop(true);
+    }
+  });
+
+  it("includes fetched page content in provider-visible result data", async () => {
+    process.env[RUN_ENV_NAME] = "development";
+    const server = Bun.serve({
+      hostname: "::",
+      port: 0,
+      fetch: () =>
+        new Response("<main><h1>Fetched title</h1><p>Readable body.</p></main>", {
+          headers: { "Content-Type": "text/html" },
+        }),
+    });
+
+    try {
+      const result = await new SafeHttpFetchEngine().fetch(`http://localhost:${server.port}/page`, {}, {
+        abortSignal: AbortSignal.timeout(5_000),
+      } as ToolContext);
+      const data = result.data as { summary?: string };
+
+      expect(result.success).toBe(true);
+      expect(data.summary).toBe(result.message);
+      expect(data.summary).toContain("# Fetched title");
+      expect(data.summary).toContain("Readable body.");
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it("preserves start_index pagination in provider-visible summaries", async () => {
+    process.env[RUN_ENV_NAME] = "development";
+    const server = Bun.serve({
+      hostname: "::",
+      port: 0,
+      fetch: () => new Response("abcdefghijklmnopqrstuvwxyz", { headers: { "Content-Type": "text/plain" } }),
+    });
+    const engine = new SafeHttpFetchEngine();
+    const context = { abortSignal: AbortSignal.timeout(5_000) } as ToolContext;
+    const url = `http://localhost:${server.port}/page`;
+
+    try {
+      const first = await engine.fetch(url, { maxLength: 10 }, context);
+      const firstData = first.data as { summary: string; nextIndex?: number; startIndex: number };
+      expect(firstData.summary).toContain("abcdefghij");
+      expect(firstData.summary).toContain("start_index=10");
+      expect(firstData.nextIndex).toBe(10);
+
+      const second = await engine.fetch(url, { maxLength: 10, startIndex: firstData.nextIndex }, context);
+      const secondData = second.data as { summary: string; nextIndex?: number; startIndex: number };
+      expect(secondData.summary).toContain("klmnopqrst");
+      expect(secondData.startIndex).toBe(10);
+      expect(secondData.nextIndex).toBe(20);
+    } finally {
       server.stop(true);
     }
   });

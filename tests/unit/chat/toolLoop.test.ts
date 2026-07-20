@@ -262,11 +262,14 @@ function makeFunctionCallResult(
 function makeProvider(
   results: StreamResult[],
   providerName = "test-provider",
+  simulateBufferedTextParts = false,
 ): {
   provider: LLMProvider;
   capturedHistories: Array<unknown[]>;
+  capturedModelParts: Array<Array<Record<string, unknown>>>;
 } {
   const capturedHistories: Array<unknown[]> = [];
+  const capturedModelParts: Array<Array<Record<string, unknown>>> = [];
   const queue = [...results];
 
   const provider = {
@@ -299,13 +302,18 @@ function makeProvider(
       _ts: unknown,
       _cfg: unknown,
       _ctx: unknown,
-      _parts: unknown,
+      modelPartsInput: unknown,
       _emoji: unknown,
       functionHistory: unknown[] | undefined,
     ) => {
       capturedHistories.push(functionHistory ? [...functionHistory] : []);
+      const modelParts = modelPartsInput as Array<Record<string, unknown>>;
+      capturedModelParts.push([...modelParts]);
       const next = queue.shift();
       if (!next) throw new Error("Fake provider: no more queued stream results");
+      if (simulateBufferedTextParts && next.accumulatedText?.trim()) {
+        modelParts.push({ text: next.accumulatedText });
+      }
       return next;
     },
     validateApiKey: async () => ({ valid: true }),
@@ -315,7 +323,7 @@ function makeProvider(
     createConfig: async () => makeProviderConfig(),
   } as unknown as LLMProvider;
 
-  return { provider, capturedHistories };
+  return { provider, capturedHistories, capturedModelParts };
 }
 
 /** Convenience: build ToolLoopParams from a context and provider. */
@@ -613,6 +621,24 @@ describe("runToolLoop — contract tests", () => {
     }>;
     expect(secondHistory).toHaveLength(1);
     expect(secondHistory[0]?.preToolCallTextParts).toEqual([{ type: "text", text: "Yeah, let me remember that." }]);
+  });
+
+  it("removes pre-tool text from trailing model prefill after moving it into tool history", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider, capturedModelParts } = makeProvider(
+      [
+        makeFunctionCallResult("echo_tool", {}, "Let me check that."),
+        { status: "completed", accumulatedText: "Here is the result." },
+      ],
+      "openrouter",
+      true,
+    );
+    toolExecuteQueue.push({ success: true, data: { summary: "Tool result" } });
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.status).toBe("completed");
+    expect(capturedModelParts).toEqual([[], []]);
   });
 
   it("no pre-tool text: history entry omits preToolCallTextParts", async () => {

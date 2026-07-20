@@ -116,6 +116,10 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         }
 
         functionHistory.push(toolOutcome.historyEntry);
+        // Visible text emitted before the tool call now lives on that history
+        // entry's assistant tool-call turn. Remove the same buffered parts from
+        // the trailing prefill so providers do not receive it a second time.
+        accumulatedModelParts.length = 0;
         if (toolOutcome.stickerSelection !== undefined) {
           selectedStickerToSend = toolOutcome.stickerSelection;
         }

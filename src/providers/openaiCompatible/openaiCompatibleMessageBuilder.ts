@@ -206,13 +206,10 @@ export async function buildOpenAICompatibleMessages(
         content: JSON.stringify(interaction.functionResponse),
       });
 
+      // The function response is already serialized in the role=tool message.
+      // A synthetic user turn is needed only when image metadata must be moved
+      // onto a role that supports image inputs.
       const responseParts: Array<Record<string, unknown>> = [];
-      if (interaction.functionResponse) {
-        responseParts.push({
-          type: "text",
-          text: JSON.stringify(interaction.functionResponse),
-        });
-      }
 
       if (
         options.seesImages &&

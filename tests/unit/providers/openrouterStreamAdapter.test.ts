@@ -337,6 +337,37 @@ describe("OpenrouterStreamAdapter.handleProviderError", () => {
   });
 });
 
+describe("OpenrouterStreamAdapter tool history", () => {
+  it("does not duplicate a text-only tool response as a user message", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return makeSseResponse(["[DONE]"]);
+    }) as typeof fetch;
+
+    const context = makeStreamContext();
+    context.functionInteractionHistory = [
+      {
+        functionCall: { name: "fetch_url", args: { url: "https://example.com" } },
+        functionResponse: {
+          functionResponse: {
+            name: "fetch_url",
+            response: { result: { summary: "Fetched page content" } },
+          },
+        },
+      },
+    ];
+
+    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
+      // Drain the stream so the request body is fully assembled and processed.
+    }
+
+    const messages = requestBody?.messages as Array<Record<string, unknown>>;
+    expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
+    expect(String(messages[1]?.content)).toContain("Fetched page content");
+  });
+});
+
 describe("OpenrouterStreamAdapter parameter degradation", () => {
   it("restarts an uncommitted SSE error with all named parameters removed", async () => {
     const requestBodies: Array<Record<string, unknown>> = [];

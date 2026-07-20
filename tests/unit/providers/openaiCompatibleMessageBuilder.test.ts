@@ -152,4 +152,28 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       { role: "assistant", content: "Sure, " },
     ]);
   });
+
+  it("serializes a text-only tool result once without a duplicate user turn", async () => {
+    const functionResponse = {
+      functionResponse: {
+        name: "fetch_url",
+        response: { result: { summary: "Fetched page content" } },
+      },
+    };
+    const messages = await buildOpenAICompatibleMessages({
+      adapterName: "TestAdapter",
+      contextItems: [],
+      currentTurnModelParts: [],
+      functionInteractionHistory: [
+        {
+          functionCall: { name: "fetch_url", args: { url: "https://example.com" } },
+          functionResponse,
+        },
+      ],
+      seesImages: false,
+    });
+
+    expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
+    expect(messages[1]?.content).toBe(JSON.stringify(functionResponse));
+  });
 });

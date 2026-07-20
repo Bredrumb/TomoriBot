@@ -147,7 +147,9 @@ Steps in execution order:
     assistant tool-call turn on the follow-up call, so the model knows it
     already said that text and does not repeat it. Each iteration's entry
     carries only that iteration's text (stream state is fresh per
-    `streamOnce` call).
+    `streamOnce` call). After the history entry is accepted, the outer loop
+    clears the same text from `accumulatedModelParts`; otherwise OpenAI-style
+    providers would also append it as a trailing assistant prefill.
 
 13. **Return `{kind: "history"}`** with `historyEntry` (the paired
     `functionCall` + `functionResponse` + optional `imageMetadata` +

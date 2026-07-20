@@ -2720,16 +2720,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           content: JSON.stringify(interaction.functionResponse),
         });
 
-        // Build a follow-up user message with the tool result text + any images
+        // Build a follow-up user message only for image metadata. The function
+        // response is already present in the role=tool message above; repeating
+        // it as user text doubles large results such as fetched webpages.
         const responseParts: Array<Record<string, unknown>> = [];
-
-        // Include the raw function response as a text part (helps model know tool finished)
-        if (interaction.functionResponse) {
-          responseParts.push({
-            type: "text",
-            text: JSON.stringify(interaction.functionResponse),
-          });
-        }
 
         // If the tool returned images, surface them to the model as image_url parts (only if model supports images)
         if (interaction.imageMetadata?.imageUrls && interaction.imageMetadata.imageUrls.length > 0) {
@@ -2763,7 +2757,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         }
 
         if (responseParts.length > 0) {
-          // Add a follow-up user message carrying the result + images for model visibility
+          // Add a follow-up user message carrying images for model visibility.
           messages.push({
             role: "user",
             content: responseParts,

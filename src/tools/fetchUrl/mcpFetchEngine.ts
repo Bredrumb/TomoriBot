@@ -112,13 +112,16 @@ export class SafeHttpFetchEngine implements FetchEngine {
     const sliced = sliceContent(content, opts);
 
     if (!sliced.text.trim()) {
+      const summary =
+        sliced.startIndex > 0
+          ? `[End of page content. No further content found at character offset ${sliced.startIndex}. All sections of this page have been read.]`
+          : "[The page returned no readable content.]";
       return {
         success: true,
-        message:
-          sliced.startIndex > 0
-            ? `[End of page content. No further content found at character offset ${sliced.startIndex}. All sections of this page have been read.]`
-            : "[The page returned no readable content.]",
+        message: summary,
         data: {
+          // The main tool loop serializes data, not message, into provider history.
+          summary,
           source: "http",
           functionName: "fetch_url",
           serverName: "safe-http",
@@ -141,6 +144,8 @@ export class SafeHttpFetchEngine implements FetchEngine {
       success: true,
       message,
       data: {
+        // Provider adapters also prefer summary, preventing message/data duplication.
+        summary: message,
         source: "http",
         functionName: "fetch_url",
         serverName: "safe-http",
