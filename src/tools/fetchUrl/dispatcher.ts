@@ -2,18 +2,18 @@ import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 import { Crawl4aiEngine } from "./crawl4aiEngine";
-import { McpFetchEngine } from "./mcpFetchEngine";
+import { SafeHttpFetchEngine } from "./mcpFetchEngine";
 import type { FetchEngine, FetchEngineName, FetchOpts } from "./types";
 
-const DEFAULT_ENGINE_ORDER: readonly FetchEngineName[] = ["crawl4ai", "mcp_fetch"];
-const REQUIRED_FALLBACK_ENGINE: FetchEngineName = "mcp_fetch";
+const DEFAULT_ENGINE_ORDER: readonly FetchEngineName[] = ["safe_http"];
+const REQUIRED_FALLBACK_ENGINE: FetchEngineName = "safe_http";
 
 function createEngine(name: FetchEngineName): FetchEngine {
   switch (name) {
     case "crawl4ai":
       return new Crawl4aiEngine();
-    case "mcp_fetch":
-      return new McpFetchEngine();
+    case "safe_http":
+      return new SafeHttpFetchEngine();
   }
 }
 
@@ -30,21 +30,28 @@ export function parseFetchUrlEngineOrder(raw = process.env.FETCH_URL_ENGINE_ORDE
       continue;
     }
 
-    if (name !== "crawl4ai" && name !== REQUIRED_FALLBACK_ENGINE) {
+    const normalizedName = name === "mcp_fetch" ? REQUIRED_FALLBACK_ENGINE : name;
+    if (normalizedName !== "crawl4ai" && normalizedName !== REQUIRED_FALLBACK_ENGINE) {
       log.warn(`Ignoring unknown fetch_url engine name "${name}" from FETCH_URL_ENGINE_ORDER`);
       continue;
     }
 
-    if (name === REQUIRED_FALLBACK_ENGINE) {
+    if (normalizedName === REQUIRED_FALLBACK_ENGINE) {
       continue;
     }
 
-    if (seen.has(name)) {
+    // Crawl4AI follows redirects outside this process. Only enable it when an
+    // operator explicitly accepts private-network fetches; the secure default
+    // always uses the per-hop validated in-process engine.
+    if (normalizedName === "crawl4ai" && process.env.FETCH_URL_ALLOW_PRIVATE_NETWORK !== "true") {
+      log.warn("Ignoring crawl4ai fetch_url engine while FETCH_URL_ALLOW_PRIVATE_NETWORK is not true");
       continue;
     }
 
-    seen.add(name);
-    order.push(name);
+    if (seen.has(normalizedName)) continue;
+
+    seen.add(normalizedName);
+    order.push(normalizedName);
   }
 
   order.push(REQUIRED_FALLBACK_ENGINE);

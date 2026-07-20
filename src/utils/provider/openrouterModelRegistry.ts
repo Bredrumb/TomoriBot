@@ -1,5 +1,6 @@
 import type { DiffusionModelRow, EmbeddingModelRow, LlmRow, VideoGenerationModelRow } from "@/types/db/schema";
 import { getOrFetchOpenRouterCapabilities } from "@/utils/cache/openrouterCapabilityCache";
+import { getOrFetchOpenRouterVideoModelCapabilities } from "@/utils/cache/openrouterVideoModelCache";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 
 import { log } from "@/utils/misc/logger";
@@ -336,6 +337,10 @@ export async function registerOpenRouterModelForScope(
       };
     }
     case "video": {
+      if (!(await getOrFetchOpenRouterVideoModelCapabilities(normalizedModelName))) {
+        return { status: "invalid_model" };
+      }
+
       const model = await upsertScopedOpenRouterVideoModel(normalizedModelName);
       const entry = model ? buildRegisteredEntryFromVideoModel(model) : null;
       if (!entry) {

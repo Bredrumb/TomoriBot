@@ -17,7 +17,11 @@ does not host TomoriBot infrastructure.
 
 ## Pages
 
+- [`azure-production-deployment.md`](./azure-production-deployment/) — OIDC/Run Command deployment,
+  database-role bootstrap, host lockdown, and production operating rules
 - [`azure-application-logs.md`](./azure-application-logs/) — shipping structured error logs
   from an Azure VM into Log Analytics and Grafana
+- [`azure-terraform-state-recovery.md`](./azure-terraform-state-recovery/) — blob-version restore and
+  stale Terraform lock recovery
 - [`azure-vertex-auth.md`](./azure-vertex-auth/) — keyless authentication from the Azure VM
   to Google Vertex AI

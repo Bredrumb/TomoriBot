@@ -26,7 +26,8 @@ Set the bot env to the compose service URL:
 
 ```env
 CRAWL4AI_BASE_URL=http://crawl4ai:11235/
-FETCH_URL_ENGINE_ORDER=crawl4ai,mcp_fetch
+FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http
+FETCH_URL_ALLOW_PRIVATE_NETWORK=true
 ```
 
 If you enable Crawl4AI JWT/API-token auth, set the same secret in both places:
@@ -118,7 +119,7 @@ deployment, keep it private to the Crawl4AI service.
 |---|---|---|
 | `CRAWL4AI_BASE_URL` | TomoriBot | unset, Crawl4AI disabled |
 | `CRAWL4AI_TOKEN` | TomoriBot and compose sidecar | unset |
-| `FETCH_URL_ENGINE_ORDER` | TomoriBot | `crawl4ai,mcp_fetch` |
+| `FETCH_URL_ENGINE_ORDER` | TomoriBot | `safe_http` (`crawl4ai,safe_http` for trusted development) |
 | `FETCH_URL_TIMEOUT_MS` | TomoriBot | `15000` |
 | `FETCH_URL_HEALTHCHECK_CACHE_SEC` | TomoriBot | `60` |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | TomoriBot | `false` |

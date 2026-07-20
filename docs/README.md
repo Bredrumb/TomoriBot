@@ -128,7 +128,9 @@ Supporting services that pipelines depend on.
 Production infrastructure on cloud provider services (Azure, AWS, GCP).
 
 - [`architecture/cloud/`](./architecture/cloud/) — deployment and operations on cloud providers
+  - [`cloud/azure-production-deployment.md`](./architecture/cloud/azure-production-deployment) — hardened OIDC/Run Command production deployment and operations
   - [`cloud/azure-application-logs.md`](./architecture/cloud/azure-application-logs) — shipping error logs to Azure Log Analytics + Grafana
+  - [`cloud/azure-terraform-state-recovery.md`](./architecture/cloud/azure-terraform-state-recovery) — state version and stale-lock recovery
   - [`cloud/azure-vertex-auth.md`](./architecture/cloud/azure-vertex-auth) — keyless Azure VM authentication to Google Vertex AI
 
 ## Meet Tomori (order 6)

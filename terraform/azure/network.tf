@@ -1,8 +1,8 @@
 /**
  * Network resources for the singleton TomoriBot VM.
  *
- * Inbound traffic is limited to SSH. The bot health endpoint is intentionally
- * bound to localhost by docker-compose and is checked over SSH by CI.
+ * No public inbound traffic is permitted. Deployment and health checks use
+ * Azure VM Run Command through the authenticated management plane.
  */
 
 resource "azurerm_virtual_network" "main" {
@@ -20,6 +20,14 @@ resource "azurerm_subnet" "vm" {
   address_prefixes     = [var.vm_subnet_address_prefix]
 }
 
+resource "azurerm_subnet" "postgres_private_endpoint" {
+  name                              = "${var.name_prefix}-postgres-pe-subnet"
+  resource_group_name               = azurerm_resource_group.main.name
+  virtual_network_name              = azurerm_virtual_network.main.name
+  address_prefixes                  = [var.postgres_private_endpoint_subnet_address_prefix]
+  private_endpoint_network_policies = "Disabled"
+}
+
 resource "azurerm_public_ip" "vm" {
   name                = "${var.name_prefix}-vm-pip"
   location            = azurerm_resource_group.main.location
@@ -34,18 +42,6 @@ resource "azurerm_network_security_group" "vm" {
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   tags                = local.common_tags
-
-  security_rule {
-    name                       = "AllowSsh"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = var.ssh_source_address_prefix
-    destination_address_prefix = "*"
-  }
 
   security_rule {
     name                       = "DenyAllInbound"

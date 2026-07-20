@@ -1,8 +1,8 @@
 /**
  * Singleton VM for TomoriBot.
  *
- * The app deploy is intentionally absent here. CI copies the compose file and
- * secrets, then runs docker compose over SSH after Terraform finishes.
+ * The app deploy is intentionally absent here. CI uses Azure VM Run Command
+ * after Terraform finishes; the VM exposes no public management port.
  */
 
 resource "azurerm_linux_virtual_machine" "tomoribot" {
@@ -14,6 +14,12 @@ resource "azurerm_linux_virtual_machine" "tomoribot" {
   admin_username        = var.vm_admin_username
 
   disable_password_authentication = true
+  secure_boot_enabled             = true
+  vtpm_enabled                    = true
+  patch_assessment_mode           = "AutomaticByPlatform"
+  patch_mode                      = "AutomaticByPlatform"
+  reboot_setting                  = "IfRequired"
+  provision_vm_agent              = true
   custom_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
     admin_username = var.vm_admin_username
   }))

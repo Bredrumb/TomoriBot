@@ -19,6 +19,8 @@ export default {
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_remaining: `You have {remaining} video(s) remaining for today.`,
       file_too_large: `The generated video ({size_mb} MB) exceeds Discord's 25 MB file size limit.`,
+      reference_unsupported: `The selected OpenRouter model \`{model}\` cannot use an image as the exact first frame. Remove the reference image or choose a compatible video model.`,
+      loop_unsupported: `The selected OpenRouter model \`{model}\` cannot use a last frame for looping video. Disable looping or choose a compatible video model.`,
     },
     generate_image_nai: {
       no_google_api_key: `Inpainting requires saved Google provider credentials for image segmentation. Add them with \`/provider add\`, or switch to the Google provider.`,

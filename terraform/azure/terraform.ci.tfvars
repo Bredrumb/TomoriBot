@@ -6,6 +6,6 @@
 # Non-sensitive CI overrides:
 environment = "production"
 
-# Optional admin database access. Leave null in CI unless temporarily opening a
-# single operator IP for restore/debug access.
-admin_ip = null
+# grafana_egress_ip is injected by CI through TF_VAR_grafana_egress_ip from the
+# protected production environment variable GRAFANA_EGRESS_IP. It creates one
+# exact-address firewall rule for the operator's read-only Grafana datasource.

@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${runtimeSecretsB64:?runtimeSecretsB64 is required}"
+: "${vertexConfigB64:?vertexConfigB64 is required}"
+: "${composeConfigB64:?composeConfigB64 is required}"
+: "${dockerHubUsername:?dockerHubUsername is required}"
+: "${dockerHubTokenB64:?dockerHubTokenB64 is required}"
+: "${tomoribotImage:?tomoribotImage is required}"
+: "${searxngImage:?searxngImage is required}"
+
+require_digest() {
+  local image_ref=$1
+  local label=$2
+
+  if [[ ! "$image_ref" =~ @sha256:[0-9a-f]{64}$ ]]; then
+    echo "$label must be an immutable sha256 image reference." >&2
+    exit 1
+  fi
+}
+
+umask 077
+install -d -o root -g root -m 0700 /etc/tomoribot
+stage_dir=$(mktemp -d /etc/tomoribot/.deploy.XXXXXX)
+docker_authenticated=false
+cleanup() {
+  rm -rf "$stage_dir"
+  if [ "$docker_authenticated" = true ]; then
+    docker logout docker.io >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+timeout 600s cloud-init status --wait >/dev/null
+command -v jq >/dev/null 2>&1 || {
+  echo "jq is required; install it during VM provisioning." >&2
+  exit 1
+}
+
+require_digest "$tomoribotImage" "TomoriBot image"
+require_digest "$searxngImage" "SearXNG image"
+
+printf '%s' "$runtimeSecretsB64" | base64 --decode >"$stage_dir/runtime-secrets.json"
+printf '%s' "$vertexConfigB64" | base64 --decode >"$stage_dir/google-vertex-wif.json"
+printf '%s' "$composeConfigB64" | base64 --decode >"$stage_dir/docker-compose.yml"
+printf '%s' "$dockerHubTokenB64" | base64 --decode >"$stage_dir/dockerhub-token"
+
+jq -e '
+  type == "object" and
+  (.POSTGRES_USER | type == "string" and length > 0) and
+  (.POSTGRES_PASSWORD | type == "string" and length > 0) and
+  (.POSTGRES_HOST | type == "string" and length > 0) and
+  (.POSTGRES_PORT | type == "number" or type == "string") and
+  (.POSTGRES_DB | type == "string" and length > 0)
+' "$stage_dir/runtime-secrets.json" >/dev/null
+jq -e 'type == "object"' "$stage_dir/google-vertex-wif.json" >/dev/null
+
+runtime_user=$(jq -r '.POSTGRES_USER' "$stage_dir/runtime-secrets.json")
+postgres_host=$(jq -r '.POSTGRES_HOST' "$stage_dir/runtime-secrets.json")
+if [[ ! "$runtime_user" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
+  echo "Runtime database role name is invalid." >&2
+  exit 1
+fi
+case "$runtime_user" in
+  tomoriadmin | azure_pg_admin | postgres)
+    echo "The runtime secret bundle contains a PostgreSQL administrator identity." >&2
+    exit 1
+    ;;
+esac
+
+resolved_database_ip=$(getent ahostsv4 "$postgres_host" | awk 'NR == 1 { print $1 }')
+if [[ ! "$resolved_database_ip" =~ ^10\. ]] && \
+  [[ ! "$resolved_database_ip" =~ ^172\.(1[6-9]|2[0-9]|3[01])\. ]] && \
+  [[ ! "$resolved_database_ip" =~ ^192\.168\. ]]; then
+  echo "PostgreSQL hostname did not resolve to a private address." >&2
+  exit 1
+fi
+
+install -d -o 1001 -g 1001 -m 0750 \
+  /var/log/tomoribot \
+  /var/lib/tomoribot/backups \
+  /var/lib/tomoribot/data
+install -m 0640 -o root -g 1001 \
+  "$stage_dir/runtime-secrets.json" /etc/tomoribot/.secrets.json.new
+install -m 0640 -o root -g 1001 \
+  "$stage_dir/google-vertex-wif.json" /etc/tomoribot/.google-vertex-wif.json.new
+install -m 0644 -o root -g root \
+  "$stage_dir/docker-compose.yml" /etc/tomoribot/.docker-compose.yml.new
+mv -f /etc/tomoribot/.secrets.json.new /etc/tomoribot/secrets.json
+mv -f /etc/tomoribot/.google-vertex-wif.json.new /etc/tomoribot/google-vertex-wif.json
+mv -f /etc/tomoribot/.docker-compose.yml.new /etc/tomoribot/docker-compose.yml
+
+docker login --username "$dockerHubUsername" --password-stdin docker.io \
+  <"$stage_dir/dockerhub-token" >/dev/null
+docker_authenticated=true
+rm -f "$stage_dir/dockerhub-token"
+docker pull "$tomoribotImage" >/dev/null
+docker pull "$searxngImage" >/dev/null
+docker logout docker.io >/dev/null
+docker_authenticated=false
+
+TOMORIBOT_IMAGE="$tomoribotImage" SEARXNG_IMAGE="$searxngImage" \
+  docker compose -f /etc/tomoribot/docker-compose.yml up \
+    -d --pull never --remove-orphans tomoribot >/dev/null
+
+container_id=$(TOMORIBOT_IMAGE="$tomoribotImage" SEARXNG_IMAGE="$searxngImage" \
+  docker compose -f /etc/tomoribot/docker-compose.yml ps -q tomoribot)
+if [ -z "$container_id" ] || \
+  [ "$(docker inspect --format '{{.Config.User}}' "$container_id")" != "1001:1001" ] || \
+  [ "$(docker exec "$container_id" id -u)" != "1001" ] || \
+  [ "$(docker exec "$container_id" id -g)" != "1001" ]; then
+  echo "TomoriBot container UID/GID invariant failed." >&2
+  exit 1
+fi
+
+for attempt in $(seq 1 20); do
+  if curl -fsS http://localhost:8081/healthz >/dev/null; then
+    break
+  fi
+  if [ "$attempt" -eq 20 ]; then
+    echo "TomoriBot health check failed; inspect access-controlled Log Analytics logs." >&2
+    exit 1
+  fi
+  sleep 30
+done
+
+assert_file() {
+  local path=$1
+  local expected_mode=$2
+  local expected_owner=$3
+  local expected_group=$4
+  local actual
+
+  actual=$(stat -c '%a:%u:%g' "$path")
+  if [ "$actual" != "$expected_mode:$expected_owner:$expected_group" ]; then
+    echo "Unexpected ownership or mode for $path: $actual" >&2
+    exit 1
+  fi
+}
+
+assert_file /etc/tomoribot/secrets.json 640 0 1001
+assert_file /etc/tomoribot/google-vertex-wif.json 640 0 1001
+assert_file /etc/tomoribot/docker-compose.yml 644 0 0
+
+echo "TomoriBot deployment succeeded through Azure Run Command."
+echo "TOMORIBOT_DEPLOYMENT_SUCCEEDED"

@@ -45,9 +45,24 @@ Current native video implementations live in:
 - `src/providers/openrouter/openrouterVideoGeneration.ts`
 - `src/providers/zai/zaiVideoGeneration.ts`
 
-### OpenRouter: alpha API (subject to change)
+### OpenRouter: stable asynchronous API
 
-OpenRouter's video generation API is currently in alpha (`/api/alpha/videos`). The endpoint, request/response shapes, and supported models are expected to change as it moves toward a stable release. When that happens, `openrouterVideoGeneration.ts` will need to be updated to match the new contract.
+OpenRouter video generation uses the stable `POST /api/v1/videos` endpoint. TomoriBot follows the
+returned `polling_url` until the job reaches a terminal state, then downloads the first item in
+`unsigned_urls` (or falls back to `/api/v1/videos/{jobId}/content?index=0`). Relative polling URLs
+are resolved against `https://openrouter.ai`, and authenticated polling is restricted to that
+origin so a response cannot redirect the API key to another host.
+
+`utils/cache/openrouterVideoModelCache.ts` loads `GET /api/v1/videos/models` at startup and on
+cache misses. The adapter uses the advertised durations, resolutions, aspect ratios, and frame
+support to normalize requests. Scoped OpenRouter video registrations are accepted only when the
+model appears in this dedicated catalog.
+
+OpenRouter image-to-video requests use `frame_images` with `frame_type: "first_frame"`; they do
+not use `input_references`, which OpenRouter defines as loose subject/style guidance. The
+`generate_video` tool's explicit loop option adds the same image as `last_frame` when the model
+advertises that capability. Unsupported first/last-frame requests fail before a paid job is
+submitted and return a localized explanation.
 
 ### OpenRouter: external HTTP backends (TLS/HTTP fingerprint bypass)
 
@@ -76,6 +91,8 @@ The built-in `generate_video` tool also supports:
 
 - `duration` in seconds
 - `resolution` as `480p`, `720p`, or `1080p`
+- optional first-frame image-to-video through `media_id`
+- optional looping through first/last-frame control
 
 Tool defaults are:
 

@@ -56,6 +56,34 @@ const usePrettyTransport = !shouldHideLogs && hasPinoPretty;
  */
 const logFilePath = process.env.TOMORI_LOG_FILE?.trim() || undefined;
 
+const REDACTED = "[REDACTED]";
+const SENSITIVE_LOG_KEYS = [
+  "authorization",
+  "proxyAuthorization",
+  "cookie",
+  "setCookie",
+  "password",
+  "passwd",
+  "token",
+  "accessToken",
+  "refreshToken",
+  "apiKey",
+  "clientSecret",
+  "databaseUrl",
+  "postgresUrl",
+  "webhookUrl",
+  "signedUrl",
+] as const;
+
+/** Defense-in-depth redaction for direct structured Pino fields. */
+export const LOG_REDACTION_PATHS = SENSITIVE_LOG_KEYS.flatMap((key) => [
+  key,
+  `*.${key}`,
+  `*.*.${key}`,
+  `*.*.*.${key}`,
+  `*.*.*.*.${key}`,
+]);
+
 /**
  * Builds pino multistream entries that duplicate every JSON record to stdout
  * (preserved for Docker diagnostics) and an append-only JSONL file.
@@ -105,6 +133,10 @@ const pinoLogger = pino(
       metric: 52, // Above error (50) so periodic metrics reach CloudWatch in production
       rateLimit: 55, // Between error (50) and fatal (60)
     },
+    redact: {
+      paths: LOG_REDACTION_PATHS,
+      censor: REDACTED,
+    },
     transport: usePrettyTransport
       ? {
           target: "pino-pretty",
@@ -137,19 +169,55 @@ const colors = {
 const isCloneSafeLogValue = (value: unknown): boolean =>
   value === null || ["string", "number", "boolean", "undefined"].includes(typeof value);
 
+function normalizeSensitiveKey(key: string): string {
+  return key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+
+const SENSITIVE_NORMALIZED_KEYS = new Set(SENSITIVE_LOG_KEYS.map(normalizeSensitiveKey));
+
+function sanitizeLogString(value: string): string {
+  return value
+    .replace(/((?:https?|postgres(?:ql)?):\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${REDACTED}@`)
+    .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, `$1 ${REDACTED}`)
+    .replace(
+      /([?&](?:access_token|refresh_token|token|api[_-]?key|key|signature|sig|x-amz-signature)=)[^&#\s]+/gi,
+      `$1${REDACTED}`,
+    )
+    .replace(/(https:\/\/(?:canary\.)?discord(?:app)?\.com\/api\/webhooks\/[^/\s]+\/)[^/?\s]+/gi, `$1${REDACTED}`);
+}
+
+/**
+ * Recursively removes structured credentials and common credential-bearing URL
+ * forms before a value reaches either stdout or the JSONL sink.
+ */
+export function sanitizeLogPayload(value: unknown, depth = 0): unknown {
+  if (depth > 8) return "[TRUNCATED]";
+  if (typeof value === "string") return sanitizeLogString(value);
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((entry) => sanitizeLogPayload(entry, depth + 1));
+
+  const output: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    output[key] = SENSITIVE_NORMALIZED_KEYS.has(normalizeSensitiveKey(key))
+      ? REDACTED
+      : sanitizeLogPayload(entry, depth + 1);
+  }
+  return output;
+}
+
 const toLoggableError = (err: unknown): Record<string, unknown> => {
   if (err instanceof Error) {
     const safeExtraFields = Object.fromEntries(Object.entries(err).filter(([, value]) => isCloneSafeLogValue(value)));
 
-    return {
+    return sanitizeLogPayload({
       ...safeExtraFields,
       name: err.name,
       message: err.message,
       stack: err.stack,
-    };
+    }) as Record<string, unknown>;
   }
-  if (typeof err === "object" && err !== null) return err as Record<string, unknown>;
-  return { message: String(err) };
+  if (typeof err === "object" && err !== null) return sanitizeLogPayload(err) as Record<string, unknown>;
+  return { message: sanitizeLogString(String(err)) };
 };
 
 /**
@@ -201,7 +269,7 @@ export const log = {
     // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
     const logger = pinoLogger as any;
     if (metadata) {
-      logger.rateLimit({ metadata }, coloredMsg);
+      logger.rateLimit({ metadata: sanitizeLogPayload(metadata) }, coloredMsg);
     } else {
       logger.rateLimit(coloredMsg);
     }
@@ -235,9 +303,12 @@ export const log = {
     const coloredMsg = shouldHideLogs ? msg : `${colors.red}${msg}${colors.reset}`;
 
     if (err) {
-      pinoLogger.error({ err: toLoggableError(err), context }, coloredMsg);
+      pinoLogger.error(
+        { err: toLoggableError(err), context: sanitizeLogPayload(context) },
+        sanitizeLogString(coloredMsg),
+      );
     } else {
-      pinoLogger.error({ context }, coloredMsg);
+      pinoLogger.error({ context: sanitizeLogPayload(context) }, sanitizeLogString(coloredMsg));
     }
 
     // Skip database logging when disabled (relying on CloudWatch instead)
@@ -251,9 +322,7 @@ export const log = {
       await errorLogRepository.insertErrorLog(dbPayload);
     } catch (dbError) {
       // Avoid infinite recursion — fall back to console directly
-      console.error("\x1b[31m[DB LOG ERROR]\x1b[0m Failed to log error to database:");
-      console.error(dbError instanceof Error ? (dbError.stack ?? dbError.message) : String(dbError));
-      console.error("Original error payload:", dbPayload);
+      pinoLogger.error({ err: toLoggableError(dbError) }, "Failed to persist the sanitized error record");
     }
   },
 

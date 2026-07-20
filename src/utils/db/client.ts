@@ -10,7 +10,8 @@ import { log } from "@/utils/misc/logger";
  * - Development (`RUN_ENV !== 'production'`): SSL disabled for localhost
  * - Production (`RUN_ENV === 'production'`): full TLS with CA certificate verification
  *
- * Certificate path: `docker/certs/rds-ca-bundle.pem` (production only).
+ * Azure and other public-CA providers use the operating-system trust store.
+ * AWS RDS retains its maintained provider bundle for compatibility.
  *
  * @returns Configured SQL instance with appropriate TLS settings
  */
@@ -37,7 +38,7 @@ function createDatabaseClient(): SQL {
     });
   }
 
-  // Production: TLS for TCP connections (AWS RDS); no TLS for unix sockets (Cloud SQL Auth Proxy)
+  // Production: verified TLS for TCP connections; no TLS for unix sockets (Cloud SQL Auth Proxy)
   if (isProduction) {
     // Unix socket path (e.g. /cloudsql/<connection-name>) — Cloud SQL Auth Proxy handles TLS
     // internally; the client connects via a local socket and must not add a second TLS layer.
@@ -52,42 +53,16 @@ function createDatabaseClient(): SQL {
       } as any);
     }
 
-    // TCP connection (AWS RDS) — TLS with CA certificate verification
-    // Allow overriding CA bundle location; fall back to common paths for dev and container builds.
-    const caPathEnv = process.env.POSTGRES_CA_CERT_PATH;
-    const candidatePaths = [
-      caPathEnv,
-      join(process.cwd(), "docker", "certs", "rds-ca-bundle.pem"),
-      join(process.cwd(), "certs", "rds-ca-bundle.pem"),
-    ].filter(Boolean) as string[];
+    const tls = resolveProductionPostgresTls(host);
 
-    const certPath = candidatePaths.find((p) => existsSync(p));
-
-    try {
-      if (!certPath) {
-        throw new Error("CA bundle not found in any known path");
-      }
-      const ca = readFileSync(certPath, "utf8");
-
-      return new SQL({
-        hostname: host,
-        port: port,
-        username: user,
-        password: password,
-        database: database,
-        tls: {
-          ca: ca,
-          rejectUnauthorized: true, // Enforce certificate validation
-        },
-      });
-    } catch (error) {
-      void log.error("Failed to load AWS RDS CA certificate", error);
-      throw new Error(
-        "Production database requires a CA certificate. " +
-          `Searched paths: ${candidatePaths.join(", ")}. ` +
-          "Set POSTGRES_CA_CERT_PATH to the correct file if needed.",
-      );
-    }
+    return new SQL({
+      hostname: host,
+      port: port,
+      username: user,
+      password: password,
+      database: database,
+      tls,
+    });
   }
 
   // Development: No SSL for localhost PostgreSQL
@@ -99,6 +74,61 @@ function createDatabaseClient(): SQL {
     password: password,
     database: database,
   });
+}
+
+export interface ProductionPostgresTlsOptions {
+  ca?: string;
+  rejectUnauthorized: true;
+}
+
+/**
+ * Select verified TLS trust without coupling Azure PostgreSQL to an AWS CA.
+ *
+ * Azure PostgreSQL certificates chain to public roots (including DigiCert Global
+ * Root G2 and Microsoft RSA Root CA 2017), which are maintained by the Alpine
+ * `ca-certificates` package in the production image. AWS RDS keeps its provider
+ * bundle fallback, while an explicit POSTGRES_CA_CERT_PATH always takes priority.
+ */
+export function resolveProductionPostgresTls(
+  host: string,
+  configuredCaPath = process.env.POSTGRES_CA_CERT_PATH?.trim(),
+): ProductionPostgresTlsOptions {
+  const isAwsRds = host.toLowerCase().endsWith(".rds.amazonaws.com");
+  const candidatePaths = [
+    configuredCaPath,
+    ...(isAwsRds
+      ? [join(process.cwd(), "docker", "certs", "rds-ca-bundle.pem"), join(process.cwd(), "certs", "rds-ca-bundle.pem")]
+      : []),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  const certPath = candidatePaths.find((candidate) => existsSync(candidate));
+
+  if (configuredCaPath && !certPath) {
+    throw new Error(`Configured PostgreSQL CA bundle was not found: ${configuredCaPath}`);
+  }
+
+  if (isAwsRds && !certPath) {
+    throw new Error(
+      "AWS RDS requires its maintained CA bundle. " +
+        `Searched paths: ${candidatePaths.join(", ")}. ` +
+        "Set POSTGRES_CA_CERT_PATH to the correct file if needed.",
+    );
+  }
+
+  if (certPath) {
+    try {
+      return {
+        ca: readFileSync(certPath, "utf8"),
+        rejectUnauthorized: true,
+      };
+    } catch (error) {
+      void log.error("Failed to load the configured PostgreSQL CA bundle", error);
+      throw new Error(`Unable to read PostgreSQL CA bundle: ${certPath}`);
+    }
+  }
+
+  // Omitting `ca` delegates root maintenance to the operating-system trust
+  // store while `rejectUnauthorized` preserves chain and hostname validation.
+  return { rejectUnauthorized: true };
 }
 
 // Lazily create the client so secrets/env vars are set first (avoids premature
