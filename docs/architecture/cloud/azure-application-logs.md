@@ -92,7 +92,7 @@ your Log Analytics workspace with the Log Analytics Tables REST API
 | `level` | Int | Pino numeric level |
 | `msg` | String | Pino log message |
 | `code` | String | Top-level or nested error code |
-| `type` | String | Error type/name |
+| `errorType` | String | Error type/name (`type` is a reserved column name and is rejected) |
 | `commandName` | String | Command context when available |
 | `message` | String | Error message with `msg` fallback |
 | `RawData` | String | Original JSON line for detailed Grafana logs |
@@ -101,8 +101,9 @@ Wait until the table appears in the workspace before creating the DCR.
 
 ## Step 3: Create and associate the DCR
 
-In Azure Portal, Monitor -> Data Collection Rules -> Create (platform **Linux**), associate
-the rule with the VM (installing Azure Monitor Agent if prompted), and add a
+Custom text log collection requires a **data collection endpoint** (DCE) in the same region;
+create one first and reference it from the DCR. Then create the DCR (platform **Linux**),
+associate it with the VM (installing Azure Monitor Agent if needed), and add a
 **Custom Text Logs** data source:
 
 - File pattern: `/var/log/tomoribot/tomoribot.jsonl`
@@ -117,20 +118,25 @@ provider availability retries) to control ingestion cost:
 ```kusto
 source
 | extend p = parse_json(RawData)
-| extend EventTime = unixtime_milliseconds_todatetime(tolong(p.time))
+| extend EventTime = datetime(1970-01-01) + tolong(p["time"]) * 1ms
 | extend TimeGenerated = iff(isnull(EventTime), TimeGenerated, EventTime)
 | extend level = toint(p.level)
 | extend msg = tostring(p.msg)
-| extend code = coalesce(tostring(p.code), tostring(p.err.code))
-| extend type = coalesce(tostring(p.type), tostring(p.err.name))
-| extend message = coalesce(tostring(p.message), tostring(p.err.message), tostring(p.msg))
-| extend commandName = coalesce(tostring(p.commandName), tostring(p.context.commandName))
+| extend code = iff(isempty(tostring(p.code)), tostring(p.err.code), tostring(p.code))
+| extend errorType = iff(isempty(tostring(p.type)), tostring(p.err.name), tostring(p.type))
+| extend message = iff(isempty(tostring(p.message)), iff(isempty(tostring(p.err.message)), tostring(p.msg), tostring(p.err.message)), tostring(p.message))
+| extend commandName = iff(isempty(tostring(p.commandName)), tostring(p.context.commandName), tostring(p.commandName))
 | where level >= 50
 | where msg != "metric:cache_sizes"
 | where RawData !contains "UNAVAILABLE"
 | where RawData !contains "RESOURCE_EXHAUSTED"
-| project TimeGenerated, Computer, FilePath, level, msg, code, type, message, commandName, RawData
+| project TimeGenerated, Computer, FilePath, level, msg, code, errorType, message, commandName, RawData
 ```
+
+DCR transformations compile against a restricted KQL subset, which shapes the query above:
+`coalesce()` and `unixtime_milliseconds_todatetime()` are not available (hence the nested
+`iff(isempty(...))` fallbacks and the epoch arithmetic), and `time` is a reserved keyword in
+the transform parser, so the Pino timestamp field must be accessed as `p["time"]`.
 
 ## Step 4: Test ingestion end to end
 
@@ -147,13 +153,56 @@ If nothing arrives, check: DCR-to-VM association, Azure Monitor Agent status on 
 file path and directory permissions, that each line is valid one-line UTF-8 JSON, DCR error
 metrics, and that the transform's projected columns match the table schema exactly.
 
+## Step 5: Cache-size metrics (second dataflow)
+
+The logger emits a periodic `cache_sizes` sample (custom level 52, one line every
+`CACHE_METRICS_INTERVAL_MS`, default 5 min) carrying every in-memory cache count plus process
+RSS. The error dataflow above deliberately drops these (`msg != "metric:cache_sizes"`) so the
+error table stays clean. To chart them, the same DCR carries a **second dataflow** that reads
+the same file stream but keeps only cache samples and projects their numeric fields into a
+dedicated table, `TomoriBotCacheMetrics_CL` (typed `int`/`real` columns for each cache plus
+`rss_mb`/`rss_pct`). Two dataflows over one input stream is the supported pattern; their
+`where` filters are disjoint, so no record is double-counted.
+
+Second dataflow transform (abridged — one `toint(p.<field>)` per cache column):
+
+```kusto
+source
+| where RawData contains "metric:cache_sizes"
+| extend p = parse_json(RawData)
+| extend TimeGenerated = datetime(1970-01-01) + tolong(p["time"]) * 1ms
+| extend rss_mb = toreal(p.rss_mb), rss_pct = toreal(p.rss_pct)
+| extend shortTermMemory = toint(p.shortTermMemory), tomoriState = toint(p.tomoriState) // ...
+| extend discord_users = toint(p.discord_users), discord_members = toint(p.discord_members) // ...
+| project TimeGenerated, Computer, rss_mb, rss_pct, /* app caches */, /* discord.js caches */
+```
+
+Cost note: this reverses the original "drop cache_sizes to save ingestion" decision, but the
+volume is tiny — ~288 samples/day at ~900 bytes (~260 KB/day), well within the free tier. The
+discord.js caches (`discord_users`, `discord_members`, `discord_channels`, `discord_presences`)
+are the real memory story; the app caches are usually small.
+
 ## Grafana
 
-Point error panels at an Azure Monitor data source whose identity has `Reader` on the
-resource group and `Log Analytics Reader` on the workspace. That identity needs **read access
-only** — ingestion permissions belong to the DCR/agent path, never to Grafana. Use a
-`Time series` panel for error counts over `level`/`TimeGenerated` and a `Logs` panel showing
-`TimeGenerated`, `code`/`type`, `message`, `commandName`, and `RawData`.
+Point panels at an Azure Monitor data source whose identity has `Reader` on the resource group
+and `Log Analytics Reader` on the workspace. That identity needs **read access only** —
+ingestion permissions belong to the DCR/agent path, never to Grafana. Current panels:
+
+- **Error count** (`Time series`) — `TomoriBotLogs_CL` counted per minute. `make-series`
+  returns packed arrays, so append
+  `| mv-expand TimeGenerated to typeof(datetime), Errors to typeof(long)` or the series will
+  not render.
+- **Error log** (`Logs`) — `TomoriBotLogs_CL` showing `TimeGenerated`, a title from
+  `code`/`errorType` + `message`, `commandName`, and `RawData`.
+- **Cache sizes** (`Time series`, stacked) — `TomoriBotCacheMetrics_CL`, one series per cache
+  column, for spotting growth/leaks.
+- **Token consumption** (`Time series`, stacked bars) — Postgres `stat_counters`,
+  `SUM(count)` of `tokens_in`+`tokens_out` grouped by `bucket` (day) and `metric_key` (model).
+  Daily grain only; the table stores no finer bucket.
+
+Beware GCP-carryover panel state: legend-click "hide series" overrides and series-name color
+rules reference the *old* query's series names and silently misfire on Azure queries (e.g. a
+`byNames: ["tomoribot"]` exclude override blanks an Azure series named `value`).
 
 ## Operational rules
 

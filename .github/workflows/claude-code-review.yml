@@ -26,9 +26,12 @@ jobs:
     # Draft guard: skip opened/synchronize/reopened while the PR is still a
     # draft, and allow ready_for_review (which only fires on draft → ready
     # transitions) so the first review happens exactly once regardless of
-    # whether the PR was created as a draft or not.
+    # whether the PR was created as a draft or not. Dependabot PRs are already
+    # constrained dependency bumps covered by CI, so do not spend Claude review
+    # credits on them.
     if: >-
-      github.event.pull_request.draft == false
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
 
     runs-on: ubuntu-latest
     # Scoped to the minimum the reviewer needs: read the diff, write the review.
@@ -73,7 +76,7 @@ jobs:
 
       - name: Checkout base repository
         if: steps.check-size.outputs.skip != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           # Checkout the base branch only — never the fork's head ref.
           # The review action reads the PR diff via GitHub API, not from disk.
