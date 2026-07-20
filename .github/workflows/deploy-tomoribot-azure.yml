@@ -24,6 +24,11 @@ on:
         required: false
         type: boolean
         default: false
+      allow_vm_replacement:
+        description: "Allow Terraform to replace the production VM after reviewing the saved plan"
+        required: false
+        type: boolean
+        default: false
 
 # Least-privilege default token: OIDC for Workload Identity Federation + read-only
 # repo contents for checkout. Jobs that need more (e.g. create-release) elevate locally.
@@ -464,8 +469,8 @@ jobs:
       # The Terraform backend uses Microsoft Entra ID for Blob data-plane access.
       # This requires Storage Blob Data Contributor on the tfstate container.
       ARM_USE_AZUREAD: "true"
-      # Variable names must match terraform/azure/variables.tf (all three are
-      # required inputs with no default — see terraform.ci.tfvars header).
+      # Variable names must match terraform/azure/variables.tf (required inputs
+      # with no default — see terraform.ci.tfvars header).
       TF_VAR_azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_postgres_admin_password: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
       TF_VAR_vm_admin_ssh_public_key: ${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}
@@ -629,6 +634,23 @@ jobs:
             exit 1
           fi
           echo "No destructive Azure PostgreSQL changes detected."
+
+      - name: Guard against unapproved VM replacement
+        working-directory: terraform/azure
+        env:
+          ALLOW_VM_REPLACEMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_vm_replacement == true }}
+        run: |
+          if terraform show -json tfplan | jq -e '.resource_changes[]
+            | select(.type=="azurerm_linux_virtual_machine")
+            | select(.change.actions | index("delete"))' >/dev/null; then
+            if [ "$ALLOW_VM_REPLACEMENT" != "true" ]; then
+              echo "The production VM would be destroyed or replaced. Review the saved plan, then rerun manually with allow_vm_replacement=true." >&2
+              exit 1
+            fi
+            echo "Approved manual deployment permits the planned production VM replacement."
+          else
+            echo "No production VM replacement detected."
+          fi
 
       - name: Terraform apply
         working-directory: terraform/azure

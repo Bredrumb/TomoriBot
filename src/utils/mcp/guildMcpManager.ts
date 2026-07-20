@@ -56,6 +56,14 @@ const CONNECT_TIMEOUT_MS = Number(process.env.GUILD_MCP_CONNECT_TIMEOUT_MS) || 1
 /** Timeout for individual tool execution calls (default: 30s) */
 const EXECUTION_TIMEOUT_MS = Number(process.env.GUILD_MCP_EXECUTION_TIMEOUT_MS) || 30_000;
 
+/**
+ * How long a server that failed to connect is quarantined before it may be
+ * re-dialed (default: 5 min). This is the circuit breaker that stops one
+ * unreachable server from re-paying the full connect timeout on every
+ * generation (and every fallback-model attempt), which otherwise stalls chat.
+ */
+const CONNECT_FAILURE_COOLDOWN_MS = Number(process.env.GUILD_MCP_FAILURE_COOLDOWN_MS) || 5 * 60_000;
+
 /** Eviction sweep interval (60s) */
 const EVICTION_INTERVAL_MS = 60_000;
 
@@ -75,6 +83,13 @@ class GuildMcpManager {
 
   /** Set of pool keys currently being connected (prevents duplicate connect races) */
   private connectingKeys = new Set<string>();
+
+  /**
+   * Circuit breaker: pool key → epoch-ms timestamp until which the server is
+   * quarantined after a failed connect. Cleared on successful connect, on
+   * explicit disconnect, and once the cooldown elapses.
+   */
+  private connectFailures = new Map<string, number>();
 
   private constructor() {
     // Start the eviction sweep
@@ -357,10 +372,9 @@ class GuildMcpManager {
   async testConnection(url: string, authToken?: string): Promise<GuildMCPTestResult> {
     let client: MCPClient | null = null;
     try {
-      client = new MCPClient({ name: "tomoribot-test", version: "1.0.0" });
-
-      // Connect with StreamableHTTP → SSE fallback + timeout
-      await this.connectWithFallback(client, url, authToken, "test");
+      // Connect with (Smithery →) StreamableHTTP → SSE fallback + timeout.
+      // Returns the fresh client from whichever transport succeeded.
+      client = await this.connectWithFallback("tomoribot-test", url, authToken, "test");
 
       // Discover tools
       const toolResult = await client.listTools();
@@ -400,6 +414,9 @@ class GuildMcpManager {
    */
   async disconnectGuildServer(serverId: number, name: string): Promise<void> {
     const key = this.poolKey(serverId, name);
+    // Always clear any quarantine so a fixed/re-added server isn't skipped by the
+    // circuit breaker, even if it never made it into the pool.
+    this.connectFailures.delete(key);
     const conn = this.pool.get(key);
     if (!conn) return;
 
@@ -487,6 +504,16 @@ class GuildMcpManager {
     const existing = this.pool.get(key);
     if (existing) return existing;
 
+    // Circuit breaker: skip servers that recently failed to connect until their
+    // cooldown elapses. Without this, one unreachable server re-pays the full
+    // connect timeout on EVERY generation (and every fallback-model attempt),
+    // blowing the stream inactivity budget and stalling chat for that guild.
+    const cooldownUntil = this.connectFailures.get(key);
+    if (cooldownUntil !== undefined) {
+      if (Date.now() < cooldownUntil) return null; // still quarantined — skip silently
+      this.connectFailures.delete(key); // cooldown elapsed — allow one fresh attempt
+    }
+
     // Prevent duplicate connect races
     if (this.connectingKeys.has(key)) {
       log.info(`[GuildMcpManager] Connection already in progress for ${key}, skipping`);
@@ -499,23 +526,22 @@ class GuildMcpManager {
       // 1. Decrypt auth token if present
       const authToken = await toolRepository.decryptMcpAuthToken(config);
 
-      // 2. Create MCP client
-      const client = new MCPClient({
-        name: `tomoribot-guild-${config.server_id}-${config.name}`,
-        version: "1.0.0",
-      });
+      // 2. Connect with transport fallback (fresh client per attempt) + timeout
+      const client = await this.connectWithFallback(
+        `tomoribot-guild-${config.server_id}-${config.name}`,
+        config.url,
+        authToken ?? undefined,
+        config.name,
+      );
 
-      // 3. Connect with transport (StreamableHTTP → SSE fallback) + timeout
-      await this.connectWithFallback(client, config.url, authToken ?? undefined, config.name);
-
-      // 4. Create CallableTool via mcpToTool (same as global MCP servers)
+      // 3. Create CallableTool via mcpToTool (same as global MCP servers)
       const callableTool = mcpToTool(client);
 
-      // 5. Discover function names
+      // 4. Discover function names
       const toolResult = await client.listTools();
       const functionNames = toolResult.tools.map((t) => t.name);
 
-      // 6. Build connection entry
+      // 5. Build connection entry
       const conn: GuildMCPConnection = {
         guildMcpId: config.guild_mcp_id ?? 0,
         serverId: config.server_id,
@@ -528,6 +554,7 @@ class GuildMcpManager {
       };
 
       this.pool.set(key, conn);
+      this.connectFailures.delete(key); // clear any prior quarantine on success
       log.success(
         `[GuildMcpManager] Connected to guild MCP server "${config.name}" ` +
           `(server: ${config.server_id}, tools: ${functionNames.length}: ${functionNames.join(", ")})`,
@@ -535,8 +562,11 @@ class GuildMcpManager {
 
       return conn;
     } catch (error) {
+      // Quarantine so this server is not re-dialed on every generation.
+      this.connectFailures.set(key, Date.now() + CONNECT_FAILURE_COOLDOWN_MS);
       log.error(
-        `[GuildMcpManager] Failed to connect to guild MCP server "${config.name}" (server: ${config.server_id})`,
+        `[GuildMcpManager] Failed to connect to guild MCP server "${config.name}" (server: ${config.server_id}); ` +
+          `quarantining for ${Math.round(CONNECT_FAILURE_COOLDOWN_MS / 1000)}s`,
         error,
       );
       return null;
@@ -563,37 +593,40 @@ class GuildMcpManager {
    * @param serverLabel - Label for log messages
    */
   private async connectWithFallback(
-    client: MCPClient,
+    clientName: string,
     url: string,
     authToken?: string,
     serverLabel?: string,
-  ): Promise<void> {
+  ): Promise<MCPClient> {
     const label = serverLabel ?? url;
     const urlValidation = await validateRemoteMcpUrl(url);
     if (!urlValidation.valid) {
       throw new Error(urlValidation.details ?? `Guild MCP URL failed runtime validation for '${label}'.`);
     }
 
+    // Every transport attempt below uses its OWN fresh MCP client. The SDK's Client
+    // throws "Already connected to a transport" if the same instance is reused after
+    // a failed/timed-out connect, which previously broke the SSE fallback outright.
+    const errors: string[] = [];
+
     // 1. Try Smithery Connect for *.run.tools URLs
     if (isSmitheryUrl(url) && authToken) {
+      const client = this.newMcpClient(clientName);
       try {
         const smitheryClient = new Smithery({ apiKey: authToken });
         const { transport: smitheryTransport } = await createSmitheryConnection({
           client: smitheryClient,
           mcpUrl: url,
         });
-        await Promise.race([
-          client.connect(smitheryTransport),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Smithery connection to '${label}' timed out`)), CONNECT_TIMEOUT_MS),
-          ),
-        ]);
+        await this.connectWithTimeout(client, smitheryTransport, label, "Smithery");
         log.info(`[GuildMcpManager] Connected via Smithery Connect: ${label}`);
-        return;
+        return client;
       } catch (smitheryError) {
+        const message = smitheryError instanceof Error ? smitheryError.message : String(smitheryError);
+        errors.push(`Smithery: ${message}`);
+        await this.safeCloseClient(client);
         log.info(
-          `[GuildMcpManager] Smithery Connect failed for "${label}", falling back to StreamableHTTP: ` +
-            `${smitheryError instanceof Error ? smitheryError.message : String(smitheryError)}`,
+          `[GuildMcpManager] Smithery Connect failed for "${label}", falling back to StreamableHTTP: ${message}`,
         );
       }
     }
@@ -610,41 +643,86 @@ class GuildMcpManager {
     };
 
     // 2. Try StreamableHTTP (modern MCP transport)
-    try {
-      const streamableTransport = new StreamableHTTPClientTransport(parsedUrl, {
-        fetch: fetchUserRemoteUrl,
-        requestInit,
-      });
-      await Promise.race([
-        client.connect(streamableTransport),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Connection to '${label}' timed out`)), CONNECT_TIMEOUT_MS),
-        ),
-      ]);
-      log.info(`[GuildMcpManager] Connected via StreamableHTTP: ${label}`);
-      return;
-    } catch (streamableError) {
-      log.info(
-        `[GuildMcpManager] StreamableHTTP failed for "${label}", falling back to SSE: ` +
-          `${streamableError instanceof Error ? streamableError.message : String(streamableError)}`,
-      );
+    {
+      const client = this.newMcpClient(clientName);
+      try {
+        const streamableTransport = new StreamableHTTPClientTransport(parsedUrl, {
+          fetch: fetchUserRemoteUrl,
+          requestInit,
+        });
+        await this.connectWithTimeout(client, streamableTransport, label, "StreamableHTTP");
+        log.info(`[GuildMcpManager] Connected via StreamableHTTP: ${label}`);
+        return client;
+      } catch (streamableError) {
+        const message = streamableError instanceof Error ? streamableError.message : String(streamableError);
+        errors.push(`StreamableHTTP: ${message}`);
+        await this.safeCloseClient(client);
+        log.info(`[GuildMcpManager] StreamableHTTP failed for "${label}", falling back to SSE: ${message}`);
+      }
     }
 
     // 3. Fall back to SSE transport
-    const sseTransport = new SSEClientTransport(parsedUrl, {
-      fetch: fetchUserRemoteUrl,
-      requestInit,
-      eventSourceInit: {
-        fetch: fetchUserRemoteUrl,
-      },
-    });
-    await Promise.race([
-      client.connect(sseTransport),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`SSE connection to '${label}' timed out`)), CONNECT_TIMEOUT_MS),
-      ),
-    ]);
-    log.info(`[GuildMcpManager] Connected via SSE fallback: ${label}`);
+    {
+      const client = this.newMcpClient(clientName);
+      try {
+        const sseTransport = new SSEClientTransport(parsedUrl, {
+          fetch: fetchUserRemoteUrl,
+          requestInit,
+          eventSourceInit: {
+            fetch: fetchUserRemoteUrl,
+          },
+        });
+        await this.connectWithTimeout(client, sseTransport, label, "SSE");
+        log.info(`[GuildMcpManager] Connected via SSE fallback: ${label}`);
+        return client;
+      } catch (sseError) {
+        const message = sseError instanceof Error ? sseError.message : String(sseError);
+        errors.push(`SSE: ${message}`);
+        await this.safeCloseClient(client);
+        throw new Error(`All MCP transports failed for '${label}' — ${errors.join("; ")}`);
+      }
+    }
+  }
+
+  /** Create a fresh MCP client. One is used per transport attempt (see connectWithFallback). */
+  private newMcpClient(clientName: string): MCPClient {
+    return new MCPClient({ name: clientName, version: "1.0.0" });
+  }
+
+  /**
+   * Connect a client to a transport with a hard timeout, always clearing the timer.
+   *
+   * @param client - Fresh MCP client to connect
+   * @param transport - Transport to connect through
+   * @param label - Server label for the timeout message
+   * @param kind - Transport kind for the timeout message (e.g. "SSE")
+   */
+  private async connectWithTimeout(
+    client: MCPClient,
+    transport: Parameters<MCPClient["connect"]>[0],
+    label: string,
+    kind: string,
+  ): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        client.connect(transport),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`${kind} connection to '${label}' timed out`)), CONNECT_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /** Best-effort close of a client whose connect attempt failed, releasing any half-open transport. */
+  private async safeCloseClient(client: MCPClient): Promise<void> {
+    try {
+      await client.close();
+    } catch {
+      /* ignore — the client may have no active transport to close */
+    }
   }
 
   /**
@@ -679,6 +757,14 @@ class GuildMcpManager {
   private async evictIdleConnections(): Promise<void> {
     const now = Date.now();
     const toEvict: string[] = [];
+
+    // Prune expired circuit-breaker entries so the map stays bounded even for
+    // servers that were removed from config and are never dialed again.
+    for (const [key, cooldownUntil] of this.connectFailures.entries()) {
+      if (now >= cooldownUntil) {
+        this.connectFailures.delete(key);
+      }
+    }
 
     for (const [key, conn] of this.pool.entries()) {
       if (now - conn.lastUsedAt > CONNECTION_TTL_MS) {

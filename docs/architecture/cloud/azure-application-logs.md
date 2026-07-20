@@ -138,6 +138,18 @@ DCR transformations compile against a restricted KQL subset, which shapes the qu
 `iff(isempty(...))` fallbacks and the epoch arithmetic), and `time` is a reserved keyword in
 the transform parser, so the Pino timestamp field must be accessed as `p["time"]`.
 
+### Terraform ownership of VM attachments
+
+The existing workspace, DCE, DCR definitions, and custom tables remain external to Terraform, but
+the production VM's `AzureMonitorLinuxAgent` extension and its VM Insights/application-log DCR
+associations are Terraform-managed. Their complete, non-sensitive existing resource IDs are set in
+`terraform/azure/terraform.ci.tfvars` and must be updated if either DCR is deliberately replaced.
+
+This boundary is intentional: replacing the VM deletes its extensions and associations, while the
+workspace and DCRs survive. The next Terraform apply therefore restores collection without
+rewriting the existing streams, table schemas, or ingestion transforms. Do not re-create the
+workspace or DCR definitions merely because a replacement VM has no incoming data.
+
 ## Step 4: Test ingestion end to end
 
 Append a harmless synthetic level-50 record to the host file (do not manufacture a real bot

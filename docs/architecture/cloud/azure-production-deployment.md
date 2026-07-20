@@ -58,6 +58,34 @@ environment-scoped Run Command deployment succeeds.
 
 The workflow deliberately separates recurring releases from one-time lifecycle operations.
 
+### VM replacement protection and monitoring recovery
+
+Terraform plans that delete or replace the production VM stop before apply. After reviewing the
+saved plan, an operator may approve the replacement only through a manual dispatch with
+`allow_vm_replacement=true`; release-branch pushes cannot bypass this guard. This matters because
+changes to VM `custom_data` are replacement operations, not in-place updates.
+
+The Azure Monitor Linux Agent and both DCR associations are Terraform-managed children of the VM.
+The DCR definitions, DCE, Log Analytics workspace, and custom tables remain externally managed and
+are referenced through the non-sensitive DCR resource IDs in `terraform.ci.tfvars`. A normal
+Terraform apply installs the agent and restores both associations on the current VM. A later
+approved VM replacement destroys and recreates these attachments in the same dependency graph, so
+guest-memory and cache telemetry recover without a separate portal operation. Update the committed
+IDs only when an operator deliberately replaces a DCR.
+
+To inventory the existing DCR IDs before the first adoption apply, authenticate Azure CLI and run:
+
+```sh
+az resource list \
+  --resource-type Microsoft.Insights/dataCollectionRules \
+  --query "[].{name:name,resourceGroup:resourceGroup,id:id}" \
+  --output table
+```
+
+If the current VM already has an extension or association with the Terraform names, import that live
+object instead of deleting it; a recreated VM normally has no such child objects, so the first apply
+creates them.
+
 ### Database bootstrap
 
 For the first non-administrator cutover, set the one-time environment flag described above before

@@ -34,6 +34,12 @@ Image generation progress notices are also backend-aware. They only announce def
 
 Guild MCP tools are appended after built-in and global MCP filtering, then collision-checked. If a guild enables a `url_fetcher` MCP server with at least one function, TomoriBot hides bundled `fetch_url` for that guild so the LLM receives one URL-fetch surface. Prompt macro resolution follows the same rule: `{url_fetch_tool}` prefers guild `url_fetcher` functions, then falls back to `fetch_url`.
 
+### Connection resilience
+
+Guild MCP servers are connected lazily and pooled (`guildMcpManager`), on the critical path of tool-gathering before each generation. Each connect attempt tries transports in order — Smithery Connect (for `*.run.tools`), then StreamableHTTP, then SSE — using a **fresh MCP client per attempt** (reusing one client across attempts triggers the SDK's "Already connected to a transport" error and breaks the fallback). Every attempt is bounded by `GUILD_MCP_CONNECT_TIMEOUT_MS`.
+
+A **circuit breaker** quarantines any server that fails to connect for `GUILD_MCP_FAILURE_COOLDOWN_MS` (default 5 min), so a single unreachable server cannot re-pay its full connect timeout on every generation — and every fallback-model attempt — which would otherwise blow the stream inactivity budget and stall chat for that guild. The quarantine is cleared early on a successful connect or when the server is removed/disabled.
+
 ## NovelAI
 
 `fetch_url` is not exposed to NovelAI initially. NovelAI GLM tool calling is prompt-based and token-constrained, and fetched-page payloads need separate prompt-budget validation before enabling this tool.
