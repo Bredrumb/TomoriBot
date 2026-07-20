@@ -165,7 +165,7 @@ Rationale: a narrowly authenticated read-only SQL datasource is simpler and more
 - [ ] Verify application startup, schema bootstrap, backup tooling, and representative queries through the private endpoint.
 - [x] Remove the VM public-IP firewall rule after proving the running app uses the private endpoint. `(live)`
 - [x] Keep PostgreSQL public network access enabled only for the Terraform-managed Grafana `/32`. `(live)`
-- [ ] Confirm a connection from outside the allowed Grafana `/32` is rejected before password authentication.
+- [x] Confirm a connection from outside the allowed Grafana `/32` is rejected before password authentication. `(live: GitHub-hosted runner probe was rejected before the deliberately invalid credential reached authentication)`
 - [x] Add Terraform validation that accepts one explicit, non-zero Grafana IPv4 and manages only that one public firewall rule. `(working tree)`
 
 ### Phase 2 gate
