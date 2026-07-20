@@ -76,8 +76,30 @@ merging. Later operator-requested reruns can be manually dispatched from `releas
 The administrator bundle contains only PostgreSQL connection fields, is staged for the one-shot
 container, and is deleted when Run Command exits. It is never installed as `/etc/tomoribot/secrets.json`.
 For an existing PostgreSQL server, bootstrap skips all schema and seed operations and changes only
-the runtime role and its privileges. Schema-container failures are retained in the access-controlled
+the runtime role and its privileges — schema and migrations are instead applied on every deploy by the
+separate always-on step below. Schema-container failures are retained in the access-controlled
 Azure Run Command record without exposing that output in the public Actions log.
+
+### Schema and migration application
+
+Because the runtime role has no DDL privilege, the running bot cannot apply schema changes
+(`DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`). To preserve the pre-hardening guarantee that idempotent
+schema and migrations always apply on deploy, **every** deploy runs
+[`migrate-database.sh`](../../../deploy/azure/migrate-database.sh) as a dedicated step before the bot
+is (re)started. It:
+
+1. runs the same `initializeCli` entrypoint the local boot path uses (idempotent `schema.sql` plus the
+   tracked `NNN_*.sql` migration runner), in a one-shot container using the database-only administrator
+   bundle — the only identity permitted to create tables or apply migrations in production;
+2. touches no roles or grants: new tables inherit runtime and Grafana privileges automatically from the
+   `ALTER DEFAULT PRIVILEGES` rules `bootstrap-database.sh` installs for the administrator role; and
+3. fails the deploy (before the bot restarts) if migration does not report success.
+
+Destructive migrations (`DROP`, `ALTER COLUMN ... TYPE`, `TRUNCATE`, unfiltered `DELETE`, etc.) are still
+blocked upstream by the **Destructive migration gate** unless the deployer opts into a pre-deploy backup
+(a `(Checkpoint)` commit message on push, or `create_db_backup=true` on manual dispatch). This is why the
+gate matters: routine pushes now genuinely apply migrations, so an unguarded destructive change is caught
+before it reaches the database.
 
 ### Recurring deployment
 
@@ -92,7 +114,9 @@ only these responsibilities:
   FQDN, root-owned configuration modes, and `http://localhost:8081/healthz`.
 
 The runtime container sets `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`, so startup verifies database
-connectivity but cannot execute migrations or `pg_cron` administration.
+connectivity but cannot execute migrations or `pg_cron` administration. Migrations are applied
+out-of-band on every deploy by the privileged step in [Schema and migration application](#schema-and-migration-application),
+which runs before this deploy step.
 
 ### Host lockdown
 

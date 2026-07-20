@@ -685,6 +685,7 @@ jobs:
           compose_b64=$(base64 -w 0 deploy/azure/docker-compose.yml)
           deploy_script_b64=$(base64 -w 0 deploy/azure/run-command-deploy.sh)
           bootstrap_script_b64=$(base64 -w 0 deploy/azure/bootstrap-database.sh)
+          migrate_script_b64=$(base64 -w 0 deploy/azure/migrate-database.sh)
           lockdown_script_b64=$(base64 -w 0 deploy/azure/host-lockdown.sh)
 
           for value in "$runtime_b64" "$docker_token_b64"; do
@@ -698,6 +699,7 @@ jobs:
             echo "compose_b64=$compose_b64"
             echo "deploy_script_b64=$deploy_script_b64"
             echo "bootstrap_script_b64=$bootstrap_script_b64"
+            echo "migrate_script_b64=$migrate_script_b64"
             echo "lockdown_script_b64=$lockdown_script_b64"
             echo "runtime_secret_migrated=$runtime_secret_migrated"
           } >> "$GITHUB_OUTPUT"
@@ -776,6 +778,73 @@ jobs:
 
           if [[ "$response_message" != *TOMORIBOT_DATABASE_BOOTSTRAP_SUCCEEDED* ]]; then
             echo "Database bootstrap failed; inspect the access-controlled Azure Run Command record." >&2
+            exit 1
+          fi
+
+      - name: Apply database schema and migrations
+        # Runs on EVERY deploy (unlike the gated role bootstrap above). The runtime
+        # bot role has no DDL privilege, so this privileged container is the only path
+        # that applies idempotent schema.sql + pending NNN_*.sql migrations to the
+        # existing production database. Destructive migrations are still blocked
+        # upstream by the "Destructive migration gate" step unless a backup was opted
+        # into. New tables inherit runtime/Grafana grants via the ALTER DEFAULT
+        # PRIVILEGES rules the bootstrap step installs, so this step touches no roles.
+        env:
+          VM_NAME: ${{ steps.tf_outputs.outputs.vm_name }}
+          RESOURCE_GROUP: ${{ steps.tf_outputs.outputs.resource_group_name }}
+          MIGRATE_SCRIPT_B64: ${{ steps.payloads.outputs.migrate_script_b64 }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN_B64: ${{ steps.payloads.outputs.docker_token_b64 }}
+          TOMORIBOT_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tomoribot@${{ needs.push-to-docker-hub.outputs.image_digest }}
+          TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
+          POSTGRES_ADMIN_LOGIN: ${{ steps.tf_outputs.outputs.postgres_admin_login }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # 1. Assemble the migration (admin) DB credential bundle, same shape as the
+          #    role-bootstrap step (host/port/db from the runtime secret, admin login).
+          # shellcheck disable=SC2016
+          migration_json=$(jq -cn \
+            --arg user "$POSTGRES_ADMIN_LOGIN" \
+            --arg password "$POSTGRES_ADMIN_PASSWORD" \
+            --arg host "$(jq -er '.POSTGRES_HOST' <<<"$TOMORI_SECRETS_JSON")" \
+            --arg port "$(jq -er '.POSTGRES_PORT | tostring' <<<"$TOMORI_SECRETS_JSON")" \
+            --arg database "$(jq -er '.POSTGRES_DB' <<<"$TOMORI_SECRETS_JSON")" \
+            '{
+              POSTGRES_USER: $user,
+              POSTGRES_PASSWORD: $password,
+              POSTGRES_HOST: $host,
+              POSTGRES_PORT: $port,
+              POSTGRES_DB: $database
+            }')
+          migration_b64=$(printf '%s' "$migration_json" | base64 -w 0)
+          echo "::add-mask::$migration_b64"
+
+          # 2. Run migrate-database.sh on the VM via Azure Run Command.
+          # shellcheck disable=SC2016
+          response_message=$(az vm run-command invoke \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$VM_NAME" \
+            --command-id RunShellScript \
+            --scripts \
+              'set -eu' \
+              'migrate_script=$(mktemp /var/lib/waagent/tomoribot-db-migrate.XXXXXX)' \
+              'trap '\''rm -f "$migrate_script"'\'' EXIT' \
+              'printf '\''%s'\'' "$migrateScriptB64" | base64 --decode >"$migrate_script"' \
+              'chmod 0700 "$migrate_script"' \
+              'bash "$migrate_script"' \
+            --parameters \
+              "migrateScriptB64=$MIGRATE_SCRIPT_B64" \
+              "migrationSecretsB64=$migration_b64" \
+              "dockerHubUsername=$DOCKERHUB_USERNAME" \
+              "dockerHubTokenB64=$DOCKERHUB_TOKEN_B64" \
+              "tomoribotImage=$TOMORIBOT_IMAGE" \
+            --query 'value[0].message' \
+            --output tsv \
+            --only-show-errors)
+
+          if [[ "$response_message" != *TOMORIBOT_DATABASE_MIGRATION_SUCCEEDED* ]]; then
+            echo "Database migration failed; inspect the access-controlled Azure Run Command record." >&2
             exit 1
           fi
 
