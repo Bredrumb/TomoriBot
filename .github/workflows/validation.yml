@@ -8,12 +8,58 @@ on:
     branches:
       - release
   workflow_dispatch:
+    inputs:
+      verify_postgres_firewall:
+        description: "One-time proof that an external runner is rejected before PostgreSQL authentication"
+        required: false
+        type: boolean
+        default: false
   workflow_call:
 
 permissions:
   contents: read
 
 jobs:
+  verify-postgres-firewall:
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_postgres_firewall == true
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify rejection before authentication
+        run: |
+          set -euo pipefail
+          runner_ip=$(curl --fail --silent --show-error --retry 3 https://api.ipify.org)
+          echo "External runner address: ${runner_ip}"
+
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+          set +e
+          output=$(PGCONNECT_TIMEOUT=10 \
+            PGPASSWORD=deliberately-invalid-firewall-probe \
+            psql \
+              "host=tomoribot-postgres.postgres.database.azure.com port=5432 dbname=tomoribot user=firewall_probe sslmode=verify-full" \
+              --command 'SELECT 1' 2>&1)
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "Firewall probe unexpectedly connected." >&2
+            exit 1
+          fi
+
+          if grep -Eqi 'password authentication failed|role .* does not exist' <<<"$output"; then
+            echo "External runner reached PostgreSQL authentication; firewall rejection was not proven." >&2
+            exit 1
+          fi
+
+          if grep -Eqi 'no pg_hba\.conf entry|not allowed|timeout expired|connection timed out|server closed the connection unexpectedly' <<<"$output"; then
+            echo "External runner was rejected before PostgreSQL password authentication."
+            exit 0
+          fi
+
+          echo "Firewall probe failed with an unrecognized pre-authentication response." >&2
+          exit 1
+
   validate:
     runs-on: ubuntu-24.04
     services:
