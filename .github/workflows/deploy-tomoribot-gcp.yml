@@ -51,7 +51,6 @@ jobs:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           ARTIFACT_REGISTRY_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
           CLOUD_SQL_INSTANCE_PASSWORD: ${{ secrets.CLOUD_SQL_INSTANCE_PASSWORD }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           echo "=========================================="
           echo "Validating GitHub Secrets (GCP Infrastructure)"
@@ -65,7 +64,6 @@ jobs:
           if [ -z "$GCP_SERVICE_ACCOUNT" ];               then missing_secrets+=("GCP_SERVICE_ACCOUNT"); fi
           if [ -z "$ARTIFACT_REGISTRY_REPO" ];            then missing_secrets+=("ARTIFACT_REGISTRY_REPO"); fi
           if [ -z "$CLOUD_SQL_INSTANCE_PASSWORD" ];       then missing_secrets+=("CLOUD_SQL_INSTANCE_PASSWORD"); fi
-          if [ -z "$PAT_TOKEN" ];                         then missing_secrets+=("PAT_TOKEN"); fi
 
           if [ ${#missing_secrets[@]} -gt 0 ]; then
             echo "Missing required GCP secrets: ${missing_secrets[*]}"
@@ -186,9 +184,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.semgrep.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-dependencies:
@@ -223,9 +221,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.bun-audit.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-secrets:
@@ -259,9 +257,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.trufflehog.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-container:
@@ -303,9 +301,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.trivy.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-gate:
@@ -377,7 +375,7 @@ jobs:
         id: package_version
         run: |
           VERSION=$(jq -r '.version' package.json)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Package version: v$VERSION"
 
       - name: Check if version exists in Artifact Registry
@@ -391,10 +389,10 @@ jobs:
             --project="${GCP_PROJECT_ID}" \
             --filter="tag=v${VERSION}" \
             --format="value(tag)" 2>/dev/null | grep -q "v${VERSION}"; then
-            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "version_exists=true" >> "$GITHUB_OUTPUT"
             echo "Version v$VERSION already exists in Artifact Registry — skipping deployment"
           else
-            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "version_exists=false" >> "$GITHUB_OUTPUT"
             echo "Version v$VERSION is new — will deploy"
           fi
 
@@ -403,14 +401,14 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "Manual dispatch — allowing Terraform apply"
-            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           BEFORE="${{ github.event.before }}"
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "No previous ref available — allowing Terraform apply conservatively"
-            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -418,10 +416,10 @@ jobs:
           if [ -n "$changed_files" ]; then
             echo "Infrastructure changes detected:"
             echo "$changed_files"
-            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "No GCP infrastructure changes detected"
-            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Tag and push image to Artifact Registry
@@ -483,8 +481,8 @@ jobs:
             echo "Terraform deploy skipped: version tag exists and no infra changes were detected"
           fi
 
-          echo "uri=${DEPLOY_IMAGE_URI}" >> $GITHUB_OUTPUT
-          echo "deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
+          echo "uri=${DEPLOY_IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          echo "deploy=${SHOULD_DEPLOY}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push custom SearXNG image
         id: searxng_uri
@@ -503,7 +501,7 @@ jobs:
           docker push "${SEARXNG_BASE}:${IMAGE_TAG}"
           docker push "${SEARXNG_BASE}:latest"
           echo "Pushed custom SearXNG image: ${SEARXNG_BASE}:${IMAGE_TAG}"
-          echo "uri=${SEARXNG_BASE}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "uri=${SEARXNG_BASE}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
   deploy-with-terraform:
     runs-on: ubuntu-24.04
@@ -618,8 +616,8 @@ jobs:
       - name: Get commit information
         id: commit-info
         run: |
-          echo "hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "message=$(git log -1 --pretty=format:'%s')" >> $GITHUB_OUTPUT
+          echo "hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "message=$(git log -1 --pretty=format:'%s')" >> "$GITHUB_OUTPUT"
 
       - name: Authenticate to GCP (Workload Identity Federation)
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
@@ -642,7 +640,7 @@ jobs:
 
             if [ "$READY" = "True" ]; then
               echo "Cloud Run service is ready!"
-              echo "status=success" >> $GITHUB_OUTPUT
+              echo "status=success" >> "$GITHUB_OUTPUT"
               exit 0
             fi
 
@@ -651,7 +649,7 @@ jobs:
           done
 
           echo "Cloud Run service did not become ready within 10 minutes."
-          echo "status=failed" >> $GITHUB_OUTPUT
+          echo "status=failed" >> "$GITHUB_OUTPUT"
           exit 1
 
       - name: Check recent Cloud Logging output
@@ -681,7 +679,7 @@ jobs:
       - name: Get version from package.json
         id: version
         run: |
-          echo "version=$(jq -r '.version' package.json)" >> $GITHUB_OUTPUT
+          echo "version=$(jq -r '.version' package.json)" >> "$GITHUB_OUTPUT"
 
       - name: Check if version-specific release folder exists
         id: check
@@ -690,9 +688,9 @@ jobs:
         run: |
           versionFolder=".github/release/v$VERSION"
           if [ -d "$versionFolder" ]; then
-            echo "has-assets=true" >> $GITHUB_OUTPUT
+            echo "has-assets=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has-assets=false" >> $GITHUB_OUTPUT
+            echo "has-assets=false" >> "$GITHUB_OUTPUT"
           fi
 
   create-release:
@@ -709,13 +707,13 @@ jobs:
       - name: Check if GitHub release already exists
         id: release-check
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
         run: |
           if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Prepare release notes and Discord notification
@@ -743,12 +741,12 @@ jobs:
           releaseNotes="${releaseNotes//\{REPO_NAME\}/${{ github.event.repository.name }}}"
 
           echo "$releaseNotes" > processed-release-notes.md
-          echo "image-name=$imageName" >> $GITHUB_OUTPUT
+          echo "image-name=$imageName" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         if: steps.release-check.outputs.exists != 'true'
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
         run: |
           gh release create "v$VERSION" \
@@ -765,8 +763,7 @@ jobs:
           MENTION_ROLE_ID: ${{ secrets.RELEASE_DISCORD_MENTION_ROLE_ID }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          releaseNotes=$(cat processed-release-notes.md)
-          releaseNotes=$(echo "$releaseNotes" | sed 's/!\[[^]]*\]([^)]*)//g')
+          releaseNotes=$(sed 's/!\[[^]]*\]([^)]*)//g' processed-release-notes.md)
           printf '%s' "$releaseNotes" > discord_release_notes.txt
 
           python3 .github/scripts/discord_split.py

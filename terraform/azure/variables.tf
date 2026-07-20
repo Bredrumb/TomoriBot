@@ -47,16 +47,16 @@ variable "vm_subnet_address_prefix" {
   default     = "10.80.1.0/24"
 }
 
-variable "ssh_source_address_prefix" {
-  description = "Source address prefix allowed to SSH to the VM. Use an IP/CIDR to restrict administration."
+variable "postgres_private_endpoint_subnet_address_prefix" {
+  description = "CIDR block for the PostgreSQL private endpoint subnet."
   type        = string
-  default     = "*"
+  default     = "10.80.2.0/24"
 }
 
 # --- VM ---
 
 variable "vm_admin_ssh_public_key" {
-  description = "Public half of the dedicated Phase 0 deploy keypair used for azureuser SSH."
+  description = "Provisioning-only public key required by Azure. Public SSH is disabled; CI never receives the private key."
   type        = string
 
   validation {
@@ -152,16 +152,12 @@ variable "postgres_backup_retention_days" {
   default     = 7
 }
 
-variable "admin_ip" {
-  description = "Optional single IPv4 address allowed through the PostgreSQL firewall for Eli/admin access."
+variable "grafana_egress_ip" {
+  description = "Exact public IPv4 address of the operator-managed Grafana datasource. Produces one exact-address PostgreSQL firewall rule."
   type        = string
-  default     = null
 
   validation {
-    condition = (
-      var.admin_ip == null ||
-      can(regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", var.admin_ip))
-    )
-    error_message = "admin_ip must be null or a single IPv4 address."
+    condition     = can(regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", var.grafana_egress_ip)) && var.grafana_egress_ip != "0.0.0.0"
+    error_message = "grafana_egress_ip must be one explicit non-zero IPv4 address."
   }
 }

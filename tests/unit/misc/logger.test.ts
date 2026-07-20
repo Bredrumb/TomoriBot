@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildLogStreams } from "@/utils/misc/logger";
+import { buildLogStreams, LOG_REDACTION_PATHS, sanitizeLogPayload } from "@/utils/misc/logger";
 import pino from "pino";
 
 /**
@@ -24,6 +24,7 @@ const createProductionLikeLogger = (streams: pino.StreamEntry[]) =>
     {
       level: "error",
       customLevels: { success: 35, section: 31, metric: 52, rateLimit: 55 },
+      redact: { paths: LOG_REDACTION_PATHS, censor: "[REDACTED]" },
     },
     pino.multistream(streams),
   );
@@ -76,5 +77,36 @@ describe("buildLogStreams", () => {
     expect((errorRecord?.context as Record<string, unknown>).commandName).toBe("chat");
     expect(metricRecord?.level).toBe(52);
     expect(metricRecord?.msg).toBe("metric:cache_sizes");
+  });
+
+  test("representative credentials never reach stdout or the JSONL sink", () => {
+    const stdoutSink = new MemorySink();
+    const fileSink = new MemorySink();
+    const streams = buildLogStreams("/app/logs/tomoribot.jsonl", stdoutSink, () => fileSink);
+    if (!streams) throw new Error("Expected stream entries when a file path is configured");
+
+    const logger = createProductionLikeLogger(streams);
+    const secrets = ["super-secret-password", "provider-api-token", "discord-webhook-token", "signed-query-value"];
+
+    logger.error(
+      sanitizeLogPayload({
+        password: secrets[0],
+        context: {
+          apiKey: secrets[1],
+          webhookUrl: `https://discord.com/api/webhooks/123/${secrets[2]}`,
+          requestUrl: `https://example.com/file?X-Amz-Signature=${secrets[3]}`,
+          headers: { authorization: `Bearer ${secrets[1]}`, cookie: `session=${secrets[0]}` },
+        },
+        err: {
+          message: `Database failed at postgresql://tomori:${secrets[0]}@db.example.com/tomori`,
+        },
+      }),
+      "Sanitized failure",
+    );
+
+    expect(stdoutSink.lines).toEqual(fileSink.lines);
+    const serialized = stdoutSink.lines.join("\n");
+    for (const secret of secrets) expect(serialized).not.toContain(secret);
+    expect(serialized).toContain("[REDACTED]");
   });
 });

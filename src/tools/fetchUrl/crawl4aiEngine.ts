@@ -4,7 +4,10 @@ import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { log } from "@/utils/misc/logger";
 import type { FetchEngine, FetchOpts } from "./types";
 
-const MAX_CONTENT_LENGTH = 50000;
+const MAX_CONTENT_LENGTH = Math.max(
+  1,
+  Number.parseInt(process.env.FETCH_URL_MAX_CONTENT_LENGTH ?? "50000", 10) || 50000,
+);
 
 interface Crawl4aiToolData {
   source: "http";

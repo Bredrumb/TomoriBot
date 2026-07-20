@@ -95,7 +95,7 @@ your Log Analytics workspace with the Log Analytics Tables REST API
 | `errorType` | String | Error type/name (`type` is a reserved column name and is rejected) |
 | `commandName` | String | Command context when available |
 | `message` | String | Error message with `msg` fallback |
-| `RawData` | String | Original JSON line for detailed Grafana logs |
+| `RawData` | String | Original JSON line for access-controlled troubleshooting |
 
 Wait until the table appears in the workspace before creating the DCR.
 
@@ -200,11 +200,25 @@ ingestion permissions belong to the DCR/agent path, never to Grafana. Current pa
   `SUM(count)` of `tokens_in`+`tokens_out` grouped by `bucket` (day) and `metric_key` (model).
   Daily grain only; the table stores no finer bucket.
 
+The token panel uses Grafana's separate read-only PostgreSQL login over TLS `verify-full`; it must
+not use the application runtime or administrator credential. Keep the Azure Monitor VM/error/cache
+panels alongside the direct PostgreSQL statistics panels. The retired
+`Custom-TomoriBotTokenMetrics_CL` DCR flow must not be recreated: PostgreSQL remains authoritative
+for token, cost, and usage statistics.
+
 Beware GCP-carryover panel state: legend-click "hide series" overrides and series-name color
 rules reference the *old* query's series names and silently misfire on Azure queries (e.g. a
 `byNames: ["tomoribot"]` exclude override blanks an Azure series named `value`).
 
 ## Operational rules
+
+- **`RawData` is privileged troubleshooting data.** Access is limited to identities with Log
+  Analytics read access, currently the designated operator/Grafana identity. It can contain error
+  context after structured redaction, so do not publish it in GitHub Actions output or widen
+  workspace roles. Retain it while nested context is needed; reconsider removing it only after
+  parsed columns have proven sufficient.
+- **Retention is 30 days.** Keep the workspace at the production 30-day retention baseline unless
+  an explicit incident-response or cost decision changes it.
 
 - **Keep the file append-only.** Do not add log rotation that renames files into a pattern
   the DCR's file glob still matches — Azure Monitor Agent treats a renamed file as new

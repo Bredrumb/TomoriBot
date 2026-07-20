@@ -40,7 +40,7 @@ docker-npm-cache/
 
 # Other folders
 .plans/*
-plans/
+plans/*
 .deprecated/
 .vscode/
 .temp/
@@ -58,6 +58,7 @@ CLAUDE.md
 CLAUDE
 tmpclaude*
 *PLAN*.md
+!plans/azure-security-hardening-plan.md
 *HANDOVER*.md
 *REFERENCES*.md
 !docs/**
@@ -220,5 +221,6 @@ Thumbs.db
 terraform.tfvars
 .terraform/
 .terraform.lock.hcl
+!terraform/azure/.terraform.lock.hcl
 *.tfplan
 *.tfplan.*

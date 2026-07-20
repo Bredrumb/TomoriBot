@@ -22,8 +22,13 @@ on:
         required: false
         type: boolean
         default: false
-      initial_db_bootstrap:
-        description: "Allow first application startup only when the Azure database is known to be blank (no backup)"
+      run_database_bootstrap:
+        description: "Run the idempotent migration/runtime-role bootstrap before deployment"
+        required: false
+        type: boolean
+        default: false
+      run_host_lockdown:
+        description: "After deployment verification, disable guest SSH and enforce host firewall controls"
         required: false
         type: boolean
         default: false
@@ -31,62 +36,17 @@ on:
 # Least-privilege default token: OIDC for Workload Identity Federation + read-only
 # repo contents for checkout. Jobs that need more (e.g. create-release) elevate locally.
 permissions:
-  id-token: write
   contents: read
 
+concurrency:
+  group: production-${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
-  # ─── SECRETS VALIDATION ────────────────────────────────────────────────────
-
-  validate-secrets:
-    runs-on: ubuntu-24.04
-    if: vars.ACTIVE_PROVIDER == 'azure' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Validate Azure deployment secrets
-        # Secrets are mapped to env vars (not interpolated into the script body) so a
-        # value containing shell metacharacters can never break or inject into the test.
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_VM_SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
-          AZURE_VM_SSH_PUBLIC_KEY: ${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}
-          AZURE_POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
-          TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "=========================================="
-          echo "Validating GitHub Secrets (Azure Infrastructure)"
-          echo "=========================================="
-
-          missing_secrets=()
-
-          if [ -z "$AZURE_CLIENT_ID" ];                  then missing_secrets+=("AZURE_CLIENT_ID"); fi
-          if [ -z "$AZURE_TENANT_ID" ];                  then missing_secrets+=("AZURE_TENANT_ID"); fi
-          if [ -z "$AZURE_SUBSCRIPTION_ID" ];            then missing_secrets+=("AZURE_SUBSCRIPTION_ID"); fi
-          if [ -z "$AZURE_VM_SSH_PRIVATE_KEY" ];         then missing_secrets+=("AZURE_VM_SSH_PRIVATE_KEY"); fi
-          if [ -z "$AZURE_VM_SSH_PUBLIC_KEY" ];          then missing_secrets+=("AZURE_VM_SSH_PUBLIC_KEY"); fi
-          if [ -z "$AZURE_POSTGRES_ADMIN_PASSWORD" ];    then missing_secrets+=("AZURE_POSTGRES_ADMIN_PASSWORD"); fi
-          if [ -z "$TOMORI_SECRETS_JSON" ];              then missing_secrets+=("TOMORI_SECRETS_JSON"); fi
-          if [ -z "$DOCKERHUB_USERNAME" ];               then missing_secrets+=("DOCKERHUB_USERNAME"); fi
-          if [ -z "$DOCKERHUB_TOKEN" ];                  then missing_secrets+=("DOCKERHUB_TOKEN"); fi
-          if [ -z "$PAT_TOKEN" ];                        then missing_secrets+=("PAT_TOKEN"); fi
-
-          if [ ${#missing_secrets[@]} -gt 0 ]; then
-            echo "Missing required Azure secrets: ${missing_secrets[*]}"
-            exit 1
-          fi
-
-          echo "================================================"
-          echo "Azure Secrets: VALIDATED"
-          echo "Application secrets: Written to /etc/tomoribot/secrets.json at deploy time"
-          echo "================================================"
-
   # ─── VALIDATION (lint, types, schema, locales, lifecycle) ─────────────────
 
   code-quality:
-    needs: validate-secrets
+    if: vars.ACTIVE_PROVIDER == 'azure' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/validation.yml
     permissions:
       contents: read
@@ -99,12 +59,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -172,12 +126,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Run Semgrep SAST scan
         uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d
         with:
@@ -192,9 +140,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.semgrep.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-dependencies:
@@ -229,9 +177,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.bun-audit.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-secrets:
@@ -244,12 +192,6 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Run TruffleHog secret scan
         uses: trufflesecurity/trufflehog@99dc7bd6c06427bcb32f32fe1641d7fb83583915
@@ -265,9 +207,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.trufflehog.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-container:
@@ -278,12 +220,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Download Docker image artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -309,9 +245,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.trivy.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-gate:
@@ -348,10 +284,13 @@ jobs:
 
   push-to-docker-hub:
     runs-on: ubuntu-24.04
+    environment: production
     needs: security-gate
     outputs:
       deploy: ${{ steps.dockerhub_tags.outputs.deploy }}
       version: ${{ steps.package_version.outputs.version }}
+      image_ref: ${{ steps.dockerhub_tags.outputs.image_ref }}
+      searxng_image_ref: ${{ steps.searxng_image.outputs.image_ref }}
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -376,7 +315,7 @@ jobs:
         id: package_version
         run: |
           VERSION=$(jq -r '.version' package.json)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Package version: v$VERSION"
 
       - name: Check if version exists in Docker Hub
@@ -388,10 +327,10 @@ jobs:
           IMAGE_BASE="docker.io/${DOCKERHUB_USERNAME}/tomoribot"
 
           if docker manifest inspect "${IMAGE_BASE}:v${VERSION}" >/dev/null 2>&1; then
-            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "version_exists=true" >> "$GITHUB_OUTPUT"
             echo "Version v$VERSION already exists in Docker Hub — skipping deployment"
           else
-            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "version_exists=false" >> "$GITHUB_OUTPUT"
             echo "Version v$VERSION is new — will deploy"
           fi
 
@@ -400,25 +339,25 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "Manual dispatch — allowing Terraform apply"
-            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           BEFORE="${{ github.event.before }}"
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "No previous ref available — allowing Terraform apply conservatively"
-            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           changed_files=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- terraform/azure deploy/azure/ .github/workflows/deploy-tomoribot-azure.yml servers/searxng/ || true)
           if [ -n "$changed_files" ]; then
             echo "Infrastructure changes detected:"
-            echo "$changed_files"
-            echo "changed=true" >> $GITHUB_OUTPUT
+            printf '%s\n' "$changed_files"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "No Azure infrastructure changes detected"
-            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Tag and push image to Docker Hub
@@ -479,9 +418,14 @@ jobs:
             echo "Terraform deploy skipped: version tag exists and no infra changes were detected"
           fi
 
-          echo "deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
+          echo "deploy=${SHOULD_DEPLOY}" >> "$GITHUB_OUTPUT"
+
+          IMAGE_DIGEST=$(docker buildx imagetools inspect "${IMAGE_BASE}:${IMAGE_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          test -n "$IMAGE_DIGEST"
+          echo "image_ref=${IMAGE_BASE}@${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push custom SearXNG image
+        id: searxng_image
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           IMAGE_TAG: ${{ github.sha }}
@@ -498,12 +442,22 @@ jobs:
           docker push "${SEARXNG_BASE}:latest"
           echo "Pushed custom SearXNG image: ${SEARXNG_BASE}:${IMAGE_TAG}"
 
+          SEARXNG_DIGEST=$(docker buildx imagetools inspect "${SEARXNG_BASE}:${IMAGE_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          test -n "$SEARXNG_DIGEST"
+          echo "image_ref=${SEARXNG_BASE}@${SEARXNG_DIGEST}" >> "$GITHUB_OUTPUT"
+
   deploy-with-terraform:
     runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
     needs: push-to-docker-hub
     if: needs['push-to-docker-hub'].outputs.deploy == 'true'
     outputs:
-      vm_public_ip: ${{ steps.tf_outputs.outputs.vm_public_ip }}
+      deployment-status: ${{ steps.verify.outputs.status }}
+      commit-hash: ${{ steps.commit-info.outputs.hash }}
+      commit-message: ${{ steps.commit-info.outputs.message }}
     env:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -517,6 +471,7 @@ jobs:
       TF_VAR_azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_postgres_admin_password: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
       TF_VAR_vm_admin_ssh_public_key: ${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}
+      TF_VAR_grafana_egress_ip: ${{ vars.GRAFANA_EGRESS_IP }}
       TF_IN_AUTOMATION: "1"
       TF_INPUT: "0"
     steps:
@@ -582,7 +537,7 @@ jobs:
         if: |
           !(
             steps.postgres_bootstrap.outputs.is_initial_bootstrap == 'true' ||
-            (github.event_name == 'workflow_dispatch' && inputs.initial_db_bootstrap == true) ||
+            (github.event_name == 'workflow_dispatch' && inputs.run_database_bootstrap == true) ||
             (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
             (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
           )
@@ -621,6 +576,8 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.14.3
 
       - name: Terraform init
         working-directory: terraform/azure
@@ -650,174 +607,215 @@ jobs:
         id: tf_outputs
         working-directory: terraform/azure
         run: |
-          VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
-          echo "vm_public_ip=${VM_PUBLIC_IP}" >> "$GITHUB_OUTPUT"
+          {
+            echo "vm_name=$(terraform output -raw vm_name)"
+            echo "resource_group_name=$(terraform output -raw resource_group_name)"
+            echo "postgres_admin_login=$(terraform output -raw postgres_admin_login)"
+            echo "vm_admin_username=$(terraform output -raw vm_admin_username)"
+            echo "vm_nsg_name=$(terraform output -raw vm_network_security_group_name)"
+          } >> "$GITHUB_OUTPUT"
 
-  deploy-to-vm:
-    runs-on: ubuntu-24.04
-    needs: [push-to-docker-hub, deploy-with-terraform]
-    env:
-      VM_HOST: ${{ needs.deploy-with-terraform.outputs.vm_public_ip }}
-      SSH_USER: azureuser
-      TOMORIBOT_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tomoribot:v${{ needs.push-to-docker-hub.outputs.version }}
-      SEARXNG_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tomoribot-searxng:${{ github.sha }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Prepare SSH key
-        env:
-          AZURE_VM_SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$AZURE_VM_SSH_PRIVATE_KEY" > ~/.ssh/azure_vm_key
-          chmod 600 ~/.ssh/azure_vm_key
-
-          for attempt in $(seq 1 30); do
-            if ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
-              exit 0
-            fi
-
-            echo "Attempt $attempt/30: SSH host key not available yet, retrying in 10s..."
-            sleep 10
-          done
-
-          echo "Timed out waiting for SSH host key from Azure VM."
-          exit 1
-
-      - name: Wait for VM bootstrap
-        run: |
-          SSH_KEY="$HOME/.ssh/azure_vm_key"
-          SSH_TARGET="${SSH_USER}@${VM_HOST}"
-
-          ssh -i "$SSH_KEY" "$SSH_TARGET" \
-            "timeout 600s cloud-init status --wait && sudo docker --version && sudo docker compose version"
-
-      - name: Upload secrets, Vertex federation config, and compose file
+      - name: Validate and encode deployment payloads
+        id: payloads
         env:
           TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
-        run: |
-          SSH_KEY="$HOME/.ssh/azure_vm_key"
-          SSH_TARGET="${SSH_USER}@${VM_HOST}"
-          trap 'rm -f tomori-secrets.json' EXIT
-
-          printf '%s' "$TOMORI_SECRETS_JSON" > tomori-secrets.json
-          chmod 600 tomori-secrets.json
-          jq -e type tomori-secrets.json >/dev/null
-
-          scp -i "$SSH_KEY" tomori-secrets.json "${SSH_TARGET}:/tmp/tomori-secrets.json"
-          scp -i "$SSH_KEY" deploy/azure/google-vertex-wif.json "${SSH_TARGET}:/tmp/google-vertex-wif.json"
-          scp -i "$SSH_KEY" deploy/azure/docker-compose.yml "${SSH_TARGET}:/tmp/docker-compose.yml"
-
-          ssh -i "$SSH_KEY" "$SSH_TARGET" \
-            "sudo install -m 700 -d /etc/tomoribot && sudo install -m 640 -o root -g 1001 /tmp/tomori-secrets.json /etc/tomoribot/secrets.json && sudo install -m 640 -o root -g 1001 /tmp/google-vertex-wif.json /etc/tomoribot/google-vertex-wif.json && sudo install -m 644 -o root -g root /tmp/docker-compose.yml /etc/tomoribot/docker-compose.yml && rm -f /tmp/tomori-secrets.json /tmp/google-vertex-wif.json /tmp/docker-compose.yml"
-
-      - name: Pull image and restart compose service
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          SSH_KEY="$HOME/.ssh/azure_vm_key"
-          SSH_TARGET="${SSH_USER}@${VM_HOST}"
+          set -euo pipefail
+          runtime_user=$(jq -er '.POSTGRES_USER' <<<"$TOMORI_SECRETS_JSON")
+          case "$runtime_user" in
+            tomoriadmin|azure_pg_admin|postgres)
+              echo "TOMORI_SECRETS_JSON must use the non-administrator runtime database role." >&2
+              exit 1
+              ;;
+          esac
 
-          printf '%s\n' "$DOCKERHUB_TOKEN" | ssh -i "$SSH_KEY" "$SSH_TARGET" \
-            "sudo docker login --username '$DOCKERHUB_USERNAME' --password-stdin"
+          runtime_b64=$(printf '%s' "$TOMORI_SECRETS_JSON" | base64 -w 0)
+          docker_token_b64=$(printf '%s' "$DOCKERHUB_TOKEN" | base64 -w 0)
+          vertex_b64=$(base64 -w 0 deploy/azure/google-vertex-wif.json)
+          compose_b64=$(base64 -w 0 deploy/azure/docker-compose.yml)
+          deploy_script_b64=$(base64 -w 0 deploy/azure/run-command-deploy.sh)
+          bootstrap_script_b64=$(base64 -w 0 deploy/azure/bootstrap-database.sh)
+          lockdown_script_b64=$(base64 -w 0 deploy/azure/host-lockdown.sh)
 
-          # Application log directory bind-mounted into the bot container at /app/logs.
-          # Owned by UID/GID 1001 (container user "tomori") so the non-root bot can
-          # append tomoribot.jsonl; Azure Monitor Agent (root) tails it from the host.
-          ssh -i "$SSH_KEY" "$SSH_TARGET" \
-            "sudo install -d -o 1001 -g 1001 -m 0750 /var/log/tomoribot"
+          for value in "$runtime_b64" "$docker_token_b64"; do
+            echo "::add-mask::$value"
+          done
 
-          ssh -i "$SSH_KEY" "$SSH_TARGET" \
-            "sudo TOMORIBOT_IMAGE='$TOMORIBOT_IMAGE' SEARXNG_IMAGE='$SEARXNG_IMAGE' docker compose -f /etc/tomoribot/docker-compose.yml pull tomoribot && sudo TOMORIBOT_IMAGE='$TOMORIBOT_IMAGE' SEARXNG_IMAGE='$SEARXNG_IMAGE' docker compose -f /etc/tomoribot/docker-compose.yml up -d tomoribot"
+          {
+            echo "runtime_b64=$runtime_b64"
+            echo "docker_token_b64=$docker_token_b64"
+            echo "vertex_b64=$vertex_b64"
+            echo "compose_b64=$compose_b64"
+            echo "deploy_script_b64=$deploy_script_b64"
+            echo "bootstrap_script_b64=$bootstrap_script_b64"
+            echo "lockdown_script_b64=$lockdown_script_b64"
+          } >> "$GITHUB_OUTPUT"
 
-  verify-vm-deployment:
-    runs-on: ubuntu-24.04
-    needs: [deploy-with-terraform, deploy-to-vm]
-    outputs:
-      deployment-status: ${{ steps.verify.outputs.status }}
-      commit-hash: ${{ steps.commit-info.outputs.hash }}
-      commit-message: ${{ steps.commit-info.outputs.message }}
-    env:
-      VM_HOST: ${{ needs.deploy-with-terraform.outputs.vm_public_ip }}
-      SSH_USER: azureuser
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Bootstrap database role and schema
+        if: github.event_name == 'workflow_dispatch' && inputs.run_database_bootstrap == true
+        env:
+          VM_NAME: ${{ steps.tf_outputs.outputs.vm_name }}
+          RESOURCE_GROUP: ${{ steps.tf_outputs.outputs.resource_group_name }}
+          RUNTIME_SECRETS_B64: ${{ steps.payloads.outputs.runtime_b64 }}
+          BOOTSTRAP_SCRIPT_B64: ${{ steps.payloads.outputs.bootstrap_script_b64 }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN_B64: ${{ steps.payloads.outputs.docker_token_b64 }}
+          TOMORIBOT_IMAGE: ${{ needs.push-to-docker-hub.outputs.image_ref }}
+          TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
+          POSTGRES_ADMIN_LOGIN: ${{ steps.tf_outputs.outputs.postgres_admin_login }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          migration_json=$(jq -cn \
+            --arg user "$POSTGRES_ADMIN_LOGIN" \
+            --arg password "$POSTGRES_ADMIN_PASSWORD" \
+            --arg host "$(jq -er '.POSTGRES_HOST' <<<"$TOMORI_SECRETS_JSON")" \
+            --arg port "$(jq -er '.POSTGRES_PORT | tostring' <<<"$TOMORI_SECRETS_JSON")" \
+            --arg database "$(jq -er '.POSTGRES_DB' <<<"$TOMORI_SECRETS_JSON")" \
+            '{
+              POSTGRES_USER: $user,
+              POSTGRES_PASSWORD: $password,
+              POSTGRES_HOST: $host,
+              POSTGRES_PORT: $port,
+              POSTGRES_DB: $database
+            }')
+          migration_b64=$(printf '%s' "$migration_json" | base64 -w 0)
+          echo "::add-mask::$migration_b64"
+
+          # shellcheck disable=SC2016
+          response_message=$(az vm run-command invoke \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$VM_NAME" \
+            --command-id RunShellScript \
+            --scripts \
+              'set -eu' \
+              'bootstrap_script=$(mktemp /var/lib/waagent/tomoribot-db-bootstrap.XXXXXX)' \
+              'trap '\''rm -f "$bootstrap_script"'\'' EXIT' \
+              'printf '\''%s'\'' "$bootstrapScriptB64" | base64 --decode >"$bootstrap_script"' \
+              'chmod 0700 "$bootstrap_script"' \
+              'bash "$bootstrap_script"' \
+            --parameters \
+              "bootstrapScriptB64=$BOOTSTRAP_SCRIPT_B64" \
+              "runtimeSecretsB64=$RUNTIME_SECRETS_B64" \
+              "migrationSecretsB64=$migration_b64" \
+              "dockerHubUsername=$DOCKERHUB_USERNAME" \
+              "dockerHubTokenB64=$DOCKERHUB_TOKEN_B64" \
+              "tomoribotImage=$TOMORIBOT_IMAGE" \
+            --query 'value[0].message' \
+            --output tsv \
+            --only-show-errors)
+
+          if [[ "$response_message" != *TOMORIBOT_DATABASE_BOOTSTRAP_SUCCEEDED* ]]; then
+            echo "Database bootstrap failed; inspect the access-controlled Azure Run Command record." >&2
+            exit 1
+          fi
+
+      - name: Deploy and verify through Azure VM Run Command
+        id: verify
+        env:
+          VM_NAME: ${{ steps.tf_outputs.outputs.vm_name }}
+          RESOURCE_GROUP: ${{ steps.tf_outputs.outputs.resource_group_name }}
+          RUNTIME_SECRETS_B64: ${{ steps.payloads.outputs.runtime_b64 }}
+          VERTEX_CONFIG_B64: ${{ steps.payloads.outputs.vertex_b64 }}
+          COMPOSE_CONFIG_B64: ${{ steps.payloads.outputs.compose_b64 }}
+          DEPLOY_SCRIPT_B64: ${{ steps.payloads.outputs.deploy_script_b64 }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN_B64: ${{ steps.payloads.outputs.docker_token_b64 }}
+          TOMORIBOT_IMAGE: ${{ needs.push-to-docker-hub.outputs.image_ref }}
+          SEARXNG_IMAGE: ${{ needs.push-to-docker-hub.outputs.searxng_image_ref }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          response_message=$(az vm run-command invoke \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$VM_NAME" \
+            --command-id RunShellScript \
+            --scripts \
+              'set -eu' \
+              'deploy_script=$(mktemp /var/lib/waagent/tomoribot-deploy.XXXXXX)' \
+              'trap '\''rm -f "$deploy_script"'\'' EXIT' \
+              'printf '\''%s'\'' "$deployScriptB64" | base64 --decode >"$deploy_script"' \
+              'chmod 0700 "$deploy_script"' \
+              'bash "$deploy_script"' \
+            --parameters \
+              "deployScriptB64=$DEPLOY_SCRIPT_B64" \
+              "runtimeSecretsB64=$RUNTIME_SECRETS_B64" \
+              "vertexConfigB64=$VERTEX_CONFIG_B64" \
+              "composeConfigB64=$COMPOSE_CONFIG_B64" \
+              "dockerHubUsername=$DOCKERHUB_USERNAME" \
+              "dockerHubTokenB64=$DOCKERHUB_TOKEN_B64" \
+              "tomoribotImage=$TOMORIBOT_IMAGE" \
+              "searxngImage=$SEARXNG_IMAGE" \
+            --query 'value[0].message' \
+            --output tsv \
+            --only-show-errors)
+
+          if [[ "$response_message" != *TOMORIBOT_DEPLOYMENT_SUCCEEDED* ]]; then
+            echo "Azure Run Command deployment failed; inspect access-controlled Azure execution and Log Analytics records." >&2
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "status=success" >> "$GITHUB_OUTPUT"
+
+      - name: Lock down VM host after verified deployment
+        if: github.event_name == 'workflow_dispatch' && inputs.run_host_lockdown == true
+        env:
+          VM_NAME: ${{ steps.tf_outputs.outputs.vm_name }}
+          RESOURCE_GROUP: ${{ steps.tf_outputs.outputs.resource_group_name }}
+          VM_ADMIN_USERNAME: ${{ steps.tf_outputs.outputs.vm_admin_username }}
+          VM_NSG_NAME: ${{ steps.tf_outputs.outputs.vm_nsg_name }}
+          LOCKDOWN_SCRIPT_B64: ${{ steps.payloads.outputs.lockdown_script_b64 }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          response_message=$(az vm run-command invoke \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$VM_NAME" \
+            --command-id RunShellScript \
+            --scripts \
+              'set -eu' \
+              'lockdown_script=$(mktemp /var/lib/waagent/tomoribot-host-lockdown.XXXXXX)' \
+              'trap '\''rm -f "$lockdown_script"'\'' EXIT' \
+              'printf '\''%s'\'' "$lockdownScriptB64" | base64 --decode >"$lockdown_script"' \
+              'chmod 0700 "$lockdown_script"' \
+              'bash "$lockdown_script"' \
+            --parameters \
+              "lockdownScriptB64=$LOCKDOWN_SCRIPT_B64" \
+              "deployUsername=$VM_ADMIN_USERNAME" \
+            --query 'value[0].message' \
+            --output tsv \
+            --only-show-errors)
+
+          if [[ "$response_message" != *TOMORIBOT_HOST_LOCKDOWN_SUCCEEDED* ]]; then
+            echo "Host lockdown failed; inspect the access-controlled Azure Run Command record." >&2
+            exit 1
+          fi
+
+          inbound_allow_count=$(az network nsg rule list \
+            --resource-group "$RESOURCE_GROUP" \
+            --nsg-name "$VM_NSG_NAME" \
+            --query "[?direction=='Inbound' && access=='Allow'] | length(@)" \
+            --output tsv \
+            --only-show-errors)
+          if [ "$inbound_allow_count" != "0" ]; then
+            echo "The VM network security group still permits public inbound traffic." >&2
+            exit 1
+          fi
 
       - name: Get commit information
         id: commit-info
         run: |
-          echo "hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "message=$(git log -1 --pretty=format:'%s')" >> $GITHUB_OUTPUT
-
-      - name: Prepare SSH key
-        env:
-          AZURE_VM_SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$AZURE_VM_SSH_PRIVATE_KEY" > ~/.ssh/azure_vm_key
-          chmod 600 ~/.ssh/azure_vm_key
-
-          for attempt in $(seq 1 12); do
-            if ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
-              exit 0
-            fi
-
-            echo "Attempt $attempt/12: SSH host key not available yet, retrying in 10s..."
-            sleep 10
-          done
-
-          echo "Timed out waiting for SSH host key from Azure VM."
-          exit 1
-
-      - name: Wait for VM health check
-        id: verify
-        run: |
-          SSH_KEY="$HOME/.ssh/azure_vm_key"
-          SSH_TARGET="${SSH_USER}@${VM_HOST}"
-
-          for i in $(seq 1 20); do
-            if ssh -i "$SSH_KEY" "$SSH_TARGET" "curl -fsS http://localhost:8081/healthz >/dev/null"; then
-              echo "TomoriBot VM health check passed."
-              echo "status=success" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-
-            echo "Attempt $i/20: health check failed, retrying in 30s..."
-            sleep 30
-          done
-
-          echo "TomoriBot VM health check did not pass within 10 minutes."
-          echo "status=failed" >> $GITHUB_OUTPUT
-          exit 1
-
-      - name: Dump container logs on failure
-        if: failure()
-        run: |
-          SSH_KEY="$HOME/.ssh/azure_vm_key"
-          SSH_TARGET="${SSH_USER}@${VM_HOST}"
-
-          ssh -i "$SSH_KEY" "$SSH_TARGET" <<'REMOTE'
-          set -euo pipefail
-          # Do not invoke Compose here: TOMORIBOT_IMAGE is injected only by the
-          # deploy job, and Compose interpolation would hide the actual app log.
-          container_id=$(sudo docker ps -aq --filter "label=com.docker.compose.service=tomoribot" | head -n 1)
-          if [ -n "$container_id" ]; then
-            sudo docker logs --tail 50 "$container_id"
-          else
-            echo "TomoriBot container was not created. Docker container list:"
-            sudo docker ps -a
-          fi
-          REMOTE
+          echo "hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "message=$(git log -1 --pretty=format:'%s')" >> "$GITHUB_OUTPUT"
 
   # ─── GITHUB RELEASES (identical to AWS workflow) ──────────────────────────
 
   check-release-assets:
     runs-on: ubuntu-24.04
-    needs: verify-vm-deployment
-    if: needs.verify-vm-deployment.outputs.deployment-status == 'success'
+    needs: deploy-with-terraform
+    if: needs.deploy-with-terraform.outputs.deployment-status == 'success'
     outputs:
       has-assets: ${{ steps.check.outputs.has-assets }}
       version: ${{ steps.version.outputs.version }}
@@ -828,7 +826,7 @@ jobs:
       - name: Get version from package.json
         id: version
         run: |
-          echo "version=$(jq -r '.version' package.json)" >> $GITHUB_OUTPUT
+          echo "version=$(jq -r '.version' package.json)" >> "$GITHUB_OUTPUT"
 
       - name: Check if version-specific release folder exists
         id: check
@@ -837,18 +835,22 @@ jobs:
         run: |
           versionFolder=".github/release/v$VERSION"
           if [ -d "$versionFolder" ]; then
-            echo "has-assets=true" >> $GITHUB_OUTPUT
+            echo "has-assets=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has-assets=false" >> $GITHUB_OUTPUT
+            echo "has-assets=false" >> "$GITHUB_OUTPUT"
           fi
 
   create-release:
     runs-on: ubuntu-24.04
-    needs: [verify-vm-deployment, check-release-assets]
-    if: needs.verify-vm-deployment.outputs.deployment-status == 'success' && needs.check-release-assets.outputs.has-assets == 'true'
+    environment: production
+    needs: [deploy-with-terraform, check-release-assets]
+    if: needs.deploy-with-terraform.outputs.deployment-status == 'success' && needs.check-release-assets.outputs.has-assets == 'true'
     # Release creation publishes a GitHub Release; the default token needs write here.
     permissions:
       contents: write
+    outputs:
+      created: ${{ steps.release-check.outputs.exists != 'true' }}
+      image_name: ${{ steps.release-notes.outputs.image-name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -856,13 +858,13 @@ jobs:
       - name: Check if GitHub release already exists
         id: release-check
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
         run: |
           if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Prepare release notes and Discord notification
@@ -870,7 +872,7 @@ jobs:
         if: steps.release-check.outputs.exists != 'true'
         env:
           VERSION: ${{ needs.check-release-assets.outputs.version }}
-          COMMIT_HASH: ${{ needs.verify-vm-deployment.outputs.commit-hash }}
+          COMMIT_HASH: ${{ needs.deploy-with-terraform.outputs.commit-hash }}
         run: |
           versionFolder=".github/release/v$VERSION"
           releaseNotesPath=$(find "$versionFolder" -maxdepth 1 -name "*.md" ! -name "README.md" | head -n 1)
@@ -890,12 +892,12 @@ jobs:
           releaseNotes="${releaseNotes//\{REPO_NAME\}/${{ github.event.repository.name }}}"
 
           echo "$releaseNotes" > processed-release-notes.md
-          echo "image-name=$imageName" >> $GITHUB_OUTPUT
+          echo "image-name=$imageName" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         if: steps.release-check.outputs.exists != 'true'
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
         run: |
           gh release create "v$VERSION" \
@@ -903,19 +905,40 @@ jobs:
             --notes-file "processed-release-notes.md" \
             --latest
 
-      - name: Send Discord notification
-        if: steps.release-check.outputs.exists != 'true'
+
+  notify-release:
+    runs-on: ubuntu-24.04
+    environment: production
+    needs: [deploy-with-terraform, check-release-assets, create-release]
+    if: needs.create-release.outputs.created == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Prepare Discord notification
         env:
-          STATUS: ${{ needs.verify-vm-deployment.outputs.deployment-status }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
-          IMAGE_NAME: ${{ steps.release-notes.outputs.image-name }}
+          COMMIT_HASH: ${{ needs.deploy-with-terraform.outputs.commit-hash }}
+        run: |
+          versionFolder=".github/release/v$VERSION"
+          releaseNotesPath=$(find "$versionFolder" -maxdepth 1 -name "*.md" ! -name "README.md" | head -n 1)
+          releaseNotes=$(cat "$releaseNotesPath")
+          releaseNotes="${releaseNotes//\{VERSION\}/$VERSION}"
+          releaseNotes="${releaseNotes//\{TIMESTAMP\}/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+          releaseNotes="${releaseNotes//\{COMMIT_HASH\}/$COMMIT_HASH}"
+          releaseNotes="${releaseNotes//\{REPO_OWNER\}/${{ github.repository_owner }}}"
+          releaseNotes="${releaseNotes//\{REPO_NAME\}/${{ github.event.repository.name }}}"
+          printf '%s' "$releaseNotes" > processed-release-notes.md
+
+      - name: Send Discord notification
+        env:
+          VERSION: ${{ needs.check-release-assets.outputs.version }}
+          IMAGE_NAME: ${{ needs.create-release.outputs.image_name }}
           MENTION_ROLE_ID: ${{ secrets.RELEASE_DISCORD_MENTION_ROLE_ID }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          releaseNotes=$(cat processed-release-notes.md)
-          releaseNotes=$(echo "$releaseNotes" | sed 's/!\[[^]]*\]([^)]*)//g')
+          releaseNotes=$(sed 's/!\[[^]]*\]([^)]*)//g' processed-release-notes.md)
           printf '%s' "$releaseNotes" > discord_release_notes.txt
-
           python3 .github/scripts/discord_split.py
           chunkCount=$(cat discord_chunk_count.txt)
 
@@ -923,54 +946,45 @@ jobs:
           imageFile=""
           if [ -n "$IMAGE_NAME" ]; then
             imageUrl="https://github.com/${{ github.repository }}/raw/release/.github/release/v$VERSION/$IMAGE_NAME"
-            # Preserve the real extension (e.g. .webp) so Discord renders the attachment as the post's preview image
             imageFile="release-post-image.${IMAGE_NAME##*.}"
             if curl -sL --max-time 30 "$imageUrl" -o "$imageFile" && [ -s "$imageFile" ]; then
               hasImage=true
             fi
           fi
 
-          discordWebhookUrl="${DISCORD_WEBHOOK_URL}"
-          if [ -z "$discordWebhookUrl" ]; then
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
             echo "DISCORD_WEBHOOK_URL not configured — skipping Discord notification"
             exit 0
           fi
 
           threadTitle=$(head -1 processed-release-notes.md | sed 's/^# *//')
           firstChunk=$(cat discord_chunk_0.txt)
+          firstPayload=$(jq -n --arg content "$firstChunk" --arg thread_name "$threadTitle" '{content: $content, thread_name: $thread_name}')
 
           if [ "$hasImage" = true ]; then
-            firstPayload=$(jq -n --arg content "$firstChunk" --arg thread_name "$threadTitle" '{content: $content, thread_name: $thread_name}')
-            response=$(curl -s -w "\n%{http_code}" -X POST -F "payload_json=$firstPayload" -F "files[0]=@$imageFile" "${discordWebhookUrl}?wait=true")
+            response=$(curl -s -w "\n%{http_code}" -X POST -F "payload_json=$firstPayload" -F "files[0]=@$imageFile" "${DISCORD_WEBHOOK_URL}?wait=true")
           else
-            firstPayload=$(jq -n --arg content "$firstChunk" --arg thread_name "$threadTitle" '{content: $content, thread_name: $thread_name}')
-            response=$(curl -s -w "\n%{http_code}" -X POST -H "Content-Type: application/json" -d "$firstPayload" "${discordWebhookUrl}?wait=true")
+            response=$(curl -s -w "\n%{http_code}" -X POST -H "Content-Type: application/json" -d "$firstPayload" "${DISCORD_WEBHOOK_URL}?wait=true")
           fi
 
           httpCode=$(echo "$response" | tail -1)
           responseBody=$(echo "$response" | sed '$d')
-
           if [ "$httpCode" -lt 200 ] || [ "$httpCode" -ge 300 ]; then
             echo "Failed to create Discord forum post (HTTP $httpCode)"
             exit 1
           fi
 
           threadId=$(echo "$responseBody" | jq -r '.channel_id // empty')
-
           if [ "$chunkCount" -gt 1 ] && [ -n "$threadId" ]; then
-            i=1
-            while [ "$i" -lt "$chunkCount" ]; do
+            for i in $(seq 1 $((chunkCount - 1))); do
               chunk=$(cat "discord_chunk_${i}.txt")
               chunkPayload=$(jq -n --arg content "$chunk" '{content: $content}')
-              curl -s -X POST -H "Content-Type: application/json" -d "$chunkPayload" "${discordWebhookUrl}?thread_id=${threadId}" >/dev/null
-              i=$((i + 1))
+              curl -s -X POST -H "Content-Type: application/json" -d "$chunkPayload" "${DISCORD_WEBHOOK_URL}?thread_id=${threadId}" >/dev/null
               sleep 1
             done
           fi
 
           if [ -n "$MENTION_ROLE_ID" ] && [ -n "$threadId" ]; then
             mentionPayload=$(jq -n --arg content "<@&${MENTION_ROLE_ID}> Follow-up hotfixes or patches for this update will be posted in this Forum post!" '{content: $content}')
-            curl -s -X POST -H "Content-Type: application/json" -d "$mentionPayload" "${discordWebhookUrl}?thread_id=${threadId}" >/dev/null
+            curl -s -X POST -H "Content-Type: application/json" -d "$mentionPayload" "${DISCORD_WEBHOOK_URL}?thread_id=${threadId}" >/dev/null
           fi
-
-          echo "Discord notification complete!"

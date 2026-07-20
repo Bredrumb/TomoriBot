@@ -40,7 +40,6 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           ECR_REPOSITORY_NAME: ${{ secrets.ECR_REPOSITORY_NAME }}
           RDS_MASTER_PASSWORD: ${{ secrets.RDS_MASTER_PASSWORD }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           echo "=========================================="
@@ -60,7 +59,6 @@ jobs:
           if [ -z "$AWS_REGION" ]; then missing_secrets+=("AWS_REGION"); fi
           if [ -z "$ECR_REPOSITORY_NAME" ]; then missing_secrets+=("ECR_REPOSITORY_NAME"); fi
           if [ -z "$RDS_MASTER_PASSWORD" ]; then missing_secrets+=("RDS_MASTER_PASSWORD"); fi
-          if [ -z "$PAT_TOKEN" ]; then missing_secrets+=("PAT_TOKEN"); fi
 
           # Optional secrets
           optional_secrets=()
@@ -210,10 +208,10 @@ jobs:
         run: |
           if [ "${{ steps.semgrep.outcome }}" == "failure" ]; then
             echo "Semgrep found potential security issues. Review the output above."
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
             echo "SAST scan passed"
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-dependencies:
@@ -253,9 +251,9 @@ jobs:
         id: check-result
         run: |
           if [ "${{ steps.bun-audit.outcome }}" == "failure" ]; then
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-secrets:
@@ -290,10 +288,10 @@ jobs:
         run: |
           if [ "${{ steps.trufflehog.outcome }}" == "failure" ]; then
             echo "TruffleHog found exposed secrets in git history!"
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
             echo "Secret scan passed"
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   security-container:
@@ -336,10 +334,10 @@ jobs:
         run: |
           if [ "${{ steps.trivy.outcome }}" == "failure" ]; then
             echo "Trivy found critical or high vulnerabilities in container image!"
-            echo "failed=true" >> $GITHUB_OUTPUT
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           else
             echo "Container scan passed"
-            echo "failed=false" >> $GITHUB_OUTPUT
+            echo "failed=false" >> "$GITHUB_OUTPUT"
           fi
 
   # SECURITY GATE: Block deployment if critical/high vulnerabilities found
@@ -449,7 +447,7 @@ jobs:
         id: package_version
         run: |
           VERSION=$(jq -r '.version' package.json)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Package version: v$VERSION"
 
       - name: Check if version exists in ECR
@@ -461,14 +459,14 @@ jobs:
         run: |
           # Check if version tag exists in ECR
           if aws ecr describe-images \
-            --registry-id ${ECR_REGISTRY%%.*} \
-            --repository-name $ECR_REPOSITORY \
-            --image-ids imageTag=v$VERSION \
+            --registry-id "${ECR_REGISTRY%%.*}" \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids "imageTag=v$VERSION" \
             >/dev/null 2>&1; then
-            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "version_exists=true" >> "$GITHUB_OUTPUT"
             echo " Version v$VERSION already exists in ECR - skipping deployment"
           else
-            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "version_exists=false" >> "$GITHUB_OUTPUT"
             echo "Version v$VERSION is new - will deploy"
           fi
 
@@ -482,30 +480,30 @@ jobs:
           VERSION_EXISTS: ${{ steps.version_check.outputs.version_exists }}
         run: |
           echo "Tagging image with commit hash..."
-          docker tag tomoribot:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag tomoribot:latest "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
           echo "Pushed commit hash tag: $IMAGE_TAG"
 
           # Always update 'latest' tag for debugging
-          docker tag tomoribot:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker tag tomoribot:latest "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
           echo "Updated 'latest' tag"
 
           # Tag with semantic version if new
           if [ "$VERSION_EXISTS" = "false" ]; then
             echo "Tagging image with semantic version..."
-            docker tag tomoribot:latest $ECR_REGISTRY/$ECR_REPOSITORY:v$VERSION
-            docker push $ECR_REGISTRY/$ECR_REPOSITORY:v$VERSION
+            docker tag tomoribot:latest "${ECR_REGISTRY}/${ECR_REPOSITORY}:v${VERSION}"
+            docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:v${VERSION}"
             echo "Pushed version tag: v$VERSION"
 
             # Use version tag for deployment
-            echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:v$VERSION" >> $GITHUB_OUTPUT
-            echo "deploy=true" >> $GITHUB_OUTPUT
+            echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:v$VERSION" >> "$GITHUB_OUTPUT"
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
             echo " Skipping version tag (already exists)"
-            echo "deploy=false" >> $GITHUB_OUTPUT
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
             # Output commit hash as fallback (won't be used for deployment)
-            echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+            echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Deployment summary
@@ -560,7 +558,7 @@ jobs:
           if [ -z "${TF_VAR_container_image}" ]; then
             ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
             IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:${GITHUB_SHA}"
-            echo "TF_VAR_container_image=$IMAGE_URI" >> $GITHUB_ENV
+            echo "TF_VAR_container_image=$IMAGE_URI" >> "$GITHUB_ENV"
             TF_VAR_container_image="$IMAGE_URI"
             echo "Resolved image URI from AWS account: ${TF_VAR_container_image}"
           else
@@ -693,8 +691,8 @@ jobs:
         run: |
           hash=$(git rev-parse --short HEAD)
           message=$(git log -1 --pretty=format:"%s")
-          echo "hash=$hash" >> $GITHUB_OUTPUT
-          echo "message=$message" >> $GITHUB_OUTPUT
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "message=$message" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
@@ -709,13 +707,13 @@ jobs:
 
           # Wait for service to reach steady state (max 10 minutes)
           if aws ecs wait services-stable \
-            --cluster $ECS_CLUSTER \
-            --services $ECS_SERVICE; then
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"; then
             echo "ECS service is stable!"
-            echo "status=success" >> $GITHUB_OUTPUT
+            echo "status=success" >> "$GITHUB_OUTPUT"
           else
             echo "ECS service failed to stabilize!"
-            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "status=failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
@@ -726,8 +724,8 @@ jobs:
 
           # Get running tasks
           TASKS=$(aws ecs list-tasks \
-            --cluster $ECS_CLUSTER \
-            --service-name $ECS_SERVICE \
+            --cluster "$ECS_CLUSTER" \
+            --service-name "$ECS_SERVICE" \
             --desired-status RUNNING \
             --query 'taskArns' \
             --output text)
@@ -738,9 +736,10 @@ jobs:
           fi
 
           # Describe tasks
+          read -r -a task_arns <<< "$TASKS"
           aws ecs describe-tasks \
-            --cluster $ECS_CLUSTER \
-            --tasks $TASKS \
+            --cluster "$ECS_CLUSTER" \
+            --tasks "${task_arns[@]}" \
             --query 'tasks[*].[taskArn, lastStatus, healthStatus, containers[0].healthStatus]' \
             --output table
 
@@ -779,7 +778,7 @@ jobs:
         id: version
         run: |
           version=$(jq -r '.version' package.json)
-          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Check if version-specific release folder exists
         id: check
@@ -790,11 +789,11 @@ jobs:
 
           if [ -d "$versionFolder" ]; then
             echo "Version-specific release folder found: $versionFolder"
-            echo "has-assets=true" >> $GITHUB_OUTPUT
+            echo "has-assets=true" >> "$GITHUB_OUTPUT"
           else
             echo "No version-specific release folder found: $versionFolder"
             echo "This appears to be a minor update that doesn't require a release announcement"
-            echo "has-assets=false" >> $GITHUB_OUTPUT
+            echo "has-assets=false" >> "$GITHUB_OUTPUT"
           fi
 
   create-release:
@@ -811,15 +810,15 @@ jobs:
       - name: Check if GitHub release already exists
         id: release-check
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
         run: |
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "Release v$VERSION already exists. Skipping release creation."
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "Release v$VERSION does not exist. Proceeding."
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Prepare release notes and Discord notification
@@ -861,12 +860,12 @@ jobs:
 
           # Save processed release notes
           echo "$releaseNotes" > processed-release-notes.md
-          echo "image-name=$imageName" >> $GITHUB_OUTPUT
+          echo "image-name=$imageName" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release (Source Code Only)
         if: steps.release-check.outputs.exists != 'true'
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
         run: |
           echo "Creating GitHub Release v$VERSION (source code only)..."
@@ -884,21 +883,13 @@ jobs:
       - name: Send Discord notification
         if: steps.release-check.outputs.exists != 'true'
         env:
-          STATUS: ${{ needs.verify-ecs-deployment.outputs.deployment-status }}
           VERSION: ${{ needs.check-release-assets.outputs.version }}
           IMAGE_NAME: ${{ steps.release-notes.outputs.image-name }}
           MENTION_ROLE_ID: ${{ secrets.RELEASE_DISCORD_MENTION_ROLE_ID }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          if [ "$STATUS" == "success" ]; then
-            statusLabel="✅ Deployed successfully"
-          else
-            statusLabel="❌ Deployment failed"
-          fi
-
           # Read release notes and strip markdown image syntax (![alt](url) patterns)
-          releaseNotes=$(cat processed-release-notes.md)
-          releaseNotes=$(echo "$releaseNotes" | sed 's/!\[[^]]*\]([^)]*)//g')
+          releaseNotes=$(sed 's/!\[[^]]*\]([^)]*)//g' processed-release-notes.md)
 
           # Write processed notes to file so Python can read them safely
           printf '%s' "$releaseNotes" > discord_release_notes.txt

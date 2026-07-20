@@ -10,5 +10,5 @@ vm_admin_ssh_public_key = "ssh-ed25519 AAAA... gh-actions-deploy"
 # PostgreSQL password - store this securely; it is also used in TOMORI_SECRETS_JSON.
 postgres_admin_password = "change-me"
 
-# Optional single IPv4 address for direct admin access to PostgreSQL.
-admin_ip = null
+# Exact operator egress IPv4 for the read-only Grafana PostgreSQL datasource.
+grafana_egress_ip = "203.0.113.10"

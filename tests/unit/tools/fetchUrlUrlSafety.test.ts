@@ -34,6 +34,16 @@ describe("validateFetchUrlTarget", () => {
     expect(result.error).toContain("127.0.0.1");
   });
 
+  it("blocks the Azure Instance Metadata Service address", async () => {
+    delete process.env[ENV_NAME];
+
+    const result = await validateFetchUrlTarget("http://169.254.169.254/metadata/identity/oauth2/token");
+
+    expect(result.allowed).toBe(false);
+    expect(result.failureCode).toBe("PRIVATE_NETWORK_BLOCKED");
+    expect(result.error).toContain("link-local IPv4 address");
+  });
+
   it("allows public IP literals by default", async () => {
     delete process.env[ENV_NAME];
 

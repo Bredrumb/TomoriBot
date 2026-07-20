@@ -20,6 +20,7 @@ import { getDuckDuckGoHandler } from "../../tools/mcpServers/duckduckgo-search/d
 import { sendToolProgressNotice } from "../discord/toolProgressNotice";
 import { localizer } from "../text/localizer";
 import { FETCH_LIMITS, memoryGuard } from "../security/rateLimiter";
+import { fetchUserRemoteUrl } from "../security/userRemoteFetch";
 
 /**
  * Tracks consecutive fetch calls per channel to show pagination in notices.
@@ -103,7 +104,10 @@ export async function validateFetchSize(url: string): Promise<{ allowed: boolean
     const maxSizeMB = FETCH_LIMITS.MAX_FETCH_SIZE_MB;
 
     // Perform HEAD request to get Content-Length without downloading body
-    const headResponse = await fetch(url, {
+    // Use the same DNS validation, pinning, and per-hop redirect checks as the
+    // body fetch. A plain fetch() here could be redirected to IMDS or another
+    // private address before the guarded engine runs.
+    const headResponse = await fetchUserRemoteUrl(url, {
       method: "HEAD",
       signal: AbortSignal.timeout(5000), // 5 second timeout
     });

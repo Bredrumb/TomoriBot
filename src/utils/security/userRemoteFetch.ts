@@ -2,14 +2,13 @@ import { isIP } from "node:net";
 import {
   Agent,
   fetch as undiciFetch,
-  interceptors,
   type RequestInfo as UndiciRequestInfo,
   type RequestInit as UndiciRequestInit,
   type Response as UndiciResponse,
-} from "undici";
+} from "undici/index.js";
 import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 
-interface PinnedDnsRecord {
+export interface PinnedDnsRecord {
   address: string;
   family: 4 | 6;
   ttl: number;
@@ -94,23 +93,33 @@ function toPinnedDnsRecords(addresses: string[]): PinnedDnsRecord[] {
     .filter((entry): entry is PinnedDnsRecord => entry !== null);
 }
 
-function createPinnedDispatcher(records: PinnedDnsRecord[]): Agent | null {
-  // interceptors.dns is absent in Bun's built-in undici shim; fall back to
-  // no pinning (validateRemoteMcpUrl already validated the resolved IPs).
-  if (typeof interceptors?.dns !== "function") {
-    return null;
-  }
-
+export function createPinnedDispatcher(records: PinnedDnsRecord[]): Agent {
   return new Agent({
-    interceptors: {
-      Agent: [
-        interceptors.dns({
-          lookup: (_origin, _options, callback) => callback(null, records),
-        }),
-      ],
-      Client: [],
+    connect: {
+      lookup: (_hostname, options, callback) => {
+        if (typeof options === "object" && options.all) {
+          callback(null, records);
+          return;
+        }
+
+        const [record] = records;
+        callback(null, record.address, record.family);
+      },
     },
   });
+}
+
+export async function closePinnedDispatcher(dispatcher: Agent): Promise<void> {
+  const compatibleDispatcher = dispatcher as unknown as {
+    close?: () => Promise<void>;
+    destroy?: () => Promise<void> | void;
+  };
+
+  if (typeof compatibleDispatcher.close === "function") {
+    await compatibleDispatcher.close();
+  } else if (typeof compatibleDispatcher.destroy === "function") {
+    await compatibleDispatcher.destroy();
+  }
 }
 
 function isRedirectStatus(status: number): status is 301 | 302 | 303 | 307 | 308 {
@@ -140,6 +149,15 @@ function buildRedirectRequestInit(requestInit: RequestInit, status: number): Req
   };
 }
 
+export async function resolveValidatedUserRedirect(currentUrl: URL, location: string, strict: boolean): Promise<URL> {
+  const nextUrl = new URL(location, currentUrl);
+  const validation = await validateRemoteMcpUrl(nextUrl.toString(), { strict });
+  if (!validation.valid) {
+    throw new Error(validation.details ?? `Remote redirect validation failed for '${nextUrl.hostname}'.`);
+  }
+  return nextUrl;
+}
+
 async function fetchUserRemoteUrlInternal(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
@@ -156,6 +174,10 @@ async function fetchUserRemoteUrlInternal(
   const pinnedRecords = toPinnedDnsRecords(validation.resolvedAddresses ?? []);
   const dispatcher =
     isIP(url.hostname) === 0 && pinnedRecords.length > 0 ? createPinnedDispatcher(pinnedRecords) : null;
+
+  if (isIP(url.hostname) === 0 && !dispatcher) {
+    throw new Error(`Remote URL validation did not return a pinnable address for '${url.hostname}'.`);
+  }
 
   try {
     const response = await undiciFetch(url as unknown as UndiciRequestInfo, {
@@ -187,7 +209,7 @@ async function fetchUserRemoteUrlInternal(
       throw new Error(`Redirect response from '${url.toString()}' did not include a Location header.`);
     }
 
-    const nextUrl = new URL(location, url);
+    const nextUrl = await resolveValidatedUserRedirect(url, location, strict);
     return await fetchUserRemoteUrlInternal(
       nextUrl,
       buildRedirectRequestInit(requestInit, response.status),
@@ -196,7 +218,7 @@ async function fetchUserRemoteUrlInternal(
     );
   } finally {
     if (dispatcher) {
-      void dispatcher.close().catch(() => undefined);
+      await closePinnedDispatcher(dispatcher).catch(() => undefined);
     }
   }
 }

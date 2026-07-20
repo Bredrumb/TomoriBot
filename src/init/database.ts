@@ -19,8 +19,15 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
+  const managesSchema = isDatabaseSchemaManagementEnabled();
+
   try {
-    await initializeDatabase();
+    if (managesSchema) {
+      await initializeDatabase();
+    } else {
+      await sql`SELECT 1`;
+      log.success("PostgreSQL runtime connection verified (schema management disabled)");
+    }
   } catch {
     process.exit(1);
   }
@@ -37,6 +44,10 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
   } catch (error) {
     log.warn("Error during startup cooldowns cleanup:", error);
     // Non-critical — continue startup
+  }
+
+  if (!managesSchema) {
+    return;
   }
 
   // Attempt to set up pg_cron for recurring cooldown cleanup (non-critical)
@@ -89,4 +100,9 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     log.info(`pg_cron setup failed (non-critical): ${err instanceof Error ? err.message : err}`);
     log.info("Cooldown cleanup will be handled by startup method instead");
   }
+}
+
+export function isDatabaseSchemaManagementEnabled(raw = process.env.DATABASE_SCHEMA_MANAGEMENT_ENABLED): boolean {
+  if (raw === undefined) return true;
+  return ["true", "1", "yes", "on"].includes(raw.trim().toLowerCase());
 }

@@ -1,6 +1,6 @@
 # Use the official Bun image as base
 # Think of this as choosing the "apartment building type" - Bun comes pre-installed
-FROM oven/bun:1.3.14-alpine AS base
+FROM oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS base
 
 # Set the working directory inside the container
 # This is like choosing which floor/apartment number TomoriBot lives in
@@ -106,8 +106,8 @@ COPY --chown=tomori:tomori legal/ ./legal/
 # Copy local tokenizer assets used by model-aware logit-bias resolution
 COPY --chown=tomori:tomori tokenizers/ ./tokenizers/
 
-# Copy SSL certificates for secure database connections
-# AWS RDS CA bundle for verify-full SSL mode (protects against MITM attacks)
+# Copy provider-specific SSL certificates. Azure PostgreSQL uses the maintained
+# operating-system trust store; AWS RDS retains its dedicated bundle.
 COPY --chown=tomori:tomori docker/certs/ ./certs/
 
 # No build step needed - Bun runs TypeScript natively!
