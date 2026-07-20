@@ -44,18 +44,68 @@ const hasPinoPretty = (() => {
 })();
 
 /**
+ * Whether the development pino-pretty transport is active.
+ * Production (or a build without pino-pretty) falls back to raw JSON output.
+ */
+const usePrettyTransport = !shouldHideLogs && hasPinoPretty;
+
+/**
+ * Optional JSONL log file for host-side ingestion (e.g. Azure Monitor Agent
+ * tailing a bind-mounted file). Only used in JSON output mode — the
+ * development pino-pretty transport ignores it. See `.env.optional.example`.
+ */
+const logFilePath = process.env.TOMORI_LOG_FILE?.trim() || undefined;
+
+/**
+ * Builds pino multistream entries that duplicate every JSON record to stdout
+ * (preserved for Docker diagnostics) and an append-only JSONL file.
+ *
+ * Exported for tests: injecting in-memory streams lets tests verify that both
+ * sinks receive identical newline-delimited JSON without touching the filesystem.
+ *
+ * @param filePath - Destination JSONL file path; `undefined` disables file output.
+ * @param stdoutStream - Stream receiving the primary output (default `process.stdout`).
+ * @param createFileStream - Factory for the file sink (default `pino.destination` in synchronous append mode so no lines are lost on a crash).
+ * @returns Stream entries for `pino.multistream()`, or `undefined` when no file is configured.
+ */
+export const buildLogStreams = (
+  filePath: string | undefined,
+  stdoutStream: pino.DestinationStream = process.stdout,
+  createFileStream: (dest: string) => pino.DestinationStream = (dest) =>
+    pino.destination({ dest, append: true, mkdir: true, sync: true }),
+): pino.StreamEntry[] | undefined => {
+  // 1. Without a file path, keep pino's default single-stream stdout construction
+  if (!filePath) return undefined;
+
+  // 2. "trace" lets every record through each sink — level filtering stays on the
+  //    logger itself so both outputs always carry identical lines
+  return [
+    { stream: stdoutStream, level: "trace" },
+    { stream: createFileStream(filePath), level: "trace" },
+  ];
+};
+
+/**
+ * Multistream entries for JSON mode. `undefined` when pretty-printing is active
+ * or no log file is configured (pino then defaults to stdout only). Pino forbids
+ * combining `transport` with an explicit stream, so the pretty transport and the
+ * multistream are mutually exclusive by construction.
+ */
+const jsonStreams = usePrettyTransport ? undefined : buildLogStreams(logFilePath);
+
+/**
  * Pino logger instance with custom levels and formatting
  */
-const pinoLogger = pino({
-  level: shouldHideLogs ? "error" : "info",
-  customLevels: {
-    success: 35, // Between info (30) and warn (40)
-    section: 31, // Just above info (30)
-    metric: 52, // Above error (50) so periodic metrics reach CloudWatch in production
-    rateLimit: 55, // Between error (50) and fatal (60)
-  },
-  transport:
-    !shouldHideLogs && hasPinoPretty
+const pinoLogger = pino(
+  {
+    level: shouldHideLogs ? "error" : "info",
+    customLevels: {
+      success: 35, // Between info (30) and warn (40)
+      section: 31, // Just above info (30)
+      metric: 52, // Above error (50) so periodic metrics reach CloudWatch in production
+      rateLimit: 55, // Between error (50) and fatal (60)
+    },
+    transport: usePrettyTransport
       ? {
           target: "pino-pretty",
           options: {
@@ -67,7 +117,9 @@ const pinoLogger = pino({
           },
         }
       : undefined,
-});
+  },
+  jsonStreams ? pino.multistream(jsonStreams) : undefined,
+);
 
 /**
  * ANSI color codes for terminal output

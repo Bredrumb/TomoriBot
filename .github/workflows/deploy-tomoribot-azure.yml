@@ -722,6 +722,12 @@ jobs:
           printf '%s\n' "$DOCKERHUB_TOKEN" | ssh -i "$SSH_KEY" "$SSH_TARGET" \
             "sudo docker login --username '$DOCKERHUB_USERNAME' --password-stdin"
 
+          # Application log directory bind-mounted into the bot container at /app/logs.
+          # Owned by UID/GID 1001 (container user "tomori") so the non-root bot can
+          # append tomoribot.jsonl; Azure Monitor Agent (root) tails it from the host.
+          ssh -i "$SSH_KEY" "$SSH_TARGET" \
+            "sudo install -d -o 1001 -g 1001 -m 0750 /var/log/tomoribot"
+
           ssh -i "$SSH_KEY" "$SSH_TARGET" \
             "sudo TOMORIBOT_IMAGE='$TOMORIBOT_IMAGE' SEARXNG_IMAGE='$SEARXNG_IMAGE' docker compose -f /etc/tomoribot/docker-compose.yml pull tomoribot && sudo TOMORIBOT_IMAGE='$TOMORIBOT_IMAGE' SEARXNG_IMAGE='$SEARXNG_IMAGE' docker compose -f /etc/tomoribot/docker-compose.yml up -d tomoribot"
 

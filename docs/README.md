@@ -123,6 +123,13 @@ Supporting services that pipelines depend on.
 - [`architecture/integrations/`](./architecture/integrations/) — Discord platform, Matrix bridge,
   NovelAI, SillyTavern, and voice pipeline internals
 
+### Cloud
+
+Production infrastructure on cloud provider services (Azure, AWS, GCP).
+
+- [`architecture/cloud/`](./architecture/cloud/) — deployment and operations on cloud providers
+  - [`cloud/azure-application-logs.md`](./architecture/cloud/azure-application-logs) — shipping error logs to Azure Log Analytics + Grafana
+
 ## Meet Tomori (order 6)
 
 The persona gallery — a card deck introducing each of Tomori's "sisters" (the default
