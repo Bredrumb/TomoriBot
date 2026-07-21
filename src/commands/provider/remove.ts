@@ -124,6 +124,12 @@ export async function execute(
       disabledProviders: tomoriState.config.user_byok_mode ? [] : [currentProvider],
       titleKey: "commands.provider.remove.picker_title",
       descriptionKey: "commands.provider.remove.picker_description",
+      currentSelections: [
+        {
+          model: tomoriState.llm.llm_codename,
+          provider: tomoriState.llm.llm_provider,
+        },
+      ],
       additionalDescription: [
         localizer(locale, "commands.provider.remove.active_provider_note", {
           provider: getProviderDisplayName(currentProvider),

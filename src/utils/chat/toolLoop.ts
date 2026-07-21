@@ -210,7 +210,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       color: ColorCode.WARN,
       titleKey: "genai.max_iterations_title",
       descriptionKey: "genai.max_iterations_streaming_description",
-      footerKey: "genai.generic_error_footer",
+      tipKeys: ["genai.tips.refresh_context", "genai.tips.report_support"],
     });
   }
   selectedStickerToSend = null;
@@ -718,7 +718,7 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
       color: ColorCode.ERROR,
       titleKey: "genai.tool_error_loop_title",
       descriptionKey: "genai.tool_error_loop_description",
-      footerKey: "genai.generic_error_footer",
+      tipKeys: ["genai.tips.refresh_context", "genai.tips.report_support"],
     },
     {
       webhook: context.responseTarget?.webhook,

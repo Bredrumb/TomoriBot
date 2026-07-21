@@ -213,7 +213,14 @@ export async function execute(
     return;
   }
 
-  const providerSelection = await promptForSavedProvider(interaction, locale, savedProviders);
+  const providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
+    currentSelections: [
+      {
+        model: tomoriState.llm.llm_codename,
+        provider: tomoriState.llm.llm_provider,
+      },
+    ],
+  });
   if (!providerSelection) return;
 
   const selectedProvider = providerSelection.provider;

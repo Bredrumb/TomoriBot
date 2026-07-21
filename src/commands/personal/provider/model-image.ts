@@ -9,7 +9,10 @@ import { localizer } from "@/utils/text/localizer";
 import type { DiffusionModelRow, ErrorContext, SavedProviderConfigRow, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { assignPersonalCapabilityToProvider } from "@/utils/provider/personalProviderHelpers";
+import {
+  assignPersonalCapabilityToProvider,
+  resolveActivePersonalProviderModelSelections,
+} from "@/utils/provider/personalProviderHelpers";
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 
 const MODEL_SELECT_ID = "model_select";
@@ -68,6 +71,9 @@ export async function execute(
       interaction,
       locale,
       savedProviders as unknown as SavedProviderConfigRow[],
+      {
+        currentSelections: await resolveActivePersonalProviderModelSelections(savedProviders, "image"),
+      },
     );
     if (!providerSelection) return;
 

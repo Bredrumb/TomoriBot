@@ -51,7 +51,25 @@ This is a current map of shared utility modules under `src/utils/`.
 - `interactionHelper.ts`: compatibility barrel for grouped UI helpers in `utils/discord/ui/`; new code imports the owned UI module directly
 - `streamOrchestrator.ts`: public stream orchestration entry point backed by responsibility modules in `utils/discord/stream/`
 - `webhookManager.ts`: compatibility barrel for grouped webhook helpers in `utils/discord/webhook/`; new code imports the owned webhook module directly
-- `embedHelper.ts`, `historyFetcher.ts`, `historyFormatter.ts`
+- `embedHelper.ts`: shared embed builders (`createStandardEmbed`, `createSummaryEmbed`, `createTipEmbed`, `sendStandardEmbed`) — see [Tip embeds](#tip-embeds) below
+- `historyFetcher.ts`, `historyFormatter.ts`
+
+#### Tip embeds
+
+`createTipEmbed(locale, tipKeys, tipVars?)` in `embedHelper.ts` builds the reusable green **💡 Tip**
+embed shown alongside an error/info embed (e.g. by `stream/errorUi.ts` and `ui/interactionCore.ts`).
+
+- Each entry in `tipKeys` is an **atomic** locale key resolved independently and rendered as its own
+  dashed bullet (`- item`). Keys live under `genai.tips.*` (see the Localization doc's
+  [Tip-item keys](./localization.md#tip-item-keys-genaitips) convention).
+- Tips render as an embed **description**, not a footer, so markdown and hyperlinks render — that is
+  the reason tips moved out of error-embed footers.
+- **Conditional tips are the caller's job**: include or omit a key inline (e.g. an OpenRouter-only
+  item) instead of maintaining whole-paragraph tip strings per branch. Items that resolve to empty
+  text are dropped, and the function returns `null` when nothing resolves, so the caller can skip
+  attaching a tip embed entirely.
+- Colored `ColorCode.SUCCESS` (green) to read as "helpful" and stay visibly distinct from the
+  red/yellow error embed above it; the description is truncated to Discord's embed-description limit.
 
 ### `utils/text`
 

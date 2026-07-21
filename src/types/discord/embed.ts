@@ -1,5 +1,12 @@
 import { ButtonStyle } from "discord.js";
-import type { ButtonInteraction, ColorResolvable, APIEmbedField, EmbedField, MessageFlags } from "discord.js";
+import type {
+  ButtonInteraction,
+  ColorResolvable,
+  APIEmbedField,
+  EmbedField,
+  EmbedBuilder,
+  MessageFlags,
+} from "discord.js";
 
 /**
  * Options for creating a standard info/status embed.
@@ -16,6 +23,14 @@ export interface StandardEmbedOptions {
   thumbnailUrl?: string;
   flags?: MessageFlags;
   timestamp?: boolean;
+  /**
+   * Optional atomic tip-item locale keys. When present, embed senders append a separate green
+   * "💡 Tip" embed rendering these keys as a dashed bullet list. Prefer this over baking tips into
+   * the main embed's description/footer — a footer cannot render markdown or hyperlinks.
+   */
+  tipKeys?: string[];
+  /** Shared interpolation vars applied to every tip item in {@link tipKeys}. */
+  tipVars?: Record<string, string | number | boolean>;
 }
 
 /**
@@ -102,6 +117,11 @@ export interface SummaryEmbedOptions extends StandardEmbedOptions {
     valueVars?: Record<string, string | number | boolean>; // Variables for the value localization
     inline?: boolean;
   }>;
+  /**
+   * Extra pre-built embeds to send alongside the summary embed in the same message
+   * (e.g. a separate yellow "notes" embed). Sent after the main embed, in order.
+   */
+  appendEmbeds?: EmbedBuilder[];
 }
 
 /**

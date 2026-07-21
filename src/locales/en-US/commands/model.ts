@@ -5,6 +5,7 @@ export default {
     providerPicker: {
       title: `Select Provider`,
       description: `Choose which saved provider to use for this model slot.`,
+      current_selection: `Currently using \`{model}\` in \`{provider}\`.`,
       placeholder: `Choose a saved provider...`,
       no_providers_title: `No Saved Providers`,
       no_providers_description: `No saved providers are available for this capability. Add one with \`/provider add\` first.`,

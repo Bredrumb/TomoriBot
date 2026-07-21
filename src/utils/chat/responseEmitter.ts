@@ -212,7 +212,7 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
       descriptionVars: {
         error_message: error instanceof Error ? error.message : "Unknown Error",
       },
-      footerKey: "genai.generic_error_footer",
+      tipKeys: ["genai.tips.refresh_context", "genai.tips.report_support"],
     },
     {
       webhook: context.responseTarget?.webhook,

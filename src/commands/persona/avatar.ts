@@ -13,7 +13,7 @@ import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "
 import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { safeDownload } from "../../utils/security/safeDownload";
-import { memoryGuard, reserveAvatarQuota } from "../../utils/security/rateLimiter";
+import { memoryGuard, PERSONA_LIMITS, reserveAvatarQuota } from "../../utils/security/rateLimiter";
 import { personaRepository } from "@/utils/db/repositories";
 import { convertToPNG } from "../../utils/image/imageProcessor";
 import { deletePersonaAvatarFromStorage, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
@@ -59,8 +59,8 @@ function validateImage(attachment: AvatarAttachment): {
   const contentType = "contentType" in attachment ? attachment.contentType : attachment.content_type;
   const filename = "name" in attachment ? attachment.name : attachment.filename;
 
-  // 1. Check file size (Discord's limit is 8MB for bots)
-  const maxSize = 8 * 1024 * 1024; // 8MB in bytes
+  // 1. Check file size against the shared persona/avatar upload limit.
+  const maxSize = PERSONA_LIMITS.MAX_AVATAR_SIZE_MB * 1024 * 1024;
   if (attachment.size > maxSize) {
     return {
       isValid: false,
@@ -101,9 +101,9 @@ async function downloadAttachmentBuffer(attachment: AvatarAttachment): Promise<{
   error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
   details?: string;
 }> {
-  // 1. Use safeDownload with 15s timeout and 8MB size limit
+  // 1. Use safeDownload with the shared persona/avatar upload limit.
   const downloadResult = await safeDownload(attachment.url, {
-    maxSizeMB: 8,
+    maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
     timeoutMs: 15000, // 15 seconds
     knownSize: attachment.size,
   });
@@ -429,6 +429,7 @@ export async function execute(
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.persona.avatar.invalid_image_title",
         descriptionKey: `commands.persona.avatar.${errorKey}`,
+        descriptionVars: { max_size: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB.toString() },
         color: ColorCode.ERROR,
       });
       return;
@@ -449,6 +450,7 @@ export async function execute(
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.persona.avatar.invalid_image_title",
         descriptionKey: errorKey,
+        descriptionVars: { max_size: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB.toString() },
         color: ColorCode.ERROR,
       });
       return;

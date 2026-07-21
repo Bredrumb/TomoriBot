@@ -9,6 +9,7 @@ import {
   type InteractionEditReplyOptions,
   type InteractionReplyOptions,
   type ModalSubmitInteraction,
+  escapeMarkdown,
 } from "discord.js";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { SavedProviderConfigRow } from "@/types/db/schema";
@@ -42,6 +43,11 @@ export interface PickerOptions {
   titleKey?: string;
   /** Override the picker embed description locale key. */
   descriptionKey?: string;
+  /** Active model/provider pairs to show beneath the picker guidance. */
+  currentSelections?: Array<{
+    model: string;
+    provider: string;
+  }>;
 }
 
 export async function promptForSavedProvider(
@@ -72,8 +78,30 @@ export async function promptForSavedProvider(
     descriptionKey: options?.descriptionKey ?? "commands.model.providerPicker.description",
     color: ColorCode.INFO,
   });
+  const extraDescriptionParts: string[] = [];
+  if (options?.currentSelections?.length) {
+    const uniqueSelections = Array.from(
+      new Map(
+        options.currentSelections.map((selection) => [
+          JSON.stringify([selection.provider, selection.model]),
+          selection,
+        ]),
+      ).values(),
+    );
+    extraDescriptionParts.push(
+      ...uniqueSelections.map((selection) =>
+        localizer(locale, "commands.model.providerPicker.current_selection", {
+          model: escapeMarkdown(selection.model),
+          provider: escapeMarkdown(selection.provider),
+        }),
+      ),
+    );
+  }
   if (options?.additionalDescription) {
-    pickerEmbed.setDescription(`${pickerEmbed.data.description ?? ""}\n\n${options.additionalDescription}`);
+    extraDescriptionParts.push(options.additionalDescription);
+  }
+  if (extraDescriptionParts.length > 0) {
+    pickerEmbed.setDescription(`${pickerEmbed.data.description ?? ""}\n\n${extraDescriptionParts.join("\n")}`);
   }
   const pickerComponents = buildProviderRows(savedProviders, locale, options?.disabledProviders);
 

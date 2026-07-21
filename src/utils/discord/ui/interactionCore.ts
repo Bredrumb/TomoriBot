@@ -256,7 +256,7 @@ import {
   isModalCheckboxGroupField,
   isModalCheckboxField,
 } from "../../../types/discord/modal";
-import { createStandardEmbed, createSummaryEmbed } from "../embedHelper";
+import { createStandardEmbed, createSummaryEmbed, createTipEmbed } from "../embedHelper";
 import { buildDocsLinkRow } from "@/utils/discord/docsLinks";
 
 const PROMPT_TIMEOUT = 60000; // 60 seconds
@@ -786,8 +786,13 @@ export async function replyInfoEmbed(
     finalOptions.footerKey = "general.errors.tomori_not_setup_dm_footer";
   }
 
-  // 3. Build the embed using the shared helper for consistency
+  // 3. Build the embed using the shared helper for consistency. When tip-item keys are supplied,
+  //    append the reusable green Tip embed so every send path below emits both embeds together.
   const embed = createStandardEmbed(locale, finalOptions);
+  const tipEmbed = finalOptions.tipKeys?.length
+    ? createTipEmbed(locale, finalOptions.tipKeys, finalOptions.tipVars)
+    : null;
+  const embeds = tipEmbed ? [embed, tipEmbed] : [embed];
 
   // 4. Defensive interaction state checking
   const interactionState = {
@@ -810,7 +815,7 @@ export async function replyInfoEmbed(
     log.info(`Raw modal state desync detected for interaction ${interaction.id}, using webhook.send directly`);
     try {
       await interaction.webhook.send({
-        embeds: [embed],
+        embeds,
         components: [],
         flags: flags || MessageFlags.Ephemeral,
       });
@@ -824,10 +829,10 @@ export async function replyInfoEmbed(
   try {
     if (interaction.deferred || interaction.replied) {
       // Interaction has already been acknowledged, use editReply
-      await interaction.editReply({ embeds: [embed], components: [] });
+      await interaction.editReply({ embeds, components: [] });
     } else {
       // Interaction hasn't been acknowledged, use reply
-      await interaction.reply({ embeds: [embed], components: [], flags });
+      await interaction.reply({ embeds, components: [], flags });
     }
   } catch (error) {
     log.warn("Failed to show info embed via primary method:", error);
@@ -842,7 +847,7 @@ export async function replyInfoEmbed(
         // INTERACTION_NOT_REPLIED guard — use webhook.send() instead.
         log.info("Attempting webhook.send due to acknowledgment conflict (raw REST desync)");
         await interaction.webhook.send({
-          embeds: [embed],
+          embeds,
           components: [],
           flags: flags || MessageFlags.Ephemeral,
         });
@@ -850,7 +855,7 @@ export async function replyInfoEmbed(
         // Interaction wasn't properly acknowledged - try reply without flags first
         log.info("Attempting basic reply due to no prior acknowledgment");
         await interaction.reply({
-          embeds: [embed],
+          embeds,
           components: [],
           flags: MessageFlags.Ephemeral,
         });
@@ -858,7 +863,7 @@ export async function replyInfoEmbed(
         // Other error - try webhook.send as last resort (avoids followUp guard)
         log.info("Attempting webhook.send as last resort fallback");
         await interaction.webhook.send({
-          embeds: [embed],
+          embeds,
           components: [],
           flags: flags || MessageFlags.Ephemeral,
         });
@@ -901,6 +906,8 @@ export async function replySummaryEmbed(
     | undefined = MessageFlags.Ephemeral,
 ): Promise<void> {
   const embed = createSummaryEmbed(locale, options);
+  // Optional pre-built embeds (e.g. a separate yellow "notes" embed) ride in the same message.
+  const embeds = options.appendEmbeds?.length ? [embed, ...options.appendEmbeds] : [embed];
   const components = options.docsPath ? [buildDocsLinkRow(locale, options.docsPath, options.docsLabelKey)] : [];
 
   // Defensive interaction state checking
@@ -922,7 +929,7 @@ export async function replySummaryEmbed(
     log.info(`Raw modal state desync detected for interaction ${interaction.id}, using webhook.send directly`);
     try {
       await interaction.webhook.send({
-        embeds: [embed],
+        embeds,
         components,
         flags: flags || MessageFlags.Ephemeral,
       });
@@ -935,9 +942,9 @@ export async function replySummaryEmbed(
 
   try {
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ embeds: [embed], components });
+      await interaction.editReply({ embeds, components });
     } else {
-      await interaction.reply({ embeds: [embed], components, flags });
+      await interaction.reply({ embeds, components, flags });
     }
   } catch (error) {
     log.warn("Failed to show summary embed via primary method:", error);
@@ -949,21 +956,21 @@ export async function replySummaryEmbed(
       if (errorMessage.includes("has already been acknowledged")) {
         log.info("Attempting webhook.send due to acknowledgment conflict (raw REST desync)");
         await interaction.webhook.send({
-          embeds: [embed],
+          embeds,
           components,
           flags: flags || MessageFlags.Ephemeral,
         });
       } else if (errorMessage.includes("not been sent or deferred")) {
         log.info("Attempting basic reply due to no prior acknowledgment");
         await interaction.reply({
-          embeds: [embed],
+          embeds,
           components,
           flags: flags || MessageFlags.Ephemeral,
         });
       } else {
         log.info("Attempting webhook.send as last resort fallback");
         await interaction.webhook.send({
-          embeds: [embed],
+          embeds,
           components,
           flags: flags || MessageFlags.Ephemeral,
         });

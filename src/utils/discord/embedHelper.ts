@@ -124,6 +124,40 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
   return embed;
 }
 
+/**
+ * Builds the reusable green "💡 Tip" embed shown alongside error/info embeds.
+ *
+ * Each entry in `tipKeys` is an atomic locale key resolved independently and rendered as its own
+ * dashed bullet. Because the content lives in an embed description (not a footer), markdown and
+ * hyperlinks render — which is why tips moved out of footers. Conditional tips are handled by the
+ * caller simply including/excluding a key (e.g. an OpenRouter-only item), so no duplicate paragraph
+ * strings are needed in the locales.
+ * @param locale - The locale to localize each tip item with.
+ * @param tipKeys - Atomic tip-item locale keys, in display order.
+ * @param tipVars - Optional interpolation vars applied to every tip item.
+ * @returns A green EmbedBuilder, or null when no tip item resolves to non-empty text.
+ */
+export function createTipEmbed(
+  locale: string,
+  tipKeys: string[],
+  tipVars: Record<string, string | number | boolean> = {},
+): EmbedBuilder | null {
+  // 1. Localize every tip item and drop any that resolve to empty text (e.g. an unset optional key).
+  const items = tipKeys.map((key) => localizer(locale, key, tipVars).trim()).filter((text) => text.length > 0);
+  if (items.length === 0) {
+    return null;
+  }
+
+  // 2. Render as a dashed bullet list, truncated to stay within Discord's embed description limit.
+  const description = truncateForEmbedDescription(items.map((item) => `- ${item}`).join("\n"));
+
+  // 3. Green (SUCCESS) reads as "helpful", visibly distinct from the red/yellow error embed above it.
+  return new EmbedBuilder()
+    .setColor(ColorCode.SUCCESS)
+    .setTitle(localizer(locale, "genai.tips.title"))
+    .setDescription(description);
+}
+
 export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions): EmbedBuilder {
   const {
     titleKey,
@@ -210,6 +244,9 @@ export async function sendStandardEmbed(
   webhookContext?: WebhookEmbedContext,
 ): Promise<void> {
   const embed = createStandardEmbed(locale, options);
+  // Append the reusable green Tip embed when the caller supplied atomic tip-item keys.
+  const tipEmbed = options.tipKeys?.length ? createTipEmbed(locale, options.tipKeys, options.tipVars) : null;
+  const embeds = tipEmbed ? [embed, tipEmbed] : [embed];
   if (
     webhookContext?.webhook &&
     webhookContext.personaUsername &&
@@ -221,7 +258,7 @@ export async function sendStandardEmbed(
       await sendWebhookMessageWithIdentity(
         webhookContext.webhook,
         {
-          embeds: [embed],
+          embeds,
           ...(threadId ? { threadId } : {}),
         },
         {
@@ -238,7 +275,7 @@ export async function sendStandardEmbed(
     }
   }
 
-  await channel.send({ embeds: [embed] });
+  await channel.send({ embeds });
 }
 
 const TRANSLATION_TIMEOUT = 90000;

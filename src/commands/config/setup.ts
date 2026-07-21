@@ -1,4 +1,4 @@
-import { TextInputStyle, MessageFlags } from "discord.js";
+import { TextInputStyle, MessageFlags, EmbedBuilder } from "discord.js";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import type { SetupConfig, UserRow } from "../../types/db/schema";
 import type { SelectOption, RadioGroupOption } from "../../types/discord/modal";
@@ -666,63 +666,73 @@ export async function execute(
         }
       }
 
-      // Prepare fields for success message
-      // Map humanizer degree to user-friendly label
-      const humanizerLabels = [
-        localizer(locale, "commands.config.setup.humanizer_option_none_label"),
-        localizer(locale, "commands.config.setup.humanizer_option_light_label"),
-        localizer(locale, "commands.config.setup.humanizer_option_default_label"),
-        localizer(locale, "commands.config.setup.humanizer_option_heavy_label"),
-      ];
-      const humanizerLabel = humanizerLabels[humanizerDegree] || "Unknown";
+      // Prepare the success message.
+      // 1. Resolve the provider display name and chosen persona for the inline confirmation line
+      //    (persona/name/humanizer are now named in the confirmation, not shown as separate fields).
+      const providerDisplayName = normalizedProvider ? getProviderDisplayName(normalizedProvider) : "";
+      const personaName = selectedPresetOption.name;
+
+      // 2. Look up this provider's default model for the "{model_name}" confirmation variants.
       let configuredModelName: string | null = null;
-      if (!configuredModelName && normalizedProvider) {
+      if (normalizedProvider) {
         const defaultModel = await llmModelRepo.loadDefaultModel(normalizedProvider);
         if (defaultModel) {
           configuredModelName = defaultModel.llm_codename;
         }
       }
 
-      const successFields = [
-        {
-          nameKey: "commands.config.setup.preset_field",
-          value: selectedPresetOption.name,
-        },
-        {
-          nameKey: "commands.config.setup.name_field",
-          value:
-            locale === "ja"
-              ? process.env.DEFAULT_BOTNAME_JP || "ともり" // Use environment variable with fallback
-              : process.env.DEFAULT_BOTNAME || "Tomori", // Use environment variable with fallback
-        },
-        {
-          nameKey: "commands.config.setup.humanizer_field",
-          value: humanizerLabel,
-        },
-      ];
+      // 3. Green embed fields: an optional DM explanation, then the shared Next Steps + Learn More.
+      const helpFeaturesMention = commandRegistry.getCommandMention("help", "features");
+      const successFields: Array<{ nameKey: string; value: string }> = [];
 
-      // Add NovelAI expressions warning field if provider is NovelAI
-      if (normalizedProvider === "novelai") {
+      if (isDMChannel) {
         successFields.push({
-          nameKey: "commands.config.setup.novelai_expressions_warning_field",
-          value: localizer(locale, "commands.config.setup.novelai_expressions_warning_value"),
+          nameKey: "commands.config.setup.dm_context_explanation_title",
+          value: localizer(locale, "commands.config.setup.dm_context_explanation"),
         });
       }
 
-      // Add Z.ai ToS warning field if provider is Z.ai or Z.aiCoding
+      successFields.push({
+        nameKey: "commands.config.setup.next_steps_title",
+        // DM drops the server-only `/server initialize` bullet.
+        value: localizer(
+          locale,
+          isDMChannel ? "commands.config.setup.next_steps_value_dm" : "commands.config.setup.next_steps_value",
+        ),
+      });
+
+      successFields.push({
+        nameKey: "commands.config.setup.learn_more_title",
+        value: localizer(locale, "commands.config.setup.learn_more_value", {
+          helpFeatures: helpFeaturesMention,
+        }),
+      });
+
+      // 4. Provider/mode-specific notes go into a conditional yellow "A Few Things to Note" embed,
+      //    rendered only when at least one applies. Each note is a bold top-level bullet (label) with
+      //    an indented detail sub-bullet — nothing shows for a plain paid-provider setup.
+      const headsUpNotes: Array<{ label: string; detail: string }> = [];
+
+      if (normalizedProvider === "novelai") {
+        headsUpNotes.push({
+          label: localizer(locale, "commands.config.setup.novelai_expressions_warning_field"),
+          detail: localizer(locale, "commands.config.setup.novelai_expressions_warning_value"),
+        });
+      }
+
       if (normalizedProvider === "zai" || normalizedProvider === "zaicoding") {
-        successFields.push({
-          nameKey: "commands.config.setup.zai_tos_warning_field",
-          value: localizer(locale, "commands.config.setup.zai_tos_warning_value"),
+        headsUpNotes.push({
+          label: localizer(locale, "commands.config.setup.zai_tos_warning_field"),
+          detail: localizer(locale, "commands.config.setup.zai_tos_warning_value"),
         });
       }
 
       if (isUserByokSetup) {
         const userByokToggleMention = commandRegistry.getCommandMention("server", "user-byok", "toggle");
         const helpPersonalProviderMention = commandRegistry.getCommandMention("help", "personal-provider");
-        successFields.push({
-          nameKey: "commands.config.setup.byok_bootstrap_field",
-          value: localizer(locale, "commands.config.setup.byok_bootstrap_value", {
+        headsUpNotes.push({
+          label: localizer(locale, "commands.config.setup.byok_bootstrap_field"),
+          detail: localizer(locale, "commands.config.setup.byok_bootstrap_value", {
             toggle_command: userByokToggleMention,
             help_personal_provider: helpPersonalProviderMention,
           }),
@@ -735,9 +745,9 @@ export async function execute(
         const helpCustomModelsMention = commandRegistry.getCommandMention("help", "custom-endpoint");
         const helpSpeechMention = commandRegistry.getCommandMention("help", "speech");
         const helpTranscriptionMention = commandRegistry.getCommandMention("help", "transcription");
-        successFields.push({
-          nameKey: "commands.config.setup.custom_endpoint_bootstrap_field",
-          value: localizer(locale, "commands.config.setup.custom_endpoint_bootstrap_value", {
+        headsUpNotes.push({
+          label: localizer(locale, "commands.config.setup.custom_endpoint_bootstrap_field"),
+          detail: localizer(locale, "commands.config.setup.custom_endpoint_bootstrap_value", {
             custom_models_add_command: customModelsAddMention,
             model_text_command: modelTextMention,
             help_custom_models_command: helpCustomModelsMention,
@@ -747,24 +757,16 @@ export async function execute(
         });
       }
 
-      // Add DM explanation field if in DM context
-      if (isDMChannel) {
-        successFields.push({
-          nameKey: "commands.config.setup.dm_context_explanation_title",
-          value: localizer(locale, "commands.config.setup.dm_context_explanation"),
-        });
-      }
+      // Build the yellow embed only when at least one note applies.
+      const headsUpEmbed =
+        headsUpNotes.length > 0
+          ? new EmbedBuilder()
+              .setColor(ColorCode.WARN)
+              .setTitle(localizer(locale, "commands.config.setup.heads_up_title"))
+              .setDescription(headsUpNotes.map((note) => `- **${note.label}**\n  - ${note.detail}`).join("\n"))
+          : null;
 
-      // Always show a "What can I do?" field pointing to /help features
-      const helpFeaturesMention = commandRegistry.getCommandMention("help", "features");
-      successFields.push({
-        nameKey: "commands.config.setup.next_steps_title",
-        value: localizer(locale, "commands.config.setup.next_steps_description", {
-          helpFeatures: helpFeaturesMention,
-        }),
-      });
-
-      // Show success message
+      // 5. Pick the confirmation variant for the chosen mode.
       const successDescriptionKey = isUserByokSetup
         ? isDMChannel
           ? "commands.config.setup.success_desc_dm"
@@ -782,9 +784,15 @@ export async function execute(
       await replySummaryEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.setup.success_title",
         descriptionKey: successDescriptionKey,
-        descriptionVars: configuredModelName ? { model_name: configuredModelName } : undefined,
+        // All confirmation variants pull from the same var set; unused ones are ignored per template.
+        descriptionVars: {
+          model_name: configuredModelName ?? "",
+          provider: providerDisplayName,
+          persona: personaName,
+        },
         color: avatarUpdateFailed || isDMChannel ? ColorCode.WARN : ColorCode.SUCCESS,
         fields: successFields,
+        appendEmbeds: headsUpEmbed ? [headsUpEmbed] : undefined,
         footerKey: isDMChannel
           ? "commands.persona.default.avatar_update_skipped_dm"
           : avatarUpdateFailed

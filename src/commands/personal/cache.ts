@@ -111,7 +111,7 @@ export async function execute(
       color: ColorCode.ERROR,
       titleKey: "general.errors.critical_error_title",
       descriptionKey: "general.errors.critical_error_description",
-      footerKey: "genai.generic_error_footer",
+      tipKeys: ["genai.tips.refresh_context", "genai.tips.report_support"],
     });
   }
 }

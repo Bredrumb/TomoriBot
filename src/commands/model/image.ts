@@ -184,11 +184,24 @@ export async function execute(
     const hasNaiProviders = savedProviders.some(
       (provider) => getStaticProviderInfo(provider.provider)?.featureSupport.imageGeneration === "nai-pipeline",
     );
-    const pickerOptions = hasNaiProviders
-      ? {
-          additionalDescription: localizer(locale, "commands.model.image.nai_picker_note"),
-        }
-      : undefined;
+    const currentImageModels = await Promise.all(
+      [tomoriState.config.diffusion_model_id, tomoriState.config.nai_diffusion_model_id]
+        .filter((modelId): modelId is number => typeof modelId === "number")
+        .map((modelId) => llmModelRepo.loadDiffusionModelById(modelId)),
+    );
+    const pickerOptions = {
+      currentSelections: currentImageModels.flatMap((model) =>
+        model
+          ? [
+              {
+                model: model.codename,
+                provider: model.provider,
+              },
+            ]
+          : [],
+      ),
+      additionalDescription: hasNaiProviders ? localizer(locale, "commands.model.image.nai_picker_note") : undefined,
+    };
     providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, pickerOptions);
 
     if (!providerSelection) {

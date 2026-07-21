@@ -121,7 +121,19 @@ export async function execute(
 
   try {
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "video");
-    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders);
+    const currentVideoModel = tomoriState.config.video_model_id
+      ? await llmModelRepo.loadVideoGenerationModelById(tomoriState.config.video_model_id)
+      : null;
+    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
+      currentSelections: currentVideoModel
+        ? [
+            {
+              model: currentVideoModel.codename,
+              provider: currentVideoModel.provider,
+            },
+          ]
+        : [],
+    });
 
     if (!providerSelection) {
       return;

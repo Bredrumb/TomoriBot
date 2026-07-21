@@ -106,7 +106,16 @@ export async function execute(
   try {
     // 1. Channel scope: provider picker → model picker → channel override
     if (scope === "channel") {
-      providerSelection = await promptForSavedProvider(interaction, locale, savedProviders);
+      const currentChannelModel =
+        (await llmOverrideRepo.getChannelLlmOverride(tomoriState.server_id, interaction.channelId)) ?? tomoriState.llm;
+      providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
+        currentSelections: [
+          {
+            model: currentChannelModel.llm_codename,
+            provider: currentChannelModel.llm_provider,
+          },
+        ],
+      });
       if (!providerSelection) return;
 
       const selectedProvider = providerSelection.provider;
@@ -234,7 +243,15 @@ export async function execute(
           return;
         }
 
-        providerSelection = await promptForSavedProvider(personaButtonInteraction, locale, savedProviders);
+        const currentPersonaModel = selectedPersona.persona_llm ?? tomoriState.llm;
+        providerSelection = await promptForSavedProvider(personaButtonInteraction, locale, savedProviders, {
+          currentSelections: [
+            {
+              model: currentPersonaModel.llm_codename,
+              provider: currentPersonaModel.llm_provider,
+            },
+          ],
+        });
         if (!providerSelection) return;
 
         const selectedProvider = providerSelection.provider;
@@ -338,7 +355,14 @@ export async function execute(
     }
 
     // 3. Global scope: provider picker → (custom capabilities || model picker) → Phase A mirror write
-    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders);
+    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
+      currentSelections: [
+        {
+          model: tomoriState.llm.llm_codename,
+          provider: tomoriState.llm.llm_provider,
+        },
+      ],
+    });
     if (!providerSelection) return;
 
     const selectedProvider = providerSelection.provider;

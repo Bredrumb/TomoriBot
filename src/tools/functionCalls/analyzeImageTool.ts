@@ -6,6 +6,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import type { Part } from "@google/genai";
+import { escapeMarkdown } from "discord.js";
 import { BaseTool } from "@/types/tool/interfaces";
 import type { ToolContext, ToolResult, ToolParameterSchema } from "@/types/tool/interfaces";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -41,7 +42,7 @@ const DISCORD_ID_PATTERN = /^\d{17,19}$/;
 const DEFAULT_VISION_PROMPT =
   "Describe what you see in this image in detail. Include any text, objects, people, colors, and notable elements.";
 
-/** Maximum total size of all images in bytes (8 MB) to avoid API rejections */
+/** Maximum total size of all images in bytes (default: 10 MiB) to avoid API rejections. */
 const MAX_TOTAL_IMAGE_BYTES = MEDIA_LIMITS.MAX_MEDIA_SIZE_MB * 1024 * 1024;
 
 /** Maximum wall-clock time for image extraction and vision inference (default: 60 seconds). */
@@ -162,6 +163,9 @@ export class AnalyzeImageTool extends BaseTool {
         {
           titleKey: "tools.vision.analyzing_title",
           descriptionKey: "tools.vision.analyzing_description",
+          descriptionVars: {
+            model: escapeMarkdown(visionLlm.llm_codename),
+          },
           footerKey: "tools.vision.analyzing_footer",
           color: ColorCode.INFO,
         },

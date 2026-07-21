@@ -6,6 +6,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import type { Part } from "@google/genai";
+import { escapeMarkdown } from "discord.js";
 import { log } from "../../utils/misc/logger";
 import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
@@ -215,18 +216,6 @@ export class PeekProfilePictureTool extends BaseTool {
       // vision model is configured, call the vision model directly with the avatar image
       // and return a text description. The primary model then responds to that description.
       if (!context.tomoriState.llm.sees_images && context.tomoriState.vision_llm) {
-        await sendToolProgressNotice(
-          context,
-          "image_analysis",
-          {
-            titleKey: "tools.vision.analyzing_title",
-            descriptionKey: "tools.vision.analyzing_description",
-            footerKey: "tools.vision.analyzing_footer",
-            color: ColorCode.INFO,
-          },
-          "PeekProfilePictureTool",
-        );
-
         return await this.redirectToVisionModel(preparedImages, targetTypeLabel, userDisplayText, reason, context);
       }
 
@@ -384,6 +373,21 @@ export class PeekProfilePictureTool extends BaseTool {
         error: "No vision model configured. Use /model vision to set one.",
       };
     }
+
+    await sendToolProgressNotice(
+      context,
+      "image_analysis",
+      {
+        titleKey: "tools.vision.analyzing_title",
+        descriptionKey: "tools.vision.analyzing_description",
+        descriptionVars: {
+          model: escapeMarkdown(visionLlm.llm_codename),
+        },
+        footerKey: "tools.vision.analyzing_footer",
+        color: ColorCode.INFO,
+      },
+      "PeekProfilePictureTool",
+    );
 
     const apiKey = creds.apiKey;
 

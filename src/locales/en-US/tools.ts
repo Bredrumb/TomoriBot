@@ -118,7 +118,7 @@ export default {
     },
     vision: {
       analyzing_title: `🖼️  Analyzing Image...`,
-      analyzing_description: `Current model is non-vision; using configured vision model to analyze images.`,
+      analyzing_description: `Current model is non-vision; using configured \`/model vision\` ({model}) to analyze images.`,
       analyzing_footer: `This may take a moment depending on image count`,
     },
     gif: {

@@ -163,11 +163,11 @@ export default {
       rejoin_title: `TomoriBotが戻ってきました！`,
       rejoin_description: `このサーバーに再追加されたようです。既存の設定とペルソナはそのまま残っています。\`/config\`、\`/persona\`、\`/memory\`、\`/server\`、\`/provider add\` で確認や変更ができます。
 
-			現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms\` と \`/legal privacy\` で確認できます。`,
+現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms\` と \`/legal privacy\` で確認できます。`,
       setup_prompt_title: `TomoriBotの追加が完了しました`,
       setup_prompt_description: `追加してくれてありがとうございます。始めるには、**サーバー管理**権限を持つメンバーが \`/config setup\` を実行して、初期ペルソナとプロバイダーを選択してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/introduction/quickstart/ で確認できます。
 
-			プロバイダーのAPIキーが必要な場合は \`/help api-key\` を使ってください。現在の利用規約とプライバシーポリシーは \`/legal terms\` と \`/legal privacy\` で確認できます。`,
+プロバイダーのAPIキーが必要な場合は \`/help api-key\` を使ってください。現在の利用規約とプライバシーポリシーは \`/legal terms\` と \`/legal privacy\` で確認できます。`,
     },
   },
   reminders: {

@@ -23,6 +23,7 @@ import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouter
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
+import { resolveActivePersonalProviderModelSelections } from "@/utils/provider/personalProviderHelpers";
 
 const SLOT_IDS = [
   "fallback_slot_1",
@@ -155,6 +156,9 @@ export async function execute(
       interaction,
       locale,
       savedProviders as unknown as SavedProviderConfigRow[],
+      {
+        currentSelections: await resolveActivePersonalProviderModelSelections(savedProviders, "text"),
+      },
     );
     if (!providerSelection) return;
 

@@ -64,7 +64,7 @@ export const MEDIA_LIMITS = {
    * Larger files will be rejected or downscaled
    * @default 10 MB
    */
-  MAX_MEDIA_SIZE_MB: Number.parseInt(process.env.MAX_MEDIA_SIZE_MB || "8", 10),
+  MAX_MEDIA_SIZE_MB: Number.parseInt(process.env.MAX_MEDIA_SIZE_MB || "10", 10),
 
   /**
    * Maximum size per individual GIF file in MB (for process_gif tool in dev)

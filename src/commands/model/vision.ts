@@ -97,7 +97,16 @@ export async function execute(
 
   try {
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "vision");
-    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders);
+    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
+      currentSelections: tomoriState.vision_llm
+        ? [
+            {
+              model: tomoriState.vision_llm.llm_codename,
+              provider: tomoriState.vision_llm.llm_provider,
+            },
+          ]
+        : [],
+    });
 
     if (!providerSelection) {
       return;

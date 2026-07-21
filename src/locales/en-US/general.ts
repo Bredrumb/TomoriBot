@@ -8,7 +8,7 @@ export default {
     unknown: `Unknown`,
     scoped_openrouter_model_description: `Added via /openrouter model`,
     openrouter_model_moved_title: `Functionality Moved`,
-    openrouter_model_moved_description: `Direct \`other-model\` selection moved to the OpenRouter model registry. Add the exact model codename with {add_command}, remove old registrations with {remove_command}, then pick that registered model from the normal OpenRouter model list.`,
+    openrouter_model_moved_description: `\`other-model\` selection has been moved to {add_command}. After using it, use \`/model text\` again to select it.`,
     defaults: {
       bot_name: `Tomori`,
     },
@@ -163,11 +163,11 @@ export default {
       rejoin_title: `I'm Back!`,
       rejoin_description: `Looks like I was re-added to this server. Existing settings and personas are still intact. Use \`/config\`, \`/persona\`, \`/memory\`, \`/server\`, and \`/provider add\` to review or change them.
 
-			View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
+View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
       setup_prompt_title: `Successfully Added`,
-      setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or https://docs.tomoribot.app/introduction/quickstart/ for the short guide.
+      setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or read the official [short guide](https://docs.tomoribot.app/introduction/quickstart/).
 
-			Use \`/help api-key\` if you need provider key instructions. View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
+Use \`/help api-key\` if you need provider key instructions. View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
     },
   },
   reminders: {

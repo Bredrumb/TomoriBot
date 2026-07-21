@@ -341,7 +341,15 @@ export async function execute(
         }
 
         await modalSubmitInteraction.editReply({
-          embeds: [new EmbedBuilder().setTitle(localizer(locale, errorKey)).setColor(ColorCode.ERROR)],
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(
+                localizer(locale, errorKey, {
+                  max_size: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB.toString(),
+                }),
+              )
+              .setColor(ColorCode.ERROR),
+          ],
         });
         return;
       }

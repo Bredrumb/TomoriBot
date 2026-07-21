@@ -110,6 +110,7 @@ const MANAGER_ONLY_CATEGORIES = [
   "mcp",
   "capabilities",
   "nsfw",
+  "openrouter",
   "optional-key",
   "server",
 ];

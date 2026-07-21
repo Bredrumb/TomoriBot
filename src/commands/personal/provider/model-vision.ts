@@ -10,7 +10,10 @@ import type { ErrorContext, LlmRow, SavedProviderConfigRow, UserRow } from "@/ty
 import type { SelectOption } from "@/types/discord/modal";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { assignPersonalCapabilityToProvider } from "@/utils/provider/personalProviderHelpers";
+import {
+  assignPersonalCapabilityToProvider,
+  resolveActivePersonalProviderModelSelections,
+} from "@/utils/provider/personalProviderHelpers";
 import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 
 const MODEL_SELECT_ID = "model_select";
@@ -70,6 +73,9 @@ export async function execute(
       interaction,
       locale,
       savedProviders as unknown as SavedProviderConfigRow[],
+      {
+        currentSelections: await resolveActivePersonalProviderModelSelections(savedProviders, "vision"),
+      },
     );
     if (!providerSelection) return;
 

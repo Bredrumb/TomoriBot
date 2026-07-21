@@ -5,6 +5,7 @@ export default {
     providerPicker: {
       title: `プロバイダーを選択`,
       description: `このモデルスロットで使う保存済みプロバイダーを選択してください。`,
+      current_selection: `現在は \`{provider}\` の \`{model}\` を使用しています。`,
       placeholder: `保存済みプロバイダーを選択...`,
       no_providers_title: `保存済みプロバイダーがありません`,
       no_providers_description: `この機能で使える保存済みプロバイダーがありません。先に \`/provider add\` で追加してください。`,

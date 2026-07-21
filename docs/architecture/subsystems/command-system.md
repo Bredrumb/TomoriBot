@@ -78,6 +78,11 @@ Grouped commands are represented by folders:
 
 - `src/commands/model/text.ts` -> `/model text`
 
+Model and provider flows that call `promptForSavedProvider()` use one shared initial
+provider-selection embed. Model-selection callers pass the effective slot selection so
+the embed can show the active model codename and provider; channel and persona text
+commands resolve their scoped override before falling back to the server text model.
+
 Root commands are represented by top-level command files:
 
 - `src/commands/subscribe.ts` -> `/subscribe`

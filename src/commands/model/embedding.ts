@@ -82,7 +82,19 @@ export async function execute(
 
   try {
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "embedding");
-    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders);
+    const activeEmbeddingModel = tomoriState.config.embedding_model_id
+      ? await llmModelRepo.loadEmbeddingModelById(tomoriState.config.embedding_model_id)
+      : null;
+    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
+      currentSelections: activeEmbeddingModel
+        ? [
+            {
+              model: activeEmbeddingModel.codename,
+              provider: activeEmbeddingModel.provider,
+            },
+          ]
+        : [],
+    });
 
     if (!providerSelection) {
       return;

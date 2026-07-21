@@ -118,7 +118,7 @@ export default {
     },
     vision: {
       analyzing_title: `🖼️ 画像を解析中...`,
-      analyzing_description: `現在のモデルはビジョン非対応です。設定されたビジョンモデルを使用して画像を解析しています`,
+      analyzing_description: `現在のモデルはビジョン非対応です。設定された \`/model vision\`（{model}）を使用して画像を解析しています。`,
       analyzing_footer: `画像の数によって少し時間がかかる場合があります`,
     },
     gif: {
