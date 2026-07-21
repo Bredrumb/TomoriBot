@@ -91,7 +91,7 @@
     "satori": "^0.26.0",
     "sharp": "^0.34.5",
     "turndown": "^7.2.4",
-    "undici": "^6.27.0",
+    "undici": "^8.8.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
