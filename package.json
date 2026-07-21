@@ -84,7 +84,7 @@
     "minimatch": "^10.2.4",
     "minimist": "^1.2.8",
     "music-metadata": "^11.12.3",
-    "pdf-parse": "1.1.4",
+    "pdf-parse": "2.4.5",
     "pg": "^8.20.0",
     "pino": "^10.3.1",
     "profane-words": "^2.1.0",
