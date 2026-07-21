@@ -7,7 +7,8 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Singapore"
-    open-pull-requests-limit: 10
+    # Disable routine version-update PRs while retaining security updates.
+    open-pull-requests-limit: 0
     commit-message:
       # Trailing whitespace prevents Dependabot from inserting a colon.
       prefix: "Dependency | "
@@ -19,14 +20,7 @@ updates:
       day: "monday"
       time: "09:30"
       timezone: "Asia/Singapore"
-    open-pull-requests-limit: 10
-    groups:
-      Bun-minor-and-patch:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    # Disable routine version-update PRs while retaining security updates.
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "Dependency | "
