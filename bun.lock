@@ -14,7 +14,7 @@
         "@modelcontextprotocol/sdk": "^1.28.0",
         "@mozilla/readability": "^0.6.0",
         "@oevortex/ddg_search": "1.3.0",
-        "@openrouter/sdk": "0.1.27",
+        "@openrouter/sdk": "1.0.0",
         "@resvg/resvg-js": "^2.6.2",
         "@smithery/api": "^0.56.0",
         "@types/bun": "^1.3.10",
@@ -453,7 +453,7 @@
 
     "@oevortex/ddg_search": ["@oevortex/ddg_search@1.3.0", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.17.4", "axios": "^1.8.4", "axios-cookiejar-support": "^6.0.5", "cheerio": "^1.0.0", "smithery": "^0.5.2", "tough-cookie": "^6.0.0", "turndown": "^7.2.2", "ws": "^8.18.3" }, "bin": { "ddg-search-mcp": "bin/cli.js", "oevortex-ddg-search": "bin/cli.js" } }, "sha512-BEsJ4kDkTZDgAZIVNewNdfvguDCALYuA225j9XmhzlBuIpj6jb8Iogh52MIBKDanxiss+OW3D6DDY4pw6igKpQ=="],
 
-    "@openrouter/sdk": ["@openrouter/sdk@0.1.27", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-RH//L10bSmc81q25zAZudiI4kNkLgxF2E+WU42vghp3N6TEvZ6F0jK7uT3tOxkEn91gzmMw9YVmDENy7SJsajQ=="],
+    "@openrouter/sdk": ["@openrouter/sdk@1.0.0", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-FTZg35yWnNUjMCGrjBbsGw9WJhnleAWyJlON4ZQ7pxOKsqBrZo7Zzmc3OoJQFQ+39bsIcKMf3wRNNC9KLjihrw=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.1", "", {}, "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="],
 
