@@ -400,20 +400,39 @@ async function appendTextParts(
 ): Promise<void> {
   if (params.msg.content) {
     const normalizedContent = normalizeCustomEmojisForLlm(params.msg.content);
+
+    // 1. The author label is text WE author, so identity macros in it must still resolve — it is
+    //    what tells the model which name owns the turn. Resolved BEFORE the join so the body,
+    //    which is raw prose, can opt out of macro expansion in step 3.
+    const resolvedAuthorLabel = await params.convertMentions(
+      params.msg.authorName,
+      params.client,
+      params.guildId,
+      params.msg.authorName,
+      params.botName,
+      params.tomoriConfig.personal_memories_enabled,
+      undefined,
+      "resolve",
+    );
+
     let processedContent: string;
     if (normalizedContent.startsWith("[System:")) {
       const { leadingSystemBlocks, remainingContent } = splitLeadingSystemBlocks(normalizedContent);
       processedContent =
         leadingSystemBlocks.length > 0 && remainingContent
-          ? `${leadingSystemBlocks.join("\n")}\n${params.msg.authorName}: ${remainingContent}`
+          ? `${leadingSystemBlocks.join("\n")}\n${resolvedAuthorLabel}: ${remainingContent}`
           : normalizedContent;
     } else {
-      processedContent = `${params.msg.authorName}: ${normalizedContent}`;
+      processedContent = `${resolvedAuthorLabel}: ${normalizedContent}`;
     }
 
     if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY && params.role === "model") {
       processedContent = humanizeString(processedContent);
     }
+    // 2. Mentions, channel links, and roles still resolve here. Only the identity macros are left
+    //    literal: this string carries a real Discord message body, so rewriting "{bot}"/"{char}"
+    //    would corrupt legitimate content (e.g. a persona preset Tomori drafted for a user) and,
+    //    on a model-role line, would collapse both macros onto the persona's own name.
     processedContent = await params.convertMentions(
       processedContent,
       params.client,
@@ -421,6 +440,8 @@ async function appendTextParts(
       params.msg.authorName,
       params.botName,
       params.tomoriConfig.personal_memories_enabled,
+      undefined,
+      "preserve",
     );
     if (!processedContent.startsWith("[System:")) {
       processedContent = applyUncensorInputTransforms(processedContent, params.uncensorInputOptions);

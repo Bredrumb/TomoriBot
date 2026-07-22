@@ -136,6 +136,22 @@ function buildNameLabelAlternation(names: string[]): string | null {
   return escapedForms.length > 0 ? `(?:${escapedForms.join("|")})` : null;
 }
 
+/** Matches a bare identity macro in its single- or double-brace form (`{bot}`, `{{char}}`, `{user}`). */
+const IDENTITY_MACRO_SOURCE = "(?:\\{\\{\\s*(?:bot|char|user)\\s*\\}\\}|\\{\\s*(?:bot|char|user)\\s*\\})";
+
+/**
+ * Identity-macro turn labels ("{bot}:", "{{char}}:", "**{user}:**") in the same plain/bold forms
+ * as {@link buildNameLabelAlternation}.
+ *
+ * Only ever applied at the START of a response. A macro there means the model mistook its raw
+ * Discord turn for a transcript line and labelled itself with the template syntax, so the label is
+ * a leak like any other self-label. Mid-text macros are deliberately left alone — they are
+ * legitimate content whenever a user asks the persona to draft a preset or system prompt, which is
+ * exactly the text that is *supposed* to contain "{{char}}: ..." sample dialogue. Fenced drafts are
+ * safe either way: a response opening with a code fence never matches the leading pattern.
+ */
+const IDENTITY_MACRO_LABEL_ALTERNATION = `(?:\\*\\*${IDENTITY_MACRO_SOURCE}:\\*\\*|\\*\\*${IDENTITY_MACRO_SOURCE}\\*\\*:|${IDENTITY_MACRO_SOURCE}:)`;
+
 /**
  * Removes leaked uses of the bot's *own* name as a turn label (e.g. "Tomori:"). Conversation
  * history is fed to the model in "Name: text" form, so the model both opens its turn with its own
@@ -174,8 +190,12 @@ export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNam
   // Own-name label in plain, "**Name:**", or "**Name**:" bold forms (reused across the helpers).
   // Scoped to the *active* name only, so the preamble/boundary passes never strip an alias from prose.
   const labelAlternation = `(?:\\*\\*${escapedName}:\\*\\*|\\*\\*${escapedName}\\*\\*:|${escapedName}:)`;
-  // Opening-chain label covers the active name plus any aliases (lore/default name, trigger names).
-  const leadingAlternation = buildNameLabelAlternation([botName, ...aliasNames]) ?? labelAlternation;
+  // Opening-chain label covers the active name plus any aliases (lore/default name, trigger names),
+  // plus the identity-macro label forms — the model sometimes labels its turn "{bot}:"/"{{char}}:"
+  // instead of using the resolved name. Macros widen the *opening-chain* match only, so mid-text
+  // macros in a drafted preset survive untouched.
+  const nameAlternation = buildNameLabelAlternation([botName, ...aliasNames]) ?? labelAlternation;
+  const leadingAlternation = `(?:${nameAlternation}|${IDENTITY_MACRO_LABEL_ALTERNATION})`;
 
   // 1. Consume a leading chain of self/alias labels. Each iteration peels one label, so a multi-name
   //    leak ("Tomori: Lilya: hi") collapses fully. If at least one peels, the model opened its turn

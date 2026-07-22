@@ -26,6 +26,7 @@ export type MentionConverter = (
   tomoriNickname?: string,
   personalMemoriesEnabled?: boolean,
   snapshot?: import("@/types/misc/context").RequestSnapshot,
+  identityMacroMode?: import("./mentionNormalizer").IdentityMacroMode,
 ) => Promise<string>;
 
 /**

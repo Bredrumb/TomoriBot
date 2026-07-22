@@ -108,6 +108,24 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.
+- **Identity macros are preserved in message bodies** — this stage is the only
+  `convertMentions` caller that handles raw prose it did not author, so it splits
+  the conversion in two: the **author label** is converted with
+  `identityMacroMode: "resolve"` (it names the turn's owner), and the **joined
+  line** is then converted with `identityMacroMode: "preserve"`. Mentions,
+  channel links, and roles still resolve in the body; only `{bot}` / `{char}` /
+  `{user}` stay literal. Two reasons:
+  - On a model-role line `authorName` *is* the persona label and `botName` *is*
+    the persona nickname, so resolving would collapse **both** macros onto the
+    same persona name — turning `{bot} greets {user}` into `Tomori greets Tomori`.
+  - A message body legitimately contains macros whenever a user asks the persona
+    to draft a preset or system prompt; rewriting them corrupts the draft the
+    user is iterating on.
+
+  Every other `convertMentions` caller (prompt items, server info/memories/
+  emojis/stickers, participants, sample dialogues, preset nodes, and the
+  memory/thread/cross-channel tools) authors its own text and keeps the default
+  `"resolve"` mode.
 - **Copied-render webhook reconstruction** — webhook usernames formatted as
   `SourcePersona (target)` are attributed to `SourcePersona` for role mapping,
   self-reply ownership, and reply routing, while `authorName` preserves the full

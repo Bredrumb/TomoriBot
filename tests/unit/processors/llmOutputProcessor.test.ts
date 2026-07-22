@@ -237,6 +237,51 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
+  // Identity-macro labels: the model sometimes labels its own turn with the template syntax
+  // ("{bot}:") instead of the resolved name. Stripped only at the opening — mid-text macros are
+  // legitimate content whenever the persona is drafting a preset or system prompt for a user.
+  describe("identity-macro opening labels", () => {
+    it("peels a leading {bot} label", () => {
+      expect(stripLeakedOwnNameLabels("{bot}: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("peels a leading double-brace {{char}} label", () => {
+      expect(stripLeakedOwnNameLabels("{{char}}: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("peels a leading bold macro label", () => {
+      expect(stripLeakedOwnNameLabels("**{bot}:** hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("peels a mixed macro + real-name opening chain", () => {
+      expect(stripLeakedOwnNameLabels("{bot}: Tomori: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("peels a leading {user} label rather than posting it verbatim", () => {
+      expect(stripLeakedOwnNameLabels("{user}: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("preserves macros in drafted prose that does not open with a macro label", () => {
+      const draft = "Sure! Here's a preset:\n{{char}}: Hi!\n{{user}}: Hey.";
+      expect(stripLeakedOwnNameLabels(draft, "Tomori")).toBe(draft);
+    });
+
+    it("preserves a macro used inline mid-sentence", () => {
+      const text = "Use {bot} to refer to yourself and {user} for the target.";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+
+    it("preserves a fenced preset draft opening with a macro label", () => {
+      const draft = "```\n{{char}}: Hi!\n```";
+      expect(stripLeakedOwnNameLabels(draft, "Tomori")).toBe(draft);
+    });
+
+    it("does not treat an unrelated braced word as a turn label", () => {
+      const text = "{persona}: not an identity macro";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+  });
+
   describe("preserves legitimate Name: usages", () => {
     it("does not strip a hyphen list item", () => {
       const text = "Power levels:\n- Tsukushi: 100\n- Bella: 80";

@@ -77,6 +77,16 @@ The transformation pipeline runs in this order:
    extra names; the leaked-preamble and later-boundary passes stay scoped to the active name so
    mid-prose `"Name:"` usages are preserved.
 
+   The opening chain also matches **identity-macro labels** — `{bot}:`, `{{char}}:`, `{user}:` and
+   their bold forms — because the model sometimes labels its turn with the template syntax instead
+   of the resolved name. Like aliases, macros widen the *opening-chain* match only. Identity macros
+   elsewhere in the response are deliberately delivered to Discord verbatim: a persona asked to
+   draft a preset or system prompt is *supposed* to emit `{{char}}: …` sample dialogue, and that
+   draft must survive both the send and its round-trip back through dialogue history (see
+   [`11-dialogue-history.md`](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)).
+   A response opening with a code fence never matches the leading pattern, so fenced drafts are
+   safe regardless.
+
 6. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
    in the text (e.g., `@alice`) to Discord snowflake mentions (`<@1234567890>`) using the mention
    map built at stream init from `ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION` items.
