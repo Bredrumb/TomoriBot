@@ -375,6 +375,16 @@ write their own outer picker loop. Picker outcomes remain discriminated as `sele
 `cancelled`, `timeout`, `error`, and `fatal`. A fatal picker result exits before
 `onSelected` runs, so it cannot enter the retry path.
 
+Classify collector expiry with `isCollectorTimeoutError(error)` from `interactionCore` —
+never with a bare `error === "time"` check. discord.js uses two rejection shapes for the
+same event: raw collectors reject with the end-reason string (`"time"` / `"idle"`), while
+`Message#awaitMessageComponent` and `awaitModalSubmit` reject with an
+`InteractionCollectorError` whose message carries the reason
+(`"...ending with reason: time"`). Missing the second shape makes an ordinary user timeout
+present as `fatal` with the generic unknown-error copy instead of the timeout notice. Other
+end reasons (`limit`, `messageDelete`) and dead-token errors are genuine failures and must
+stay classified as `error`/`fatal`.
+
 Every same-visibility workflow owns one canonical ephemeral Components V2 message. Its
 message ID is exposed as `selection.message.canonicalMessageId` and must remain unchanged
 through loading, selectors, validation, progress, results, errors, and timeouts. Opening a

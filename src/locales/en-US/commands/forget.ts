@@ -43,6 +43,10 @@ export default {
       no_permission_description: `You need the **Manage Server** permission to clear persona prompts.`,
       success_title: `Persona Prompt Cleared`,
       success_description: `Cleared persona prompt for "{persona_name}".`,
+      success_description_with_prompt: `Cleared persona prompt for "{persona_name}". Here it is in case you want to keep a copy:
+\`\`\`
+{removed_prompt}
+\`\`\``,
     },
     memory: {
       personal: {

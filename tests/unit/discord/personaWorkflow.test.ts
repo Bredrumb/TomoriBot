@@ -117,6 +117,17 @@ mock.module("@/utils/discord/ui/interactionCore", () => ({
     },
   ],
   hasRawModalAcknowledgement: (interaction: object) => rawModalAcknowledged.has(interaction),
+  // Mirrors the real helper's two rejection shapes: the bare collector end-reason
+  // string used by this harness, and the InteractionCollectorError message form.
+  // `mock.module` replaces the whole module, so every export personaWorkflow.ts
+  // imports must be stubbed or module linking fails.
+  isCollectorTimeoutError: (error: unknown) => {
+    if (error === "time" || error === "idle") return true;
+    if (!error || typeof error !== "object") return false;
+    const message = (error as { message?: unknown }).message;
+    if (typeof message !== "string") return false;
+    return /ending with reason: (time|idle)/i.test(message);
+  },
   promptWithRawModal: async (button: ButtonInteraction, _locale: string, options: ModalOptions) => {
     calls.push({ method: "rawModal", source: button.id, payload: options });
     rawModalCalls.push({ button, options });

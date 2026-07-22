@@ -18,6 +18,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
+import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.speech.voice-design.remove.description"));
@@ -103,6 +104,11 @@ export async function execute(
             return completePersonaWorkflow();
           }
 
+          // 1. Capture the design prompt before the write, so the success
+          //    notice can echo it back — voice prompts are tuned by ear and
+          //    effectively unrecoverable once nulled.
+          const removedPreview = buildTextPreview(selectedPersona.speech_voice_design_prompt);
+
           const voiceNameIfOtherVoiceRemains = selectedPersona.speech_voice_sample_id
             ? selectedPersona.speech_voice_name === "VoiceDesign"
               ? "Voice Clone"
@@ -131,12 +137,22 @@ export async function execute(
           }
 
           invalidateTomoriStateCache(serverDiscId);
+          // 2. Show the removed prompt when there was one; fall back to the
+          //    plain notice for personas that had nothing set.
+          const hadPrompt = removedPreview.totalChars > 0;
           await message.replace(
             buildPersonaWorkflowNotice({
               locale,
               titleKey: "commands.speech.voice_design.cleared_title",
-              descriptionKey: "commands.speech.voice_design.cleared_description",
-              descriptionVars: { persona: selectedPersona.persona_nickname },
+              descriptionKey: hadPrompt
+                ? "commands.speech.voice_design.cleared_description_with_prompt"
+                : "commands.speech.voice_design.cleared_description",
+              descriptionVars: {
+                persona: selectedPersona.persona_nickname,
+                removed_prompt: removedPreview.text,
+              },
+              footerKey: textPreviewFooterKey(removedPreview),
+              footerVars: textPreviewFooterVars(removedPreview),
               color: ColorCode.SUCCESS,
             }),
           );

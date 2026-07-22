@@ -43,6 +43,9 @@ export default {
       timeout_title: `⏰ コマンドがタイムアウトしました`,
       timeout_description: `時間内に応答しませんでした。もう一度お試しください。`,
     },
+    text_preview: {
+      truncated_footer: `全 {total} 文字のうち、最初の {shown} 文字を表示しています。`,
+    },
     pagination: {
       page_info: `ページ {current}/{total}`,
       previous: `前へ`,

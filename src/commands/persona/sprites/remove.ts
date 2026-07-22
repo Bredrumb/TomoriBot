@@ -17,6 +17,7 @@ import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/disco
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { isCollectorTimeoutError } from "@/utils/discord/ui/interactionCore";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import {
   buildPersonaWorkflowNotice,
@@ -271,7 +272,7 @@ async function promptForSpritePage(
         time: WORKFLOW_COMPONENT_TIMEOUT_MS,
       });
     } catch (error) {
-      const isTimeout = error === "time" || (error instanceof Error && error.message.toLowerCase().includes("time"));
+      const isTimeout = isCollectorTimeoutError(error);
       await selection.message.replace(
         buildPersonaWorkflowNotice({
           locale,
@@ -352,6 +353,15 @@ function buildPageSelectorPayload(
 ): PersonaWorkflowComponentsV2Payload {
   const pageSize = PERSONA_SPRITE_LIMITS.MAX_REMOVAL_ENTRIES_PER_PAGE;
   const totalPages = Math.ceil(totalSprites / pageSize);
+
+  // 1. Every sprite fits in one modal (<= 10 options x 5 checkbox groups), so a
+  //    range selector would offer a single meaningless choice. The persona button
+  //    was already update-deferred before the sprite query, so the modal must be
+  //    opened from a fresh launcher button rather than from that interaction.
+  if (totalPages <= 1) {
+    return buildSinglePageLauncherPayload(nonce, locale);
+  }
+
   const selectorPageCount = Math.ceil(totalPages / PAGE_BUTTONS_PER_SELECTOR);
   const startPage = selectorPage * PAGE_BUTTONS_PER_SELECTOR;
   const endPage = Math.min(totalPages, startPage + PAGE_BUTTONS_PER_SELECTOR);
@@ -415,6 +425,54 @@ function buildPageSelectorPayload(
       },
     ],
   } satisfies ActionRowData<ButtonComponentData>);
+
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
+    components,
+  };
+  return { components: [container], flags: MessageFlags.IsComponentsV2 };
+}
+
+/**
+ * Builds the single-page launcher state shown when every sprite fits in one modal.
+ *
+ * The "open" button intentionally reuses the page-selector custom ID for page 0 so
+ * the shared collector loop in {@link promptForSpritePage} resolves it as a normal
+ * page selection with no extra branching.
+ *
+ * @param nonce - Phase-scoped nonce shared by every button in this workflow step.
+ * @param locale - Locale used for all button labels and container text.
+ * @returns A Components V2 payload replacing the picker with an open/cancel pair.
+ */
+function buildSinglePageLauncherPayload(nonce: string, locale: string): PersonaWorkflowComponentsV2Payload {
+  const components: ComponentInContainerData[] = [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${localizer(locale, "general.persona_workflow.modal_ready_title")}`,
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, "general.persona_workflow.modal_ready_description"),
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Primary,
+          customId: `${PAGE_SELECT_ID_PREFIX}_${nonce}_0`,
+          label: localizer(locale, "general.persona_workflow.open_modal_button"),
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Danger,
+          customId: `${PAGE_CANCEL_ID_PREFIX}_${nonce}`,
+          label: localizer(locale, "general.pagination.cancel"),
+        },
+      ],
+    } satisfies ActionRowData<ButtonComponentData>,
+  ];
 
   const container: ContainerComponentData<ComponentInContainerData> = {
     type: ComponentType.Container,

@@ -277,10 +277,25 @@ const SELECT_PLACEHOLDER_MAX_LENGTH = 150;
 const SELECT_OPTION_TEXT_MAX_LENGTH = 100;
 const CONFIRMATION_DESCRIPTION_LIMIT = 3800; // Budget for description, leaving room for title/buttons in the 4000-char total component limit
 
-function isRawModalCollectorTimeout(error: unknown): boolean {
-  if (error === "time") return true;
+/**
+ * @description Detects a discord.js collector expiry across every awaiting surface
+ * (`awaitMessageComponent`, `awaitModalSubmit`, and raw component collectors).
+ * discord.js is inconsistent about the rejection shape, so both are handled:
+ *   1. Raw collectors reject with the bare end-reason string (`"time"` / `"idle"`).
+ *   2. `Message#awaitMessageComponent` and `awaitModalSubmit` reject with an
+ *      `InteractionCollectorError` whose message embeds the end reason, e.g.
+ *      "Collector received no interactions before ending with reason: time".
+ * Only `time`/`idle` count as expiry — `limit`, `messageDelete`, and channel/guild
+ * deletions are genuine failures the caller must surface as errors.
+ * @param error The rejection value from an await/collector helper
+ * @returns True when the wait ended because the user simply never responded
+ */
+export function isCollectorTimeoutError(error: unknown): boolean {
+  // 1. Bare end-reason string form.
+  if (error === "time" || error === "idle") return true;
   if (!error || typeof error !== "object") return false;
 
+  // 2. InteractionCollectorError form — identify by code/name, then read the reason.
   const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
   const code = typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
   const name = typeof candidate.name === "string" ? candidate.name.toLowerCase() : "";
@@ -290,7 +305,7 @@ function isRawModalCollectorTimeout(error: unknown): boolean {
     name === "interactioncollectorerror" ||
     message.includes("collector received");
 
-  return isInteractionCollectorError && message.includes("reason: time");
+  return isInteractionCollectorError && (message.includes("reason: time") || message.includes("reason: idle"));
 }
 
 function createRawModalRestError(response: Response, responseBody: string): Error {
@@ -2465,10 +2480,12 @@ export async function replyPaginatedPersonaChoicesV2(
           }
         }
       } catch (innerError) {
-        // Discord.js signals awaitMessageComponent timeout by rejecting with the
-        // string "time". Any other value is a real Discord API error (rate limit,
-        // expired token, lost permission, etc.).
-        const isTimeout = innerError === "time";
+        // Discord.js signals an awaitMessageComponent expiry either with the bare
+        // string "time" or with an InteractionCollectorError carrying the end
+        // reason, depending on the surface — isCollectorTimeoutError covers both.
+        // Any other value is a real Discord API error (rate limit, expired token,
+        // lost permission, etc.) and must stay classified as fatal.
+        const isTimeout = isCollectorTimeoutError(innerError);
 
         if (isTimeout) {
           log.warn(`Pagination interaction timed out for user ${interaction.user.id}`);
@@ -2912,7 +2929,7 @@ export async function promptWithRawModal(
       };
     } catch (error) {
       log.warn(`Modal submission failed for user ${interaction.user.id}:`, error);
-      return isRawModalCollectorTimeout(error) ? { outcome: "timeout" } : { outcome: "error", error };
+      return isCollectorTimeoutError(error) ? { outcome: "timeout" } : { outcome: "error", error };
     }
   } catch (error) {
     log.error("Failed to show raw modal:", error);

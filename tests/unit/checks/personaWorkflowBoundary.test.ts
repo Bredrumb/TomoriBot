@@ -111,6 +111,12 @@ describe("persona workflow boundary — real source tree", () => {
       .map((violation) => `${violation.file}:${violation.line}:${violation.column} [${violation.kind}]`)
       .join("\n");
 
-    expect(violations, `Persona workflow boundary violations:\n${detail}`).toHaveLength(0);
+    expect(
+      violations,
+      `Persona workflow boundary violations:\n${detail}\n\n` +
+        "Fix: migrate callers to src/utils/discord/ui/personaWorkflow.ts. Low-level picker access and " +
+        "legacy preservation/callback boilerplate are internal-only.\n" +
+        "Run `bun run check-persona-workflow-boundary` for the full report.",
+    ).toHaveLength(0);
   });
 });

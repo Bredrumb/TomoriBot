@@ -20,6 +20,7 @@ import { localizer } from "@/utils/text/localizer";
 import {
   buildNoticeContainer,
   hasRawModalAcknowledgement,
+  isCollectorTimeoutError,
   promptWithRawModal,
   replyPaginatedPersonaChoicesV2,
 } from "./interactionCore";
@@ -781,11 +782,6 @@ function sliceModalOptions(options: ModalOptions, target: ModalComponent, start:
   };
 }
 
-function isCollectorTimeout(error: unknown): boolean {
-  if (error === "time") return true;
-  return error instanceof Error && error.message.toLowerCase().includes("time");
-}
-
 function publicPayloadIsEphemeral(flags: unknown): boolean {
   if (typeof flags === "number") return (flags & MessageFlags.Ephemeral) !== 0;
   if (typeof flags === "bigint") return (flags & BigInt(MessageFlags.Ephemeral)) !== 0n;
@@ -996,7 +992,7 @@ async function openModalWithBridge(
     try {
       modalButton = await awaitWorkflowButton(controller, initialButton.user.id, prefix);
     } catch (error) {
-      if (isCollectorTimeout(error)) {
+      if (isCollectorTimeoutError(error)) {
         logWorkflowTimeout("modal-launcher", controller.canonicalMessageId, {
           interactionId: initialButton.id,
         });
@@ -1037,7 +1033,7 @@ async function openModalWithBridge(
     try {
       rangeButton = await awaitWorkflowButton(controller, initialButton.user.id, prefix);
     } catch (error) {
-      if (isCollectorTimeout(error)) {
+      if (isCollectorTimeoutError(error)) {
         logWorkflowTimeout("range-selector", controller.canonicalMessageId, {
           interactionId: initialButton.id,
           rangePage,

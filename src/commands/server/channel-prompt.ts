@@ -27,6 +27,12 @@ import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
+import {
+  buildTextPreview,
+  CONFIRMATION_PREVIEW_BUDGET,
+  textPreviewFooterKey,
+  textPreviewFooterVars,
+} from "@/utils/text/textPreview";
 
 const MODAL_CUSTOM_ID = "server_channel_prompt_modal";
 const MODE_RADIO_ID = "channel_prompt_mode";
@@ -273,14 +279,17 @@ export async function execute(
         ? "commands.server.channel-prompt.mode_replace_label"
         : "commands.server.channel-prompt.mode_append_label",
     );
+    const preview = buildTextPreview(channelPrompt, CONFIRMATION_PREVIEW_BUDGET);
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.server.channel-prompt.saved_title",
       descriptionKey: "commands.server.channel-prompt.saved_description",
       descriptionVars: {
         channel: channelMention,
         mode: modeLabel,
-        preview: channelPrompt.substring(0, 200),
+        preview: preview.text,
       },
+      footerKey: textPreviewFooterKey(preview),
+      footerVars: textPreviewFooterVars(preview),
       color: ColorCode.SUCCESS,
       flags: MessageFlags.Ephemeral,
     });

@@ -440,15 +440,22 @@ function isDbConfigured(): boolean {
 const isNamedCheck = (r: ResultItem): boolean => r._category === undefined;
 
 const CATEGORIES = {
+  // Architectural guards (persona-workflow boundary, text-preview conventions)
+  // are deliberately absent: their scanners are asserted against the real source
+  // tree by tests/unit/checks/, which the test lanes below already run. A named
+  // check here would scan the repo a second time for the same answer. The
+  // `check-persona-workflow-boundary` / `check-text-preview` CLIs remain for
+  // targeted local reports.
   CODE: (r: ResultItem) =>
     isNamedCheck(r) &&
     (r.name.includes("Type Check") ||
       r.name.includes("Linting") ||
       r.name.includes("Runtime Imports") ||
-      r.name.includes("SQL Audit") ||
-      r.name.includes("Persona Workflow Boundary") ||
-      r.name.includes("Media Size") ||
-      r.name.includes("Seed Catalog")),
+      r.name.includes("SQL Audit")),
+  // Assets and seed data rather than source code — these fail on *content*
+  // (an oversized PNG, a malformed catalog entry), not on how code is written.
+  CONTENT: (r: ResultItem) =>
+    isNamedCheck(r) && (r.name.includes("Media Size") || r.name.includes("Seed Catalog")),
   SECURITY: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Dependency Audit"),
   UNIT_TESTS: (r: ResultItem) => r._category === "unit-test",
   REGRESSION_TESTS: (r: ResultItem) => r._category === "regression-test",
@@ -473,7 +480,6 @@ async function main() {
     runtimeImportsResult,
     auditResult,
     sqlAuditResult,
-    personaWorkflowBoundaryResult,
     mediaSizeResult,
     modelCatalogResult,
     migrationFilesResult,
@@ -488,11 +494,6 @@ async function main() {
     runCheck("Runtime Imports (bun run check-runtime-imports)", ["bun", "run", "check-runtime-imports"], true),
     runAudit(),
     runCheck("SQL Audit (bun run audit-sql)", ["bun", "run", "audit-sql"], true),
-    runCheck(
-      "Persona Workflow Boundary (bun run check-persona-workflow-boundary)",
-      ["bun", "run", "check-persona-workflow-boundary"],
-      true,
-    ),
     runCheck("Media Size (bun run check-media-size)", ["bun", "run", "check-media-size"], true),
     runCheck("Seed Catalog (bun run check-seed-catalogs)", ["bun", "run", "check-seed-catalogs"], true),
     // Filesystem-only (no DB): verifies rollback pairing + numbering uniqueness,
@@ -531,7 +532,6 @@ async function main() {
     runtimeImportsResult,
     auditResult,
     sqlAuditResult,
-    personaWorkflowBoundaryResult,
     mediaSizeResult,
     modelCatalogResult,
     migrationFilesResult,
@@ -562,8 +562,6 @@ async function main() {
       "Update the parent dependency or run `bun update <package-name>` specifically. Only use a global override when the replacement stays within every dependent package's declared version range.",
     "SQL Audit":
       "Ensure all raw SQL queries are inside the 'src/utils/db/repositories/' folder or exempt them in the script.",
-    "Persona Workflow Boundary":
-      "Migrate callers to src/utils/discord/ui/personaWorkflow.ts. Low-level picker access and legacy preservation/callback boilerplate are internal-only.",
     "Seed Catalog":
       "Run `bun run check-seed-catalogs` to see which invariant broke. Seed catalogs live in `src/db/seed/catalog/` — the same validations run at bot startup, so a failure here would also fail a real boot.",
     "Media Size":
@@ -619,6 +617,8 @@ async function main() {
   };
 
   printSection("Code Quality", results.filter((r) => CATEGORIES.CODE(r)));
+
+  printSection("\nContent Guards", results.filter((r) => CATEGORIES.CONTENT(r)));
 
   printSection("\nProject Security", results.filter((r) => CATEGORIES.SECURITY(r)));
 

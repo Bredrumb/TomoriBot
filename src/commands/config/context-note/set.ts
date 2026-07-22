@@ -18,6 +18,12 @@ import type { UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { channelContextNoteRepo, configRepository, personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
+import {
+  buildTextPreview,
+  CONFIRMATION_PREVIEW_BUDGET,
+  textPreviewFooterKey,
+  textPreviewFooterVars,
+} from "@/utils/text/textPreview";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
@@ -206,6 +212,9 @@ export async function execute(
           invalidateTomoriStateCache(serverId);
 
           const isRemoving = !rawNote;
+          // Fence-safe preview of the stored note; the removal branch shows no
+          // preview at all, so it never carries a truncation footer.
+          const preview = buildTextPreview(noteToStore, CONFIRMATION_PREVIEW_BUDGET);
           await work.message.replace(
             buildPersonaWorkflowNotice({
               locale,
@@ -220,8 +229,10 @@ export async function execute(
                 : {
                     scope: selectedPersona.persona_nickname,
                     depth: String(depthToStore),
-                    preview: (noteToStore ?? "").substring(0, 200),
+                    preview: preview.text,
                   },
+              footerKey: isRemoving ? undefined : textPreviewFooterKey(preview),
+              footerVars: textPreviewFooterVars(preview),
               color: ColorCode.SUCCESS,
             }),
           );
@@ -388,11 +399,13 @@ export async function execute(
         flags: MessageFlags.Ephemeral,
       });
     } else {
-      const preview = (noteToStore ?? "").substring(0, 200);
+      const preview = buildTextPreview(noteToStore, CONFIRMATION_PREVIEW_BUDGET);
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.context-note.set.success_set_title",
         descriptionKey: "commands.config.context-note.set.success_set_description",
-        descriptionVars: { scope: scopeLabel, depth: String(depthToStore), preview },
+        descriptionVars: { scope: scopeLabel, depth: String(depthToStore), preview: preview.text },
+        footerKey: textPreviewFooterKey(preview),
+        footerVars: textPreviewFooterVars(preview),
         color: ColorCode.SUCCESS,
         flags: MessageFlags.Ephemeral,
       });

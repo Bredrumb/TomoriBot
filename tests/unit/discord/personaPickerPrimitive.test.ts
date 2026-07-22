@@ -1,7 +1,26 @@
 import { describe, expect, it } from "bun:test";
 import type { ButtonInteraction, ChatInputCommandInteraction, InteractionEditReplyOptions, Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import { replyPaginatedPersonaChoicesV2, type AvatarSessionCache } from "@/utils/discord/ui/interactionCore";
+import {
+  isCollectorTimeoutError,
+  replyPaginatedPersonaChoicesV2,
+  type AvatarSessionCache,
+} from "@/utils/discord/ui/interactionCore";
+
+/** Terminal states the harness can drive the picker into. */
+type PickerOutcome = "cancel" | "timeout" | "collector-timeout";
+
+/**
+ * Builds the error discord.js v14 actually rejects with when
+ * `Message#awaitMessageComponent` expires — an `InteractionCollectorError`
+ * rather than the bare "time" string used by raw collectors.
+ */
+function makeInteractionCollectorError(reason: string): Error {
+  return Object.assign(new Error(`Collector received no interactions before ending with reason: ${reason}`), {
+    code: "InteractionCollectorError",
+    name: "Error [InteractionCollectorError]",
+  });
+}
 
 interface PickerHarness {
   interaction: ChatInputCommandInteraction;
@@ -20,13 +39,14 @@ function makePersona(): TomoriState {
   } as unknown as TomoriState;
 }
 
-function makeHarness(outcome: "cancel" | "timeout"): PickerHarness {
+function makeHarness(outcome: PickerOutcome): PickerHarness {
   const edits: InteractionEditReplyOptions[] = [];
   const deferredButtons: string[] = [];
   const message = {
     id: "canonical-picker-message",
     awaitMessageComponent: async () => {
       if (outcome === "timeout") return Promise.reject("time");
+      if (outcome === "collector-timeout") return Promise.reject(makeInteractionCollectorError("time"));
       return {
         id: "cancel-button",
         customId: "persona_cancel",
@@ -67,7 +87,7 @@ function makeHarness(outcome: "cancel" | "timeout"): PickerHarness {
 }
 
 describe("replyPaginatedPersonaChoicesV2 terminal attachment cleanup", () => {
-  for (const outcome of ["cancel", "timeout"] as const) {
+  for (const outcome of ["cancel", "timeout", "collector-timeout"] as const) {
     it(`clears a local avatar attachment when the picker reaches ${outcome}`, async () => {
       const harness = makeHarness(outcome);
       const avatarSessionCache: AvatarSessionCache = new Map([
@@ -88,4 +108,23 @@ describe("replyPaginatedPersonaChoicesV2 terminal attachment cleanup", () => {
       expect(harness.deferredButtons).toEqual(outcome === "cancel" ? ["cancel-button"] : []);
     });
   }
+});
+
+describe("isCollectorTimeoutError", () => {
+  it("treats both discord.js expiry rejection shapes as timeouts", () => {
+    expect(isCollectorTimeoutError("time")).toBe(true);
+    expect(isCollectorTimeoutError("idle")).toBe(true);
+    expect(isCollectorTimeoutError(makeInteractionCollectorError("time"))).toBe(true);
+    expect(isCollectorTimeoutError(makeInteractionCollectorError("idle"))).toBe(true);
+  });
+
+  it("does not misclassify non-expiry collector reasons or real API errors", () => {
+    // A deleted message ends the collector but is a genuine failure, not a timeout.
+    expect(isCollectorTimeoutError(makeInteractionCollectorError("messageDelete"))).toBe(false);
+    expect(isCollectorTimeoutError(makeInteractionCollectorError("limit"))).toBe(false);
+    // Dead interaction tokens must stay fatal so callers never retry them.
+    expect(isCollectorTimeoutError(Object.assign(new Error("Unknown interaction"), { code: 10062 }))).toBe(false);
+    expect(isCollectorTimeoutError(new Error("Request timed out"))).toBe(false);
+    expect(isCollectorTimeoutError(undefined)).toBe(false);
+  });
 });

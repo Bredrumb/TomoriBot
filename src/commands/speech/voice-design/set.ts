@@ -19,6 +19,12 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
+import {
+  buildTextPreview,
+  CONFIRMATION_PREVIEW_BUDGET,
+  textPreviewFooterKey,
+  textPreviewFooterVars,
+} from "@/utils/text/textPreview";
 
 const PROMPT_MODAL_ID = "speech_voice_design_prompt_modal";
 const PROMPT_FIELD_ID = "voice_design_prompt";
@@ -268,6 +274,9 @@ async function saveVoiceDesignPrompt(
   }
 
   invalidateTomoriStateCache(serverDiscId);
+  // Rendered as a fenced block rather than a blockquote: a newline terminates a
+  // Discord blockquote, so multi-line design prompts used to spill out of it.
+  const preview = buildTextPreview(designPrompt, CONFIRMATION_PREVIEW_BUDGET);
   await message.replace(
     buildPersonaWorkflowNotice({
       locale,
@@ -275,8 +284,10 @@ async function saveVoiceDesignPrompt(
       descriptionKey: "commands.speech.voice_design.success_description",
       descriptionVars: {
         persona: selectedPersona.persona_nickname,
-        preview: designPrompt.length > 120 ? `${designPrompt.slice(0, 117)}...` : designPrompt,
+        preview: preview.text,
       },
+      footerKey: textPreviewFooterKey(preview),
+      footerVars: textPreviewFooterVars(preview),
       color: ColorCode.SUCCESS,
     }),
   );

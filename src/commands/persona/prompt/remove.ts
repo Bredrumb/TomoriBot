@@ -12,6 +12,7 @@ import {
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
+import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.persona.prompt.remove.description"));
@@ -94,6 +95,10 @@ export async function execute(
             return completePersonaWorkflow();
           }
 
+          // 1. Capture the prompt before the write, so the success notice can
+          //    echo it back — this is the user's last chance to copy it.
+          const removedPreview = buildTextPreview(selectedPersona.persona_prompt);
+
           const ok = await personaRepository.removePrompt(selectedPersona.persona_id);
           if (!ok) {
             await message.replace(
@@ -108,12 +113,22 @@ export async function execute(
           }
 
           invalidateTomoriStateCache(serverDiscId);
+          // 2. Show the removed prompt when there was one; fall back to the
+          //    plain notice for personas that had nothing set.
+          const hadPrompt = removedPreview.totalChars > 0;
           await message.replace(
             buildPersonaWorkflowNotice({
               locale,
               titleKey: "commands.forget.personaprompt.success_title",
-              descriptionKey: "commands.forget.personaprompt.success_description",
-              descriptionVars: { persona_name: selectedPersona.persona_nickname },
+              descriptionKey: hadPrompt
+                ? "commands.forget.personaprompt.success_description_with_prompt"
+                : "commands.forget.personaprompt.success_description",
+              descriptionVars: {
+                persona_name: selectedPersona.persona_nickname,
+                removed_prompt: removedPreview.text,
+              },
+              footerKey: textPreviewFooterKey(removedPreview),
+              footerVars: textPreviewFooterVars(removedPreview),
               color: ColorCode.SUCCESS,
             }),
           );

@@ -12,6 +12,12 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
+import {
+  buildTextPreview,
+  CONFIRMATION_PREVIEW_BUDGET,
+  textPreviewFooterKey,
+  textPreviewFooterVars,
+} from "@/utils/text/textPreview";
 
 // Modal configuration constants
 const MODAL_CUSTOM_ID = "config_prompt_preset_modal";
@@ -153,15 +159,18 @@ export async function execute(
     // 13. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverId);
 
-    // 14. Success response with preview
-    const preview = selectedPreset.preset_prompt_text.substring(0, 200);
+    // 14. Success response with a fence-safe preview. The footer only appears
+    //     when the preset text actually exceeded the preview width.
+    const preview = buildTextPreview(selectedPreset.preset_prompt_text, CONFIRMATION_PREVIEW_BUDGET);
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.config.prompt.preset.success_title",
       descriptionKey: "commands.config.prompt.preset.success_description",
       descriptionVars: {
         presetName: selectedPreset.system_prompt_preset_name,
-        preview,
+        preview: preview.text,
       },
+      footerKey: textPreviewFooterKey(preview),
+      footerVars: textPreviewFooterVars(preview),
       color: ColorCode.SUCCESS,
       flags: MessageFlags.Ephemeral,
     });

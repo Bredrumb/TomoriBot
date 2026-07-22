@@ -43,6 +43,9 @@ export default {
       timeout_title: `⏰ Command Timed Out`,
       timeout_description: `You didn't respond in time. Please try again.`,
     },
+    text_preview: {
+      truncated_footer: `Showing the first {shown} of {total} characters.`,
+    },
     pagination: {
       page_info: `Page {current} of {total}`,
       previous: `Previous`,

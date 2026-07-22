@@ -117,14 +117,19 @@ function buildPersonaProviderPicker(
     },
     {
       type: ComponentType.TextDisplay,
-      content: `${localizer(locale, "commands.model.providerPicker.description")}\n\n${localizer(
-        locale,
-        "commands.model.providerPicker.current_selection",
-        {
-          model: escapeMarkdown(currentModel),
-          provider: escapeMarkdown(currentProvider),
-        },
-      )}`,
+      content: localizer(locale, "commands.model.providerPicker.description"),
+    },
+    // The current selection is metadata, not body copy, so it gets its own TextDisplay
+    // rendered as muted subtext — matching the footer convention in buildNoticeContainer.
+    // It must NOT be appended to the description with "\n\n": a Container already puts a
+    // gap between TextDisplay components, so the explicit blank line stacked on top of
+    // that gap and produced the oversized break above the provider buttons.
+    {
+      type: ComponentType.TextDisplay,
+      content: `-# ${localizer(locale, "commands.model.providerPicker.current_selection", {
+        model: escapeMarkdown(currentModel),
+        provider: escapeMarkdown(currentProvider),
+      })}`,
     },
   ];
 

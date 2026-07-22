@@ -89,14 +89,14 @@ function buildPersonaStatusPayload(
   let inlineFields: string[] = [];
   const flushInlineFields = () => {
     if (inlineFields.length === 0) return;
-    components.push({ type: ComponentType.TextDisplay, content: inlineFields.join("\n\n") });
+    components.push({ type: ComponentType.TextDisplay, content: inlineFields.join("\n") });
     inlineFields = [];
   };
 
   for (const field of page.fields) {
     const fieldContent = truncateTextDisplayContent(formatStatusField(field, locale));
     if (field.inline) {
-      const nextLength = inlineFields.join("\n\n").length + (inlineFields.length > 0 ? 2 : 0) + fieldContent.length;
+      const nextLength = inlineFields.join("\n").length + (inlineFields.length > 0 ? 1 : 0) + fieldContent.length;
       if (nextLength > MAX_TEXT_DISPLAY_LENGTH) flushInlineFields();
       inlineFields.push(fieldContent);
       continue;

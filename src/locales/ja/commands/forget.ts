@@ -43,6 +43,10 @@ export default {
       no_permission_description: `ペルソナプロンプトをクリアするには**サーバー管理**権限が必要です。`,
       success_title: `ペルソナプロンプトをクリアしました`,
       success_description: `「{persona_name}」のペルソナプロンプトをクリアしました。`,
+      success_description_with_prompt: `「{persona_name}」のペルソナプロンプトをクリアしました。控えが必要な場合は以下をコピーしてください：
+\`\`\`
+{removed_prompt}
+\`\`\``,
     },
     memory: {
       personal: {
