@@ -4,7 +4,9 @@
  * as well as optimizing images before sending to LLM providers.
  */
 
-import sharp from "sharp";
+// 1. sharp v0.35 moved to ESM-style types, so `Metadata` is a named type export
+//    rather than a member of a merged `sharp` namespace.
+import sharp, { type Metadata } from "sharp";
 import { log } from "../misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -325,9 +327,9 @@ export async function convertToPNG(buffer: Buffer): Promise<Buffer> {
  * Get metadata from an image buffer
  *
  * @param buffer - Input image buffer
- * @returns Promise<sharp.Metadata> - Image metadata
+ * @returns Promise<Metadata> - Image metadata
  */
-export async function getImageMetadata(buffer: Buffer): Promise<sharp.Metadata> {
+export async function getImageMetadata(buffer: Buffer): Promise<Metadata> {
   try {
     const metadata = await sharp(buffer).metadata();
     return metadata;

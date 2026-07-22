@@ -14,6 +14,7 @@ import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 import { appendComponentMediaFromMessage } from "@/utils/chat/contextMedia";
+import { resolveForwardChain } from "@/utils/discord/forwardChain";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 
 /** Intermediate representation of a discovered image URL before base64 conversion */
@@ -203,7 +204,8 @@ function collectImageUrlsFromSource(
  *    and therefore never appears in the top-level attachment/embed sources above.
  * 7. Forwarded message snapshots — a forward wrapper has EMPTY top-level
  *    content/attachments/embeds; all its media lives inside `messageSnapshots`,
- *    which is re-scanned with sources 1-6.
+ *    which is re-scanned with sources 1-6. Nested forwards flatten to an empty
+ *    snapshot, so the chain is resolved first (see {@link resolveForwardChain}).
  *
  * This is the single source of truth for "where can an image live in a message",
  * shared by every tool that needs to re-fetch image bytes by message/media ID.
@@ -211,7 +213,7 @@ function collectImageUrlsFromSource(
  * @param message - Fetched Discord message to scan
  * @returns Array of discovered image URL descriptors (may be empty)
  */
-export function collectImageUrlsFromMessage(message: Message): ImageUrlInfo[] {
+export async function collectImageUrlsFromMessage(message: Message): Promise<ImageUrlInfo[]> {
   const imageUrls: ImageUrlInfo[] = [];
   // Track URLs already added so the same media discovered via two paths
   // (e.g. a Components V2 attachment also listed as a candidate) is
@@ -227,8 +229,11 @@ export function collectImageUrlsFromMessage(message: Message): ImageUrlInfo[] {
 
   collectImageUrlsFromSource(message, addImageUrl);
 
-  // Forwarded messages: scan each snapshot with the same source walk.
-  for (const snapshot of message.messageSnapshots.values()) {
+  // Forwarded messages: resolve any nested-forward chain first, then scan each
+  // snapshot with the same source walk. An unresolved chain yields no snapshots,
+  // so the caller reports "no images found" rather than silently returning empty.
+  const chain = await resolveForwardChain(message);
+  for (const snapshot of chain.snapshots) {
     collectImageUrlsFromSource(snapshot, addImageUrl, "forwarded ");
   }
 
@@ -257,7 +262,7 @@ export async function resolveMessageImageUrls(
   context: ToolContext,
 ): Promise<ResolvedMessageImageUrls> {
   const message = await context.channel.messages.fetch(messageId);
-  const directImageUrls = collectImageUrlsFromMessage(message);
+  const directImageUrls = await collectImageUrlsFromMessage(message);
 
   if (directImageUrls.length > 0) {
     return { imageUrls: directImageUrls, sourceMessageId: messageId };
@@ -283,7 +288,7 @@ export async function resolveMessageImageUrls(
     );
   }
 
-  const repliedToImageUrls = collectImageUrlsFromMessage(repliedToMessage);
+  const repliedToImageUrls = await collectImageUrlsFromMessage(repliedToMessage);
   if (repliedToImageUrls.length === 0) {
     throw new Error(
       `No images found in message ${messageId} or replied-to message ${repliedToMessageId} (checked attachments, embeds, stickers, custom emojis, and components)`,
@@ -320,7 +325,7 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
   }
 
   // 2. Discover every image URL in the message (all sources, including Components V2)
-  const imageUrls = collectImageUrlsFromMessage(message);
+  const imageUrls = await collectImageUrlsFromMessage(message);
 
   // Validate we found at least one image source
   if (imageUrls.length === 0) {

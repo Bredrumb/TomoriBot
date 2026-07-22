@@ -792,7 +792,7 @@ async function simplifyMessage(
     content = stripAtPersonaTriggers(content, turn.allPersonas);
   }
 
-  const forwardContext = buildForwardContext({
+  const forwardContext = await buildForwardContext({
     message: msg,
     content,
     imageAttachments,

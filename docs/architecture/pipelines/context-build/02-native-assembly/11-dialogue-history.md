@@ -105,6 +105,20 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   source channel, so only the wrapper ID is resolvable by media-ID tools
   fetching from the current channel (the shared image extractor scans the
   wrapper's `messageSnapshots` to find the media).
+- **Nested forwards (a forward of a forward)** — Discord's `message_snapshots`
+  payload is non-recursive, so re-forwarding an already-forwarded message
+  delivers an *empty* snapshot: no text, no attachments, no embeds. The wrapper's
+  own `reference` survives and points at the intermediate forward, so
+  `resolveForwardChain` (`utils/discord/forwardChain.ts`) re-fetches that message
+  to reach the next snapshot level, repeating up to `FORWARD_CHAIN_MAX_DEPTH`
+  hops (default 3, each hop costing one message fetch). An empty snapshot is a
+  reliable nested-forward signal because Discord rejects genuinely empty
+  messages. When the origin cannot be re-fetched — unreadable channel, deleted
+  message, depth exhausted — the block degrades to an explicit "was itself a
+  forward … contents cannot be seen" notice and registers no media ID, rather
+  than emitting an empty forward block that would invite the model to invent one.
+  Both `buildForwardContext` and the shared image extractor resolve the chain, so
+  a registered media ID always re-resolves to the same bytes.
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.
