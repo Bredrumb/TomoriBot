@@ -60,6 +60,15 @@ const modalResolvedAttachments = new Map<string, Record<string, APIAttachment>>(
 const rawModalAcknowledged = new WeakMap<ChatInputCommandInteraction | ButtonInteraction, boolean>();
 
 /**
+ * Reports whether a command or button interaction was acknowledged through the
+ * raw REST modal path. Discord.js does not update `replied`/`deferred` for that
+ * response, so workflow code must consult this state explicitly.
+ */
+export function hasRawModalAcknowledgement(interaction: ChatInputCommandInteraction | ButtonInteraction): boolean {
+  return rawModalAcknowledged.get(interaction) === true;
+}
+
+/**
  * Transform Component Type 18 modal submission to standard ActionRow format
  * This makes Discord.js process the submission as if it were a normal modal from the start
  */
@@ -267,6 +276,43 @@ const TEXT_INPUT_PLACEHOLDER_MAX_LENGTH = 100;
 const SELECT_PLACEHOLDER_MAX_LENGTH = 150;
 const SELECT_OPTION_TEXT_MAX_LENGTH = 100;
 const CONFIRMATION_DESCRIPTION_LIMIT = 3800; // Budget for description, leaving room for title/buttons in the 4000-char total component limit
+
+function isRawModalCollectorTimeout(error: unknown): boolean {
+  if (error === "time") return true;
+  if (!error || typeof error !== "object") return false;
+
+  const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
+  const code = typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
+  const name = typeof candidate.name === "string" ? candidate.name.toLowerCase() : "";
+  const message = typeof candidate.message === "string" ? candidate.message.toLowerCase() : "";
+  const isInteractionCollectorError =
+    code === "interactioncollectorerror" ||
+    name === "interactioncollectorerror" ||
+    message.includes("collector received");
+
+  return isInteractionCollectorError && message.includes("reason: time");
+}
+
+function createRawModalRestError(response: Response, responseBody: string): Error {
+  let rawError: unknown;
+  try {
+    rawError = JSON.parse(responseBody);
+  } catch {
+    rawError = responseBody;
+  }
+
+  const rawErrorRecord = rawError && typeof rawError === "object" ? (rawError as Record<string, unknown>) : undefined;
+  const discordMessage = typeof rawErrorRecord?.message === "string" ? rawErrorRecord.message : response.statusText;
+  const error = new Error(`Discord API error: ${response.status} ${discordMessage}`) as Error & {
+    code?: unknown;
+    rawError: unknown;
+    status: number;
+  };
+  error.code = rawErrorRecord?.code;
+  error.rawError = rawError;
+  error.status = response.status;
+  return error;
+}
 
 /**
  * Safely localizes a string for modal usage, truncating if necessary to prevent Discord API errors
@@ -1014,7 +1060,7 @@ interface PersonaPaginatedChoiceOptions {
   onSelect?: (index: number) => Promise<void>;
   onCancel?: () => Promise<void>;
   preserveSelectedInteraction?: boolean;
-  /** Persistent avatar cache to share across multiple picker calls in an outer retry loop. */
+  /** Workflow-owned avatar cache shared across internal picker retries. */
   avatarSessionCache?: AvatarSessionCache;
 }
 
@@ -1158,7 +1204,7 @@ export interface NoticeContainerOptions {
   locale: string;
   /** Accent color of the container's left bar (maps to the old embed color). */
   color?: AccentColorInput;
-  /** Locale key for the H2 title line. */
+  /** Locale key for the H3 title line. */
   titleKey: string;
   /** Variables for the title. */
   titleVars?: Record<string, string | number | boolean>;
@@ -1191,7 +1237,7 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     options.description ??
     (options.descriptionKey ? localizer(locale, options.descriptionKey, options.descriptionVars) : "");
 
-  // 1. Title line, rendered as an H2 heading like every other CV2 container.
+  // 1. Title line, rendered as an H3 heading like every other CV2 container.
   components.push({
     type: ComponentType.TextDisplay,
     content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
@@ -1343,7 +1389,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
   const useThumbnailLayout =
     options.layout === "thumbnail-section" && Boolean(options.imageAttachmentName) && sections.length > 0;
 
-  // 1. Title line, rendered as an H2 heading like every other CV2 container.
+  // 1. Title line, rendered as an H3 heading like every other CV2 container.
   components.push({
     type: ComponentType.TextDisplay,
     content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
@@ -1542,8 +1588,7 @@ export type AvatarCacheEntry = { type: "url"; url: string } | { type: "buffer"; 
 /**
  * Session-scoped avatar cache keyed by absolute persona index (not page-local).
  * Populated lazily on first page visit; reused on re-navigation to the same page.
- * Pass into {@link PersonaPaginatedChoiceOptions.avatarSessionCache} to persist the cache
- * across multiple picker invocations in an outer retry loop.
+ * The persona workflow owns this map and passes it through internal picker retries.
  */
 export type AvatarSessionCache = Map<number, AvatarCacheEntry>;
 
@@ -1671,6 +1716,13 @@ function buildPersonaPageComponents(
       },
     },
   ];
+
+  if (options.descriptionKey) {
+    containerComponents.push({
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, options.descriptionKey),
+    });
+  }
 
   pagePersonas.forEach((persona, idx) => {
     const personaPrompt = persona.persona_prompt?.trim();
@@ -2121,8 +2173,9 @@ export async function replyPaginatedChoices(
 }
 
 /**
- * Displays a Components V2 persona selector with avatar cards and inline select buttons.
- * Designed for persona-targeting flows in /forget commands.
+ * Low-level Components V2 persona renderer used by `runPersonaPickerWorkflow`.
+ * Command and feature callers must use the workflow API so acknowledgment,
+ * retry, cache, and canonical-message invariants remain enforced.
  */
 export async function replyPaginatedPersonaChoicesV2(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
@@ -2136,12 +2189,21 @@ export async function replyPaginatedPersonaChoicesV2(
   const onSelect = options.onSelect ?? (async () => {});
 
   if (totalItems === 0) {
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: options.titleKey ?? "general.pagination.select_persona_title",
-      descriptionKey: "general.pagination.no_items",
-      color: ColorCode.INFO,
-      flags: MessageFlags.Ephemeral,
-    });
+    const components = buildV2StatusComponents(
+      locale,
+      options.titleKey ?? "general.pagination.select_persona_title",
+      "general.pagination.no_items",
+      ColorCode.INFO,
+    );
+    if (interaction.replied || interaction.deferred) {
+      await interaction.editReply({ components, attachments: [], flags: MessageFlags.IsComponentsV2 });
+    } else {
+      await interaction.reply({
+        components,
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        withResponse: true,
+      });
+    }
 
     return {
       success: false,
@@ -2169,7 +2231,7 @@ export async function replyPaginatedPersonaChoicesV2(
   // Discord API calls — by the time an error escapes the inner try, the interaction
   // token may already be dead and any recovery attempt just wastes rate-limit quota.
   const sessionStart = Date.now();
-  // Use a provided cache (outer retry loop) or create a fresh one for this session.
+  // Reuse the workflow-owned cache across retries, or create one for direct internal use.
   const avatarSessionCache: AvatarSessionCache = options.avatarSessionCache ?? new Map();
   try {
     while (true) {
@@ -2199,6 +2261,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 "general.pagination.timeout",
                 ColorCode.WARN,
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
           } catch (error) {
@@ -2244,14 +2307,16 @@ export async function replyPaginatedPersonaChoicesV2(
         if (interaction.replied || interaction.deferred) {
           message = await interaction.editReply({
             ...baseReplyOptions,
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
         } else {
-          await interaction.reply({
+          const response = await interaction.reply({
             ...baseReplyOptions,
             flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+            withResponse: true,
           });
-          message = await interaction.fetchReply();
+          message = response.resource?.message ?? (await interaction.fetchReply());
         }
 
         const buttonInteraction = await message.awaitMessageComponent({
@@ -2282,6 +2347,7 @@ export async function replyPaginatedPersonaChoicesV2(
               "general.pagination.cancelled",
               ColorCode.WARN,
             ),
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
 
@@ -2320,6 +2386,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 "general.errors.invalid_option_description",
                 ColorCode.ERROR,
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
             return {
@@ -2369,6 +2436,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 ColorCode.SUCCESS,
                 { item: selectedItem },
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
 
@@ -2387,6 +2455,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 ColorCode.ERROR,
                 { item: selectedItem },
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
             return {
@@ -2418,6 +2487,7 @@ export async function replyPaginatedPersonaChoicesV2(
               isTimeout ? "general.pagination.timeout" : "general.errors.unknown_error_description",
               isTimeout ? ColorCode.WARN : ColorCode.ERROR,
             ),
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
         } catch (error) {
@@ -2688,7 +2758,7 @@ export async function promptWithRawModal(
     if (!response.ok) {
       const errorText = await response.text();
       log.error(`Failed to send raw modal via REST API: ${response.status} ${response.statusText} - ${errorText}`);
-      throw new Error(`Discord API error: ${response.status} ${response.statusText}`);
+      throw createRawModalRestError(response, errorText);
     }
 
     // Mark this interaction as acknowledged via raw API for state tracking
@@ -2841,14 +2911,12 @@ export async function promptWithRawModal(
         interaction: submitted,
       };
     } catch (error) {
-      // This will only catch actual errors, not artificial timeouts
-      // Discord's natural timeout or user cancellation will be handled by command timeout
       log.warn(`Modal submission failed for user ${interaction.user.id}:`, error);
-      return { outcome: "timeout" };
+      return isRawModalCollectorTimeout(error) ? { outcome: "timeout" } : { outcome: "error", error };
     }
   } catch (error) {
     log.error("Failed to show raw modal:", error);
-    return { outcome: "timeout" };
+    return { outcome: "error", error };
   }
 }
 

@@ -12,16 +12,20 @@
  * Submitting a blank note clears (removes) the stored value.
  */
 
-import type { ButtonInteraction, ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
+import type { ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
 import { ChannelType, MessageFlags, TextInputStyle } from "discord.js";
-import type { TomoriState, UserRow } from "@/types/db/schema";
+import type { UserRow } from "@/types/db/schema";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { channelContextNoteRepo, configRepository, personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  runPersonaPickerWorkflow,
+} from "@/utils/discord/ui/personaWorkflow";
 
 const MODAL_CUSTOM_ID = "config_context_note_modal";
 const CONTEXT_NOTE_MAX_LENGTH = 2000;
@@ -95,6 +99,13 @@ export async function execute(
     return;
   }
 
+  // Resolve the branch before any asynchronous state reads. Persona scope can
+  // safely pre-defer; channel/global scopes still need the root to open a modal.
+  const scope = interaction.options.getString("scope", true) as "persona" | "channel" | "global";
+  if (scope === "persona") {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  }
+
   // 2. Resolve server identity and fetch cached state
   const serverId = interaction.guildId ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
@@ -109,52 +120,137 @@ export async function execute(
     return;
   }
 
-  // 3. Read required scope option
-  const scope = interaction.options.getString("scope", true) as "persona" | "channel" | "global";
+  if (scope === "persona") {
+    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
+    if (allPersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.config.context-note.set.no_personas_title",
+        descriptionKey: "commands.config.context-note.set.no_personas_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      async onSelected(selection) {
+        const selectedPersona = selection.persona;
+        const personaId = selectedPersona.persona_id;
+        if (personaId == null) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.unknown_error_title",
+              descriptionKey: "general.errors.unknown_error_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
+
+        try {
+          const modalResult = await selection.openModal({
+            modalCustomId: MODAL_CUSTOM_ID,
+            modalTitleKey: "commands.config.context-note.set.modal_title",
+            components: [
+              {
+                customId: "context_note_text",
+                style: TextInputStyle.Paragraph,
+                labelKey: "commands.config.context-note.set.text_label",
+                placeholder: "commands.config.context-note.set.text_placeholder",
+                required: false,
+                maxLength: CONTEXT_NOTE_MAX_LENGTH,
+                value: selectedPersona.context_note || undefined,
+              },
+              {
+                customId: "context_note_depth",
+                style: TextInputStyle.Short,
+                labelKey: "commands.config.context-note.set.depth_label",
+                placeholder: "commands.config.context-note.set.depth_placeholder",
+                required: true,
+                maxLength: 3,
+                value: String(selectedPersona.context_note_depth ?? 0),
+              },
+            ],
+          });
+          if (modalResult.outcome !== "submitted") {
+            log.info(`Context note modal ${modalResult.outcome}`);
+            return completePersonaWorkflow();
+          }
+
+          const work = await modalResult.phase.beginInPlaceWork();
+          const rawNote = (modalResult.phase.values.context_note_text ?? "").trim();
+          const rawDepth = (modalResult.phase.values.context_note_depth ?? "0").trim();
+          const parsedDepth = Number.parseInt(rawDepth, 10);
+          if (Number.isNaN(parsedDepth) || parsedDepth < 0 || parsedDepth > CONTEXT_NOTE_DEPTH_MAX) {
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.config.context-note.set.invalid_depth_title",
+                descriptionKey: "commands.config.context-note.set.invalid_depth_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+
+          const noteToStore = rawNote || null;
+          const depthToStore = rawNote ? parsedDepth : 0;
+          const persisted = await personaRepository.setContextNote(personaId, noteToStore, depthToStore);
+          if (!persisted) throw new Error("Failed to persist persona context note");
+          selectedPersona.context_note = noteToStore;
+          selectedPersona.context_note_depth = depthToStore;
+          invalidateTomoriStateCache(serverId);
+
+          const isRemoving = !rawNote;
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: isRemoving
+                ? "commands.config.context-note.set.success_removed_title"
+                : "commands.config.context-note.set.success_set_title",
+              descriptionKey: isRemoving
+                ? "commands.config.context-note.set.success_removed_description"
+                : "commands.config.context-note.set.success_set_description",
+              descriptionVars: isRemoving
+                ? { scope: selectedPersona.persona_nickname }
+                : {
+                    scope: selectedPersona.persona_nickname,
+                    depth: String(depthToStore),
+                    preview: (noteToStore ?? "").substring(0, 200),
+                  },
+              color: ColorCode.SUCCESS,
+            }),
+          );
+          log.info(
+            `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=persona persona=${personaId} depth=${depthToStore}`,
+          );
+          return completePersonaWorkflow();
+        } catch (error) {
+          await selection.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.unknown_error_title",
+              descriptionKey: "general.errors.unknown_error_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          throw error;
+        }
+      },
+    });
+    return;
+  }
 
   // 4. Declare interaction handles outside try-catch for fallback error replies
-  let modalHost: ChatInputCommandInteraction | ButtonInteraction = interaction;
+  const modalHost = interaction;
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
-  let selectedPersona: TomoriState | null = null;
   let selectedChannelDiscId: string | null = null;
 
   try {
-    // 5a. Persona scope: show paginated persona picker first
-    if (scope === "persona") {
-      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
-
-      if (allPersonas.length === 0) {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "commands.config.context-note.set.no_personas_title",
-          descriptionKey: "commands.config.context-note.set.no_personas_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      // Display paginated persona picker; preserveSelectedInteraction=true returns
-      // the unacknowledged ButtonInteraction so we can show a modal on it.
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
-      });
-
-      if (!personaSelection.success || !personaSelection.interaction || personaSelection.selectedIndex === undefined) {
-        return;
-      }
-
-      // Hand the ButtonInteraction to promptWithRawModal instead of ChatInputCommandInteraction
-      modalHost = personaSelection.interaction;
-      selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-
-      if (!selectedPersona?.persona_id) {
-        return;
-      }
-    }
-
     // 5b. Channel scope: read the native channel option from the slash command
     if (scope === "channel") {
       const channelOption = interaction.options.getChannel("channel");
@@ -174,10 +270,7 @@ export async function execute(
     let existingNote: string | null | undefined;
     let existingDepth: number;
 
-    if (scope === "persona" && selectedPersona) {
-      existingNote = selectedPersona.context_note;
-      existingDepth = selectedPersona.context_note_depth ?? 0;
-    } else if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
+    if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
       const existing = await channelContextNoteRepo.getChannelContextNote(tomoriState.server_id, selectedChannelDiscId);
       existingNote = existing?.note ?? null;
       existingDepth = existing?.depth ?? 0;
@@ -253,9 +346,7 @@ export async function execute(
     // 11. Persist to the appropriate table
     let persisted: boolean;
 
-    if (scope === "persona" && selectedPersona?.persona_id) {
-      persisted = await personaRepository.setContextNote(selectedPersona.persona_id, noteToStore, depthToStore);
-    } else if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
+    if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
       if (noteToStore) {
         persisted = await channelContextNoteRepo.setChannelContextNote(
           tomoriState.server_id,
@@ -278,17 +369,15 @@ export async function execute(
     }
 
     // 12. Invalidate tomori state cache AFTER the successful write (persona/global scopes)
-    if (scope !== "channel") {
+    if (scope === "global") {
       invalidateTomoriStateCache(serverId);
     }
 
     // 13. Reply with scoped success message
     const scopeLabel =
-      scope === "persona" && selectedPersona
-        ? selectedPersona.persona_nickname
-        : scope === "channel" && selectedChannelDiscId
-          ? `<#${selectedChannelDiscId}>`
-          : localizer(locale, "commands.config.context-note.set.global_option");
+      scope === "channel" && selectedChannelDiscId
+        ? `<#${selectedChannelDiscId}>`
+        : localizer(locale, "commands.config.context-note.set.global_option");
 
     if (isRemoving) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -310,7 +399,7 @@ export async function execute(
     }
 
     log.info(
-      `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=${scope}${selectedPersona ? ` persona=${selectedPersona.persona_id}` : ""}${selectedChannelDiscId ? ` channel=${selectedChannelDiscId}` : ""} depth=${depthToStore}`,
+      `Context note ${isRemoving ? "cleared" : "updated"} for server ${serverId} scope=${scope}${selectedChannelDiscId ? ` channel=${selectedChannelDiscId}` : ""} depth=${depthToStore}`,
     );
   } catch (error) {
     log.error("Failed to set context note:", error as Error);

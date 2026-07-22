@@ -5,31 +5,43 @@
  * - persona:    Documents scoped to a specific persona (persona picker shown first)
  * - serverwide: Documents with persona_id IS NULL
  *
- * Flow: scope → [persona picker] → document select modal → ephemeral embed + nav buttons.
- * Edit/Delete buttons appear only for users with Manage Server. Editing channel tags from
- * a per-chunk modal updates the parent document (channel_tags is document-scoped, not chunk-scoped).
+ * Flow: scope → [persona picker] → document select → chunk view, all on one canonical
+ * ephemeral Components V2 message. Edit/Delete buttons appear only for users with Manage
+ * Server. Editing channel tags from a per-chunk modal updates the parent document
+ * (channel_tags is document-scoped, not chunk-scoped).
  */
 
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
+  ComponentType,
+  escapeMarkdown,
   MessageFlags,
   TextInputStyle,
+  type ActionRowData,
+  type ButtonComponentData,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
-  type ModalSubmitInteraction,
+  type ComponentInContainerData,
+  type ContainerComponentData,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { promptWithModal, promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  beginCanonicalPrivateWorkflow,
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
+  runPersonaPickerWorkflow,
+  type CanonicalPrivateWorkflowPhase,
+  type PersonaWorkflowComponentsV2Payload,
+  type PersonaWorkflowModalResult,
+  type PersonaWorkflowSelectionPhase,
+} from "@/utils/discord/ui/personaWorkflow";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { llmModelRepo, personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { formatVector, rebuildDocumentTextContent } from "@/utils/documents/documentService";
@@ -59,10 +71,10 @@ const BTN_CANCEL_DELETE = "doc_view_cancel_delete";
 const CHUNK_CONTENT_MAX = 4000;
 const EDIT_CONTENT_INPUT_MAX = 4000;
 const EDIT_TAGS_INPUT_MAX = 200;
-const VIEW_TIMEOUT_MS = 5 * 60 * 1000;
 
 type DocumentScope = "persona" | "serverwide";
 type NavMode = "normal" | "confirm_delete";
+type DocumentWorkflowPhase = Pick<CanonicalPrivateWorkflowPhase, "phaseId" | "message" | "useButton">;
 
 interface ChunkRow {
   document_chunk_id: number;
@@ -80,21 +92,33 @@ function isChunkTooLongToEdit(chunk: ChunkRow | undefined): boolean {
   return (chunk?.content.length ?? 0) > EDIT_CONTENT_INPUT_MAX;
 }
 
-function buildChunkEmbed(
+interface InlineNotice {
+  titleKey: string;
+  descriptionKey: string;
+  descriptionVars?: Record<string, string | number>;
+}
+
+function buildChunkViewPayload(
   chunks: ChunkRow[],
   index: number,
   documentName: string,
   locale: string,
   canEdit: boolean,
-): EmbedBuilder {
+  options: { controls?: boolean; notice?: InlineNotice } = {},
+): PersonaWorkflowComponentsV2Payload {
   const raw = chunks[index]?.content ?? "";
   const truncated = raw.length > CHUNK_CONTENT_MAX;
-  const display = truncated ? `${raw.substring(0, CHUNK_CONTENT_MAX)}…` : raw;
-
-  const embed = new EmbedBuilder()
-    .setTitle(documentName.length > 256 ? `${documentName.substring(0, 253)}…` : documentName)
-    .setDescription(display || "​")
-    .setColor(ColorCode.INFO);
+  const display = truncated ? `${raw.substring(0, CHUNK_CONTENT_MAX - 1)}…` : raw;
+  const components: ComponentInContainerData[] = [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${escapeMarkdown(documentName).slice(0, 250)}`,
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: display || "​",
+    },
+  ];
 
   const footerParts: string[] = [];
   if (chunks.length > 1) {
@@ -109,71 +133,137 @@ function buildChunkEmbed(
     footerParts.push(localizer(locale, "commands.memory.document.view.chunk_too_long_to_edit"));
   }
   if (footerParts.length > 0) {
-    embed.setFooter({ text: footerParts.join(" · ") });
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: `-# ${footerParts.join(" · ")}`,
+    });
   }
 
-  return embed;
+  if (options.notice) {
+    components.push(
+      { type: ComponentType.Separator, divider: true, spacing: 1 },
+      {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, options.notice.titleKey)}`,
+      },
+      {
+        type: ComponentType.TextDisplay,
+        content: localizer(locale, options.notice.descriptionKey, options.notice.descriptionVars),
+      },
+    );
+  }
+
+  if (options.controls !== false) {
+    const buttons: ButtonComponentData[] = [];
+    if (chunks.length > 1) {
+      buttons.push(
+        {
+          type: ComponentType.Button,
+          customId: BTN_PREV,
+          label: localizer(locale, "commands.memory.document.view.btn_prev"),
+          style: ButtonStyle.Primary,
+          disabled: index === 0,
+        },
+        {
+          type: ComponentType.Button,
+          customId: BTN_NEXT,
+          label: localizer(locale, "commands.memory.document.view.btn_next"),
+          style: ButtonStyle.Primary,
+          disabled: index === chunks.length - 1,
+        },
+      );
+    }
+    if (canEdit) {
+      buttons.push(
+        {
+          type: ComponentType.Button,
+          customId: BTN_EDIT,
+          label: localizer(locale, "commands.memory.document.view.btn_edit"),
+          style: ButtonStyle.Secondary,
+          disabled: isChunkTooLongToEdit(chunks[index]),
+        },
+        {
+          type: ComponentType.Button,
+          customId: BTN_DELETE,
+          label: localizer(locale, "commands.memory.document.view.btn_delete"),
+          style: ButtonStyle.Danger,
+        },
+      );
+    }
+    buttons.push({
+      type: ComponentType.Button,
+      customId: BTN_CLOSE,
+      label: localizer(locale, "commands.memory.document.view.btn_close"),
+      style: ButtonStyle.Secondary,
+    });
+    components.push({
+      type: ComponentType.ActionRow,
+      components: buttons,
+    } satisfies ActionRowData<ButtonComponentData>);
+  }
+
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
+    components,
+  };
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  };
 }
 
-function buildNavRow(
+function buildDeleteConfirmPayload(
   chunks: ChunkRow[],
   index: number,
+  documentName: string,
   locale: string,
-  canEdit: boolean,
-): ActionRowBuilder<ButtonBuilder> {
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  const total = chunks.length;
-
-  if (total > 1) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(BTN_PREV)
-        .setLabel(localizer(locale, "commands.memory.document.view.btn_prev"))
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(index === 0),
-      new ButtonBuilder()
-        .setCustomId(BTN_NEXT)
-        .setLabel(localizer(locale, "commands.memory.document.view.btn_next"))
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(index === total - 1),
-    );
-  }
-
-  if (canEdit) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(BTN_EDIT)
-        .setLabel(localizer(locale, "commands.memory.document.view.btn_edit"))
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(isChunkTooLongToEdit(chunks[index])),
-      new ButtonBuilder()
-        .setCustomId(BTN_DELETE)
-        .setLabel(localizer(locale, "commands.memory.document.view.btn_delete"))
-        .setStyle(ButtonStyle.Danger),
-    );
-  }
-
-  row.addComponents(
-    new ButtonBuilder()
-      .setCustomId(BTN_CLOSE)
-      .setLabel(localizer(locale, "commands.memory.document.view.btn_close"))
-      .setStyle(ButtonStyle.Secondary),
-  );
-
-  return row;
-}
-
-function buildDeleteConfirmRow(locale: string): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(BTN_CONFIRM_DELETE)
-      .setLabel(localizer(locale, "commands.memory.document.view.btn_confirm_delete"))
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(BTN_CANCEL_DELETE)
-      .setLabel(localizer(locale, "commands.memory.document.view.btn_cancel"))
-      .setStyle(ButtonStyle.Secondary),
-  );
+): PersonaWorkflowComponentsV2Payload {
+  const isLast = chunks.length === 1;
+  const titleKey = isLast
+    ? "commands.memory.document.view.delete_last_confirm_title"
+    : "commands.memory.document.view.delete_confirm_title";
+  const descriptionKey = isLast
+    ? "commands.memory.document.view.delete_last_confirm_description"
+    : "commands.memory.document.view.delete_confirm_description";
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.WARN.replace("#", ""), 16),
+    components: [
+      { type: ComponentType.TextDisplay, content: `### ${localizer(locale, titleKey)}` },
+      {
+        type: ComponentType.TextDisplay,
+        content: localizer(locale, descriptionKey, {
+          current: String(index + 1),
+          total: String(chunks.length),
+          document_name: documentName,
+        }),
+      },
+      {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            customId: BTN_CONFIRM_DELETE,
+            label: localizer(locale, "commands.memory.document.view.btn_confirm_delete"),
+            style: ButtonStyle.Danger,
+          },
+          {
+            type: ComponentType.Button,
+            customId: BTN_CANCEL_DELETE,
+            label: localizer(locale, "commands.memory.document.view.btn_cancel"),
+            style: ButtonStyle.Secondary,
+          },
+        ],
+      } satisfies ActionRowData<ButtonComponentData>,
+    ],
+  };
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  };
 }
 
 /**
@@ -294,6 +384,511 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         ),
     );
 
+type DocumentRow = Awaited<ReturnType<typeof serverMemoryRepository.loadDocuments>>[number];
+
+function buildDocumentSelectModal(documents: readonly DocumentRow[]): {
+  modalCustomId: string;
+  modalTitleKey: string;
+  components: Array<{
+    customId: string;
+    labelKey: string;
+    descriptionKey: string;
+    placeholder: string;
+    required: true;
+    options: SelectOption[];
+  }>;
+} {
+  return {
+    modalCustomId: MODAL_CUSTOM_ID,
+    modalTitleKey: "commands.memory.document.view.modal_title",
+    components: [
+      {
+        customId: DOCUMENT_SELECT_ID,
+        labelKey: "commands.memory.document.view.select_label",
+        descriptionKey: "commands.memory.document.view.select_description",
+        placeholder: "commands.memory.document.view.select_placeholder",
+        required: true,
+        options: documents.map((document) => ({
+          label: safeSelectOptionText(document.document_name),
+          value: document.document_id.toString(),
+          description: document.first_chunk ? safeSelectOptionText(document.first_chunk) : undefined,
+        })),
+      },
+    ],
+  };
+}
+
+async function promptForDocument(
+  phase: DocumentWorkflowPhase,
+  documents: readonly DocumentRow[],
+  interaction: ChatInputCommandInteraction,
+  locale: string,
+): Promise<PersonaWorkflowModalResult | null> {
+  const openButtonId = `document_view_${phase.phaseId}_open`;
+  await phase.message.replace(
+    buildPersonaWorkflowNotice({
+      locale,
+      titleKey: "general.persona_workflow.modal_ready_title",
+      descriptionKey: "general.persona_workflow.modal_ready_description",
+      color: ColorCode.INFO,
+      button: {
+        customId: openButtonId,
+        labelKey: "general.persona_workflow.open_modal_button",
+        style: ButtonStyle.Primary,
+      },
+    }),
+  );
+
+  let openButton: ButtonInteraction;
+  try {
+    const message = await phase.message.fetchMessage();
+    openButton = await message.awaitMessageComponent({
+      componentType: ComponentType.Button,
+      filter: (candidate) => candidate.user.id === interaction.user.id && candidate.customId === openButtonId,
+      time: PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
+    });
+  } catch {
+    await phase.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.interaction.timeout_title",
+        descriptionKey: "general.pagination.timeout",
+        color: ColorCode.WARN,
+      }),
+    );
+    return null;
+  }
+
+  const result = await phase.useButton(openButton).openModal(buildDocumentSelectModal(documents));
+  if (result.outcome !== "submitted") {
+    if (result.outcome === "timeout") {
+      await phase.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.interaction.timeout_title",
+          descriptionKey: "general.pagination.timeout",
+          color: ColorCode.WARN,
+        }),
+      );
+    }
+    return null;
+  }
+  return result;
+}
+
+async function runDocumentViewStateMachine(params: {
+  client: Client;
+  interaction: ChatInputCommandInteraction;
+  userData: UserRow;
+  locale: string;
+  tomoriState: TomoriState;
+  phase: DocumentWorkflowPhase;
+  documents: readonly DocumentRow[];
+  targetPersonaId: number | null;
+  canEdit: boolean;
+  guildCacheKey: string;
+}): Promise<void> {
+  const {
+    client,
+    interaction,
+    userData,
+    locale,
+    tomoriState,
+    phase,
+    documents,
+    targetPersonaId,
+    canEdit,
+    guildCacheKey,
+  } = params;
+  const modalResult = await promptForDocument(phase, documents, interaction, locale);
+  if (!modalResult || modalResult.outcome !== "submitted") return;
+
+  const modalWork = await modalResult.phase.beginInPlaceWork();
+  const selectedId = Number.parseInt(modalResult.phase.values[DOCUMENT_SELECT_ID] ?? "", 10);
+  if (!Number.isInteger(selectedId) || !documents.some((document) => document.document_id === selectedId)) {
+    await modalWork.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.errors.invalid_option_title",
+        descriptionKey: "general.errors.invalid_option_description",
+        color: ColorCode.ERROR,
+      }),
+    );
+    return;
+  }
+
+  await modalWork.message.replace(
+    buildPersonaWorkflowNotice({
+      locale,
+      titleKey: "general.persona_workflow.loading_title",
+      descriptionKey: "general.persona_workflow.loading_description",
+      color: ColorCode.INFO,
+    }),
+  );
+  const documentMeta = await serverMemoryRepository.loadDocumentMeta(
+    selectedId,
+    tomoriState.server_id,
+    targetPersonaId,
+  );
+  if (!documentMeta) {
+    await modalWork.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.errors.invalid_option_title",
+        descriptionKey: "general.errors.invalid_option_description",
+        color: ColorCode.ERROR,
+      }),
+    );
+    return;
+  }
+
+  const documentName = documentMeta.document_name;
+  let currentChannelTags = documentMeta.channel_tags;
+  let chunks: ChunkRow[] = await serverMemoryRepository.loadDocumentChunks(
+    selectedId,
+    tomoriState.server_id,
+    targetPersonaId,
+  );
+  if (chunks.length === 0) {
+    await modalWork.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.memory.document.view.no_chunks_title",
+        descriptionKey: "commands.memory.document.view.no_chunks_description",
+        color: ColorCode.WARN,
+      }),
+    );
+    return;
+  }
+
+  let currentIndex = 0;
+  let mode: NavMode = "normal";
+  await modalWork.message.replace(buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit));
+
+  while (true) {
+    let button: ButtonInteraction;
+    try {
+      const viewMessage = await phase.message.fetchMessage();
+      button = await viewMessage.awaitMessageComponent({
+        componentType: ComponentType.Button,
+        filter: (candidate) => candidate.user.id === interaction.user.id,
+        time: PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
+      });
+    } catch {
+      await phase.message.replace(
+        buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+          controls: false,
+          notice: {
+            titleKey: "general.interaction.timeout_title",
+            descriptionKey: "general.pagination.timeout",
+          },
+        }),
+      );
+      return;
+    }
+
+    const action = phase.useButton(button);
+    if (button.customId === BTN_CLOSE) {
+      try {
+        await action.delete();
+      } catch (error) {
+        log.warn("Failed to delete /memory document view on close; disabling controls instead", error);
+        await phase.message.replace(
+          buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, { controls: false }),
+        );
+      }
+      return;
+    }
+
+    if (button.customId === BTN_PREV || button.customId === BTN_NEXT) {
+      currentIndex =
+        button.customId === BTN_PREV ? Math.max(0, currentIndex - 1) : Math.min(chunks.length - 1, currentIndex + 1);
+      mode = "normal";
+      await action.replace(buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit));
+      continue;
+    }
+
+    if (!canEdit && (button.customId === BTN_EDIT || button.customId === BTN_DELETE)) {
+      await action.replace(
+        buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+          notice: {
+            titleKey: "commands.memory.document.view.no_permission_title",
+            descriptionKey: "commands.memory.document.view.no_permission_description",
+          },
+        }),
+      );
+      continue;
+    }
+
+    if (button.customId === BTN_EDIT) {
+      const currentChunk = chunks[currentIndex];
+      if (!currentChunk) {
+        await action.replace(buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit));
+        continue;
+      }
+
+      const editResult = await action.openModal({
+        modalTitleKey: "commands.memory.document.view.edit_modal_title",
+        modalCustomId: EDIT_MODAL_ID,
+        components: [
+          {
+            customId: EDIT_CONTENT_FIELD_ID,
+            labelKey: "commands.memory.document.view.edit_content_label",
+            placeholder: "commands.memory.document.view.edit_content_placeholder",
+            style: TextInputStyle.Paragraph,
+            required: true,
+            maxLength: EDIT_CONTENT_INPUT_MAX,
+            value: currentChunk.content.substring(0, EDIT_CONTENT_INPUT_MAX),
+          },
+          {
+            customId: EDIT_TAGS_FIELD_ID,
+            labelKey: "commands.memory.document.view.edit_channel_tags_label",
+            placeholder: "commands.memory.document.view.edit_channel_tags_placeholder",
+            style: TextInputStyle.Short,
+            required: false,
+            maxLength: EDIT_TAGS_INPUT_MAX,
+            value: currentChannelTags.join(","),
+          },
+        ],
+      });
+      if (editResult.outcome !== "submitted") {
+        await phase.message.replace(
+          buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+            notice: {
+              titleKey: "general.interaction.timeout_title",
+              descriptionKey: "general.pagination.timeout",
+            },
+          }),
+        );
+        continue;
+      }
+
+      const editWork = await editResult.phase.beginInPlaceWork();
+      const newContent = (editResult.phase.values[EDIT_CONTENT_FIELD_ID] ?? "").trim();
+      const newTags = parseChannelTagsInput(editResult.phase.values[EDIT_TAGS_FIELD_ID] ?? "", client);
+      if (!newContent) {
+        await editWork.message.replace(
+          buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+            notice: {
+              titleKey: "commands.memory.document.view.edit_empty_content_title",
+              descriptionKey: "commands.memory.document.view.edit_empty_content_description",
+            },
+          }),
+        );
+        continue;
+      }
+
+      const contentChanged = newContent !== currentChunk.content;
+      const tagsChanged = !tagArraysEqual(newTags, currentChannelTags);
+      if (!contentChanged && !tagsChanged) {
+        await editWork.message.replace(
+          buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+            notice: {
+              titleKey: "commands.memory.document.view.edit_no_changes_title",
+              descriptionKey: "commands.memory.document.view.edit_no_changes_description",
+            },
+          }),
+        );
+        continue;
+      }
+
+      await editWork.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.persona_workflow.loading_title",
+          descriptionKey: "general.persona_workflow.loading_description",
+          color: ColorCode.INFO,
+        }),
+      );
+
+      if (contentChanged) {
+        const regen = await regenChunkEmbedding({
+          content: newContent,
+          serverId: tomoriState.server_id,
+          configuredEmbeddingModelId: tomoriState.config.embedding_model_id ?? null,
+          userId: userData.user_id ?? null,
+        });
+        if (!regen.ok) {
+          await editWork.message.replace(
+            buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+              notice: {
+                titleKey: `commands.memory.document.view.${regen.errorKey}_title`,
+                descriptionKey: `commands.memory.document.view.${regen.errorKey}_description`,
+              },
+            }),
+          );
+          continue;
+        }
+
+        const updated = await serverMemoryRepository.updateChunk({
+          chunkId: currentChunk.document_chunk_id,
+          serverId: tomoriState.server_id,
+          personaId: targetPersonaId,
+          content: newContent,
+          embeddingVector: regen.embeddingVector,
+          embeddingModelId: regen.embeddingModelId,
+          embeddingFamily: regen.embeddingFamily,
+        });
+        if (!updated) {
+          await editWork.message.replace(
+            buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+              notice: {
+                titleKey: "commands.memory.document.view.embedding_error_title",
+                descriptionKey: "commands.memory.document.view.embedding_error_description",
+              },
+            }),
+          );
+          continue;
+        }
+        // Invalidate the committed chunk update even if the derived document-text rebuild fails.
+        invalidateTomoriStateCache(guildCacheKey);
+        await rebuildDocumentTextContent(selectedId);
+        // Close the repopulation window around the rebuild's second DB write.
+        invalidateTomoriStateCache(guildCacheKey);
+        chunks[currentIndex] = { ...currentChunk, content: newContent };
+      }
+
+      if (tagsChanged) {
+        const tagsUpdated = await serverMemoryRepository.updateDocumentChannelTags(
+          selectedId,
+          tomoriState.server_id,
+          newTags,
+          targetPersonaId,
+        );
+        if (!tagsUpdated) {
+          await editWork.message.replace(
+            buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+              notice: {
+                titleKey: "general.errors.update_failed_title",
+                descriptionKey: "general.errors.update_failed_description",
+              },
+            }),
+          );
+          continue;
+        }
+        currentChannelTags = newTags;
+        invalidateTomoriStateCache(guildCacheKey);
+      }
+
+      const successKey =
+        contentChanged && tagsChanged
+          ? "edit_success_both"
+          : contentChanged
+            ? "edit_success_content_only"
+            : "edit_success_tags_only";
+      await editWork.message.replace(
+        buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+          notice: {
+            titleKey: "commands.memory.document.view.edit_success_title",
+            descriptionKey: `commands.memory.document.view.${successKey}`,
+          },
+        }),
+      );
+      continue;
+    }
+
+    if (button.customId === BTN_DELETE) {
+      mode = "confirm_delete";
+      await action.replace(buildDeleteConfirmPayload(chunks, currentIndex, documentName, locale));
+      continue;
+    }
+
+    if (button.customId === BTN_CANCEL_DELETE) {
+      mode = "normal";
+      await action.replace(buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit));
+      continue;
+    }
+
+    if (button.customId === BTN_CONFIRM_DELETE && mode === "confirm_delete") {
+      const currentChunk = chunks[currentIndex];
+      if (!currentChunk) {
+        mode = "normal";
+        await action.replace(buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit));
+        continue;
+      }
+
+      const deleteWork = await action.beginInPlaceWork();
+      await deleteWork.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.persona_workflow.loading_title",
+          descriptionKey: "general.persona_workflow.loading_description",
+          color: ColorCode.INFO,
+        }),
+      );
+      const wasLast = chunks.length === 1;
+      const deleted = await serverMemoryRepository.deleteChunk(
+        currentChunk.document_chunk_id,
+        tomoriState.server_id,
+        targetPersonaId,
+      );
+      if (!deleted) {
+        mode = "normal";
+        await deleteWork.message.replace(
+          buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+            notice: {
+              titleKey: "commands.memory.document.view.delete_failed_title",
+              descriptionKey: "commands.memory.document.view.delete_failed_description",
+            },
+          }),
+        );
+        continue;
+      }
+      // Invalidate the committed chunk deletion even if the derived document-text rebuild fails.
+      invalidateTomoriStateCache(guildCacheKey);
+
+      if (wasLast) {
+        const removedDocument = await serverMemoryRepository.removeDocument(
+          selectedId,
+          tomoriState.server_id,
+          targetPersonaId,
+        );
+        if (!removedDocument) {
+          await deleteWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.memory.document.view.delete_failed_title",
+              descriptionKey: "commands.memory.document.view.delete_failed_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return;
+        }
+        invalidateTomoriStateCache(guildCacheKey);
+        await deleteWork.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.memory.document.view.delete_document_title",
+            descriptionKey: "commands.memory.document.view.delete_document_description",
+            descriptionVars: { document_name: documentName },
+            color: ColorCode.SUCCESS,
+          }),
+        );
+        return;
+      }
+
+      await rebuildDocumentTextContent(selectedId);
+      // Close the repopulation window around the rebuild's second DB write.
+      invalidateTomoriStateCache(guildCacheKey);
+      chunks = chunks.filter((chunk) => chunk.document_chunk_id !== currentChunk.document_chunk_id);
+      currentIndex = Math.min(currentIndex, chunks.length - 1);
+      mode = "normal";
+      await deleteWork.message.replace(
+        buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit, {
+          notice: {
+            titleKey: "commands.memory.document.view.delete_success_title",
+            descriptionKey: "commands.memory.document.view.delete_success_description",
+            descriptionVars: { total: String(chunks.length) },
+          },
+        }),
+      );
+      continue;
+    }
+
+    await action.replace(buildChunkViewPayload(chunks, currentIndex, documentName, locale, canEdit));
+  }
+}
+
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
@@ -310,9 +905,13 @@ export async function execute(
     return;
   }
 
-  let tomoriState: TomoriState | null = null;
-  let targetPersonaId: number | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
+  const state: {
+    tomoriState: TomoriState | null;
+    targetPersonaId: number | null;
+    phase: DocumentWorkflowPhase | null;
+  } = { tomoriState: null, targetPersonaId: null, phase: null };
+  const scope: DocumentScope = interaction.options.getString("scope") === "serverwide" ? "serverwide" : "persona";
+  let serverwidePhase: CanonicalPrivateWorkflowPhase | null = null;
 
   try {
     if (!isRagAvailable()) {
@@ -325,8 +924,104 @@ export async function execute(
       return;
     }
 
-    tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
-    if (!tomoriState) {
+    if (scope === "persona") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    } else {
+      serverwidePhase = await beginCanonicalPrivateWorkflow(
+        interaction,
+        locale,
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.persona_workflow.loading_title",
+          descriptionKey: "general.persona_workflow.loading_description",
+          color: ColorCode.INFO,
+        }),
+      );
+      state.phase = serverwidePhase;
+    }
+
+    const guildCacheKey = interaction.guild?.id ?? interaction.user.id;
+    const cachedState = await getCachedTomoriState(guildCacheKey);
+    if (!cachedState) {
+      if (serverwidePhase) {
+        await serverwidePhase.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.tomori_not_setup_title",
+            descriptionKey: "general.errors.tomori_not_setup_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+      } else {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "general.errors.tomori_not_setup_title",
+          descriptionKey: "general.errors.tomori_not_setup_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      return;
+    }
+    const overlayResult = await applyPersonalProviderSelectionsToTomoriState(cachedState, userData.user_id ?? null);
+    const tomoriState = overlayResult.tomoriState;
+    state.tomoriState = tomoriState;
+
+    const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
+    if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
+      if (serverwidePhase) {
+        await serverwidePhase.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.teach.document.teaching_disabled_title",
+            descriptionKey: "commands.teach.document.teaching_disabled_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+      } else {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.teach.document.teaching_disabled_title",
+          descriptionKey: "commands.teach.document.teaching_disabled_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      return;
+    }
+
+    if (scope === "serverwide") {
+      const phase = serverwidePhase;
+      if (!phase) {
+        throw new Error("Serverwide document view is missing its canonical workflow phase.");
+      }
+      const documents = await serverMemoryRepository.loadDocuments(tomoriState.server_id, null);
+      if (!documents.length) {
+        await phase.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.memory.document.view.none_title",
+            descriptionKey: "commands.memory.document.view.none_description",
+            color: ColorCode.WARN,
+          }),
+        );
+        return;
+      }
+      await runDocumentViewStateMachine({
+        client,
+        interaction,
+        userData,
+        locale,
+        tomoriState,
+        phase,
+        documents,
+        targetPersonaId: null,
+        canEdit: hasManagePermission,
+        guildCacheKey,
+      });
+      return;
+    }
+
+    const allPersonas = await personaRepository.loadAllForServer(guildCacheKey);
+    if (!allPersonas.length) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
         descriptionKey: "general.errors.tomori_not_setup_description",
@@ -335,537 +1030,79 @@ export async function execute(
       });
       return;
     }
-    const overlayResult = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
-    tomoriState = overlayResult.tomoriState;
 
-    const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
-    if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.teach.document.teaching_disabled_title",
-        descriptionKey: "commands.teach.document.teaching_disabled_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    // Edit/Delete are gated on Manage Server even when teaching is enabled,
-    // because regenerating embeddings costs API tokens.
-    const canEdit = hasManagePermission;
-
-    const scopeInput = interaction.options.getString("scope");
-    const scope: DocumentScope = scopeInput === "serverwide" ? "serverwide" : "persona";
-    const avatarSessionCache: AvatarSessionCache = new Map();
-
-    // Persona picker
-    if (scope === "persona") {
-      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
-      if (allPersonas.length === 0) {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "general.errors.tomori_not_setup_title",
-          descriptionKey: "general.errors.tomori_not_setup_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        avatarSessionCache,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
-      });
-
-      if (!personaSelection.success || personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-        return;
-      }
-
-      personaSelectionInteraction = personaSelection.interaction;
-      const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-
-      if (!selectedPersona?.persona_id) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "general.errors.invalid_option_title",
-          "general.errors.invalid_option_description",
-          ColorCode.ERROR,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        return;
-      }
-
-      targetPersonaId = selectedPersona.persona_id;
-    }
-
-    const selectionInteraction = personaSelectionInteraction ?? interaction;
-    const dbServerId = tomoriState.server_id;
-    const guildCacheKey = interaction.guild?.id ?? interaction.user.id;
-
-    // Load document list
-    const documents = await serverMemoryRepository.loadDocuments(dbServerId, targetPersonaId);
-
-    if (!documents || documents.length === 0) {
-      if (personaSelectionInteraction) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "commands.memory.document.view.none_title",
-          "commands.memory.document.view.none_description",
-          ColorCode.WARN,
-        );
-      } else {
-        await replyInfoEmbed(selectionInteraction, locale, {
-          titleKey: "commands.memory.document.view.none_title",
-          descriptionKey: "commands.memory.document.view.none_description",
-          color: ColorCode.WARN,
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-      return;
-    }
-
-    // Document select modal
-    const documentOptions: SelectOption[] = documents.map((doc) => ({
-      label: safeSelectOptionText(doc.document_name),
-      value: doc.document_id.toString(),
-      description: doc.first_chunk ? safeSelectOptionText(doc.first_chunk) : undefined,
-    }));
-
-    const modalResult = await promptWithPaginatedModal(selectionInteraction, locale, {
-      modalCustomId: MODAL_CUSTOM_ID,
-      modalTitleKey: "commands.memory.document.view.modal_title",
-      components: [
-        {
-          customId: DOCUMENT_SELECT_ID,
-          labelKey: "commands.memory.document.view.select_label",
-          descriptionKey: "commands.memory.document.view.select_description",
-          placeholder: "commands.memory.document.view.select_placeholder",
-          required: true,
-          options: documentOptions,
-        },
-      ],
-    });
-
-    if (modalResult.outcome !== "submit") {
-      log.info(`Document view modal ${modalResult.outcome} for user ${userData.user_id}`);
-      if (scope === "persona") {
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-      }
-      return;
-    }
-
-    if (!modalResult.interaction || !modalResult.values) {
-      await replyInfoEmbed(selectionInteraction, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const selectedIdStr = modalResult.values[DOCUMENT_SELECT_ID];
-    if (!selectedIdStr) {
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "commands.memory.document.view.none_title",
-        descriptionKey: "commands.memory.document.view.none_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const modalSubmitInteraction = modalResult.interaction;
-    const selectedId = Number.parseInt(selectedIdStr, 10);
-
-    // Reject any document_id not in the persona-scoped list we already loaded
-    if (!documents.some((doc) => doc.document_id === selectedId)) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "general.errors.invalid_option_title",
-        descriptionKey: "general.errors.invalid_option_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    // Load document meta (for channel_tags pre-fill on edit) and chunks
-    const documentMeta = await serverMemoryRepository.loadDocumentMeta(selectedId, dbServerId, targetPersonaId);
-    if (!documentMeta) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "general.errors.invalid_option_title",
-        descriptionKey: "general.errors.invalid_option_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    const documentName = documentMeta.document_name;
-    let currentChannelTags = documentMeta.channel_tags;
-
-    let chunks: ChunkRow[] = await serverMemoryRepository.loadDocumentChunks(selectedId, dbServerId, targetPersonaId);
-
-    if (chunks.length === 0) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.memory.document.view.no_chunks_title",
-        descriptionKey: "commands.memory.document.view.no_chunks_description",
-        color: ColorCode.WARN,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    let currentIndex = 0;
-    let mode: NavMode = "normal";
-
-    // Reply with first chunk
-    await modalSubmitInteraction.reply({
-      embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
-      components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
-      flags: MessageFlags.Ephemeral,
-    });
-
-    const viewMessage = await modalSubmitInteraction.fetchReply();
-
-    // Navigation loop — handles paging, edit modal, and delete-confirm flow
-    while (true) {
-      let btnInteraction: ButtonInteraction;
-      try {
-        btnInteraction = (await viewMessage.awaitMessageComponent({
-          filter: (i) => i.user.id === interaction.user.id,
-          time: VIEW_TIMEOUT_MS,
-        })) as ButtonInteraction;
-      } catch {
-        // Timeout — strip buttons so the embed stays readable
-        await modalSubmitInteraction.editReply({ components: [] });
-        break;
-      }
-
-      if (btnInteraction.customId === BTN_CLOSE) {
-        await btnInteraction.deferUpdate();
-        try {
-          await modalSubmitInteraction.deleteReply();
-        } catch (closeError) {
-          log.warn("Failed to delete /memory document view reply on close; disabling controls instead", closeError);
-          await modalSubmitInteraction.editReply({ components: [] });
-        }
-        break;
-      }
-
-      if (btnInteraction.customId === BTN_PREV) {
-        currentIndex = Math.max(0, currentIndex - 1);
-        mode = "normal";
-        await btnInteraction.update({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
-          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
-        });
-        continue;
-      }
-
-      if (btnInteraction.customId === BTN_NEXT) {
-        currentIndex = Math.min(chunks.length - 1, currentIndex + 1);
-        mode = "normal";
-        await btnInteraction.update({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
-          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
-        });
-        continue;
-      }
-
-      // Defensive — should never be rendered for non-managers
-      if (!canEdit && (btnInteraction.customId === BTN_EDIT || btnInteraction.customId === BTN_DELETE)) {
-        await btnInteraction.reply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.document.view.no_permission_title"))
-              .setDescription(localizer(locale, "commands.memory.document.view.no_permission_description"))
-              .setColor(ColorCode.ERROR),
-          ],
-          flags: MessageFlags.Ephemeral,
-        });
-        continue;
-      }
-
-      // ──────────────────────────── EDIT ────────────────────────────
-      if (btnInteraction.customId === BTN_EDIT) {
-        const currentChunk = chunks[currentIndex];
-        if (!currentChunk) {
-          await btnInteraction.deferUpdate();
-          continue;
-        }
-
-        const tagsPrefill = currentChannelTags.join(",");
-        const modalEditResult = await promptWithModal(btnInteraction, locale, {
-          modalTitleKey: "commands.memory.document.view.edit_modal_title",
-          modalCustomId: EDIT_MODAL_ID,
-          components: [
-            {
-              customId: EDIT_CONTENT_FIELD_ID,
-              labelKey: "commands.memory.document.view.edit_content_label",
-              placeholder: "commands.memory.document.view.edit_content_placeholder",
-              style: TextInputStyle.Paragraph,
-              required: true,
-              maxLength: EDIT_CONTENT_INPUT_MAX,
-              value: currentChunk.content.substring(0, EDIT_CONTENT_INPUT_MAX),
-            },
-            {
-              customId: EDIT_TAGS_FIELD_ID,
-              labelKey: "commands.memory.document.view.edit_channel_tags_label",
-              placeholder: "commands.memory.document.view.edit_channel_tags_placeholder",
-              style: TextInputStyle.Short,
-              required: false,
-              maxLength: EDIT_TAGS_INPUT_MAX,
-              value: tagsPrefill,
-            },
-          ],
-        });
-
-        if (modalEditResult.outcome !== "submit" || !modalEditResult.interaction || !modalEditResult.values) {
-          continue;
-        }
-        const editSubmit = modalEditResult.interaction as ModalSubmitInteraction;
-        const newContent = (modalEditResult.values[EDIT_CONTENT_FIELD_ID] ?? "").trim();
-        const newTags = parseChannelTagsInput(modalEditResult.values[EDIT_TAGS_FIELD_ID] ?? "", client);
-
-        if (!newContent) {
-          await editSubmit.reply({
-            embeds: [
-              new EmbedBuilder()
-                .setTitle(localizer(locale, "commands.memory.document.view.edit_empty_content_title"))
-                .setDescription(localizer(locale, "commands.memory.document.view.edit_empty_content_description"))
-                .setColor(ColorCode.ERROR),
-            ],
-            flags: MessageFlags.Ephemeral,
-          });
-          continue;
-        }
-
-        const contentChanged = newContent !== currentChunk.content;
-        const tagsChanged = !tagArraysEqual(newTags, currentChannelTags);
-
-        if (!contentChanged && !tagsChanged) {
-          await editSubmit.reply({
-            embeds: [
-              new EmbedBuilder()
-                .setTitle(localizer(locale, "commands.memory.document.view.edit_no_changes_title"))
-                .setDescription(localizer(locale, "commands.memory.document.view.edit_no_changes_description"))
-                .setColor(ColorCode.INFO),
-            ],
-            flags: MessageFlags.Ephemeral,
-          });
-          continue;
-        }
-
-        // Defer the modal submit so we can do network work without hitting 3s deadline
-        await editSubmit.deferUpdate();
-
-        // Re-embed only if content actually changed
-        if (contentChanged) {
-          const regen = await regenChunkEmbedding({
-            content: newContent,
-            serverId: dbServerId,
-            configuredEmbeddingModelId: tomoriState?.config.embedding_model_id ?? null,
-            userId: userData.user_id ?? null,
-          });
-          if (!regen.ok) {
-            await editSubmit.followUp({
-              embeds: [
-                new EmbedBuilder()
-                  .setTitle(localizer(locale, `commands.memory.document.view.${regen.errorKey}_title`))
-                  .setDescription(localizer(locale, `commands.memory.document.view.${regen.errorKey}_description`))
-                  .setColor(ColorCode.ERROR),
-              ],
-              flags: MessageFlags.Ephemeral,
-            });
-            continue;
-          }
-          const updated = await serverMemoryRepository.updateChunk({
-            chunkId: currentChunk.document_chunk_id,
-            serverId: dbServerId,
-            personaId: targetPersonaId,
-            content: newContent,
-            embeddingVector: regen.embeddingVector,
-            embeddingModelId: regen.embeddingModelId,
-            embeddingFamily: regen.embeddingFamily,
-          });
-          if (!updated) {
-            await editSubmit.followUp({
-              embeds: [
-                new EmbedBuilder()
-                  .setTitle(localizer(locale, "commands.memory.document.view.embedding_error_title"))
-                  .setDescription(localizer(locale, "commands.memory.document.view.embedding_error_description"))
-                  .setColor(ColorCode.ERROR),
-              ],
-              flags: MessageFlags.Ephemeral,
-            });
-            continue;
-          }
-          await rebuildDocumentTextContent(selectedId);
-          chunks[currentIndex] = { ...currentChunk, content: newContent };
-        }
-
-        if (tagsChanged) {
-          await serverMemoryRepository.updateDocumentChannelTags(selectedId, dbServerId, newTags, targetPersonaId);
-          currentChannelTags = newTags;
-        }
-
-        invalidateTomoriStateCache(guildCacheKey);
-
-        const successKey =
-          contentChanged && tagsChanged
-            ? "edit_success_both"
-            : contentChanged
-              ? "edit_success_content_only"
-              : "edit_success_tags_only";
-
-        await editSubmit.editReply({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
-          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
-        });
-        await editSubmit.followUp({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.document.view.edit_success_title"))
-              .setDescription(localizer(locale, `commands.memory.document.view.${successKey}`))
-              .setColor(ColorCode.SUCCESS),
-          ],
-          flags: MessageFlags.Ephemeral,
-        });
-        continue;
-      }
-
-      // ─────────────────────── DELETE (request confirm) ───────────────────────
-      if (btnInteraction.customId === BTN_DELETE) {
-        mode = "confirm_delete";
-        const isLast = chunks.length === 1;
-        const confirmTitleKey = isLast
-          ? "commands.memory.document.view.delete_last_confirm_title"
-          : "commands.memory.document.view.delete_confirm_title";
-        const confirmDescKey = isLast
-          ? "commands.memory.document.view.delete_last_confirm_description"
-          : "commands.memory.document.view.delete_confirm_description";
-        const confirmEmbed = new EmbedBuilder()
-          .setTitle(localizer(locale, confirmTitleKey))
-          .setDescription(
-            localizer(locale, confirmDescKey, {
-              current: String(currentIndex + 1),
-              total: String(chunks.length),
-              document_name: documentName,
+    await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      async onSelected(selection: PersonaWorkflowSelectionPhase<TomoriState>) {
+        state.phase = selection;
+        state.targetPersonaId = selection.persona.persona_id ?? null;
+        if (state.targetPersonaId == null) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              color: ColorCode.ERROR,
             }),
-          )
-          .setColor(ColorCode.WARN);
-
-        await btnInteraction.update({
-          embeds: [confirmEmbed],
-          components: [buildDeleteConfirmRow(locale)],
-        });
-        continue;
-      }
-
-      // ─────────────────────── DELETE CONFIRM ───────────────────────
-      if (btnInteraction.customId === BTN_CONFIRM_DELETE && mode === "confirm_delete") {
-        const currentChunk = chunks[currentIndex];
-        if (!currentChunk) {
-          mode = "normal";
-          await btnInteraction.update({
-            embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
-            components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
-          });
-          continue;
+          );
+          return completePersonaWorkflow();
         }
 
-        const wasLast = chunks.length === 1;
-        const deleted = await serverMemoryRepository.deleteChunk(
-          currentChunk.document_chunk_id,
-          dbServerId,
-          targetPersonaId,
-        );
-        if (!deleted) {
-          mode = "normal";
-          await btnInteraction.update({
-            embeds: [
-              new EmbedBuilder()
-                .setTitle(localizer(locale, "commands.memory.document.view.delete_failed_title"))
-                .setDescription(localizer(locale, "commands.memory.document.view.delete_failed_description"))
-                .setColor(ColorCode.ERROR),
-            ],
-            components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
+        try {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.persona_workflow.loading_title",
+              descriptionKey: "general.persona_workflow.loading_description",
+              color: ColorCode.INFO,
+            }),
+          );
+          const documents = await serverMemoryRepository.loadDocuments(tomoriState.server_id, state.targetPersonaId);
+          if (!documents.length) {
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.memory.document.view.none_title",
+                descriptionKey: "commands.memory.document.view.none_description",
+                color: ColorCode.WARN,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+          await runDocumentViewStateMachine({
+            client,
+            interaction,
+            userData,
+            locale,
+            tomoriState,
+            phase: selection,
+            documents,
+            targetPersonaId: state.targetPersonaId,
+            canEdit: hasManagePermission,
+            guildCacheKey,
           });
-          continue;
+          return completePersonaWorkflow();
+        } catch (error) {
+          await selection.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.unknown_error_title",
+              descriptionKey: "general.errors.unknown_error_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          throw error;
         }
-
-        if (wasLast) {
-          await serverMemoryRepository.removeDocument(selectedId, dbServerId, targetPersonaId);
-          invalidateTomoriStateCache(guildCacheKey);
-          await btnInteraction.update({
-            embeds: [
-              new EmbedBuilder()
-                .setTitle(localizer(locale, "commands.memory.document.view.delete_document_title"))
-                .setDescription(
-                  localizer(locale, "commands.memory.document.view.delete_document_description", {
-                    document_name: documentName,
-                  }),
-                )
-                .setColor(ColorCode.SUCCESS),
-            ],
-            components: [],
-          });
-          break;
-        }
-
-        await rebuildDocumentTextContent(selectedId);
-        invalidateTomoriStateCache(guildCacheKey);
-
-        chunks = chunks.filter((c) => c.document_chunk_id !== currentChunk.document_chunk_id);
-        currentIndex = Math.min(currentIndex, chunks.length - 1);
-        mode = "normal";
-
-        await btnInteraction.update({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
-          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
-        });
-        await btnInteraction.followUp({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.document.view.delete_success_title"))
-              .setDescription(
-                localizer(locale, "commands.memory.document.view.delete_success_description", {
-                  total: String(chunks.length),
-                }),
-              )
-              .setColor(ColorCode.SUCCESS),
-          ],
-          flags: MessageFlags.Ephemeral,
-        });
-        continue;
-      }
-
-      // ─────────────────────── DELETE CANCEL ───────────────────────
-      if (btnInteraction.customId === BTN_CANCEL_DELETE) {
-        mode = "normal";
-        await btnInteraction.update({
-          embeds: [buildChunkEmbed(chunks, currentIndex, documentName, locale, canEdit)],
-          components: [buildNavRow(chunks, currentIndex, locale, canEdit)],
-        });
-        continue;
-      }
-
-      // Unknown button — defer to avoid hanging
-      await btnInteraction.deferUpdate();
-    }
+      },
+    });
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
-      serverId: tomoriState?.server_id,
-      personaId: targetPersonaId ?? tomoriState?.persona_id,
+      serverId: state.tomoriState?.server_id,
+      personaId: state.targetPersonaId ?? state.tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory document view",
@@ -875,17 +1112,16 @@ export async function execute(
     };
     await log.error(`Unexpected error in /memory document view for user ${userData.user_disc_id}`, error, context);
 
-    const errorEmbed = new EmbedBuilder()
-      .setTitle(localizer(locale, "general.errors.unknown_error_title"))
-      .setDescription(localizer(locale, "general.errors.unknown_error_description"))
-      .setColor(ColorCode.ERROR);
-
     try {
-      if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({
-          embeds: [errorEmbed],
-          flags: MessageFlags.Ephemeral,
-        });
+      if (state.phase) {
+        await state.phase.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
       } else {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.unknown_error_title",

@@ -204,7 +204,7 @@ export interface ModalOptions {
  * Result type for modal interactions
  */
 export type ModalResult = {
-  outcome: "submit" | "timeout";
+  outcome: "submit" | "timeout" | "error";
   /** Scalar string values from text inputs, radio groups (selected value), and checkboxes ("true"/"false") */
   values?: Record<string, string>;
   /** Array values from checkbox groups — keyed by customId, value is the array of selected option values */
@@ -213,4 +213,6 @@ export type ModalResult = {
   attachments?: Record<string, APIAttachment>;
   /** The raw modal submit interaction for further Discord API calls */
   interaction?: ModalSubmitInteraction;
+  /** Preserved failure when displaying or collecting the modal fails for a reason other than timeout. */
+  error?: unknown;
 };

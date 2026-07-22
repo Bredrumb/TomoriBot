@@ -369,7 +369,7 @@ function buildTabContainer(
  * `iconFile` is re-attached on every paint so an `attachment://` icon ref (local
  * persona avatars in non-prod) keeps resolving across tab switches and the timeout.
  */
-function dashboardPayload(
+export function buildStatsDashboardPayload(
   interactionId: string,
   tabs: StatsTab[],
   activeIndex: number,
@@ -424,19 +424,43 @@ export async function renderStatsDashboard(
   iconUrl?: string,
   iconFile?: AttachmentBuilder,
 ): Promise<void> {
+  return renderStatsDashboardWithReply(
+    (payload) => interaction.editReply(payload),
+    interaction.id,
+    invokerId,
+    locale,
+    tabs,
+    iconUrl,
+    iconFile,
+  );
+}
+
+/**
+ * Renders the same public dashboard through a caller-owned one-shot public reply.
+ * This is used by persona workflows after the private picker has been compacted.
+ */
+export async function renderStatsDashboardWithReply(
+  reply: (payload: ReturnType<typeof buildStatsDashboardPayload>) => Promise<Message>,
+  interactionId: string,
+  invokerId: string,
+  locale: string,
+  tabs: StatsTab[],
+  iconUrl?: string,
+  iconFile?: AttachmentBuilder,
+): Promise<void> {
   if (tabs.length === 0) return;
   let activeIndex = 0;
 
-  const message = (await interaction.editReply(
-    dashboardPayload(interaction.id, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
-  )) as Message;
+  const message = await reply(
+    buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
+  );
 
   // 1. Persistent collector — no listening gap between clicks, so fast switches queue
   //    instead of being dropped into a dead window.
   const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
     time: DASHBOARD_TIMEOUT_MS,
-    filter: (i) => i.user.id === invokerId && i.customId.startsWith(`stats:${interaction.id}:`),
+    filter: (i) => i.user.id === invokerId && i.customId.startsWith(`stats:${interactionId}:`),
   });
 
   collector.on("collect", async (button: ButtonInteraction) => {
@@ -446,7 +470,9 @@ export async function renderStatsDashboard(
     try {
       // 2. Acknowledge + repaint. Wrapped so a stale token (e.g. a duplicate click whose
       //    interaction Discord no longer recognizes) never escapes to the command handler.
-      await button.update(dashboardPayload(interaction.id, tabs, activeIndex, locale, true, false, iconUrl, iconFile));
+      await button.update(
+        buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
+      );
     } catch (error) {
       log.warn("renderStatsDashboard: tab-switch update failed (stale interaction, ignored)", error as Error);
     }
@@ -457,8 +483,8 @@ export async function renderStatsDashboard(
   await new Promise<void>((resolve) => collector.once("end", () => resolve()));
 
   try {
-    await interaction.editReply(
-      dashboardPayload(interaction.id, tabs, activeIndex, locale, true, true, iconUrl, iconFile),
+    await message.edit(
+      buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, true, iconUrl, iconFile),
     );
   } catch (error) {
     log.warn("renderStatsDashboard: failed to disable dashboard buttons after timeout", error as Error);

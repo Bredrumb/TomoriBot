@@ -450,15 +450,17 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   /**
    * Applies a NovelAI preset's sampling parameters to a server's config.
-   * Writes through typed split-table methods; invalidates the tomori state cache on success.
+   * Writes through typed split-table methods. Because these writes are not
+   * transactional, invalidates the tomori state cache when any write succeeds,
+   * including a partial failure.
    *
    * @param serverId     - Internal server DB ID
    * @param preset       - NaiPresetRow to apply
    * @param model        - LLM codename for temperature conversion
-   * @param serverDiscId - Discord server snowflake (required for cache invalidation)
+   * @param serverDiscId - Discord server snowflake used for cache invalidation
    * @returns true on success, false if any write failed
    */
-  async applyNaiPreset(serverId: number, preset: NaiPresetRow, model: string, serverDiscId?: string): Promise<boolean> {
+  async applyNaiPreset(serverId: number, preset: NaiPresetRow, model: string, serverDiscId: string): Promise<boolean> {
     const params = preset.parameters;
     const naiTemp = typeof params.temperature === "number" ? params.temperature : 1.35;
     const llm_temperature = this.invertNaiTemperature(naiTemp, model);
@@ -474,7 +476,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     ]);
 
     const ok = modelOk && chatOk && naiOk;
-    if (ok && serverDiscId) invalidateTomoriStateCache(serverDiscId);
+    if (modelOk || chatOk || naiOk) invalidateTomoriStateCache(serverDiscId);
     return ok;
   }
 

@@ -1,18 +1,29 @@
-import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
-import { MessageFlags } from "discord.js";
+import type {
+  ActionRowData,
+  ButtonComponentData,
+  ChatInputCommandInteraction,
+  Client,
+  ComponentInContainerData,
+  ContainerComponentData,
+  SlashCommandSubcommandBuilder,
+} from "discord.js";
+import { ButtonStyle, ComponentType, escapeMarkdown, MessageFlags } from "discord.js";
 import { configRepository, llmModelRepo, llmOverrideRepo } from "@/utils/db/repositories";
 
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithPaginatedModal,
-  safeSelectOptionText,
-} from "@/utils/discord/ui/modals";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowComponentsV2Payload,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
 import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
@@ -22,6 +33,7 @@ import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouter
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { commandRegistry } from "@/utils/discord/commandRegistry";
 
 const MODAL_CUSTOM_ID = "config_model_text_modal";
 const MODEL_SELECT_ID = "model_select";
@@ -51,6 +63,122 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
 
   const flagPrefix = flags.length > 0 ? `(${flags.join("+")}) ` : "";
   return `${flagPrefix}${baseDescription}`;
+}
+
+function buildPersonaModelLoadingNotice(locale: string): PersonaWorkflowComponentsV2Payload {
+  return buildPersonaWorkflowNotice({
+    locale,
+    titleKey: "general.persona_workflow.loading_title",
+    descriptionKey: "general.persona_workflow.loading_description",
+    color: ColorCode.INFO,
+  });
+}
+
+function buildPersonaModelModalReady(locale: string, customId: string): PersonaWorkflowComponentsV2Payload {
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
+    components: [
+      {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "general.persona_workflow.modal_ready_title")}`,
+      },
+      {
+        type: ComponentType.TextDisplay,
+        content: localizer(locale, "general.persona_workflow.modal_ready_description"),
+      },
+      {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            customId,
+            label: localizer(locale, "general.persona_workflow.open_modal_button"),
+            style: ButtonStyle.Primary,
+          },
+        ],
+      } satisfies ActionRowData<ButtonComponentData>,
+    ],
+  };
+  return { components: [container], flags: MessageFlags.IsComponentsV2 };
+}
+
+function buildPersonaProviderPicker(
+  locale: string,
+  customIdPrefix: string,
+  providers: readonly string[],
+  currentModel: string,
+  currentProvider: string,
+): PersonaWorkflowComponentsV2Payload {
+  const components: ComponentInContainerData[] = [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${localizer(locale, "commands.model.providerPicker.title")}`,
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: `${localizer(locale, "commands.model.providerPicker.description")}\n\n${localizer(
+        locale,
+        "commands.model.providerPicker.current_selection",
+        {
+          model: escapeMarkdown(currentModel),
+          provider: escapeMarkdown(currentProvider),
+        },
+      )}`,
+    },
+  ];
+
+  const buttons = providers.map(
+    (provider, index): ButtonComponentData => ({
+      type: ComponentType.Button,
+      customId: `${customIdPrefix}_${index}`,
+      label: getProviderDisplayName(provider),
+      style: ButtonStyle.Secondary,
+    }),
+  );
+  const buttonRows: ButtonComponentData[][] = [];
+  for (let offset = 0; offset < buttons.length; offset += 4) {
+    buttonRows.push(buttons.slice(offset, offset + 4));
+  }
+
+  const cancelButton: ButtonComponentData = {
+    type: ComponentType.Button,
+    customId: `${customIdPrefix}_cancel`,
+    label: localizer(locale, "general.pagination.cancel"),
+    style: ButtonStyle.Danger,
+  };
+  const lastRow = buttonRows.at(-1);
+  if (lastRow && lastRow.length < 5) {
+    lastRow.push(cancelButton);
+  } else {
+    buttonRows.push([cancelButton]);
+  }
+  for (const row of buttonRows) {
+    components.push({
+      type: ComponentType.ActionRow,
+      components: row,
+    } satisfies ActionRowData<ButtonComponentData>);
+  }
+
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
+    components,
+  };
+  return { components: [container], flags: MessageFlags.IsComponentsV2 };
+}
+
+function buildOpenRouterMovedNotice(locale: string): PersonaWorkflowComponentsV2Payload {
+  return buildPersonaWorkflowNotice({
+    locale,
+    titleKey: "general.openrouter_model_moved_title",
+    descriptionKey: "general.openrouter_model_moved_description",
+    descriptionVars: {
+      add_command: commandRegistry.getCommandMention("openrouter", "model", "add"),
+      remove_command: commandRegistry.getCommandMention("openrouter", "model", "remove"),
+    },
+    color: ColorCode.ERROR,
+  });
 }
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -84,6 +212,11 @@ export async function execute(
     return;
   }
 
+  const scope = interaction.options.getString("scope") ?? "global";
+  if (scope === "persona") {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  }
+
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -97,11 +230,11 @@ export async function execute(
   }
 
   const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "text");
-  const scope = interaction.options.getString("scope") ?? "global";
 
   let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
   let selectedModel: LlmRow | null = null;
   let providerSelection: Awaited<ReturnType<typeof promptForSavedProvider>> = null;
+  const personaWorkflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   try {
     // 1. Channel scope: provider picker → model picker → channel override
@@ -217,141 +350,241 @@ export async function execute(
         return;
       }
 
-      const avatarSessionCache: AvatarSessionCache = new Map();
-      while (true) {
-        const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-          personas: allPersonas,
-          avatarSessionCache,
-          color: ColorCode.INFO,
-          preserveSelectedInteraction: true,
-          onSelect: async () => {},
-        });
+      await runPersonaPickerWorkflow(interaction, locale, {
+        personas: allPersonas,
+        color: ColorCode.INFO,
+        async onSelected(selection) {
+          personaWorkflowState.message = selection.message;
+          const selectedPersona = selection.persona;
+          const personaId = selectedPersona.persona_id;
+          if (personaId == null) {
+            const work = await selection.beginInPlaceWork();
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
 
-        if (!personaSelection.success) {
-          return;
-        }
-        if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
+          try {
+            const currentPersonaModel = selectedPersona.persona_llm ?? tomoriState.llm;
+            let selectedProvider: string;
 
-        const personaButtonInteraction: ButtonInteraction = personaSelection.interaction;
-        const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.persona_id) {
-          await replyInfoEmbed(personaButtonInteraction, locale, {
-            titleKey: "general.errors.invalid_option_title",
-            descriptionKey: "general.errors.invalid_option_description",
-            color: ColorCode.ERROR,
-          });
-          return;
-        }
+            if (savedProviders.length === 0) {
+              const work = await selection.beginInPlaceWork();
+              await work.message.replace(
+                buildPersonaWorkflowNotice({
+                  locale,
+                  titleKey: "commands.model.providerPicker.no_providers_title",
+                  descriptionKey: "commands.model.providerPicker.no_providers_description",
+                  color: ColorCode.ERROR,
+                }),
+              );
+              return completePersonaWorkflow();
+            }
 
-        const currentPersonaModel = selectedPersona.persona_llm ?? tomoriState.llm;
-        providerSelection = await promptForSavedProvider(personaButtonInteraction, locale, savedProviders, {
-          currentSelections: [
-            {
-              model: currentPersonaModel.llm_codename,
-              provider: currentPersonaModel.llm_provider,
-            },
-          ],
-        });
-        if (!providerSelection) return;
+            if (savedProviders.length === 1) {
+              selectedProvider = savedProviders[0].provider.toLowerCase();
+              const work = await selection.beginInPlaceWork();
+              await work.message.replace(buildPersonaModelLoadingNotice(locale));
+            } else {
+              const work = await selection.beginInPlaceWork();
+              const providerPrefix = `persona_model_${selection.phaseId}_provider`;
+              await work.message.replace(
+                buildPersonaProviderPicker(
+                  locale,
+                  providerPrefix,
+                  savedProviders.map((provider) => provider.provider),
+                  currentPersonaModel.llm_codename,
+                  currentPersonaModel.llm_provider,
+                ),
+              );
 
-        const selectedProvider = providerSelection.provider;
-        const providerInteraction = providerSelection.interaction;
+              let providerButton: import("discord.js").ButtonInteraction;
+              try {
+                const providerMessage = await work.message.fetchMessage();
+                providerButton = await providerMessage.awaitMessageComponent({
+                  componentType: ComponentType.Button,
+                  filter: (candidate) =>
+                    candidate.user.id === interaction.user.id && candidate.customId.startsWith(providerPrefix),
+                  time: PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
+                });
+              } catch {
+                await work.message.replace(
+                  buildPersonaWorkflowNotice({
+                    locale,
+                    titleKey: "general.interaction.timeout_title",
+                    descriptionKey: "general.pagination.timeout",
+                    color: ColorCode.WARN,
+                  }),
+                );
+                return completePersonaWorkflow();
+              }
 
-        const personaAvailableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
-          kind: "server",
-          ownerId: tomoriState.server_id,
-        });
-        if (!personaAvailableModels?.length) {
-          await replyInfoEmbed(providerInteraction, locale, {
-            titleKey: "commands.model.text.no_models_title",
-            descriptionKey: "commands.model.text.no_models_description",
-            color: ColorCode.ERROR,
-          });
-          return;
-        }
+              const providerAction = selection.useButton(providerButton);
+              if (providerButton.customId === `${providerPrefix}_cancel`) {
+                await providerAction.replace(
+                  buildPersonaWorkflowNotice({
+                    locale,
+                    titleKey: "general.interaction.cancel_title",
+                    descriptionKey: "general.pagination.cancelled",
+                    color: ColorCode.WARN,
+                  }),
+                );
+                return retryPersonaWorkflow();
+              }
 
-        const personaModelOptions: SelectOption[] = personaAvailableModels.map((m) => ({
-          label: safeSelectOptionText(m.llm_codename),
-          value: safeSelectOptionText(m.llm_codename),
-          description: safeSelectOptionText(getLocalizedDescription(m, userData.language_pref)),
-        }));
+              const providerIndex = Number.parseInt(providerButton.customId.replace(`${providerPrefix}_`, ""), 10);
+              const provider = savedProviders[providerIndex];
+              if (!provider) {
+                await providerAction.replace(
+                  buildPersonaWorkflowNotice({
+                    locale,
+                    titleKey: "general.errors.invalid_option_title",
+                    descriptionKey: "general.errors.invalid_option_description",
+                    color: ColorCode.ERROR,
+                  }),
+                );
+                return completePersonaWorkflow();
+              }
+              selectedProvider = provider.provider.toLowerCase();
+              const providerWork = await providerAction.beginInPlaceWork();
+              await providerWork.message.replace(buildPersonaModelLoadingNotice(locale));
+            }
 
-        const personaModalResult = await promptWithPaginatedModal(providerInteraction, locale, {
-          modalCustomId: "config_model_text_persona_modal",
-          modalTitleKey: "commands.model.text.modal_title",
-          components: [
-            {
-              customId: MODEL_SELECT_ID,
-              labelKey: "commands.model.text.select_label",
-              descriptionKey: "commands.model.text.select_description",
-              placeholder: "commands.model.text.select_placeholder",
-              required: true,
-              options: personaModelOptions,
-            },
-          ],
-        });
+            const personaAvailableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
+              kind: "server",
+              ownerId: tomoriState.server_id,
+            });
+            if (!personaAvailableModels?.length) {
+              await selection.message.replace(
+                buildPersonaWorkflowNotice({
+                  locale,
+                  titleKey: "commands.model.text.no_models_title",
+                  descriptionKey: "commands.model.text.no_models_description",
+                  color: ColorCode.ERROR,
+                }),
+              );
+              return completePersonaWorkflow();
+            }
 
-        if (personaModalResult.outcome !== "submit") {
-          await replyComponentsV2Status(
-            interaction,
-            locale,
-            "general.pagination.select_persona_title",
-            "general.pagination.reloading_persona_picker",
-            ColorCode.INFO,
-          );
-          continue;
-        }
+            const personaModelOptions: SelectOption[] = personaAvailableModels.map((model) => ({
+              label: safeSelectOptionText(model.llm_codename),
+              value: safeSelectOptionText(model.llm_codename),
+              description: safeSelectOptionText(getLocalizedDescription(model, userData.language_pref)),
+            }));
+            const modalButtonId = `persona_model_${selection.phaseId}_open`;
+            await selection.message.replace(buildPersonaModelModalReady(locale, modalButtonId));
 
-        // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees values
-        const personaModalInteraction = personaModalResult.interaction!;
-        const selectedPersonaCodename = personaModalResult.values?.[MODEL_SELECT_ID];
-        const selectedPersonaModel =
-          personaAvailableModels.find((m) => m.llm_codename === selectedPersonaCodename) ?? null;
+            let modalButton: import("discord.js").ButtonInteraction;
+            try {
+              const modalMessage = await selection.message.fetchMessage();
+              modalButton = await modalMessage.awaitMessageComponent({
+                componentType: ComponentType.Button,
+                filter: (candidate) =>
+                  candidate.user.id === interaction.user.id && candidate.customId === modalButtonId,
+                time: PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
+              });
+            } catch {
+              await selection.message.replace(
+                buildPersonaWorkflowNotice({
+                  locale,
+                  titleKey: "general.interaction.timeout_title",
+                  descriptionKey: "general.pagination.timeout",
+                  color: ColorCode.WARN,
+                }),
+              );
+              return retryPersonaWorkflow();
+            }
 
-        if (!selectedPersonaModel?.llm_id) {
-          await replyInfoEmbed(personaModalInteraction, locale, {
-            titleKey: "commands.model.text.invalid_model_title",
-            descriptionKey: "commands.model.text.invalid_model_description",
-            color: ColorCode.ERROR,
-          });
-          return;
-        }
+            const personaModalResult = await selection.useButton(modalButton).openModal({
+              modalCustomId: "config_model_text_persona_modal",
+              modalTitleKey: "commands.model.text.modal_title",
+              components: [
+                {
+                  customId: MODEL_SELECT_ID,
+                  labelKey: "commands.model.text.select_label",
+                  descriptionKey: "commands.model.text.select_description",
+                  placeholder: "commands.model.text.select_placeholder",
+                  required: true,
+                  options: personaModelOptions,
+                },
+              ],
+            });
+            if (personaModalResult.outcome !== "submitted") {
+              return retryPersonaWorkflow();
+            }
 
-        if (selectedPersonaModel.llm_codename === "other-model") {
-          await replyLegacyOpenRouterOtherModelMoved(personaModalInteraction, locale, "server");
-          return;
-        }
+            const modalWork = await personaModalResult.phase.beginInPlaceWork();
+            const selectedPersonaCodename = personaModalResult.phase.values[MODEL_SELECT_ID];
+            const selectedPersonaModel =
+              personaAvailableModels.find((model) => model.llm_codename === selectedPersonaCodename) ?? null;
 
-        const personaWriteOk = await llmOverrideRepo.setPersonaLlmOverride(
-          selectedPersona.persona_id,
-          selectedPersonaModel.llm_id,
-          {
-            serverDiscId: serverId,
-          },
-        );
-        if (!personaWriteOk) {
-          await replyInfoEmbed(personaModalInteraction, locale, {
-            titleKey: "general.errors.update_failed_title",
-            descriptionKey: "general.errors.update_failed_description",
-            color: ColorCode.ERROR,
-          });
-          return;
-        }
+            if (!selectedPersonaModel?.llm_id) {
+              await modalWork.message.replace(
+                buildPersonaWorkflowNotice({
+                  locale,
+                  titleKey: "commands.model.text.invalid_model_title",
+                  descriptionKey: "commands.model.text.invalid_model_description",
+                  color: ColorCode.ERROR,
+                }),
+              );
+              return completePersonaWorkflow();
+            }
 
-        await acknowledgeModalSubmitForRefresh(personaModalInteraction);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "commands.model.text.success_title",
-          "commands.model.text.scope_set_persona_success",
-          ColorCode.SUCCESS,
-          {
-            persona: selectedPersona.persona_nickname,
-            model: selectedPersonaModel.llm_codename,
-          },
-          "general.pagination.reloading_persona_picker",
-        );
-      }
+            if (selectedPersonaModel.llm_codename === "other-model") {
+              await modalWork.message.replace(buildOpenRouterMovedNotice(locale));
+              return completePersonaWorkflow();
+            }
+
+            const personaWriteOk = await llmOverrideRepo.setPersonaLlmOverride(personaId, selectedPersonaModel.llm_id, {
+              serverDiscId: serverId,
+            });
+            if (!personaWriteOk) {
+              await modalWork.message.replace(
+                buildPersonaWorkflowNotice({
+                  locale,
+                  titleKey: "general.errors.update_failed_title",
+                  descriptionKey: "general.errors.update_failed_description",
+                  color: ColorCode.ERROR,
+                }),
+              );
+              return completePersonaWorkflow();
+            }
+
+            selectedPersona.persona_llm = selectedPersonaModel;
+            await modalWork.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.model.text.success_title",
+                descriptionKey: "commands.model.text.scope_set_persona_success",
+                descriptionVars: {
+                  persona: selectedPersona.persona_nickname,
+                  model: selectedPersonaModel.llm_codename,
+                },
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.SUCCESS,
+              }),
+            );
+            return retryPersonaWorkflow();
+          } catch (error) {
+            await selection.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.unknown_error_title",
+                descriptionKey: "general.errors.unknown_error_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            throw error;
+          }
+        },
+      });
+      return;
     }
 
     // 3. Global scope: provider picker → (custom capabilities || model picker) → Phase A mirror write
@@ -439,7 +672,7 @@ export async function execute(
         : (selectedSavedConfig.fallback_model_refs ?? []).filter((r) => r.type === "llm").map((r) => r.id);
       const disabledParams = selectedSavedConfig.llm_disabled_params ?? [];
 
-      const [updatedModel] = await Promise.all([
+      const [updatedModel, updatedChat] = await Promise.all([
         configRepository.updateModelConfig(tomoriState.server_id, {
           llm_id: customModel.llm_id,
           api_key: selectedSavedConfig.api_key,
@@ -464,9 +697,34 @@ export async function execute(
           llm_logit_biases: resolvedLogitBiases.entries,
         }),
       ]);
-      const updatedRow = updatedModel;
+      // The split-table writes are not transactional. Invalidate after either
+      // succeeds so a partial write cannot leave a stale assembled state.
+      if (updatedModel || updatedChat) {
+        invalidateTomoriStateCache(serverId);
+      }
 
-      if (!updatedRow) {
+      if (!updatedModel || !updatedChat) {
+        const context: ErrorContext = {
+          personaId: tomoriState.persona_id,
+          serverId: tomoriState.server_id,
+          userId: userData.user_id,
+          errorType: "DatabaseUpdateError",
+          metadata: {
+            command: "model text",
+            guildId: serverId,
+            scope: "global",
+            selectedProvider,
+            selectedModelCodename: customModel.llm_codename,
+            targetLlmId: customModel.llm_id,
+            modelConfigUpdated: updatedModel,
+            chatConfigUpdated: updatedChat,
+          },
+        };
+        await log.error(
+          "Failed to update all custom-provider LLM configuration tables",
+          new Error("One or more database updates returned false"),
+          context,
+        );
         await replyInfoEmbed(customReplyTarget, locale, {
           titleKey: "general.errors.update_failed_title",
           descriptionKey: "general.errors.update_failed_description",
@@ -475,7 +733,6 @@ export async function execute(
         return;
       }
 
-      invalidateTomoriStateCache(serverId);
       await replyInfoEmbed(customReplyTarget, locale, {
         titleKey: "commands.model.text.success_title",
         descriptionKey: "commands.model.text.success_description",
@@ -587,7 +844,7 @@ export async function execute(
       : (selectedSavedConfig?.fallback_model_refs ?? []).filter((r) => r.type === "llm").map((r) => r.id);
     const disabledParams = selectedSavedConfig?.llm_disabled_params ?? [];
 
-    const [updatedModel] = await Promise.all([
+    const [updatedModel, updatedChat] = await Promise.all([
       configRepository.updateModelConfig(tomoriState.server_id, {
         llm_id: selectedModel.llm_id,
         api_key: selectedSavedConfig?.api_key ?? null,
@@ -611,9 +868,13 @@ export async function execute(
         llm_logit_biases: resolvedLogitBiases.entries,
       }),
     ]);
-    const updatedRow = updatedModel;
+    // Keep invalidation immediately after the primary split writes. This also
+    // protects readers when only one of the non-transactional writes succeeds.
+    if (updatedModel || updatedChat) {
+      invalidateTomoriStateCache(serverId);
+    }
 
-    if (!updatedRow) {
+    if (!updatedModel || !updatedChat) {
       const context: ErrorContext = {
         personaId: tomoriState.persona_id,
         serverId: tomoriState.server_id,
@@ -624,11 +885,13 @@ export async function execute(
           guildId: interaction.guild?.id ?? interaction.user.id,
           selectedModelCodename,
           targetLlmId: selectedModel.llm_id,
+          modelConfigUpdated: updatedModel,
+          chatConfigUpdated: updatedChat,
         },
       };
       await log.error(
-        "Failed to update LLM config after DB update",
-        new Error("Database update returned no rows"),
+        "Failed to update all LLM configuration tables",
+        new Error("One or more database updates returned false"),
         context,
       );
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -638,8 +901,6 @@ export async function execute(
       });
       return;
     }
-
-    invalidateTomoriStateCache(serverId);
 
     // Auto-apply default NAI sampling preset when switching to Kayra or Erato
     const naiDefaultPresets: Record<string, { name: string; target: "kayra" | "erato" }> = {
@@ -651,7 +912,50 @@ export async function execute(
       const naiPresets = await configRepository.loadNaiPresets(defaultPresetEntry.target);
       const defaultPreset = naiPresets.find((p) => p.preset_name === defaultPresetEntry.name);
       if (defaultPreset) {
-        await configRepository.applyNaiPreset(tomoriState.server_id, defaultPreset, selectedModel.llm_codename);
+        const presetApplied = await configRepository.applyNaiPreset(
+          tomoriState.server_id,
+          defaultPreset,
+          selectedModel.llm_codename,
+          serverId,
+        );
+        if (!presetApplied) {
+          // The preset spans three non-transactional writes. Invalidate again
+          // after the failed attempt in case any sub-write committed.
+          invalidateTomoriStateCache(serverId);
+
+          const context: ErrorContext = {
+            personaId: tomoriState.persona_id,
+            serverId: tomoriState.server_id,
+            userId: userData.user_id,
+            errorType: "DatabaseUpdateError",
+            metadata: {
+              command: "model text",
+              guildId: serverId,
+              scope: "global",
+              selectedModelCodename,
+              targetLlmId: selectedModel.llm_id,
+              naiPresetName: defaultPreset.preset_name,
+            },
+          };
+          await log.error(
+            "Failed to apply the default NovelAI preset after updating the text model",
+            new Error("NovelAI preset update returned false"),
+            context,
+          );
+
+          const failureOptions = {
+            titleKey: "general.errors.update_failed_title",
+            descriptionKey: "general.errors.update_failed_description",
+            color: ColorCode.ERROR,
+          } as const;
+          const replacedPicker =
+            modalSubmitInteraction &&
+            (await replaceProviderPickerWithInfo(providerSelection, modalSubmitInteraction, locale, failureOptions));
+          if (!replacedPicker) {
+            await replyInfoEmbed(modalSubmitInteraction, locale, failureOptions);
+          }
+          return;
+        }
       } else {
         log.warn(
           `Default NAI preset "${defaultPresetEntry.name}" not found in DB. Was the seed catalog loaded? Skipping auto-apply.`,
@@ -692,6 +996,18 @@ export async function execute(
       },
     };
     await log.error(`Error executing /model text for user ${userData.user_disc_id}`, error as Error, context);
+
+    if (personaWorkflowState.message) {
+      await personaWorkflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
 
     const replyTarget = modalSubmitInteraction ?? interaction;
     await replyInfoEmbed(replyTarget, locale, {

@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { configRepository } from "@/utils/db/repositories";
 
 import { localizer } from "@/utils/text/localizer";
@@ -151,7 +151,12 @@ export async function execute(
   }
 
   // 10. Apply the preset — writes schema fields to split server config tables + nai_preset_name
-  const updated = await configRepository.applyNaiPreset(tomoriState.server_id, chosenPreset, modelCodename);
+  const updated = await configRepository.applyNaiPreset(
+    tomoriState.server_id,
+    chosenPreset,
+    modelCodename,
+    interaction.guild.id,
+  );
   if (!updated) {
     await replyInfoEmbed(modalInteraction, locale, {
       titleKey: "general.errors.update_failed_title",
@@ -161,10 +166,7 @@ export async function execute(
     return;
   }
 
-  // 11. Invalidate cache so the next generation picks up the new preset
-  invalidateTomoriStateCache(interaction.guild.id);
-
-  // 12. Confirm success
+  // 11. Confirm success (applyNaiPreset invalidated the cache after its writes)
   await replyInfoEmbed(modalInteraction, locale, {
     titleKey: "commands.novelai.preset.text.success_title",
     descriptionKey: "commands.novelai.preset.text.success_description",

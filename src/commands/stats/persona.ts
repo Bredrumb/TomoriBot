@@ -1,15 +1,18 @@
 import {
   AttachmentBuilder,
   MessageFlags,
-  type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
-import { buildNoticeContainer, replyInfoEmbed } from "@/utils/discord/ui/interactionCore";
+import { replyInfoEmbed } from "@/utils/discord/ui/interactionCore";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  runPersonaPickerWorkflow,
+} from "@/utils/discord/ui/personaWorkflow";
 import {
   isLocalPersonaAvatarPath,
   loadStoredPersonaAvatarBuffer,
@@ -21,7 +24,7 @@ import {
   buildPersonaTabs,
   buildSubtitle,
   DEFAULT_TIMEFRAME,
-  renderStatsDashboard,
+  renderStatsDashboardWithReply,
   resolveWindowFrom,
   type Timeframe,
   TIMEFRAME_VALUES,
@@ -71,6 +74,8 @@ export async function execute(
   }
 
   try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     // 1. Resolve the internal server id and the server's persona roster.
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
@@ -96,76 +101,76 @@ export async function execute(
     const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const from = resolveWindowFrom(timeframe);
 
-    // 2. Show the persona picker (ephemeral), preserving the selected button so the
-    //    public dashboard can be sent from it.
-    const result = await replyPaginatedPersonaChoicesV2(interaction, locale, {
+    await runPersonaPickerWorkflow(interaction, locale, {
       personas,
       titleKey: "commands.stats.persona.picker_title",
       descriptionKey: "commands.stats.persona.picker_description",
       color: ColorCode.INFO,
-      preserveSelectedInteraction: true,
-    });
+      async onSelected(selection) {
+        const selected = selection.persona;
+        const publicReply = await selection.beginSeparatePublicReply(
+          buildPersonaWorkflowNotice({
+            locale,
+            color: ColorCode.SUCCESS,
+            titleKey: "commands.stats.persona.chosen_title",
+            titleVars: { name: selected.persona_nickname },
+          }),
+        );
 
-    // 3. Picker dismissed/timed out/dead — nothing to render.
-    if (!result.success || result.selectedIndex === undefined || !result.interaction) return;
+        try {
+          const lineageId = selected.persona_lineage_id ?? 0;
+          const subtitle = buildSubtitle(locale, timeframe);
+          const tabs = await buildPersonaTabs({
+            locale,
+            serverId,
+            guildId: guild.id,
+            lineageId,
+            personaName: selected.persona_nickname,
+            timeframe,
+            from,
+            subtitle: `${selected.persona_nickname} • ${subtitle}`,
+          });
 
-    const selected = personas[result.selectedIndex];
-    if (!selected) return;
-    const lineageId = selected.persona_lineage_id ?? 0;
-
-    // 4. Collapse the ephemeral picker to a compact confirmation so the bulky
-    //    persona card disappears before the public dashboard appears.
-    await interaction.editReply({
-      components: buildNoticeContainer({
-        locale,
-        color: ColorCode.SUCCESS,
-        titleKey: "commands.stats.persona.chosen_title",
-        titleVars: { name: selected.persona_nickname },
-      }),
-      flags: MessageFlags.IsComponentsV2,
-    });
-
-    // 5. Render the dashboard publicly from the selected button interaction.
-    const button = result.interaction as ButtonInteraction;
-    await button.deferReply();
-
-    const subtitle = buildSubtitle(locale, timeframe);
-    const tabs = await buildPersonaTabs({
-      locale,
-      serverId,
-      guildId: guild.id,
-      lineageId,
-      personaName: selected.persona_nickname,
-      timeframe,
-      from,
-      subtitle: `${selected.persona_nickname} • ${subtitle}`,
-    });
-
-    // Pin the selected persona's icon to the dashboard's top-right corner, mirroring how
-    // the persona picker resolves avatars so it works in non-production too:
-    //   - main persona  → the bot's per-server member avatar (always a public CDN URL).
-    //   - alter persona → its stored avatar as a public URL when available, otherwise
-    //     (non-prod, no AVATAR_PUBLIC_BASE_URL) the local file loaded from disk and
-    //     attached to the message, referenced via an `attachment://` Thumbnail ref.
-    // Any failure leaves both undefined and the card simply renders iconless.
-    let personaIconUrl: string | undefined;
-    let personaIconFile: AttachmentBuilder | undefined;
-    if (selected.is_alter) {
-      const publicUrl = resolvePersonaAvatarPublicUrl(selected.webhook_avatar_url);
-      if (publicUrl) {
-        personaIconUrl = publicUrl;
-      } else if (selected.webhook_avatar_url && isLocalPersonaAvatarPath(selected.webhook_avatar_url)) {
-        const buffer = await loadStoredPersonaAvatarBuffer(selected.webhook_avatar_url);
-        if (buffer) {
-          const name = "stats_persona_icon.png";
-          personaIconFile = new AttachmentBuilder(buffer, { name });
-          personaIconUrl = `attachment://${name}`;
+          let personaIconUrl: string | undefined;
+          let personaIconFile: AttachmentBuilder | undefined;
+          if (selected.is_alter) {
+            const publicUrl = resolvePersonaAvatarPublicUrl(selected.webhook_avatar_url);
+            if (publicUrl) {
+              personaIconUrl = publicUrl;
+            } else if (selected.webhook_avatar_url && isLocalPersonaAvatarPath(selected.webhook_avatar_url)) {
+              const buffer = await loadStoredPersonaAvatarBuffer(selected.webhook_avatar_url);
+              if (buffer) {
+                const name = "stats_persona_icon.png";
+                personaIconFile = new AttachmentBuilder(buffer, { name });
+                personaIconUrl = `attachment://${name}`;
+              }
+            }
+          } else {
+            personaIconUrl = guild.members.me?.displayAvatarURL({ extension: "png", size: 256 }) ?? undefined;
+          }
+          await renderStatsDashboardWithReply(
+            (payload) => publicReply.reply(payload),
+            selection.phaseId,
+            interaction.user.id,
+            locale,
+            tabs,
+            personaIconUrl,
+            personaIconFile,
+          );
+        } catch (error) {
+          await selection.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              color: ColorCode.ERROR,
+              titleKey: "general.errors.unknown_error_title",
+              descriptionKey: "general.errors.unknown_error_description",
+            }),
+          );
+          throw error;
         }
-      }
-    } else {
-      personaIconUrl = guild.members.me?.displayAvatarURL({ extension: "png", size: 256 }) ?? undefined;
-    }
-    await renderStatsDashboard(button, interaction.user.id, locale, tabs, personaIconUrl, personaIconFile);
+        return completePersonaWorkflow();
+      },
+    });
   } catch (error) {
     await log.error(`Error executing /stats persona for user ${userData.user_disc_id}`, error as Error, {
       userId: userData.user_id,

@@ -59,6 +59,13 @@ export default {
       persona_no_attributes: `No attributes configured yet.`,
       persona_select_button: `Select`,
     },
+    persona_workflow: {
+      loading_title: `Preparing Your Selection`,
+      loading_description: `Loading the available options...`,
+      modal_ready_title: `Ready to Continue`,
+      modal_ready_description: `Open the form to continue with your selection.`,
+      open_modal_button: `Open Form`,
+    },
     errors: {
       guild_only_title: `Server Only Command`,
       guild_only_description: `This command can only be used within a server.`,

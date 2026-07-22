@@ -1,9 +1,14 @@
-import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { UserRow, TomoriState } from "@/types/db/schema";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  PersonaWorkflowUpdateError,
+  runPersonaPickerWorkflow,
+} from "@/utils/discord/ui/personaWorkflow";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
@@ -41,8 +46,10 @@ export async function execute(
   }
 
   let tomoriState: TomoriState | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
+  let personaWorkflowStarted = false;
   try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
@@ -66,46 +73,74 @@ export async function execute(
       return;
     }
 
-    const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
+    personaWorkflowStarted = true;
+    await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
-      preserveSelectedInteraction: true,
-      onSelect: async () => {},
-    });
+      onSelected: async (selection) => {
+        const { message } = await selection.beginInPlaceWork();
+        const selectedPersona = selection.persona;
 
-    if (!personaSelection.success || personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-      return;
-    }
+        try {
+          if (!selectedPersona.persona_id) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
 
-    personaSelectionInteraction = personaSelection.interaction;
-    const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
+          const ok = await personaRepository.removePrompt(selectedPersona.persona_id);
+          if (!ok) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.update_failed_title",
+                descriptionKey: "general.errors.update_failed_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
 
-    if (!selectedPersona?.persona_id) {
-      await replyInfoEmbed(personaSelectionInteraction, locale, {
-        titleKey: "general.errors.invalid_option_title",
-        descriptionKey: "general.errors.invalid_option_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
+          invalidateTomoriStateCache(serverDiscId);
+          await message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.forget.personaprompt.success_title",
+              descriptionKey: "commands.forget.personaprompt.success_description",
+              descriptionVars: { persona_name: selectedPersona.persona_nickname },
+              color: ColorCode.SUCCESS,
+            }),
+          );
+        } catch (error) {
+          if (error instanceof PersonaWorkflowUpdateError) throw error;
+          await log.error("Error in /forget personaprompt command", error, {
+            serverId: selectedPersona.server_id,
+            personaId: selectedPersona.persona_id,
+            errorType: "CommandExecutionError",
+            metadata: {
+              command: "forget personaprompt",
+              guildId: interaction.guild?.id,
+              userId: interaction.user.id,
+            },
+          });
+          await message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.unknown_error_title",
+              descriptionKey: "general.errors.unknown_error_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+        }
 
-    const ok = await personaRepository.removePrompt(selectedPersona.persona_id);
-    if (!ok) {
-      await replyInfoEmbed(personaSelectionInteraction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    invalidateTomoriStateCache(serverDiscId);
-
-    await replyInfoEmbed(personaSelectionInteraction, locale, {
-      titleKey: "commands.forget.personaprompt.success_title",
-      descriptionKey: "commands.forget.personaprompt.success_description",
-      descriptionVars: { persona_name: selectedPersona.persona_nickname },
-      color: ColorCode.SUCCESS,
+        return completePersonaWorkflow();
+      },
     });
   } catch (error) {
     await log.error("Error in /forget personaprompt command", error, {
@@ -119,11 +154,8 @@ export async function execute(
       },
     });
 
-    const errorReplyTarget =
-      personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction;
-    await replyInfoEmbed(errorReplyTarget, locale, {
+    if (personaWorkflowStarted) return;
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,

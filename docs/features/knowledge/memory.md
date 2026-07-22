@@ -65,6 +65,19 @@ Server admins can give her documents to reference:
 - Remove any stored document with `/memory document remove`. `/memory history remove` is
   a filtered shortcut that only lists documents created by `/memory history import`.
 
+`/memory document view` keeps its complete private session in one Components V2 message for
+both persona and serverwide scopes. Persona selection, document selection, loading, chunk
+navigation, edit/delete confirmation, progress, success, errors, and timeout all replace
+that same message. Lists of up to 25 documents open directly; larger lists show in-place
+range buttons instead of a second page-selector message. On timeout, the current chunk stays
+readable with its controls disabled. **Close** deletes the private workflow message.
+
+Document selection is acknowledged before metadata and chunks are loaded. Edit submissions
+are acknowledged before embedding or persistence work. Content and channel-tag changes only
+become visible after successful writes, and cache invalidation occurs after those writes.
+Deleting the last chunk also removes the now-empty document and changes the same message to
+a terminal result.
+
 ### History Import Prompts
 
 When importing channel history, the `prompt` option changes how TomoriBot extracts

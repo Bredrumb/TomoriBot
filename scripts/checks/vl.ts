@@ -446,6 +446,7 @@ const CATEGORIES = {
       r.name.includes("Linting") ||
       r.name.includes("Runtime Imports") ||
       r.name.includes("SQL Audit") ||
+      r.name.includes("Persona Workflow Boundary") ||
       r.name.includes("Media Size") ||
       r.name.includes("Seed Catalog")),
   SECURITY: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Dependency Audit"),
@@ -463,15 +464,16 @@ async function main() {
   config({ quiet: true });
   const dbConfigured = isDbConfigured();
 
-  console.log("Running Validation Checks in parallel...\n");
+  console.log("Running Validation Checks...\n");
 
-  // All checks are independent — run them concurrently and collect results
+  // Run the checks that do not load the complete command graph concurrently.
   const [
     typeCheckResult,
     lintResult,
     runtimeImportsResult,
     auditResult,
     sqlAuditResult,
+    personaWorkflowBoundaryResult,
     mediaSizeResult,
     modelCatalogResult,
     migrationFilesResult,
@@ -480,13 +482,17 @@ async function main() {
     dbLifecycleResult,
     localesResult,
     localeLengthsResult,
-    commandReferenceResult,
   ] = await Promise.all([
     runCheck("Type Check (bun run check)", ["bun", "run", "check"], true),
     runLint(),
     runCheck("Runtime Imports (bun run check-runtime-imports)", ["bun", "run", "check-runtime-imports"], true),
     runAudit(),
     runCheck("SQL Audit (bun run audit-sql)", ["bun", "run", "audit-sql"], true),
+    runCheck(
+      "Persona Workflow Boundary (bun run check-persona-workflow-boundary)",
+      ["bun", "run", "check-persona-workflow-boundary"],
+      true,
+    ),
     runCheck("Media Size (bun run check-media-size)", ["bun", "run", "check-media-size"], true),
     runCheck("Seed Catalog (bun run check-seed-catalogs)", ["bun", "run", "check-seed-catalogs"], true),
     // Filesystem-only (no DB): verifies rollback pairing + numbering uniqueness,
@@ -509,12 +515,15 @@ async function main() {
       ["bun", "run", "check-locale-lengths"],
       true,
     ),
-    runCheck(
-      "Command Reference Freshness (bun run check-command-reference)",
-      ["bun", "run", "check-command-reference"],
-      true,
-    ),
   ]);
+
+  // This check imports the complete command graph. Keep it outside the parallel
+  // block so Windows/Bun does not run multiple command-graph loaders at once.
+  const commandReferenceResult = await runCheck(
+    "Command Reference Freshness (bun run check-command-reference)",
+    ["bun", "run", "check-command-reference"],
+    true,
+  );
 
   const results: ResultItem[] = [
     typeCheckResult,
@@ -522,6 +531,7 @@ async function main() {
     runtimeImportsResult,
     auditResult,
     sqlAuditResult,
+    personaWorkflowBoundaryResult,
     mediaSizeResult,
     modelCatalogResult,
     migrationFilesResult,
@@ -552,6 +562,8 @@ async function main() {
       "Update the parent dependency or run `bun update <package-name>` specifically. Only use a global override when the replacement stays within every dependent package's declared version range.",
     "SQL Audit":
       "Ensure all raw SQL queries are inside the 'src/utils/db/repositories/' folder or exempt them in the script.",
+    "Persona Workflow Boundary":
+      "Migrate callers to src/utils/discord/ui/personaWorkflow.ts. Low-level picker access and legacy preservation/callback boilerplate are internal-only.",
     "Seed Catalog":
       "Run `bun run check-seed-catalogs` to see which invariant broke. Seed catalogs live in `src/db/seed/catalog/` — the same validations run at bot startup, so a failure here would also fail a real boot.",
     "Media Size":

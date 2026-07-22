@@ -27,7 +27,12 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { llmModelRepo, personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
@@ -86,6 +91,45 @@ interface WriteTarget {
   documentId: number;
   dbServerId: number;
   personaId: number | null;
+}
+
+type HistoryImportReplyInteraction = ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+type HistoryImportStatusTarget = HistoryImportReplyInteraction | PersonaWorkflowMessageController;
+
+interface HistoryImportStatusOptions {
+  titleKey?: string;
+  descriptionKey?: string;
+  description?: string;
+  descriptionVars?: Record<string, string | number | boolean>;
+  color: ColorCode;
+}
+
+async function replaceHistoryImportStatus(
+  target: HistoryImportStatusTarget,
+  locale: string,
+  options: HistoryImportStatusOptions,
+): Promise<void> {
+  if ("canonicalMessageId" in target) {
+    await target.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: options.titleKey ?? "general.persona_workflow.loading_title",
+        descriptionKey: options.descriptionKey,
+        description: options.description,
+        descriptionVars: options.descriptionVars,
+        color: options.color,
+      }),
+    );
+    return;
+  }
+
+  const embed = new EmbedBuilder().setColor(options.color);
+  if (options.titleKey) embed.setTitle(localizer(locale, options.titleKey));
+  const description =
+    options.description ??
+    (options.descriptionKey ? localizer(locale, options.descriptionKey, options.descriptionVars) : undefined);
+  if (description) embed.setDescription(description);
+  await target.editReply({ embeds: [embed] });
 }
 
 /**
@@ -200,19 +244,14 @@ async function retrieveInCharacterChunks(params: {
 
 /** Shows the "no facts extracted from this batch" embed with the pagination footer. */
 async function showNoFactsExtractedEmbed(
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  statusTarget: HistoryImportStatusTarget,
   locale: string,
   footer: string,
 ): Promise<void> {
-  await replyInteraction.editReply({
-    embeds: [
-      new EmbedBuilder()
-        .setTitle(localizer(locale, "commands.memory.history.import.no_facts_extracted_title"))
-        .setDescription(
-          `${localizer(locale, "commands.memory.history.import.no_facts_extracted_description")}\n\n${footer}`,
-        )
-        .setColor(ColorCode.WARN),
-    ],
+  await replaceHistoryImportStatus(statusTarget, locale, {
+    titleKey: "commands.memory.history.import.no_facts_extracted_title",
+    description: `${localizer(locale, "commands.memory.history.import.no_facts_extracted_description")}\n\n${footer}`,
+    color: ColorCode.WARN,
   });
 }
 
@@ -399,7 +438,7 @@ async function fetchAndFormatMessages(params: {
   endMessageId: string | null;
   limit: number;
   allPersonas: TomoriState[];
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+  replyInteraction: HistoryImportStatusTarget;
   locale: string;
 }): Promise<{
   formattedResult: ReturnType<typeof formatMessagesForExtraction>;
@@ -409,12 +448,9 @@ async function fetchAndFormatMessages(params: {
 } | null> {
   const { channel, startMessageId, endMessageId, limit, allPersonas, replyInteraction, locale } = params;
 
-  await replyInteraction.editReply({
-    embeds: [
-      new EmbedBuilder()
-        .setDescription(localizer(locale, "commands.memory.history.import.progress_fetching"))
-        .setColor(ColorCode.INFO),
-    ],
+  await replaceHistoryImportStatus(replyInteraction, locale, {
+    descriptionKey: "commands.memory.history.import.progress_fetching",
+    color: ColorCode.INFO,
   });
 
   // When endMessageId is set we override the user limit and reach the full 100 so we can
@@ -422,13 +458,10 @@ async function fetchAndFormatMessages(params: {
   const effectiveLimit = endMessageId ? 100 : limit;
   const fetchResult = await fetchHistoryAfter(channel, startMessageId, effectiveLimit);
   if (fetchResult.messages.length === 0) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.no_messages_title"))
-          .setDescription(localizer(locale, "commands.memory.history.import.no_messages_description"))
-          .setColor(ColorCode.WARN),
-      ],
+    await replaceHistoryImportStatus(replyInteraction, locale, {
+      titleKey: "commands.memory.history.import.no_messages_title",
+      descriptionKey: "commands.memory.history.import.no_messages_description",
+      color: ColorCode.WARN,
     });
     return null;
   }
@@ -439,17 +472,11 @@ async function fetchAndFormatMessages(params: {
   if (endMessageId) {
     const endIdx = messages.findIndex((m) => m.id === endMessageId);
     if (endIdx === -1) {
-      await replyInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.memory.history.import.end_too_far_title"))
-            .setDescription(
-              localizer(locale, "commands.memory.history.import.end_too_far_description", {
-                end_message_id: endMessageId,
-              }),
-            )
-            .setColor(ColorCode.ERROR),
-        ],
+      await replaceHistoryImportStatus(replyInteraction, locale, {
+        titleKey: "commands.memory.history.import.end_too_far_title",
+        descriptionKey: "commands.memory.history.import.end_too_far_description",
+        descriptionVars: { end_message_id: endMessageId },
+        color: ColorCode.ERROR,
       });
       return null;
     }
@@ -476,19 +503,18 @@ async function fetchAndFormatMessages(params: {
  */
 async function reserveDocumentQuotaForImport(
   userId: string,
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  replyInteraction: HistoryImportStatusTarget,
   locale: string,
 ): Promise<boolean> {
   const quotaReserve = reserveDocumentQuota(userId);
   if (quotaReserve.allowed) return true;
 
   const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
-  await replyInfoEmbed(replyInteraction, locale, {
+  await replaceHistoryImportStatus(replyInteraction, locale, {
     titleKey: "rate_limit.error_quota_exceeded_title",
     descriptionKey: "rate_limit.error_quota_exceeded_description",
     descriptionVars: { reset_time: resetTime },
     color: ColorCode.ERROR,
-    flags: MessageFlags.Ephemeral,
   });
   return false;
 }
@@ -504,7 +530,7 @@ async function createDocumentForImport(params: {
   uploaderUserId: number | null;
   channelTags: string[];
   scopeLabel: string;
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+  replyInteraction: HistoryImportStatusTarget;
   locale: string;
 }): Promise<number | null> {
   const { documentName, serverId, personaId, uploaderUserId, channelTags, scopeLabel, replyInteraction, locale } =
@@ -513,52 +539,40 @@ async function createDocumentForImport(params: {
   const memoryLimits = getMemoryLimits();
 
   if (await serverMemoryRepository.documentExistsByName(serverId, personaId, documentName)) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.duplicate_title"))
-          .setDescription(
-            localizer(locale, "commands.memory.history.import.duplicate_description", { name: documentName }),
-          )
-          .setColor(ColorCode.ERROR),
-      ],
+    await replaceHistoryImportStatus(replyInteraction, locale, {
+      titleKey: "commands.memory.history.import.duplicate_title",
+      descriptionKey: "commands.memory.history.import.duplicate_description",
+      descriptionVars: { name: documentName },
+      color: ColorCode.ERROR,
     });
     return null;
   }
 
   const docCount = await serverMemoryRepository.countDocumentsScoped(serverId, personaId);
   if (docCount >= memoryLimits.maxDocumentsPerServer) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.limit_exceeded_title"))
-          .setDescription(
-            localizer(locale, "commands.memory.history.import.limit_exceeded_description", {
-              current_count: docCount.toString(),
-              max_allowed: memoryLimits.maxDocumentsPerServer.toString(),
-              scope: scopeLabel,
-            }),
-          )
-          .setColor(ColorCode.ERROR),
-      ],
+    await replaceHistoryImportStatus(replyInteraction, locale, {
+      titleKey: "commands.memory.history.import.limit_exceeded_title",
+      descriptionKey: "commands.memory.history.import.limit_exceeded_description",
+      descriptionVars: {
+        current_count: docCount.toString(),
+        max_allowed: memoryLimits.maxDocumentsPerServer.toString(),
+        scope: scopeLabel,
+      },
+      color: ColorCode.ERROR,
     });
     return null;
   }
 
   const currentChunkCount = await serverMemoryRepository.countChunksScoped(serverId, personaId);
   if (currentChunkCount >= memoryLimits.maxDocumentChunksPerServer) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.memory.history.import.server_chunk_limit_title"))
-          .setDescription(
-            localizer(locale, "commands.memory.history.import.server_chunk_limit_description", {
-              scope: scopeLabel,
-              max_chunks: memoryLimits.maxDocumentChunksPerServer.toString(),
-            }),
-          )
-          .setColor(ColorCode.ERROR),
-      ],
+    await replaceHistoryImportStatus(replyInteraction, locale, {
+      titleKey: "commands.memory.history.import.server_chunk_limit_title",
+      descriptionKey: "commands.memory.history.import.server_chunk_limit_description",
+      descriptionVars: {
+        scope: scopeLabel,
+        max_chunks: memoryLimits.maxDocumentChunksPerServer.toString(),
+      },
+      color: ColorCode.ERROR,
     });
     return null;
   }
@@ -588,7 +602,7 @@ async function runIncrementalExtraction(params: {
   endpointUrl?: string;
   /** Composes the system prompt for a given window. For static prompts (conversation/roleplay) this returns a constant; for in_character it does per-window RAG. */
   composeSystemPrompt: (windowText: string, windowIndex: number) => Promise<string>;
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
+  replyInteraction: HistoryImportStatusTarget;
   locale: string;
   writeTargets: WriteTarget[];
   embeddingModelId: number;
@@ -628,18 +642,14 @@ async function runIncrementalExtraction(params: {
   }
 
   for (let i = 0; i < windows.length; i++) {
-    await replyInteraction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setDescription(
-            localizer(locale, "commands.memory.history.import.progress_extracting", {
-              message_count: formattedResult.messageCount.toString(),
-              current: (i + 1).toString(),
-              total: windows.length.toString(),
-            }),
-          )
-          .setColor(ColorCode.INFO),
-      ],
+    await replaceHistoryImportStatus(replyInteraction, locale, {
+      descriptionKey: "commands.memory.history.import.progress_extracting",
+      descriptionVars: {
+        message_count: formattedResult.messageCount.toString(),
+        current: (i + 1).toString(),
+        total: windows.length.toString(),
+      },
+      color: ColorCode.INFO,
     });
 
     const composedSystemPrompt = await composeSystemPrompt(windows[i], i);
@@ -702,6 +712,150 @@ async function runIncrementalExtraction(params: {
   return { totalFactCount: allChunks.length, allChunkText: allChunks.join("\n\n") };
 }
 
+interface HistoryImportNotice {
+  titleKey: string;
+  descriptionKey: string;
+  descriptionVars?: Record<string, string>;
+}
+
+interface HistoryImportRuntime {
+  textCreds: ResolvedCredentials;
+  embeddingCreds: ResolvedCredentials;
+  embeddingModel: NonNullable<Awaited<ReturnType<typeof llmModelRepo.loadEmbeddingModelById>>>;
+  embeddingParams: {
+    embeddingModelId: number;
+    embeddingFamily: string;
+    embeddingProvider: string;
+    embeddingCodename: string;
+    embeddingApiKey: string;
+  };
+  provider: string;
+  model: string;
+  endpointUrl: string | undefined;
+}
+
+type HistoryImportRuntimeResult =
+  | { ok: true; runtime: HistoryImportRuntime }
+  | { ok: false; notice: HistoryImportNotice };
+
+async function resolveHistoryImportRuntime(
+  tomoriState: TomoriState,
+  userId: number | null,
+): Promise<HistoryImportRuntimeResult> {
+  let textCreds: ResolvedCredentials;
+  let embeddingCreds: ResolvedCredentials;
+  try {
+    [textCreds, embeddingCreds] = await Promise.all([
+      resolveCapabilityCredentials(tomoriState.server_id, "text", { userId }),
+      resolveCapabilityCredentials(tomoriState.server_id, "embedding", { userId }),
+    ]);
+  } catch (error) {
+    if (error instanceof PersonalProviderRequiredError) {
+      return {
+        ok: false,
+        notice: {
+          titleKey: "general.errors.personal_provider_required_title",
+          descriptionKey: "general.errors.personal_provider_required_description",
+        },
+      };
+    }
+    if (error instanceof CredentialUnavailableError && error.source === "personal") {
+      return {
+        ok: false,
+        notice: {
+          titleKey: "general.errors.api_key_error_title",
+          descriptionKey: "general.errors.personal_provider_credentials_error_description",
+        },
+      };
+    }
+    throw error;
+  }
+
+  const embeddingModelId =
+    getResolvedCapabilityModelId(embeddingCreds, "embedding") ?? tomoriState.config.embedding_model_id;
+  if (!embeddingModelId) {
+    return {
+      ok: false,
+      notice: {
+        titleKey: "commands.memory.history.import.no_embedding_model_title",
+        descriptionKey: "commands.memory.history.import.no_embedding_model_description",
+      },
+    };
+  }
+  const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
+  if (!embeddingModel) {
+    return {
+      ok: false,
+      notice: {
+        titleKey: "commands.memory.history.import.no_embedding_model_title",
+        descriptionKey: "commands.memory.history.import.no_embedding_model_description",
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    runtime: {
+      textCreds,
+      embeddingCreds,
+      embeddingModel,
+      embeddingParams: {
+        embeddingModelId,
+        embeddingFamily: embeddingModel.model_family,
+        embeddingProvider: embeddingModel.provider as string,
+        embeddingCodename: embeddingModel.codename,
+        embeddingApiKey: embeddingCreds.apiKey,
+      },
+      provider: tomoriState.llm.llm_provider.toLowerCase(),
+      model: getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name),
+      endpointUrl: tomoriState.config.custom_endpoint_url ?? undefined,
+    },
+  };
+}
+
+async function validateHistoryMessageRange(
+  channel: NonNullable<ChatInputCommandInteraction["channel"]>,
+  startMessageId: string,
+  endMessageId: string | null,
+): Promise<HistoryImportNotice | null> {
+  try {
+    await channel.messages.fetch(startMessageId);
+  } catch {
+    return {
+      titleKey: "commands.memory.history.import.invalid_start_id_title",
+      descriptionKey: "commands.memory.history.import.invalid_start_id_description",
+      descriptionVars: { start_message_id: startMessageId },
+    };
+  }
+
+  if (!endMessageId) return null;
+  try {
+    await channel.messages.fetch(endMessageId);
+  } catch {
+    return {
+      titleKey: "commands.memory.history.import.invalid_end_id_title",
+      descriptionKey: "commands.memory.history.import.invalid_end_id_description",
+      descriptionVars: { end_message_id: endMessageId },
+    };
+  }
+
+  try {
+    if (BigInt(endMessageId) <= BigInt(startMessageId)) {
+      return {
+        titleKey: "commands.memory.history.import.end_not_after_start_title",
+        descriptionKey: "commands.memory.history.import.end_not_after_start_description",
+      };
+    }
+  } catch {
+    return {
+      titleKey: "commands.memory.history.import.invalid_end_id_title",
+      descriptionKey: "commands.memory.history.import.invalid_end_id_description",
+      descriptionVars: { end_message_id: endMessageId },
+    };
+  }
+  return null;
+}
+
 /**
  * Executes the /memory history import command.
  * Extracts atomic facts from channel history using an LLM and stores them for RAG retrieval.
@@ -721,10 +875,14 @@ export async function execute(
     });
     return;
   }
+  const sourceChannel = interaction.channel;
+  const scopeInput = interaction.options.getString("scope");
+  const scope: HistoryScope = scopeInput === "automatic" ? "automatic" : scopeInput === "global" ? "global" : "persona";
 
   let tomoriState: TomoriState | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
+  let selectedPersonaId: number | undefined;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   try {
     if (!isRagAvailable()) {
@@ -762,6 +920,10 @@ export async function execute(
       return;
     }
 
+    if (scope === "persona") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+
     const guildId = interaction.guild?.id ?? interaction.user.id;
     tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
@@ -796,68 +958,7 @@ export async function execute(
       return;
     }
 
-    let textCreds: ResolvedCredentials;
-    let embeddingCreds: ResolvedCredentials;
-    try {
-      [textCreds, embeddingCreds] = await Promise.all([
-        resolveCapabilityCredentials(tomoriState.server_id, "text", {
-          userId: userData.user_id ?? null,
-        }),
-        resolveCapabilityCredentials(tomoriState.server_id, "embedding", {
-          userId: userData.user_id ?? null,
-        }),
-      ]);
-    } catch (error) {
-      if (error instanceof PersonalProviderRequiredError) {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "general.errors.personal_provider_required_title",
-          descriptionKey: "general.errors.personal_provider_required_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (error instanceof CredentialUnavailableError && error.source === "personal") {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "general.errors.api_key_error_title",
-          descriptionKey: "general.errors.personal_provider_credentials_error_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      throw error;
-    }
-
-    const embeddingModelId =
-      getResolvedCapabilityModelId(embeddingCreds, "embedding") ?? tomoriState.config.embedding_model_id;
-    if (!embeddingModelId) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.memory.history.import.no_embedding_model_title",
-        descriptionKey: "commands.memory.history.import.no_embedding_model_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
-    if (!embeddingModel) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.memory.history.import.no_embedding_model_title",
-        descriptionKey: "commands.memory.history.import.no_embedding_model_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
     const nameInput = interaction.options.getString("name", true).trim();
-    const scopeInput = interaction.options.getString("scope");
-    const scope: HistoryScope =
-      scopeInput === "automatic" ? "automatic" : scopeInput === "global" ? "global" : "persona";
     const startMessageId = interaction.options.getString("start_message_id", true).trim();
     const endMessageId = interaction.options.getString("end_message_id")?.trim() || null;
     const channelsInput = interaction.options.getString("channels");
@@ -882,60 +983,6 @@ export async function execute(
       return;
     }
 
-    // Validate the start message ID exists in this channel before doing any further setup,
-    // so users with a typo get immediate feedback instead of sitting through the persona/modal flow.
-    try {
-      await interaction.channel.messages.fetch(startMessageId);
-    } catch {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.memory.history.import.invalid_start_id_title",
-        descriptionKey: "commands.memory.history.import.invalid_start_id_description",
-        descriptionVars: { start_message_id: startMessageId },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (endMessageId) {
-      try {
-        await interaction.channel.messages.fetch(endMessageId);
-      } catch {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "commands.memory.history.import.invalid_end_id_title",
-          descriptionKey: "commands.memory.history.import.invalid_end_id_description",
-          descriptionVars: { end_message_id: endMessageId },
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      // Snowflake ordering: high bits encode timestamp, so BigInt compare gives strict chronology.
-      let startSnowflake: bigint;
-      let endSnowflake: bigint;
-      try {
-        startSnowflake = BigInt(startMessageId);
-        endSnowflake = BigInt(endMessageId);
-      } catch {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "commands.memory.history.import.invalid_end_id_title",
-          descriptionKey: "commands.memory.history.import.invalid_end_id_description",
-          descriptionVars: { end_message_id: endMessageId },
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      if (endSnowflake <= startSnowflake) {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "commands.memory.history.import.end_not_after_start_title",
-          descriptionKey: "commands.memory.history.import.end_not_after_start_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-    }
     const channelTags: string[] = channelsInput
       ? channelsInput
           .split(",")
@@ -952,20 +999,7 @@ export async function execute(
           .map((c) => `#${c}`)
       : [];
 
-    const provider = tomoriState.llm.llm_provider.toLowerCase();
-    const model = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
-    const endpointUrl = tomoriState.config.custom_endpoint_url ?? undefined;
-
     const allPersonas = await personaRepository.loadAllForServer(guildId);
-
-    // Shared embedding params passed to runIncrementalExtraction
-    const embeddingParams = {
-      embeddingModelId,
-      embeddingFamily: embeddingModel.model_family,
-      embeddingProvider: embeddingModel.provider as string,
-      embeddingCodename: embeddingModel.codename,
-      embeddingApiKey: embeddingCreds.apiKey,
-    };
 
     // ====================================================================
     // SCOPE: PERSONA
@@ -981,175 +1015,212 @@ export async function execute(
         return;
       }
 
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
+      const activeTomoriState = tomoriState;
+      const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
         personas: allPersonas,
         color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
+        async onSelected(selection) {
+          workflowState.message = selection.message;
+          const selectedPersona = selection.persona;
+          const targetPersonaId = selectedPersona.persona_id;
+          selectedPersonaId = targetPersonaId;
+          if (!targetPersonaId) {
+            const work = await selection.beginInPlaceWork();
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+
+          const defaultPrompt =
+            promptMode === "in_character"
+              ? substituteInCharacterFraming(EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT, selectedPersona.persona_nickname)
+              : promptMode === "roleplay"
+                ? EXTRACTION_ROLEPLAY_SYSTEM_PROMPT
+                : EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
+          const promptModalResult = await selection.openModal({
+            modalCustomId: EXTRACTION_PROMPT_MODAL_ID,
+            modalTitleKey: "commands.memory.history.import.prompt_modal_title",
+            components: [
+              {
+                customId: EXTRACTION_PROMPT_FIELD_ID,
+                style: TextInputStyle.Paragraph,
+                labelKey: "commands.memory.history.import.prompt_modal_label",
+                placeholder: "commands.memory.history.import.prompt_modal_placeholder",
+                required: false,
+                maxLength: 4000,
+                value: defaultPrompt,
+              },
+            ],
+          });
+          if (promptModalResult.outcome !== "submitted") {
+            log.info(`History import prompt modal ${promptModalResult.outcome} for user ${interaction.user.id}`);
+            return completePersonaWorkflow();
+          }
+
+          const work = await promptModalResult.phase.beginInPlaceWork();
+          await replaceHistoryImportStatus(work.message, locale, {
+            titleKey: "general.persona_workflow.loading_title",
+            descriptionKey: "general.persona_workflow.loading_description",
+            color: ColorCode.INFO,
+          });
+
+          const runtimeResult = await resolveHistoryImportRuntime(activeTomoriState, userData.user_id ?? null);
+          if (!runtimeResult.ok) {
+            await replaceHistoryImportStatus(work.message, locale, {
+              ...runtimeResult.notice,
+              color: ColorCode.ERROR,
+            });
+            return completePersonaWorkflow();
+          }
+
+          const rangeError = await validateHistoryMessageRange(sourceChannel, startMessageId, endMessageId);
+          if (rangeError) {
+            await replaceHistoryImportStatus(work.message, locale, {
+              ...rangeError,
+              color: ColorCode.ERROR,
+            });
+            return completePersonaWorkflow();
+          }
+
+          const { textCreds, embeddingCreds, embeddingModel, embeddingParams, provider, model, endpointUrl } =
+            runtimeResult.runtime;
+          const personaSystemPrompt =
+            promptModalResult.phase.values[EXTRACTION_PROMPT_FIELD_ID]?.trim() || defaultPrompt;
+          const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
+            persona_name: selectedPersona.persona_nickname,
+          });
+          const fetchResult = await fetchAndFormatMessages({
+            channel: sourceChannel,
+            startMessageId,
+            endMessageId,
+            limit: messageFetchLimit,
+            allPersonas,
+            replyInteraction: work.message,
+            locale,
+          });
+          if (!fetchResult) return completePersonaWorkflow();
+
+          const inCharacterFilterTags =
+            channelTags.length > 0
+              ? channelTags.map((tag) => tag.replace(/^#/, ""))
+              : "name" in sourceChannel && sourceChannel.name
+                ? [sourceChannel.name.toLowerCase()]
+                : [];
+          const personaServerId = activeTomoriState.server_id;
+          const inCharacterExistingMemories =
+            promptMode === "in_character"
+              ? await loadInCharacterMemoryLines(
+                  personaServerId,
+                  selectedPersona.persona_lineage_id ?? null,
+                  inCharacterFilterTags,
+                )
+              : [];
+          const composeSystemPrompt =
+            promptMode === "in_character"
+              ? async (windowText: string): Promise<string> => {
+                  const retrievedChunks = await retrieveInCharacterChunks({
+                    serverId: personaServerId,
+                    personaId: targetPersonaId,
+                    query: windowText,
+                    embeddingModel,
+                    embeddingApiKey: embeddingCreds.apiKey,
+                    filterChannelTags: inCharacterFilterTags,
+                    maxResults: HISTORY_INCHARACTER_RAG_MAX_RESULTS,
+                  });
+                  return composeInCharacterSystemPrompt({
+                    framingTemplate: personaSystemPrompt,
+                    personaNickname: selectedPersona.persona_nickname,
+                    personaPrompt: selectedPersona.persona_prompt ?? null,
+                    attributes: selectedPersona.attribute_list ?? [],
+                    existingMemoryLines: inCharacterExistingMemories,
+                    retrievedChunks,
+                  });
+                }
+              : async (): Promise<string> => personaSystemPrompt;
+          const footer = buildFooter({
+            firstMessage: fetchResult.firstMessage,
+            lastMessage: fetchResult.lastMessage,
+            reachedEnd: fetchResult.reachedEnd,
+            guildId: interaction.guild?.id ?? null,
+            channelId: sourceChannel.id,
+            locale,
+          });
+
+          if (fetchResult.formattedResult.messageCount === 0) {
+            await replaceHistoryImportStatus(work.message, locale, {
+              titleKey: "commands.memory.history.import.no_extractable_content_title",
+              description: `${localizer(locale, "commands.memory.history.import.no_extractable_content_description")}\n\n${footer}`,
+              color: ColorCode.WARN,
+            });
+            return completePersonaWorkflow();
+          }
+          if (!(await reserveDocumentQuotaForImport(interaction.user.id, work.message, locale))) {
+            return completePersonaWorkflow();
+          }
+
+          const documentId = await createDocumentForImport({
+            documentName: nameInput,
+            serverId: activeTomoriState.server_id,
+            personaId: targetPersonaId,
+            uploaderUserId: userData.user_id ?? null,
+            channelTags,
+            scopeLabel,
+            replyInteraction: work.message,
+            locale,
+          });
+          if (documentId === null) return completePersonaWorkflow();
+
+          const extractResult = await runIncrementalExtraction({
+            formattedResult: fetchResult.formattedResult,
+            provider,
+            model,
+            apiKey: textCreds.apiKey,
+            endpointUrl,
+            composeSystemPrompt,
+            replyInteraction: work.message,
+            locale,
+            writeTargets: [{ documentId, dbServerId: activeTomoriState.server_id, personaId: targetPersonaId }],
+            ...embeddingParams,
+          });
+          if (!extractResult) {
+            await serverMemoryRepository.removeDocument(documentId, activeTomoriState.server_id, targetPersonaId);
+            await showNoFactsExtractedEmbed(work.message, locale, footer);
+            return completePersonaWorkflow();
+          }
+
+          await finalizeDocumentContent(documentId, extractResult.allChunkText);
+          invalidateTomoriStateCache(guildId);
+          await replaceHistoryImportStatus(work.message, locale, {
+            titleKey: "commands.memory.history.import.success_title",
+            description: `${localizer(locale, "commands.memory.history.import.success_description", {
+              fact_count: extractResult.totalFactCount.toString(),
+              message_count: fetchResult.formattedResult.messageCount.toString(),
+              name: nameInput,
+              chunk_count: extractResult.totalFactCount.toString(),
+              scope: scopeLabel,
+            })}\n\n${footer}`,
+            color: ColorCode.SUCCESS,
+          });
+          return completePersonaWorkflow();
+        },
       });
 
-      if (!personaSelection.success || personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-        return;
+      if (workflowResult.outcome === "error" && workflowState.message) {
+        await workflowState.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
       }
-
-      personaSelectionInteraction = personaSelection.interaction;
-      const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.persona_id) {
-        await replyInfoEmbed(personaSelectionInteraction, locale, {
-          titleKey: "general.errors.invalid_option_title",
-          descriptionKey: "general.errors.invalid_option_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      const targetPersonaId = selectedPersona.persona_id;
-      const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_persona", {
-        persona_name: selectedPersona.persona_nickname,
-      });
-
-      const promptModalResult = await promptForExtractionSystem(
-        personaSelectionInteraction,
-        locale,
-        promptMode,
-        selectedPersona,
-      );
-      if (!promptModalResult) return;
-      modalSubmitInteraction = promptModalResult.submitInteraction;
-      const personaSystemPrompt = promptModalResult.systemPrompt;
-
-      await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
-
-      const fetchResult = await fetchAndFormatMessages({
-        channel: interaction.channel,
-        startMessageId,
-        endMessageId,
-        limit: messageFetchLimit,
-        allPersonas,
-        replyInteraction: modalSubmitInteraction,
-        locale,
-      });
-      if (!fetchResult) return;
-
-      // For in-character mode, precompute the channel-filtered existing memories once.
-      // The retrieval-and-compose closure handles per-window RAG below.
-      const inCharacterFilterTags =
-        channelTags.length > 0
-          ? channelTags.map((t) => t.replace(/^#/, ""))
-          : interaction.channel && "name" in interaction.channel && interaction.channel.name
-            ? [interaction.channel.name.toLowerCase()]
-            : [];
-
-      // Capture into a const so TypeScript can narrow inside the async closure below.
-      const personaServerId = tomoriState.server_id;
-
-      const inCharacterExistingMemories =
-        promptMode === "in_character"
-          ? await loadInCharacterMemoryLines(
-              personaServerId,
-              selectedPersona.persona_lineage_id ?? null,
-              inCharacterFilterTags,
-            )
-          : [];
-
-      const composeSystemPrompt =
-        promptMode === "in_character"
-          ? async (windowText: string): Promise<string> => {
-              const retrievedChunks = await retrieveInCharacterChunks({
-                serverId: personaServerId,
-                personaId: targetPersonaId,
-                query: windowText,
-                embeddingModel,
-                embeddingApiKey: embeddingCreds.apiKey,
-                filterChannelTags: inCharacterFilterTags,
-                maxResults: HISTORY_INCHARACTER_RAG_MAX_RESULTS,
-              });
-              return composeInCharacterSystemPrompt({
-                framingTemplate: personaSystemPrompt,
-                personaNickname: selectedPersona.persona_nickname,
-                personaPrompt: selectedPersona.persona_prompt ?? null,
-                attributes: selectedPersona.attribute_list ?? [],
-                existingMemoryLines: inCharacterExistingMemories,
-                retrievedChunks,
-              });
-            }
-          : async (): Promise<string> => personaSystemPrompt;
-
-      const footer = buildFooter({
-        firstMessage: fetchResult.firstMessage,
-        lastMessage: fetchResult.lastMessage,
-        reachedEnd: fetchResult.reachedEnd,
-        guildId: interaction.guild?.id ?? null,
-        channelId: interaction.channel.id,
-        locale,
-      });
-
-      if (fetchResult.formattedResult.messageCount === 0) {
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.history.import.no_extractable_content_title"))
-              .setDescription(
-                `${localizer(locale, "commands.memory.history.import.no_extractable_content_description")}\n\n${footer}`,
-              )
-              .setColor(ColorCode.WARN),
-          ],
-        });
-        return;
-      }
-
-      if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
-
-      const documentId = await createDocumentForImport({
-        documentName: nameInput,
-        serverId: tomoriState.server_id,
-        personaId: targetPersonaId,
-        uploaderUserId: userData.user_id ?? null,
-        channelTags,
-        scopeLabel,
-        replyInteraction: modalSubmitInteraction,
-        locale,
-      });
-      if (documentId === null) return;
-
-      const extractResult = await runIncrementalExtraction({
-        formattedResult: fetchResult.formattedResult,
-        provider,
-        model,
-        apiKey: textCreds.apiKey,
-        endpointUrl,
-        composeSystemPrompt,
-        replyInteraction: modalSubmitInteraction,
-        locale,
-        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: targetPersonaId }],
-        ...embeddingParams,
-      });
-
-      if (!extractResult) {
-        await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, targetPersonaId);
-        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
-        return;
-      }
-
-      await finalizeDocumentContent(documentId, extractResult.allChunkText);
-      invalidateTomoriStateCache(guildId);
-
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.memory.history.import.success_title"))
-            .setDescription(
-              `${localizer(locale, "commands.memory.history.import.success_description", {
-                fact_count: extractResult.totalFactCount.toString(),
-                message_count: fetchResult.formattedResult.messageCount.toString(),
-                name: nameInput,
-                chunk_count: extractResult.totalFactCount.toString(),
-                scope: scopeLabel,
-              })}\n\n${footer}`,
-            )
-            .setColor(ColorCode.SUCCESS),
-        ],
-      });
       return;
     }
 
@@ -1165,6 +1236,26 @@ export async function execute(
       const globalSystemPrompt = promptModalResult.systemPrompt;
 
       await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      const runtimeResult = await resolveHistoryImportRuntime(tomoriState, userData.user_id ?? null);
+      if (!runtimeResult.ok) {
+        await replaceHistoryImportStatus(modalSubmitInteraction, locale, {
+          ...runtimeResult.notice,
+          color: ColorCode.ERROR,
+        });
+        return;
+      }
+
+      const rangeError = await validateHistoryMessageRange(sourceChannel, startMessageId, endMessageId);
+      if (rangeError) {
+        await replaceHistoryImportStatus(modalSubmitInteraction, locale, {
+          ...rangeError,
+          color: ColorCode.ERROR,
+        });
+        return;
+      }
+
+      const { textCreds, embeddingParams, provider, model, endpointUrl } = runtimeResult.runtime;
 
       const fetchResult = await fetchAndFormatMessages({
         channel: interaction.channel,
@@ -1266,6 +1357,26 @@ export async function execute(
     const autoSystemPrompt = autoPromptModalResult.systemPrompt;
 
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const runtimeResult = await resolveHistoryImportRuntime(tomoriState, userData.user_id ?? null);
+    if (!runtimeResult.ok) {
+      await replaceHistoryImportStatus(modalSubmitInteraction, locale, {
+        ...runtimeResult.notice,
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+
+    const rangeError = await validateHistoryMessageRange(sourceChannel, startMessageId, endMessageId);
+    if (rangeError) {
+      await replaceHistoryImportStatus(modalSubmitInteraction, locale, {
+        ...rangeError,
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+
+    const { textCreds, embeddingParams, provider, model, endpointUrl } = runtimeResult.runtime;
 
     const fetchResult = await fetchAndFormatMessages({
       channel: interaction.channel,
@@ -1473,7 +1584,7 @@ export async function execute(
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      personaId: tomoriState?.persona_id,
+      personaId: selectedPersonaId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory history import",
@@ -1483,14 +1594,24 @@ export async function execute(
     };
     await log.error("Error in /memory history import command", error, context);
 
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
+
     const errorReplyTarget =
       modalSubmitInteraction && (modalSubmitInteraction.deferred || modalSubmitInteraction.replied)
         ? modalSubmitInteraction
-        : personaSelectionInteraction && (personaSelectionInteraction.deferred || personaSelectionInteraction.replied)
-          ? personaSelectionInteraction
-          : interaction.deferred || interaction.replied
-            ? interaction
-            : null;
+        : interaction.deferred || interaction.replied
+          ? interaction
+          : null;
 
     if (errorReplyTarget) {
       await replyInfoEmbed(errorReplyTarget, locale, {

@@ -150,30 +150,45 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 - DB retention pruning (`PERSONA_SPRITE_MESSAGE_RETENTION_DAYS`, default 30) piggybacks on the
   write path, gated to run at most once per few hours
 
-### 16) Persona picker avatar session cache (transient, in `utils/discord/ui/personaPagination.ts`)
+### 16) Persona workflow avatar session cache (transient, in `utils/discord/ui/personaWorkflow.ts`)
 
-Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an ephemeral
-`Map<number, AvatarCacheEntry>` created per command invocation and discarded when the command finishes.
+Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an
+ephemeral `Map<number, AvatarCacheEntry>` owned by one
+`runPersonaPickerWorkflow(...)` invocation and discarded when that workflow returns.
 
-- **Scope:** one picker session (one slash command invocation)
-- **Key:** absolute persona index within the `personas` array passed to `replyPaginatedPersonaChoicesV2`
-- **Value:** `{ type: "url"; url: string }` for public/fallback URLs, or `{ type: "buffer"; buffer: Buffer }` for local-disk avatars that must be attached to the Discord message
-- **Purpose:** avatar images (especially local-disk reads) are resolved once on the first page visit and reused on all subsequent page turns and loop re-entries. Without this cache, every page navigation and every retry after a failed transaction re-reads the same files from disk.
-- **Usage in commands:** declare `const avatarSessionCache: AvatarSessionCache = new Map()` before the outer `while (true)` loop and pass it as `avatarSessionCache` in `replyPaginatedPersonaChoicesV2` options. The helper uses `options.avatarSessionCache ?? new Map()` so callers that omit it still work correctly.
+- **Scope:** the complete persona workflow started by one slash command, including picker
+  navigation and every explicit retry directive
+- **Key:** absolute persona index within the workflow's current `personas` array
+- **Value:** `{ type: "url"; url: string }` for public/fallback URLs, or
+  `{ type: "buffer"; buffer: Buffer }` for local-disk avatars attached to Discord
+- **Purpose:** resolve each avatar once and reuse it across page navigation, modal
+  cancel/timeout recovery, validation retries, and transaction-loop re-entry
+- **Owner:** the workflow runner creates the cache before its internal retry loop and passes
+  the same instance to the low-level renderer on every iteration
+- **Lifetime:** when the runner returns `selected`, `cancelled`, `timeout`, `error`, or
+  `fatal`, it releases the cache; an internal `retryPersonaWorkflow()` directive retains it
+
+Command code must not import `AvatarSessionCache`, construct the map, or pass
+`avatarSessionCache` manually. It declares retry intent and lets the runner preserve the
+cache:
 
 ```ts
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+await runPersonaPickerWorkflow(interaction, locale, {
+  personas,
+  onSelected: async (selection) => {
+    const modal = await selection.openModal(modalOptions);
+    if (modal.outcome === "fatal") throw modal.error;
+    if (modal.outcome !== "submitted") return retryPersonaWorkflow();
 
-const avatarSessionCache: AvatarSessionCache = new Map();
-while (true) {
-  const result = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-    personas: allPersonas,
-    avatarSessionCache,
-    // ...
-  });
-  // ...
-}
+    // Process the modal and optionally reopen the picker with the same cache.
+    return retryPersonaWorkflow();
+  },
+});
 ```
+
+When `retryPersonaWorkflow(updatedPersonas)` supplies a refreshed array, the runner compares
+persona IDs by absolute index. It retains the avatar cache only when that identity ordering is
+unchanged; a removal, addition, or reorder clears the map before the next picker render.
 
 ## Cache Invalidation Rules (Critical)
 

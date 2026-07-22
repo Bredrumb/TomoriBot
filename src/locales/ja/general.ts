@@ -59,6 +59,13 @@ export default {
       persona_no_attributes: `属性はまだ設定されていません。`,
       persona_select_button: `選択`,
     },
+    persona_workflow: {
+      loading_title: `選択内容を準備しています`,
+      loading_description: `利用可能なオプションを読み込んでいます...`,
+      modal_ready_title: `続行できます`,
+      modal_ready_description: `フォームを開いて、選択内容の設定を続けてください。`,
+      open_modal_button: `フォームを開く`,
+    },
     errors: {
       guild_only_title: `サーバー専用コマンド`,
       guild_only_description: `このコマンドはサーバー内でのみ使用できます。`,

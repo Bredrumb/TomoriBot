@@ -1,26 +1,24 @@
 import {
   MessageFlags,
-  type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
-  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { localizer } from "@/utils/text/localizer";
-import { log, ColorCode } from "@/utils/misc/logger";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  safeSelectOptionText,
-} from "@/utils/discord/ui/modals";
-import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from "@/types/discord/modal";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
+import { ColorCode, log } from "@/utils/misc/logger";
+import { localizer } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const TRIGGER_MODAL_CUSTOM_ID = "persona_triggerremove_trigger_modal";
@@ -30,9 +28,12 @@ const MAX_OPTIONS_PER_GROUP = 10;
 const MAX_GROUPS_PER_MODAL = 5;
 const MAX_ENTRIES_PER_MODAL = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
 
+type PersonaWithId = TomoriState & { persona_id: number };
+
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.persona.trigger.remove.description"));
 
+/** Removes one or more trigger words from a selected persona. */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -48,12 +49,16 @@ export async function execute(
     return;
   }
 
-  let tomoriState: TomoriState | null = null;
-  let responseInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction = interaction;
-  let selectedPersona: TomoriState | null = null;
+  const guildId = interaction.guild.id;
+  const workflowState: {
+    selectedPersona: TomoriState | null;
+    message: PersonaWorkflowMessageController | null;
+  } = { selectedPersona: null, message: null };
 
   try {
-    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const allPersonas = await personaRepository.loadAllForServer(guildId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(
         interaction,
@@ -68,156 +73,163 @@ export async function execute(
       return;
     }
 
-    const avatarSessionCache: AvatarSessionCache = new Map();
-    while (true) {
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        avatarSessionCache,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
-      });
-
-      if (!personaSelection.success) {
-        return;
-      }
-      if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-        return;
-      }
-
-      responseInteraction = personaSelection.interaction;
-      selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      tomoriState = selectedPersona;
-      if (!selectedPersona?.persona_id) {
-        await updateButtonComponentsV2Status(
-          personaSelection.interaction,
-          locale,
-          "general.errors.invalid_option_title",
-          "general.errors.invalid_option_description",
-          ColorCode.ERROR,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
-      const selectedPersonaWithId = selectedPersona as TomoriState & {
-        persona_id: number;
-      };
-
-      const currentTriggerWords = selectedPersonaWithId.trigger_words ?? [];
-      if (currentTriggerWords.length === 0) {
-        await updateButtonComponentsV2Status(
-          personaSelection.interaction,
-          locale,
-          "commands.persona.trigger.remove.no_triggers_title",
-          "commands.persona.trigger.remove.no_triggers_description",
-          ColorCode.WARN,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
-
-      if (currentTriggerWords.length > MAX_ENTRIES_PER_MODAL) {
-        const fallbackHandled = await handlePaginatedTriggerRemovalFallback(
-          responseInteraction,
-          selectedPersonaWithId,
-          currentTriggerWords,
-          userData,
-          locale,
-          interaction.guild.id,
-        );
-        if (!fallbackHandled) {
-          return;
+    await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      onSelected: async (selection) => {
+        workflowState.selectedPersona = selection.persona;
+        workflowState.message = selection.message;
+        if (!selection.persona.persona_id) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
         }
-        continue;
-      }
 
-      const triggerGroupCount = Math.ceil(currentTriggerWords.length / MAX_OPTIONS_PER_GROUP);
-      const checkboxGroups = buildTriggerCheckboxGroups(currentTriggerWords);
-
-      const triggerModalResult = await promptWithRawModal(responseInteraction, locale, {
-        modalCustomId: TRIGGER_MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.persona.trigger.remove.modal_title",
-        components: checkboxGroups,
-      });
-
-      if (triggerModalResult.outcome !== "submit") {
-        log.info(`Trigger delete modal ${triggerModalResult.outcome} for user ${userData.user_id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      const triggerModalInteraction = triggerModalResult.interaction;
-      if (!triggerModalInteraction) {
-        log.error("Trigger delete modal unexpectedly missing interaction");
-        return;
-      }
-      await acknowledgeModalSubmitForRefresh(triggerModalInteraction);
-      responseInteraction = triggerModalInteraction;
-
-      const checkedIndices = new Set<number>();
-      for (let groupIndex = 0; groupIndex < triggerGroupCount; groupIndex++) {
-        const groupValues = triggerModalResult.multiValues?.[`${TRIGGER_CHECKBOX_ID_PREFIX}_${groupIndex}`] ?? [];
-        for (const index of groupValues) {
-          checkedIndices.add(Number.parseInt(index, 10));
+        const selectedPersona = selection.persona as PersonaWithId;
+        const currentTriggerWords = selectedPersona.trigger_words ?? [];
+        if (currentTriggerWords.length === 0) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.persona.trigger.remove.no_triggers_title",
+              descriptionKey: "commands.persona.trigger.remove.no_triggers_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
         }
-      }
 
-      const removedIndices = currentTriggerWords.flatMap((_, index) => (checkedIndices.has(index) ? [] : [index]));
-      if (removedIndices.length === 0) {
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "commands.persona.trigger.remove.no_removals_title",
-          "commands.persona.trigger.remove.no_removals_description",
-          ColorCode.INFO,
-          undefined,
-          "general.pagination.reloading_persona_picker",
+        const paginatedFallback = currentTriggerWords.length > MAX_ENTRIES_PER_MODAL;
+        const modalResult = paginatedFallback
+          ? await selection.openModal({
+              modalCustomId: TRIGGER_MODAL_CUSTOM_ID,
+              modalTitleKey: "commands.persona.trigger.remove.modal_title",
+              components: [
+                {
+                  customId: TRIGGER_SELECT_ID,
+                  labelKey: "commands.persona.trigger.remove.select_label",
+                  descriptionKey: "commands.persona.trigger.remove.select_description",
+                  placeholder: "commands.persona.trigger.remove.select_placeholder",
+                  required: true,
+                  options: currentTriggerWords.map(
+                    (trigger, index): SelectOption => ({
+                      label: safeSelectOptionText(formatTriggerWordForDisplay(trigger), 50),
+                      value: index.toString(),
+                    }),
+                  ),
+                },
+              ],
+            })
+          : await selection.openModal({
+              modalCustomId: TRIGGER_MODAL_CUSTOM_ID,
+              modalTitleKey: "commands.persona.trigger.remove.modal_title",
+              components: buildTriggerCheckboxGroups(currentTriggerWords),
+            });
+
+        if (modalResult.outcome !== "submitted") {
+          log.info(`Trigger delete modal ${modalResult.outcome} for user ${userData.user_id}`);
+          return modalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+        }
+
+        const work = await modalResult.phase.beginInPlaceWork();
+        let removedIndices: number[];
+        if (paginatedFallback) {
+          const selectedIndex = Number.parseInt(modalResult.phase.values[TRIGGER_SELECT_ID] ?? "", 10);
+          removedIndices = Number.isInteger(selectedIndex) ? [selectedIndex] : [];
+        } else {
+          const checkedIndices = new Set<number>();
+          const triggerGroupCount = Math.ceil(currentTriggerWords.length / MAX_OPTIONS_PER_GROUP);
+          for (let groupIndex = 0; groupIndex < triggerGroupCount; groupIndex++) {
+            const groupValues = modalResult.phase.multiValues[`${TRIGGER_CHECKBOX_ID_PREFIX}_${groupIndex}`] ?? [];
+            for (const index of groupValues) checkedIndices.add(Number.parseInt(index, 10));
+          }
+          removedIndices = currentTriggerWords.flatMap((_, index) => (checkedIndices.has(index) ? [] : [index]));
+        }
+
+        const removedIndexSet = new Set(removedIndices);
+        const removedTriggerWords = currentTriggerWords.filter((_, index) => removedIndexSet.has(index));
+        const remainingTriggerWords = currentTriggerWords.filter((_, index) => !removedIndexSet.has(index));
+        if (removedTriggerWords.length === 0) {
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.persona.trigger.remove.no_removals_title",
+              descriptionKey: "commands.persona.trigger.remove.no_removals_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.INFO,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+
+        const success = await personaRepository.removeTrigger(selectedPersona.persona_id, remainingTriggerWords);
+        if (!success) {
+          const context: ErrorContext = {
+            personaId: selectedPersona.persona_id,
+            serverId: selectedPersona.server_id,
+            userId: userData.user_id,
+            errorType: "DatabaseUpdateError",
+            metadata: {
+              command: "persona trigger remove",
+              guildId,
+              removedIndices,
+              removedTriggerWords,
+            },
+          };
+          await log.error(
+            "Failed to update trigger_words in persona_configs table via repository",
+            new Error("Database update returned false"),
+            context,
+          );
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.update_failed_title",
+              descriptionKey: "general.errors.update_failed_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
+
+        invalidateTomoriStateCache(guildId);
+        log.success(
+          `Removed ${removedTriggerWords.length} trigger word(s) for tomori ${selectedPersona.persona_id} by user ${userData.user_disc_id}: ${removedTriggerWords.join(", ")}`,
         );
-        continue;
-      }
-
-      const removalSucceeded = await performTriggerWordRemoval(
-        selectedPersonaWithId,
-        currentTriggerWords,
-        removedIndices,
-        userData,
-        triggerModalInteraction,
-        locale,
-        interaction.guild.id,
-        true,
-      );
-      if (!removalSucceeded) {
-        return;
-      }
-      await replyComponentsV2Status(
-        interaction,
-        locale,
-        "commands.persona.trigger.remove.success_title",
-        "commands.persona.trigger.remove.success_description",
-        ColorCode.SUCCESS,
-        {
-          triggerWords: formatTriggerList(currentTriggerWords.filter((_, index) => removedIndices.includes(index))),
-        },
-        "general.pagination.reloading_persona_picker",
-      );
-    }
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.persona.trigger.remove.success_title",
+            descriptionKey: "commands.persona.trigger.remove.success_description",
+            descriptionVars: { triggerWords: formatTriggerList(removedTriggerWords) },
+            footerKey: "general.pagination.reloading_persona_picker",
+            color: ColorCode.SUCCESS,
+          }),
+        );
+        const refreshedPersonas = await personaRepository.loadAllForServer(guildId);
+        return retryPersonaWorkflow(refreshedPersonas);
+      },
+    });
   } catch (error) {
+    const selectedPersona = workflowState.selectedPersona;
     const context: ErrorContext = {
       userId: userData.user_id,
-      serverId: selectedPersona?.server_id ?? tomoriState?.server_id,
-      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      serverId: selectedPersona?.server_id,
+      personaId: selectedPersona?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona trigger remove",
-        guildId: interaction.guild?.id,
+        guildId,
         executorDiscordId: interaction.user.id,
       },
     };
@@ -226,186 +238,28 @@ export async function execute(
       error as Error,
       context,
     );
-
-    if (responseInteraction.deferred || responseInteraction.replied) {
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-      });
-    } else {
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
     }
-  }
-}
-
-async function handlePaginatedTriggerRemovalFallback(
-  responseInteraction: ChatInputCommandInteraction | ButtonInteraction,
-  selectedPersona: TomoriState & { persona_id: number },
-  currentTriggerWords: string[],
-  userData: UserRow,
-  locale: string,
-  guildId: string,
-): Promise<boolean> {
-  const triggerOptions: SelectOption[] = currentTriggerWords.map((trigger, index) => ({
-    label: safeSelectOptionText(formatTriggerWordForDisplay(trigger), 50),
-    value: index.toString(),
-  }));
-
-  const triggerModalResult = await promptWithPaginatedModal(responseInteraction, locale, {
-    modalCustomId: TRIGGER_MODAL_CUSTOM_ID,
-    modalTitleKey: "commands.persona.trigger.remove.modal_title",
-    components: [
-      {
-        customId: TRIGGER_SELECT_ID,
-        labelKey: "commands.persona.trigger.remove.select_label",
-        descriptionKey: "commands.persona.trigger.remove.select_description",
-        placeholder: "commands.persona.trigger.remove.select_placeholder",
-        required: true,
-        options: triggerOptions,
-      },
-    ],
-  });
-
-  if (triggerModalResult.outcome !== "submit") {
-    log.info(`Trigger delete fallback modal ${triggerModalResult.outcome} for user ${userData.user_id}`);
-    await replyComponentsV2Status(
-      responseInteraction,
-      locale,
-      "general.pagination.select_persona_title",
-      "general.pagination.reloading_persona_picker",
-      ColorCode.INFO,
-    );
-    return true;
-  }
-
-  const triggerModalInteraction = triggerModalResult.interaction;
-  const selectedTriggerIndex = triggerModalResult.values?.[TRIGGER_SELECT_ID];
-  if (!triggerModalInteraction || !selectedTriggerIndex) {
-    log.error("Trigger fallback modal result unexpectedly missing interaction or values");
-    return false;
-  }
-
-  const parsedSelectedTriggerIndex = Number.parseInt(selectedTriggerIndex, 10);
-  const selectedTriggerWord = currentTriggerWords[parsedSelectedTriggerIndex];
-  if (!selectedTriggerWord) {
-    await replyInfoEmbed(triggerModalInteraction, locale, {
-      titleKey: "general.errors.invalid_option_title",
-      descriptionKey: "general.errors.invalid_option_description",
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,
-    });
-    return false;
-  }
-
-  const removalSucceeded = await performTriggerWordRemoval(
-    selectedPersona,
-    currentTriggerWords,
-    [parsedSelectedTriggerIndex],
-    userData,
-    triggerModalInteraction,
-    locale,
-    guildId,
-    true,
-  );
-  if (!removalSucceeded) {
-    return false;
-  }
-  await acknowledgeModalSubmitForRefresh(triggerModalInteraction);
-  await replyComponentsV2Status(
-    responseInteraction,
-    locale,
-    "commands.persona.trigger.remove.success_title",
-    "commands.persona.trigger.remove.success_description",
-    ColorCode.SUCCESS,
-    {
-      triggerWords: formatTriggerList([selectedTriggerWord]),
-    },
-    "general.pagination.reloading_persona_picker",
-  );
-
-  return true;
-}
-
-async function performTriggerWordRemoval(
-  selectedPersona: TomoriState & { persona_id: number },
-  currentTriggerWords: string[],
-  removedIndices: number[],
-  userData: UserRow,
-  replyInteraction: ModalSubmitInteraction,
-  locale: string,
-  guildId: string,
-  suppressSuccessReply = false,
-): Promise<boolean> {
-  const removedIndexSet = new Set(removedIndices);
-  const remainingTriggerWords = currentTriggerWords.filter((_, index) => !removedIndexSet.has(index));
-  const removedTriggerWords = currentTriggerWords.filter((_, index) => removedIndexSet.has(index));
-
-  if (removedTriggerWords.length === 0) {
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "commands.persona.trigger.remove.no_removals_title",
-      descriptionKey: "commands.persona.trigger.remove.no_removals_description",
-      color: ColorCode.INFO,
-    });
-    return false;
-  }
-
-  const success = await personaRepository.removeTrigger(selectedPersona.persona_id, remainingTriggerWords);
-
-  if (!success) {
-    const context: ErrorContext = {
-      personaId: selectedPersona.persona_id,
-      serverId: selectedPersona.server_id,
-      userId: userData.user_id,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "persona trigger remove",
-        guildId,
-        removedIndices,
-        removedTriggerWords,
-      },
-    };
-    await log.error(
-      "Failed to update trigger_words in persona_configs table via repository",
-      new Error("Database update returned false"),
-      context,
-    );
-
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return false;
-  }
-
-  invalidateTomoriStateCache(guildId);
-
-  log.success(
-    `Removed ${removedTriggerWords.length} trigger word(s) for tomori ${selectedPersona.persona_id} by user ${userData.user_disc_id}: ${removedTriggerWords.join(", ")}`,
-  );
-
-  if (!suppressSuccessReply) {
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "commands.persona.trigger.remove.success_title",
-      descriptionKey: "commands.persona.trigger.remove.success_description",
-      descriptionVars: {
-        triggerWords: formatTriggerList(removedTriggerWords),
-      },
-      color: ColorCode.SUCCESS,
+      flags: MessageFlags.Ephemeral,
     });
   }
-
-  return true;
 }
 
 function buildTriggerCheckboxGroups(currentTriggerWords: string[]): ModalCheckboxGroupField[] {
   const checkboxGroups: ModalCheckboxGroupField[] = [];
-
   for (let i = 0; i < currentTriggerWords.length; i += MAX_OPTIONS_PER_GROUP) {
     const chunk = currentTriggerWords.slice(i, i + MAX_OPTIONS_PER_GROUP);
     const groupIndex = Math.floor(i / MAX_OPTIONS_PER_GROUP);
@@ -414,7 +268,6 @@ function buildTriggerCheckboxGroups(currentTriggerWords: string[]): ModalCheckbo
       value: (i + offset).toString(),
       default: true,
     }));
-
     checkboxGroups.push({
       kind: "checkboxGroup",
       customId: `${TRIGGER_CHECKBOX_ID_PREFIX}_${groupIndex}`,
@@ -428,14 +281,12 @@ function buildTriggerCheckboxGroups(currentTriggerWords: string[]): ModalCheckbo
       options,
     });
   }
-
   return checkboxGroups;
 }
 
 function formatTriggerList(triggerWords: string[]): string {
-  const maxVisible = 10;
-  const visibleWords = triggerWords.slice(0, maxVisible);
-  const suffix = triggerWords.length > maxVisible ? ", ..." : "";
+  const visibleWords = triggerWords.slice(0, 10);
+  const suffix = triggerWords.length > 10 ? ", ..." : "";
   return `${visibleWords.map((triggerWord) => `\`${formatTriggerWordForDisplay(triggerWord)}\``).join(", ")}${suffix}`;
 }
 

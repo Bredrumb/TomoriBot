@@ -9,14 +9,15 @@ import { MessageFlags } from "discord.js";
 import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithPaginatedModal,
-  safeSelectOptionText,
-} from "@/utils/discord/ui/modals";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
 import { personaRepository, personalMemoryRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { SelectOption } from "@/types/discord/modal";
@@ -135,15 +136,19 @@ export async function execute(
   // Define state and result variables outside try for catch block context
   let tomoriState: TomoriState | null = null;
   let selectedPersona: TomoriState | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
   let personalizationDisabledWarning = false; // Flag to check if warning needed
+  const memoryScope =
+    (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
+    PERSONAL_SCOPE_VALUE;
 
   try {
+    if (memoryScope === PERSONAL_SCOPE_VALUE) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+
     // 2. Load server's Tomori state to check personalization setting (Rule 17)
     tomoriState = await personaRepository.loadState(interaction.guild?.id ?? interaction.user.id);
-    const memoryScope =
-      (interaction.options.getString("scope") as typeof PERSONAL_SCOPE_VALUE | typeof GLOBAL_SCOPE_VALUE | null) ??
-      PERSONAL_SCOPE_VALUE;
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title", // Corrected key
@@ -160,11 +165,9 @@ export async function execute(
       personalizationDisabledWarning = true;
     }
 
-    // 4. Resolve scope + target lineage
-    let targetLineageId = GLOBAL_PERSONAL_MEMORY_LINEAGE_ID;
-    let selectionInteraction: ChatInputCommandInteraction | ButtonInteraction = interaction;
+    const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     if (memoryScope === PERSONAL_SCOPE_VALUE) {
-      const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
+      const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -175,170 +178,141 @@ export async function execute(
         return;
       }
 
-      const avatarSessionCache: AvatarSessionCache = new Map();
-      while (true) {
-        const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-          personas: allPersonas,
-          avatarSessionCache,
-          color: ColorCode.INFO,
-          preserveSelectedInteraction: true,
-          onSelect: async () => {},
-        });
+      const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
+        personas: allPersonas,
+        color: ColorCode.INFO,
+        async onSelected(selection) {
+          workflowState.message = selection.message;
+          selectedPersona = selection.persona;
+          const targetLineageId = selectedPersona.persona_lineage_id ?? GLOBAL_PERSONAL_MEMORY_LINEAGE_ID;
+          if (targetLineageId === GLOBAL_PERSONAL_MEMORY_LINEAGE_ID) {
+            const work = await selection.beginInPlaceWork();
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.operation_failed_title",
+                descriptionKey: "general.errors.operation_failed_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
 
-        if (!personaSelection.success) {
-          return;
-        }
-        if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-          return;
-        }
-
-        personaSelectionInteraction = personaSelection.interaction;
-        selectionInteraction = personaSelectionInteraction;
-        selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona) {
-          await updateButtonComponentsV2Status(
-            personaSelectionInteraction,
-            locale,
-            "general.errors.invalid_option_title",
-            "general.errors.invalid_option_description",
-            ColorCode.ERROR,
-            undefined,
-            "general.pagination.reloading_persona_picker",
-          );
-          continue;
-        }
-
-        targetLineageId = selectedPersona.persona_lineage_id ?? 0;
-        if (targetLineageId === GLOBAL_PERSONAL_MEMORY_LINEAGE_ID) {
-          await updateButtonComponentsV2Status(
-            personaSelectionInteraction,
-            locale,
-            "general.errors.operation_failed_title",
-            "general.errors.operation_failed_description",
-            ColorCode.ERROR,
-            undefined,
-            "general.pagination.reloading_persona_picker",
-          );
-          continue;
-        }
-
-        // 5. Get current personal memories from lineage-scoped table
-        // (Inside PERSONAL_SCOPE_VALUE block, so always persona-scoped)
-        const fetchedMemories = userData.user_id
-          ? await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)
-          : [];
-        const currentMemories = fetchedMemories.filter((memory) => memory.persona_lineage_id === targetLineageId);
-
-        // 6. Check if there are any memories to remove
-        if (currentMemories.length === 0) {
-          await updateButtonComponentsV2Status(
-            personaSelectionInteraction,
-            locale,
-            "commands.forget.memory.personal.no_memories_title",
-            "commands.forget.memory.personal.no_memories",
-            ColorCode.WARN,
-            undefined,
-            "general.pagination.reloading_persona_picker",
-          );
-          continue;
-        }
-
-        // 7. Create memory select options for the modal
-        const memorySelectOptions: SelectOption[] = currentMemories.map((memory, index) => ({
-          label: safeSelectOptionText(memory.content, 20),
-          value: index.toString(), // Use index to avoid truncation issues
-          description: safeSelectOptionText(memory.content),
-        }));
-
-        // 8. Show the paginated modal with memory selection
-        const modalResult = await promptWithPaginatedModal(selectionInteraction, locale, {
-          modalCustomId: MODAL_CUSTOM_ID,
-          modalTitleKey: "commands.forget.memory.personal.modal_title",
-          components: [
-            {
-              customId: MEMORY_SELECT_ID,
-              labelKey: "commands.forget.memory.personal.select_label",
-              descriptionKey: "commands.forget.memory.personal.select_description",
-              placeholder: "commands.forget.memory.personal.select_placeholder",
-              required: true,
-              options: memorySelectOptions,
-            },
-          ],
-        });
-
-        // 9. Handle modal outcome - keep the persona picker loop alive when the modal closes
-        if (modalResult.outcome !== "submit") {
-          log.info(`Personal memory deletion modal ${modalResult.outcome} for user ${userData.user_id}`);
-          await replyComponentsV2Status(
-            interaction,
-            locale,
-            "general.pagination.select_persona_title",
-            "general.pagination.reloading_persona_picker",
-            ColorCode.INFO,
-          );
-          continue;
-        }
-
-        // 10. Extract values from the modal
-        const modalSubmitInteraction = modalResult.interaction;
-        const selectedIndex = modalResult.values?.[MEMORY_SELECT_ID];
-
-        // Safety checks (should never be null after submit outcome)
-        if (!modalSubmitInteraction || !selectedIndex) {
-          log.error("Modal result unexpectedly missing interaction or values");
-          return;
-        }
-
-        // Get the full memory row from the original array
-        const selectedMemory = currentMemories[Number.parseInt(selectedIndex, 10)];
-        if (!selectedMemory) {
-          await replyInfoEmbed(modalSubmitInteraction, locale, {
-            titleKey: "general.errors.operation_failed_title",
-            descriptionKey: "commands.forget.memory.personal.no_memories",
-            color: ColorCode.ERROR,
+          let currentMemories: Awaited<ReturnType<typeof personalMemoryRepository.loadForUserLineage>> = [];
+          let hasNoMemories = false;
+          const modalResult = await selection.openModal(async () => {
+            const fetchedMemories = userData.user_id
+              ? await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)
+              : [];
+            currentMemories = fetchedMemories.filter((memory) => memory.persona_lineage_id === targetLineageId);
+            if (currentMemories.length === 0) {
+              hasNoMemories = true;
+              throw new Error("The selected persona has no personal memories.");
+            }
+            const memorySelectOptions: SelectOption[] = currentMemories.map((memory, index) => ({
+              label: safeSelectOptionText(memory.content, 20),
+              value: index.toString(),
+              description: safeSelectOptionText(memory.content),
+            }));
+            return {
+              modalCustomId: MODAL_CUSTOM_ID,
+              modalTitleKey: "commands.forget.memory.personal.modal_title",
+              components: [
+                {
+                  customId: MEMORY_SELECT_ID,
+                  labelKey: "commands.forget.memory.personal.select_label",
+                  descriptionKey: "commands.forget.memory.personal.select_description",
+                  placeholder: "commands.forget.memory.personal.select_placeholder",
+                  required: true,
+                  options: memorySelectOptions,
+                },
+              ],
+            };
           });
-          return;
-        }
 
-        // 11. Perform the database update using the helper function
-        const removalSucceeded = await performPersonalMemoryRemoval(
-          selectedMemory,
-          userData,
-          modalSubmitInteraction,
-          locale,
-          true,
-        );
-        if (!removalSucceeded) {
-          return;
-        }
-        await acknowledgeModalSubmitForRefresh(modalSubmitInteraction);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "commands.forget.memory.personal.success_title",
-          "commands.forget.memory.personal.success_description",
-          ColorCode.SUCCESS,
-          {
-            memory:
-              selectedMemory.content.length > 50 ? `${selectedMemory.content.slice(0, 50)}...` : selectedMemory.content,
-          },
-          "general.pagination.reloading_persona_picker",
-        );
-
-        // 12. If personalization is disabled, send a warning follow-up
-        if (personalizationDisabledWarning) {
-          await modalSubmitInteraction.followUp({
-            embeds: [
-              createStandardEmbed(locale, {
-                titleKey: "commands.forget.memory.personal.warning_disabled_title",
-                descriptionKey: "commands.forget.memory.personal.warning_disabled_description",
+          if (hasNoMemories) {
+            await selection.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.forget.memory.personal.no_memories_title",
+                descriptionKey: "commands.forget.memory.personal.no_memories",
+                footerKey: "general.pagination.reloading_persona_picker",
                 color: ColorCode.WARN,
               }),
-            ],
-            flags: MessageFlags.Ephemeral,
-          });
-        }
+            );
+            return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
+          }
+          if (modalResult.outcome !== "submitted") {
+            log.info(`Personal memory deletion modal ${modalResult.outcome} for user ${userData.user_id}`);
+            return modalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+          }
+
+          const work = await modalResult.phase.beginInPlaceWork();
+          const selectedIndex = Number.parseInt(modalResult.phase.values[MEMORY_SELECT_ID] ?? "", 10);
+          const selectedMemory = currentMemories[selectedIndex];
+          if (!selectedMemory?.personal_memory_id) {
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.operation_failed_title",
+                descriptionKey: "commands.forget.memory.personal.no_memories",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
+
+          const ok = await personalMemoryRepository.remove(selectedMemory.personal_memory_id);
+          if (!ok) {
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.update_failed_title",
+                descriptionKey: "general.errors.update_failed_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
+
+          invalidateUserCache(userData.user_disc_id);
+          log.success(
+            `Deleted personal memory "${selectedMemory.content.slice(0, 30)}..." for user ${userData.user_disc_id} (ID: ${userData.user_id})`,
+          );
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.forget.memory.personal.success_title",
+              descriptionKey: "commands.forget.memory.personal.success_description",
+              descriptionVars: {
+                memory:
+                  selectedMemory.content.length > 50
+                    ? `${selectedMemory.content.slice(0, 50)}...`
+                    : selectedMemory.content,
+              },
+              footerKey: personalizationDisabledWarning
+                ? "commands.forget.memory.personal.warning_disabled_description"
+                : "general.pagination.reloading_persona_picker",
+              color: ColorCode.SUCCESS,
+            }),
+          );
+          return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
+        },
+      });
+      if (workflowResult.outcome === "error" && workflowState.message) {
+        await workflowState.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
       }
+      return;
     } else {
       // 4b. GLOBAL scope: load lineage-0 memories directly (no persona picker needed)
       const globalMemories = userData.user_id
@@ -440,12 +414,18 @@ export async function execute(
       context,
     );
 
-    // 17. Inform user of unknown error, prioritizing unacknowledged button interaction
-    const errorReplyTarget =
-      personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction;
-    await replyInfoEmbed(errorReplyTarget, locale, {
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,
