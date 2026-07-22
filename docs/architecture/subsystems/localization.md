@@ -88,6 +88,10 @@ Callers compose the bullet list by passing an ordered `tipKeys` array to `create
 atomic: a conditional hint (e.g. an OpenRouter-only tip) is added by including its key in one branch,
 not by duplicating a whole paragraph string. Descriptions render markdown and hyperlinks.
 
+`genai.tips.support_server` is the one reserved key: `createTipEmbed()` appends it as the closing
+bullet of every rendered tip embed so the Official Support Server link is always offered. Do not put
+it in a caller's `tipKeys` array.
+
 When adding a tip:
 
 1. Add the atomic key under `genai.tips` in both `src/locales/en-US/providers.ts` and

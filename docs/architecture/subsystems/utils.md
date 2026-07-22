@@ -68,6 +68,11 @@ embed shown alongside an error/info embed (e.g. by `stream/errorUi.ts` and `ui/i
   item) instead of maintaining whole-paragraph tip strings per branch. Items that resolve to empty
   text are dropped, and the function returns `null` when nothing resolves, so the caller can skip
   attaching a tip embed entirely.
+- **The Official Support Server link is automatic**: `genai.tips.support_server` (exported as
+  `SUPPORT_SERVER_TIP_KEY`) is appended as the last bullet of every rendered tip embed. Callers must
+  not list it in `tipKeys` — it is filtered out if they do, so it can never be duplicated or
+  reordered. It is appended *after* the empty check, so a tip embed with no caller-supplied items
+  still returns `null` rather than degrading into a support-link-only embed.
 - Colored `ColorCode.SUCCESS` (green) to read as "helpful" and stay visibly distinct from the
   red/yellow error embed above it; the description is truncated to Discord's embed-description limit.
 

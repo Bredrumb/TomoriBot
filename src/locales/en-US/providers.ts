@@ -80,7 +80,8 @@ export default {
       choose_supported_model: `Choose a supported model ID with \`/model text\`, \`/personal provider model-text\`, or your custom endpoint settings.`,
       verify_api_key: `Double-check your API key, then try again.`,
       switch_model_provider: `Switch to a different model or provider with \`/model\`.`,
-      report_support: `If this keeps happening, report it through \`/support discord\`.`,
+      // Auto-appended to every non-empty tip embed by createTipEmbed(); never list it in a caller's tipKeys.
+      support_server: `Visit the [Official Support Server](https://discord.gg/bjCfHm9QsB) for assistance.`,
       shorten_message: `Try shortening your message, then send it again.`,
       refresh_context: `Clear the conversation context with \`/tool refresh\`.`,
       provider_overloaded_wait: `The provider is under heavy load right now. Try again shortly or switch providers.`,

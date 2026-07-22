@@ -89,7 +89,7 @@ export class StreamErrorUi {
         descriptionKey: "genai.generic_error_description",
         descriptionVars: { error_message: error.message },
         color: ColorCode.ERROR,
-        tipKeys: ["genai.tips.refresh_context", "genai.tips.report_support"],
+        tipKeys: ["genai.tips.refresh_context"],
       },
     ).catch((e) => log.warn("Stream: Failed to send generic error embed to channel", e));
   }
@@ -173,7 +173,6 @@ export class StreamErrorUi {
             "genai.tips.verify_api_key",
             "genai.tips.switch_model_provider",
             ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),
-            "genai.tips.report_support",
           ],
           color: providerError.retryable ? ColorCode.WARN : ColorCode.ERROR,
         };

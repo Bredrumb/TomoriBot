@@ -80,7 +80,8 @@ export default {
       choose_supported_model: `\`/model text\`、\`/personal provider model-text\`、またはカスタムエンドポイント設定で対応モデルIDを選んでください。`,
       verify_api_key: `APIキーを再確認してから、もう一度お試しください。`,
       switch_model_provider: `\`/model\` で別のモデルまたはプロバイダーに切り替えてください。`,
-      report_support: `問題が解決しない場合は、\`/support discord\` で報告してください。`,
+      // createTipEmbed() が空でないヒント埋め込みすべてに自動追加します。呼び出し側の tipKeys には含めないでください。
+      support_server: `[公式サポートサーバー](https://discord.gg/bjCfHm9QsB)でサポートを受けられます。`,
       shorten_message: `メッセージを短くしてから、もう一度送信してください。`,
       refresh_context: `\`/tool refresh\` で会話コンテキストをクリアしてください。`,
       provider_overloaded_wait: `プロバイダーが現在高負荷状態です。しばらくしてから再試行するか、別のプロバイダーに切り替えてください。`,

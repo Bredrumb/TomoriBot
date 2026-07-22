@@ -33,6 +33,12 @@ const MAX_FIELD_VALUE_LENGTH = 1024;
 export const MAX_EMBED_DESCRIPTION_LENGTH = 4096;
 
 /**
+ * Tip-item locale key for the Official Support Server link, appended to every rendered tip embed
+ * by {@link createTipEmbed}. Exported so tests and callers can reference it without re-typing it.
+ */
+export const SUPPORT_SERVER_TIP_KEY = "genai.tips.support_server";
+
+/**
  * Truncates text so it fits within Discord's embed description limit, optionally reserving
  * space for other content that shares the same description (e.g. a headline above the detail).
  * @param value - The text to fit into the description.
@@ -132,6 +138,11 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
  * hyperlinks render — which is why tips moved out of footers. Conditional tips are handled by the
  * caller simply including/excluding a key (e.g. an OpenRouter-only item), so no duplicate paragraph
  * strings are needed in the locales.
+ *
+ * The Official Support Server link (`genai.tips.support_server`) is appended automatically as the
+ * last bullet of every rendered tip embed, so callers never list it themselves. It is appended only
+ * after at least one caller-supplied tip resolves, which preserves the null return that lets callers
+ * skip the tip embed entirely rather than showing a support-link-only embed.
  * @param locale - The locale to localize each tip item with.
  * @param tipKeys - Atomic tip-item locale keys, in display order.
  * @param tipVars - Optional interpolation vars applied to every tip item.
@@ -143,15 +154,24 @@ export function createTipEmbed(
   tipVars: Record<string, string | number | boolean> = {},
 ): EmbedBuilder | null {
   // 1. Localize every tip item and drop any that resolve to empty text (e.g. an unset optional key).
-  const items = tipKeys.map((key) => localizer(locale, key, tipVars).trim()).filter((text) => text.length > 0);
+  const items = tipKeys
+    .filter((key) => key !== SUPPORT_SERVER_TIP_KEY)
+    .map((key) => localizer(locale, key, tipVars).trim())
+    .filter((text) => text.length > 0);
   if (items.length === 0) {
     return null;
   }
 
-  // 2. Render as a dashed bullet list, truncated to stay within Discord's embed description limit.
+  // 2. Always close with the Official Support Server link so every tip embed offers a way to get help.
+  const supportItem = localizer(locale, SUPPORT_SERVER_TIP_KEY, tipVars).trim();
+  if (supportItem.length > 0) {
+    items.push(supportItem);
+  }
+
+  // 3. Render as a dashed bullet list, truncated to stay within Discord's embed description limit.
   const description = truncateForEmbedDescription(items.map((item) => `- ${item}`).join("\n"));
 
-  // 3. Green (SUCCESS) reads as "helpful", visibly distinct from the red/yellow error embed above it.
+  // 4. Green (SUCCESS) reads as "helpful", visibly distinct from the red/yellow error embed above it.
   return new EmbedBuilder()
     .setColor(ColorCode.SUCCESS)
     .setTitle(localizer(locale, "genai.tips.title"))
