@@ -4,8 +4,6 @@ import { join } from "node:path";
 import { spawn } from "bun";
 import { config } from "dotenv";
 
-config({ quiet: true });
-
 /** Shape of every item pushed into the results array */
 type ResultItem = {
   name: string;
@@ -171,10 +169,10 @@ function sortTestItems(items: ResultItem[]): ResultItem[] {
  * counts and collect direct child describe names as optional display-name hints.
  * Returns `null` when the XML has no usable suites so the caller can fall back.
  */
-function parseJUnitSuites(xml: string): ResultItem[] | null {
+export function parseJUnitSuites(xml: string): ResultItem[] | null {
   const fileSuites = new Map<string, Omit<JUnitSuite, "topLevelDescribeNames">>();
   const topLevelDescribeNames = new Map<string, string[]>();
-  const stack: Array<{ name: string; file: string }> = [];
+  const stack: Array<{ name: string; file: string; isFileSuite: boolean }> = [];
   const attr = (tag: string, key: string): string => decodeXmlAttr(tag.match(new RegExp(`${key}="([^"]*)"`))?.[1] ?? "");
   const countAttr = (tag: string, key: string): number => Number.parseInt(attr(tag, key) || "0", 10);
 
@@ -188,7 +186,13 @@ function parseJUnitSuites(xml: string): ResultItem[] | null {
     const file = normalizeTestPath(attr(tag, "file"));
     const parent = stack.at(-1);
 
-    if (file && name === file) {
+    // Bun emits `name` and `file` using the host platform's separator, so a file-level
+    // suite is only recognisable once BOTH sides are normalized (on Windows the raw
+    // values are backslash-delimited). `name` itself is stored verbatim because it
+    // doubles as a describe-block label, which is arbitrary user text.
+    const isFileSuite = Boolean(file) && normalizeTestPath(name) === file;
+
+    if (isFileSuite) {
       fileSuites.set(file, {
         name,
         file,
@@ -196,14 +200,14 @@ function parseJUnitSuites(xml: string): ResultItem[] | null {
         failures: countAttr(tag, "failures"),
         skipped: countAttr(tag, "skipped"),
       });
-    } else if (file && name && parent?.file === file && parent.name === file) {
+    } else if (file && name && parent?.file === file && parent.isFileSuite) {
       const names = topLevelDescribeNames.get(file) ?? [];
       names.push(name);
       topLevelDescribeNames.set(file, names);
     }
 
     if (!tag.endsWith("/>")) {
-      stack.push({ name, file });
+      stack.push({ name, file, isFileSuite });
     }
   }
 
@@ -303,7 +307,23 @@ async function runTests(): Promise<ResultItem[]> {
   }
 
   // 2. Fall back to console parsing if JUnit was unavailable.
-  return items ?? parseConsoleOutput(output, exitCode);
+  const resolved = items ?? parseConsoleOutput(output, exitCode);
+
+  // 3. The runner can exit non-zero without any individual file reporting a failure
+  //    (segfault, OOM, harness error, a batch dying before it emits results). Those
+  //    runs must never read as green just because the parsed items all look clean.
+  if (exitCode !== 0 && resolved.every((item) => item.exitCode === 0)) {
+    resolved.push({
+      name: "Test Runner (bun run test)",
+      exitCode: 1,
+      fatal: true,
+      summary: `(runner exited ${exitCode} with no failing file reported)`,
+      hint: "Run `bun run test` directly — a file likely crashed before reporting results.",
+      _category: "unit-test",
+    });
+  }
+
+  return resolved;
 }
 
 async function runLint(): Promise<ResultItem> {
@@ -341,20 +361,48 @@ async function runLint(): Promise<ResultItem> {
 async function runAudit(): Promise<ResultItem> {
   console.log(`> Running Dependency Audit (bun audit)...`);
 
-  // --filter . scopes audit to the root bot package only, excluding workspace
-  // packages (e.g. apps/docs Astro build deps) from blocking the pipeline.
+  // bun audit has no working workspace filter — it always audits the whole
+  // lockfile, including apps/docs devDeps. Advisories reaching the gate via
+  // workspace:tomoribot-docs are build-time-only, but still block audit:clean.
   // We use cmd.exe on Windows for bun audit to prevent pipe hangs, just in case.
-  let command = ["bun", "audit", "--filter", "."];
+  let command = ["bun", "audit"];
   if (process.platform === "win32") {
-    command = ["cmd.exe", "/d", "/s", "/c", "bun audit --filter ."];
+    command = ["cmd.exe", "/d", "/s", "/c", "bun audit"];
   }
 
+  // This is the only check that depends on a remote server, so it is the only one
+  // that can stall indefinitely. Without a bound, an unreachable or slow registry
+  // turns the whole ~15s gate into an open-ended wait.
+  const timeoutMs = Number.parseInt(process.env.TOMORI_VL_AUDIT_TIMEOUT_MS || "60000", 10);
+
   const proc = spawn(command, { stdout: "pipe", stderr: "pipe" });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    // On Windows this kills the cmd.exe wrapper; a lingering child exits on its
+    // own. Either way vl stops waiting, which is the point.
+    proc.kill();
+  }, timeoutMs);
+
   const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   const exitCode = await proc.exited;
+  clearTimeout(timer);
 
   const output = stdout + stderr;
   console.log(output);
+
+  // A timed-out audit proves nothing either way, so report it as a warning rather
+  // than a pass or a failure — the advisory state is simply unknown this run.
+  if (timedOut) {
+    return {
+      name: "Dependency Audit (bun audit)",
+      exitCode: 1,
+      fatal: false,
+      isWarning: true,
+      summary: `(timed out after ${timeoutMs}ms — registry unreachable?)`,
+      hint: "The advisory registry did not respond. Re-run when back online, or raise TOMORI_VL_AUDIT_TIMEOUT_MS.",
+    };
+  }
 
   let hasHighOrCritical = false;
   if (/(\d+)\s+critical/i.test(output) && !output.match(/0\s+critical/i)) hasHighOrCritical = true;
@@ -369,25 +417,52 @@ async function runAudit(): Promise<ResultItem> {
   };
 }
 
-const dbConfigured = !!(process.env.POSTGRES_PASSWORD || process.env.DATABASE_URL || process.env.POSTGRES_URL);
+/**
+ * Whether a local database is reachable, so the DB-dependent checks can run.
+ * Read lazily inside main() rather than at module scope: `parseJUnitSuites` is
+ * imported by its unit test, and loading `.env` as an import side effect would
+ * leak real credentials into every other test sharing that process.
+ */
+function isDbConfigured(): boolean {
+  return !!(process.env.POSTGRES_PASSWORD || process.env.DATABASE_URL || process.env.POSTGRES_URL);
+}
+
+/**
+ * True for the fixed set of named checks, false for per-test-file items.
+ *
+ * Sections are rendered by independent filters, so an item matching two
+ * predicates would print (and be counted) twice. Test files are named after their
+ * top-level `describe`, which is arbitrary prose that can easily contain a word a
+ * named-check predicate looks for — "Database Only Lifecycle Secrets" matches
+ * `includes("Lifecycle")`, for example. Test items are therefore routed solely by
+ * `_category`, and every named-check predicate is gated on this guard.
+ */
+const isNamedCheck = (r: ResultItem): boolean => r._category === undefined;
 
 const CATEGORIES = {
   CODE: (r: ResultItem) =>
-    r.name.includes("Type Check") ||
-    r.name.includes("Linting") ||
-    r.name.includes("Runtime Imports") ||
-    r.name.includes("SQL Audit") ||
-    r.name.includes("Media Size"),
-  SECURITY: (r: ResultItem) => r.name.includes("Dependency Audit"),
+    isNamedCheck(r) &&
+    (r.name.includes("Type Check") ||
+      r.name.includes("Linting") ||
+      r.name.includes("Runtime Imports") ||
+      r.name.includes("SQL Audit") ||
+      r.name.includes("Media Size") ||
+      r.name.includes("Seed Catalog")),
+  SECURITY: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Dependency Audit"),
   UNIT_TESTS: (r: ResultItem) => r._category === "unit-test",
   REGRESSION_TESTS: (r: ResultItem) => r._category === "regression-test",
   DB: (r: ResultItem) =>
-    r.name.includes("Schema Drift") || r.name.includes("Lifecycle") || r.name.includes("Migration Files"),
-  LOCALES: (r: ResultItem) => r.name.includes("Localization"),
-  DOCS: (r: ResultItem) => r.name.includes("Command Reference"),
+    isNamedCheck(r) &&
+    (r.name.includes("Schema Drift") || r.name.includes("Lifecycle") || r.name.includes("Migration Files")),
+  LOCALES: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Localization"),
+  DOCS: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Command Reference"),
 };
 
 async function main() {
+  // Load .env here rather than at module scope so importing this file is side-effect free.
+  config({ quiet: true });
+  const dbConfigured = isDbConfigured();
+
   console.log("Running Validation Checks in parallel...\n");
 
   // All checks are independent — run them concurrently and collect results
@@ -477,6 +552,8 @@ async function main() {
       "Update the parent dependency or run `bun update <package-name>` specifically. Only use a global override when the replacement stays within every dependent package's declared version range.",
     "SQL Audit":
       "Ensure all raw SQL queries are inside the 'src/utils/db/repositories/' folder or exempt them in the script.",
+    "Seed Catalog":
+      "Run `bun run check-seed-catalogs` to see which invariant broke. Seed catalogs live in `src/db/seed/catalog/` — the same validations run at bot startup, so a failure here would also fail a real boot.",
     "Media Size":
       "Run `bun run compress-media` to fix this automatically (lossless re-encode, downscaling oversized art to fit). Default Persona avatars/sprites ship to Discord, so keep them under 1 MB. Override the budget with MEDIA_SIZE_LIMIT_BYTES if truly needed.",
     "Schema Drift Check": "Ensure `schema.sql` and your Zod types in `src/types/db/schema.ts` are in sync. See the check output for the specific mismatch (column missing from schema.sql, export coverage gap, or INSERT column count mismatch).",
@@ -551,6 +628,17 @@ async function main() {
 
   printSection("\nDocs", results.filter((r) => CATEGORIES.DOCS(r)));
 
+  // Safety net: a check whose name matches no predicate still gates the exit code
+  // but would otherwise never be printed, leaving a ❌ run with nothing to explain
+  // it. Surfacing strays here means adding a check can never make it invisible.
+  const categorized = new Set(
+    Object.values(CATEGORIES).flatMap((matches) => results.filter((r) => matches(r))),
+  );
+  const uncategorized = results.filter((r) => !categorized.has(r));
+  if (uncategorized.length > 0) {
+    printSection("\nOther Checks (uncategorized — add these to CATEGORIES in vl.ts)", uncategorized);
+  }
+
   console.log("\n====================================");
   if (allFatalPassed) {
     console.log("\n✅ All required checks passed.\n");
@@ -561,7 +649,11 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Guarded so `parseJUnitSuites` can be imported by its unit test without
+// running the entire validation suite as a side effect of the import.
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

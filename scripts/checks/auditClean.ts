@@ -2,6 +2,10 @@
  * Runs `bun audit --audit-level=high` and exits non-zero only if high or
  * critical vulnerabilities are found. Low and moderate advisories are reported
  * but do not block the pipeline.
+ *
+ * bun audit has no working workspace filter — it always audits the whole
+ * lockfile, including apps/docs devDeps. Advisories reaching the gate via
+ * workspace:tomoribot-docs are build-time-only, but still block audit:clean.
  */
 
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
@@ -13,7 +17,7 @@ async function runBunAudit(): Promise<{ output: string; exitCode: number }> {
     if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
 
     const outputPath = join(tempDir, `bun-audit-${process.pid}.txt`);
-    const command = `${process.execPath} audit --audit-level=high --filter . > ${outputPath} 2>&1`;
+    const command = `${process.execPath} audit --audit-level=high > ${outputPath} 2>&1`;
     const proc = Bun.spawn(["cmd.exe", "/d", "/s", "/c", command], {
       stdin: "ignore",
       stdout: "inherit",
@@ -26,7 +30,7 @@ async function runBunAudit(): Promise<{ output: string; exitCode: number }> {
     return { output, exitCode };
   }
 
-  const proc = Bun.spawn([process.execPath, "audit", "--audit-level=high", "--filter", "."], { stderr: "pipe", stdout: "pipe" });
+  const proc = Bun.spawn([process.execPath, "audit", "--audit-level=high"], { stderr: "pipe", stdout: "pipe" });
   const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   const exitCode = await proc.exited;
   return { output: stdout + stderr, exitCode };

@@ -59,10 +59,11 @@ jobs:
       - name: Run linting and type checks
         run: bun run lint && bun run check
 
-      - name: Audit dependencies (bot only)
-        # --filter . scopes to the root bot package; excludes workspace packages
-        # such as apps/docs Astro build deps which have no runtime attack surface.
-        run: bun audit --audit-level=high --filter .
+      - name: Audit dependencies
+        # bun audit has no working workspace filter — it always audits the whole
+        # lockfile, including apps/docs devDeps. Advisories reaching this gate via
+        # workspace:tomoribot-docs are build-time-only, but still block the job.
+        run: bun audit --audit-level=high
 
       - name: Audit inline SQL outside repositories
         run: bun run scripts/checks/audit_sql.ts
