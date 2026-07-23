@@ -73,6 +73,10 @@ payload. It handles:
   `@everyone` / `@here` pings while allowing user and role mentions.
 - **State tracking** — on a successful send: `state.messageSentCount++`, `state.accumulatedText`
   is appended, and `state.firstReplyUrl` is set on the first message sent (used in thought-log embeds).
+  The message's `{ messageId, channelId, isWebhook }` is also appended to
+  `context.deliveredMessageRefs` when that shared sink is present, so a later fallback attempt can
+  delete this attempt's partial output if it is superseded (see
+  [06.3 Generation Turn](../chat/06-per-turn/03-run-generation-turn) → superseded-message cleanup).
   For render-modifier payloads, `state.accumulatedText` is prefixed with the model-facing
   source-first label (`SourcePersona (modifier): `) — which may differ from the visible webhook
   username (clean name for sprites, flipped name for copied identities) — so result capture,

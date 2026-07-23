@@ -312,6 +312,16 @@ export class StreamUiUpdater {
     if (textForState) {
       state.accumulatedText += textForState;
     }
+    // Record the committed message so a later fallback attempt can delete this attempt's partial
+    // output if it turns out to be superseded (see runGenerationTurn). The array is a shared
+    // reference off StreamingContext, so appends survive an abandoned (timed-out) stream promise.
+    if (context.deliveredMessageRefs && sentMessage) {
+      context.deliveredMessageRefs.push({
+        messageId: sentMessage.id,
+        channelId: sentMessage.channelId,
+        isWebhook: Boolean(sentMessage.webhookId),
+      });
+    }
     this.deps.notifyStreamProgress(context);
     const logPreview = textForState
       ? textForState.length > 100

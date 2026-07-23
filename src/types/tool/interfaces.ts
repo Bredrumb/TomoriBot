@@ -69,6 +69,20 @@ export interface ToolParameterSchema extends ToolObjectParameterSchema {
 }
 
 /**
+ * A single Discord message the streaming layer has already committed to the channel.
+ * Collected into {@link StreamingContext.deliveredMessageRefs} so the fallback orchestrator
+ * can delete the partial output of a superseded (timed-out / errored) generation attempt.
+ */
+export interface DeliveredStreamMessage {
+  /** Discord snowflake ID of the delivered message. */
+  messageId: string;
+  /** Channel (or thread) ID the message was delivered to. */
+  channelId: string;
+  /** True when delivered through a persona/alter webhook (deleted via `webhook.deleteMessage`). */
+  isWebhook: boolean;
+}
+
+/**
  * Streaming context for enhanced functionality during streaming
  */
 export interface StreamingContext {
@@ -118,6 +132,16 @@ export interface StreamingContext {
 
   // Opaque message ID map — threaded from tomoriChat through to StreamContext and ToolContext
   messageIdMap?: MessageIdMap;
+
+  /**
+   * Shared, mutable sink of messages the streaming layer has committed to Discord this turn.
+   * The orchestrator pushes one entry per successful send (see uiUpdater's `recordSuccessfulSend`);
+   * because it is a reference threaded through {@link buildStreamContext} onto the per-attempt
+   * StreamContext, entries survive even when a timed-out `streamToDiscord` promise is abandoned by
+   * the SDK-call-timeout race. `runGenerationTurn` reads it to delete the partial output of a
+   * superseded generation attempt so only the surviving (fallback) response remains visible.
+   */
+  deliveredMessageRefs?: DeliveredStreamMessage[];
 }
 
 /**

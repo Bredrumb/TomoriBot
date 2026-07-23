@@ -2,7 +2,7 @@ import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ProviderError } from "@/types/stream/interfaces";
-import type { ToolContext } from "@/types/tool/interfaces";
+import type { DeliveredStreamMessage, ToolContext } from "@/types/tool/interfaces";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
 import { getNovelAITokenLimits } from "@/utils/cache/novelaiCapabilityCache";
@@ -11,6 +11,7 @@ import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/ut
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
@@ -60,6 +61,11 @@ export async function runGenerationTurn(
     const failures: FallbackNoticeAttempt[] = [];
     const baseContextItems = context.contextItems;
 
+    // Sink the streaming layer appends every committed message to. Initialized here (once per turn)
+    // so a superseded attempt's partial output can be deleted when a later attempt supersedes it.
+    context.streamingContext.deliveredMessageRefs ??= [];
+    const deliveredMessageRefs = context.streamingContext.deliveredMessageRefs;
+
     for (const [index, attempt] of attempts.entries()) {
       const hasPendingModelFallback = index < attempts.length - 1;
       context.tomoriState = attempt.tomoriState;
@@ -77,6 +83,9 @@ export async function runGenerationTurn(
       let result!: GenerationTurnResult;
       let keyAttemptCount = 0;
       context.streamingContext.rotationKeyRetriesUsed = false;
+      // Index into deliveredMessageRefs marking where the current runToolLoop invocation's
+      // committed messages begin, so a superseded invocation's partials can be sliced out.
+      let invocationStart = deliveredMessageRefs.length;
 
       while (true) {
         keyAttemptCount++;
@@ -90,6 +99,7 @@ export async function runGenerationTurn(
         setStreamUserErrorSuppression(context, hasFallbackKey || hasPendingModelFallback);
         context.streamingContext.forceModelFallback = hasPendingModelFallback;
 
+        invocationStart = deliveredMessageRefs.length;
         result = await runToolLoop({
           context,
           provider: attempt.provider,
@@ -117,6 +127,9 @@ export async function runGenerationTurn(
         const nextKey = await selectApiKey(attempt.tomoriState, [...Array.from(excludedKeyIds)]);
         if (!nextKey) break;
 
+        // A key-rotation retry supersedes this invocation: delete its partial output before the
+        // retry so the eventual response is not stacked on top of a truncated first attempt.
+        await purgeSupersededDeliveries(context, deliveredMessageRefs, invocationStart);
         attempt.providerConfig.apiKey = nextKey.apiKey;
         rotationKeyId = nextKey.rotationKeyId;
         log.warn(
@@ -139,6 +152,10 @@ export async function runGenerationTurn(
         await responseSink.finalize(result);
         return result;
       }
+
+      // A model fallback supersedes this attempt: delete the partial output it committed (e.g. text
+      // flushed before an SDK-call timeout) so only the fallback model's response remains visible.
+      await purgeSupersededDeliveries(context, deliveredMessageRefs, invocationStart);
 
       failures.push({
         modelCodename: attempt.tomoriState.llm.llm_codename,
@@ -171,6 +188,35 @@ export async function runGenerationTurn(
 
 function setStreamUserErrorSuppression(context: ChatTurnContext, temporarySuppressed: boolean): void {
   context.streamingContext.suppressUserErrors = temporarySuppressed || !context.shouldSurfaceUserErrors;
+}
+
+/**
+ * Deletes and forgets the messages a superseded generation invocation committed to Discord.
+ *
+ * Slices off every delivered-message ref from `fromIndex` onward (this invocation's output plus any
+ * stragglers an abandoned timeout stream flushed after it), removing them from the shared sink so
+ * later attempts start clean, then best-effort deletes them from the channel. Called at each point
+ * `runGenerationTurn` decides not to keep an invocation's result (key-rotation retry, model
+ * fallback), so only the surviving attempt's messages remain visible.
+ *
+ * @param context - Active chat turn context (supplies the channel and persona webhook).
+ * @param deliveredMessageRefs - The shared delivered-message sink for this turn.
+ * @param fromIndex - First index belonging to the superseded invocation.
+ */
+async function purgeSupersededDeliveries(
+  context: ChatTurnContext,
+  deliveredMessageRefs: DeliveredStreamMessage[],
+  fromIndex: number,
+): Promise<void> {
+  if (deliveredMessageRefs.length <= fromIndex) {
+    return;
+  }
+  const superseded = deliveredMessageRefs.splice(fromIndex);
+  log.info(`Deleting ${superseded.length} superseded partial message(s) from a failed generation attempt.`);
+  await deleteSupersededStreamMessages(superseded, {
+    channel: context.channel,
+    webhook: context.responseTarget?.webhook,
+  });
 }
 
 async function buildGenerationAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
