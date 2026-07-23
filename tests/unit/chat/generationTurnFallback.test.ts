@@ -16,6 +16,10 @@ import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 import * as realRepositories from "@/utils/db/repositories";
 
 const queuedResults: GenerationTurnResult[] = [];
+// Parallel to queuedResults: the delivered-message refs each runToolLoop call should push into the
+// shared sink before returning its queued result, simulating messages the stream committed to
+// Discord during that attempt. Undefined entries push nothing.
+const queuedDeliveries: Array<Array<{ messageId: string; channelId: string; isWebhook: boolean }> | undefined> = [];
 const toolLoopCalls: Array<{ model: string; suppressUserErrors: boolean | undefined }> = [];
 const fallbackNoticeCalls: Array<{ failures: FallbackNoticeAttempt[]; successModel: LlmRow }> = [];
 const testStopRequests = new Map<string, { type: "stop" | "follow_up"; stopContext?: TestStopContext }>();
@@ -225,6 +229,15 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
       model: params.tomoriState.llm.llm_codename,
       suppressUserErrors: params.context.streamingContext.suppressUserErrors,
     });
+    // Simulate this attempt committing messages to the channel before it resolves, so the
+    // supersede-cleanup path in runGenerationTurn has refs to act on.
+    const deliveries = queuedDeliveries.shift();
+    if (deliveries) {
+      if (!params.context.streamingContext.deliveredMessageRefs) {
+        params.context.streamingContext.deliveredMessageRefs = [];
+      }
+      params.context.streamingContext.deliveredMessageRefs.push(...deliveries);
+    }
     const next = queuedResults.shift();
     if (!next) {
       throw new Error("No queued generation result for test");
@@ -481,6 +494,7 @@ function makeContext(primaryModel: LlmRow, fallbackModel: LlmRow): ChatTurnConte
 describe("runGenerationTurn fallback behavior", () => {
   beforeEach(async () => {
     queuedResults.length = 0;
+    queuedDeliveries.length = 0;
     toolLoopCalls.length = 0;
     fallbackNoticeCalls.length = 0;
 
@@ -543,6 +557,68 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls[0]?.successModel.llm_codename).toBe("fallback-model");
     expect(context.streamingContext.suppressUserErrors).toBe(false);
     expect(context.streamingContext.forceModelFallback).toBe(false);
+  });
+
+  it("deletes the timed-out primary's partial message when a fallback succeeds", async () => {
+    const primaryModel = makeLlm(1, "primary-model");
+    const fallbackModel = makeLlm(2, "fallback-model");
+    const context = makeContext(primaryModel, fallbackModel);
+
+    // Attach a persona webhook so webhook-delivered partials are removed via the webhook path.
+    const deletedWebhookMessageIds: string[] = [];
+    (context as unknown as { responseTarget?: unknown }).responseTarget = {
+      webhook: {
+        deleteMessage: async (messageId: string) => {
+          deletedWebhookMessageIds.push(messageId);
+        },
+      },
+    };
+
+    const finalizedResults: GenerationTurnResult[] = [];
+    const sink: ChatResponseSink = {
+      emitStreamResult: async () => undefined,
+      emitError: async () => undefined,
+      finalize: async (result) => {
+        finalizedResults.push(result);
+      },
+    };
+
+    const fallbackSuccess: GenerationTurnResult = {
+      status: "completed",
+      streamResults: [{ status: "completed", accumulatedText: "ok" }],
+      personaResponses: [
+        {
+          personaName: "Tomori",
+          text: "ok",
+          personaId: 10,
+          personaLineageId: 100,
+        },
+      ],
+    };
+    // Primary times out after flushing one partial webhook message; the fallback completes with its
+    // own message. Only the fallback's message should remain in the channel (and the sink).
+    queuedResults.push(
+      {
+        status: "timeout",
+        streamResults: [
+          { status: "timeout", data: new Error("SDK_CALL_TIMEOUT: provider streamToDiscord call timed out.") },
+        ],
+        personaResponses: [],
+      },
+      fallbackSuccess,
+    );
+    queuedDeliveries.push(
+      [{ messageId: "partial_1", channelId: "channel_1", isWebhook: true }],
+      [{ messageId: "fallback_1", channelId: "channel_1", isWebhook: true }],
+    );
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(result).toBe(fallbackSuccess);
+    expect(finalizedResults).toEqual([fallbackSuccess]);
+    expect(deletedWebhookMessageIds).toEqual(["partial_1"]);
+    expect(context.streamingContext.deliveredMessageRefs?.map((ref) => ref.messageId)).toEqual(["fallback_1"]);
   });
 
   it("does not post fallback notice when fallback is interrupted by a follow-up", async () => {

@@ -2186,7 +2186,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     ) {
       return {
         type: "api_error",
-        message: `OpenRouter Privacy Policy Error: The selected model requires allowing data for paid model training, but your account privacy settings block this.\n\nTo fix this:\n1. Go to https://openrouter.ai/settings/privacy\n2. Adjust your "Data Policy" settings to allow this model\n3. Or choose a different model that matches your privacy preferences\n\nOriginal error: ${finalMessage}`,
+        message: `OpenRouter Privacy Policy Error: The selected model requires allowing data for paid model training, but your account privacy settings block this.\n\nOriginal error: ${finalMessage}`,
         code: finalCode,
         retryable: false,
         originalError: error,

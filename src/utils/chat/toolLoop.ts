@@ -29,6 +29,12 @@ const SOFT_WARN_ITERATION_THRESHOLD = 20;
 const MAX_CONSECUTIVE_TOOL_ERRORS = parseIntegerEnvFlag(process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS, 5, 1);
 const NAI_TOOL_FAILURE_RETRY_THRESHOLD = parseIntegerEnvFlag(process.env.NAI_TOOL_FAILURE_RETRY_THRESHOLD, 3, 1);
 const STREAM_SDK_CALL_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120000, 10000);
+// After the SDK-call watchdog aborts a stalled stream, how long to wait for the abandoned
+// `streamToDiscord` promise to actually settle before returning. `Promise.race` does not cancel the
+// loser and `abort()` only tears down the HTTP request, so a Discord send it already dispatched can
+// still be in flight; waiting for it guarantees that send is recorded in `deliveredMessageRefs`
+// before the fallback path's superseded-message cleanup runs, so it cannot leak past cleanup.
+const STREAM_ABANDONED_SETTLE_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_ABANDONED_SETTLE_TIMEOUT_MS, 5000, 0);
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
 const TOOL_FAILURE_NOTICE_LIMIT = 1800;
@@ -247,26 +253,31 @@ async function streamOnce(
   const isSceneTurn = Boolean(params.context.turn.lockedTurn.admission.incoming.sceneTurn);
   const replyToMessage = params.context.isFromQueue && !isSceneTurn ? params.context.message : undefined;
 
+  // Keep a handle to the provider call so the timeout branch can await it settling. Under
+  // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
+  // by race's internal handlers, so holding this reference does not create an unhandled rejection.
+  const streamPromise = params.provider.streamToDiscord(
+    params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
+    params.context.client,
+    params.tomoriState,
+    params.providerConfig,
+    params.context.contextItems,
+    accumulatedModelParts,
+    params.context.emojiStrings,
+    functionHistory.length > 0 ? functionHistory : undefined,
+    undefined,
+    replyToMessage,
+    params.context.streamingContext,
+    params.context.locale,
+    params.context.responseTarget?.webhook,
+    params.context.responseTarget?.personaAvatarUrl,
+    params.context.responseTarget?.personaUsername,
+    params.context.responseTarget?.prefixStrippingName,
+  );
+
   try {
     return await Promise.race([
-      params.provider.streamToDiscord(
-        params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
-        params.context.client,
-        params.tomoriState,
-        params.providerConfig,
-        params.context.contextItems,
-        accumulatedModelParts,
-        params.context.emojiStrings,
-        functionHistory.length > 0 ? functionHistory : undefined,
-        undefined,
-        replyToMessage,
-        params.context.streamingContext,
-        params.context.locale,
-        params.context.responseTarget?.webhook,
-        params.context.responseTarget?.personaAvatarUrl,
-        params.context.responseTarget?.personaUsername,
-        params.context.responseTarget?.prefixStrippingName,
-      ),
+      streamPromise,
       new Promise<never>((_, reject) => {
         // Register the kill callback with the lock entry so external callers can trigger it.
         killStream = (reason: Error) => {
@@ -278,9 +289,19 @@ async function streamOnce(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
+      // A pending stop request (e.g. /bot kill) makes this a terminal stop — no fallback runs, so
+      // no superseded-message cleanup will consume in-flight sends. Return immediately; settling
+      // here would just make the kill wait out the abandoned stream for no benefit.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
         return { status: "stopped_by_user" };
       }
+
+      // Genuine timeout → the fallback path may run. The stream was aborted, not cancelled: wait
+      // (bounded) for it to actually settle so any Discord send it had already dispatched is recorded
+      // in `deliveredMessageRefs` BEFORE the fallback path's superseded-message cleanup runs. Without
+      // this, a late straggler would land after cleanup and be misattributed to the surviving
+      // fallback attempt — leaving the exact orphaned partial message this feature exists to remove.
+      await settleAbandonedStream(streamPromise);
 
       if (!params.context.streamingContext.suppressUserErrors) {
         await sendStandardEmbed(
@@ -305,6 +326,36 @@ async function streamOnce(
     if (timeoutId) clearTimeout(timeoutId);
     params.context.streamingContext.onStreamProgress = undefined;
     setChannelStreamKill(channelId, null);
+  }
+}
+
+/**
+ * Waits for an aborted-but-abandoned `streamToDiscord` promise to settle, bounded by
+ * {@link STREAM_ABANDONED_SETTLE_TIMEOUT_MS} so a genuinely hung send cannot block the fallback path
+ * indefinitely. After `abortController.abort()` the provider generator throws promptly, so in the
+ * common (stalled-provider) case this resolves almost immediately; the wait only matters when a
+ * Discord send was mid-flight when the watchdog fired, and it exists solely so that send is recorded
+ * before the caller proceeds. The promise's outcome is intentionally ignored.
+ * @param streamPromise - The abandoned provider call to let settle.
+ */
+async function settleAbandonedStream(streamPromise: Promise<unknown>): Promise<void> {
+  if (STREAM_ABANDONED_SETTLE_TIMEOUT_MS <= 0) {
+    return;
+  }
+  let guardTimer: ReturnType<typeof setTimeout> | null = null;
+  const settleGuard = new Promise<void>((resolve) => {
+    guardTimer = setTimeout(resolve, STREAM_ABANDONED_SETTLE_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([
+      streamPromise.then(
+        () => undefined,
+        () => undefined,
+      ),
+      settleGuard,
+    ]);
+  } finally {
+    if (guardTimer) clearTimeout(guardTimer);
   }
 }
 

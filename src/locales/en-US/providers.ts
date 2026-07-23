@@ -55,6 +55,7 @@ export default {
       streaming_failed_description: `An issue while trying to stream the response.`,
       provider_error_interaction: `Stream response blocked/stopped. Reason: {reason}.`,
       api_error_title: `🔴 Provider API Error`,
+      privacy_error_title: `🔴 Provider Privacy Settings`,
       model_error_title: `🔴 Model Configuration Error`,
       model_error_description: `The selected model was rejected by the provider. Check the configured model name and switch to one of the provider's supported model IDs.`,
       rate_limit_title: `🟡 Provider Rate Limit Exceeded`,
@@ -62,6 +63,8 @@ export default {
       content_blocked_title: `🔴️ Provider Content Filter`,
       timeout_title: `🟡️ Provider Request Timeout`,
       provider_overloaded_title: `🔴 Provider Overloaded`,
+      context_length_title: `🔴 Message Too Long for This Model`,
+      credit_limit_title: `🔴 Not Enough Provider Credits`,
       flush_limit_title: `🟡️ Response Length Limit Reached`,
       flush_limit_description: `This response has reached the maximum message length limit and has been stopped. You can use \`/bot respond\` to manually continue the response if needed.`,
       inactivity_timeout_title: `🟡️ Response Timed Out`,
@@ -79,6 +82,12 @@ export default {
       openrouter_models: `Browse the [OpenRouter model list](https://openrouter.ai/models) and switch models with \`/openrouter model add\`.`,
       choose_supported_model: `Choose a supported model ID with \`/model text\`, \`/personal provider model-text\`, or your custom endpoint settings.`,
       verify_api_key: `Double-check your API key, then try again.`,
+      openrouter_privacy_settings: `Adjust your "Data Policy" settings at [OpenRouter Privacy Settings](https://openrouter.ai/settings/privacy) to allow this model, or choose a different model.`,
+      openrouter_fund_account: `Add at least 10 credits to your OpenRouter account to unlock 1000 free model requests per day.`,
+      reduce_context_length: `Try reducing the length of your message or clearing context with \`/tool refresh\`.`,
+      reduce_output_tokens: `Lower the reply length cap with \`/model parameters\` (output tokens) to free up room for chat history.`,
+      openrouter_add_credits: `Add credits at [OpenRouter Credits](https://openrouter.ai/settings/credits), or lower the reply length with \`/model parameters\` (output tokens).`,
+      adjust_parameters: `Use \`/config parameters\` and adjust either **Temperature** or **Top P** to ensure only one is sent.`,
       switch_model_provider: `Switch to a different model or provider with \`/model\`.`,
       // Auto-appended to every non-empty tip embed by createTipEmbed(); never list it in a caller's tipKeys.
       support_server: `Visit the [Official Support Server](https://discord.gg/bjCfHm9QsB) for assistance.`,
@@ -117,19 +126,14 @@ export default {
     },
     openrouter: {
       "404_privacy_policy_error": `**Privacy Policy Restriction**
-The selected model requires allowing data for paid model training, but your OpenRouter account privacy settings currently block this.
-
-**To fix this:**
-1. Visit https://openrouter.ai/settings/privacy
-2. Adjust your "Data Policy" settings to allow this model
-3. Or select a different model that matches your privacy preferences`,
+The selected model requires allowing data for paid model training, but your OpenRouter account privacy settings currently block this.`,
       "400_default_message": `Invalid request sent to OpenRouter`,
       "401_default_message": `Your OpenRouter API key is invalid or expired`,
       "402_default_message": `Your OpenRouter account has insufficient credits`,
       "403_default_message": `Access denied: check your OpenRouter account settings`,
       "408_default_message": `The OpenRouter request timed out`,
       "429_default_message": `OpenRouter rate limit exceeded, please wait before retrying`,
-      "429_free_models_message": `OpenRouter rate limit exceeded for free models. Add atleast 10 credits to your OpenRouter account to unlock 1000 free model requests per day.`,
+      "429_free_models_message": `OpenRouter rate limit exceeded for free models.`,
       "500_default_message": `OpenRouter encountered an internal server error`,
       "502_default_message": `The upstream AI provider is temporarily unavailable`,
       "503_default_message": `The upstream AI model is currently overloaded`,
@@ -137,14 +141,14 @@ The selected model requires allowing data for paid model training, but your Open
       unknown_default_message: `An unexpected error occurred`,
     },
     anthropic: {
-      "400_default_message": `Invalid request to Anthropic API. Try a different model or reduce context length.`,
+      "400_default_message": `Invalid request to Anthropic API.`,
       "401_default_message": `Your Anthropic API key is invalid. Please check your key at console.anthropic.com`,
       "403_default_message": `Your Anthropic API key does not have permission for this operation.`,
-      "404_default_message": `The requested Anthropic model could not be found. Try switching models with \`/model text\`.`,
+      "404_default_message": `The requested Anthropic model could not be found.`,
       "429_default_message": `Anthropic rate limit exceeded. Please wait a moment and try again.`,
       "500_default_message": `Anthropic returned an internal server error.`,
       "503_default_message": `Anthropic is currently unavailable or overloaded.`,
-      temperature_top_p_conflict_message: `Anthropic rejected this request because both Temperature and Top-P were sent. Use \`/config parameters\` and adjust either **Temperature** or **Top P** for that provider.`,
+      temperature_top_p_conflict_message: `Anthropic rejected this request because both Temperature and Top-P were sent.`,
       unknown_default_message: `An unexpected error occurred while communicating with Anthropic.`,
     },
     custom: {
@@ -157,7 +161,7 @@ The selected model requires allowing data for paid model training, but your Open
       unknown_default_message: `An unexpected error occurred`,
     },
     nvidia: {
-      "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA. Try switching models with \`/model text\`.`,
+      "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA.`,
       "500_default_message": `NVIDIA rejected one or more request parameters for this model. If the details name unsupported sampler parameters such as \`min_p\`, set them to \`0\` with \`/model parameters\` to turn them off. If the details name \`logit_bias\`, clear saved entries with \`/model logit-bias remove\`.`,
       unknown_default_message: `An unexpected error occurred`,
     },

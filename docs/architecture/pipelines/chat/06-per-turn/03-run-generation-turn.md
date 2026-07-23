@@ -4,7 +4,7 @@ title: "06.3: Generation Turn"
 
 Drive the provider call with model fallback and API-key rotation.
 
-**File:** `src/utils/chat/generationTurn.ts:46-152`
+**File:** `src/utils/chat/generationTurn.ts:50-187`
 
 ## Mission
 
@@ -78,7 +78,15 @@ a non-error result *and* the loop falls through (rare; defensive).
   where personal-provider routing, fallback model capability differences, and
   OpenRouter live media capability corrections affect media visibility.
 - Applies provider-specific token-limit truncation
-  (`truncateDialogueHistory`) for Gemini, OpenRouter, NovelAI.
+  (`truncateDialogueHistory`) for Gemini, OpenRouter, NovelAI. The reserved
+  output budget is resolved by `resolveMaxOutputTokens` so it matches what the
+  request builder actually sends: the server's `/model parameters` override
+  (`config.llm_max_output_tokens`) wins, then the provider env cap
+  (`OPENROUTER_MAX_OUTPUT_TOKENS` / `GOOGLE_MAX_OUTPUT_TOKENS`), then a
+  per-provider fallback (flat 8192 for OpenRouter and Gemini, the model-reported
+  completion ceiling for NovelAI), always clamped to the model's reported
+  ceiling. Keeping the reserve in lockstep with the request avoids over-dropping
+  history.
 - If the previous attempt ended with `emptyResponseFinishReason === "length"`
   and we're on a retry, additionally drops the oldest history exchange
   pairs.
@@ -103,6 +111,37 @@ a non-error result *and* the loop falls through (rare; defensive).
 - On thrown error: calls `responseSink.emitError(error)` and finalizes with
   an `error` result.
 
+**Superseded-message cleanup (`purgeSupersededDeliveries`):**
+
+- A shared, per-turn sink (`streamingContext.deliveredMessageRefs`) collects one
+  entry per message the streaming layer commits to Discord. The orchestrator
+  appends to it in `uiUpdater.recordSuccessfulSend`, and because it is threaded
+  through `buildStreamContext` as an array *reference*, the entries survive even
+  when a stalled `streamToDiscord` promise is abandoned by the SDK-call-timeout
+  race in the tool loop (that path returns `timeout` but never reports the
+  messages it had already flushed).
+- Whenever the stage decides **not** to keep an invocation's result — a
+  key-rotation retry, or a model fallback after an `error`/`timeout` — it deletes
+  that invocation's already-committed messages. Deletion tries the persona webhook
+  first (`webhook.deleteMessage`, no Manage Messages needed) and falls back to a
+  channel-level delete (`channel.messages.delete`) if that fails — e.g. the
+  webhook was recreated mid-stream — or for bot-native messages. It is
+  best-effort: individual failures are logged and skipped. This prevents a
+  timed-out primary's truncated partial output from lingering above the fallback
+  model's complete response (two conflicting messages). The surviving/final
+  attempt's messages are always kept. On total failure, the last attempt's output
+  stays and the error embed is shown.
+- **Straggler safety:** on the SDK-call timeout the tool loop aborts the stalled
+  stream but the losing `streamToDiscord` promise is not cancelled — only its HTTP
+  request is. `streamOnce` therefore awaits that promise settling (bounded by
+  `STREAM_ABANDONED_SETTLE_TIMEOUT_MS`) before returning `timeout`, so any Discord
+  send that was already in flight is recorded in `deliveredMessageRefs` *before*
+  the fallback path's cleanup runs and cannot leak past it.
+- **Scope:** only messages sent through `StreamUiUpdater.recordSuccessfulSend` are
+  tracked. Ancillary artifacts posted outside that path — the alter "Replying
+  to…" notice, warning/progress embeds — are not tracked and may persist after a
+  purge.
+
 **NovelAI subscription refresh:**
 
 - For NovelAI providers without a cached context-token count, refreshes the
@@ -119,6 +158,11 @@ After this stage runs:
   status is `"skipped"`, which post-turn effects will distinguish).
 - Rotation-key bookkeeping (`recordKeySuccess`/`recordKeyError`) reflects
   the outcome of the key that was actually used for each attempt.
+- No superseded attempt's partial output committed through the streaming send
+  path (`recordSuccessfulSend`) remains in the channel — those messages are
+  deleted, leaving only the surviving (or final) attempt's response. Artifacts
+  sent outside that path (alter reply notice, warning embeds) are not tracked and
+  are out of scope for this guarantee.
 
 ## Extension points
 
@@ -148,7 +192,9 @@ The stage is a coordinator over several plugin-relevant subsystems:
 |---|---|---|
 | `OPENROUTER_APP_ATTRIBUTION_ENABLED` | `true` | Sends TomoriBot app attribution headers to OpenRouter for app rankings and aggregated usage analytics. Set to `false` to omit them. |
 | `OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS` | `2` | Per-retry history-pair drop count when OpenRouter returns empty/length |
-| `OPENROUTER_MAX_OUTPUT_TOKENS` | `8192` | Cap on OpenRouter truncation output-token budget |
+| `OPENROUTER_MAX_OUTPUT_TOKENS` | `8192` | OpenRouter truncation/request output-token cap (overridden by `/model parameters`) |
+| `GOOGLE_MAX_OUTPUT_TOKENS` | `8192` | Gemini truncation/request output-token cap (overridden by `/model parameters`) |
+| `STREAM_ABANDONED_SETTLE_TIMEOUT_MS` | `5000` | Max wait (ms) for an SDK-timeout-aborted stream to settle so its in-flight sends are recorded before superseded-message cleanup. `0` disables the wait. Defined in `toolLoop.ts`. |
 
 Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.
 

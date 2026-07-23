@@ -2,7 +2,12 @@ import { EmbedBuilder, MessageFlags, type ColorResolvable } from "discord.js";
 import type { ProviderError, StreamProvider, StreamContext } from "@/types/stream/interfaces";
 import { createTipEmbed, sendStandardEmbed, truncateForEmbedDescription } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { getProviderErrorDetail, isProviderModelError } from "@/utils/provider/providerErrorClassification";
+import {
+  getProviderErrorDetail,
+  isContextLengthError,
+  isCreditAffordabilityError,
+  isProviderModelError,
+} from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 
 /**
@@ -119,11 +124,68 @@ export class StreamErrorUi {
     const hasFallbackModels = (context.tomoriState.fallback_llms?.length ?? 0) > 0;
     const modelFallbackTip = hasFallbackModels ? [] : ["genai.tips.model_fallback"];
 
-    // 2. Model errors (unsupported/unknown/deprecated model IDs) — steer toward a supported model.
+    // 2. Specialized Error Conditions
+    const isPrivacyError = providerError.message.includes("Privacy Policy Error");
+    if (isPrivacyError) {
+      return {
+        titleKey: "genai.stream.privacy_error_title",
+        tipKeys: [
+          "genai.tips.openrouter_privacy_settings",
+          "genai.tips.choose_supported_model",
+          ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),
+        ],
+        color: ColorCode.ERROR,
+      };
+    }
+
+    const isTempTopPConflict =
+      typeof providerError.userMessage === "string" &&
+      providerError.userMessage.includes("`temperature` and `top_p` cannot both be specified");
+    if (isTempTopPConflict) {
+      return {
+        titleKey: "genai.stream.api_error_title",
+        tipKeys: ["genai.tips.adjust_parameters", "genai.tips.switch_model_provider"],
+        color: ColorCode.ERROR,
+      };
+    }
+
+    // 3. Model errors (unsupported/unknown/deprecated model IDs) — steer toward a supported model.
     if (isProviderModelError(providerError)) {
       return {
         titleKey: "genai.stream.model_error_title",
         tipKeys: ["genai.tips.choose_supported_model", ...(isOpenRouter ? ["genai.tips.openrouter_models"] : [])],
+        color: ColorCode.ERROR,
+      };
+    }
+
+    // 4. Credit-affordability ceiling (e.g. OpenRouter 402): the account cannot pay for the
+    //    requested max_tokens. Adding history back does not help — steer toward lowering the
+    //    output-token cap or topping up credits. Checked before the context-length branch
+    //    because the 402 copy is the more specific signal.
+    if (isCreditAffordabilityError(providerError)) {
+      return {
+        titleKey: "genai.stream.credit_limit_title",
+        tipKeys: [
+          "genai.tips.reduce_output_tokens",
+          ...(isOpenRouter ? ["genai.tips.openrouter_add_credits"] : []),
+          "genai.tips.switch_model_provider",
+        ],
+        color: ColorCode.ERROR,
+      };
+    }
+
+    // 5. Hard context-window overflow (e.g. OpenRouter 400 "maximum context length"): trimming the
+    //    request genuinely helps. Lead with the output-token cap (the reserve the truncator honors),
+    //    then context refresh / shorter message, then a model-fallback nudge when none is configured.
+    if (isContextLengthError(providerError)) {
+      return {
+        titleKey: "genai.stream.context_length_title",
+        tipKeys: [
+          "genai.tips.reduce_output_tokens",
+          "genai.tips.refresh_context",
+          "genai.tips.shorten_message",
+          ...modelFallbackTip,
+        ],
         color: ColorCode.ERROR,
       };
     }
@@ -139,6 +201,9 @@ export class StreamErrorUi {
             "genai.tips.api_key_rotation",
             ...modelFallbackTip,
             ...(isOpenRouter ? ["genai.tips.openrouter_free_models"] : []),
+            ...(isOpenRouter && providerError.message.includes("free-models-per-day")
+              ? ["genai.tips.openrouter_fund_account"]
+              : []),
           ],
           color: ColorCode.WARN,
         };

@@ -26,6 +26,7 @@ import type {
 } from "../provider/interfaces";
 import type { TomoriState } from "../db/schema";
 import type { StructuredContextItem } from "../misc/context";
+import type { DeliveredStreamMessage } from "../tool/interfaces";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 
 /**
@@ -152,6 +153,10 @@ export interface StreamContext {
 
   // Opaque message ID map for resolving media_N/ref_N keys back to Discord snowflake IDs
   messageIdMap?: MessageIdMap;
+
+  // Shared sink (reference threaded from StreamingContext) that the orchestrator appends to on
+  // every successful send, so runGenerationTurn can delete a superseded attempt's partial output.
+  deliveredMessageRefs?: DeliveredStreamMessage[];
 }
 
 /**
