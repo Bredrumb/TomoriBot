@@ -14,6 +14,7 @@ import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { log } from "@/utils/misc/logger";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
+import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
@@ -569,9 +570,17 @@ async function applyProviderContextTruncation(
     isOpenRouterCapabilityCacheReady()
   ) {
     const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-    const openrouterTruncationOutputCap = Number.parseInt(process.env.OPENROUTER_MAX_OUTPUT_TOKENS || "8192", 10);
     if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      const truncationMaxCompletionTokens = Math.min(tokenLimits.maxCompletionTokens, openrouterTruncationOutputCap);
+      // Reserve the SAME output budget the request builder sends: the server's
+      // `/model parameters` override first, then OPENROUTER_MAX_OUTPUT_TOKENS, then a
+      // flat 8192 — clamped to the model's reported completion ceiling. Previously this
+      // ignored the server override, over-reserving output and dropping fitting history.
+      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
+        configured: tomoriState.config.llm_max_output_tokens,
+        envRaw: process.env.OPENROUTER_MAX_OUTPUT_TOKENS,
+        fallback: DEFAULT_MAX_OUTPUT_TOKENS,
+        providerReportedMax: tokenLimits.maxCompletionTokens,
+      });
       const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
         contextItems,
         tokenLimits.contextLength,
@@ -590,10 +599,23 @@ async function applyProviderContextTruncation(
   if (providerIsApiFamily(tomoriState.llm.llm_provider, "google-genai")) {
     const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
     if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
+      // Use the SAME fallback chain as the Google request builder (config override →
+      // GOOGLE_MAX_OUTPUT_TOKENS → flat 8192), so big-ceiling Gemini models (e.g. 65536
+      // reported) no longer over-reserve output and drop history that would otherwise fit.
+      // The extra clamp to the model-reported ceiling (which the request builder omits) only
+      // bites when the resolved value is ABOVE what the model can emit; reserving the real
+      // ceiling there is correct — the model cannot output more than that regardless of the
+      // requested max, so this never under-reserves relative to actual output.
+      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
+        configured: tomoriState.config.llm_max_output_tokens,
+        envRaw: process.env.GOOGLE_MAX_OUTPUT_TOKENS,
+        fallback: DEFAULT_MAX_OUTPUT_TOKENS,
+        providerReportedMax: tokenLimits.maxCompletionTokens,
+      });
       const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
         contextItems,
         tokenLimits.contextLength,
-        tokenLimits.maxCompletionTokens,
+        truncationMaxCompletionTokens,
       );
       if (totalDropped > 0) {
         log.warn(
@@ -617,10 +639,18 @@ async function applyProviderContextTruncation(
     }
     const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
     if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
+      // NovelAI has no dedicated output-token env cap, so the reserve falls back to the
+      // subscription-tier ceiling unless the server set a `/model parameters` override.
+      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
+        configured: tomoriState.config.llm_max_output_tokens,
+        envRaw: undefined,
+        fallback: tokenLimits.maxCompletionTokens,
+        providerReportedMax: tokenLimits.maxCompletionTokens,
+      });
       const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
         contextItems,
         tokenLimits.contextLength,
-        tokenLimits.maxCompletionTokens,
+        truncationMaxCompletionTokens,
       );
       if (totalDropped > 0) {
         log.warn(

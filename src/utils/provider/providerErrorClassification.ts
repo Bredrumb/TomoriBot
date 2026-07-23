@@ -21,6 +21,69 @@ export function isProviderModelError(error: ProviderError): boolean {
   return collectProviderErrorMessages(error).some(isProviderModelErrorMessage);
 }
 
+// A prompt whose input + reserved output exceeds the model's hard context window.
+// Example (OpenRouter 400): "This endpoint's maximum context length is 16384 tokens.
+// However, you requested about 22581 tokens ... use the context-compression plugin".
+const CONTEXT_LENGTH_ERROR_PATTERNS: RegExp[] = [
+  /\bmaximum\s+context\s+length\b/i,
+  /\bcontext\s+length\s+(?:is|of|exceeded)\b/i,
+  /\bcontext_length_exceeded\b/i,
+  /\bcontext\s+window\s+(?:is\s+)?exceeded\b/i,
+  /\breduce\s+the\s+length\s+of\b/i,
+];
+
+// The account cannot afford the request at the requested max_tokens — a credit
+// ceiling, not a context-window ceiling. Example (OpenRouter 402): "This request
+// requires more credits, or fewer max_tokens. You requested up to 16384 tokens,
+// but can only afford 7783."
+const CREDIT_AFFORDABILITY_ERROR_PATTERNS: RegExp[] = [
+  /\brequires\s+more\s+credits\b/i,
+  /\bcan\s+only\s+afford\b/i,
+  /\bfewer\s+max_tokens\b/i,
+  /\binsufficient\s+credits\b/i,
+];
+
+/**
+ * Detects a hard context-window overflow (input + reserved output exceeds the
+ * model's maximum context length). Distinct from a credit ceiling: here,
+ * trimming the request (shorter message, less history, lower output tokens)
+ * actually resolves it.
+ * @param error - The normalized provider error.
+ * @returns True when any collected message signals a context-length overflow.
+ */
+export function isContextLengthError(error: ProviderError): boolean {
+  return collectProviderErrorMessages(error).some((message) =>
+    matchesAnyPattern(message, CONTEXT_LENGTH_ERROR_PATTERNS),
+  );
+}
+
+/**
+ * Detects a credit-affordability ceiling (the account cannot pay for the
+ * requested max_tokens). Distinct from a context overflow: adding history back
+ * does not help — the fix is more credits or fewer output tokens.
+ * @param error - The normalized provider error.
+ * @returns True when any collected message signals a credit-affordability limit.
+ */
+export function isCreditAffordabilityError(error: ProviderError): boolean {
+  return collectProviderErrorMessages(error).some((message) =>
+    matchesAnyPattern(message, CREDIT_AFFORDABILITY_ERROR_PATTERNS),
+  );
+}
+
+/**
+ * Tests a message against a set of patterns after collapsing whitespace.
+ * @param message - Candidate message (nullable).
+ * @param patterns - Regexes to test.
+ * @returns True when the normalized message matches any pattern.
+ */
+function matchesAnyPattern(message: string | null | undefined, patterns: RegExp[]): boolean {
+  if (!message) {
+    return false;
+  }
+  const normalized = message.replace(/\s+/g, " ").trim();
+  return patterns.some((pattern) => pattern.test(normalized));
+}
+
 export function isProviderModelErrorMessage(message: string | null | undefined): boolean {
   if (!message) {
     return false;
