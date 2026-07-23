@@ -23,6 +23,7 @@ import {
   runPersonaPickerWorkflow,
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/personaWorkflow";
+import { personaIdIsEligible, refreshEligibilitySet } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
@@ -163,9 +164,34 @@ export async function execute(
         return;
       }
 
+      // Class B eligibility: one batched query resolves every persona that owns
+      // at least one document. The predicate closes over this mutable set, which
+      // is refreshed in place after each removal so emptying the last document of
+      // the last eligible persona reaches the workflow's mid-loop empty state.
+      const eligibleDocumentPersonaIds = await serverMemoryRepository.personaIdsWithDocuments(
+        activeTomoriState.server_id,
+      );
+      const isEligible = personaIdIsEligible(eligibleDocumentPersonaIds);
+      const eligiblePersonas = allPersonas.filter(isEligible);
+      if (eligiblePersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.forget.document.none_title",
+          descriptionKey: "commands.forget.document.none_description",
+          color: ColorCode.WARN,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
         personas: allPersonas,
         color: ColorCode.INFO,
+        eligibility: {
+          isEligible,
+          emptyTitleKey: "commands.forget.document.none_title",
+          emptyDescriptionKey: "commands.forget.document.none_description",
+          itemsLabelKey: "general.persona_workflow.items.documents",
+        },
         async onSelected(selection) {
           workflowState.message = selection.message;
           const selectedPersonaId = selection.persona.persona_id;
@@ -275,6 +301,13 @@ export async function execute(
               footerKey: "general.pagination.reloading_persona_picker",
               color: ColorCode.SUCCESS,
             }),
+          );
+          // Refresh the eligible set in place (the predicate closes over it) so a
+          // persona whose last document was just removed drops out of the picker
+          // on retry, and the last such removal reaches the mid-loop empty state.
+          await refreshEligibilitySet(
+            eligibleDocumentPersonaIds,
+            serverMemoryRepository.personaIdsWithDocuments(activeTomoriState.server_id),
           );
           return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
         },

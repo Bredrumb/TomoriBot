@@ -1077,6 +1077,12 @@ interface PersonaPaginatedChoiceOptions {
   preserveSelectedInteraction?: boolean;
   /** Workflow-owned avatar cache shared across internal picker retries. */
   avatarSessionCache?: AvatarSessionCache;
+  /**
+   * Pre-localized notice appended under the picker description when the list has
+   * been narrowed by an eligibility filter. Rendered only when at least one
+   * persona was excluded so an unfiltered picker stays visually unchanged.
+   */
+  filteredNotice?: string;
 }
 
 type AccentColorInput = string | number | readonly [red: number, green: number, blue: number];
@@ -1736,6 +1742,16 @@ function buildPersonaPageComponents(
     containerComponents.push({
       type: ComponentType.TextDisplay,
       content: localizer(locale, options.descriptionKey),
+    });
+  }
+
+  // Filtered-notice line. The workflow pre-localizes this and only supplies it
+  // when the eligibility filter actually excluded a persona, so an unfiltered
+  // picker never shows it. Rendered as muted subtext beneath the description.
+  if (options.filteredNotice) {
+    containerComponents.push({
+      type: ComponentType.TextDisplay,
+      content: `-# ${options.filteredNotice}`,
     });
   }
 

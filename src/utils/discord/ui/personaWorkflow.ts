@@ -201,8 +201,36 @@ export type PersonaPickerWorkflowResult<TPersona extends TomoriState, TValue = v
     }
   | { outcome: "cancelled" }
   | { outcome: "timeout" }
+  | { outcome: "empty" }
   | { outcome: "error"; error?: unknown }
   | { outcome: "fatal"; error?: unknown };
+
+/**
+ * Declares which personas an item-scoped command can actually act on. Supplied
+ * to {@link runPersonaPickerWorkflow} so the picker filter and the terminal
+ * empty state are both driven by one predicate. The identical `isEligible`
+ * function must also back the caller's pre-picker guard and its post-selection
+ * concurrency backstop; divergence between the three reintroduces the wasted
+ * round trip this option exists to remove.
+ */
+export interface PersonaWorkflowEligibility<TPersona extends TomoriState> {
+  /**
+   * Synchronous predicate deciding whether a persona qualifies. Class B callers
+   * close over a precomputed `Set` of eligible keys so no per-persona query runs
+   * between the persona click and its acknowledgment.
+   */
+  isEligible: (persona: TPersona) => boolean;
+  /** Title locale key for the terminal state rendered when no persona qualifies. */
+  emptyTitleKey: string;
+  /** Description locale key for that terminal state. */
+  emptyDescriptionKey: string;
+  /**
+   * Locale key for the bare item noun ("attributes", "documents"). Interpolated
+   * into the single shared filtered-notice sentence shown when the picker was
+   * narrowed.
+   */
+  itemsLabelKey: string;
+}
 
 export interface PersonaPickerWorkflowOptions<TPersona extends TomoriState, TValue = void> {
   personas: readonly TPersona[];
@@ -210,6 +238,13 @@ export interface PersonaPickerWorkflowOptions<TPersona extends TomoriState, TVal
   descriptionKey?: string;
   color?: string | number;
   requiredPersonaId?: number;
+  /**
+   * Optional eligibility filter. When supplied, only personas satisfying
+   * `isEligible` are shown, a filtered notice is appended when any persona was
+   * excluded, and the workflow reaches a terminal `empty` outcome instead of
+   * ever rendering a zero-persona picker.
+   */
+  eligibility?: PersonaWorkflowEligibility<TPersona>;
   onCancel?: () => Promise<void>;
   onSelected: (
     selection: PersonaWorkflowSelectionPhase<TPersona>,
@@ -313,6 +348,21 @@ function logWorkflowTimeout(
       ...metadata,
     },
   });
+}
+
+function logWorkflowEmpty(
+  stage: string,
+  canonicalMessageId: string | null,
+  counts: { totalPersonas: number; eligiblePersonas: number; interactionId?: string },
+): void {
+  // Empty is a normal terminal state, not a warning, so it uses info-level
+  // logging. The total-vs-eligible counts are folded into the message because
+  // the info channel does not carry structured metadata.
+  log.info(
+    `Persona workflow ${stage} reached an empty eligible set (message=${canonicalMessageId ?? "none"}, ` +
+      `total=${counts.totalPersonas}, eligible=${counts.eligiblePersonas}` +
+      `${counts.interactionId ? `, interaction=${counts.interactionId}` : ""})`,
+  );
 }
 
 function logWorkflowFatal(
@@ -1213,9 +1263,43 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
 ): Promise<PersonaPickerWorkflowResult<TPersona, TValue>> {
   const avatarSessionCache: AvatarSessionCache = new Map();
   const ledger = new AcknowledgementLedger();
-  let currentPersonas = options.personas;
+  const { eligibility } = options;
+
+  // 0. Resolve eligibility once. `filterPersonas` is the single filtering point;
+  //    both the initial entry and every persona-supplying retry pass through it,
+  //    so the picker can never render a persona the command cannot act on.
+  const filterPersonas = (list: readonly TPersona[]): { filtered: readonly TPersona[]; excluded: number } => {
+    if (!eligibility) return { filtered: list, excluded: 0 };
+    const filtered = list.filter((persona) => eligibility.isEligible(persona));
+    return { filtered, excluded: list.length - filtered.length };
+  };
+
+  const initialFilter = filterPersonas(options.personas);
+  let currentPersonas = initialFilter.filtered;
+  let currentExcluded = initialFilter.excluded;
+
+  // 0a. Pre-picker empty case. The caller owns rendering its own notice on its
+  //     deferred reply (it computes the same eligible set for its own guard), so
+  //     the workflow returns `empty` here without ever rendering a picker.
+  if (eligibility && currentPersonas.length === 0) {
+    logWorkflowEmpty("initial", null, {
+      totalPersonas: options.personas.length,
+      eligiblePersonas: 0,
+      interactionId: interaction.id,
+    });
+    return { outcome: "empty" };
+  }
 
   while (true) {
+    // The filtered notice is verb-agnostic: one shared sentence with the family's
+    // bare item noun interpolated in. It is only shown when the current picker
+    // actually hides at least one persona.
+    const filteredNotice =
+      eligibility && currentExcluded > 0
+        ? localizer(locale, "general.persona_workflow.filtered_notice", {
+            items: localizer(locale, eligibility.itemsLabelKey),
+          })
+        : undefined;
     const pickerResult = await replyPaginatedPersonaChoicesV2(interaction, locale, {
       personas: [...currentPersonas],
       titleKey: options.titleKey,
@@ -1223,6 +1307,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
       color: options.color,
       preserveSelectedInteraction: true,
       avatarSessionCache,
+      filteredNotice,
     });
 
     if (!pickerResult.success) {
@@ -1369,11 +1454,44 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
         `Persona workflow retrying picker ${controller.canonicalMessageId} in place for persona ${normalized.persona.persona_id}`,
       );
       if (directive.personas) {
+        const { filtered, excluded } = filterPersonas(directive.personas);
+
+        // Mid-loop empty case: the user just removed the last item from the last
+        // eligible persona. Replace the canonical message in place with the
+        // terminal empty state and return `empty`; never render an empty picker
+        // and never emit a second ephemeral message.
+        if (eligibility && filtered.length === 0) {
+          try {
+            await controller.replace(
+              noticePayload(locale, eligibility.emptyTitleKey, eligibility.emptyDescriptionKey, ColorCode.INFO),
+            );
+          } catch (error) {
+            if (isFatalInteractionFailure(error)) {
+              controller.logLatchedFatal("retry-empty-state", {
+                interactionId: selectedButton.id,
+              });
+              return { outcome: "fatal", error };
+            }
+            return { outcome: "error", error };
+          }
+          logWorkflowEmpty("retry", controller.canonicalMessageId, {
+            totalPersonas: directive.personas.length,
+            eligiblePersonas: 0,
+            interactionId: selectedButton.id,
+          });
+          return { outcome: "empty" };
+        }
+
+        // Avatar-cache identity comparison stays sound because both sides are the
+        // post-filter arrays: filtering changes indices, so comparing the raw
+        // retry array against the already-filtered current array would spuriously
+        // clear the cache. Comparing filtered-to-filtered keeps it accurate.
         const identityChanged =
-          directive.personas.length !== currentPersonas.length ||
-          directive.personas.some((persona, index) => persona.persona_id !== currentPersonas[index]?.persona_id);
+          filtered.length !== currentPersonas.length ||
+          filtered.some((persona, index) => persona.persona_id !== currentPersonas[index]?.persona_id);
         if (identityChanged) avatarSessionCache.clear();
-        currentPersonas = directive.personas;
+        currentPersonas = filtered;
+        currentExcluded = excluded;
       }
       continue;
     }

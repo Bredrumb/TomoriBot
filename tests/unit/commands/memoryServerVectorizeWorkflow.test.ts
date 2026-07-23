@@ -180,6 +180,9 @@ mock.module("@/utils/db/repositories", () => ({
     }),
   },
   serverMemoryRepository: {
+    // Eligibility source for the pre-picker filter: the selected persona's
+    // lineage (700) must be present so it survives the eligibility gate.
+    lineageIdsWithServerMemories: async () => new Set([700]),
     loadServerMemoriesScoped: async () => [selectedMemory],
     documentExistsByName: async () => false,
     countDocumentsScoped: async () => 0,

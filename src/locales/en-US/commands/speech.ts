@@ -129,6 +129,8 @@ Reference text: {ref_text_hint}`,
 \`\`\`
 {preview}
 \`\`\``,
+      no_prompt_title: `No VoiceDesign Prompt`,
+      no_prompt_description: `There is no voice design prompt to clear. Set one with \`/speech voice-design set\`.`,
       cleared_title: `VoiceDesign Prompt Cleared`,
       cleared_description: `Removed the voice design prompt from **{persona}**.`,
       cleared_description_with_prompt: `Removed the voice design prompt from **{persona}**. Here it is in case you want to keep a copy:

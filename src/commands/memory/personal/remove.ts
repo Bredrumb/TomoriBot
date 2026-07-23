@@ -18,6 +18,7 @@ import {
   runPersonaPickerWorkflow,
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/personaWorkflow";
+import { lineageIdIsEligible, refreshEligibilitySet } from "@/utils/discord/ui/personaEligibility";
 import { personaRepository, personalMemoryRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { SelectOption } from "@/types/discord/modal";
@@ -178,9 +179,34 @@ export async function execute(
         return;
       }
 
+      // Class B eligibility keyed on lineages for which this user has personal
+      // memories. `lineageIdsWithMemories` excludes lineage 0, matching the
+      // persona branch's own global-lineage rejection; the global scope below is
+      // handled by its own branch and is unaffected. Refreshed after each removal.
+      const eligibleLineageIds = userData.user_id
+        ? await personalMemoryRepository.lineageIdsWithMemories(userData.user_id)
+        : new Set<number>();
+      const isEligible = lineageIdIsEligible(eligibleLineageIds);
+      const eligiblePersonas = allPersonas.filter(isEligible);
+      if (eligiblePersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.forget.memory.personal.no_memories_title",
+          descriptionKey: "commands.forget.memory.personal.no_memories",
+          color: ColorCode.WARN,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
         personas: allPersonas,
         color: ColorCode.INFO,
+        eligibility: {
+          isEligible,
+          emptyTitleKey: "commands.forget.memory.personal.no_memories_title",
+          emptyDescriptionKey: "commands.forget.memory.personal.no_memories",
+          itemsLabelKey: "general.persona_workflow.items.personal_memories",
+        },
         async onSelected(selection) {
           workflowState.message = selection.message;
           selectedPersona = selection.persona;
@@ -298,6 +324,14 @@ export async function execute(
                 : "general.pagination.reloading_persona_picker",
               color: ColorCode.SUCCESS,
             }),
+          );
+          // Refresh eligibility in place so a lineage whose last personal memory
+          // was removed drops from the picker on retry (reaching mid-loop empty).
+          await refreshEligibilitySet(
+            eligibleLineageIds,
+            userData.user_id
+              ? personalMemoryRepository.lineageIdsWithMemories(userData.user_id)
+              : Promise.resolve(new Set<number>()),
           );
           return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
         },

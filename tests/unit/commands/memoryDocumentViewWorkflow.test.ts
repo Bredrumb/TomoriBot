@@ -334,6 +334,10 @@ mock.module("@/utils/db/repositories", () => ({
     },
   },
   serverMemoryRepository: {
+    // Pre-picker eligibility source. Kept unconditionally eligible so existing
+    // scenarios still flow through the picker and exercise the post-selection
+    // `loadDocuments` backstop (which is what renders the in-place none state).
+    personaIdsWithDocuments: async () => new Set([77]),
     loadDocuments: async (...args: unknown[]) => {
       chronology.push("repo.documents");
       repositoryCalls.push({ method: "loadDocuments", args });

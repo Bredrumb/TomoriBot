@@ -68,6 +68,21 @@ export default {
       modal_ready_title: `Ready to Continue`,
       modal_ready_description: `Open the form to continue with your selection.`,
       open_modal_button: `Open Form`,
+      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
+      // below is interpolated in, so remove/edit variants of a family reuse it.
+      filtered_notice: `Only showing personas that have {items}.`,
+      items: {
+        attributes: `attributes`,
+        sample_dialogues: `sample dialogues`,
+        trigger_words: `trigger words`,
+        persona_prompts: `persona prompts`,
+        voice_designs: `voice designs`,
+        documents: `documents`,
+        chat_history: `chat history`,
+        server_memories: `server memories`,
+        personal_memories: `personal memories`,
+        sprites: `sprites`,
+      },
     },
     errors: {
       guild_only_title: `Server Only Command`,

@@ -91,6 +91,41 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 
   /**
+   * Returns the set of persona lineage ids that have at least one server memory
+   * in the given server. Batched eligibility source for `/memory server` picker
+   * filters: it reproduces exactly the filters `loadServerMemoriesScoped` applies
+   * (server scope, plus the optional owner filter) so the filtered picker and the
+   * loader always agree.
+   *
+   * @param serverId - Internal server DB ID
+   * @param userId   - If provided, restricts to memories owned by this user, so a
+   *                   manager and a non-manager can receive different eligible sets
+   *                   for the same command in the same guild.
+   * @returns Set of eligible `persona_lineage_id` values.
+   */
+  async lineageIdsWithServerMemories(serverId: number, userId?: number): Promise<Set<number>> {
+    try {
+      const rows =
+        userId !== undefined
+          ? await sql<Array<{ persona_lineage_id: number | string }>>`
+              SELECT DISTINCT persona_lineage_id
+              FROM server_memories
+              WHERE server_id = ${serverId}
+                AND user_id = ${userId}
+            `
+          : await sql<Array<{ persona_lineage_id: number | string }>>`
+              SELECT DISTINCT persona_lineage_id
+              FROM server_memories
+              WHERE server_id = ${serverId}
+            `;
+      return new Set(rows.map((row) => Number(row.persona_lineage_id)));
+    } catch (error) {
+      log.error(`Error loading lineage ids with server memories for server ${serverId}:`, error);
+      return new Set();
+    }
+  }
+
+  /**
    * Returns all memory content strings for a server + persona lineage.
    * Used for case-insensitive duplicate detection before insert.
    *
@@ -554,6 +589,32 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 
   /**
+   * Returns the set of persona ids that own at least one document in the given
+   * server. Batched eligibility source for the persona-scoped `/memory document`
+   * picker filters. Mirrors `loadDocuments` for persona scope, which deliberately
+   * applies **no** `source_type` filter — history-sourced documents count here
+   * exactly as they do in that loader. Serverwide documents (`persona_id IS NULL`)
+   * are excluded because the persona picker only concerns persona-owned rows.
+   *
+   * @param serverId - Internal server DB ID
+   * @returns Set of eligible `persona_id` values.
+   */
+  async personaIdsWithDocuments(serverId: number): Promise<Set<number>> {
+    try {
+      const rows = await sql<Array<{ persona_id: number | string }>>`
+        SELECT DISTINCT persona_id
+        FROM documents
+        WHERE server_id = ${serverId}
+          AND persona_id IS NOT NULL
+      `;
+      return new Set(rows.map((row) => Number(row.persona_id)));
+    } catch (error) {
+      log.error(`Error loading persona ids with documents for server ${serverId}:`, error);
+      return new Set();
+    }
+  }
+
+  /**
    * Delete a document (chunks cascade-delete via FK).
    *
    * @param documentId - Primary key of the document
@@ -786,6 +847,33 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
         AND source_type = 'history'
       ORDER BY created_at DESC
     `;
+  }
+
+  /**
+   * Returns the set of persona ids that own at least one history-sourced document
+   * in the given server. Batched eligibility source for the persona-scoped
+   * `/memory history` picker filter. Reproduces the `source_type = 'history'`
+   * filter `loadHistoryDocuments` applies, so a persona that has upload documents
+   * but no history documents is correctly excluded here even though it appears in
+   * {@link personaIdsWithDocuments}.
+   *
+   * @param serverId - Internal server DB ID
+   * @returns Set of eligible `persona_id` values.
+   */
+  async personaIdsWithHistoryDocuments(serverId: number): Promise<Set<number>> {
+    try {
+      const rows = await sql<Array<{ persona_id: number | string }>>`
+        SELECT DISTINCT persona_id
+        FROM documents
+        WHERE server_id = ${serverId}
+          AND persona_id IS NOT NULL
+          AND source_type = 'history'
+      `;
+      return new Set(rows.map((row) => Number(row.persona_id)));
+    } catch (error) {
+      log.error(`Error loading persona ids with history documents for server ${serverId}:`, error);
+      return new Set();
+    }
   }
 
   /**

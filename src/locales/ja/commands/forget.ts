@@ -41,6 +41,8 @@ export default {
       description: `ペルソナ専用プロンプトをクリアします`,
       no_permission_title: `🔴 権限がありません`,
       no_permission_description: `ペルソナプロンプトをクリアするには**サーバー管理**権限が必要です。`,
+      no_prompt_title: `ペルソナプロンプトがありません`,
+      no_prompt_description: `クリアできるペルソナ専用プロンプトがありません。\`/persona prompt set\` で設定できます。`,
       success_title: `ペルソナプロンプトをクリアしました`,
       success_description: `「{persona_name}」のペルソナプロンプトをクリアしました。`,
       success_description_with_prompt: `「{persona_name}」のペルソナプロンプトをクリアしました。控えが必要な場合は以下をコピーしてください：

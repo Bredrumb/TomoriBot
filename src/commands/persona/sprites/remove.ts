@@ -29,6 +29,7 @@ import {
   type PersonaWorkflowModalPhase,
   type PersonaWorkflowSelectionPhase,
 } from "@/utils/discord/ui/personaWorkflow";
+import { personaIdIsEligible } from "@/utils/discord/ui/personaEligibility";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { PERSONA_SPRITE_LIMITS } from "@/utils/persona/sprites";
 import { deletePersonaSpriteFromStorage } from "@/utils/storage/avatarStorage";
@@ -99,10 +100,35 @@ export async function execute(
       return;
     }
 
+    // Class B eligibility, pointer-aware: `personaIdsWithSprites` resolves preset
+    // pointers in bulk (a pointer persona has zero own rows but still has sprites)
+    // and reproduces the numeric `sprite_id` narrowing used by the guard below.
+    // Single-selection flow, so no in-place set refresh is needed.
+    const eligibleSpritePersonaIds = await personaSpriteRepository.personaIdsWithSprites(
+      allPersonas.map((persona) => persona.persona_id).filter((id): id is number => typeof id === "number"),
+    );
+    const isEligible = personaIdIsEligible(eligibleSpritePersonaIds);
+    const eligiblePersonas = allPersonas.filter(isEligible);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.persona.sprites.remove.no_sprites_title",
+        descriptionKey: "commands.persona.sprites.remove.no_eligible_sprites_description",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
       titleKey: "commands.persona.sprites.remove.persona_select_title",
+      eligibility: {
+        isEligible,
+        emptyTitleKey: "commands.persona.sprites.remove.no_sprites_title",
+        emptyDescriptionKey: "commands.persona.sprites.remove.no_eligible_sprites_description",
+        itemsLabelKey: "general.persona_workflow.items.sprites",
+      },
       async onSelected(selection) {
         workflowState.message = selection.message;
         const selectedPersona = selection.persona;

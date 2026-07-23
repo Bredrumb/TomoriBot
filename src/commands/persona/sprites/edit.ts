@@ -28,6 +28,7 @@ import {
   type PersonaWorkflowComponentsV2Payload,
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/personaWorkflow";
+import { personaIdIsEligible } from "@/utils/discord/ui/personaEligibility";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { ColorCode, log } from "@/utils/misc/logger";
 import {
@@ -141,10 +142,33 @@ export async function execute(
       return;
     }
 
+    // Class B eligibility, pointer-aware (same batched resolver as sprite remove).
+    // Editing never deletes a sprite, so the eligible set stays static (no refresh).
+    const eligibleSpritePersonaIds = await personaSpriteRepository.personaIdsWithSprites(
+      allPersonas.map((persona) => persona.persona_id).filter((id): id is number => typeof id === "number"),
+    );
+    const isEligible = personaIdIsEligible(eligibleSpritePersonaIds);
+    const eligiblePersonas = allPersonas.filter(isEligible);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.persona.sprites.edit.no_sprites_title",
+        descriptionKey: "commands.persona.sprites.edit.no_eligible_sprites_description",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
       titleKey: "commands.persona.sprites.edit.persona_select_title",
+      eligibility: {
+        isEligible,
+        emptyTitleKey: "commands.persona.sprites.edit.no_sprites_title",
+        emptyDescriptionKey: "commands.persona.sprites.edit.no_eligible_sprites_description",
+        itemsLabelKey: "general.persona_workflow.items.sprites",
+      },
       onSelected: async (selection) => {
         workflowState.selectedPersona = selection.persona;
         workflowState.message = selection.message;

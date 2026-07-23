@@ -42,6 +42,7 @@ import {
   type PersonaWorkflowModalResult,
   type PersonaWorkflowSelectionPhase,
 } from "@/utils/discord/ui/personaWorkflow";
+import { personaIdIsEligible } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { llmModelRepo, personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { formatVector, rebuildDocumentTextContent } from "@/utils/documents/documentService";
@@ -1031,9 +1032,31 @@ export async function execute(
       return;
     }
 
+    // Class B eligibility: filter to personas that own at least one document.
+    // No retry loop here (view completes after one selection), so the set stays
+    // static. The `!documents.length` load below remains the concurrency backstop.
+    const eligibleDocumentPersonaIds = await serverMemoryRepository.personaIdsWithDocuments(tomoriState.server_id);
+    const isEligible = personaIdIsEligible(eligibleDocumentPersonaIds);
+    const eligiblePersonas = allPersonas.filter(isEligible);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.memory.document.view.none_title",
+        descriptionKey: "commands.memory.document.view.none_description",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible,
+        emptyTitleKey: "commands.memory.document.view.none_title",
+        emptyDescriptionKey: "commands.memory.document.view.none_description",
+        itemsLabelKey: "general.persona_workflow.items.documents",
+      },
       async onSelected(selection: PersonaWorkflowSelectionPhase<TomoriState>) {
         state.phase = selection;
         state.targetPersonaId = selection.persona.persona_id ?? null;

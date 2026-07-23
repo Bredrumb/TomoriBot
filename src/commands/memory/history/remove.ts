@@ -32,6 +32,7 @@ import {
   runPersonaPickerWorkflow,
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/personaWorkflow";
+import { personaIdIsEligible, refreshEligibilitySet } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
@@ -197,9 +198,33 @@ export async function execute(
         return;
       }
 
+      // Class B eligibility keyed on personas owning history-sourced documents.
+      // The mutable set is refreshed after each removal so the mid-loop empty
+      // state is reachable; the `loadHistoryDocuments` reload stays the backstop.
+      const eligibleHistoryPersonaIds = await serverMemoryRepository.personaIdsWithHistoryDocuments(
+        activeTomoriState.server_id,
+      );
+      const isEligible = personaIdIsEligible(eligibleHistoryPersonaIds);
+      const eligiblePersonas = allPersonas.filter(isEligible);
+      if (eligiblePersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.memory.history.remove.none_title",
+          descriptionKey: "commands.memory.history.remove.none_description",
+          color: ColorCode.WARN,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
         personas: allPersonas,
         color: ColorCode.INFO,
+        eligibility: {
+          isEligible,
+          emptyTitleKey: "commands.memory.history.remove.none_title",
+          emptyDescriptionKey: "commands.memory.history.remove.none_description",
+          itemsLabelKey: "general.persona_workflow.items.chat_history",
+        },
         async onSelected(selection) {
           workflowState.message = selection.message;
           const selectedPersonaId = selection.persona.persona_id;
@@ -311,6 +336,12 @@ export async function execute(
               footerKey: "general.pagination.reloading_persona_picker",
               color: ColorCode.SUCCESS,
             }),
+          );
+          // Refresh eligibility in place so a persona whose last history document
+          // was removed drops from the picker on retry (reaching mid-loop empty).
+          await refreshEligibilitySet(
+            eligibleHistoryPersonaIds,
+            serverMemoryRepository.personaIdsWithHistoryDocuments(activeTomoriState.server_id),
           );
           return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
         },

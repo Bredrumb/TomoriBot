@@ -9,6 +9,7 @@ import type { SelectOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { hasAttributes } from "@/utils/discord/ui/personaEligibility";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import {
   buildPersonaWorkflowNotice,
@@ -75,10 +76,31 @@ export async function execute(
       return;
     }
 
+    // Pre-picker eligibility guard: the same `hasAttributes` predicate drives the
+    // caller's empty check here, the workflow's picker filter, and the
+    // post-selection concurrency backstop below. When no persona has attributes,
+    // render the empty state on the deferred reply instead of opening the picker.
+    const eligiblePersonas = allPersonas.filter(hasAttributes);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.attribute.no_attributes_title",
+        descriptionKey: "commands.forget.attribute.no_attributes",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible: hasAttributes,
+        emptyTitleKey: "commands.forget.attribute.no_attributes_title",
+        emptyDescriptionKey: "commands.forget.attribute.no_attributes",
+        itemsLabelKey: "general.persona_workflow.items.attributes",
+      },
       onSelected: async (selection) => {
         workflowState.selectedPersona = selection.persona;
         workflowState.message = selection.message;
@@ -111,8 +133,11 @@ export async function execute(
           return completePersonaWorkflow();
         }
 
+        // Concurrency backstop: the picker already filtered to eligible personas,
+        // but the attribute list can empty between filter and click. Reuse the
+        // shared predicate so the guard and the filter never diverge.
         const currentAttributes = selection.persona.attribute_list ?? [];
-        if (currentAttributes.length === 0) {
+        if (!hasAttributes(selection.persona)) {
           const work = await selection.beginInPlaceWork();
           await work.message.replace(
             buildPersonaWorkflowNotice({

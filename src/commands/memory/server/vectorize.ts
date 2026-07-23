@@ -22,6 +22,7 @@ import {
   type PersonaWorkflowComponentsV2Payload,
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/personaWorkflow";
+import { lineageIdIsEligible } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import {
   llmModelRepo,
@@ -184,9 +185,38 @@ export async function execute(
       return;
     }
 
+    // Class B, permission-dependent eligibility. A manager sees every lineage
+    // with server memories; a non-manager only lineages with memories they own.
+    // Vectorizing does not delete a memory, so the set stays static (no refresh).
+    const memoryUserScope = hasManagePermission ? undefined : userData.user_id;
+    const eligibleServerMemoryLineageIds = await serverMemoryRepository.lineageIdsWithServerMemories(
+      baseTomoriState.server_id,
+      memoryUserScope,
+    );
+    const isEligible = lineageIdIsEligible(eligibleServerMemoryLineageIds);
+    const emptyMemoriesDescriptionKey = hasManagePermission
+      ? "commands.forget.memory.server.no_memories"
+      : "commands.forget.memory.server.no_owned_memories";
+    const eligiblePersonas = allPersonas.filter(isEligible);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.memory.server.no_memories_title",
+        descriptionKey: emptyMemoriesDescriptionKey,
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible,
+        emptyTitleKey: "commands.forget.memory.server.no_memories_title",
+        emptyDescriptionKey: emptyMemoriesDescriptionKey,
+        itemsLabelKey: "general.persona_workflow.items.server_memories",
+      },
       async onSelected(selection) {
         workflowState.message = selection.message;
         selectedPersona = selection.persona;

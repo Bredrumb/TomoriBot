@@ -129,6 +129,8 @@ Exaggeration: **{exaggeration}**`,
 \`\`\`
 {preview}
 \`\`\``,
+      no_prompt_title: `VoiceDesign プロンプトがありません`,
+      no_prompt_description: `削除できる VoiceDesign プロンプトがありません。\`/speech voice-design set\` で設定できます。`,
       cleared_title: `VoiceDesign プロンプトを削除しました`,
       cleared_description: `**{persona}** から VoiceDesign プロンプトを削除しました。`,
       cleared_description_with_prompt: `**{persona}** から VoiceDesign プロンプトを削除しました。控えが必要な場合は以下をコピーしてください：

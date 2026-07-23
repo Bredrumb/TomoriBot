@@ -68,6 +68,21 @@ export default {
       modal_ready_title: `続行できます`,
       modal_ready_description: `フォームを開いて、選択内容の設定を続けてください。`,
       open_modal_button: `フォームを開く`,
+      // 動詞に依存しない共通のフィルター通知文。下の名詞が差し込まれるため、
+      // 各機能の remove / edit では同じ文を再利用する。
+      filtered_notice: `{items}があるペルソナのみ表示しています。`,
+      items: {
+        attributes: `属性`,
+        sample_dialogues: `サンプル会話`,
+        trigger_words: `トリガーワード`,
+        persona_prompts: `ペルソナプロンプト`,
+        voice_designs: `ボイスデザイン`,
+        documents: `ドキュメント`,
+        chat_history: `チャット履歴`,
+        server_memories: `サーバーの記憶`,
+        personal_memories: `個人の記憶`,
+        sprites: `スプライト`,
+      },
     },
     errors: {
       guild_only_title: `サーバー専用コマンド`,

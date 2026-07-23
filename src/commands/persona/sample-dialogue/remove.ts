@@ -9,6 +9,7 @@ import type { SelectOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { hasSampleDialogues } from "@/utils/discord/ui/personaEligibility";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import {
   buildPersonaWorkflowNotice,
@@ -97,10 +98,29 @@ export async function execute(
       return;
     }
 
+    // Pre-picker eligibility guard shared with the workflow filter and the
+    // post-selection backstop below (all via `hasSampleDialogues`).
+    const eligiblePersonas = allPersonas.filter(hasSampleDialogues);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.sampledialogue.no_dialogues_title",
+        descriptionKey: "commands.forget.sampledialogue.no_dialogues",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible: hasSampleDialogues,
+        emptyTitleKey: "commands.forget.sampledialogue.no_dialogues_title",
+        emptyDescriptionKey: "commands.forget.sampledialogue.no_dialogues",
+        itemsLabelKey: "general.persona_workflow.items.sample_dialogues",
+      },
       onSelected: async (selection) => {
         workflowState.selectedPersona = selection.persona;
         workflowState.message = selection.message;
@@ -133,9 +153,11 @@ export async function execute(
           return completePersonaWorkflow();
         }
 
+        // Concurrency backstop reusing the shared predicate (both input and
+        // output arrays must be non-empty, identical to the picker filter).
         let currentIn = [...(selection.persona.sample_dialogues_in ?? [])];
         let currentOut = [...(selection.persona.sample_dialogues_out ?? [])];
-        if (currentIn.length === 0 || currentOut.length === 0) {
+        if (!hasSampleDialogues(selection.persona)) {
           const work = await selection.beginInPlaceWork();
           await work.message.replace(
             buildPersonaWorkflowNotice({

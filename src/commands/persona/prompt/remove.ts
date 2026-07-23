@@ -3,6 +3,7 @@ import { MessageFlags } from "discord.js";
 import type { UserRow, TomoriState } from "@/types/db/schema";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { hasPersonaPrompt } from "@/utils/discord/ui/personaEligibility";
 import {
   buildPersonaWorkflowNotice,
   completePersonaWorkflow,
@@ -74,10 +75,31 @@ export async function execute(
       return;
     }
 
+    // Pre-picker eligibility guard. This command previously removed
+    // unconditionally and reported a "successful" removal of nothing; the same
+    // `hasPersonaPrompt` predicate now gates the caller, the picker filter, and
+    // the post-selection backstop so a promptless persona is never offered.
+    const eligiblePersonas = allPersonas.filter(hasPersonaPrompt);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.personaprompt.no_prompt_title",
+        descriptionKey: "commands.forget.personaprompt.no_prompt_description",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     personaWorkflowStarted = true;
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible: hasPersonaPrompt,
+        emptyTitleKey: "commands.forget.personaprompt.no_prompt_title",
+        emptyDescriptionKey: "commands.forget.personaprompt.no_prompt_description",
+        itemsLabelKey: "general.persona_workflow.items.persona_prompts",
+      },
       onSelected: async (selection) => {
         const { message } = await selection.beginInPlaceWork();
         const selectedPersona = selection.persona;
@@ -90,6 +112,21 @@ export async function execute(
                 titleKey: "general.errors.invalid_option_title",
                 descriptionKey: "general.errors.invalid_option_description",
                 color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+
+          // Post-selection concurrency backstop (this command had none before):
+          // the prompt can be cleared between the picker filter and this click,
+          // so refuse to "remove nothing" and report it plainly instead.
+          if (!hasPersonaPrompt(selectedPersona)) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.forget.personaprompt.no_prompt_title",
+                descriptionKey: "commands.forget.personaprompt.no_prompt_description",
+                color: ColorCode.WARN,
               }),
             );
             return completePersonaWorkflow();

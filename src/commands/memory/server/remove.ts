@@ -12,6 +12,7 @@ import {
   runPersonaPickerWorkflow,
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/personaWorkflow";
+import { lineageIdIsEligible, refreshEligibilitySet } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import type { SelectOption } from "@/types/discord/modal";
 import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
@@ -86,9 +87,38 @@ export async function execute(
     }
 
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
+
+    // Class B, permission-dependent eligibility. Removal deletes memories, so the
+    // set is refreshed in place after each success to reach mid-loop empty.
+    const memoryUserScope = hasManagePermission ? undefined : userData.user_id;
+    const eligibleServerMemoryLineageIds = await serverMemoryRepository.lineageIdsWithServerMemories(
+      activeTomoriState.server_id,
+      memoryUserScope,
+    );
+    const isEligible = lineageIdIsEligible(eligibleServerMemoryLineageIds);
+    const emptyMemoriesDescriptionKey = hasManagePermission
+      ? "commands.forget.memory.server.no_memories"
+      : "commands.forget.memory.server.no_owned_memories";
+    const eligiblePersonas = allPersonas.filter(isEligible);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.memory.server.no_memories_title",
+        descriptionKey: emptyMemoriesDescriptionKey,
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible,
+        emptyTitleKey: "commands.forget.memory.server.no_memories_title",
+        emptyDescriptionKey: emptyMemoriesDescriptionKey,
+        itemsLabelKey: "general.persona_workflow.items.server_memories",
+      },
       async onSelected(selection) {
         workflowState.message = selection.message;
         selectedPersona = selection.persona;
@@ -221,6 +251,12 @@ export async function execute(
             footerKey: "general.pagination.reloading_persona_picker",
             color: ColorCode.SUCCESS,
           }),
+        );
+        // Refresh eligibility in place so a lineage whose last owned memory was
+        // just removed drops from the picker (reaching mid-loop empty on retry).
+        await refreshEligibilitySet(
+          eligibleServerMemoryLineageIds,
+          serverMemoryRepository.lineageIdsWithServerMemories(activeTomoriState.server_id, memoryUserScope),
         );
         return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
       },

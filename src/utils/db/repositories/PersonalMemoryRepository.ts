@@ -75,6 +75,34 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     }
   }
 
+  /**
+   * Returns the set of persona lineage ids for which this user has at least one
+   * personal memory. Batched eligibility source for the persona-scoped `/memory
+   * personal` picker filters, which load with `includeGlobalMemories = false`.
+   *
+   * Lineage `0` (global) is excluded on purpose: it is the command's separate
+   * global branch, so a global memory must never make a specific persona look
+   * eligible. This mirrors `loadForUserLineage(userId, lineageId, false)`, which
+   * returns a non-empty array exactly for the non-zero lineages in this set.
+   *
+   * @param userId - Internal user DB ID
+   * @returns Set of eligible non-zero `persona_lineage_id` values.
+   */
+  async lineageIdsWithMemories(userId: number): Promise<Set<number>> {
+    try {
+      const rows = await sql<Array<{ persona_lineage_id: number | string }>>`
+        SELECT DISTINCT persona_lineage_id
+        FROM personal_memories
+        WHERE user_id = ${userId}
+          AND persona_lineage_id <> 0
+      `;
+      return new Set(rows.map((row) => Number(row.persona_lineage_id)));
+    } catch (error) {
+      log.error(`Error loading lineage ids with personal memories for user ${userId}:`, error);
+      return new Set();
+    }
+  }
+
   // ── writes ─────────────────────────────────────────────────────────────────
 
   async edit(personalMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {

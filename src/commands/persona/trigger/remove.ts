@@ -9,6 +9,7 @@ import type { CheckboxGroupOption, ModalCheckboxGroupField, SelectOption } from 
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { hasTriggerWords } from "@/utils/discord/ui/personaEligibility";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import {
   buildPersonaWorkflowNotice,
@@ -73,9 +74,32 @@ export async function execute(
       return;
     }
 
+    // Pre-picker eligibility guard shared with the workflow filter and the
+    // post-selection backstop below (all via `hasTriggerWords`).
+    const eligiblePersonas = allPersonas.filter(hasTriggerWords);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(
+        interaction,
+        locale,
+        {
+          titleKey: "commands.persona.trigger.remove.no_triggers_title",
+          descriptionKey: "commands.persona.trigger.remove.no_triggers_description",
+          color: ColorCode.WARN,
+        },
+        MessageFlags.Ephemeral,
+      );
+      return;
+    }
+
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible: hasTriggerWords,
+        emptyTitleKey: "commands.persona.trigger.remove.no_triggers_title",
+        emptyDescriptionKey: "commands.persona.trigger.remove.no_triggers_description",
+        itemsLabelKey: "general.persona_workflow.items.trigger_words",
+      },
       onSelected: async (selection) => {
         workflowState.selectedPersona = selection.persona;
         workflowState.message = selection.message;
@@ -93,9 +117,10 @@ export async function execute(
           return retryPersonaWorkflow();
         }
 
+        // Concurrency backstop reusing the shared predicate.
         const selectedPersona = selection.persona as PersonaWithId;
         const currentTriggerWords = selectedPersona.trigger_words ?? [];
-        if (currentTriggerWords.length === 0) {
+        if (!hasTriggerWords(selectedPersona)) {
           const work = await selection.beginInPlaceWork();
           await work.message.replace(
             buildPersonaWorkflowNotice({

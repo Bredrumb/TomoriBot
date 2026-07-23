@@ -29,6 +29,7 @@ import {
   type PersonaWorkflowComponentsV2Payload,
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/personaWorkflow";
+import { lineageIdIsEligible } from "@/utils/discord/ui/personaEligibility";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { personaRepository, personalMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { invalidateUserCache } from "@/utils/cache/userCache";
@@ -238,9 +239,33 @@ export async function execute(
         return;
       }
 
+      // Class B eligibility keyed on lineages for which this user has personal
+      // memories (lineage 0 excluded, matching the branch's global rejection).
+      // Editing does not delete memories, so the set stays static (no refresh).
+      const eligibleLineageIds = userData.user_id
+        ? await personalMemoryRepository.lineageIdsWithMemories(userData.user_id)
+        : new Set<number>();
+      const isEligible = lineageIdIsEligible(eligibleLineageIds);
+      const eligiblePersonas = allPersonas.filter(isEligible);
+      if (eligiblePersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.forget.memory.personal.no_memories_title",
+          descriptionKey: "commands.forget.memory.personal.no_memories",
+          color: ColorCode.WARN,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
         personas: allPersonas,
         color: ColorCode.INFO,
+        eligibility: {
+          isEligible,
+          emptyTitleKey: "commands.forget.memory.personal.no_memories_title",
+          emptyDescriptionKey: "commands.forget.memory.personal.no_memories",
+          itemsLabelKey: "general.persona_workflow.items.personal_memories",
+        },
         async onSelected(selection) {
           workflowState.message = selection.message;
           selectedPersona = selection.persona;
@@ -263,10 +288,11 @@ export async function execute(
           let currentMemories: Awaited<ReturnType<typeof personalMemoryRepository.loadForUserLineage>> = [];
           let hasNoMemories = false;
           const selectModalResult = await selection.openModal(async () => {
+            // `loadForUserLineage(..., false)` already scopes to this exact lineage
+            // in SQL, so the previous in-memory re-filter was redundant. The shared
+            // `lineageIdIsEligible` predicate is the single source of the same rule.
             currentMemories = userData.user_id
-              ? (await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)).filter(
-                  (memory) => memory.persona_lineage_id === targetLineageId,
-                )
+              ? await personalMemoryRepository.loadForUserLineage(userData.user_id, targetLineageId, false)
               : [];
             if (currentMemories.length === 0) {
               hasNoMemories = true;

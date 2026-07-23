@@ -8,6 +8,7 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { personaRepository } from "@/utils/db/repositories";
 
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { hasVoiceDesignPrompt } from "@/utils/discord/ui/personaEligibility";
 import {
   buildPersonaWorkflowNotice,
   completePersonaWorkflow,
@@ -82,11 +83,32 @@ export async function execute(
       return;
     }
 
+    // Pre-picker eligibility guard. Like `/persona prompt remove`, this command
+    // previously wrote unconditionally and reported clearing nothing; the shared
+    // `hasVoiceDesignPrompt` predicate now gates the caller, the picker filter,
+    // and the post-selection backstop.
+    const eligiblePersonas = allPersonas.filter(hasVoiceDesignPrompt);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.speech.voice_design.no_prompt_title",
+        descriptionKey: "commands.speech.voice_design.no_prompt_description",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     personaWorkflowStarted = true;
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
       titleKey: "commands.speech.voice_design.select_persona_title",
+      eligibility: {
+        isEligible: hasVoiceDesignPrompt,
+        emptyTitleKey: "commands.speech.voice_design.no_prompt_title",
+        emptyDescriptionKey: "commands.speech.voice_design.no_prompt_description",
+        itemsLabelKey: "general.persona_workflow.items.voice_designs",
+      },
       onSelected: async (selection) => {
         const { message } = await selection.beginInPlaceWork();
         const selectedPersona = selection.persona;
@@ -99,6 +121,20 @@ export async function execute(
                 titleKey: "general.errors.invalid_option_title",
                 descriptionKey: "general.errors.invalid_option_description",
                 color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+
+          // Post-selection concurrency backstop (this command had none before):
+          // the design prompt can be cleared between filter and click.
+          if (!hasVoiceDesignPrompt(selectedPersona)) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.speech.voice_design.no_prompt_title",
+                descriptionKey: "commands.speech.voice_design.no_prompt_description",
+                color: ColorCode.WARN,
               }),
             );
             return completePersonaWorkflow();

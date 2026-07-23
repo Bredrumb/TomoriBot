@@ -137,6 +137,61 @@ export class PersonaSpriteRepository {
     return this.parseRows(rows, `preset pointer persona ${personaId}`);
   }
 
+  /**
+   * Returns the subset of the given persona ids that have at least one sprite,
+   * resolving preset pointers in bulk. Batched eligibility source for the
+   * `/persona sprites` picker filters.
+   *
+   * A plain `GROUP BY persona_id` over `persona_sprites` would be wrong: a live
+   * preset-pointer persona owns **zero** `persona_sprites` rows yet still has
+   * sprites through the shared preset set. This query reproduces
+   * {@link listForPersona}'s branch order — pointer resolution first, own rows
+   * otherwise — and treats a persona as eligible when:
+   *   - it is not a live pointer and owns at least one `persona_sprites` row
+   *     (real rows always carry a numeric `sprite_id`, reproducing the caller's
+   *     `typeof sprite.sprite_id === "number"` narrowing); or
+   *   - it is a live pointer whose resolved preset lineage/language has at least
+   *     one `preset_sprites` row.
+   *
+   * @param personaIds - Candidate persona ids (usually every persona on a server)
+   * @returns Set of eligible `persona_id` values.
+   */
+  async personaIdsWithSprites(personaIds: number[]): Promise<Set<number>> {
+    if (personaIds.length === 0) {
+      return new Set();
+    }
+
+    try {
+      const rows = await sql<Array<{ persona_id: number | string }>>`
+        SELECT DISTINCT p.persona_id
+        FROM personas p
+        WHERE p.persona_id = ANY(${sql.array(personaIds, "int4")})
+          AND (
+            (
+              p.is_pointer IS NOT TRUE
+              AND EXISTS (
+                SELECT 1 FROM persona_sprites ps WHERE ps.persona_id = p.persona_id
+              )
+            )
+            OR (
+              p.is_pointer = TRUE
+              AND p.preset_lineage_id IS NOT NULL
+              AND p.preset_language IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM preset_sprites prs
+                WHERE prs.preset_lineage_id = p.preset_lineage_id
+                  AND prs.preset_language = p.preset_language
+              )
+            )
+          )
+      `;
+      return new Set(rows.map((row) => Number(row.persona_id)));
+    } catch (error) {
+      log.error(`Error loading persona ids with sprites for ${personaIds.length} personas:`, error);
+      return new Set();
+    }
+  }
+
   async countForPersona(personaId: number): Promise<number> {
     try {
       const [row] = await sql<Array<{ count: string | number }>>`

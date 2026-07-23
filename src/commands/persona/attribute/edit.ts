@@ -17,6 +17,7 @@ import type { SelectOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { hasAttributes } from "@/utils/discord/ui/personaEligibility";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import {
   buildPersonaWorkflowNotice,
@@ -149,9 +150,28 @@ export async function execute(
       return;
     }
 
+    // Pre-picker eligibility guard shared with the workflow filter and the
+    // post-selection backstop below (all via `hasAttributes`).
+    const eligiblePersonas = allPersonas.filter(hasAttributes);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.attribute.no_attributes_title",
+        descriptionKey: "commands.forget.attribute.no_attributes",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible: hasAttributes,
+        emptyTitleKey: "commands.forget.attribute.no_attributes_title",
+        emptyDescriptionKey: "commands.forget.attribute.no_attributes",
+        itemsLabelKey: "general.persona_workflow.items.attributes",
+      },
       onSelected: async (selection) => {
         workflowState.selectedPersona = selection.persona;
         workflowState.message = selection.message;
@@ -183,8 +203,10 @@ export async function execute(
           return completePersonaWorkflow();
         }
 
+        // Concurrency backstop reusing the shared predicate (never diverges from
+        // the picker filter).
         const currentAttributes = selection.persona.attribute_list ?? [];
-        if (currentAttributes.length === 0) {
+        if (!hasAttributes(selection.persona)) {
           const work = await selection.beginInPlaceWork();
           await work.message.replace(
             buildPersonaWorkflowNotice({
