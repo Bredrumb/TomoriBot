@@ -5,11 +5,22 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
-import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
+import {
+  beginCanonicalPrivateWorkflow,
+  buildPersonaWorkflowNotice,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/canonicalWorkflow";
+import {
+  acquireModelModalOpener,
+  buildNoProvidersPayload,
+  buildOpenRouterMovedNotice,
+  buildOpenSelectorPayload,
+  buildProviderPickerPayload,
+  openCanonicalModal,
+} from "@/utils/discord/ui/canonicalModelFlow";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
@@ -89,75 +100,92 @@ export async function execute(
     return;
   }
 
-  // Track modal state for error handling
-  let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
+  // Canonical one-message controller, tracked so the outer catch can render an
+  // unexpected-error terminal on the same ephemeral message.
   let selectedModel: LlmRow | null = null;
-  let responseInteraction: ChatInputCommandInteraction | import("discord.js").ButtonInteraction = interaction;
-  let providerSelection: Awaited<ReturnType<typeof promptForSavedProvider>> = null;
+  let canonicalMessage: PersonaWorkflowMessageController | null = null;
 
   try {
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "vision");
-    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
-      currentSelections: tomoriState.vision_llm
-        ? [
-            {
-              model: tomoriState.vision_llm.llm_codename,
-              provider: tomoriState.vision_llm.llm_provider,
-            },
-          ]
-        : [],
-    });
+    const idRoot = "model_vision";
 
-    if (!providerSelection) {
-      return;
-    }
-    const selectedProvider = providerSelection.provider;
-    responseInteraction = providerSelection.interaction;
+    // 1. Open the canonical message with the right initial control for the provider count.
+    const currentModel = tomoriState.vision_llm?.llm_codename ?? localizer(locale, "general.unknown");
+    const currentProvider = tomoriState.vision_llm?.llm_provider ?? localizer(locale, "general.unknown");
+    const initialPayload =
+      savedProviders.length === 0
+        ? buildNoProvidersPayload(locale)
+        : savedProviders.length === 1
+          ? buildOpenSelectorPayload(locale, `${idRoot}_open`)
+          : buildProviderPickerPayload(
+              locale,
+              idRoot,
+              savedProviders.map((p) => p.provider),
+              currentModel,
+              currentProvider,
+            );
 
+    const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
+    canonicalMessage = phase.message;
+    if (savedProviders.length === 0) return;
+
+    // 2. Resolve the provider and the unacknowledged button the modal opens from.
+    const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
+    if (!opener) return;
+    const selectedProvider = opener.provider;
+
+    // 3a. Custom provider: no modal — activate the saved vision model directly.
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
+      const work = await phase.useButton(opener.button).beginInPlaceWork();
       if (!selectedSavedConfig?.vision_llm_id) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.vision.no_models_title",
-          descriptionKey: "commands.model.vision.no_models_description",
-          descriptionVars: {
-            provider: getProviderDisplayName(selectedProvider),
-          },
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.vision.no_models_title",
+            descriptionKey: "commands.model.vision.no_models_description",
+            descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
       const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
         vision_llm_id: selectedSavedConfig.vision_llm_id,
       });
-
       if (!updated) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.update_failed_title",
+            descriptionKey: "general.errors.update_failed_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
       invalidateTomoriStateCache(serverId);
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "commands.model.vision.success_title",
-        descriptionKey: tomoriState.llm.has_tools
-          ? "commands.model.vision.success_description"
-          : "commands.model.vision.success_no_tools_description",
-        descriptionVars: {
-          model_name: getProviderDisplayName(selectedProvider),
-          chat_model: tomoriState.llm.llm_codename,
-          provider: getProviderDisplayName(selectedProvider),
-        },
-        color: ColorCode.SUCCESS,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.vision.success_title",
+          descriptionKey: tomoriState.llm.has_tools
+            ? "commands.model.vision.success_description"
+            : "commands.model.vision.success_no_tools_description",
+          descriptionVars: {
+            model_name: getProviderDisplayName(selectedProvider),
+            chat_model: tomoriState.llm.llm_codename,
+            provider: getProviderDisplayName(selectedProvider),
+          },
+          color: ColorCode.SUCCESS,
+        }),
+      );
       return;
     }
 
+    // 3b. Regular provider: vision-capable model picker with a "clear" option.
     const allModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
@@ -165,27 +193,24 @@ export async function execute(
     const visionModels = allModels?.filter((m) => m.sees_images) ?? [];
 
     if (visionModels.length === 0) {
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "commands.model.vision.no_models_title",
-        descriptionKey: "commands.model.vision.no_models_description",
-        descriptionVars: {
-          provider: getProviderDisplayName(selectedProvider),
-        },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
+      await phase.useButton(opener.button).replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.vision.no_models_title",
+          descriptionKey: "commands.model.vision.no_models_description",
+          descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
-    // 5. Build select options: vision models + "clear" option
     const modelSelectOptions: SelectOption[] = [
-      // "None" option to clear the vision model
       {
         label: safeSelectOptionText(localizer(locale, "commands.model.vision.clear_option")),
         value: CLEAR_VISION_VALUE,
         description: "",
       },
-      // Vision-capable models
       ...visionModels.map((model) => ({
         label: safeSelectOptionText(model.llm_codename),
         value: safeSelectOptionText(model.llm_codename),
@@ -193,114 +218,99 @@ export async function execute(
       })),
     ];
 
-    // 6. Show the modal with vision model selection
-    const modalResult = await promptWithRawModal(
-      responseInteraction,
-      locale,
-      {
-        modalCustomId: MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.model.vision.modal_title",
-        components: [
-          {
-            customId: MODEL_SELECT_ID,
-            labelKey: "commands.model.vision.select_label",
-            descriptionKey: "commands.model.vision.select_description",
-            placeholder: "commands.model.vision.select_placeholder",
-            required: true,
-            options: modelSelectOptions,
-          },
-        ],
-      },
-      MessageFlags.Ephemeral,
-    );
+    // >25 vision models route through the canonical range selector automatically.
+    const modalPhase = await openCanonicalModal(phase, opener.button, locale, {
+      modalCustomId: MODAL_CUSTOM_ID,
+      modalTitleKey: "commands.model.vision.modal_title",
+      components: [
+        {
+          customId: MODEL_SELECT_ID,
+          labelKey: "commands.model.vision.select_label",
+          descriptionKey: "commands.model.vision.select_description",
+          placeholder: "commands.model.vision.select_placeholder",
+          required: true,
+          options: modelSelectOptions,
+        },
+      ],
+    });
+    if (!modalPhase) return;
 
-    // 7. Handle modal outcome
-    if (modalResult.outcome !== "submit") {
-      log.info(`Vision model selection modal ${modalResult.outcome} for user ${userData.user_id}`);
-      return;
-    }
+    const work = await modalPhase.beginInPlaceWork();
+    const selectedValue = modalPhase.values[MODEL_SELECT_ID];
 
-    // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-    modalSubmitInteraction = modalResult.interaction!;
-    // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-    const selectedValue = modalResult.values![MODEL_SELECT_ID];
-
-    // 8. Handle "clear" selection — remove vision model
+    // Handle "clear" selection — remove the vision model.
     if (selectedValue === CLEAR_VISION_VALUE) {
-      // Check if already cleared
       if (!tomoriState.config.vision_llm_id) {
-        await replyInfoEmbed(modalSubmitInteraction, locale, {
-          titleKey: "commands.model.vision.cleared_title",
-          descriptionKey: "commands.model.vision.cleared_description",
-          color: ColorCode.WARN,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.vision.cleared_title",
+            descriptionKey: "commands.model.vision.cleared_description",
+            color: ColorCode.WARN,
+          }),
+        );
         return;
       }
 
-      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
-        vision_llm_id: null,
-      });
-
+      const updated = await configRepository.updateModelConfig(tomoriState.server_id, { vision_llm_id: null });
       if (!updated) {
-        await replyInfoEmbed(modalSubmitInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.update_failed_title",
+            descriptionKey: "general.errors.update_failed_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
       invalidateTomoriStateCache(serverId);
-
-      const clearedOptions = {
-        titleKey: "commands.model.vision.cleared_title",
-        descriptionKey: "commands.model.vision.cleared_description",
-        color: ColorCode.SUCCESS,
-      } as const;
-
-      const replacedPicker =
-        modalSubmitInteraction &&
-        (await replaceProviderPickerWithInfo(providerSelection, modalSubmitInteraction, locale, clearedOptions));
-
-      if (!replacedPicker) {
-        await replyInfoEmbed(modalSubmitInteraction, locale, clearedOptions);
-      }
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.vision.cleared_title",
+          descriptionKey: "commands.model.vision.cleared_description",
+          color: ColorCode.SUCCESS,
+        }),
+      );
       return;
     }
 
-    // 9. Find the selected vision model by codename
     selectedModel = visionModels.find((model) => model.llm_codename === selectedValue) ?? null;
-
     if (!selectedModel) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.vision.invalid_model_title",
-        descriptionKey: "commands.model.vision.invalid_model_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.vision.invalid_model_title",
+          descriptionKey: "commands.model.vision.invalid_model_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
     if (selectedModel.llm_codename === "other-model") {
-      await replyLegacyOpenRouterOtherModelMoved(modalSubmitInteraction, locale, "server");
+      await work.message.replace(buildOpenRouterMovedNotice(locale));
       return;
     }
 
-    // 10. Check if already selected
     if (selectedModel.llm_id === tomoriState.config.vision_llm_id) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.vision.already_selected_title",
-        descriptionKey: "commands.model.vision.already_selected_description",
-        descriptionVars: { model_name: selectedModel.llm_codename },
-        color: ColorCode.WARN,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.vision.already_selected_title",
+          descriptionKey: "commands.model.vision.already_selected_description",
+          descriptionVars: { model_name: selectedModel.llm_codename },
+          color: ColorCode.WARN,
+        }),
+      );
       return;
     }
 
-    // 11. Update vision_llm_id in the database
     const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
       vision_llm_id: selectedModel.llm_id,
     });
-
     if (!updated) {
       const context: ErrorContext = {
         personaId: tomoriState.persona_id,
@@ -319,41 +329,33 @@ export async function execute(
         new Error("Database update failed"),
         context,
       );
-
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.update_failed_title",
+          descriptionKey: "general.errors.update_failed_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
-    // 13. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverId);
-
-    // 14. Success message (with tool warning if chat model lacks tool support)
-    const descriptionKey = tomoriState.llm.has_tools
-      ? "commands.model.vision.success_description"
-      : "commands.model.vision.success_no_tools_description";
-
-    const successOptions = {
-      titleKey: "commands.model.vision.success_title",
-      descriptionKey,
-      descriptionVars: {
-        model_name: selectedModel.llm_codename,
-        chat_model: tomoriState.llm.llm_codename,
-        provider: getProviderDisplayName(selectedProvider),
-      },
-      color: ColorCode.SUCCESS,
-    } as const;
-
-    const replacedPicker =
-      modalSubmitInteraction &&
-      (await replaceProviderPickerWithInfo(providerSelection, modalSubmitInteraction, locale, successOptions));
-
-    if (!replacedPicker) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, successOptions);
-    }
+    await work.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.model.vision.success_title",
+        descriptionKey: tomoriState.llm.has_tools
+          ? "commands.model.vision.success_description"
+          : "commands.model.vision.success_no_tools_description",
+        descriptionVars: {
+          model_name: selectedModel.llm_codename,
+          chat_model: tomoriState.llm.llm_codename,
+          provider: getProviderDisplayName(selectedProvider),
+        },
+        color: ColorCode.SUCCESS,
+      }),
+    );
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
@@ -369,8 +371,25 @@ export async function execute(
     };
     await log.error(`Error executing /model vision for user ${userData.user_disc_id}`, error as Error, context);
 
-    const replyTarget = modalSubmitInteraction ?? responseInteraction;
-    await replyInfoEmbed(replyTarget, locale, {
+    // Render the unexpected-error terminal on the canonical message; fall back to a fresh
+    // reply only if the message is already gone (fatal) or was never created.
+    if (canonicalMessage) {
+      try {
+        await canonicalMessage.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+        return;
+      } catch {
+        // Fall through to a fresh reply below.
+      }
+    }
+
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,

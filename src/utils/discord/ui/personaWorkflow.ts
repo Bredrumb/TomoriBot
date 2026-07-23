@@ -52,7 +52,13 @@ export const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
  * migration ledger tracks: add a caller here only once it is fully canonical AND
  * Discord-verified, never before.
  */
-export const MIGRATED_CANONICAL_CALLERS: readonly string[] = ["src/commands/model/text.ts"];
+export const MIGRATED_CANONICAL_CALLERS: readonly string[] = [
+  "src/commands/model/text.ts",
+  "src/commands/model/vision.ts",
+  "src/commands/model/video.ts",
+  "src/commands/model/image.ts",
+  "src/commands/model/embedding.ts",
+];
 
 /** Primitives a migrated caller must not reach for; see {@link MIGRATED_CANONICAL_CALLERS}. */
 export const PRE_CANONICAL_PRIMITIVES: readonly string[] = [

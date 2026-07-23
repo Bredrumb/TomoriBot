@@ -5,14 +5,24 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
-import type { SelectOption } from "@/types/discord/modal";
+import {
+  beginCanonicalPrivateWorkflow,
+  buildPersonaWorkflowNotice,
+  type PersonaWorkflowInPlacePhase,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/canonicalWorkflow";
+import {
+  acquireModelModalOpener,
+  buildNoProvidersPayload,
+  buildOpenSelectorPayload,
+  buildProviderPickerPayload,
+  openCanonicalModal,
+} from "@/utils/discord/ui/canonicalModelFlow";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { configRepository, llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
@@ -75,171 +85,81 @@ export async function execute(
     return;
   }
 
-  let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
+  // Canonical one-message controller, tracked so the outer catch can render an
+  // unexpected-error terminal on the same ephemeral message.
   let selectedModel: EmbeddingModelRow | null = null;
-  let responseInteraction: ChatInputCommandInteraction | import("discord.js").ButtonInteraction = interaction;
-  let providerSelection: Awaited<ReturnType<typeof promptForSavedProvider>> = null;
+  let canonicalMessage: PersonaWorkflowMessageController | null = null;
 
   try {
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "embedding");
+    const idRoot = "model_embedding";
+
+    // 1. Open the canonical message with the right initial control for the provider count.
     const activeEmbeddingModel = tomoriState.config.embedding_model_id
       ? await llmModelRepo.loadEmbeddingModelById(tomoriState.config.embedding_model_id)
       : null;
-    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
-      currentSelections: activeEmbeddingModel
-        ? [
-            {
-              model: activeEmbeddingModel.codename,
-              provider: activeEmbeddingModel.provider,
-            },
-          ]
-        : [],
-    });
+    const currentModel =
+      getEmbeddingModelDisplayName(activeEmbeddingModel) ?? localizer(locale, "commands.model.embedding.current_none");
+    const currentProvider = activeEmbeddingModel?.provider ?? localizer(locale, "general.unknown");
+    const initialPayload =
+      savedProviders.length === 0
+        ? buildNoProvidersPayload(locale)
+        : savedProviders.length === 1
+          ? buildOpenSelectorPayload(locale, `${idRoot}_open`)
+          : buildProviderPickerPayload(
+              locale,
+              idRoot,
+              savedProviders.map((p) => p.provider),
+              currentModel,
+              currentProvider,
+            );
 
-    if (!providerSelection) {
-      return;
-    }
-    const selectedProvider = providerSelection.provider;
-    responseInteraction = providerSelection.interaction;
+    const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
+    canonicalMessage = phase.message;
+    if (savedProviders.length === 0) return;
 
-    if (isCustomProvider(selectedProvider)) {
-      const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
-      const customAvailableModels = selectedSavedConfig
-        ? ((await llmModelRepo.loadAvailableEmbeddingModels(selectedProvider, false, {
-            kind: "server",
-            ownerId: tomoriState.server_id,
-          })) ?? [])
-        : [];
-      const customModelChoices = customAvailableModels.filter(
-        (model): model is typeof model & { embedding_model_id: number } =>
-          model.embedding_model_id !== undefined && model.embedding_model_id !== null,
-      );
-      if (!selectedSavedConfig || customModelChoices.length === 0) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.embedding.no_models_title",
-          descriptionKey: "commands.model.embedding.no_models_description",
-          descriptionVars: {
-            provider: getProviderDisplayName(selectedProvider),
-          },
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
+    // 2. Resolve the provider and the unacknowledged button the modal opens from.
+    const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
+    if (!opener) return;
+    const selectedProvider = opener.provider;
+    const isCustom = isCustomProvider(selectedProvider);
 
-      // Single registered model activates directly; multiple show a string-select picker.
-      const selection = await promptCustomModelSelection({
-        interaction: responseInteraction,
-        locale,
-        choices: customModelChoices.map((model) => ({
-          model,
-          value: model.embedding_model_id.toString(),
-          label: getEmbeddingModelDisplayName(model) ?? model.codename,
-          description: getLocalizedDescription(model, userData.language_pref),
-        })),
-        modalCustomId: "config_model_embedding_custom_modal",
-        modalTitleKey: "commands.model.embedding.modal_title",
-        selectLabelKey: "commands.model.embedding.select_label",
-        selectDescriptionKey: "commands.model.embedding.select_description",
-        selectPlaceholderKey: "commands.model.embedding.select_placeholder",
-      });
-      if (!selection) return;
-
-      const selectedConfiguredModel = selection.model;
-      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
-      const currentSelectedId = tomoriState.config.embedding_model_id ?? null;
-      const selectedModelName =
-        getEmbeddingModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
-
-      if (selectedConfiguredModel.embedding_model_id === currentSelectedId) {
-        await replyInfoEmbed(customReplyTarget, locale, {
-          titleKey: "commands.model.embedding.already_selected_title",
-          descriptionKey: "commands.model.embedding.already_selected_description",
-          descriptionVars: {
-            model_name: selectedModelName,
-          },
-          color: ColorCode.WARN,
-        });
-        return;
-      }
-
-      const previousModel = currentSelectedId ? await llmModelRepo.loadEmbeddingModelById(currentSelectedId) : null;
-      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
-        embedding_model_id: selectedConfiguredModel.embedding_model_id,
-      });
-
-      if (!updated) {
-        await replyInfoEmbed(customReplyTarget, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-      await replyInfoEmbed(customReplyTarget, locale, {
-        titleKey: "commands.model.embedding.success_title",
-        descriptionKey: "commands.model.embedding.success_description",
-        descriptionVars: {
-          model_name: selectedModelName,
-          previous_model:
-            getEmbeddingModelDisplayName(previousModel) ?? localizer(locale, "commands.model.embedding.current_none"),
-          provider: getProviderDisplayName(selectedProvider),
-        },
-        color: ColorCode.SUCCESS,
-      });
-      return;
-    }
-
-    const availableModels =
+    // 3. Load this provider's embedding models (custom + regular share the list).
+    const availableModels = (
       (await llmModelRepo.loadAvailableEmbeddingModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
-      })) ?? [];
-    if (!availableModels.length) {
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "commands.model.embedding.no_models_title",
-        descriptionKey: "commands.model.embedding.no_models_description",
-        descriptionVars: {
-          provider: getProviderDisplayName(selectedProvider),
-        },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
+      })) ?? []
+    ).filter(
+      (model): model is typeof model & { embedding_model_id: number } =>
+        model.embedding_model_id !== undefined && model.embedding_model_id !== null,
+    );
+    type EmbeddingModelChoice = (typeof availableModels)[number];
+
+    if (availableModels.length === 0) {
+      await phase.useButton(opener.button).replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.embedding.no_models_title",
+          descriptionKey: "commands.model.embedding.no_models_description",
+          descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
-    const modelSelectOptions: SelectOption[] = [];
-    for (const model of availableModels) {
-      if (model.embedding_model_id === null || model.embedding_model_id === undefined) {
-        continue;
-      }
-      modelSelectOptions.push({
-        label: safeSelectOptionText(model.codename),
-        value: safeSelectOptionText(model.embedding_model_id.toString()),
-        description: safeSelectOptionText(getLocalizedDescription(model, userData.language_pref)),
-      });
-    }
-
-    if (modelSelectOptions.length === 0) {
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "commands.model.embedding.no_models_title",
-        descriptionKey: "commands.model.embedding.no_models_description",
-        descriptionVars: {
-          provider: getProviderDisplayName(selectedProvider),
-        },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const modalResult = await promptWithRawModal(
-      responseInteraction,
-      locale,
-      {
-        modalCustomId: MODAL_CUSTOM_ID,
+    // 4. Acquire the selected model. A custom provider with a single registered model
+    //    activates directly (no modal); otherwise a string-select modal is shown in place.
+    let work: PersonaWorkflowInPlacePhase;
+    let chosenModel: EmbeddingModelChoice | null;
+    if (isCustom && availableModels.length === 1) {
+      work = await phase.useButton(opener.button).beginInPlaceWork();
+      chosenModel = availableModels[0];
+    } else {
+      // >25 models route through the canonical range selector automatically.
+      const modalPhase = await openCanonicalModal(phase, opener.button, locale, {
+        modalCustomId: isCustom ? "config_model_embedding_custom_modal" : MODAL_CUSTOM_ID,
         modalTitleKey: "commands.model.embedding.modal_title",
         components: [
           {
@@ -248,89 +168,58 @@ export async function execute(
             descriptionKey: "commands.model.embedding.select_description",
             placeholder: "commands.model.embedding.select_placeholder",
             required: true,
-            options: modelSelectOptions,
+            options: availableModels.map((model) => ({
+              label: safeSelectOptionText(model.codename),
+              value: safeSelectOptionText(model.embedding_model_id.toString()),
+              description: safeSelectOptionText(getLocalizedDescription(model, userData.language_pref)),
+            })),
           },
         ],
-      },
-      MessageFlags.Ephemeral,
-    );
-
-    if (modalResult.outcome !== "submit") {
-      log.info(`Embedding model selection modal ${modalResult.outcome} for user ${userData.user_id}`);
-      return;
-    }
-
-    if (!modalResult.interaction || !modalResult.values) {
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
       });
-      return;
+      if (!modalPhase) return;
+      work = await modalPhase.beginInPlaceWork();
+      const selectedId = Number.parseInt(modalPhase.values[MODEL_SELECT_ID], 10);
+      chosenModel = availableModels.find((model) => model.embedding_model_id === selectedId) ?? null;
     }
+    selectedModel = chosenModel;
 
-    modalSubmitInteraction = modalResult.interaction;
-    const selectedModelIdStr = modalResult.values[MODEL_SELECT_ID];
-    if (!selectedModelIdStr) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.embedding.invalid_model_title",
-        descriptionKey: "commands.model.embedding.invalid_model_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-    const selectedModelId = Number.parseInt(selectedModelIdStr, 10);
-    selectedModel = availableModels.find((model) => model.embedding_model_id === selectedModelId) ?? null;
-
-    if (!selectedModel?.embedding_model_id) {
-      const context: ErrorContext = {
-        personaId: tomoriState.persona_id,
-        serverId: tomoriState.server_id,
-        userId: userData.user_id,
-        errorType: "CommandExecutionError",
-        metadata: {
-          command: "model embedding",
-          guildId: interaction.guild?.id ?? interaction.user.id,
-          requestedModelId: selectedModelIdStr,
-        },
-      };
-      await log.error(
-        "Selected embedding model ID not found in available models from DB",
-        new Error("Invalid model selection despite modal choices"),
-        context,
+    if (!chosenModel) {
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.embedding.invalid_model_title",
+          descriptionKey: "commands.model.embedding.invalid_model_description",
+          color: ColorCode.ERROR,
+        }),
       );
-
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.embedding.invalid_model_title",
-        descriptionKey: "commands.model.embedding.invalid_model_description",
-        color: ColorCode.ERROR,
-      });
       return;
     }
 
-    if (selectedModel.embedding_model_id === tomoriState.config.embedding_model_id) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.embedding.already_selected_title",
-        descriptionKey: "commands.model.embedding.already_selected_description",
-        descriptionVars: {
-          model_name: selectedModel.codename,
-        },
-        color: ColorCode.WARN,
-      });
+    const selectedModelName = getEmbeddingModelDisplayName(chosenModel) ?? getProviderDisplayName(selectedProvider);
+
+    if (chosenModel.embedding_model_id === tomoriState.config.embedding_model_id) {
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.embedding.already_selected_title",
+          descriptionKey: "commands.model.embedding.already_selected_description",
+          descriptionVars: { model_name: selectedModelName },
+          color: ColorCode.WARN,
+        }),
+      );
       return;
     }
 
+    // A change of embedding family invalidates existing document vectors, so re-embed.
     const currentEmbeddingModel = tomoriState.config.embedding_model_id
       ? await llmModelRepo.loadEmbeddingModelById(tomoriState.config.embedding_model_id)
       : null;
     const shouldReembed =
-      currentEmbeddingModel?.model_family && currentEmbeddingModel.model_family !== selectedModel.model_family;
+      currentEmbeddingModel?.model_family && currentEmbeddingModel.model_family !== chosenModel.model_family;
 
     const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
-      embedding_model_id: selectedModel.embedding_model_id,
+      embedding_model_id: chosenModel.embedding_model_id,
     });
-
     if (!updated) {
       const context: ErrorContext = {
         personaId: tomoriState.persona_id,
@@ -340,36 +229,43 @@ export async function execute(
         metadata: {
           command: "model embedding",
           guildId: interaction.guild?.id ?? interaction.user.id,
-          selectedModelCodename: selectedModel.codename,
-          targetEmbeddingModelId: selectedModel.embedding_model_id,
+          selectedModelCodename: chosenModel.codename,
+          targetEmbeddingModelId: chosenModel.embedding_model_id,
         },
       };
       await log.error("Failed to update embedding model config", new Error("Database update failed"), context);
-
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.update_failed_title",
+          descriptionKey: "general.errors.update_failed_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
+    // Re-embed in place: show the progress notice on the canonical message, run the
+    // (potentially long) re-embed, then land the success terminal on the same message.
     if (shouldReembed && isRagAvailable()) {
       const docCount = await serverMemoryRepository.countDocuments(tomoriState.server_id);
       if (docCount > 0) {
-        await replyInfoEmbed(modalSubmitInteraction, locale, {
-          titleKey: "commands.model.embedding.reembed_started_title",
-          descriptionKey: "commands.model.embedding.reembed_started_description",
-          color: ColorCode.INFO,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.embedding.reembed_started_title",
+            descriptionKey: "commands.model.embedding.reembed_started_description",
+            color: ColorCode.INFO,
+          }),
+        );
 
         const creds = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
         const limits = getMemoryLimits();
         await ragRepository.reembedServerDocuments({
           serverId: tomoriState.server_id,
-          embeddingModel: selectedModel,
+          embeddingModel: chosenModel,
           apiKey: creds.apiKey,
           chunkSize: limits.documentChunkSize,
           chunkOverlap: limits.documentChunkOverlap,
@@ -377,28 +273,21 @@ export async function execute(
       }
     }
 
-    const previousModel = currentEmbeddingModel?.codename
-      ? currentEmbeddingModel.codename
-      : localizer(locale, "commands.model.embedding.current_none");
-
-    const successOptions = {
-      titleKey: "commands.model.embedding.success_title",
-      descriptionKey: "commands.model.embedding.success_description",
-      descriptionVars: {
-        model_name: selectedModel.codename,
-        previous_model: previousModel,
-        provider: getProviderDisplayName(selectedProvider),
-      },
-      color: ColorCode.SUCCESS,
-    } as const;
-
-    const replacedPicker =
-      modalSubmitInteraction &&
-      (await replaceProviderPickerWithInfo(providerSelection, modalSubmitInteraction, locale, successOptions));
-
-    if (!replacedPicker) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, successOptions);
-    }
+    await work.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.model.embedding.success_title",
+        descriptionKey: "commands.model.embedding.success_description",
+        descriptionVars: {
+          model_name: selectedModelName,
+          previous_model:
+            getEmbeddingModelDisplayName(currentEmbeddingModel) ??
+            localizer(locale, "commands.model.embedding.current_none"),
+          provider: getProviderDisplayName(selectedProvider),
+        },
+        color: ColorCode.SUCCESS,
+      }),
+    );
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
@@ -414,8 +303,25 @@ export async function execute(
     };
     await log.error(`Error executing /model embedding for user ${userData.user_disc_id}`, error as Error, context);
 
-    const replyTarget = modalSubmitInteraction ?? responseInteraction;
-    await replyInfoEmbed(replyTarget, locale, {
+    // Render the unexpected-error terminal on the canonical message; fall back to a fresh
+    // reply only if the message is already gone (fatal) or was never created.
+    if (canonicalMessage) {
+      try {
+        await canonicalMessage.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+        return;
+      } catch {
+        // Fall through to a fresh reply below.
+      }
+    }
+
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,
