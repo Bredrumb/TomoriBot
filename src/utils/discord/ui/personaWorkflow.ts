@@ -1,12 +1,8 @@
 import { ButtonStyle, ComponentType, MessageFlags } from "discord.js";
 import type {
-  ActionRowData,
   APIAttachment,
-  ButtonComponentData,
   ButtonInteraction,
   ChatInputCommandInteraction,
-  ComponentInContainerData,
-  ContainerComponentData,
   InteractionEditReplyOptions,
   InteractionReplyOptions,
   Message,
@@ -14,15 +10,21 @@ import type {
   ModalSubmitInteraction,
 } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import type { ModalComponent, ModalOptions } from "@/types/discord/modal";
+import type { ModalOptions } from "@/types/discord/modal";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import {
   buildNoticeContainer,
+  buildRangeSelectorPayload,
+  getPaginatedModalComponent,
   hasRawModalAcknowledgement,
   isCollectorTimeoutError,
+  MODAL_OPTIONS_PER_PAGE,
+  parseModalRangeIndex,
   promptWithRawModal,
+  RANGES_PER_SELECTOR_PAGE,
   replyPaginatedPersonaChoicesV2,
+  sliceModalOptions,
 } from "./interactionCore";
 import type { AvatarSessionCache } from "./interactionCore";
 import type { NoticeContainerOptions } from "./interactionCore";
@@ -33,9 +35,6 @@ export const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
   Number.isFinite(configuredWorkflowTimeout) && configuredWorkflowTimeout > 0
     ? configuredWorkflowTimeout
     : DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS;
-const OPTIONS_PER_MODAL = 25;
-const RANGES_PER_SELECTOR_PAGE = 20;
-const RANGE_BUTTONS_PER_ROW = 5;
 
 type PersonaWorkflowRootInteraction = ChatInputCommandInteraction | ButtonInteraction;
 type PersonaWorkflowMessageInteraction = ButtonInteraction | ModalMessageModalSubmitInteraction;
@@ -741,97 +740,6 @@ function buildModalReadyPayload(locale: string, customId: string): PersonaWorkfl
   };
 }
 
-function buildRangeSelectorPayload(
-  locale: string,
-  customIdPrefix: string,
-  optionCount: number,
-  rangePage: number,
-): PersonaWorkflowComponentsV2Payload {
-  const totalRanges = Math.ceil(optionCount / OPTIONS_PER_MODAL);
-  const totalRangePages = Math.ceil(totalRanges / RANGES_PER_SELECTOR_PAGE);
-  const firstRange = rangePage * RANGES_PER_SELECTOR_PAGE;
-  const lastRange = Math.min(firstRange + RANGES_PER_SELECTOR_PAGE, totalRanges);
-  const components: ComponentInContainerData[] = [
-    {
-      type: ComponentType.TextDisplay,
-      content: `### ${localizer(locale, "general.pagination.select_page_title")}`,
-    },
-    {
-      type: ComponentType.TextDisplay,
-      content: localizer(locale, "general.pagination.select_page_description", {
-        totalItems: optionCount,
-        totalPages: totalRanges,
-      }),
-    },
-  ];
-
-  const rangeButtons: ButtonComponentData[] = [];
-  for (let rangeIndex = firstRange; rangeIndex < lastRange; rangeIndex += 1) {
-    const start = rangeIndex * OPTIONS_PER_MODAL + 1;
-    const end = Math.min(start + OPTIONS_PER_MODAL - 1, optionCount);
-    rangeButtons.push({
-      type: ComponentType.Button,
-      style: ButtonStyle.Primary,
-      customId: `${customIdPrefix}_range_${rangeIndex}`,
-      label: `${start}-${end}`,
-    });
-  }
-  for (let offset = 0; offset < rangeButtons.length; offset += RANGE_BUTTONS_PER_ROW) {
-    components.push({
-      type: ComponentType.ActionRow,
-      components: rangeButtons.slice(offset, offset + RANGE_BUTTONS_PER_ROW),
-    } satisfies ActionRowData<ButtonComponentData>);
-  }
-
-  const navigation: ButtonComponentData[] = [
-    {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      customId: `${customIdPrefix}_previous`,
-      label: localizer(locale, "general.pagination.previous"),
-      disabled: rangePage === 0,
-    },
-    {
-      type: ComponentType.Button,
-      style: ButtonStyle.Danger,
-      customId: `${customIdPrefix}_cancel`,
-      label: localizer(locale, "general.pagination.cancel"),
-    },
-    {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      customId: `${customIdPrefix}_next`,
-      label: localizer(locale, "general.pagination.next"),
-      disabled: rangePage >= totalRangePages - 1,
-    },
-  ];
-  components.push({
-    type: ComponentType.ActionRow,
-    components: navigation,
-  } satisfies ActionRowData<ButtonComponentData>);
-
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
-    components,
-  };
-  return { components: [container], flags: MessageFlags.IsComponentsV2 };
-}
-
-function getPaginatedModalComponent(options: ModalOptions): ModalComponent | undefined {
-  return options.components.find((component) => "options" in component && Array.isArray(component.options));
-}
-
-function sliceModalOptions(options: ModalOptions, target: ModalComponent, start: number, end: number): ModalOptions {
-  return {
-    ...options,
-    components: options.components.map((component) => {
-      if (component !== target || !("options" in component)) return component;
-      return { ...component, options: component.options.slice(start, end) } as ModalComponent;
-    }),
-  };
-}
-
 function publicPayloadIsEphemeral(flags: unknown): boolean {
   if (typeof flags === "number") return (flags & MessageFlags.Ephemeral) !== 0;
   if (typeof flags === "bigint") return (flags & BigInt(MessageFlags.Ephemeral)) !== 0n;
@@ -1036,7 +944,7 @@ async function openModalWithBridge(
   const paginatedComponent = getPaginatedModalComponent(options);
   const optionCount = paginatedComponent && "options" in paginatedComponent ? paginatedComponent.options.length : 0;
 
-  if (typeof source === "function" && optionCount <= OPTIONS_PER_MODAL) {
+  if (typeof source === "function" && optionCount <= MODAL_OPTIONS_PER_PAGE) {
     const prefix = `persona_workflow_${initialButton.id}_open`;
     await controller.replace(buildModalReadyPayload(locale, prefix));
     try {
@@ -1066,7 +974,7 @@ async function openModalWithBridge(
     }
   }
 
-  if (!paginatedComponent || optionCount <= OPTIONS_PER_MODAL) {
+  if (!paginatedComponent || optionCount <= MODAL_OPTIONS_PER_PAGE) {
     return openRawWorkflowModal(modalButton, locale, options, 0, controller);
   }
 
@@ -1115,14 +1023,14 @@ async function openModalWithBridge(
       continue;
     }
     if (rangeButton.customId === `${prefix}_next`) {
-      const totalRangePages = Math.ceil(Math.ceil(optionCount / OPTIONS_PER_MODAL) / RANGES_PER_SELECTOR_PAGE);
+      const totalRangePages = Math.ceil(Math.ceil(optionCount / MODAL_OPTIONS_PER_PAGE) / RANGES_PER_SELECTOR_PAGE);
       rangePage = Math.min(totalRangePages - 1, rangePage + 1);
       await controller.replaceFrom(rangeButton, buildRangeSelectorPayload(locale, prefix, optionCount, rangePage));
       continue;
     }
 
-    const rangeIndex = Number.parseInt(rangeButton.customId.replace(`${prefix}_range_`, ""), 10);
-    if (Number.isNaN(rangeIndex)) {
+    const rangeIndex = parseModalRangeIndex(rangeButton.customId, prefix);
+    if (rangeIndex === null) {
       await controller.replaceFrom(
         rangeButton,
         noticePayload(
@@ -1138,12 +1046,12 @@ async function openModalWithBridge(
       };
     }
 
-    const optionOffset = rangeIndex * OPTIONS_PER_MODAL;
+    const optionOffset = rangeIndex * MODAL_OPTIONS_PER_PAGE;
     const rangedOptions = sliceModalOptions(
       options,
       paginatedComponent,
       optionOffset,
-      Math.min(optionOffset + OPTIONS_PER_MODAL, optionCount),
+      Math.min(optionOffset + MODAL_OPTIONS_PER_PAGE, optionCount),
     );
     return openRawWorkflowModal(rangeButton, locale, rangedOptions, optionOffset, controller);
   }

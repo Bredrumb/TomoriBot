@@ -282,6 +282,11 @@ export async function execute(
       const channelModalResult = await promptWithPaginatedModal(responseInteraction, locale, {
         modalCustomId: "config_model_text_channel_modal",
         modalTitleKey: "commands.model.text.modal_title",
+        // Opt into the shared Components V2 range selector for the >25-model list.
+        // Safe: responseInteraction is unacknowledged here, so the selector takes the
+        // fresh-reply path (no legacy→V2 editReply), and Phase 1's guard covers the
+        // error-path fallback to the original interaction.
+        selectorStyle: "componentsV2",
         components: [
           {
             customId: MODEL_SELECT_ID,
@@ -775,6 +780,11 @@ export async function execute(
     const modalResult = await promptWithPaginatedModal(responseInteraction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.model.text.modal_title",
+      // Opt into the shared Components V2 range selector for the >25-model list.
+      // Safe: responseInteraction is unacknowledged here (global scope never defers),
+      // so the selector takes the fresh-reply path; Phase 1's guard covers the
+      // single-provider error-path fallback to the marked original interaction.
+      selectorStyle: "componentsV2",
       components: [
         {
           customId: MODEL_SELECT_ID,

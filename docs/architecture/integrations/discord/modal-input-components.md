@@ -349,7 +349,7 @@ Is the input free-form text?
 - **Radio Group**: 2-10 options. No emoji support. No placeholder text.
 - **Checkbox Group**: 1-10 options. Supports `min_values`/`max_values` for range control. Also serves as the workaround for required single-boolean inputs.
 - **Checkbox**: Cannot be `required`. Use a Checkbox Group with 1 option if required behavior is needed.
-- **String Select**: Up to 25 options natively. Generic non-persona flows may use `promptWithPaginatedModal()`; persona workflows must use `selection.openModal(...)`, whose `>25` bridge remains on the canonical Components V2 message. Supports emoji, descriptions, and placeholder text.
+- **String Select**: Up to 25 options natively. Generic non-persona flows may use `promptWithPaginatedModal()` — pass `selectorStyle: "componentsV2"` to render the same `>25` range selector (`1-25`/`26-50` + Previous/Cancel/Next) the persona workflow uses, or omit it for the legacy numbered page-button embed (default). Persona workflows must use `selection.openModal(...)`, whose `>25` bridge remains on the canonical Components V2 message. Both selectors share `buildRangeSelectorPayload`. Supports emoji, descriptions, and placeholder text.
 - **All new components** must be wrapped in a **Label** (type 18), not an Action Row.
 
 ### Persona workflow modal bridge

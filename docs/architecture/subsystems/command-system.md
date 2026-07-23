@@ -345,6 +345,27 @@ Rules:
 - `promptWithPaginatedModal(...)` does not expose an auto-defer parameter; defer on submission manually when needed
 - commands that begin with a persona picker use Pattern 4A; the workflow owns picker acknowledgment and retries
 
+**`>25`-option selector style.** `promptWithPaginatedModal(...)` accepts an optional
+`selectorStyle: "legacy" | "componentsV2"` (default `"legacy"`). At `<=25` options both
+styles open a modal directly, so this only affects the paginated path:
+
+- `"legacy"` — numbered page-button embed on the interaction's reply (`1` `2` `3`, capped
+  at 9 pages).
+- `"componentsV2"` — the shared Components V2 range selector (`1-25` / `26-50` ranges +
+  Previous/Cancel/Next), byte-identical to the persona workflow's `>25` shell
+  (`buildRangeSelectorPayload`). Its Cancel button returns `outcome: "cancelled"` (the
+  legacy selector has no Cancel and never returns it); callers gating on
+  `outcome !== "submit"` already handle it.
+
+The V2 selector renders `IsComponentsV2` onto the interaction's reply, which Discord then
+forbids editing with legacy embeds. The selector marks the interaction, and the shared
+sinks (`replyInfoEmbed`/`replySummaryEmbed`/`replyPaginatedStatusPages`) detect the mark
+and emit a V2 notice container instead of embeds — so a later error/info reply to the same
+interaction cannot collide. Before opting a caller into `"componentsV2"`, confirm the
+interaction reaching the helper is unacknowledged (fresh-reply path) rather than a
+deferred/replied **legacy** message, since Discord cannot convert a legacy reply to V2 via
+`editReply`.
+
 ### Pattern 4A: Persona Picker Workflow
 
 Commands that begin with a persona picker use the single command-facing entry point in

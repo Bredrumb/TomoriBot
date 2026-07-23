@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { ComponentType, MessageFlags } from "discord.js";
+import { ButtonStyle, ComponentType, MessageFlags } from "discord.js";
 import type {
   APIAttachment,
   ButtonInteraction,
@@ -87,6 +87,11 @@ mock.module("@/utils/text/localizer", () => ({
     variables ? `${key}:${JSON.stringify(variables)}` : key,
 }));
 
+// Mirror the real interactionCore constants so the faithful stubs below compute the
+// same range/page math the persona range-selector tests rely on.
+const MOCK_OPTIONS_PER_PAGE = 25;
+const MOCK_RANGES_PER_SELECTOR_PAGE = 20;
+
 mock.module("@/utils/discord/ui/interactionCore", () => ({
   buildNoticeContainer: (options: {
     titleKey: string;
@@ -143,6 +148,75 @@ mock.module("@/utils/discord/ui/interactionCore", () => ({
     const queued = pickerQueue.shift();
     if (!queued) throw new Error("Persona picker mock queue is empty.");
     return typeof queued === "function" ? queued(options) : queued;
+  },
+  // ── shared paginated-modal helpers personaWorkflow.ts now imports from here ──
+  // `mock.module` replaces the whole module, so these must be stubbed with faithful
+  // behavior (the range-selector tests below click buttons from the rendered payload
+  // and assert the sliced option offsets). They mirror the real pure helpers in
+  // interactionCore.ts one-for-one.
+  MODAL_OPTIONS_PER_PAGE: MOCK_OPTIONS_PER_PAGE,
+  RANGES_PER_SELECTOR_PAGE: MOCK_RANGES_PER_SELECTOR_PAGE,
+  getPaginatedModalComponent: (options: ModalOptions) =>
+    options.components.find((component) => "options" in component && Array.isArray(component.options)),
+  sliceModalOptions: (options: ModalOptions, target: unknown, start: number, end: number): ModalOptions => ({
+    ...options,
+    components: options.components.map((component) =>
+      component === target && "options" in component
+        ? { ...component, options: component.options.slice(start, end) }
+        : component,
+    ),
+  }),
+  parseModalRangeIndex: (customId: string, prefix: string): number | null => {
+    const marker = `${prefix}_range_`;
+    if (!customId.startsWith(marker)) return null;
+    const parsed = Number.parseInt(customId.slice(marker.length), 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  },
+  buildRangeSelectorPayload: (_locale: string, prefix: string, optionCount: number, rangePage: number) => {
+    const totalRanges = Math.ceil(optionCount / MOCK_OPTIONS_PER_PAGE);
+    const totalRangePages = Math.ceil(totalRanges / MOCK_RANGES_PER_SELECTOR_PAGE);
+    const firstRange = rangePage * MOCK_RANGES_PER_SELECTOR_PAGE;
+    const lastRange = Math.min(firstRange + MOCK_RANGES_PER_SELECTOR_PAGE, totalRanges);
+    const rangeButtons = [];
+    for (let rangeIndex = firstRange; rangeIndex < lastRange; rangeIndex += 1) {
+      rangeButtons.push({
+        type: ComponentType.Button,
+        style: ButtonStyle.Primary,
+        customId: `${prefix}_range_${rangeIndex}`,
+        label: `${rangeIndex * MOCK_OPTIONS_PER_PAGE + 1}`,
+      });
+    }
+    const rows = [];
+    for (let offset = 0; offset < rangeButtons.length; offset += 5) {
+      rows.push({ type: ComponentType.ActionRow, components: rangeButtons.slice(offset, offset + 5) });
+    }
+    rows.push({
+      type: ComponentType.ActionRow,
+      components: [
+        { type: ComponentType.Button, style: ButtonStyle.Secondary, customId: `${prefix}_previous`, label: "prev" },
+        { type: ComponentType.Button, style: ButtonStyle.Danger, customId: `${prefix}_cancel`, label: "cancel" },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: `${prefix}_next`,
+          label: "next",
+          disabled: rangePage >= totalRangePages - 1,
+        },
+      ],
+    });
+    return {
+      components: [
+        {
+          type: ComponentType.Container,
+          components: [
+            { type: ComponentType.TextDisplay, content: "range-title" },
+            { type: ComponentType.TextDisplay, content: "range-desc" },
+            ...rows,
+          ],
+        },
+      ],
+      flags: MessageFlags.IsComponentsV2,
+    };
   },
 }));
 
