@@ -42,6 +42,8 @@ export default {
       cancel_description: `コマンドはキャンセルされました。`,
       timeout_title: `⏰ コマンドがタイムアウトしました`,
       timeout_description: `時間内に応答しませんでした。もう一度お試しください。`,
+      selector_opened_title: `フォームを開きました`,
+      selector_opened_description: `入力フォームを開いています。送信すると続行し、閉じるとキャンセルされます。`,
     },
     text_preview: {
       truncated_footer: `全 {total} 文字のうち、最初の {shown} 文字を表示しています。`,

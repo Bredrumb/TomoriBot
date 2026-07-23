@@ -67,6 +67,13 @@ const calls: RecordedCall[] = [];
 const warnings: RecordedWarning[] = [];
 let rawModalAcknowledged = new WeakSet<object>();
 let acknowledgeRawModal = true;
+// Resolution-order + gate instrumentation for the collapse-at-open ordering tests.
+// `resolutionOrder` records when an edit actually completes (not when it is invoked),
+// so a terminal edit that awaits a gated collapse lands after it. `collapseGate` blocks
+// the collapse edit until released; `rejectCollapse` makes it throw.
+const resolutionOrder: string[] = [];
+let collapseGate: Promise<void> | null = null;
+let rejectCollapse = false;
 
 mock.module("@/utils/misc/logger", () => ({
   ColorCode: {
@@ -314,6 +321,10 @@ function makeHarness(canonicalMessageId = "canonical-message"): WorkflowHarness 
       harness.record("root.editReply", "root-interaction", payload);
       harness.lastRenderedPayload = payload;
       if (harness.rootEditError !== undefined) throw harness.rootEditError;
+      const isCollapse = JSON.stringify(payload?.components ?? []).includes("selector_opened");
+      if (isCollapse && rejectCollapse) throw new Error("collapse edit failed");
+      if (isCollapse && collapseGate) await collapseGate;
+      resolutionOrder.push("root.editReply");
       return harness.rootEditMessage ?? harness.message;
     },
     fetchReply: async () => {
@@ -374,11 +385,13 @@ function makeModalSubmit(
       harness.record("modal.update", id, payload);
       harness.lastRenderedPayload = payload;
       modal.replied = true;
+      resolutionOrder.push("modal.update");
       return { resource: { message: harness.message } };
     },
     deferUpdate: async (options?: unknown) => {
       harness.record("modal.deferUpdate", id, options);
       modal.deferred = true;
+      resolutionOrder.push("modal.deferUpdate");
       return { resource: { message: harness.message } };
     },
   };
@@ -482,6 +495,9 @@ beforeEach(() => {
   rawModalAcknowledged = new WeakSet<object>();
   acknowledgeRawModal = true;
   interactionSequence = 0;
+  resolutionOrder.length = 0;
+  collapseGate = null;
+  rejectCollapse = false;
 });
 
 describe("runPersonaPickerWorkflow selection and terminal outcomes", () => {
@@ -755,7 +771,15 @@ describe("workflow acknowledgment and modal phases", () => {
     });
 
     expect(result.outcome).toBe("selected");
-    expect(calls.map((call) => call.method)).toEqual(["rawModal", "modal.deferUpdate", "root.editReply"]);
+    // The leading root.editReply is collapse-at-open, fired as the modal opened so a
+    // dismissal cannot strand live controls; the trailing one is the terminal render.
+    expect(calls.map((call) => call.method)).toEqual([
+      "root.editReply",
+      "rawModal",
+      "modal.deferUpdate",
+      "root.editReply",
+    ]);
+    expect(JSON.stringify(getPayload(calls[0]).components)).toContain("selector_opened_title");
     expect(calls.some((call) => call.method === "button.deferUpdate" && call.source === selectedButton.id)).toBe(false);
     expect(calls.some((call) => call.method === "button.update" && call.source === selectedButton.id)).toBe(false);
     expectAllInPlacePayloadsAreV2();
@@ -780,10 +804,73 @@ describe("workflow acknowledgment and modal phases", () => {
     });
 
     expect(result.outcome).toBe("selected");
-    expect(calls.map((call) => call.method)).toEqual(["rawModal", "modal.update"]);
+    // Collapse-at-open adds one root.editReply as the modal opens; the terminal edit
+    // still lands through the fresh, message-backed modal submit (modal.update).
+    expect(calls.map((call) => call.method)).toEqual(["root.editReply", "rawModal", "modal.update"]);
     expect(calls.some((call) => call.method === "modal.deferUpdate")).toBe(false);
-    expect(calls.some((call) => call.method === "root.editReply")).toBe(false);
+    const rootEdits = calls.filter((call) => call.method === "root.editReply");
+    expect(rootEdits).toHaveLength(1);
+    expect(JSON.stringify(getPayload(rootEdits[0]).components)).toContain("selector_opened_title");
     expectAllInPlacePayloadsAreV2();
+  });
+
+  it("orders the terminal edit after a slow collapse-at-open edit (constraint C)", async () => {
+    const harness = makeHarness();
+    const selectedButton = makeButton(harness);
+    const modalSubmit = makeModalSubmit(harness);
+    queueSelection(selectedButton, 0);
+    rawModalQueue.push({ outcome: "submit", interaction: modalSubmit });
+
+    // Gate the collapse edit so it resolves only after we release it. If the terminal
+    // edit did not settle the collapse first, modal.update would complete before the
+    // collapse, flipping the recorded resolution order.
+    let releaseCollapse!: () => void;
+    collapseGate = new Promise<void>((resolve) => {
+      releaseCollapse = resolve;
+    });
+
+    const runPromise = runPersonaPickerWorkflow(harness.root, "en-US", {
+      personas: [makePersona(1)],
+      onSelected: async (selection) => {
+        const modal = await selection.openModal(modalOptions(1));
+        if (modal.outcome !== "submitted") return completePersonaWorkflow();
+        await modal.phase.replace(v2Payload("terminal after collapse"));
+        return completePersonaWorkflow();
+      },
+    });
+
+    // Let the flow progress to where the terminal edit is blocked on the gated collapse.
+    await Promise.resolve();
+    expect(resolutionOrder).not.toContain("modal.update");
+    releaseCollapse();
+    const result = await runPromise;
+
+    expect(result.outcome).toBe("selected");
+    expect(resolutionOrder).toEqual(["root.editReply", "modal.update"]);
+  });
+
+  it("swallows a rejecting collapse-at-open edit so the submit still succeeds (Review B5)", async () => {
+    const harness = makeHarness();
+    const selectedButton = makeButton(harness);
+    const modalSubmit = makeModalSubmit(harness);
+    queueSelection(selectedButton, 0);
+    rawModalQueue.push({ outcome: "submit", interaction: modalSubmit });
+    // The collapse edit rejects; because it is `.catch()`ed at storage, settling it must
+    // not throw and the real submit must still render its terminal state.
+    rejectCollapse = true;
+
+    const result = await runPersonaPickerWorkflow(harness.root, "en-US", {
+      personas: [makePersona(1)],
+      onSelected: async (selection) => {
+        const modal = await selection.openModal(modalOptions(1));
+        if (modal.outcome !== "submitted") return completePersonaWorkflow();
+        await modal.phase.replace(v2Payload("terminal despite rejected collapse"));
+        return completePersonaWorkflow("done");
+      },
+    });
+
+    expect(result.outcome).toBe("selected");
+    expect(calls.some((call) => call.method === "modal.update")).toBe(true);
   });
 
   it("acknowledges before asynchronously loading modal options, then opens from a fresh button", async () => {

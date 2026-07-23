@@ -42,6 +42,8 @@ export default {
       cancel_description: `The command has been cancelled.`,
       timeout_title: `⏰ Command Timed Out`,
       timeout_description: `You didn't respond in time. Please try again.`,
+      selector_opened_title: `Selector Opened`,
+      selector_opened_description: `The selection form is open. Submit it to continue, or dismiss it to cancel.`,
     },
     text_preview: {
       truncated_footer: `Showing the first {shown} of {total} characters.`,

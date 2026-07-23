@@ -205,6 +205,11 @@ mock.module("@/utils/misc/logger", () => ({
 
 mock.module("@/utils/text/localizer", () => ({
   localizer: (_locale: string, key: string) => key,
+  initializeLocalizer: async () => undefined,
+  getSupportedLocales: () => ["en-US", "ja"],
+  getLocaleSubKeys: () => [],
+  getDefaultBotName: () => "Tomori",
+  getBaseTriggerWords: () => [],
 }));
 
 mock.module("@/utils/discord/openrouterModelMigrationNotice", () => ({
@@ -219,12 +224,58 @@ mock.module("@/utils/discord/commandRegistry", () => ({
   commandRegistry: { getCommandMention: () => "/openrouter model" },
 }));
 
+// Fake canonical one-message engine. It drives text.ts's global scope: the provider
+// step resolves to a single "open selector" button, the modal opens and submits the
+// scenario's model, and every terminal `replace` is recorded so the persistence and
+// terminal-rendering assertions can inspect what landed on the one canonical message.
+function makeCanonicalController() {
+  const replace = async (payload: InfoOptions) => {
+    chronology.push("message.replace");
+    replacements.push(payload);
+    return {};
+  };
+  return {
+    canonicalMessageId: "canonical-msg",
+    fetchMessage: async () => ({
+      id: "canonical-msg",
+      awaitMessageComponent: async () => ({
+        id: "opener-button",
+        customId: "model_text_global_open",
+        user: { id: "user-1" },
+      }),
+    }),
+    replace,
+  };
+}
+
 mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
+  isCollectorTimeoutError: () => false,
   buildPersonaWorkflowNotice: (options: unknown) => options,
   completePersonaWorkflow: () => ({ action: "complete" }),
   retryPersonaWorkflow: () => ({ action: "retry" }),
   runPersonaPickerWorkflow: async () => undefined,
+  beginCanonicalPrivateWorkflow: async () => {
+    const controller = makeCanonicalController();
+    const modalPhase = {
+      values: { model_select: scenario.selectedModel.llm_codename },
+      message: controller,
+      beginInPlaceWork: async () => ({ message: controller }),
+      replace: controller.replace,
+    };
+    const nestedButton = {
+      message: controller,
+      replace: controller.replace,
+      beginInPlaceWork: async () => ({ message: controller }),
+      openModal: async () => ({ outcome: "submitted", phase: modalPhase }),
+      delete: async () => undefined,
+    };
+    return {
+      phaseId: "phase-1",
+      message: controller,
+      useButton: () => nestedButton,
+    };
+  },
 }));
 
 function makeInteraction(): ChatInputCommandInteraction {
@@ -250,12 +301,10 @@ async function runCommand(): Promise<void> {
 }
 
 function expectUpdateFailure(): void {
+  // Terminal notices now render through the canonical controller, so the payload also
+  // carries `locale`/`color`; match on the title key rather than the whole object.
   const rendered = [...infoReplies, ...replacements];
-  expect(rendered).toContainEqual({
-    titleKey: "general.errors.update_failed_title",
-    descriptionKey: "general.errors.update_failed_description",
-    color: "#E74C3C",
-  });
+  expect(rendered.some((options) => options.titleKey === "general.errors.update_failed_title")).toBe(true);
   expect(rendered.some((options) => options.titleKey === "commands.model.text.success_title")).toBe(false);
 }
 
@@ -329,7 +378,7 @@ describe("/model text global persistence", () => {
     });
     expectBefore("cache.invalidate", "repo.apply-preset");
     expect(chronology.lastIndexOf("cache.invalidate")).toBeGreaterThan(chronology.indexOf("repo.apply-preset"));
-    expectBefore("repo.apply-preset", "provider.replace");
+    expectBefore("repo.apply-preset", "message.replace");
   });
 
   it("renders success only after the primary writes and default preset all succeed", async () => {
@@ -348,6 +397,6 @@ describe("/model text global persistence", () => {
       }),
     );
     expectBefore("cache.invalidate", "repo.apply-preset");
-    expectBefore("repo.apply-preset", "provider.replace");
+    expectBefore("repo.apply-preset", "message.replace");
   });
 });

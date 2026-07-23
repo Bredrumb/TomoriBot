@@ -213,6 +213,12 @@ function selectionPhase(iteration: number) {
 
 mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
+  // Present only for module linking — the persona scope never enters the canonical
+  // private workflow (that path is exercised by modelTextGlobalPersistence.test.ts).
+  beginCanonicalPrivateWorkflow: async () => {
+    throw new Error("beginCanonicalPrivateWorkflow is not used by the persona scope");
+  },
+  isCollectorTimeoutError: () => false,
   buildPersonaWorkflowNotice: (options: {
     titleKey: string;
     descriptionKey: string;
@@ -281,6 +287,13 @@ mock.module("@/utils/discord/ui/embeds", () => ({
 mock.module("@/utils/text/localizer", () => ({
   localizer: (_locale: string, key: string, variables?: Record<string, unknown>) =>
     variables ? `${key}:${JSON.stringify(variables)}` : key,
+  // Complete the export surface so a later-linked module that statically imports any of
+  // these (e.g. interactionCore → getBaseTriggerWords) does not break this file's linking.
+  initializeLocalizer: async () => undefined,
+  getSupportedLocales: () => ["en-US", "ja"],
+  getLocaleSubKeys: () => [],
+  getDefaultBotName: () => "Tomori",
+  getBaseTriggerWords: () => [],
 }));
 
 mock.module("@/utils/misc/logger", () => ({

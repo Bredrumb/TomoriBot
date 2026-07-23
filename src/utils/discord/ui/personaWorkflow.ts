@@ -29,12 +29,39 @@ import {
 import type { AvatarSessionCache } from "./interactionCore";
 import type { NoticeContainerOptions } from "./interactionCore";
 
+// Re-exported so canonical-workflow callers (e.g. commands/model/text.ts) can detect a
+// collector timeout without importing the heavy interactionCore module directly, keeping
+// their unit-test module graph small.
+export { isCollectorTimeoutError } from "./interactionCore";
+
 const DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS = 120000;
 const configuredWorkflowTimeout = Number.parseInt(process.env.PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS || "", 10);
 export const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
   Number.isFinite(configuredWorkflowTimeout) && configuredWorkflowTimeout > 0
     ? configuredWorkflowTimeout
     : DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS;
+
+/**
+ * Command files fully migrated to the canonical one-message workflow (Phase 4). The
+ * lock-down audit (`tests/unit/commands/canonicalMigrationLockdown.test.ts`) forbids
+ * every file listed here from calling the pre-canonical picker/modal primitives
+ * (`promptForSavedProvider`, `promptWithPaginatedModal`, `replaceProviderPickerWithInfo`,
+ * `promptWithRawModal`, `promptCustomModelSelection`). Their absence transitively
+ * guarantees the only modal path is the canonical controller, so no post-modal terminal
+ * can escape it via `replyInfoEmbed`/`followUp`. This is the single source of truth the
+ * migration ledger tracks: add a caller here only once it is fully canonical AND
+ * Discord-verified, never before.
+ */
+export const MIGRATED_CANONICAL_CALLERS: readonly string[] = ["src/commands/model/text.ts"];
+
+/** Primitives a migrated caller must not reach for; see {@link MIGRATED_CANONICAL_CALLERS}. */
+export const PRE_CANONICAL_PRIMITIVES: readonly string[] = [
+  "promptForSavedProvider",
+  "promptWithPaginatedModal",
+  "replaceProviderPickerWithInfo",
+  "promptWithRawModal",
+  "promptCustomModelSelection",
+];
 
 type PersonaWorkflowRootInteraction = ChatInputCommandInteraction | ButtonInteraction;
 type PersonaWorkflowMessageInteraction = ButtonInteraction | ModalMessageModalSubmitInteraction;
@@ -408,13 +435,18 @@ function disableInteractiveComponents(value: unknown): unknown {
   return component;
 }
 
-class CanonicalPersonaMessageController implements PersonaWorkflowMessageController {
+class CanonicalMessageController implements PersonaWorkflowMessageController {
   public readonly deliveryPolicy = "replace-picker" as const;
   readonly #root: PersonaWorkflowRootInteraction;
   readonly #ledger: AcknowledgementLedger;
   #deleted = false;
   #fatalError?: PersonaWorkflowUpdateError;
   #fatalLogged = false;
+  // Collapse-at-open edit that is in flight while a modal is open (constraint C).
+  // Stored fire-and-forget; every terminal edit settles it first so the final
+  // state deterministically lands last, and it is `.catch()`ed at storage so a
+  // rejected collapse can never convert a real submit into an error.
+  #pendingCollapse?: Promise<unknown>;
 
   public constructor(
     root: PersonaWorkflowRootInteraction,
@@ -483,7 +515,7 @@ class CanonicalPersonaMessageController implements PersonaWorkflowMessageControl
     };
   }
 
-  async #editRoot(payload: PersonaWorkflowComponentsV2Payload, retainAttachments: boolean): Promise<Message> {
+  async #editRootInner(payload: PersonaWorkflowComponentsV2Payload, retainAttachments: boolean): Promise<Message> {
     this.#ensureAvailable();
     try {
       const message = await this.#root.editReply(this.#normalizePayload(payload, retainAttachments));
@@ -493,6 +525,39 @@ class CanonicalPersonaMessageController implements PersonaWorkflowMessageControl
       logWorkflowFailure("root-edit", this.canonicalMessageId, error);
       throw this.classifyFailure("Failed to edit the canonical persona workflow message.", error, "root-edit");
     }
+  }
+
+  async #editRoot(payload: PersonaWorkflowComponentsV2Payload, retainAttachments: boolean): Promise<Message> {
+    // A terminal/in-place render must land after any collapse-at-open edit.
+    await this.settlePendingCollapse();
+    return this.#editRootInner(payload, retainAttachments);
+  }
+
+  /**
+   * Awaits any in-flight collapse-at-open edit so a later render deterministically
+   * lands last. The stored promise is already `.catch()`ed, so this never throws.
+   * Cleared once settled; safe to call repeatedly and when no collapse is pending.
+   */
+  public async settlePendingCollapse(): Promise<void> {
+    const pending = this.#pendingCollapse;
+    if (!pending) return;
+    this.#pendingCollapse = undefined;
+    await pending;
+  }
+
+  /**
+   * Collapse-at-open: fire-and-forget replacement of the canonical message's live
+   * controls with an inert notice as a modal opens. Discord emits no modal-dismiss
+   * event, so without this a dismissed modal would strand clickable buttons for the
+   * full modal timeout. Not awaited here — the promise is stored (and swallowed at
+   * storage) so the modal's own await is never blocked, and {@link settlePendingCollapse}
+   * lets the terminal edit order itself after it.
+   */
+  public collapseAtOpen(payload: PersonaWorkflowComponentsV2Payload): void {
+    // 1. One collapse per open; a repeated call keeps the first in-flight edit.
+    if (this.#pendingCollapse) return;
+    // 2. Swallow at storage: a rejected collapse must never surface as a submit error.
+    this.#pendingCollapse = this.#editRootInner(payload, false).catch(() => undefined);
   }
 
   public async replace(payload: PersonaWorkflowComponentsV2Payload): Promise<Message> {
@@ -527,6 +592,10 @@ class CanonicalPersonaMessageController implements PersonaWorkflowMessageControl
         "The interaction has already performed its first acknowledgment.",
       );
     }
+
+    // A terminal edit through the freshest bound interaction must still land after
+    // any collapse-at-open edit fired on the root token when the modal opened.
+    await this.settlePendingCollapse();
 
     try {
       const response = await source.update({
@@ -700,7 +769,7 @@ export async function beginCanonicalPrivateWorkflow(
   }
 
   const ledger = new AcknowledgementLedger();
-  const controller = new CanonicalPersonaMessageController(interaction, message.id, ledger);
+  const controller = new CanonicalMessageController(interaction, message.id, ledger);
   const phaseId = interaction.id;
   return {
     phaseId,
@@ -752,7 +821,7 @@ function publicPayloadIsEphemeral(flags: unknown): boolean {
 }
 
 async function awaitWorkflowButton(
-  controller: CanonicalPersonaMessageController,
+  controller: CanonicalMessageController,
   userId: string,
   customIdPrefix: string,
 ): Promise<ButtonInteraction> {
@@ -772,7 +841,7 @@ function createModalPhase(
     interaction: ModalMessageModalSubmitInteraction;
   },
   optionOffset: number,
-  controller: CanonicalPersonaMessageController,
+  controller: CanonicalMessageController,
 ): PersonaWorkflowModalPhase {
   const modalInteraction = result.interaction;
   return {
@@ -795,7 +864,7 @@ async function openRawWorkflowModal(
   locale: string,
   options: ModalOptions,
   optionOffset: number,
-  controller: CanonicalPersonaMessageController,
+  controller: CanonicalMessageController,
 ): Promise<PersonaWorkflowModalResult> {
   if (controller.hasAcknowledged(button)) {
     return {
@@ -806,6 +875,22 @@ async function openRawWorkflowModal(
       ),
     };
   }
+
+  // Collapse-at-open: as the modal opens, replace the canonical message's live
+  // controls (provider picker, modal-ready button, or range selector) with an
+  // inert notice. Fire-and-forget relative to the modal await below — Discord
+  // emits no modal-dismiss event, so this is the only thing that keeps a dismissed
+  // modal from leaving clickable-but-dead buttons until the 10-minute timeout.
+  // The edit uses the root token because `button` is consumed by showModal; every
+  // terminal edit calls `settlePendingCollapse()` so this lands before the result.
+  controller.collapseAtOpen(
+    noticePayload(
+      locale,
+      "general.interaction.selector_opened_title",
+      "general.interaction.selector_opened_description",
+      ColorCode.INFO,
+    ),
+  );
 
   const modalResult = await promptWithRawModal(button, locale, options);
   const rawModalAcknowledged = hasRawModalAcknowledgement(button);
@@ -906,7 +991,7 @@ async function openModalWithBridge(
   initialButton: ButtonInteraction,
   locale: string,
   source: PersonaWorkflowModalSource,
-  controller: CanonicalPersonaMessageController,
+  controller: CanonicalMessageController,
 ): Promise<PersonaWorkflowModalResult> {
   let options: ModalOptions;
   let modalButton = initialButton;
@@ -1063,7 +1148,7 @@ function createSelectionPhase<TPersona extends TomoriState>(
   persona: TPersona,
   absoluteIndex: number,
   selectedButton: ButtonInteraction,
-  controller: CanonicalPersonaMessageController,
+  controller: CanonicalMessageController,
 ): {
   phase: PersonaWorkflowSelectionPhase<TPersona>;
   state: { fatalError?: PersonaWorkflowUpdateError };
@@ -1243,7 +1328,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
         "The picker returned an invalid selected persona context.",
       );
       if (selectedButton) {
-        const controller = new CanonicalPersonaMessageController(interaction, selectedButton.message.id, ledger);
+        const controller = new CanonicalMessageController(interaction, selectedButton.message.id, ledger);
         try {
           await controller.replaceFrom(
             selectedButton,
@@ -1267,7 +1352,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
       return { outcome: "error", error };
     }
 
-    const controller = new CanonicalPersonaMessageController(interaction, selectedButton.message.id, ledger);
+    const controller = new CanonicalMessageController(interaction, selectedButton.message.id, ledger);
     const selectionContext = createSelectionPhase(
       interaction,
       locale,

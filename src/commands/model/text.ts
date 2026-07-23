@@ -1,6 +1,7 @@
 import type {
   ActionRowData,
   ButtonComponentData,
+  ButtonInteraction,
   ChatInputCommandInteraction,
   Client,
   ComponentInContainerData,
@@ -13,25 +14,27 @@ import { configRepository, llmModelRepo, llmOverrideRepo } from "@/utils/db/repo
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import {
+  beginCanonicalPrivateWorkflow,
   buildPersonaWorkflowNotice,
   completePersonaWorkflow,
+  isCollectorTimeoutError,
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
   retryPersonaWorkflow,
   runPersonaPickerWorkflow,
+  type CanonicalPrivateWorkflowPhase,
   type PersonaWorkflowComponentsV2Payload,
+  type PersonaWorkflowInPlacePhase,
   type PersonaWorkflowMessageController,
+  type PersonaWorkflowModalPhase,
 } from "@/utils/discord/ui/personaWorkflow";
-import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
+import type { UserRow, ErrorContext, LlmRow, SavedProviderConfigRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
-import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 
@@ -103,7 +106,7 @@ function buildPersonaModelModalReady(locale: string, customId: string): PersonaW
   return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
-function buildPersonaProviderPicker(
+function buildProviderPickerPayload(
   locale: string,
   customIdPrefix: string,
   providers: readonly string[],
@@ -186,6 +189,161 @@ function buildOpenRouterMovedNotice(locale: string): PersonaWorkflowComponentsV2
   });
 }
 
+/**
+ * Renders a single "open model selector" button on the canonical message. Used for
+ * the single-provider case, where no provider picker is shown but the flow must still
+ * open its modal from a button click on the one canonical message.
+ */
+function buildOpenSelectorPayload(locale: string, openId: string): PersonaWorkflowComponentsV2Payload {
+  return buildPersonaModelModalReady(locale, openId);
+}
+
+/**
+ * Awaits a button click on the canonical message. On timeout it renders the timeout
+ * notice in place and returns null; the returned button is left unacknowledged so the
+ * caller can open a modal on it via {@link CanonicalPrivateWorkflowPhase.useButton}.
+ */
+async function awaitCanonicalButton(
+  phase: CanonicalPrivateWorkflowPhase,
+  userId: string,
+  prefix: string,
+  locale: string,
+): Promise<ButtonInteraction | null> {
+  const message = await phase.message.fetchMessage();
+  try {
+    return await message.awaitMessageComponent({
+      componentType: ComponentType.Button,
+      filter: (candidate) => candidate.user.id === userId && candidate.customId.startsWith(prefix),
+      time: PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
+    });
+  } catch (error) {
+    if (isCollectorTimeoutError(error)) {
+      await phase.message
+        .replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.interaction.timeout_title",
+            descriptionKey: "general.pagination.timeout",
+            color: ColorCode.WARN,
+          }),
+        )
+        .catch(() => undefined);
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Renders the provider-selection step on the canonical message and returns the
+ * unacknowledged button the model modal will open from, plus the chosen provider.
+ *
+ * - 1 provider: the canonical message already shows the "open selector" button; this
+ *   just collects the click and returns the lone provider.
+ * - 2+ providers: collects the picker click, handling cancel and invalid selection.
+ *
+ * Returns null when the user cancels or times out — the canonical message already
+ * shows the terminal notice in those cases.
+ */
+async function acquireModelModalOpener(
+  phase: CanonicalPrivateWorkflowPhase,
+  userId: string,
+  locale: string,
+  savedProviders: SavedProviderConfigRow[],
+  idRoot: string,
+): Promise<{ button: ButtonInteraction; provider: string } | null> {
+  // 1. Single provider: the only control is the "open selector" button.
+  if (savedProviders.length === 1) {
+    const button = await awaitCanonicalButton(phase, userId, `${idRoot}_open`, locale);
+    if (!button) return null;
+    return { button, provider: savedProviders[0].provider.toLowerCase() };
+  }
+
+  // 2. Multiple providers: collect the picker click.
+  const button = await awaitCanonicalButton(phase, userId, idRoot, locale);
+  if (!button) return null;
+  if (button.customId === `${idRoot}_cancel`) {
+    await phase.useButton(button).replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.interaction.cancel_title",
+        descriptionKey: "general.pagination.cancelled",
+        color: ColorCode.WARN,
+      }),
+    );
+    return null;
+  }
+  const index = Number.parseInt(button.customId.replace(`${idRoot}_`, ""), 10);
+  const provider = savedProviders[index];
+  if (!provider) {
+    await phase.useButton(button).replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.errors.invalid_option_title",
+        descriptionKey: "general.errors.invalid_option_description",
+        color: ColorCode.ERROR,
+      }),
+    );
+    return null;
+  }
+  return { button, provider: provider.provider.toLowerCase() };
+}
+
+/**
+ * Opens the model-selection modal on the canonical message from `button`, routing the
+ * `>25` case through the canonical range selector automatically. Returns the submitted
+ * modal phase, or null when the flow ended without a submit — cancel and timeout are
+ * rendered in place by the bridge; a transport error renders the generic error notice.
+ */
+async function openModelModal(
+  phase: CanonicalPrivateWorkflowPhase,
+  button: ButtonInteraction,
+  locale: string,
+  modelOptions: SelectOption[],
+  modalCustomId: string,
+): Promise<PersonaWorkflowModalPhase | null> {
+  const result = await phase.useButton(button).openModal({
+    modalCustomId,
+    modalTitleKey: "commands.model.text.modal_title",
+    components: [
+      {
+        customId: MODEL_SELECT_ID,
+        labelKey: "commands.model.text.select_label",
+        descriptionKey: "commands.model.text.select_description",
+        placeholder: "commands.model.text.select_placeholder",
+        required: true,
+        options: modelOptions,
+      },
+    ],
+  });
+  if (result.outcome === "submitted") return result.phase;
+  // Cancel and timeout already rendered a terminal notice; only transport errors need one.
+  if (result.outcome === "error" || result.outcome === "fatal") {
+    await phase.message
+      .replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      )
+      .catch(() => undefined);
+  }
+  return null;
+}
+
+/** Builds the model-option list shown in the selection modal for one provider. */
+function buildModelSelectOptions(models: LlmRow[], locale: string, labelFromDescription = false): SelectOption[] {
+  return models.map((model) => ({
+    label: safeSelectOptionText(
+      labelFromDescription ? model.llm_description?.trim() || model.llm_codename : model.llm_codename,
+    ),
+    value: safeSelectOptionText(model.llm_codename),
+    description: safeSelectOptionText(getLocalizedDescription(model, locale)),
+  }));
+}
+
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("text")
@@ -236,87 +394,93 @@ export async function execute(
 
   const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "text");
 
-  let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
   let selectedModel: LlmRow | null = null;
-  let providerSelection: Awaited<ReturnType<typeof promptForSavedProvider>> = null;
+  // Canonical one-message controller for channel/global scopes. Tracked so the outer
+  // catch can render an unexpected-error terminal on the same ephemeral message.
+  let canonicalMessage: PersonaWorkflowMessageController | null = null;
   const personaWorkflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   try {
-    // 1. Channel scope: provider picker → model picker → channel override
+    // 1. Channel scope: canonical one-message flow — provider picker → model picker →
+    //    channel override → terminal result, all edited in place on one ephemeral message.
     if (scope === "channel") {
       const currentChannelModel =
         (await llmOverrideRepo.getChannelLlmOverride(tomoriState.server_id, interaction.channelId)) ?? tomoriState.llm;
-      providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
-        currentSelections: [
-          {
-            model: currentChannelModel.llm_codename,
-            provider: currentChannelModel.llm_provider,
-          },
-        ],
-      });
-      if (!providerSelection) return;
+      const idRoot = "model_text_channel";
 
-      const selectedProvider = providerSelection.provider;
-      const responseInteraction = providerSelection.interaction;
+      // 1a. Open the canonical message with the correct initial control for the
+      //     number of saved providers (none → error, one → open button, many → picker).
+      const initialPayload =
+        savedProviders.length === 0
+          ? buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.model.providerPicker.no_providers_title",
+              descriptionKey: "commands.model.providerPicker.no_providers_description",
+              color: ColorCode.ERROR,
+            })
+          : savedProviders.length === 1
+            ? buildOpenSelectorPayload(locale, `${idRoot}_open`)
+            : buildProviderPickerPayload(
+                locale,
+                idRoot,
+                savedProviders.map((p) => p.provider),
+                currentChannelModel.llm_codename,
+                currentChannelModel.llm_provider,
+              );
 
-      const availableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
+      const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
+      canonicalMessage = phase.message;
+      if (savedProviders.length === 0) return;
+
+      // 1b. Resolve the provider and the unacknowledged button the modal opens from.
+      const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
+      if (!opener) return;
+
+      const availableModels = await llmModelRepo.loadAvailableModelsForProvider(opener.provider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
       });
       if (!availableModels?.length) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.text.no_models_title",
-          descriptionKey: "commands.model.text.no_models_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
+        await phase.useButton(opener.button).replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.text.no_models_title",
+            descriptionKey: "commands.model.text.no_models_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
-      const modelOptions: SelectOption[] = availableModels.map((m) => ({
-        label: safeSelectOptionText(m.llm_codename),
-        value: safeSelectOptionText(m.llm_codename),
-        description: safeSelectOptionText(getLocalizedDescription(m, userData.language_pref)),
-      }));
+      // 1c. Open the model modal (>25 routes through the canonical range selector).
+      const modalPhase = await openModelModal(
+        phase,
+        opener.button,
+        locale,
+        buildModelSelectOptions(availableModels, userData.language_pref),
+        "config_model_text_channel_modal",
+      );
+      if (!modalPhase) return;
 
-      const channelModalResult = await promptWithPaginatedModal(responseInteraction, locale, {
-        modalCustomId: "config_model_text_channel_modal",
-        modalTitleKey: "commands.model.text.modal_title",
-        // Opt into the shared Components V2 range selector for the >25-model list.
-        // Safe: responseInteraction is unacknowledged here, so the selector takes the
-        // fresh-reply path (no legacy→V2 editReply), and Phase 1's guard covers the
-        // error-path fallback to the original interaction.
-        selectorStyle: "componentsV2",
-        components: [
-          {
-            customId: MODEL_SELECT_ID,
-            labelKey: "commands.model.text.select_label",
-            descriptionKey: "commands.model.text.select_description",
-            placeholder: "commands.model.text.select_placeholder",
-            required: true,
-            options: modelOptions,
-          },
-        ],
-      });
-
-      if (channelModalResult.outcome !== "submit") return;
-      // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees values
-      modalSubmitInteraction = channelModalResult.interaction!;
-      // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees values
-      const selectedCodename = channelModalResult.values![MODEL_SELECT_ID];
-      const selectedChannelModel = availableModels.find((m) => m.llm_codename === selectedCodename) ?? null;
+      // 1d. Acknowledge within 3s, then write and render the terminal on the one message.
+      const work = await modalPhase.beginInPlaceWork();
+      const selectedChannelModel =
+        availableModels.find((m) => m.llm_codename === modalPhase.values[MODEL_SELECT_ID]) ?? null;
 
       if (!selectedChannelModel?.llm_id) {
-        await replyInfoEmbed(modalSubmitInteraction, locale, {
-          titleKey: "commands.model.text.invalid_model_title",
-          descriptionKey: "commands.model.text.invalid_model_description",
-          color: ColorCode.ERROR,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.text.invalid_model_title",
+            descriptionKey: "commands.model.text.invalid_model_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
       if (selectedChannelModel.llm_codename === "other-model") {
-        await replyLegacyOpenRouterOtherModelMoved(modalSubmitInteraction, locale, "server");
+        await work.message.replace(buildOpenRouterMovedNotice(locale));
         return;
       }
 
@@ -327,23 +491,29 @@ export async function execute(
         { serverDiscId: serverId },
       );
       if (!channelWriteOk) {
-        await replyInfoEmbed(modalSubmitInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.update_failed_title",
+            descriptionKey: "general.errors.update_failed_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.text.success_title",
-        descriptionKey: "commands.model.text.scope_set_channel_success",
-        descriptionVars: {
-          channel: interaction.channel?.toString() ?? interaction.channelId,
-          model: selectedChannelModel.llm_codename,
-        },
-        color: ColorCode.SUCCESS,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.text.success_title",
+          descriptionKey: "commands.model.text.scope_set_channel_success",
+          descriptionVars: {
+            channel: interaction.channel?.toString() ?? interaction.channelId,
+            model: selectedChannelModel.llm_codename,
+          },
+          color: ColorCode.SUCCESS,
+        }),
+      );
       return;
     }
 
@@ -405,7 +575,7 @@ export async function execute(
               const work = await selection.beginInPlaceWork();
               const providerPrefix = `persona_model_${selection.phaseId}_provider`;
               await work.message.replace(
-                buildPersonaProviderPicker(
+                buildProviderPickerPayload(
                   locale,
                   providerPrefix,
                   savedProviders.map((provider) => provider.provider),
@@ -597,19 +767,34 @@ export async function execute(
       return;
     }
 
-    // 3. Global scope: provider picker → (custom capabilities || model picker) → Phase A mirror write
-    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
-      currentSelections: [
-        {
-          model: tomoriState.llm.llm_codename,
-          provider: tomoriState.llm.llm_provider,
-        },
-      ],
-    });
-    if (!providerSelection) return;
+    // 3. Global scope: canonical one-message flow — provider picker → (custom capability
+    //    activation | model picker) → mirror write → terminal result, all on one message.
+    const idRoot = "model_text_global";
+    const initialPayload =
+      savedProviders.length === 0
+        ? buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.providerPicker.no_providers_title",
+            descriptionKey: "commands.model.providerPicker.no_providers_description",
+            color: ColorCode.ERROR,
+          })
+        : savedProviders.length === 1
+          ? buildOpenSelectorPayload(locale, `${idRoot}_open`)
+          : buildProviderPickerPayload(
+              locale,
+              idRoot,
+              savedProviders.map((p) => p.provider),
+              tomoriState.llm.llm_codename,
+              tomoriState.llm.llm_provider,
+            );
 
-    const selectedProvider = providerSelection.provider;
-    const responseInteraction = providerSelection.interaction;
+    const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
+    canonicalMessage = phase.message;
+    if (savedProviders.length === 0) return;
+
+    const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
+    if (!opener) return;
+    const selectedProvider = opener.provider;
     const selectedSavedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
 
     // 3a. Custom provider: pick among the label's registered text models, then activate the choice.
@@ -621,54 +806,61 @@ export async function execute(
           })
         : null;
       if (!selectedSavedConfig || !customAvailableModels?.length) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.text.no_models_title",
-          descriptionKey: "commands.model.text.no_models_description",
-          color: ColorCode.ERROR,
-        });
+        await phase.useButton(opener.button).replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.text.no_models_title",
+            descriptionKey: "commands.model.text.no_models_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
-      // Single registered model activates directly; multiple show a string-select picker.
-      const selection = await promptCustomModelSelection<LlmRow>({
-        interaction: responseInteraction,
-        locale,
-        choices: customAvailableModels.map((m) => ({
-          model: m,
-          value: m.llm_codename,
-          label: m.llm_description?.trim() || m.llm_codename,
-          description: getLocalizedDescription(m, userData.language_pref),
-        })),
-        modalCustomId: "config_model_text_custom_modal",
-        modalTitleKey: "commands.model.text.modal_title",
-        selectLabelKey: "commands.model.text.select_label",
-        selectDescriptionKey: "commands.model.text.select_description",
-        selectPlaceholderKey: "commands.model.text.select_placeholder",
-      });
-      if (!selection) return;
-
-      const customModel = selection.model;
-      if (selection.submitInteraction) {
-        modalSubmitInteraction = selection.submitInteraction;
+      // Single registered model activates directly (no modal); multiple show a
+      // string-select modal on the same canonical message.
+      let work: PersonaWorkflowInPlacePhase;
+      let customModel: LlmRow | null;
+      if (customAvailableModels.length === 1) {
+        work = await phase.useButton(opener.button).beginInPlaceWork();
+        customModel = customAvailableModels[0];
+      } else {
+        const customModalPhase = await openModelModal(
+          phase,
+          opener.button,
+          locale,
+          buildModelSelectOptions(customAvailableModels, userData.language_pref, true),
+          "config_model_text_custom_modal",
+        );
+        if (!customModalPhase) return;
+        work = await customModalPhase.beginInPlaceWork();
+        customModel =
+          customAvailableModels.find((m) => m.llm_codename === customModalPhase.values[MODEL_SELECT_ID]) ?? null;
       }
-      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
+      selectedModel = customModel;
 
-      if (!customModel.llm_id) {
-        await replyInfoEmbed(customReplyTarget, locale, {
-          titleKey: "commands.model.text.invalid_model_title",
-          descriptionKey: "commands.model.text.invalid_model_description",
-          color: ColorCode.ERROR,
-        });
+      if (!customModel?.llm_id) {
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.text.invalid_model_title",
+            descriptionKey: "commands.model.text.invalid_model_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
       if (customModel.llm_id === tomoriState.config.llm_id) {
-        await replyInfoEmbed(customReplyTarget, locale, {
-          titleKey: "commands.model.text.already_selected_title",
-          descriptionKey: "commands.model.text.already_selected_description",
-          descriptionVars: { model_name: customModel.llm_description ?? customModel.llm_codename },
-          color: ColorCode.WARN,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.text.already_selected_title",
+            descriptionKey: "commands.model.text.already_selected_description",
+            descriptionVars: { model_name: customModel.llm_description ?? customModel.llm_codename },
+            color: ColorCode.WARN,
+          }),
+        );
         return;
       }
 
@@ -735,77 +927,62 @@ export async function execute(
           new Error("One or more database updates returned false"),
           context,
         );
-        await replyInfoEmbed(customReplyTarget, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.update_failed_title",
+            descriptionKey: "general.errors.update_failed_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
-      await replyInfoEmbed(customReplyTarget, locale, {
-        titleKey: "commands.model.text.success_title",
-        descriptionKey: "commands.model.text.success_description",
-        descriptionVars: {
-          model_name: customModel.llm_description ?? customModel.llm_codename,
-          previous_model: tomoriState.llm?.llm_codename ?? localizer(locale, "general.unknown"),
-          provider: getProviderDisplayName(selectedProvider),
-        },
-        color: ColorCode.SUCCESS,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.text.success_title",
+          descriptionKey: "commands.model.text.success_description",
+          descriptionVars: {
+            model_name: customModel.llm_description ?? customModel.llm_codename,
+            previous_model: tomoriState.llm?.llm_codename ?? localizer(locale, "general.unknown"),
+            provider: getProviderDisplayName(selectedProvider),
+          },
+          color: ColorCode.SUCCESS,
+        }),
+      );
       return;
     }
 
-    // 3b. Regular provider: model picker
+    // 3b. Regular provider: model picker on the canonical message.
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
     });
     if (!availableModels?.length) {
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "commands.model.text.no_models_title",
-        descriptionKey: "commands.model.text.no_models_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
+      await phase.useButton(opener.button).replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.text.no_models_title",
+          descriptionKey: "commands.model.text.no_models_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
-    const modelSelectOptions: SelectOption[] = availableModels.map((model) => ({
-      label: safeSelectOptionText(model.llm_codename),
-      value: safeSelectOptionText(model.llm_codename),
-      description: safeSelectOptionText(getLocalizedDescription(model, userData.language_pref)),
-    }));
+    // >25 models route through the canonical range selector automatically.
+    const modalPhase = await openModelModal(
+      phase,
+      opener.button,
+      locale,
+      buildModelSelectOptions(availableModels, userData.language_pref),
+      MODAL_CUSTOM_ID,
+    );
+    if (!modalPhase) return;
 
-    const modalResult = await promptWithPaginatedModal(responseInteraction, locale, {
-      modalCustomId: MODAL_CUSTOM_ID,
-      modalTitleKey: "commands.model.text.modal_title",
-      // Opt into the shared Components V2 range selector for the >25-model list.
-      // Safe: responseInteraction is unacknowledged here (global scope never defers),
-      // so the selector takes the fresh-reply path; Phase 1's guard covers the
-      // single-provider error-path fallback to the marked original interaction.
-      selectorStyle: "componentsV2",
-      components: [
-        {
-          customId: MODEL_SELECT_ID,
-          labelKey: "commands.model.text.select_label",
-          descriptionKey: "commands.model.text.select_description",
-          placeholder: "commands.model.text.select_placeholder",
-          required: true,
-          options: modelSelectOptions,
-        },
-      ],
-    });
-
-    if (modalResult.outcome !== "submit") {
-      log.info(`Model selection modal ${modalResult.outcome} for user ${userData.user_id}`);
-      return;
-    }
-
-    // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees values
-    modalSubmitInteraction = modalResult.interaction!;
-    // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees values
-    const selectedModelCodename = modalResult.values![MODEL_SELECT_ID];
+    const work = await modalPhase.beginInPlaceWork();
+    const selectedModelCodename = modalPhase.values[MODEL_SELECT_ID];
     selectedModel = availableModels.find((model) => model.llm_codename === selectedModelCodename) ?? null;
 
     if (!selectedModel?.llm_id) {
@@ -826,26 +1003,32 @@ export async function execute(
         new Error("Invalid model selection despite modal choices"),
         context,
       );
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.text.invalid_model_title",
-        descriptionKey: "commands.model.text.invalid_model_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.text.invalid_model_title",
+          descriptionKey: "commands.model.text.invalid_model_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
     if (selectedModel.llm_codename === "other-model") {
-      await replyLegacyOpenRouterOtherModelMoved(modalSubmitInteraction, locale, "server");
+      await work.message.replace(buildOpenRouterMovedNotice(locale));
       return;
     }
 
     if (selectedModel.llm_id === tomoriState.config.llm_id) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.text.already_selected_title",
-        descriptionKey: "commands.model.text.already_selected_description",
-        descriptionVars: { model_name: selectedModel.llm_codename },
-        color: ColorCode.WARN,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.text.already_selected_title",
+          descriptionKey: "commands.model.text.already_selected_description",
+          descriptionVars: { model_name: selectedModel.llm_codename },
+          color: ColorCode.WARN,
+        }),
+      );
       return;
     }
 
@@ -909,11 +1092,14 @@ export async function execute(
         new Error("One or more database updates returned false"),
         context,
       );
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.update_failed_title",
+          descriptionKey: "general.errors.update_failed_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
@@ -958,17 +1144,14 @@ export async function execute(
             context,
           );
 
-          const failureOptions = {
-            titleKey: "general.errors.update_failed_title",
-            descriptionKey: "general.errors.update_failed_description",
-            color: ColorCode.ERROR,
-          } as const;
-          const replacedPicker =
-            modalSubmitInteraction &&
-            (await replaceProviderPickerWithInfo(providerSelection, modalSubmitInteraction, locale, failureOptions));
-          if (!replacedPicker) {
-            await replyInfoEmbed(modalSubmitInteraction, locale, failureOptions);
-          }
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.update_failed_title",
+              descriptionKey: "general.errors.update_failed_description",
+              color: ColorCode.ERROR,
+            }),
+          );
           return;
         }
       } else {
@@ -979,24 +1162,19 @@ export async function execute(
     }
 
     const previousModel = tomoriState.llm;
-    const successOptions = {
-      titleKey: "commands.model.text.success_title",
-      descriptionKey: "commands.model.text.success_description",
-      descriptionVars: {
-        model_name: selectedModel.llm_codename,
-        previous_model: previousModel?.llm_codename ?? localizer(locale, "general.unknown"),
-        provider: getProviderDisplayName(selectedProvider),
-      },
-      color: ColorCode.SUCCESS,
-    } as const;
-
-    const replacedPicker =
-      modalSubmitInteraction &&
-      (await replaceProviderPickerWithInfo(providerSelection, modalSubmitInteraction, locale, successOptions));
-
-    if (!replacedPicker) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, successOptions);
-    }
+    await work.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.model.text.success_title",
+        descriptionKey: "commands.model.text.success_description",
+        descriptionVars: {
+          model_name: selectedModel.llm_codename,
+          previous_model: previousModel?.llm_codename ?? localizer(locale, "general.unknown"),
+          provider: getProviderDisplayName(selectedProvider),
+        },
+        color: ColorCode.SUCCESS,
+      }),
+    );
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
@@ -1024,8 +1202,25 @@ export async function execute(
       return;
     }
 
-    const replyTarget = modalSubmitInteraction ?? interaction;
-    await replyInfoEmbed(replyTarget, locale, {
+    // Channel/global scopes render their unexpected-error terminal on the same canonical
+    // message. Best-effort: if the message is already gone (fatal), fall back to a reply.
+    if (canonicalMessage) {
+      try {
+        await canonicalMessage.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+        return;
+      } catch {
+        // Fall through to a fresh reply below.
+      }
+    }
+
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,
