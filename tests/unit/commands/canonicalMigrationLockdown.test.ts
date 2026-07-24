@@ -4,14 +4,15 @@ import { resolve } from "node:path";
 import { MIGRATED_CANONICAL_CALLERS, PRE_CANONICAL_PRIMITIVES } from "@/utils/discord/ui/personaWorkflow";
 
 /**
- * Lock-down audit for the canonical one-message workflow (plan Phase 4, design-intent
- * piece 3). A command file listed in `MIGRATED_CANONICAL_CALLERS` has been fully moved
- * onto the canonical controller; it must therefore never call a pre-canonical picker or
- * modal primitive again. Because those are the ONLY ways to open a modal or render a
- * picker outside the canonical controller, their absence transitively guarantees no
- * post-modal terminal state (`replyInfoEmbed`/`followUp`) can escape the one canonical
- * message. The audit is incremental-aware (Review B2): it drives off the allow-list, so
- * the ~30 still-legacy `promptWithPaginatedModal` callers are untouched.
+ * Lock-down audit for the canonical one-message workflow. A command file listed in
+ * `MIGRATED_CANONICAL_CALLERS` is built entirely on the canonical controller; it must
+ * therefore never call a pre-canonical picker or modal primitive. Because those are the
+ * ONLY ways to open a modal or render a picker outside the canonical controller, their
+ * absence transitively guarantees no post-modal terminal state
+ * (`replyInfoEmbed`/`followUp`) can escape the one canonical message.
+ *
+ * The audit drives off the allow-list rather than scanning everything, so the ~30 callers
+ * still on `promptWithPaginatedModal` are untouched.
  */
 describe("canonical migration lock-down", () => {
   const repoRoot = resolve(import.meta.dir, "..", "..", "..");

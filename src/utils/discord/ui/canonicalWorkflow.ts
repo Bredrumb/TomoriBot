@@ -6,9 +6,16 @@
  * New non-persona callers (e.g. the `/model *` command family) import the canonical API
  * from here rather than from `personaWorkflow.ts`, so no caller has to reach into a
  * persona-named module for a generic mechanism. The engine's implementation still lives
- * in `personaWorkflow.ts` alongside `runPersonaPickerWorkflow` (its persona specialization);
- * a full physical relocation of the generic surface into this file is tracked as a
- * Phase 4.0a follow-up. The class itself is already persona-neutral: `CanonicalMessageController`.
+ * in `personaWorkflow.ts` alongside `runPersonaPickerWorkflow` (its persona specialization).
+ *
+ * **Keep it that way.** The persona specialization (`createSelectionPhase`,
+ * `normalizeSelectedPersona`, `runPersonaPickerWorkflow`) calls about ten intentionally
+ * private engine helpers — `noticePayload`, `awaitWorkflowButton`, `createModalPhase`,
+ * `openModalWithBridge`, the `CanonicalMessageController` class, the `logWorkflow*` family.
+ * Moving the generic half into this file would mean exporting every one of them just so a
+ * sibling module could reach it, while `scripts/checks/lib/personaWorkflowBoundary.ts` exists
+ * to keep exactly those internals unreachable. This module already provides the neutral
+ * import path, which is the point.
  *
  * The persona picker (`runPersonaPickerWorkflow`) is a specialization of this same engine
  * and continues to be imported from `personaWorkflow.ts`.
@@ -31,4 +38,29 @@ export type {
   PersonaWorkflowModalResult,
   PersonaWorkflowNestedButtonPhase,
   PersonaWorkflowUpdateError,
+} from "./personaWorkflow";
+
+/**
+ * Neutral names for the engine's generic types.
+ *
+ * The underlying types still carry the `PersonaWorkflow*` prefix from when the engine was
+ * persona-only. Renaming them outright is not worth it — most occurrences are in persona
+ * commands, where the persona-flavoured name is the correct one.
+ *
+ * **New non-persona callers should prefer these names.** The `PersonaWorkflow*` exports
+ * above stay for existing callers and are not deprecated.
+ *
+ * These are **type-only** aliases on purpose. Re-exporting a runtime value here would add an
+ * import edge that every consumer — including unit tests that stub `personaWorkflow` — has to
+ * satisfy. Code needing `PersonaWorkflowUpdateError` as a value imports it from
+ * `personaWorkflow.ts` directly.
+ */
+export type {
+  PersonaWorkflowComponentsV2Payload as CanonicalMessagePayload,
+  PersonaWorkflowInPlacePhase as CanonicalInPlacePhase,
+  PersonaWorkflowMessageController as CanonicalMessageController,
+  PersonaWorkflowModalPhase as CanonicalModalPhase,
+  PersonaWorkflowModalResult as CanonicalModalResult,
+  PersonaWorkflowNestedButtonPhase as CanonicalNestedButtonPhase,
+  PersonaWorkflowUpdateError as CanonicalWorkflowUpdateError,
 } from "./personaWorkflow";

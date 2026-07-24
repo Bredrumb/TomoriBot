@@ -1140,62 +1140,14 @@ export class LlmModelRepository {
     }
   }
 
-  async upsertLegacyCustomLlm(params: {
-    codename: string;
-    hasTools: boolean;
-    seesImages: boolean;
-    seesVideos: boolean;
-    supportsStructOutput: boolean;
-  }): Promise<number | null> {
-    try {
-      const rows = await sql`
-        INSERT INTO llms (
-          llm_provider,
-          llm_codename,
-          has_tools,
-          sees_images,
-          sees_videos,
-          sees_youtube,
-          supports_structoutput,
-          is_smartest,
-          is_default,
-          is_reasoning,
-          is_deprecated,
-          is_free,
-          is_uncensored,
-          llm_description
-        ) VALUES (
-          'custom',
-          ${params.codename},
-          ${params.hasTools},
-          ${params.seesImages},
-          ${params.seesVideos},
-          false,
-          ${params.supportsStructOutput},
-          false,
-          false,
-          false,
-          false,
-          true,
-          true,
-          ${"Custom endpoint model configured by server admin"}
-        )
-        ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
-          has_tools = EXCLUDED.has_tools,
-          sees_images = EXCLUDED.sees_images,
-          sees_videos = EXCLUDED.sees_videos,
-          supports_structoutput = EXCLUDED.supports_structoutput,
-          updated_at = CURRENT_TIMESTAMP
-        RETURNING llm_id
-      `;
-      const id = Number(rows[0]?.llm_id);
-      return Number.isInteger(id) ? id : null;
-    } catch (error) {
-      log.error(`LlmModelRepository.upsertLegacyCustomLlm: failed for ${params.codename}`, error);
-      return null;
-    }
-  }
-
+  /**
+   * Removes a legacy `custom/{serverId}` llms row when a server switches away from the
+   * custom provider.
+   *
+   * Deliberately has no write-side counterpart: the inline custom-provider setup flow that
+   * created these rows was retired, so nothing can produce a new one. Existing rows still
+   * exist in older databases, which is why the cleanup path stays.
+   */
   async deleteLegacyCustomLlm(codename: string): Promise<boolean> {
     const result = await sql`
       DELETE FROM llms

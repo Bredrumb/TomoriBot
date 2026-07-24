@@ -2,12 +2,10 @@
  * Legacy Custom Provider Utilities
  *
  * Shared constants and helpers left over from the retired inline custom-provider setup flow.
- * Phase 3 moved user-facing setup to /provider custom-endpoint and /personal custom-endpoint.
+ * User-facing setup now lives in /provider custom-endpoint and /personal custom-endpoint.
  *
- * The interactive parts of that old flow (`promptCustomCapabilities`, `promptOtherModelConfig`,
- * `saveCustomEndpointConfig` and their private `createCustomLLMEntry` helper) were removed in
- * 2026-07 after an audit found they had no callers left anywhere in the codebase. What remains
- * are the constants and pure helpers that live code still imports.
+ * The interactive parts of that old flow were removed once they had no callers left. What
+ * remains are the constants and pure helpers that live code still imports.
  */
 
 import type { McpUrlValidationResult } from "@/utils/mcp/mcpUrlSecurity";

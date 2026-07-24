@@ -42,15 +42,14 @@ export const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
     : DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS;
 
 /**
- * Command files fully migrated to the canonical one-message workflow (Phase 4). The
- * lock-down audit (`tests/unit/commands/canonicalMigrationLockdown.test.ts`) forbids
- * every file listed here from calling the pre-canonical picker/modal primitives
- * (`promptForSavedProvider`, `promptWithPaginatedModal`, `replaceProviderPickerWithInfo`,
- * `promptWithRawModal`). Their absence transitively
- * guarantees the only modal path is the canonical controller, so no post-modal terminal
- * can escape it via `replyInfoEmbed`/`followUp`. This is the single source of truth the
- * migration ledger tracks: add a caller here only once it is fully canonical AND
- * Discord-verified, never before.
+ * Command files built on the canonical one-message workflow. The lock-down audit
+ * (`tests/unit/commands/canonicalMigrationLockdown.test.ts`) forbids every file listed here
+ * from calling the pre-canonical picker/modal primitives (`promptForSavedProvider`,
+ * `promptWithPaginatedModal`, `replaceProviderPickerWithInfo`, `promptWithRawModal`). Their
+ * absence transitively guarantees the only modal path is the canonical controller, so no
+ * post-modal terminal can escape it via `replyInfoEmbed`/`followUp`.
+ *
+ * Add a file here only once every one of its terminals renders on the canonical message.
  */
 export const MIGRATED_CANONICAL_CALLERS: readonly string[] = [
   "src/commands/model/text.ts",
@@ -73,9 +72,6 @@ export const PRE_CANONICAL_PRIMITIVES: readonly string[] = [
   "promptWithPaginatedModal",
   "replaceProviderPickerWithInfo",
   "promptWithRawModal",
-  // `promptCustomModelSelection` used to be listed here. Migrating /model text to the
-  // canonical workflow removed its last caller, so `customModelPicker.ts` was deleted as
-  // dead code in 2026-07 — a name that no longer exists cannot be reached for.
 ];
 
 type PersonaWorkflowRootInteraction = ChatInputCommandInteraction | ButtonInteraction;

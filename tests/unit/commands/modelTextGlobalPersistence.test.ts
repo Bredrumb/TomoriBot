@@ -97,6 +97,13 @@ mock.module("@/utils/cache/tomoriStateCache", () => ({
     chronology.push("cache.invalidate");
     invalidations.push(serverDiscId);
   },
+  // Rest of the module's export surface. `mock.module` is process-wide, so a partial stub
+  // breaks module linking as soon as anything else in this process imports a missing name —
+  // and text.ts now reaches interactionCore through the shared canonical helpers.
+  getCachedMainPersona: async () => tomoriState,
+  getLastDbError: () => null,
+  clearTomoriStateCache: () => undefined,
+  getTomoriStateCacheStats: () => ({ size: 0, hits: 0, misses: 0 }),
 }));
 
 mock.module("@/utils/provider/savedProviderConfig", () => ({

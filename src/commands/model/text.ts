@@ -8,7 +8,7 @@ import type {
   ContainerComponentData,
   SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { ButtonStyle, ComponentType, escapeMarkdown, MessageFlags } from "discord.js";
+import { ButtonStyle, ComponentType, MessageFlags } from "discord.js";
 import { configRepository, llmModelRepo, llmOverrideRepo } from "@/utils/db/repositories";
 
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
@@ -20,7 +20,6 @@ import {
   beginCanonicalPrivateWorkflow,
   buildPersonaWorkflowNotice,
   completePersonaWorkflow,
-  isCollectorTimeoutError,
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
   retryPersonaWorkflow,
   runPersonaPickerWorkflow,
@@ -30,13 +29,19 @@ import {
   type PersonaWorkflowMessageController,
   type PersonaWorkflowModalPhase,
 } from "@/utils/discord/ui/personaWorkflow";
-import type { UserRow, ErrorContext, LlmRow, SavedProviderConfigRow } from "@/types/db/schema";
+import {
+  acquireModelModalOpener,
+  buildOpenRouterMovedNotice,
+  buildOpenSelectorPayload,
+  buildProviderPickerPayload,
+  openCanonicalModal,
+} from "@/utils/discord/ui/canonicalModelFlow";
+import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/discord/customProviderModal";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { commandRegistry } from "@/utils/discord/commandRegistry";
 
 const MODAL_CUSTOM_ID = "config_model_text_modal";
 const MODEL_SELECT_ID = "model_select";
@@ -106,194 +111,10 @@ function buildPersonaModelModalReady(locale: string, customId: string): PersonaW
   return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
-function buildProviderPickerPayload(
-  locale: string,
-  customIdPrefix: string,
-  providers: readonly string[],
-  currentModel: string,
-  currentProvider: string,
-): PersonaWorkflowComponentsV2Payload {
-  const components: ComponentInContainerData[] = [
-    {
-      type: ComponentType.TextDisplay,
-      content: `### ${localizer(locale, "commands.model.providerPicker.title")}`,
-    },
-    {
-      type: ComponentType.TextDisplay,
-      content: localizer(locale, "commands.model.providerPicker.description"),
-    },
-    // The current selection is metadata, not body copy, so it gets its own TextDisplay
-    // rendered as muted subtext — matching the footer convention in buildNoticeContainer.
-    // It must NOT be appended to the description with "\n\n": a Container already puts a
-    // gap between TextDisplay components, so the explicit blank line stacked on top of
-    // that gap and produced the oversized break above the provider buttons.
-    {
-      type: ComponentType.TextDisplay,
-      content: `-# ${localizer(locale, "commands.model.providerPicker.current_selection", {
-        model: escapeMarkdown(currentModel),
-        provider: escapeMarkdown(currentProvider),
-      })}`,
-    },
-  ];
-
-  const buttons = providers.map(
-    (provider, index): ButtonComponentData => ({
-      type: ComponentType.Button,
-      customId: `${customIdPrefix}_${index}`,
-      label: getProviderDisplayName(provider),
-      style: ButtonStyle.Secondary,
-    }),
-  );
-  const buttonRows: ButtonComponentData[][] = [];
-  for (let offset = 0; offset < buttons.length; offset += 4) {
-    buttonRows.push(buttons.slice(offset, offset + 4));
-  }
-
-  const cancelButton: ButtonComponentData = {
-    type: ComponentType.Button,
-    customId: `${customIdPrefix}_cancel`,
-    label: localizer(locale, "general.pagination.cancel"),
-    style: ButtonStyle.Danger,
-  };
-  const lastRow = buttonRows.at(-1);
-  if (lastRow && lastRow.length < 5) {
-    lastRow.push(cancelButton);
-  } else {
-    buttonRows.push([cancelButton]);
-  }
-  for (const row of buttonRows) {
-    components.push({
-      type: ComponentType.ActionRow,
-      components: row,
-    } satisfies ActionRowData<ButtonComponentData>);
-  }
-
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
-    components,
-  };
-  return { components: [container], flags: MessageFlags.IsComponentsV2 };
-}
-
-function buildOpenRouterMovedNotice(locale: string): PersonaWorkflowComponentsV2Payload {
-  return buildPersonaWorkflowNotice({
-    locale,
-    titleKey: "general.openrouter_model_moved_title",
-    descriptionKey: "general.openrouter_model_moved_description",
-    descriptionVars: {
-      add_command: commandRegistry.getCommandMention("openrouter", "model", "add"),
-      remove_command: commandRegistry.getCommandMention("openrouter", "model", "remove"),
-    },
-    color: ColorCode.ERROR,
-  });
-}
-
 /**
- * Renders a single "open model selector" button on the canonical message. Used for
- * the single-provider case, where no provider picker is shown but the flow must still
- * open its modal from a button click on the one canonical message.
- */
-function buildOpenSelectorPayload(locale: string, openId: string): PersonaWorkflowComponentsV2Payload {
-  return buildPersonaModelModalReady(locale, openId);
-}
-
-/**
- * Awaits a button click on the canonical message. On timeout it renders the timeout
- * notice in place and returns null; the returned button is left unacknowledged so the
- * caller can open a modal on it via {@link CanonicalPrivateWorkflowPhase.useButton}.
- */
-async function awaitCanonicalButton(
-  phase: CanonicalPrivateWorkflowPhase,
-  userId: string,
-  prefix: string,
-  locale: string,
-): Promise<ButtonInteraction | null> {
-  const message = await phase.message.fetchMessage();
-  try {
-    return await message.awaitMessageComponent({
-      componentType: ComponentType.Button,
-      filter: (candidate) => candidate.user.id === userId && candidate.customId.startsWith(prefix),
-      time: PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
-    });
-  } catch (error) {
-    if (isCollectorTimeoutError(error)) {
-      await phase.message
-        .replace(
-          buildPersonaWorkflowNotice({
-            locale,
-            titleKey: "general.interaction.timeout_title",
-            descriptionKey: "general.pagination.timeout",
-            color: ColorCode.WARN,
-          }),
-        )
-        .catch(() => undefined);
-      return null;
-    }
-    throw error;
-  }
-}
-
-/**
- * Renders the provider-selection step on the canonical message and returns the
- * unacknowledged button the model modal will open from, plus the chosen provider.
- *
- * - 1 provider: the canonical message already shows the "open selector" button; this
- *   just collects the click and returns the lone provider.
- * - 2+ providers: collects the picker click, handling cancel and invalid selection.
- *
- * Returns null when the user cancels or times out — the canonical message already
- * shows the terminal notice in those cases.
- */
-async function acquireModelModalOpener(
-  phase: CanonicalPrivateWorkflowPhase,
-  userId: string,
-  locale: string,
-  savedProviders: SavedProviderConfigRow[],
-  idRoot: string,
-): Promise<{ button: ButtonInteraction; provider: string } | null> {
-  // 1. Single provider: the only control is the "open selector" button.
-  if (savedProviders.length === 1) {
-    const button = await awaitCanonicalButton(phase, userId, `${idRoot}_open`, locale);
-    if (!button) return null;
-    return { button, provider: savedProviders[0].provider.toLowerCase() };
-  }
-
-  // 2. Multiple providers: collect the picker click.
-  const button = await awaitCanonicalButton(phase, userId, idRoot, locale);
-  if (!button) return null;
-  if (button.customId === `${idRoot}_cancel`) {
-    await phase.useButton(button).replace(
-      buildPersonaWorkflowNotice({
-        locale,
-        titleKey: "general.interaction.cancel_title",
-        descriptionKey: "general.pagination.cancelled",
-        color: ColorCode.WARN,
-      }),
-    );
-    return null;
-  }
-  const index = Number.parseInt(button.customId.replace(`${idRoot}_`, ""), 10);
-  const provider = savedProviders[index];
-  if (!provider) {
-    await phase.useButton(button).replace(
-      buildPersonaWorkflowNotice({
-        locale,
-        titleKey: "general.errors.invalid_option_title",
-        descriptionKey: "general.errors.invalid_option_description",
-        color: ColorCode.ERROR,
-      }),
-    );
-    return null;
-  }
-  return { button, provider: provider.provider.toLowerCase() };
-}
-
-/**
- * Opens the model-selection modal on the canonical message from `button`, routing the
- * `>25` case through the canonical range selector automatically. Returns the submitted
- * modal phase, or null when the flow ended without a submit — cancel and timeout are
- * rendered in place by the bridge; a transport error renders the generic error notice.
+ * Opens this command's model-selection modal on the canonical message, delegating the
+ * lifecycle (including the `>25` range-selector bridge) to the shared canonical helper.
+ * Only the modal's own copy and field id are this command's business.
  */
 async function openModelModal(
   phase: CanonicalPrivateWorkflowPhase,
@@ -302,7 +123,7 @@ async function openModelModal(
   modelOptions: SelectOption[],
   modalCustomId: string,
 ): Promise<PersonaWorkflowModalPhase | null> {
-  const result = await phase.useButton(button).openModal({
+  return openCanonicalModal(phase, button, locale, {
     modalCustomId,
     modalTitleKey: "commands.model.text.modal_title",
     components: [
@@ -316,21 +137,6 @@ async function openModelModal(
       },
     ],
   });
-  if (result.outcome === "submitted") return result.phase;
-  // Cancel and timeout already rendered a terminal notice; only transport errors need one.
-  if (result.outcome === "error" || result.outcome === "fatal") {
-    await phase.message
-      .replace(
-        buildPersonaWorkflowNotice({
-          locale,
-          titleKey: "general.errors.unknown_error_title",
-          descriptionKey: "general.errors.unknown_error_description",
-          color: ColorCode.ERROR,
-        }),
-      )
-      .catch(() => undefined);
-  }
-  return null;
 }
 
 /** Builds the model-option list shown in the selection modal for one provider. */
@@ -424,8 +230,7 @@ export async function execute(
                 locale,
                 idRoot,
                 savedProviders.map((p) => p.provider),
-                currentChannelModel.llm_codename,
-                currentChannelModel.llm_provider,
+                [{ model: currentChannelModel.llm_codename, provider: currentChannelModel.llm_provider }],
               );
 
       const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
@@ -579,8 +384,7 @@ export async function execute(
                   locale,
                   providerPrefix,
                   savedProviders.map((provider) => provider.provider),
-                  currentPersonaModel.llm_codename,
-                  currentPersonaModel.llm_provider,
+                  [{ model: currentPersonaModel.llm_codename, provider: currentPersonaModel.llm_provider }],
                 ),
               );
 
@@ -784,8 +588,7 @@ export async function execute(
               locale,
               idRoot,
               savedProviders.map((p) => p.provider),
-              tomoriState.llm.llm_codename,
-              tomoriState.llm.llm_provider,
+              [{ model: tomoriState.llm.llm_codename, provider: tomoriState.llm.llm_provider }],
             );
 
     const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);

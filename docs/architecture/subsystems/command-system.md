@@ -352,7 +352,12 @@ Rules:
 - `promptWithPaginatedModal(...)` does not expose an auto-defer parameter; defer on submission manually when needed
 - commands that begin with a persona picker use Pattern 4A; the workflow owns picker acknowledgment and retries
 
-**`>25`-option selector style.** `promptWithPaginatedModal(...)` accepts an optional
+**`>25`-option selector style (pre-canonical).** This applies to callers still on
+`promptWithPaginatedModal(...)`. Commands migrated to the canonical message workflow
+(Pattern 4A/4B) never set `selectorStyle`: their `>25` handling is chosen for them by the
+engine's range-selector bridge, which always renders the Components V2 selector.
+
+`promptWithPaginatedModal(...)` accepts an optional
 `selectorStyle: "legacy" | "componentsV2"` (default `"legacy"`). At `<=25` options both
 styles open a modal directly, so this only affects the paginated path:
 
@@ -373,7 +378,29 @@ interaction reaching the helper is unacknowledged (fresh-reply path) rather than
 deferred/replied **legacy** message, since Discord cannot convert a legacy reply to V2 via
 `editReply`.
 
-### Pattern 4A: Persona Picker Workflow
+### Pattern 4A: Canonical Message Workflow (persona picker)
+
+The **canonical message workflow** is the engine behind Patterns 4A and 4B. Its rule: one
+command invocation owns exactly **one** ephemeral message, edited in place through every
+stage — picker, `>25` range selector, modal, progress, and terminal result. Opening a modal
+is an acknowledgment, not a second message.
+
+This exists because Discord emits **no event when a user dismisses a modal**. A flow that
+opens a modal and leaves its picker message behind therefore strands dead-but-clickable
+buttons ("This interaction failed") until the modal's timeout. Rendering everything on one
+message makes that orphan impossible by construction, and *collapse-at-open* swaps the live
+controls for an inert notice the instant the modal opens.
+
+Two specializations share the engine:
+
+- **Pattern 4A** (below) — the persona picker, via `runPersonaPickerWorkflow`.
+- **Pattern 4B** — one-shot picker → modal config commands, via
+  `beginCanonicalPrivateWorkflow` plus the shared helpers in `canonicalModelFlow.ts`.
+
+Non-persona callers import the engine from `src/utils/discord/ui/canonicalWorkflow.ts`,
+which also exports neutral `Canonical*` aliases for the generic types. The implementation
+itself lives in `personaWorkflow.ts`, alongside the persona specialization it shares its
+internals with.
 
 Commands that begin with a persona picker use the single command-facing entry point in
 `src/utils/discord/ui/personaWorkflow.ts`:
@@ -810,6 +837,60 @@ must include all of the following:
 3. An update to this section documenting why the workflow API could not express the case.
 
 An exception must never weaken the repository-wide scanner or add a directory-wide bypass.
+
+### Pattern 4B: Canonical One-Shot Picker -> Modal
+
+Use for a config command shaped *pick a provider -> choose a value in a modal -> show the
+result*. The whole `/model *` family and its `/personal provider model-*` siblings are built
+this way, plus `/model fallback` and `/personal model fallback`.
+
+The command expresses only business intent — which model table to read, which column to
+write, which terminal copy to show. All lifecycle branching lives in the shared helpers in
+`src/utils/discord/ui/canonicalModelFlow.ts`:
+
+```ts
+const initialPayload =
+  savedProviders.length === 0
+    ? buildNoProvidersPayload(locale, "personal")
+    : savedProviders.length === 1
+      ? buildOpenSelectorPayload(locale, `${ID_ROOT}_open`)
+      : buildProviderPickerPayload(locale, ID_ROOT, providers, currentSelections);
+
+const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
+canonicalMessage = phase.message;                        // for the outer catch
+if (savedProviders.length === 0) return;
+
+const opener = await acquireModelModalOpener(phase, userId, locale, savedProviders, ID_ROOT);
+if (!opener) return;                                     // cancel/timeout already rendered
+
+const modalPhase = await openCanonicalModal(phase, opener.button, locale, modalOptions);
+if (!modalPhase) return;                                 // dismiss/cancel already rendered
+
+const work = await modalPhase.beginInPlaceWork();        // acks the submit within 3s
+await work.message.replace(terminalPayload);             // terminal lands on the same message
+```
+
+Rules:
+
+- **Never** call `promptForSavedProvider`, `promptWithPaginatedModal`, `promptWithRawModal`,
+  or `replaceProviderPickerWithInfo` from a file that uses this pattern. List the file in
+  `MIGRATED_CANONICAL_CALLERS`; the audit in
+  `tests/unit/commands/canonicalMigrationLockdown.test.ts` then fails the build if one of
+  those primitives reappears in it.
+- Every terminal — success, validation failure, write failure, and the outer `catch` —
+  renders through `work.message.replace(...)` or the tracked `canonicalMessage`, never
+  `replyInfoEmbed`. Absence of the banned primitives is what transitively guarantees this.
+- `>25` options need no caller handling: `openCanonicalModal` routes through the engine's
+  range-selector bridge automatically.
+- Single-provider flows still show an explicit "open selector" button. A modal must open from
+  an interaction the controller owns, so the slash command cannot open it directly.
+
+**When the bridge does not fit.** The bridge slices exactly one select component and assumes
+every entry is a selectable option. `/model fallback` violates both — five selects over one
+shared option list, with one entry per page reserved for an explicit "None" choice. Such a
+command picks its range on the canonical message first via `acquireModalOptionRange(...)`
+(passing a `pageSize` below 25 to reserve entries), then hands `openCanonicalModal` an
+already-sliced `<=25` list, which opens directly.
 
 ### Pattern 5: Manual Deferral Timing
 

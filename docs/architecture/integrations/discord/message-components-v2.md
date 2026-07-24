@@ -741,14 +741,17 @@ Implementation notes:
 - Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
 - Re-fetching a generated image by message/media ID (for image-to-image, inpaint, or vision analysis) must scan `message.components` for `MediaGallery`/`Thumbnail`/`File` media, not just top-level attachments/embeds — the generated file is referenced only inside the component. This discovery is centralized in `collectImageUrlsFromMessage` (`src/utils/image/imageExtractor.ts`), which reuses `appendComponentMediaFromMessage` from `src/utils/chat/contextMedia.ts`. `generate_image`, `generate_image_nai`, and `analyze_image` all go through it, so a Components V2 image found in context can also be reloaded by any tool that accepts a media reference.
 
-### Persona workflow: one canonical message
+### Canonical message workflow: one message
 
-A same-visibility persona workflow is one ephemeral Components V2 message for its complete
-lifecycle. The initial persona cards, page navigation, loading states, secondary selectors,
+A same-visibility canonical workflow is one ephemeral Components V2 message for its complete
+lifecycle. Provider or persona cards, page navigation, loading states, secondary selectors,
 validation, progress, success, errors, timeouts, and final private controls all replace or
 edit that canonical message. A modal is not a message and does not change this count.
 
-`runPersonaPickerWorkflow(...)` captures the picker message ID and exposes a
+Both entry points behave identically here: `runPersonaPickerWorkflow(...)` for persona
+pickers, and `beginCanonicalPrivateWorkflow(...)` for everything else (imported from
+`src/utils/discord/ui/canonicalWorkflow.ts`, which also exports neutral `Canonical*` aliases
+for the types named below). Each captures its message ID and exposes a
 `PersonaWorkflowMessageController` through selection, modal, in-place, and nested-button
 phases. Every controller operation verifies that it still targets that ID:
 
