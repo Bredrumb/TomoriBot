@@ -24,9 +24,9 @@
  * Character budget for a preview rendered inside a Components V2 workflow card.
  *
  * Discord caps a Components V2 message at 4000 characters across every
- * TextDisplay component, so this leaves roughly 1000 characters of headroom for
- * the title, description, footer, and any guard characters inserted by
- * {@link neutralizeCodeFences}.
+ * TextDisplay component. {@link buildTextPreview} bounds the *guarded* text to
+ * this budget, so the remaining ~1000 characters are pure headroom for the
+ * title, description, and footer.
  */
 export const CV2_TEXT_PREVIEW_BUDGET = 3000;
 
@@ -82,12 +82,17 @@ function neutralizeCodeFences(text: string): string {
 /**
  * Builds a fence-safe preview of user-authored text.
  *
- * Truncation is measured against the original text so the reported counts match
- * what the user actually wrote; fence guards are applied afterwards and are
- * absorbed by the headroom baked into the budget constants.
+ * The fence guard is applied to the whole source *before* truncation, and the
+ * budget then bounds the guarded string. This makes the budget a hard ceiling
+ * on the rendered length rather than a headroom assumption: a run of `N`
+ * backticks guards out to `2N - 1` characters, so guarding after a fixed slice
+ * (as an earlier version did) could nearly double the length and blow the
+ * Components V2 / embed cap the budget is meant to respect. `shownChars` is
+ * recovered from the original (non-guard) characters that survived, so the
+ * reported counts stay meaningful to a user who never sees the guards.
  *
  * @param text - The text to preview; `null`/`undefined`/blank yields a preview with `totalChars === 0`.
- * @param budget - Maximum characters to show, defaulting to {@link CV2_TEXT_PREVIEW_BUDGET}.
+ * @param budget - Maximum characters to render, defaulting to {@link CV2_TEXT_PREVIEW_BUDGET}.
  * @returns A {@link TextPreview} describing what to render.
  */
 export function buildTextPreview(
@@ -100,17 +105,21 @@ export function buildTextPreview(
     return { text: "", truncated: false, shownChars: 0, totalChars: 0 };
   }
 
-  // 2. Cut against the original text so shownChars/totalChars stay meaningful
-  //    to the user, who has no idea guard characters exist.
+  // 2. Guard the fence first so the guard's expansion counts against the
+  //    budget instead of being appended past it. A guarded run never contains
+  //    two adjacent backticks, so slicing it can at worst leave a single
+  //    trailing backtick, which cannot re-open a fence.
   const totalChars = source.length;
-  const truncated = totalChars > budget;
-  const shown = truncated ? source.slice(0, budget) : source;
+  const guardedFull = neutralizeCodeFences(source);
+  const truncated = guardedFull.length > budget;
+  const guarded = truncated ? guardedFull.slice(0, budget) : guardedFull;
 
-  // 3. Guard the fence only after measuring.
+  // 3. Report shownChars in original terms by dropping the zero-width guards,
+  //    so "Showing the first X of Y" stays honest even after fence expansion.
   return {
-    text: neutralizeCodeFences(shown),
+    text: guarded,
     truncated,
-    shownChars: shown.length,
+    shownChars: guarded.split(FENCE_GUARD).join("").length,
     totalChars,
   };
 }

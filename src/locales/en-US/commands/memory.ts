@@ -296,6 +296,8 @@ Click **Confirm** to proceed. You can review and edit the content before it is s
         chunk_limit_description: `Adding this memory would exceed the chunk limit for **{persona_name}** (max {max_chunks}). Remove some documents first.`,
         empty_content_title: `Memory Content Is Empty`,
         empty_content_description: `The memory content produced no text chunks after normalization. Please ensure it contains meaningful text.`,
+        progress_title: `Vectorization in Progress`,
+        progress_description: `Embedding and storing the memory as a document. This may take a moment...`,
         partial_failure_title: `Memory Vectorized — Cleanup Required`,
         partial_failure_description: `Created document **{name}** ({chunk_count} chunks) for **{persona_name}**, but I couldn't remove the original server memory. Both now exist. Remove the original with \`/memory server remove\`; do not vectorize it again unless you first delete the new document.`,
         success_title: `Memory Vectorized`,

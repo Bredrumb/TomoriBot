@@ -178,10 +178,6 @@ mock.module("@/utils/discord/providerPicker", () => ({
   },
 }));
 
-mock.module("@/utils/discord/customProviderModal", () => ({
-  isCustomProvider: () => scenario.branch === "custom",
-}));
-
 mock.module("@/utils/provider/logitBiasResolver", () => ({
   resolveLogitBiasEntriesForLlm: () => ({ entries: [] }),
 }));

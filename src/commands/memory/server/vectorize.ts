@@ -454,8 +454,8 @@ export async function execute(
         await work.message.replace(
           buildPersonaWorkflowNotice({
             locale,
-            titleKey: "general.persona_workflow.loading_title",
-            descriptionKey: "general.persona_workflow.loading_description",
+            titleKey: "commands.memory.server.vectorize.progress_title",
+            descriptionKey: "commands.memory.server.vectorize.progress_description",
             color: ColorCode.INFO,
           }),
         );
@@ -555,8 +555,8 @@ export async function execute(
         await work.message.replace(
           buildPersonaWorkflowNotice({
             locale,
-            titleKey: "general.persona_workflow.loading_title",
-            descriptionKey: "general.persona_workflow.loading_description",
+            titleKey: "commands.memory.server.vectorize.progress_title",
+            descriptionKey: "commands.memory.server.vectorize.progress_description",
             color: ColorCode.INFO,
           }),
         );

@@ -38,7 +38,7 @@ import {
 } from "@/utils/discord/ui/canonicalModelFlow";
 import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
-import { isCustomProvider } from "@/utils/discord/customProviderModal";
+import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";

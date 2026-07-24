@@ -296,6 +296,8 @@ export default {
         chunk_limit_description: `この記憶を追加すると **{persona_name}** のチャンク上限（最大{max_chunks}）を超えます。先にドキュメントを削除してください。`,
         empty_content_title: `記憶の内容が空です`,
         empty_content_description: `正規化後に有効なテキストチャンクが生成されませんでした。記憶に意味のあるテキストが含まれているか確認してください。`,
+        progress_title: `ベクトル化を実行中`,
+        progress_description: `記憶をドキュメントとして埋め込み・保存しています。少々お待ちください...`,
         partial_failure_title: `記憶をベクトル化しました — クリーンアップが必要です`,
         partial_failure_description: `**{persona_name}** にドキュメント **{name}**（{chunk_count}チャンク）を作成しましたが、元のサーバー記憶を削除できませんでした。現在は両方が存在します。元の記憶を \`/memory server remove\` で削除してください。新しいドキュメントを先に削除しない限り、再度ベクトル化しないでください。`,
         success_title: `記憶をベクトル化しました`,

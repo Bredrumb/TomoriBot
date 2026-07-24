@@ -358,10 +358,6 @@ mock.module("@/utils/db/repositories", () => ({
   },
 }));
 
-mock.module("@/utils/discord/customProviderModal", () => ({
-  isCustomProvider: () => false,
-}));
-
 mock.module("@/utils/provider/logitBiasResolver", () => ({
   resolveLogitBiasEntriesForLlm: () => ({ entries: [] }),
 }));

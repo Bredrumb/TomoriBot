@@ -424,7 +424,7 @@ Tool commands.
 | `/tool estimate cost` | Estimate API costs for paid AI providers |
 | `/tool ping` | Check the bot's latency. |
 | `/tool prompt snapshot` | Dump the exact LLM prompt for a persona to a file for debugging. |
-| `/tool refresh` | Clears the recent conversation history. |
+| `/tool refresh` | Clear conversation history (this channel only). |
 | `/tool status` | Show current personal, server, or persona status. |
 
 ## `/update`
