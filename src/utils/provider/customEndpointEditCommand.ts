@@ -373,6 +373,25 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
     );
   }
 
+  // Collapse-at-open: replace the summary's now-dead controls before the modal goes up.
+  // Discord emits no modal-dismiss event, so without this the Edit Fields/Cancel buttons stay
+  // clickable — and fail — for the modal's full 10-minute lifetime, because the single-shot
+  // collector above has already resolved. The summary message belongs to `selectInteraction`
+  // while the modal opens from `buttonInteraction`, so editing here does not acknowledge the
+  // button and the modal still opens normally. Doing it *before* the modal leaves no window
+  // in which the stale buttons are clickable.
+  await selectInteraction
+    .editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle(localizer(locale, "general.interaction.selector_opened_title"))
+          .setDescription(localizer(locale, "general.interaction.selector_opened_description"))
+          .setColor(ColorCode.INFO),
+      ],
+      components: [],
+    })
+    .catch(() => undefined);
+
   const editModalResult = await promptWithRawModal(buttonInteraction, locale, {
     modalCustomId: editModalCustomId,
     modalTitleKey: `commands.config.custom_models.capability_modal.${existingEndpoint.capability}_edit_title`,

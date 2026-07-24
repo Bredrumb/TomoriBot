@@ -140,6 +140,10 @@ mock.module("@/utils/provider/savedProviderConfig", () => ({
     scenario.providers.map((provider) => ({ ...baselineRow(provider), api_key: "encrypted-key" })),
 }));
 
+// The commands under test only touch `llmModelRepo`, but the mock must still expose the
+// barrel's whole export surface: `mock.module` is process-wide, so a partial stub breaks
+// module linking for anything else in this process that imports a missing name (the
+// canonical helpers pull in `interactionCore`, which reaches most of these).
 mock.module("@/utils/db/repositories", () => ({
   llmModelRepo: {
     loadAvailableModelsForProvider: async () => llmModels,
@@ -147,6 +151,34 @@ mock.module("@/utils/db/repositories", () => ({
     loadAvailableDiffusionModels: async () => diffusionModels,
     loadAvailableEmbeddingModels: async () => embeddingModels,
   },
+  configRepository: {},
+  errorLogRepository: {},
+  mcpRepository: {},
+  quotaRepository: {},
+  speechRepository: {},
+  channelContextNoteRepo: {},
+  channelPromptRepo: {},
+  conditioningMemoryRepository: {},
+  cooldownRepository: {},
+  exportRepository: {},
+  importRepository: {},
+  llmOverrideRepo: {},
+  llmProviderRepo: {},
+  personalMemoryRepository: {},
+  personaUserBlockRepository: {},
+  personaSpriteMessageRepository: {},
+  personaSpriteRepository: {},
+  personaRepository: {},
+  presetRepository: {},
+  ragRepository: {},
+  serverMemoryRepository: {},
+  serverRepository: {},
+  serverScheduleRepository: {},
+  shortTermMemoryRepository: {},
+  statRepository: {},
+  toolRepository: {},
+  userRepository: {},
+  whitelistRepository: {},
 }));
 
 mock.module("@/utils/provider/personalProviderHelpers", () => ({

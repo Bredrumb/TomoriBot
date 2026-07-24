@@ -175,13 +175,6 @@ mock.module("@/utils/discord/customProviderModal", () => ({
   isCustomProvider: () => scenario.branch === "custom",
 }));
 
-mock.module("@/utils/provider/customModelPicker", () => ({
-  promptCustomModelSelection: async (options: { interaction: unknown }) => ({
-    model: scenario.selectedModel,
-    submitInteraction: options.interaction,
-  }),
-}));
-
 mock.module("@/utils/provider/logitBiasResolver", () => ({
   resolveLogitBiasEntriesForLlm: () => ({ entries: [] }),
 }));

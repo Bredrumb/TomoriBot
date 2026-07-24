@@ -46,7 +46,7 @@ export const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
  * lock-down audit (`tests/unit/commands/canonicalMigrationLockdown.test.ts`) forbids
  * every file listed here from calling the pre-canonical picker/modal primitives
  * (`promptForSavedProvider`, `promptWithPaginatedModal`, `replaceProviderPickerWithInfo`,
- * `promptWithRawModal`, `promptCustomModelSelection`). Their absence transitively
+ * `promptWithRawModal`). Their absence transitively
  * guarantees the only modal path is the canonical controller, so no post-modal terminal
  * can escape it via `replyInfoEmbed`/`followUp`. This is the single source of truth the
  * migration ledger tracks: add a caller here only once it is fully canonical AND
@@ -63,6 +63,8 @@ export const MIGRATED_CANONICAL_CALLERS: readonly string[] = [
   "src/commands/personal/provider/model-video.ts",
   "src/commands/personal/provider/model-image.ts",
   "src/commands/personal/provider/model-embedding.ts",
+  "src/commands/model/fallback.ts",
+  "src/commands/personal/model/fallback.ts",
 ];
 
 /** Primitives a migrated caller must not reach for; see {@link MIGRATED_CANONICAL_CALLERS}. */
@@ -71,7 +73,9 @@ export const PRE_CANONICAL_PRIMITIVES: readonly string[] = [
   "promptWithPaginatedModal",
   "replaceProviderPickerWithInfo",
   "promptWithRawModal",
-  "promptCustomModelSelection",
+  // `promptCustomModelSelection` used to be listed here. Migrating /model text to the
+  // canonical workflow removed its last caller, so `customModelPicker.ts` was deleted as
+  // dead code in 2026-07 — a name that no longer exists cannot be reached for.
 ];
 
 type PersonaWorkflowRootInteraction = ChatInputCommandInteraction | ButtonInteraction;

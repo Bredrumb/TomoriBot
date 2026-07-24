@@ -368,10 +368,6 @@ mock.module("@/utils/discord/openrouterModelMigrationNotice", () => ({
   replyLegacyOpenRouterOtherModelMoved: async () => undefined,
 }));
 
-mock.module("@/utils/provider/customModelPicker", () => ({
-  promptCustomModelSelection: async () => null,
-}));
-
 mock.module("@/utils/provider/providerInfoRegistry", () => ({
   getProviderDisplayName: (provider: string) => provider,
 }));

@@ -1475,6 +1475,11 @@ const RANGE_BUTTONS_PER_ROW = 5;
  *   (`${prefix}_range_${index}`, `${prefix}_previous`, `${prefix}_cancel`, `${prefix}_next`).
  * @param optionCount - Total number of options across all ranges.
  * @param rangePage - Zero-based selector page currently shown.
+ * @param pageSize - How many options each range covers. Defaults to
+ *   {@link MODAL_OPTIONS_PER_PAGE}. Callers that reserve select entries for their own
+ *   fixed choices (e.g. `/model fallback` prepends a "None" option to every page, so only
+ *   24 models fit) pass the smaller number here, keeping the button labels honest about
+ *   what the modal will actually show.
  * @returns A {@link ComponentsV2Payload} ready for an `IsComponentsV2` send/edit.
  */
 export function buildRangeSelectorPayload(
@@ -1482,8 +1487,9 @@ export function buildRangeSelectorPayload(
   customIdPrefix: string,
   optionCount: number,
   rangePage: number,
+  pageSize: number = MODAL_OPTIONS_PER_PAGE,
 ): ComponentsV2Payload {
-  const totalRanges = Math.ceil(optionCount / MODAL_OPTIONS_PER_PAGE);
+  const totalRanges = Math.ceil(optionCount / pageSize);
   const totalRangePages = Math.ceil(totalRanges / RANGES_PER_SELECTOR_PAGE);
   const firstRange = rangePage * RANGES_PER_SELECTOR_PAGE;
   const lastRange = Math.min(firstRange + RANGES_PER_SELECTOR_PAGE, totalRanges);
@@ -1503,8 +1509,8 @@ export function buildRangeSelectorPayload(
 
   const rangeButtons: ButtonComponentData[] = [];
   for (let rangeIndex = firstRange; rangeIndex < lastRange; rangeIndex += 1) {
-    const start = rangeIndex * MODAL_OPTIONS_PER_PAGE + 1;
-    const end = Math.min(start + MODAL_OPTIONS_PER_PAGE - 1, optionCount);
+    const start = rangeIndex * pageSize + 1;
+    const end = Math.min(start + pageSize - 1, optionCount);
     rangeButtons.push({
       type: ComponentType.Button,
       style: ButtonStyle.Primary,
