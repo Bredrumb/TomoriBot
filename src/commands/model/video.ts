@@ -148,8 +148,7 @@ export async function execute(
               locale,
               idRoot,
               savedProviders.map((p) => p.provider),
-              currentModel,
-              currentProvider,
+              [{ model: currentModel, provider: currentProvider }],
             );
 
     const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);

@@ -213,8 +213,7 @@ export async function execute(
               locale,
               idRoot,
               savedProviders.map((p) => p.provider),
-              currentModel,
-              currentProvider,
+              [{ model: currentModel, provider: currentProvider }],
               { note: hasNaiProviders ? localizer(locale, "commands.model.image.nai_picker_note") : undefined },
             );
 

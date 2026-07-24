@@ -81,10 +81,17 @@ Grouped commands are represented by folders:
 
 - `src/commands/model/text.ts` -> `/model text`
 
-Model and provider flows that call `promptForSavedProvider()` use one shared initial
+Model and provider flows that still call `promptForSavedProvider()` use one shared initial
 provider-selection embed. Model-selection callers pass the effective slot selection so
 the embed can show the active model codename and provider; channel and persona text
 commands resolve their scoped override before falling back to the server text model.
+
+The `/model *` and `/personal provider model-*` families no longer use that primitive.
+They render the provider picker, the `>25` range selector, the modal, and the terminal
+result on one canonical ephemeral message through the shared helpers in
+`src/utils/discord/ui/canonicalModelFlow.ts` (see the canonical message controller section
+below). `promptForSavedProvider()` is forbidden in those files, and the allow-list audit in
+`tests/unit/commands/canonicalMigrationLockdown.test.ts` enforces it.
 
 Root commands are represented by top-level command files:
 

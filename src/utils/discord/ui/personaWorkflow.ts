@@ -58,6 +58,11 @@ export const MIGRATED_CANONICAL_CALLERS: readonly string[] = [
   "src/commands/model/video.ts",
   "src/commands/model/image.ts",
   "src/commands/model/embedding.ts",
+  "src/commands/personal/provider/model-text.ts",
+  "src/commands/personal/provider/model-vision.ts",
+  "src/commands/personal/provider/model-video.ts",
+  "src/commands/personal/provider/model-image.ts",
+  "src/commands/personal/provider/model-embedding.ts",
 ];
 
 /** Primitives a migrated caller must not reach for; see {@link MIGRATED_CANONICAL_CALLERS}. */
