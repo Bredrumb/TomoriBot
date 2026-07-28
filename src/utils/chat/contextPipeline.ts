@@ -56,13 +56,14 @@ import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
+import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
-import { statRepository } from "@/utils/db/repositories";
-import { buildReunionNote } from "@/utils/text/context/timeAwareness";
+import { resolveReunionNotes } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
+import { resolveContextReferences } from "@/utils/text/contextReferences";
 
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
@@ -95,9 +96,14 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   }
   streamingContext.suppressUserErrors = !turn.shouldSurfaceUserErrors || streamingContext.suppressUserErrors === true;
 
-  // Initialize reply notice state for alter personas responding from the queue so
-  // the "Replying to..." embed fires before the first webhook chunk is sent.
-  if (incoming.isFromQueue && turn.persona.is_alter) {
+  // Initialize reply notice state for any queued turn so the "Replying to..." embed can fire
+  // before the first webhook chunk is sent. Deliberately NOT gated on `is_alter`: the main
+  // persona also switches to a webhook whenever a sprite renders, and webhooks cannot use
+  // Discord's native reply, so it needs the standalone notice for exactly the same reason.
+  // Whether a sprite fires is only known at delivery time, so the allocation happens up front
+  // and the uiUpdater gates the actual send on real webhook delivery — leaving this an inert
+  // no-op for queued turns that end up replying natively.
+  if (incoming.isFromQueue) {
     streamingContext.replyNoticeState = { attempted: false, sent: false };
   }
 
@@ -235,33 +241,24 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     streamingContext.disableAllTools && rpBasePersona.llm.has_tools
       ? { ...rpBasePersona, llm: { ...rpBasePersona.llm, has_tools: false } }
       : rpBasePersona;
-  const triggeredPersonaIdSet = new Set(turn.triggeredPersonaIds);
-  // Mirror personal memories: only surface public attributes for personas that have
-  // actually spoken in the conversation window (are in syntheticUsers), plus any
-  // co-triggered peers responding to the same message right now.
-  // Use ID-based matching so sprite-decorated display names (e.g. "Tomori (mad)")
-  // don't break detection — syntheticUsers keys are already persona_id strings.
   const personaIdsInHistory = new Set(
     Array.from(history.syntheticUsers.entries())
       .filter(([, u]) => u.type === "persona")
       .map(([id]) => Number.parseInt(id, 10))
       .filter((id) => !Number.isNaN(id)),
   );
-  const publicPersonaAttributes = turn.allPersonas
-    .filter(
-      (persona) =>
-        typeof persona.persona_id === "number" &&
-        persona.persona_id !== effectivePersona.persona_id &&
-        (personaIdsInHistory.has(persona.persona_id) || triggeredPersonaIdSet.has(persona.persona_id)),
-    )
-    .map((persona) => ({
-      personaId: persona.persona_id as number,
-      personaName: persona.persona_nickname,
-      attributes: (persona.persona_attributes ?? [])
-        .filter((attribute) => attribute.is_public)
-        .map((attribute) => attribute.attribute_text),
-    }))
-    .filter((persona) => persona.attributes.length > 0);
+  const contextReferences = await resolveContextReferences({
+    client,
+    guildId: turn.serverDiscId,
+    simplifiedMessageHistory: history.simplifiedMessages,
+    personas: turn.allPersonas,
+    activePersonaId: effectivePersona.persona_id,
+    existingParticipantIds: history.userIds,
+    existingPersonaIds: personaIdsInHistory,
+    responderPersonaIds: new Set(turn.triggeredPersonaIds),
+  });
+  const contextUserIds = new Set(history.userIds);
+  for (const referencedUserId of contextReferences.referencedUserIds) contextUserIds.add(referencedUserId);
 
   // Resolve any per-channel system prompt override (append/replace). Negative results
   // are cached, so DM channels (which can never have an override) cost one cheap lookup.
@@ -278,33 +275,21 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // Reunion state is deliberately cross-server: the lineage is the persona's
   // cross-server identity anchor (same as personal_memories), so prior activity
   // and today's grace count pool across every server sharing the lineage.
-  let reunionNote: { note: string } | null = null;
-  const reunionLineageId = effectivePersona.persona_lineage_id;
-  if (
-    effectivePersona.config.time_awareness_enabled !== false &&
-    !incoming.isUserImpersonation &&
-    typeof turn.userRow.user_id === "number" &&
-    Number.isInteger(turn.userRow.user_id) &&
-    typeof reunionLineageId === "number" &&
-    Number.isInteger(reunionLineageId) &&
-    reunionLineageId >= 0
-  ) {
-    const reunionInfo = await statRepository.getUserPersonaReunionInfo(turn.userRow.user_id, reunionLineageId);
-    const note = buildReunionNote({
-      ...reunionInfo,
-      personalOffset: turn.userRow.timezone_offset,
-      serverOffset: effectivePersona.config.timezone_offset,
-      displayName: turn.triggererName,
-    });
-    if (note) reunionNote = { note };
-  }
+  const { notes: reunionNotes, presence: reunionPresence } = await resolveReunionNotes({
+    turn,
+    effectivePersona,
+    simplifiedMessages: history.simplifiedMessages,
+    isUserImpersonation: incoming.isUserImpersonation,
+    impersonatedUserId: incoming.impersonatedUserId,
+    botUserDiscId: client.user?.id,
+  });
 
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
     serverName: turn.serverName,
     serverDescription: turn.serverDescription,
     simplifiedMessageHistory: history.simplifiedMessages,
-    userList: Array.from(history.userIds),
+    userList: Array.from(contextUserIds),
     matrixUsers: history.matrixUsers,
     syntheticUsers: history.syntheticUsers,
     personaUserBlocks: history.activeUserBlocks,
@@ -318,11 +303,13 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     emojiStrings: assets.emojiStrings,
     tomoriNickname: effectivePersona.persona_nickname,
     tomoriAttributes: effectivePersona.attribute_list,
-    publicPersonaAttributes,
+    publicPersonaProfiles: contextReferences.publicPersonaProfiles,
+    preloadedReferencedUserRows: contextReferences.referencedUserRows,
+    referencedUserIds: contextReferences.referencedUserIds,
     tomoriConfig: effectivePersona.config,
     channelPromptOverride,
     channelContextNote,
-    reunionNote,
+    reunionNotes,
     personaPrompt: effectivePersona.persona_prompt ?? null,
     personaLineageId: effectivePersona.persona_lineage_id,
     isDMChannel: turn.isDMChannel,
@@ -337,6 +324,15 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     messageIdMap,
   });
 
+  // Mirror buildPersonaSpriteContextItem's own gating so the queued-reply directive only
+  // offers the "Persona (sprite):" opening on turns where the sprite prompt was actually
+  // injected. Any disagreement between the two would put the model back in the bind of
+  // having to violate one instruction to satisfy the other.
+  const allowSpriteLabel =
+    !incoming.isUserImpersonation &&
+    typeof effectivePersona.persona_id === "number" &&
+    (await getCachedPersonaSprites(effectivePersona.persona_id).catch(() => [])).length > 0;
+
   const contextItems = attachPersonaMentionMapToContextItems(
     appendTailDirectives({
       turn,
@@ -346,6 +342,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       tailDirectives: contextBuild.tailDirectives,
       uncensorDirective: contextBuild.uncensorDirective,
       messageIdMap,
+      allowSpriteLabel,
     }),
     buildPersonaMentionMap(turn.allPersonas),
   );
@@ -368,6 +365,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
     allPersonas: turn.allPersonas,
+    reunionPresence,
     currentPersona: effectivePersona,
     tomoriState: effectivePersona,
     requestSnapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
@@ -739,6 +737,13 @@ async function simplifyMessage(
     appendComponentMediaFromMessage(replyContext.referencedMessage, imageAttachments, videoAttachments);
     imageAttachments.push(...extractEmojiImageAttachments(replyContext.referencedMessage.content));
     if (imageAttachments.length > preRefImageCount || videoAttachments.length > preRefVideoCount) {
+      tagNewMediaWithSource(
+        imageAttachments,
+        preRefImageCount,
+        videoAttachments,
+        preRefVideoCount,
+        replyContext.referencedMessage.id,
+      );
       mediaSourceMessageIds.push(replyContext.referencedMessage.id);
       remoteMediaSourceKind = "reply";
     }
@@ -792,6 +797,8 @@ async function simplifyMessage(
     content = stripAtPersonaTriggers(content, turn.allPersonas);
   }
 
+  const preForwardImageCount = imageAttachments.length;
+  const preForwardVideoCount = videoAttachments.length;
   const forwardContext = await buildForwardContext({
     message: msg,
     content,
@@ -804,6 +811,9 @@ async function simplifyMessage(
     selfDebugEnabled: turn.persona.config.self_debug_enabled ?? false,
   });
   content = forwardContext.content;
+  if (imageAttachments.length > preForwardImageCount || videoAttachments.length > preForwardVideoCount) {
+    tagNewMediaWithSource(imageAttachments, preForwardImageCount, videoAttachments, preForwardVideoCount, msg.id);
+  }
   mediaSourceMessageIds.push(...forwardContext.mediaSourceMessageIds);
   remoteMediaSourceKind = forwardContext.remoteMediaSourceKind;
 
@@ -812,6 +822,7 @@ async function simplifyMessage(
   let hasProcessedEmbed = false;
   const embedResult = processEmbedsFromMessage({
     embeds: msg.embeds,
+    components: msg.components,
     content,
     imageAttachments,
     isTomoriAuthoredMessage,
@@ -881,6 +892,23 @@ async function simplifyMessage(
     },
     isDebug,
   };
+}
+
+function tagNewMediaWithSource(
+  imageAttachments: SimplifiedMessageForContext["imageAttachments"],
+  imageStartIndex: number,
+  videoAttachments: SimplifiedMessageForContext["videoAttachments"],
+  videoStartIndex: number,
+  sourceMessageId: string,
+): void {
+  for (let index = imageStartIndex; index < imageAttachments.length; index++) {
+    const attachment = imageAttachments[index];
+    if (attachment) attachment.sourceMessageId = sourceMessageId;
+  }
+  for (let index = videoStartIndex; index < videoAttachments.length; index++) {
+    const attachment = videoAttachments[index];
+    if (attachment) attachment.sourceMessageId = sourceMessageId;
+  }
 }
 
 async function withReplyContext(
@@ -983,6 +1011,8 @@ function appendTailDirectives(args: {
   tailDirectives: string[];
   uncensorDirective?: string;
   messageIdMap?: MessageIdMap;
+  /** True when this turn also carries the persona-sprite prompt (see buildPersonaSpriteContextItem). */
+  allowSpriteLabel?: boolean;
 }): ChatTurnContext["contextItems"] {
   const incoming = args.turn.lockedTurn.admission.incoming;
   const contextItems = [...args.contextItems];
@@ -1083,6 +1113,7 @@ function appendTailDirectives(args: {
           queuedReplyTargetName,
           args.turn.persona.persona_nickname,
           args.messageIdMap,
+          args.allowSpriteLabel ?? false,
         )
       : null;
 

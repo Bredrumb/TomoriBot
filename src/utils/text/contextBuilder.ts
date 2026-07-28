@@ -1,4 +1,9 @@
-export type { BuildContextParams, BuildContextResult, SimplifiedMessageForContext } from "./context/types";
+export type {
+  BuildContextParams,
+  BuildContextResult,
+  PublicPersonaProfile,
+  SimplifiedMessageForContext,
+} from "./context/types";
 export { buildContext } from "./context/builder";
 export { convertMentions } from "./context/mentionNormalizer";
 export { formatTimestampInline } from "./context/history";

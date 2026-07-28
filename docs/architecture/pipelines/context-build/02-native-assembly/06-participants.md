@@ -4,20 +4,23 @@ title: "02.6: Participants"
 
 The densest single contributor: list every conversation participant with
 per-user details (presence, roles, **personal memories**, reminders),
-mention aliases with conflict detection, and the closing
+mention aliases with conflict detection, the active persona's pending
+self-tasks, and the closing
 channel/time-of-day footer.
 
 **File:** `src/utils/text/context/participants.ts:38-236`
 
 ## Mission
 
-For every user ID in `userList` (collected from message history by the
-chat pipeline), emit a rich detail block: display name, mention aliases
+For every user ID in `userList` (message authors plus eligible users resolved
+from references in the visible history), emit a rich detail block: display name, mention aliases
 (unique-resolution computed), online/presence status, server roles,
 per-user personal memories (with tag-filtering against the conversation
 corpus, like server memories in stage 03), pending reminders, and public
 Physical Appearance tags for image generation. Then fold in Matrix bridge users and
-synthetic webhook users (persona-flavored). Close with channel name +
+synthetic webhook users (persona-flavored). Independently append every pending
+self-task assigned to the active persona, even when its creator is not a
+conversation participant. Close with channel name +
 current time-of-day (timezone-aware).
 
 The output is *one* context item — all participants live in a single
@@ -27,7 +30,8 @@ The output is *one* context item — all participants live in a single
 
 Substantial — see signature in `participants.ts:38-58`. Notable:
 
-- `userList: string[]` — Discord user IDs from history
+- `userList: string[]` — Discord author IDs from history plus eligible
+  reference-discovered user IDs
 - `triggererName`, `botName`, `personaLineageId`
 - `tomoriState`, `tomoriConfig` (provides `personal_memories_enabled`,
   `timezone_offset`)
@@ -35,6 +39,10 @@ Substantial — see signature in `participants.ts:38-58`. Notable:
   `impersonatedIdentityName`
 - `matrixUsers: Map<string, string>` — Matrix user ID → stripped display name
 - `syntheticUsers: Map<string, { displayName, type: "persona" | "webhook" }>`
+- `publicPersonaProfiles` — referenced/history/responder personas' public
+  attributes plus normalized Physical Appearance tags
+- `preloadedReferencedUserRows`, `referencedUserIds` — batched alias-resolution
+  results; referenced users never take the auto-registration path
 - `conversationCorpus` — for personal-memory tag filtering
 - `snapshot`, `convertMentions`
 
@@ -67,6 +75,9 @@ UserA (Mention: @{UserA}; Aliases: @{aliceA}, @{alice_global})
 - Reminders:
   - ID:42 "Take meds" (scheduled for Tue, May 21, 2026 10:00 AM (UTC-7), repeats every 24 hour(s))
 
+Pending Tasks Assigned to You:
+- ID:77 "Post the daily summary" (scheduled for Tue, May 21, 2026 06:00 PM (UTC-7), repeats every 24 hour(s)) (destination: #daily-summary)
+
 Conversation context: #general (ID: 1234...).
 Current time: May 21, 2026 18:30 UTC+09:00 (JST), evening.
 ]
@@ -84,13 +95,24 @@ Current time: May 21, 2026 18:30 UTC+09:00 (JST), evening.
   - `serverScheduleRepository.getPendingRemindersForUser` for each user;
     pending reminders include `ID:N` so the LLM can target them with
     `update_task` for requester-scoped edits/deletes
+  - One additional `getPendingRemindersForUser` read for the bot Discord ID,
+    current server, and exact active `persona_id`; only `self_reminder = true`
+    rows are rendered as persona tasks
 - **Discord fetches**:
   - `guild.members.fetch(userId)` for role / display-name resolution
   - `client.users.fetch(userId)` fallback for users not in guild
   - `getUserPresenceDetails` for online status + activities (requires
     `GuildPresences` intent)
-- **Synthetic persona enrichment** — `getCachedAllPersonas` to populate
-  image-appearance tags for synthetic persona entries.
+- **Reference discovery (upstream)** — `contextReferences.ts` scans the complete
+  sanitized fetched window. Persona triggers use normal trigger matching even
+  when Deliberate Trigger Mode is active, but this affects context only and
+  never schedules a response.
+- **User reference candidates (upstream)** — one repository read combines real
+  Discord mentions, cached guild members, users with `message_sent` or
+  `command_used` activity on this server, and eligible saved nicknames found in
+  the history. Uncached database candidates are individually verified as
+  current guild members; the pipeline never fetches the guild's entire member
+  list.
 - **Mention alias collection** — addresses, server nicknames, global names,
   usernames, and custom nicknames are collected per user; `aliasCounts`
   tracks duplicates across users to detect conflicts.
@@ -118,8 +140,28 @@ After this stage runs:
 - Personal memories are filtered by privacy (`PrivacyLevel.MINIMAL`
   required) AND blacklist AND `personal_memories_enabled` AND
   conversation-corpus tag match (if `memory_tagging_enabled`).
-- Physical Appearance tags are public for users/personas present in chat and
-  remain separate from public attributes.
+- Plain and textual `@` aliases are case-insensitive standalone phrases across
+  saved Tomori nickname, guild display/nickname, global name, and username.
+  Exactly one eligible guild member must own the alias; shared aliases, partial
+  words, bots, non-members, unknown users, and default-only registrations add
+  nobody. Real `<@id>` mentions are unambiguous but still require eligibility
+  and current guild membership.
+- Eligibility requires `message_sent`/`command_used` activity or meaningful
+  state: personal memories, pending reminders/tasks, non-default
+  personalization/image settings, timezone, privacy, or a deliberate-mode
+  preference. Registration language, the initial nickname, and default rows
+  alone do not qualify.
+- Referenced users use this same full renderer, including privacy, blacklist,
+  memory-tag, lineage, reminder/task, presence, role, timezone, alias,
+  impersonation, and mention-target behavior.
+- User reminders require both context membership and an active-persona match.
+  Main personas additionally include legacy unassigned user reminders.
+- Persona self-tasks do not require their creator or any other human to be in
+  context. They require an exact active `persona_id` match, include their
+  destination channel, and are omitted during user-impersonation turns.
+- Persona public attributes and Physical Appearance tags are attached to the
+  same participant entry. A tags-only persona is still rendered; a referenced
+  persona with no existing synthetic entry is non-mentionable.
 - Matrix and synthetic users are appended *after* normal users and are
   marked non-mentionable (`mentionable: false`).
 - The closing footer always emits, even with one participant.
@@ -132,7 +174,7 @@ After this stage runs:
 | `tomoriConfig` | `memory_tagging_enabled` | (Set upstream in `nativeBuilder`) Drives `conversationCorpus` tag filter for personal memories |
 | `tomoriConfig` | `timezone_offset` | Hours offset for current-time footer |
 | Client intent | `GuildPresences` | Required for online/activity status; without it, only static info is shown |
-| User row | `personal_dtm`, `privacy_level` | Privacy controls — `FULL` users are skipped entirely from listing |
+| User row | `personal_dtm`, `privacy_level` | Reference eligibility and per-field privacy behavior; authored messages from `FULL` users are removed upstream |
 | User row | `physical_appearance_tags` | Public physical appearance image tags |
 
 ## Extension points
@@ -145,7 +187,7 @@ Multiple plugin-relevant seams:
 | Personal memories per user (`personalMemoryRepository.loadForUserLineage`) | The "personal memory type" plugin category — a sister to server memories (stage 03). |
 | Matrix-user folding (`matrixUsers` map) | A bridge plugin emits its users via this map; the contributor handles them uniformly. A Telegram/Slack bridge plugin would extend the same map. |
 | Synthetic users (persona / webhook) | The chat pipeline pre-populates `syntheticUsers`; a plugin shipping a new "fake participant" type would extend the map. |
-| Pending reminders (`serverScheduleRepository.getPendingRemindersForUser`) | Reminder system is core, not plugin — but a plugin adding "scheduled events" might want a parallel display block here. → plugin plan candidate. |
+| Pending reminders and persona self-tasks (`serverScheduleRepository.getPendingRemindersForUser`) | Reminder system is core, not plugin — but a plugin adding "scheduled events" might want a parallel display block here. → plugin plan candidate. |
 | Physical Appearance tags (`physical_appearance_tags`) | Coupled to image-generation tooling; a plugin adding a different image-gen tag scheme would extend the `normalizeImageAppearanceTags` path. |
 | Channel + time-of-day footer | Internal — coupled to `timezoneHelper`. |
 

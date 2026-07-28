@@ -232,7 +232,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
 
   // ── aggregation reads ──────────────────────────────────────────────────────
 
-  it("getUserPersonaReunionInfo reads prior activity and today's grace count across servers", async () => {
+  it("getUsersPersonaReunionInfo reads prior activity and today's grace count across servers", async () => {
     const previousAt = new Date(`${dayOffset(4)}T18:30:00Z`);
     const [otherServer] = await testSql<{ server_id: number }[]>`
       INSERT INTO servers (server_disc_id)
@@ -243,15 +243,43 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
       INSERT INTO stat_counters
         (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
       VALUES
-        (${otherServer.server_id}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(4)}::date, 2,
+        (${otherServer.server_id}, ${refs.userId}, ${lineageA}, 'presence_seen', '', ${dayOffset(4)}::date, 2,
          ${previousAt}, ${previousAt}),
-        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(0)}::date, 3,
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'presence_seen', '', ${dayOffset(0)}::date, 3,
          NOW(), NOW())
     `;
 
-    const reunion = await statRepository.getUserPersonaReunionInfo(refs.userId, lineageA);
-    expect(reunion.lastPreviousDayAt?.toISOString()).toBe(previousAt.toISOString());
-    expect(reunion.todayCount).toBe(3);
+    const reunion = await statRepository.getUsersPersonaReunionInfo([refs.userId], lineageA);
+    expect(reunion?.get(refs.userId)?.lastPreviousDayAt?.toISOString()).toBe(previousAt.toISOString());
+    expect(reunion?.get(refs.userId)?.todayCount).toBe(3);
+  });
+
+  it("getUsersPersonaReunionInfo batches users, keeps legacy message_sent history, and graces on presence only", async () => {
+    const legacyAt = new Date(`${dayOffset(9)}T08:00:00Z`);
+    const presenceAt = new Date(`${dayOffset(2)}T08:00:00Z`);
+    await testSql`
+      INSERT INTO stat_counters
+        (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
+      VALUES
+        -- Relationship that predates the presence metric: the gap must still resolve.
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(9)}::date, 5,
+         ${legacyAt}, ${legacyAt}),
+        -- Today's message_sent must NOT burn grace; only presence ticks do.
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(0)}::date, 4,
+         NOW(), NOW()),
+        (${refs.serverId}, ${altUserId}, ${lineageA}, 'presence_seen', '', ${dayOffset(2)}::date, 1,
+         ${presenceAt}, ${presenceAt})
+    `;
+
+    const reunion = await statRepository.getUsersPersonaReunionInfo([refs.userId, altUserId], lineageA);
+    expect(reunion?.size).toBe(2);
+    expect(reunion?.get(refs.userId)?.lastPreviousDayAt?.toISOString()).toBe(legacyAt.toISOString());
+    expect(reunion?.get(refs.userId)?.todayCount).toBe(0);
+    expect(reunion?.get(altUserId)?.lastPreviousDayAt?.toISOString()).toBe(presenceAt.toISOString());
+
+    // Users with no rows at all are simply absent, never a fabricated zero row.
+    const empty = await statRepository.getUsersPersonaReunionInfo([refs.userId], lineageB);
+    expect(empty?.size).toBe(0);
   });
 
   it("getFavoritePersona ranks by message share and computes loyalty %", async () => {

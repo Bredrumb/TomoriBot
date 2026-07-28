@@ -7,6 +7,17 @@
  * plans/stat-tracking.md §5 for the full catalog and grain notes.
  *
  * `metric_key` semantics per metric:
+ *   - presence_seen → "" (one per turn per human author present in the context
+ *                     window, including the triggerer). This is the *behavioral*
+ *                     "when did this persona last see this person" clock behind
+ *                     reunion notes — deliberately separate from message_sent so
+ *                     leaderboards, favorite-persona shares, and cost reads keep
+ *                     counting only real exchanges. Unlike message_sent it is
+ *                     recorded in DMs — but it still requires a response, since a
+ *                     turn that never answered delivered no acknowledgment and must
+ *                     not consume the reunion. Owned end-to-end by
+ *                     `@/utils/chat/reunionPresence` (resolve at context build,
+ *                     commit post-turn).
  *   - command_used  → full command path, space-joined (e.g. "config humanizer",
  *                     "server welcome-channel set"); not just the top-level category
  *   - model_used    → model id / codename
@@ -36,6 +47,7 @@
  */
 export const STAT_METRICS = [
   "message_sent",
+  "presence_seen",
   "command_used",
   "model_used",
   "tokens_in",

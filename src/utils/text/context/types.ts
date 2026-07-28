@@ -1,7 +1,13 @@
 import type { Client } from "discord.js";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { RequestSnapshot } from "@/types/misc/context";
-import type { PersonaUserBlockRow, ServerEmojiRow, ServerStickerRow, AssembledServerConfig } from "@/types/db/schema";
+import type {
+  AssembledServerConfig,
+  PersonaUserBlockRow,
+  ServerEmojiRow,
+  ServerStickerRow,
+  UserRow,
+} from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 
 /**
@@ -30,6 +36,8 @@ export type SimplifiedMessageForContext = {
     mimeType: string | null;
     filename: string;
     isEmoji?: boolean;
+    /** Discord message that media-reference tools should fetch for this attachment. */
+    sourceMessageId?: string;
   }>;
   videoAttachments: Array<{
     url: string;
@@ -37,7 +45,16 @@ export type SimplifiedMessageForContext = {
     mimeType: string | null;
     filename: string;
     isYouTubeLink: boolean;
+    /** Discord message that media-reference tools should fetch for this attachment. */
+    sourceMessageId?: string;
   }>;
+};
+
+export type PublicPersonaProfile = {
+  personaId: number;
+  personaName: string;
+  attributes: string[];
+  imageAppearanceTags: string[];
 };
 
 /** Shared parameter type for both the routing wrapper and native context builder. */
@@ -58,11 +75,11 @@ export interface BuildContextParams {
   emojiStrings?: string[];
   tomoriNickname: string;
   tomoriAttributes: string[];
-  publicPersonaAttributes?: Array<{
-    personaId: number;
-    personaName: string;
-    attributes: string[];
-  }>;
+  publicPersonaProfiles?: PublicPersonaProfile[];
+  /** Eligible reference-discovered users already loaded by the shared resolver. */
+  preloadedReferencedUserRows?: Map<string, UserRow>;
+  /** Reference-discovered IDs must never take the participant auto-registration path. */
+  referencedUserIds?: ReadonlySet<string>;
   tomoriConfig: AssembledServerConfig;
   /**
    * Per-channel system prompt override resolved at the call site (null when none).
@@ -78,8 +95,12 @@ export interface BuildContextParams {
    * only used when neither persona nor channel has one set.
    */
   channelContextNote?: { note: string; depth: number } | null;
-  /** Precomputed persona-reunion system note for the triggering user. */
-  reunionNote?: { note: string } | null;
+  /**
+   * Precomputed persona-reunion note bodies (raw text — the dialogue-history
+   * stage wraps them in `[System: ...]`). One entry per returning person the
+   * chat pipeline resolved: the triggerer and/or others present in the window.
+   */
+  reunionNotes?: string[] | null;
   personaPrompt?: string | null;
   personaLineageId?: number;
   isDMChannel?: boolean;

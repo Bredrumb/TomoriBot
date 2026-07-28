@@ -1,8 +1,10 @@
 import { PrivacyLevel } from "@/types/db/schema";
 import { storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
+import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
-import { log } from "@/utils/misc/logger";
+import { resolveManagedChannelWebhook, sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
+import { getChannelDeliveredWebhookIdentity } from "@/utils/discord/stream/channelDeliveryContinuity";
+import { ColorCode, log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
 import { localizer } from "@/utils/text/localizer";
@@ -15,6 +17,7 @@ import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import { recordReunionPresence } from "@/utils/chat/reunionPresence";
 
 /**
  * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`).
@@ -39,6 +42,8 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   scheduleBoomerangFollowUp(context);
   // Fire-and-forget so stat tracking never adds latency to the response path.
   void recordUsageStats(context, result);
+  // Phase 2 of the reunion presence protocol — see @/utils/chat/reunionPresence.
+  recordReunionPresence(context.reunionPresence, result);
 }
 
 async function sendSelectedSticker(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
@@ -46,27 +51,33 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
   if (!sticker || result.status !== "completed") return;
 
   let stickerSent = false;
-  const webhook = context.responseTarget?.webhook;
-  const personaUsername = context.responseTarget?.personaUsername;
-  const personaAvatarUrl = context.responseTarget?.personaAvatarUrl;
+  // Post the sticker as whoever actually delivered the last message, so Discord groups the two
+  // instead of splitting the sticker off under a different author. Crucially this reuses the
+  // recorded username verbatim — which may be the decorated `Persona (sprite)` form picked by
+  // the group-break alternation. Re-resolving the persona's default identity here would produce
+  // a different name and force exactly the split we are avoiding.
+  //
+  // Not gated on `is_alter`: the main persona also delivers through a webhook whenever a sprite
+  // renders. A null identity means the last delivery was an ordinary bot message, so the sticker
+  // should be one too — which the bot path below handles.
+  const deliveredIdentity = getChannelDeliveredWebhookIdentity(context.channel.id);
 
-  if (context.currentPersona.is_alter && webhook && personaUsername) {
+  if (deliveredIdentity) {
     const threadId = context.channel.isThread() ? context.channel.id : undefined;
     try {
-      await sendWebhookMessageWithIdentity(
-        webhook,
-        {
-          content: sticker.url,
-          ...(threadId ? { threadId } : {}),
-        },
-        {
-          username: personaUsername,
-          avatarUrl: personaAvatarUrl,
-          avatarDataUri: personaAvatarUrl?.startsWith("data:image/") ? personaAvatarUrl : undefined,
-        },
-      );
-      stickerSent = true;
-      log.info(`Sent sticker URL for '${sticker.name}' via webhook.`);
+      const webhook = context.responseTarget?.webhook ?? (await resolveManagedChannelWebhook(context.channel));
+      if (webhook) {
+        await sendWebhookMessageWithIdentity(
+          webhook,
+          {
+            content: sticker.url,
+            ...(threadId ? { threadId } : {}),
+          },
+          deliveredIdentity,
+        );
+        stickerSent = true;
+        log.info(`Sent sticker URL for '${sticker.name}' via webhook as "${deliveredIdentity.username}".`);
+      }
     } catch (error) {
       log.warn("Failed to send sticker URL via webhook, falling back to bot sticker send", error);
     }
@@ -269,16 +280,53 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
 
 async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   const incoming = context.turn.lockedTurn.admission.incoming;
-  if (!shouldRetryEmptyResponse(incoming, result)) {
+  if (result.status !== "empty_response") {
     return;
   }
 
-  await new Promise((resolve) => setTimeout(resolve, EMPTY_RESPONSE_RETRY_DELAY_MS));
   const lastStreamResult = result.streamResults.at(-1);
   const streamResultData =
     lastStreamResult?.data && typeof lastStreamResult.data === "object"
       ? (lastStreamResult.data as Record<string, unknown>)
       : undefined;
+  const terminalFinishReason =
+    typeof streamResultData?.finishReason === "string" ? streamResultData.finishReason : undefined;
+
+  if (!shouldRetryEmptyResponse(incoming, result)) {
+    log.warn(`Empty response after ${MAX_EMPTY_RESPONSE_RETRIES} retries.`);
+
+    if (context.isUserImpersonation) {
+      throw new Error("User impersonation returned an empty response.");
+    }
+
+    if (!context.shouldSurfaceUserErrors) {
+      log.warn(`Suppressing empty response embed for non-deliberate chat turn ${context.message.id}`);
+      return;
+    }
+
+    await sendStandardEmbed(
+      context.channel as Parameters<typeof sendStandardEmbed>[0],
+      context.locale,
+      {
+        titleKey: "genai.empty_response_title",
+        descriptionKey: "genai.empty_response_description",
+        color: ColorCode.WARN,
+        footerKey: "genai.generic_error_footer",
+      },
+      {
+        webhook: context.responseTarget?.webhook,
+        personaUsername: context.responseTarget?.personaUsername,
+        personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
+      },
+    ).catch((error) => log.warn("Failed to send empty response embed to channel", error));
+    return;
+  }
+
+  log.info(
+    `Empty response detected (attempt ${incoming.retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES + 1}). ` +
+      `finishReason=${terminalFinishReason ?? "unknown"}. Retrying with fresh context in ${EMPTY_RESPONSE_RETRY_DELAY_MS}ms...`,
+  );
+  await new Promise((resolve) => setTimeout(resolve, EMPTY_RESPONSE_RETRY_DELAY_MS));
   const emptyResponseReason =
     typeof streamResultData?.emptyResponseReason === "string" ? streamResultData.emptyResponseReason : undefined;
   const speakerGuardRetryDirective =

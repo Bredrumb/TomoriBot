@@ -79,6 +79,39 @@ export function getDeliberateTriggerMatch(content: string, trigger: string): Reg
   return content.match(createDeliberateTriggerRegex(firstTriggerWord));
 }
 
+/**
+ * Finds a persona trigger in already-sanitized text without applying deliberate
+ * trigger mode. Context-reference discovery uses this so loading a public
+ * profile cannot affect response routing.
+ */
+export function getTriggerFirstMatchIndexInContent(content: string, trigger: string, deliberateOnly = false): number {
+  const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+  if (!normalizedTrigger) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  if (normalizedTrigger.startsWith("<@")) {
+    const userId = normalizedTrigger.replace(/[<@!>]/g, "");
+    const mentionPattern = new RegExp(`<@!?${escapeRegExp(userId)}>`);
+    const mentionMatch = content.match(mentionPattern);
+    return mentionMatch?.index ?? Number.POSITIVE_INFINITY;
+  }
+
+  if (deliberateOnly) {
+    const deliberateMatch = getDeliberateTriggerMatch(content, normalizedTrigger);
+    return deliberateMatch?.index ?? Number.POSITIVE_INFINITY;
+  }
+
+  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
+  if (isJapanese) {
+    const index = content.indexOf(normalizedTrigger);
+    return index >= 0 ? index : Number.POSITIVE_INFINITY;
+  }
+
+  const match = content.match(createScreamingRegex(normalizedTrigger));
+  return match?.index ?? Number.POSITIVE_INFINITY;
+}
+
 export function getTriggerFirstMatchIndex(message: Message, trigger: string, deliberateOnly = false): number {
   const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
   if (!normalizedTrigger) {
@@ -90,25 +123,11 @@ export function getTriggerFirstMatchIndex(message: Message, trigger: string, del
     if (!message.mentions.users.has(userId)) {
       return Number.POSITIVE_INFINITY;
     }
-
-    const mentionPattern = new RegExp(`<@!?${escapeRegExp(userId)}>`);
-    const mentionMatch = message.content.match(mentionPattern);
-    return mentionMatch?.index ?? Number.MAX_SAFE_INTEGER;
+    const contentMatchIndex = getTriggerFirstMatchIndexInContent(message.content, normalizedTrigger, deliberateOnly);
+    return contentMatchIndex === Number.POSITIVE_INFINITY ? Number.MAX_SAFE_INTEGER : contentMatchIndex;
   }
 
-  if (deliberateOnly) {
-    const deliberateMatch = getDeliberateTriggerMatch(message.content, normalizedTrigger);
-    return deliberateMatch?.index ?? Number.POSITIVE_INFINITY;
-  }
-
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
-  if (isJapanese) {
-    const index = message.content.indexOf(normalizedTrigger);
-    return index >= 0 ? index : Number.POSITIVE_INFINITY;
-  }
-
-  const match = message.content.match(createScreamingRegex(normalizedTrigger));
-  return match?.index ?? Number.POSITIVE_INFINITY;
+  return getTriggerFirstMatchIndexInContent(message.content, normalizedTrigger, deliberateOnly);
 }
 
 export function doesMessageMatchTrigger(message: Message, trigger: string, deliberateOnly = false): boolean {

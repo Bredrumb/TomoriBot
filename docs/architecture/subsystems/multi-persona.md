@@ -173,11 +173,25 @@ High-level flow (per incoming message):
 2. Queue additional personas to ensure sequential replies.
 3. For each persona:
    - Build context from shared history.
-   - Add public attributes from the other personas matched by the same original trigger.
+   - Add participant profiles for other personas that spoke in history, are
+     responding to the same original trigger, or are referenced by trigger text
+     anywhere in the visible fetched window.
    - Use isolated function-call history per persona.
    - Stream response with persona-specific webhook settings if applicable.
 
-Public attributes are not memories and are not server-wide. They are carried through queued persona jobs as `triggeredPersonaIds`, so the first and later queued responders see the same original trigger set. Private attributes remain visible only to their owning persona. Later personas still **do not** see earlier persona responses in their context (deferred for future refactor).
+Each profile combines the persona's public attributes and normalized Physical
+Appearance tags in the existing "users in conversation" entry. Tags-only
+personas are included, and text-only references create a non-mentionable
+synthetic persona entry. Private attributes remain visible only to their owning
+persona.
+
+Text reference matching deliberately uses normal trigger semantics even while
+Deliberate Trigger Mode is enabled. This is context enrichment only:
+`triggeredPersonaIds` still comes from routing, so a plain trigger reference
+does not schedule that persona to respond. Profiles deduplicate the active
+persona, historical speakers, and co-responders. Later queued personas still
+do **not** see earlier persona responses in their context (deferred for future
+refactor).
 
 ## Self-Reply Trigger System
 

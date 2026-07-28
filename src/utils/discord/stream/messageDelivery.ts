@@ -10,6 +10,8 @@ import type {
 import { VisibleDeliveryMode, DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
 import { renderMarkdownTableToPng } from "@/utils/image/markdownTableRenderer";
+import { attachShowMarkdownCollector, createShowMarkdownButtonRow } from "@/utils/discord/markdownTableButton";
+import { resolveManagedChannelWebhook } from "@/utils/discord/webhook/webhookCore";
 import { setCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
 import { extractMarkdownTableSegments, MARKDOWN_TABLE_ATTACHMENT_PREFIX } from "@/utils/text/markdownTable";
 import { chunkMessage } from "@/utils/text/processors/chunkProcessor";
@@ -151,6 +153,7 @@ export class StreamMessageDelivery {
     const sentMessage = await this.sendSinglePayload(
       {
         files: [attachment],
+        components: [createShowMarkdownButtonRow(context.locale)],
         allowedMentions: {
           parse: [],
           repliedUser: false,
@@ -165,7 +168,23 @@ export class StreamMessageDelivery {
     );
 
     if (sentMessage) {
+      // Cache first: the collector reads the source back out of the cache on every press,
+      // so the entry must exist before the button can be clicked.
       setCachedRenderedMarkdownTable(sentMessage.id, tableMarkdown.trim());
+
+      // A webhook-authored message can only be edited through the webhook that sent it, so
+      // hand the collector whichever webhook actually delivered this table, plus the thread
+      // id a parent-channel webhook needs to address a message posted inside a thread.
+      // A sprite render can put the main persona on the webhook path without ever populating
+      // `context.webhook`, so resolve it lazily in that case — the lookup is cached.
+      const authoringWebhook = sentMessage.webhookId
+        ? (context.webhook ?? (await resolveManagedChannelWebhook(context.channel)) ?? undefined)
+        : undefined;
+      const threadId =
+        "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
+          ? context.channel.id
+          : undefined;
+      attachShowMarkdownCollector(sentMessage, context.locale, authoringWebhook, threadId);
     }
   }
 

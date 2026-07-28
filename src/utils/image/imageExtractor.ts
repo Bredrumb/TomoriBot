@@ -304,9 +304,10 @@ export async function resolveMessageImageUrls(
 /**
  * Extract all images from a Discord message and convert them to base64.
  *
- * Delegates discovery to {@link collectImageUrlsFromMessage} (which covers
- * attachments, embeds, stickers, custom emojis, and Components V2 media), then
- * downloads and optimizes each one.
+ * Delegates discovery to {@link resolveMessageImageUrls}, so a text-only reply
+ * can use the images from the message it directly references. The resolver
+ * covers attachments, embeds, stickers, custom emojis, Components V2 media,
+ * and forwarded-message snapshots.
  *
  * Each source is fetched independently — individual failures are logged and skipped
  * so that other images in the same message can still be processed.
@@ -317,26 +318,15 @@ export async function resolveMessageImageUrls(
  * @throws Error if the message is not found or no images could be processed
  */
 export async function extractImagesFromMessage(messageId: string, context: ToolContext): Promise<ExtractedImage[]> {
-  // 1. Fetch the Discord message
-  const message = await context.channel.messages.fetch(messageId);
+  // 1. Resolve every image URL from the requested message or its direct reply target.
+  const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
+  log.info(
+    `Found ${imageUrls.length} image(s) in message ${sourceMessageId}${
+      sourceMessageId !== messageId ? ` via reply ${messageId}` : ""
+    }`,
+  );
 
-  if (!message) {
-    throw new Error(`Message ${messageId} not found`);
-  }
-
-  // 2. Discover every image URL in the message (all sources, including Components V2)
-  const imageUrls = await collectImageUrlsFromMessage(message);
-
-  // Validate we found at least one image source
-  if (imageUrls.length === 0) {
-    throw new Error(
-      `No images found in message ${messageId} (checked attachments, embeds, stickers, custom emojis, and components)`,
-    );
-  }
-
-  log.info(`Found ${imageUrls.length} image(s) in message ${messageId}`);
-
-  // 3. Convert each URL to base64
+  // 2. Convert each URL to base64
   const results: ExtractedImage[] = [];
 
   for (const imageInfo of imageUrls) {

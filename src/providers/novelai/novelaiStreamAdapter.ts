@@ -2481,10 +2481,10 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * {consolidated system instructions + tool definitions}
    *
    * <|user|>
-   * Eli: Hello there!
+   * Alice: Hello there!
    * <|assistant|>
    * <think></think>
-   * Hi Eli!
+   * Hi Alice!
    * ...
    * <|assistant|>
    * <think></think>

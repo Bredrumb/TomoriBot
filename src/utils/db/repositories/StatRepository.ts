@@ -212,6 +212,15 @@ export interface UserPersonaReunionInfo {
   todayCount: number;
 }
 
+/**
+ * Metrics that advance a user's "this persona has seen me" clock. `presence_seen`
+ * is the current, authoritative source (recorded for every human present in the
+ * turn's context window, DMs included). `message_sent` is read alongside it so
+ * relationships that predate the presence metric keep their history instead of
+ * every existing user reading as a first-timer on the deploy that ships it.
+ */
+const REUNION_ACTIVITY_METRICS = ["presence_seen", "message_sent"] as const satisfies readonly StatMetric[];
+
 /** Generation totals from the canonical stat_counters telemetry table. */
 export interface GenerationTotals {
   textGenerations: number;
@@ -439,6 +448,15 @@ export class StatRepository implements IRepository<null> {
     return this.buffer.size;
   }
 
+  /**
+   * Whether the write side is live. Behavioral features that derive state from
+   * counters (e.g. reunion notes) must check this: with tracking off, every read
+   * returns "no history", which would otherwise read as "we have never met".
+   */
+  get isTrackingEnabled(): boolean {
+    return STAT_TRACKING_ENABLED;
+  }
+
   // ── Read / aggregation layer (§6) ──────────────────────────────────────────
   // NOTE: reads hit the DB directly (no read cache in Phase 1). Dashboard and
   // infographic entry points await flush() before these reads, so user-facing
@@ -446,39 +464,64 @@ export class StatRepository implements IRepository<null> {
   // `bucket >= from` + SUM, never finer.
 
   /**
-   * Reads the triggering user's prior-day activity and today's persisted message
-   * count for one persona lineage. Today's row is deliberately invisible to the
-   * gap lookup, making the grace window restart-safe and self-expiring at the DB
-   * day rollover.
+   * Reads prior-day activity and today's persisted presence count for a batch of
+   * users against one persona lineage — the two facts the reunion note needs.
+   * Batched because the caller resolves every human in the context window, not
+   * just the triggerer, and one grouped query beats N round-trips on the hot path.
    *
-   * Known tolerances: buffered stat writes can extend the grace window by one
-   * trigger, and the UTC DB bucket can differ cosmetically from the user-facing
-   * timezone around midnight. A failed read expires the grace window rather than
-   * producing a false first-timer note.
+   * Today's rows are deliberately invisible to the gap lookup, so the current turn
+   * cannot erase the gap that triggered it; that is what makes the grace window
+   * restart-safe and self-expiring at the DB day rollover with no stored state.
+   *
+   * Grace counts `presence_seen` only (one tick per turn per person), while the
+   * gap lookup spans REUNION_ACTIVITY_METRICS so pre-presence history still counts.
+   *
+   * Known tolerance: the UTC DB bucket can differ cosmetically from the user-facing
+   * timezone around midnight.
+   *
+   * @param userIds  - Internal users FKs to read; duplicates are harmless.
+   * @param lineageId - Persona lineage whose relationship clock is being read.
+   * @returns Map keyed by user id (users with no rows are absent), or `null` when
+   *          the read failed — callers must treat `null` as "inject nothing"
+   *          rather than as "no history".
    */
-  async getUserPersonaReunionInfo(userId: number, lineageId: number): Promise<UserPersonaReunionInfo> {
+  async getUsersPersonaReunionInfo(
+    userIds: number[],
+    lineageId: number,
+  ): Promise<Map<number, UserPersonaReunionInfo> | null> {
+    if (userIds.length === 0) return new Map();
     try {
-      const [row] = await sql<
+      const rows = await sql<
         Array<{
+          user_id: number | string;
           last_previous_day_at: Date | string | null;
           today_count: number | string;
         }>
       >`
         SELECT
+          user_id,
           MAX(last_at) FILTER (WHERE bucket < CURRENT_DATE) AS last_previous_day_at,
-          COALESCE(SUM(count) FILTER (WHERE bucket = CURRENT_DATE), 0) AS today_count
+          COALESCE(SUM(count) FILTER (WHERE bucket = CURRENT_DATE AND metric = 'presence_seen'), 0) AS today_count
         FROM stat_counters
-        WHERE user_id = ${userId}
+        WHERE user_id = ANY(${sql.array(Array.from(new Set(userIds)), "int4")})
           AND persona_lineage_id = ${lineageId}
-          AND metric = 'message_sent'
+          AND metric = ANY(${sql.array([...REUNION_ACTIVITY_METRICS], "TEXT")})
+        GROUP BY user_id
       `;
-      return {
-        lastPreviousDayAt: row?.last_previous_day_at ? new Date(row.last_previous_day_at) : null,
-        todayCount: Number(row?.today_count ?? 0),
-      };
+      const byUserId = new Map<number, UserPersonaReunionInfo>();
+      for (const row of rows) {
+        byUserId.set(Number(row.user_id), {
+          lastPreviousDayAt: row.last_previous_day_at ? new Date(row.last_previous_day_at) : null,
+          todayCount: Number(row.today_count ?? 0),
+        });
+      }
+      return byUserId;
     } catch (error) {
-      log.error(`StatRepository.getUserPersonaReunionInfo: failed for user ${userId}, lineage ${lineageId}`, error);
-      return { lastPreviousDayAt: null, todayCount: Number.MAX_SAFE_INTEGER };
+      log.error(
+        `StatRepository.getUsersPersonaReunionInfo: failed for lineage ${lineageId} (${userIds.length} users)`,
+        error,
+      );
+      return null;
     }
   }
 

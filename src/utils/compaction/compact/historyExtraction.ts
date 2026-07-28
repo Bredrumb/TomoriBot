@@ -1,6 +1,7 @@
 import type { Embed, TextBasedChannel } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
 import { MAX_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { localizer, getSupportedLocales } from "@/utils/text/localizer";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
@@ -28,7 +29,15 @@ export async function buildConversationContext(
     let messageContent = msg.content?.trim() || "";
 
     for (const embed of msg.embeds) {
-      messageContent = appendEmbedContent(messageContent, embed);
+      messageContent = appendEmbedContent(messageContent, { title: embed.title, description: embed.description });
+    }
+
+    // Components V2 notices (memory-learning, scheduled-task) carry no embeds,
+    // so their text has to be reconstructed from the component tree or they are
+    // silently dropped from the compaction summary.
+    const notice = extractNoticeTextFromComponents(msg.components);
+    if (notice) {
+      messageContent = appendEmbedContent(messageContent, notice);
     }
 
     const messageImages: ImageReference[] = [];
@@ -106,22 +115,34 @@ function extractCustomEmojiImages(content: string): Array<{ url: string; name: s
   return results;
 }
 
-function appendEmbedContent(baseContent: string, embed: Embed): string {
-  if (!embed.description || !embed.title) return baseContent;
+/**
+ * Appends a classified system notice to the conversation line being built.
+ *
+ * Accepts a transport-agnostic {title, description} pair so real embeds and
+ * Components V2 notices reconstructed by `extractNoticeTextFromComponents`
+ * produce identical compaction input.
+ *
+ * @param baseContent - The message text accumulated so far.
+ * @param source - Title and description of the notice, from either transport.
+ * @returns `baseContent` with the notice appended, or unchanged when the notice
+ *          is not one of the classified system types.
+ */
+function appendEmbedContent(baseContent: string, source: { title: string | null; description: string | null }): string {
+  if (!source.description || !source.title) return baseContent;
 
-  const classification = classifyEmbedTitle(embed.title);
+  const classification = classifyEmbedTitle(source.title);
   if (!classification.isSystemInjection && !classification.isMemoryLearning && !classification.isReminderSet) {
     return baseContent;
   }
 
-  const description = embed.description.trim();
+  const description = source.description.trim();
   if (!description) return baseContent;
 
   const systemContent = classification.isMemoryLearning
-    ? `[System: ${embed.title}\n${description}]`
+    ? `[System: ${source.title}\n${description}]`
     : classification.isSystemInjection
       ? `[System: ${description}]`
-      : `[The following is a system-produced embed]\n${embed.title}\n${description}`;
+      : `[The following is a system-produced embed]\n${source.title}\n${description}`;
   return baseContent ? `${baseContent}\n${systemContent}` : systemContent;
 }
 

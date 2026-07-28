@@ -8,6 +8,11 @@ TomoriBot can set reminders and schedule tasks for later — one-time or recurri
 easiest way is to just **ask her**; she creates the task through her `create_task` tool.
 Scheduled tasks are persona-specific.
 
+Each persona keeps its pending self-tasks in context whenever it responds, regardless of
+which members appear in the recent conversation. Human-targeted reminders are more selective:
+the target must be present or referenced in the active conversation context, and the reminder
+must belong to the active persona.
+
 ## Creating One
 
 Just tell her in chat:

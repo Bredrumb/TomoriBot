@@ -60,7 +60,7 @@ export async function execute(
         descriptionKey: "commands.bot.kill.nothing_to_stop_description",
         color: ColorCode.WARN,
       },
-      MessageFlags.Ephemeral,
+      MessageFlags.SuppressNotifications,
     );
     return;
   }
@@ -84,6 +84,6 @@ export async function execute(
       descriptionKey: "commands.bot.kill.success_description",
       color: ColorCode.SUCCESS,
     },
-    MessageFlags.Ephemeral,
+    MessageFlags.SuppressNotifications,
   );
 }

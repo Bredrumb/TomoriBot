@@ -10,6 +10,7 @@ import {
   processLinkEmbed,
   formatSystemProducedEmbedHint,
 } from "@/utils/discord/embedClassifier";
+import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
@@ -71,6 +72,7 @@ import {
 } from "@/utils/chat/contextMedia";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
+import { resolveContextReferences } from "@/utils/text/contextReferences";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -681,6 +683,30 @@ export async function execute(
         }
       }
 
+      //   c) Components V2 notices (memory_learning, reminder_set) carry no embeds at
+      //      all — their text lives in the component tree — so they are reconstructed
+      //      and classified here to keep the snapshot identical to live chat context.
+      const cv2Notice = extractNoticeTextFromComponents(message.components);
+      if (cv2Notice?.title && cv2Notice.description) {
+        const noticeCheck = checkTargetEmbedTitle(cv2Notice.title);
+        if (noticeCheck.isTarget) {
+          const type = noticeCheck.type;
+          if (type === "system_injection" || type === "compact_summary" || type === "compact_refresh") {
+            const titleLine = type === "system_injection" ? "" : `## ${cv2Notice.title}\n`;
+            embedTextSegments.push(`[System: ${titleLine}${cv2Notice.description}]`);
+          } else {
+            const includeTitle = type === "memory_learning" || type === "reminder_set";
+            const titleLine = includeTitle ? `${cv2Notice.title}\n` : "";
+            const embedBody = `${titleLine}${cv2Notice.description}`;
+            embedTextSegments.push(
+              type === "memory_learning" || type === "reward" || type === "punish"
+                ? `[System: ${embedBody}]`
+                : formatSystemProducedEmbedHint(embedBody),
+            );
+          }
+        }
+      }
+
       // Merge embed-derived text into the message content (appended after original text)
       const baseContent = message.content?.trim() ? message.content : "";
       const combinedContent = [baseContent, ...embedTextSegments].filter((s) => s.length > 0).join("\n");
@@ -732,31 +758,24 @@ export async function execute(
       "name" in textChannel && typeof textChannel.name === "string" ? textChannel.name : "unknown-channel";
     const channelDesc = "topic" in textChannel ? (textChannel.topic as string | null) : null;
 
-    // 13. Assemble context using the selected persona — buildContext handles preset routing internally
-    // Mirror personal memories: only include public attributes for personas present in the
-    // fetched conversation history (userListSet contains bare numeric persona_id strings, matching
-    // the real pipeline's contextPipeline.ts key format so applySyntheticPersonaAppearance works).
+    // 13. Resolve the same context-only persona/user references as live chat,
+    // then assemble context using the selected persona.
     const personaIdsInHistory = new Set(
-      Array.from(userListSet)
-        .filter((id) => /^\d+$/.test(id))
-        .map((id) => Number.parseInt(id, 10))
+      Array.from(syntheticUsers.entries())
+        .filter(([, user]) => user.type === "persona")
+        .map(([id]) => Number.parseInt(id, 10))
         .filter((id) => !Number.isNaN(id)),
     );
-    const publicPersonaAttributes = personas
-      .filter(
-        (persona) =>
-          typeof persona.persona_id === "number" &&
-          persona.persona_id !== selectedPersona.persona_id &&
-          personaIdsInHistory.has(persona.persona_id),
-      )
-      .map((persona) => ({
-        personaId: persona.persona_id as number,
-        personaName: persona.persona_nickname,
-        attributes: (persona.persona_attributes ?? [])
-          .filter((attribute) => attribute.is_public)
-          .map((attribute) => attribute.attribute_text),
-      }))
-      .filter((persona) => persona.attributes.length > 0);
+    const contextReferences = await resolveContextReferences({
+      client,
+      guildId: interaction.guild.id,
+      simplifiedMessageHistory: simplifiedMessages,
+      personas,
+      activePersonaId: selectedPersona.persona_id,
+      existingParticipantIds: userListSet,
+      existingPersonaIds: personaIdsInHistory,
+    });
+    for (const referencedUserId of contextReferences.referencedUserIds) userListSet.add(referencedUserId);
 
     const contextBuild = await buildContext({
       guildId: interaction.guild.id,
@@ -777,7 +796,9 @@ export async function execute(
       snapshot: { triggererUserRow: userData, tomoriState: effectivePersona },
       tomoriNickname: selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
       tomoriAttributes: selectedPersona.attribute_list,
-      publicPersonaAttributes,
+      publicPersonaProfiles: contextReferences.publicPersonaProfiles,
+      preloadedReferencedUserRows: contextReferences.referencedUserRows,
+      referencedUserIds: contextReferences.referencedUserIds,
       tomoriConfig: effectivePersona.config,
       channelPromptOverride,
       channelContextNote,

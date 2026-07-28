@@ -23,6 +23,11 @@ export default {
     fallback_used_failure_line: `{index}. {model} errored with {error_detail}`,
     fallback_used_details_button: `Fallback Used`,
     fallback_used_hide_footer: `Hide this and reroute details to thought logs with \`/config notice-embeds visibility\``,
+    markdown_table: {
+      show_button: `Show Markdown`,
+      source_expired: `That table's markdown is no longer cached, so I can't show the source anymore.`,
+      source_attached: `This table is too long to show inline, so here it is as a file:`,
+    },
     no_response_title: `No Response`,
     no_response_description: `I didn't respond - this may be due to an empty response or timeout from the AI.`,
     thought_log: {
