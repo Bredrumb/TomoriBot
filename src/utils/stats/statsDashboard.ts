@@ -11,7 +11,7 @@
  *   the tab buttons living INSIDE the card). A row of named tab buttons swaps which
  *   tab container is shown (a tabbed view, not item pagination).
  *
- * Timeframe gating (per Eli's feedback): metrics whose underlying data is inherently
+ * Timeframe gating: metrics whose underlying data is inherently
  * all-time (rewards/punishments and memories) are only surfaced when timeframe =
  * all_time, and span metrics (streaks, peak hour/day) are hidden under the single-day
  * "today" view where they are meaningless. The builders decide this directly so

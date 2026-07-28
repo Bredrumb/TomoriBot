@@ -13,7 +13,7 @@ function makeMessage(id: string, createdAt?: number): SimplifiedMessageForContex
   return {
     id,
     authorId: `user-${id}`,
-    authorName: "Eli",
+    authorName: "Alice",
     authorType: "user",
     content: id,
     createdAt,
@@ -61,20 +61,20 @@ describe("buildReunionNote", () => {
       buildReunionNote({
         lastPreviousDayAt: null,
         todayCount: 0,
-        displayName: "Eli",
+        displayName: "Alice",
         nowMs: NOW,
         reunionDays: 3,
         graceTriggers: 3,
       }),
     ).toBe(
-      "[System: Eli is talking to you for the very first time! If you haven't already, welcome them naturally and ask something friendly to get to know them.]",
+      "Alice is talking to you for the very first time! If you haven't already, welcome them naturally and ask something friendly to get to know them.",
     );
 
     expect(
       buildReunionNote({
         lastPreviousDayAt: new Date("2026-07-14T12:00:00Z"),
         todayCount: 0,
-        displayName: "Eli",
+        displayName: "Alice",
         nowMs: NOW,
         reunionDays: 3,
         graceTriggers: 3,
@@ -85,20 +85,20 @@ describe("buildReunionNote", () => {
       buildReunionNote({
         lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
         todayCount: 2,
-        displayName: "Eli",
+        displayName: "Alice",
         nowMs: NOW,
         reunionDays: 3,
         graceTriggers: 3,
       }),
     ).toBe(
-      "[System: Eli is talking to you again for the first time since July 12, 2026. It's been 3 days! If you haven't already, acknowledge their return naturally and ask what they've been up to.]",
+      "Alice is talking to you again for the first time since July 12, 2026. It's been 3 days! If you haven't already, acknowledge their return naturally and ask what they've been up to.",
     );
 
     expect(
       buildReunionNote({
         lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
         todayCount: 3,
-        displayName: "Eli",
+        displayName: "Alice",
         nowMs: NOW,
         reunionDays: 3,
         graceTriggers: 3,
@@ -110,7 +110,7 @@ describe("buildReunionNote", () => {
     const args = {
       lastPreviousDayAt: new Date("2026-07-12T23:30:00Z"),
       todayCount: 0,
-      displayName: "Eli",
+      displayName: "Alice",
       nowMs: Date.parse("2026-07-15T00:30:00Z"),
       reunionDays: 3,
       graceTriggers: 3,
@@ -130,6 +130,35 @@ describe("buildReunionNote", () => {
         isUserImpersonation: true,
       }),
     ).toBeNull();
+  });
+
+  it("never welcomes a non-triggerer as a first-timer, but still acknowledges their return", () => {
+    // A bystander with no history is a stranger, not someone to introduce yourself to.
+    expect(
+      buildReunionNote({
+        lastPreviousDayAt: null,
+        todayCount: 0,
+        displayName: "Bob",
+        isTriggerer: false,
+        nowMs: NOW,
+        reunionDays: 3,
+        graceTriggers: 3,
+      }),
+    ).toBeNull();
+
+    // A bystander with a real gap gets the "around again" phrasing, not "talking to you".
+    const note = buildReunionNote({
+      lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
+      todayCount: 0,
+      displayName: "Bob",
+      isTriggerer: false,
+      nowMs: NOW,
+      reunionDays: 3,
+      graceTriggers: 3,
+    });
+    expect(note).toBe(
+      "Bob is around again for the first time since July 12, 2026. It's been 3 days! If you haven't already, acknowledge their return naturally without derailing the current topic.",
+    );
   });
 });
 
@@ -169,27 +198,39 @@ describe("buildDateSpacer", () => {
 });
 
 describe("appendDialogueHistoryContext — time-awareness injections", () => {
-  it("injects a producer-supplied reunion note at depth 1", async () => {
+  it("injects producer-supplied reunion notes as one system block above the newest messages", async () => {
     const contextItems = [];
     await appendDialogueHistoryContext({
       contextItems,
       client: {} as Client,
       guildId: "guild-1",
-      simplifiedMessageHistory: [makeMessage("one"), makeMessage("two"), makeMessage("three")],
+      simplifiedMessageHistory: [
+        makeMessage("one"),
+        makeMessage("two"),
+        makeMessage("three"),
+        makeMessage("four"),
+        makeMessage("five"),
+      ],
       botName: "Tomori",
       tomoriConfig: makeConfig(),
       tomoriState: null,
-      reunionNote: { note: "[System: Eli is talking to you for the very first time!]" },
+      reunionNotes: ["Alice is talking to you for the very first time!", "Bob is around again."],
       includeTimestamps: false,
       isUserImpersonation: false,
       uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
       convertMentions: async (text) => text,
     });
 
+    // TIME_AWARENESS_NOTE_DEPTH (3) targets the 3rd-from-last message, so the note
+    // lands above it rather than directly against the triggering prompt.
     const noteIndex = contextItems.findIndex((item) => itemText(item).includes("very first time"));
-    const lastMessageIndex = contextItems.findIndex((item) => item.messageId === "three");
-    expect(noteIndex).toBe(lastMessageIndex - 1);
-    expect(itemText(contextItems[noteIndex])).not.toContain("[System: [System:");
+    const depthTargetIndex = contextItems.findIndex((item) => item.messageId === "three");
+    expect(noteIndex).toBe(depthTargetIndex - 1);
+
+    // Several returning people collapse into one wrapped block, not a stack of them.
+    const noteText = itemText(contextItems[noteIndex]);
+    expect(noteText).toBe("[System: Alice is talking to you for the very first time!\nBob is around again.]");
+    expect(contextItems.filter((item) => itemText(item).startsWith("[System: Alice"))).toHaveLength(1);
   });
 
   it("emits exactly one spacer per boundary across a multi-day history", async () => {
@@ -223,8 +264,27 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
   it("keeps the producer-to-native-builder reunion field wired", async () => {
     const producer = await Bun.file("src/utils/chat/contextPipeline.ts").text();
     const nativeBuilder = await Bun.file("src/utils/text/context/nativeBuilder.ts").text();
-    expect(producer).toContain("reunionNote,");
-    expect(nativeBuilder).toContain("reunionNote,");
+    expect(producer).toContain("reunionNotes,");
+    expect(nativeBuilder).toContain("reunionNotes,");
     expect(nativeBuilder).toContain("dateSpacerTemplate,");
+  });
+
+  it("keeps both phases of the reunion presence protocol wired", async () => {
+    // The clock only works if phase 1 (resolve, at context build) and phase 2
+    // (commit, post-turn) both run. They live in one module so they stay in sync;
+    // this guards the two call sites that drain it.
+    const producer = await Bun.file("src/utils/chat/contextPipeline.ts").text();
+    const postTurn = await Bun.file("src/utils/chat/postTurnEffects.ts").text();
+    const presence = await Bun.file("src/utils/chat/reunionPresence.ts").text();
+
+    expect(producer).toContain("resolveReunionNotes");
+    expect(producer).toContain("reunionPresence,");
+    expect(postTurn).toContain("recordReunionPresence(context.reunionPresence, result)");
+
+    // Phase 2 must stay response-gated: a turn that never answered delivered no
+    // acknowledgment, so it must not consume the reunion.
+    expect(presence).toContain("result.personaResponses.length === 0");
+    // ...and must NOT inherit recordUsageStats' DM exclusion.
+    expect(presence).not.toContain("isDMChannel");
   });
 });

@@ -29,7 +29,7 @@ import {
 import { normalizeCustomEmojisForLlm, splitLeadingSystemBlocks } from "./mentionNormalizer";
 import type { MentionConverter } from "./templates";
 import type { SimplifiedMessageForContext } from "./types";
-import { buildDateSpacer } from "./timeAwareness";
+import { buildDateSpacer, TIME_AWARENESS_NOTE_DEPTH } from "./timeAwareness";
 
 export async function appendDialogueHistoryContext(params: {
   contextItems: StructuredContextItem[];
@@ -40,7 +40,7 @@ export async function appendDialogueHistoryContext(params: {
   tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null;
   channelContextNote?: { note: string; depth: number } | null;
-  reunionNote?: { note: string } | null;
+  reunionNotes?: string[] | null;
   dateSpacerTemplate?: string | null;
   mediaContextWindow?: number;
   includeTimestamps: boolean;
@@ -72,7 +72,7 @@ export async function appendDialogueHistoryContext(params: {
   const personaNoteText = params.tomoriState?.context_note?.trim() || null;
   const channelNoteText = params.channelContextNote?.note?.trim() || null;
 
-  const activeNotes: Array<{ text: string; targetIndex: number; emitted: boolean; isSystemBlock?: boolean }> = [];
+  const activeNotes: Array<{ text: string; targetIndex: number; emitted: boolean }> = [];
 
   if (personaNoteText) {
     const depth = params.tomoriState?.context_note_depth ?? 0;
@@ -96,13 +96,19 @@ export async function appendDialogueHistoryContext(params: {
       emitted: false,
     });
   }
-  const reunionNoteText = params.reunionNote?.note?.trim();
+  // Reunion notes sit above the newest messages rather than directly against the
+  // triggering prompt, so they read as background awareness instead of an
+  // instruction that outranks whatever the user actually asked for. Several
+  // returning people collapse into one system block rather than stacking blocks.
+  const reunionNoteText = (params.reunionNotes ?? [])
+    .map((note) => note.trim())
+    .filter((note) => note.length > 0)
+    .join("\n");
   if (reunionNoteText) {
     activeNotes.push({
       text: reunionNoteText,
-      targetIndex: Math.max(0, totalMessages - 1),
+      targetIndex: Math.max(0, totalMessages - TIME_AWARENESS_NOTE_DEPTH),
       emitted: false,
-      isSystemBlock: true,
     });
   }
 
@@ -145,7 +151,7 @@ export async function appendDialogueHistoryContext(params: {
         pushDialogueHistoryContextItem(
           params.contextItems,
           "user",
-          [{ type: "text", text: note.isSystemBlock ? note.text : `[System: ${note.text}]` }],
+          [{ type: "text", text: `[System: ${note.text}]` }],
           "context_note_injection",
           ContextItemTag.CONTEXT_NOTE_INJECTION,
         );
@@ -212,7 +218,7 @@ export async function appendDialogueHistoryContext(params: {
       pushDialogueHistoryContextItem(
         params.contextItems,
         "user",
-        [{ type: "text", text: note.isSystemBlock ? note.text : `[System: ${note.text}]` }],
+        [{ type: "text", text: `[System: ${note.text}]` }],
         "context_note_injection",
         ContextItemTag.CONTEXT_NOTE_INJECTION,
       );

@@ -11,6 +11,7 @@ import type {
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { DeliberateToolIntentMatch } from "@/utils/tools/deliberateToolMode";
 import type { ThoughtLogOwner } from "@/utils/discord/thoughtLog";
+import type { ReunionPresenceScope } from "@/utils/chat/reunionPresence";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
@@ -226,6 +227,12 @@ export interface ChatTurnContext {
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
   allPersonas: TomoriState[];
+  /**
+   * Who the answering persona could see this turn, committed as `presence_seen`
+   * only after a response actually lands. Phase 1 of the protocol fills it and
+   * phase 2 drains it — both live in `@/utils/chat/reunionPresence`.
+   */
+  reunionPresence: ReunionPresenceScope | null;
   currentPersona: TomoriState;
   tomoriState: TomoriState;
   requestSnapshot: RequestSnapshot;

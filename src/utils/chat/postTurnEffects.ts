@@ -16,6 +16,7 @@ import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import { recordReunionPresence } from "@/utils/chat/reunionPresence";
 
 /**
  * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`).
@@ -40,6 +41,8 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   scheduleBoomerangFollowUp(context);
   // Fire-and-forget so stat tracking never adds latency to the response path.
   void recordUsageStats(context, result);
+  // Phase 2 of the reunion presence protocol — see @/utils/chat/reunionPresence.
+  recordReunionPresence(context.reunionPresence, result);
 }
 
 async function sendSelectedSticker(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

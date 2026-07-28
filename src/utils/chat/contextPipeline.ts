@@ -61,8 +61,7 @@ import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLa
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
-import { statRepository } from "@/utils/db/repositories";
-import { buildReunionNote } from "@/utils/text/context/timeAwareness";
+import { resolveReunionNotes } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
 
 /**
@@ -284,26 +283,14 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // Reunion state is deliberately cross-server: the lineage is the persona's
   // cross-server identity anchor (same as personal_memories), so prior activity
   // and today's grace count pool across every server sharing the lineage.
-  let reunionNote: { note: string } | null = null;
-  const reunionLineageId = effectivePersona.persona_lineage_id;
-  if (
-    effectivePersona.config.time_awareness_enabled !== false &&
-    !incoming.isUserImpersonation &&
-    typeof turn.userRow.user_id === "number" &&
-    Number.isInteger(turn.userRow.user_id) &&
-    typeof reunionLineageId === "number" &&
-    Number.isInteger(reunionLineageId) &&
-    reunionLineageId >= 0
-  ) {
-    const reunionInfo = await statRepository.getUserPersonaReunionInfo(turn.userRow.user_id, reunionLineageId);
-    const note = buildReunionNote({
-      ...reunionInfo,
-      personalOffset: turn.userRow.timezone_offset,
-      serverOffset: effectivePersona.config.timezone_offset,
-      displayName: turn.triggererName,
-    });
-    if (note) reunionNote = { note };
-  }
+  const { notes: reunionNotes, presence: reunionPresence } = await resolveReunionNotes({
+    turn,
+    effectivePersona,
+    simplifiedMessages: history.simplifiedMessages,
+    isUserImpersonation: incoming.isUserImpersonation,
+    impersonatedUserId: incoming.impersonatedUserId,
+    botUserDiscId: client.user?.id,
+  });
 
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
@@ -328,7 +315,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     tomoriConfig: effectivePersona.config,
     channelPromptOverride,
     channelContextNote,
-    reunionNote,
+    reunionNotes,
     personaPrompt: effectivePersona.persona_prompt ?? null,
     personaLineageId: effectivePersona.persona_lineage_id,
     isDMChannel: turn.isDMChannel,
@@ -384,6 +371,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
     allPersonas: turn.allPersonas,
+    reunionPresence,
     currentPersona: effectivePersona,
     tomoriState: effectivePersona,
     requestSnapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
