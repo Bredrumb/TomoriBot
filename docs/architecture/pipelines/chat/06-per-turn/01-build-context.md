@@ -114,6 +114,7 @@ This stage is **a coordinator over many extension-relevant helpers**:
 | `buildContext` | `utils/text/contextBuilder.ts` | The context-build pipeline's public API — the main extension surface for memories, RAG, persona prompt assembly |
 | `simplifyMessage` + sub-helpers (`withReplyContext`, `withReactionContext`, `buildForwardContext`) | this file | Per-message annotation pipeline; new annotation types hook here |
 | `processEmbedsFromMessage` | `contextEmbeds.ts` | Embed classification + content extraction; new embed type plugins hook here |
+| `extractNoticeTextFromComponents` | `discord/componentNoticeReader.ts` | Reconstructs `{title, description, footer}` from a Components V2 container so CV2 notices classify like embeds |
 | `appendSupportedMediaFromMessage`, `appendStickersFromMessage`, etc. | `contextMedia.ts` | Media attachment extractors; new media kinds hook here |
 | `buildReactionContextAnnotation`, `buildReplyReferenceContextAnnotation` | `contextAnnotations.ts` | Annotation builders; reaction/reply formatting hooks here |
 | `appendTailDirectives` | this file | Tail-directive assembly; new directive kinds insert here |
@@ -129,4 +130,34 @@ appropriate seam depends on whether the change is per-message
 - Inner pipeline: → [context-build](../../context-build/)
 - Tail directive priorities: → folded into context-build docs
 - Embed classification: → no dedicated doc; `embedClassifier.ts` helper only
+
+## System notices: two transports
+
+System notices that the LLM must see (memory-learning, reminder/task set,
+system injection, compact summary/refresh, reward/punish, scene directive)
+arrive over **two different transports**, and both must be read:
+
+| Transport | Where the text lives | Read by |
+|---|---|---|
+| Discord embed | `message.embeds[].title` / `.description` | the embed loop in `processEmbedsFromMessage` |
+| Components V2 | `message.components` → `Container` → `TextDisplay.content` | `extractNoticeTextFromComponents` |
+
+A Components V2 message has an **empty `message.embeds` array and empty
+`message.content`** — Discord rejects mixing `embeds` with the
+`IsComponentsV2` flag. Any consumer that reads only `message.embeds` is
+therefore completely blind to a CV2 notice: the message contributes no text and
+no media, so `simplifyMessage` drops it from history entirely. When that
+happened to the memory and task notices, Tomori stopped seeing her own tool
+confirmations and re-ran the tools.
+
+`buildNoticeContainer` (`ui/interactionCore.ts`) renders the title as a Markdown
+heading via `formatContainerTitle` and the footer as Discord subtext (`-# `);
+the reader strips both prefixes so the reconstructed title matches
+`checkTargetEmbedTitle` exactly, including its cross-locale scan.
+
+**If you convert a notice to Components V2, verify it still classifies.** The
+formatting helpers take a transport-agnostic `{title, description}` pair
+specifically so both paths emit byte-identical `[System: ...]` context. Current
+CV2 senders: `expandableEmbedNotice.ts` (memory + task). All other notice types
+are still embed-based.
 - Voice transcripts: → no dedicated doc yet

@@ -816,6 +816,7 @@ async function simplifyMessage(
   let hasProcessedEmbed = false;
   const embedResult = processEmbedsFromMessage({
     embeds: msg.embeds,
+    components: msg.components,
     content,
     imageAttachments,
     isTomoriAuthoredMessage,

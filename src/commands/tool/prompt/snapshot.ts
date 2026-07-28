@@ -10,6 +10,7 @@ import {
   processLinkEmbed,
   formatSystemProducedEmbedHint,
 } from "@/utils/discord/embedClassifier";
+import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
@@ -677,6 +678,30 @@ export async function execute(
                 hasLocalMedia = true;
               }
             }
+          }
+        }
+      }
+
+      //   c) Components V2 notices (memory_learning, reminder_set) carry no embeds at
+      //      all — their text lives in the component tree — so they are reconstructed
+      //      and classified here to keep the snapshot identical to live chat context.
+      const cv2Notice = extractNoticeTextFromComponents(message.components);
+      if (cv2Notice?.title && cv2Notice.description) {
+        const noticeCheck = checkTargetEmbedTitle(cv2Notice.title);
+        if (noticeCheck.isTarget) {
+          const type = noticeCheck.type;
+          if (type === "system_injection" || type === "compact_summary" || type === "compact_refresh") {
+            const titleLine = type === "system_injection" ? "" : `## ${cv2Notice.title}\n`;
+            embedTextSegments.push(`[System: ${titleLine}${cv2Notice.description}]`);
+          } else {
+            const includeTitle = type === "memory_learning" || type === "reminder_set";
+            const titleLine = includeTitle ? `${cv2Notice.title}\n` : "";
+            const embedBody = `${titleLine}${cv2Notice.description}`;
+            embedTextSegments.push(
+              type === "memory_learning" || type === "reward" || type === "punish"
+                ? `[System: ${embedBody}]`
+                : formatSystemProducedEmbedHint(embedBody),
+            );
           }
         }
       }

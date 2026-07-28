@@ -415,6 +415,7 @@ export async function buildForwardContext(args: {
     const isForwardedTomoriAuthoredMessage = snapshot.author?.id === args.clientUserId;
     const embedResult = processEmbedsFromMessage({
       embeds: snapshot.embeds,
+      components: snapshot.components,
       content: forwardedTextSegments.join("\n"),
       imageAttachments: args.imageAttachments,
       isTomoriAuthoredMessage: isForwardedTomoriAuthoredMessage,

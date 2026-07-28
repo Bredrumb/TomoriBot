@@ -23,6 +23,11 @@ export default {
     fallback_used_failure_line: `{index}. {model} は {error_detail} で失敗しました`,
     fallback_used_details_button: `Fallback Used`,
     fallback_used_hide_footer: `\`/config notice-embeds visibility\` でこれを非表示にし、詳細を思考ログへ回せます`,
+    markdown_table: {
+      show_button: `Show Markdown`,
+      source_expired: `この表のマークダウンはキャッシュから消えているため、ソースを表示できません。`,
+      source_attached: `この表は長すぎてそのまま表示できないため、ファイルとして添付します:`,
+    },
     no_response_title: `応答なし`,
     no_response_description: `応答がありませんでした - これはAIからの空の応答またはタイムアウトが原因である可能性があります。`,
     thought_log: {

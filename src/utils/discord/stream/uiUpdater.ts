@@ -18,6 +18,8 @@ import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
 export type StreamSendPayload = {
   content?: string;
   files?: import("discord.js").AttachmentBuilder[];
+  /** Interactive rows attached to the sent message (e.g. the rendered table's "Show Markdown" button). */
+  components?: import("discord.js").ActionRowBuilder<import("discord.js").ButtonBuilder>[];
   identityOverride?: ResolvedWebhookIdentity;
   accumulatedTextPrefix?: string;
   /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
@@ -211,6 +213,7 @@ export class StreamUiUpdater {
           {
             ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
             ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+            ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
             allowedMentions: webhookAllowedMentions,
             ...(threadId ? { threadId } : {}),
           },
@@ -223,6 +226,7 @@ export class StreamUiUpdater {
         sentMessage = await context.replyToMessage.reply({
           ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
           ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+          ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
           allowedMentions: regularAllowedMentions,
         });
         state.hasRepliedToOriginalMessage = true;
@@ -230,6 +234,7 @@ export class StreamUiUpdater {
         sentMessage = await context.channel.send({
           ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
           ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+          ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
           allowedMentions: regularAllowedMentions,
         });
       }
@@ -433,6 +438,7 @@ export class StreamUiUpdater {
         {
           ...(payload.content !== undefined ? { content: payload.content } : {}),
           ...(payload.files?.length ? { files: payload.files } : {}),
+          ...(payload.components?.length ? { components: payload.components } : {}),
           allowedMentions: webhookAllowedMentions,
           ...(recoveredThreadId ? { threadId: recoveredThreadId } : {}),
         },
@@ -477,11 +483,13 @@ export class StreamUiUpdater {
         ? await context.replyToMessage.reply({
             ...(payload.content !== undefined ? { content: payload.content } : {}),
             ...(payload.files?.length ? { files: payload.files } : {}),
+            ...(payload.components?.length ? { components: payload.components } : {}),
             allowedMentions: regularAllowedMentions,
           })
         : await context.channel.send({
             ...(payload.content !== undefined ? { content: payload.content } : {}),
             ...(payload.files?.length ? { files: payload.files } : {}),
+            ...(payload.components?.length ? { components: payload.components } : {}),
             allowedMentions: regularAllowedMentions,
           });
 

@@ -167,8 +167,9 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
   guard (step 3) queues the same stop with nothing sent, which the state machine classifies as
   `empty_response` / `speaker_guard` so post-turn effects schedule a regeneration.
 - **PNG attachment** — when a Markdown table is detected and rendered successfully, a Discord file
-  attachment is sent and the table's raw Markdown is cached in `markdownTableCache` (keyed by
-  message ID) for subsequent reference.
+  attachment is sent with a "Show Markdown" button, and the table's raw Markdown is cached in
+  `markdownTableCache` (keyed by message ID) both for subsequent context reads and to serve the
+  button's ephemeral reply. See stage 07 § Rendered Markdown tables.
 - **`prepareOutputPrefill()`** (companion method) — called once before stage 02 begins (from
   `executeStream` setup). Resolves the prefill string through the same mention/cleaning pipeline
   and stores it on `state.prefillTarget`.

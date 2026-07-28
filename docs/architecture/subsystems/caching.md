@@ -115,6 +115,10 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 - Key: Discord message ID
 - Stores original markdown behind rendered table images
 - Default TTL: `MARKDOWN_TABLE_CACHE_TTL_MINUTES` (default 120)
+- Read by history/context builders so Tomori sees the table's text rather than an opaque image,
+  and by the message's "Show Markdown" button to serve the source ephemerally. Keep
+  `MARKDOWN_TABLE_BUTTON_TIMEOUT_MS` at or below this TTL, or the button will outlive its entry
+  and reply with the expired notice.
 
 ### 14b) Channel system prompt cache (`channelPromptCache.ts`)
 

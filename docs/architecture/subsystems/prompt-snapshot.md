@@ -122,6 +122,12 @@ The live chat pipeline in `tomoriChat.ts` has inline helpers for these. Rather t
 
 - `src/utils/discord/embedClassifier.ts` — `checkTargetEmbedTitle`, `processLinkEmbed`, `formatSystemProducedEmbedHint`
 - `src/utils/discord/embedDetection.ts` — `classifyRefreshMarkerEmbed`, `sliceMessagesAtResetMarker`, `isRefreshMarkerEmbed`, `messageContainsRefreshMarker`
+- `src/utils/discord/componentNoticeReader.ts` — `extractNoticeTextFromComponents`, which recovers `{title, description, footer}` from a Components V2 container
+
+The CV2 reader is required for snapshot fidelity: memory-learning and
+scheduled-task notices are sent as Components V2 containers with an **empty
+`message.embeds` array**, so a snapshot that only walked `message.embeds` would
+silently omit notices that live chat does include.
 
 `tomoriChat.ts` still uses its inline versions (no functional change there), but future snapshot-like consumers should prefer the shared primitives.
 
