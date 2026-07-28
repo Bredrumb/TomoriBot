@@ -1,7 +1,13 @@
 import type { Client } from "discord.js";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { RequestSnapshot } from "@/types/misc/context";
-import type { PersonaUserBlockRow, ServerEmojiRow, ServerStickerRow, AssembledServerConfig } from "@/types/db/schema";
+import type {
+  AssembledServerConfig,
+  PersonaUserBlockRow,
+  ServerEmojiRow,
+  ServerStickerRow,
+  UserRow,
+} from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 
 /**
@@ -40,6 +46,13 @@ export type SimplifiedMessageForContext = {
   }>;
 };
 
+export type PublicPersonaProfile = {
+  personaId: number;
+  personaName: string;
+  attributes: string[];
+  imageAppearanceTags: string[];
+};
+
 /** Shared parameter type for both the routing wrapper and native context builder. */
 export interface BuildContextParams {
   guildId: string;
@@ -58,11 +71,11 @@ export interface BuildContextParams {
   emojiStrings?: string[];
   tomoriNickname: string;
   tomoriAttributes: string[];
-  publicPersonaAttributes?: Array<{
-    personaId: number;
-    personaName: string;
-    attributes: string[];
-  }>;
+  publicPersonaProfiles?: PublicPersonaProfile[];
+  /** Eligible reference-discovered users already loaded by the shared resolver. */
+  preloadedReferencedUserRows?: Map<string, UserRow>;
+  /** Reference-discovered IDs must never take the participant auto-registration path. */
+  referencedUserIds?: ReadonlySet<string>;
   tomoriConfig: AssembledServerConfig;
   /**
    * Per-channel system prompt override resolved at the call site (null when none).

@@ -1,5 +1,4 @@
 import { GatewayIntentBits, type Client, type Guild, type GuildMember } from "discord.js";
-import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { log } from "@/utils/misc/logger";
@@ -11,9 +10,16 @@ import {
   getTimeOfDayPhrase,
 } from "@/utils/text/timezoneHelper";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
-import { PrivacyLevel, type AssembledServerConfig, type ReminderRow, type TomoriState } from "@/types/db/schema";
+import {
+  PrivacyLevel,
+  type AssembledServerConfig,
+  type ReminderRow,
+  type TomoriState,
+  type UserRow,
+} from "@/types/db/schema";
 import { getUserPresenceDetails } from "./history";
 import type { MentionConverter } from "./templates";
+import type { PublicPersonaProfile } from "./types";
 
 type UserConversationEntry = {
   userId: string;
@@ -79,7 +85,9 @@ export async function buildUsersInConversationContextItem(params: {
   impersonatedIdentityName: string | null;
   matrixUsers?: Map<string, string>;
   syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
-  publicPersonaAttributes?: Array<{ personaId: number; personaName: string; attributes: string[] }>;
+  publicPersonaProfiles?: PublicPersonaProfile[];
+  preloadedReferencedUserRows?: Map<string, UserRow>;
+  referencedUserIds?: ReadonlySet<string>;
   toolPromptMacroResolver: { expand(text: string): Promise<string> };
   conversationCorpus: string | null;
   snapshot?: import("@/types/misc/context").RequestSnapshot;
@@ -123,8 +131,10 @@ export async function buildUsersInConversationContextItem(params: {
       continue;
     }
 
-    let userRow = await userRepository.loadByDiscordId(userIdToProcess).catch(() => null);
-    if (!userRow) {
+    let userRow =
+      params.preloadedReferencedUserRows?.get(userIdToProcess) ??
+      (await userRepository.loadByDiscordId(userIdToProcess).catch(() => null));
+    if (!userRow && !params.referencedUserIds?.has(userIdToProcess)) {
       const guild = params.client.guilds.cache.get(params.guildId);
       const member = guild ? await guild.members.fetch(userIdToProcess).catch(() => null) : null;
       if (guild && member) {
@@ -243,10 +253,10 @@ export async function buildUsersInConversationContextItem(params: {
   }
 
   appendMatrixAndSyntheticUsers(params, userEntries, aliasCounts);
-  await applySyntheticPersonaAppearance(params, userEntries);
-  await applyPublicPersonaAttributes(params, userEntries, aliasCounts);
+  await applyPublicPersonaProfiles(params, userEntries, aliasCounts);
 
   usersInConversationText += renderUserEntries(userEntries, aliasCounts, conversationUsers, params.isUserImpersonation);
+  usersInConversationText += await renderPendingPersonaTasks(params);
   usersInConversationText += renderChannelTimeContext(params);
 
   return {
@@ -386,6 +396,34 @@ async function buildUserDetailLines(
   return detailLines;
 }
 
+async function renderPendingPersonaTasks(
+  params: Parameters<typeof buildUsersInConversationContextItem>[0],
+): Promise<string> {
+  const botUserId = params.client.user?.id;
+  const personaId = params.tomoriState?.persona_id;
+  if (params.isUserImpersonation || !botUserId || typeof personaId !== "number") {
+    return "";
+  }
+
+  const pendingTasks = await serverScheduleRepository.getPendingRemindersForUser(botUserId, params.guildId, personaId);
+  const personaTasks = pendingTasks?.filter((reminder) => reminder.self_reminder === true) ?? [];
+  if (personaTasks.length === 0) {
+    return "";
+  }
+
+  const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
+  let text = "Pending Tasks Assigned to You:\n";
+  for (const task of personaTasks) {
+    text += `- ${formatPendingReminderForContext(task, timezoneOffset)}`;
+    if (task.channel_disc_id) {
+      text += ` (destination: <#${task.channel_disc_id}>)`;
+    }
+    text += "\n";
+  }
+
+  return `${text}\n`;
+}
+
 function appendMatrixAndSyntheticUsers(
   params: Parameters<typeof buildUsersInConversationContextItem>[0],
   userEntries: UserConversationEntry[],
@@ -407,43 +445,14 @@ function appendMatrixAndSyntheticUsers(
   }
 }
 
-async function applySyntheticPersonaAppearance(
-  params: Parameters<typeof buildUsersInConversationContextItem>[0],
-  userEntries: UserConversationEntry[],
-): Promise<void> {
-  if (params.isUserImpersonation || !params.syntheticUsers?.size) return;
-  if (!Array.from(params.syntheticUsers.values()).some((entry) => entry.type === "persona")) return;
-
-  const allPersonas = await getCachedAllPersonas(params.guildId).catch((error) => {
-    log.warn("Failed to load personas for physical appearance context", error);
-    return [];
-  });
-  const personaById = new Map(
-    allPersonas
-      .filter((persona) => persona.persona_id != null)
-      .map((persona) => [persona.persona_id as number, persona]),
-  );
-
-  for (const [syntheticId, syntheticEntry] of params.syntheticUsers.entries()) {
-    if (syntheticEntry.type !== "persona" || !/^\d{1,10}$/.test(syntheticId)) continue;
-    const personaId = Number.parseInt(syntheticId, 10);
-    if (personaId === params.tomoriState?.persona_id) continue;
-    const persona = personaById.get(personaId);
-    const targetEntry = userEntries.find((entry) => entry.userId === syntheticId);
-    if (persona && targetEntry) {
-      targetEntry.imageAppearanceTags = normalizeImageAppearanceTags(persona.physical_appearance_tags);
-    }
-  }
-}
-
-async function applyPublicPersonaAttributes(
+async function applyPublicPersonaProfiles(
   params: Parameters<typeof buildUsersInConversationContextItem>[0],
   userEntries: UserConversationEntry[],
   aliasCounts: Map<string, number>,
 ): Promise<void> {
-  if (!params.publicPersonaAttributes || params.publicPersonaAttributes.length === 0) return;
+  if (!params.publicPersonaProfiles || params.publicPersonaProfiles.length === 0) return;
 
-  for (const publicPersona of params.publicPersonaAttributes) {
+  for (const publicPersona of params.publicPersonaProfiles) {
     const convertedAttributes: string[] = [];
     for (const attribute of publicPersona.attributes) {
       const trimmedAttribute = attribute.trim();
@@ -462,7 +471,10 @@ async function applyPublicPersonaAttributes(
       );
     }
 
-    if (convertedAttributes.length === 0) continue;
+    const imageAppearanceTags = params.isUserImpersonation
+      ? undefined
+      : normalizeImageAppearanceTags(publicPersona.imageAppearanceTags);
+    if (convertedAttributes.length === 0 && !imageAppearanceTags) continue;
 
     const syntheticId = String(publicPersona.personaId);
     let targetEntry = userEntries.find(
@@ -479,21 +491,27 @@ async function applyPublicPersonaAttributes(
     const attributeLines = convertedAttributes.map((attr) => `  - ${attr}`);
 
     if (targetEntry) {
-      // 2. A second persona that shares a display name resolves to the same
-      //    targetEntry via the name fallback. Only push the header if this entry
-      //    doesn't already carry it; otherwise append the attribute lines alone
-      //    to prevent a duplicate "- Known Information about ..." line.
-      if (!targetEntry.detailLines.includes(attributeHeader)) {
-        targetEntry.detailLines.push(attributeHeader);
+      targetEntry.imageAppearanceTags = imageAppearanceTags;
+      if (attributeLines.length > 0) {
+        // A second persona sharing a display name may resolve to this entry via
+        // the fallback. Avoid duplicating the header while retaining every line.
+        if (!targetEntry.detailLines.includes(attributeHeader)) {
+          targetEntry.detailLines.push(attributeHeader);
+        }
+        targetEntry.detailLines.push(...attributeLines);
       }
-      targetEntry.detailLines.push(...attributeLines);
     } else {
       const aliases = new Set<string>();
       addAlias(aliasCounts, aliases, publicPersona.personaName);
+      const detailLines =
+        attributeLines.length > 0
+          ? ["- Status: Online or status unknown", attributeHeader, ...attributeLines]
+          : ["- Status: Online or status unknown"];
       userEntries.push({
         userId: `persona:${syntheticId}`,
         displayName: publicPersona.personaName,
-        detailLines: ["- Status: Online or status unknown", attributeHeader, ...attributeLines],
+        detailLines,
+        imageAppearanceTags,
         isBot: false,
         mentionAliases: Array.from(aliases),
         primaryAlias: publicPersona.personaName,

@@ -75,6 +75,11 @@ Key fields populated here:
   attempts.
 - **Impersonation identity resolution** — if `isUserImpersonation`, fetches
   the impersonated user's nickname/avatar via `resolveImpersonatedIdentity`.
+- **Reference-driven participant discovery** — after privacy/block filtering
+  and message simplification, scans the entire visible fetched window for
+  persona triggers and eligible Discord user aliases/mentions. The shared
+  resolver batches user eligibility reads and passes preloaded rows into the
+  normal participant renderer.
 
 ## Invariants
 
@@ -86,6 +91,11 @@ After this stage runs:
   tail), queued-reply directive, uncensor directive, and manual-prefill
   model message (last).
 - `simplifiedMessages` excludes messages from privacy-FULL users.
+- Blocked-author content is not scanned for references; its synthetic block
+  notice is excluded as well.
+- Reference discovery enriches context only. It does not add matching personas
+  to the turn plan, bypass Deliberate Trigger Mode for routing, or otherwise
+  change which personas respond.
 - `simplifiedMessages` collapses runs of consecutive same-author pure-text
   messages into a single entry (see the merge rule above); media-bearing or
   debug-boundary messages remain their own entries.

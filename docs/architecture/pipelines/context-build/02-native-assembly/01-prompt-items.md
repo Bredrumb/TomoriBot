@@ -11,9 +11,9 @@ The top of the context list — the LLM's identity framing.
 Emit the `system`-role items that frame the LLM's identity for this
 turn: the humanizer block (base behavioral rules), an optional per-channel
 prompt block, the persona prompt (the persona's distinctive instructions), and
-the tomori-attributes block (the personality bullets). Multi-persona turns can
-also add public attributes from other personas triggered by the same message.
-For impersonation turns, emits a single impersonated-user prompt instead.
+the tomori-attributes block (the personality bullets). For impersonation turns,
+emits a single impersonated-user prompt instead. Other personas' public profile
+data belongs to stage 06 participants, not this prompt-item stage.
 
 ### Per-channel prompt override (`/server channel-prompt`)
 
@@ -37,7 +37,7 @@ stays directly after the system prompt.
 Subset of `BuildContextParams` plus carried state — see signature in
 `templates.ts:94-108`. Notable fields:
 
-- `botName`, `tomoriAttributes`, `publicPersonaAttributes`, `personaPrompt`
+- `botName`, `tomoriAttributes`, `personaPrompt`
 - `tomoriConfig.system_prompt`, `tomoriConfig.personal_memories_enabled`
 - `channelPromptOverride` — `{ prompt, mode }` for the active channel, or null
 - `isUserImpersonation`, `impersonatedIdentityName`, `impersonatedUserPrompt`
@@ -88,7 +88,7 @@ After this stage runs:
 | Surface | Plugin-relevance |
 |---|---|
 | `DEFAULT_SYSTEM_PROMPT` constant | Internal — exported from `templates.ts` for callers that need to know what the fallback is, but not user-configurable directly. The `system_prompt` config column is the user-facing surface. |
-| Tag emission (`SYSTEM_HUMANIZER_RULES`, `SYSTEM_PERSONA_PROMPT`, `SYSTEM_PERSONALITY`, `SYSTEM_PUBLIC_PERSONA_ATTRIBUTES`) | The tag scheme is the seam — preset reassembly relies on these tags to slot items into preset blocks. A plugin adding a new prompt-item kind would add a new `ContextItemTag` and document its slot ordering. |
+| Tag emission (`SYSTEM_HUMANIZER_RULES`, `SYSTEM_PERSONA_PROMPT`, `SYSTEM_PERSONALITY`) | The tag scheme is the seam — preset reassembly relies on these tags to slot items into preset blocks. A plugin adding a new prompt-item kind would add a new `ContextItemTag` and document its slot ordering. |
 | Impersonation prompt handling | Tightly coupled to chat pipeline's impersonation flow. A plugin adding a new "alternate identity" mode would extend here + chat pipeline stage 02. |
 
 ## Configuration
@@ -100,7 +100,6 @@ After this stage runs:
 | `tomoriConfig` | `personal_memories_enabled` | Passed to `convertMentions` for blacklist/privacy behavior |
 | `tomoriState` | `persona_prompt` | The persona's distinctive prompt |
 | `tomoriState` | `attribute_list` | Personality bullets (joined with `\n`) |
-| `ChatTurn` | `triggeredPersonaIds` | Limits public attribute exposure to the original matched persona set |
 
 ## Related docs
 

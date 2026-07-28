@@ -63,6 +63,7 @@ import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
 import { resolveReunionNotes } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
+import { resolveContextReferences } from "@/utils/text/contextReferences";
 
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
@@ -240,33 +241,24 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     streamingContext.disableAllTools && rpBasePersona.llm.has_tools
       ? { ...rpBasePersona, llm: { ...rpBasePersona.llm, has_tools: false } }
       : rpBasePersona;
-  const triggeredPersonaIdSet = new Set(turn.triggeredPersonaIds);
-  // Mirror personal memories: only surface public attributes for personas that have
-  // actually spoken in the conversation window (are in syntheticUsers), plus any
-  // co-triggered peers responding to the same message right now.
-  // Use ID-based matching so sprite-decorated display names (e.g. "Tomori (mad)")
-  // don't break detection — syntheticUsers keys are already persona_id strings.
   const personaIdsInHistory = new Set(
     Array.from(history.syntheticUsers.entries())
       .filter(([, u]) => u.type === "persona")
       .map(([id]) => Number.parseInt(id, 10))
       .filter((id) => !Number.isNaN(id)),
   );
-  const publicPersonaAttributes = turn.allPersonas
-    .filter(
-      (persona) =>
-        typeof persona.persona_id === "number" &&
-        persona.persona_id !== effectivePersona.persona_id &&
-        (personaIdsInHistory.has(persona.persona_id) || triggeredPersonaIdSet.has(persona.persona_id)),
-    )
-    .map((persona) => ({
-      personaId: persona.persona_id as number,
-      personaName: persona.persona_nickname,
-      attributes: (persona.persona_attributes ?? [])
-        .filter((attribute) => attribute.is_public)
-        .map((attribute) => attribute.attribute_text),
-    }))
-    .filter((persona) => persona.attributes.length > 0);
+  const contextReferences = await resolveContextReferences({
+    client,
+    guildId: turn.serverDiscId,
+    simplifiedMessageHistory: history.simplifiedMessages,
+    personas: turn.allPersonas,
+    activePersonaId: effectivePersona.persona_id,
+    existingParticipantIds: history.userIds,
+    existingPersonaIds: personaIdsInHistory,
+    responderPersonaIds: new Set(turn.triggeredPersonaIds),
+  });
+  const contextUserIds = new Set(history.userIds);
+  for (const referencedUserId of contextReferences.referencedUserIds) contextUserIds.add(referencedUserId);
 
   // Resolve any per-channel system prompt override (append/replace). Negative results
   // are cached, so DM channels (which can never have an override) cost one cheap lookup.
@@ -297,7 +289,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     serverName: turn.serverName,
     serverDescription: turn.serverDescription,
     simplifiedMessageHistory: history.simplifiedMessages,
-    userList: Array.from(history.userIds),
+    userList: Array.from(contextUserIds),
     matrixUsers: history.matrixUsers,
     syntheticUsers: history.syntheticUsers,
     personaUserBlocks: history.activeUserBlocks,
@@ -311,7 +303,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     emojiStrings: assets.emojiStrings,
     tomoriNickname: effectivePersona.persona_nickname,
     tomoriAttributes: effectivePersona.attribute_list,
-    publicPersonaAttributes,
+    publicPersonaProfiles: contextReferences.publicPersonaProfiles,
+    preloadedReferencedUserRows: contextReferences.referencedUserRows,
+    referencedUserIds: contextReferences.referencedUserIds,
     tomoriConfig: effectivePersona.config,
     channelPromptOverride,
     channelContextNote,

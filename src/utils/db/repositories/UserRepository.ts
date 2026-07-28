@@ -56,6 +56,29 @@ export interface PersonalSpotlightStatus {
   updatedAt: Date | null;
 }
 
+export type ContextReferenceEligibilityEvidence = {
+  hasServerActivity: boolean;
+  hasPersonalMemories: boolean;
+  hasPendingTasks: boolean;
+};
+
+/** Auto-created identity/default rows are not enough to load a user by alias. */
+export function isEligibleContextReferenceUser(user: UserRow, evidence: ContextReferenceEligibilityEvidence): boolean {
+  return (
+    evidence.hasServerActivity ||
+    evidence.hasPersonalMemories ||
+    evidence.hasPendingTasks ||
+    user.shortterm_cache_crossserver_opt_in ||
+    user.physical_appearance_tags.some((tag) => tag.trim().length > 0) ||
+    Boolean(user.nai_char_ref_url?.trim()) ||
+    Boolean(user.impersonation_prompt?.trim()) ||
+    user.personal_dtm !== "follow" ||
+    user.personal_deliberate_tool_mode !== "follow" ||
+    user.timezone_offset != null ||
+    user.privacy_level !== PrivacyLevelValue.MINIMAL
+  );
+}
+
 export class UserRepository implements IRepository<UserExportShape> {
   // ── reads ──────────────────────────────────────────────────────────────────
 
@@ -152,6 +175,101 @@ export class UserRepository implements IRepository<UserExportShape> {
           return [];
         }
       }, `load user rows for nickname ${normalizedNickname}`)) ?? []
+    );
+  }
+
+  /**
+   * Loads registered guild members who are eligible to be added to context by
+   * reference. Candidate discovery is intentionally bounded to IDs Discord has
+   * already exposed, users active on this server, and meaningful saved
+   * nicknames that occur in the visible history.
+   */
+  async loadEligibleContextReferenceCandidates(params: {
+    serverDiscId: string;
+    candidateDiscordIds: string[];
+    normalizedHistoryText: string;
+  }): Promise<UserRow[]> {
+    return (
+      (await withCachedPlanRetry(async () => {
+        try {
+          const candidateDiscordIds = Array.from(new Set(params.candidateDiscordIds));
+          const normalizedHistoryText = params.normalizedHistoryText.trim().toLowerCase().replace(/\s+/g, " ");
+          const rows = await sql`
+            WITH context_reference_candidates AS (
+              SELECT
+                u.user_id,
+                u.user_disc_id,
+                u.user_nickname,
+                u.language_pref,
+                u.registration_locale,
+                u.privacy_level,
+                u.personal_deliberate_tool_mode,
+                u.timezone_offset,
+                u.created_at,
+                u.updated_at,
+                COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
+                COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
+                upc.nai_char_ref_url,
+                upc.impersonation_prompt,
+                COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
+                EXISTS (
+                  SELECT 1
+                  FROM stat_counters sc
+                  JOIN servers s ON s.server_id = sc.server_id
+                  WHERE sc.user_id = u.user_id
+                    AND s.server_disc_id = ${params.serverDiscId}
+                    AND sc.metric IN ('message_sent', 'command_used')
+                    AND sc.count > 0
+                ) AS has_server_activity,
+                EXISTS (
+                  SELECT 1
+                  FROM personal_memories pm
+                  WHERE pm.user_id = u.user_id
+                ) AS has_personal_memories,
+                EXISTS (
+                  SELECT 1
+                  FROM reminders r
+                  WHERE (r.user_discord_id = u.user_disc_id OR r.created_by_user_id = u.user_id)
+                    AND r.reminder_time > CURRENT_TIMESTAMP
+                ) AS has_pending_tasks
+              FROM users u
+              LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+            )
+            SELECT *
+            FROM context_reference_candidates
+            WHERE (
+              user_disc_id = ANY(${sql.array(candidateDiscordIds, "TEXT")})
+              OR has_server_activity
+              OR (
+                ${normalizedHistoryText} <> ''
+                AND position(
+                  regexp_replace(lower(trim(user_nickname)), '[[:space:]]+', ' ', 'g')
+                  IN ${normalizedHistoryText}
+                ) > 0
+              )
+            )
+          `;
+
+          const parsedUsers: UserRow[] = [];
+          for (const row of rows) {
+            const parsedUser = this.parseUserRow(row, `context reference candidate ${row.user_disc_id}`);
+            if (
+              parsedUser &&
+              isEligibleContextReferenceUser(parsedUser, {
+                hasServerActivity: row.has_server_activity === true,
+                hasPersonalMemories: row.has_personal_memories === true,
+                hasPendingTasks: row.has_pending_tasks === true,
+              })
+            ) {
+              parsedUsers.push(parsedUser);
+            }
+          }
+          return parsedUsers;
+        } catch (error) {
+          log.error("Error loading eligible context reference candidates:", error);
+          return [];
+        }
+      }, `load eligible context reference candidates for server ${params.serverDiscId}`)) ?? []
     );
   }
 

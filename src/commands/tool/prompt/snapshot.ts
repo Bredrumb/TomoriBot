@@ -72,6 +72,7 @@ import {
 } from "@/utils/chat/contextMedia";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
+import { resolveContextReferences } from "@/utils/text/contextReferences";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -757,31 +758,24 @@ export async function execute(
       "name" in textChannel && typeof textChannel.name === "string" ? textChannel.name : "unknown-channel";
     const channelDesc = "topic" in textChannel ? (textChannel.topic as string | null) : null;
 
-    // 13. Assemble context using the selected persona — buildContext handles preset routing internally
-    // Mirror personal memories: only include public attributes for personas present in the
-    // fetched conversation history (userListSet contains bare numeric persona_id strings, matching
-    // the real pipeline's contextPipeline.ts key format so applySyntheticPersonaAppearance works).
+    // 13. Resolve the same context-only persona/user references as live chat,
+    // then assemble context using the selected persona.
     const personaIdsInHistory = new Set(
-      Array.from(userListSet)
-        .filter((id) => /^\d+$/.test(id))
-        .map((id) => Number.parseInt(id, 10))
+      Array.from(syntheticUsers.entries())
+        .filter(([, user]) => user.type === "persona")
+        .map(([id]) => Number.parseInt(id, 10))
         .filter((id) => !Number.isNaN(id)),
     );
-    const publicPersonaAttributes = personas
-      .filter(
-        (persona) =>
-          typeof persona.persona_id === "number" &&
-          persona.persona_id !== selectedPersona.persona_id &&
-          personaIdsInHistory.has(persona.persona_id),
-      )
-      .map((persona) => ({
-        personaId: persona.persona_id as number,
-        personaName: persona.persona_nickname,
-        attributes: (persona.persona_attributes ?? [])
-          .filter((attribute) => attribute.is_public)
-          .map((attribute) => attribute.attribute_text),
-      }))
-      .filter((persona) => persona.attributes.length > 0);
+    const contextReferences = await resolveContextReferences({
+      client,
+      guildId: interaction.guild.id,
+      simplifiedMessageHistory: simplifiedMessages,
+      personas,
+      activePersonaId: selectedPersona.persona_id,
+      existingParticipantIds: userListSet,
+      existingPersonaIds: personaIdsInHistory,
+    });
+    for (const referencedUserId of contextReferences.referencedUserIds) userListSet.add(referencedUserId);
 
     const contextBuild = await buildContext({
       guildId: interaction.guild.id,
@@ -802,7 +796,9 @@ export async function execute(
       snapshot: { triggererUserRow: userData, tomoriState: effectivePersona },
       tomoriNickname: selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
       tomoriAttributes: selectedPersona.attribute_list,
-      publicPersonaAttributes,
+      publicPersonaProfiles: contextReferences.publicPersonaProfiles,
+      preloadedReferencedUserRows: contextReferences.referencedUserRows,
+      referencedUserIds: contextReferences.referencedUserIds,
       tomoriConfig: effectivePersona.config,
       channelPromptOverride,
       channelContextNote,
