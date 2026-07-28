@@ -93,11 +93,17 @@ After this stage runs:
 - `streamingContext.explicitLongTermMemoryIntent` reflects whether the
   triggering message mentions long-term memory phrasing.
 - `streamingContext.replyNoticeState` is initialized to
-  `{ attempted: false, sent: false }` when `incoming.isFromQueue` is true
-  and the turn's persona is an alter. This is the only place where
-  `replyNoticeState` is set; without it the alter "Replying to…" embed in
-  stage 07 is suppressed (the presence of the object is the enable-switch,
-  not its field values).
+  `{ attempted: false, sent: false }` whenever `incoming.isFromQueue` is true —
+  for **any** persona, not only alters. This is the only place where
+  `replyNoticeState` is set; without it the "Replying to…" embed in stage 07 is
+  suppressed (the presence of the object is the enable-switch, not its field
+  values).
+
+  It is not gated on `is_alter` because the main persona also switches to a
+  webhook whenever a sprite renders, and webhooks cannot use Discord's native
+  reply. Whether a sprite will fire is unknown until delivery, so the object is
+  allocated up front and stage 07 gates the actual send on real webhook
+  delivery — making it an inert no-op for queued turns that reply natively.
 
 ## Extension points
 

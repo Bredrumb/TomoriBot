@@ -531,6 +531,38 @@ async function resolvePersonaWebhookAvatar(persona: TomoriState, guild?: Guild):
  * @param channel - The text channel to get/create webhook for
  * @returns Webhook object, or null if missing permissions
  */
+/**
+ * Resolves the managed webhook for the channel a message will appear in, mapping a thread to
+ * its parent — webhooks live on the parent channel and post into threads via `threadId`.
+ *
+ * Thin convenience wrapper over {@link getOrCreateWebhook} for callers that hold an arbitrary
+ * channel and only want "the webhook, or null". Used by post-turn senders (stickers, the
+ * "Fallback Used" notice) which — unlike alter turns — have no pre-resolved
+ * `responseTarget.webhook` when the main persona reaches the webhook path via a sprite.
+ *
+ * @param channel - Channel the message will be posted to (thread or text channel)
+ * @returns The managed webhook, or null when the channel cannot host one or permissions are missing
+ */
+export async function resolveManagedChannelWebhook(channel: unknown): Promise<Webhook | null> {
+  const candidate = channel as {
+    isThread?: () => boolean;
+    parent?: unknown;
+  };
+  const targetChannel = typeof candidate.isThread === "function" && candidate.isThread() ? candidate.parent : channel;
+
+  if (
+    !targetChannel ||
+    typeof targetChannel !== "object" ||
+    !("fetchWebhooks" in targetChannel) ||
+    !("createWebhook" in targetChannel)
+  ) {
+    return null;
+  }
+
+  const webhookResult = await getOrCreateWebhook(targetChannel as BaseGuildTextChannel);
+  return webhookResult.webhook ?? null;
+}
+
 export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextChannel): Promise<WebhookCreateResult> {
   try {
     const channelId = channel.id;

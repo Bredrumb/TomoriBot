@@ -28,13 +28,29 @@ import {
   collectKnownSpeakerNames,
   resolveCopiedRenderModifierTarget,
   resolveSpriteRenderModifierTarget,
+  type SpriteRenderModifierResolution,
 } from "@/utils/discord/renderModifierResolver";
+import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
+import { normalizePersonaSpriteKey } from "@/utils/persona/sprites";
+import { advanceChannelSpriteGroupParity } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { isUserImpersonationStreamContext } from "@/utils/discord/stream/uiUpdater";
 
 type StreamSegmentProcessorDependencies = {
   delivery: StreamMessageDelivery;
   requestStop: (channelId: string, requesterId?: string) => boolean;
 };
+
+/**
+ * Loose detector for "something that LOOKS like a decorated speaker label" — a parenthesized
+ * group followed by a colon, anywhere near the head of a segment. Deliberately far more
+ * permissive than parseLeadingRenderModifier (no name allowlist, not anchored to the start)
+ * so the diagnostic below fires precisely on the cases where the strict parser refused text
+ * a human would call a sprite label.
+ */
+const SUSPECTED_RENDER_MODIFIER_LABEL_RE = /\([^()\n\r:：]{1,64}\)\s*[:：]/;
+
+/** How much of a segment to echo into the diagnostic line. */
+const RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS = 80;
 
 /**
  * Owns normalization and routing for flushed stream text segments before Discord delivery.
@@ -65,8 +81,12 @@ export class StreamSegmentProcessor {
     if (trimmedGuard === "..") return;
 
     let workingSegment = segment;
+    // Track whether orphan punctuation was spliced onto the front, since that mutation
+    // happens BEFORE the anchored render-modifier parse and can single-handedly defeat it.
+    let orphanPrefixApplied: string | undefined;
     if (state.pendingOrphanPunctuation) {
       log.info(`Stream Orphan: Prepending held "${state.pendingOrphanPunctuation}" to next segment`);
+      orphanPrefixApplied = state.pendingOrphanPunctuation;
       workingSegment = `${state.pendingOrphanPunctuation}${segment}`;
       state.pendingOrphanPunctuation = undefined;
     }
@@ -78,6 +98,18 @@ export class StreamSegmentProcessor {
     const renderModifierMatch = canUseRenderModifier
       ? parseLeadingRenderModifier(workingSegment, renderModifierSourceNames, renderModifierChainSourceNames)
       : null;
+    this.logUnparsedRenderModifierLabel({
+      renderModifierMatch: Boolean(renderModifierMatch),
+      canUseRenderModifier,
+      orphanPrefixApplied,
+      rawSegment: segment,
+      workingSegment,
+      context,
+      state,
+      textConfig,
+      renderModifierSourceNames,
+      renderModifierChainSourceNames,
+    });
     if (renderModifierMatch) {
       const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
       workingSegment = renderModifierMatch.body;
@@ -107,7 +139,7 @@ export class StreamSegmentProcessor {
                 renderTarget.identity,
                 renderTarget.contextLabel,
                 renderTarget.spriteRecord.spriteName,
-                state,
+                context.channel.id,
               )
             : renderTarget.identity;
         // The accumulated-text prefix keeps the decorated "Name (modifier): "
@@ -123,6 +155,7 @@ export class StreamSegmentProcessor {
           spriteRecord: renderTarget.spriteRecord,
         };
       } else {
+        await this.logUnresolvedRenderModifierTarget(renderModifierMatch.modifier, spriteResolution.status, context);
         state.activeRenderModifier = undefined;
       }
     } else if (canUseRenderModifier && state.activeRenderModifier) {
@@ -317,6 +350,103 @@ export class StreamSegmentProcessor {
   }
 
   /**
+   * Diagnostic probe for sprite/render-modifier labels that leak into Discord as literal text.
+   *
+   * A successful `parseLeadingRenderModifier` always strips the label from the segment, so a
+   * label visible in the delivered message proves the parse returned null. This logs every
+   * input that decision depends on, letting a leaked label be attributed to exactly one of:
+   *
+   * 1. `isInsideCodeBlock` / `isUserImpersonation` vetoing render modifiers outright.
+   * 2. A name mismatch — the label's speaker name is absent from the allowlist built from
+   *    `botName` + `botNameAliases`.
+   * 3. Anchor loss — text (notably re-attached orphan punctuation) sits ahead of the label,
+   *    so the `^\s*`-anchored pattern cannot reach it.
+   *
+   * Fires only when the strict parse failed AND the segment still looks like it carried a
+   * decorated label, so ordinary prose never triggers it.
+   *
+   * @param args - Parse outcome plus every input that fed it
+   */
+  private logUnparsedRenderModifierLabel(args: {
+    renderModifierMatch: boolean;
+    canUseRenderModifier: boolean;
+    orphanPrefixApplied: string | undefined;
+    rawSegment: string;
+    workingSegment: string;
+    context: StreamContext;
+    state: StreamState;
+    textConfig: TextProcessingConfig;
+    renderModifierSourceNames: readonly string[];
+    renderModifierChainSourceNames: readonly string[];
+  }): void {
+    // 1. Only interesting when the strict parser declined text that still looks like a label.
+    if (args.renderModifierMatch) return;
+    const labelHead = args.workingSegment.slice(0, RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS);
+    if (!SUSPECTED_RENDER_MODIFIER_LABEL_RE.test(labelHead)) return;
+
+    // 2. Echo raw vs working separately so an orphan-punctuation splice is visible as a diff.
+    log.warn(
+      `Stream RenderModifier Diagnostic: leading label not parsed in channel ${args.context.channel.id}. ` +
+        `canUseRenderModifier=${args.canUseRenderModifier} ` +
+        `isInsideCodeBlock=${args.state.isInsideCodeBlock} ` +
+        `isUserImpersonation=${isUserImpersonationStreamContext(args.context)} ` +
+        `isAlter=${args.context.tomoriState.is_alter} ` +
+        `personaNickname=${JSON.stringify(args.context.tomoriState.persona_nickname)} ` +
+        `botName=${JSON.stringify(args.textConfig.botName)} ` +
+        `sourceNames=${JSON.stringify(args.renderModifierSourceNames)} ` +
+        `chainSourceNames=${JSON.stringify(args.renderModifierChainSourceNames)} ` +
+        `orphanPrefixApplied=${JSON.stringify(args.orphanPrefixApplied ?? null)} ` +
+        `rawSegmentHead=${JSON.stringify(args.rawSegment.slice(0, RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS))} ` +
+        `workingSegmentHead=${JSON.stringify(labelHead)}`,
+    );
+  }
+
+  /**
+   * Diagnostic probe for the silent-drop branch: the model emitted a well-formed
+   * "Name (modifier):" label, the parser accepted it and stripped it, but neither a sprite
+   * nor a copied identity resolved. The message then ships under the default identity with
+   * no sprite and no trace — visually identical to the model never having tried.
+   *
+   * Logs the persona the sprite lookup was performed against alongside that persona's actual
+   * sprite keys, which distinguishes the two candidate causes:
+   *
+   * 1. Wrong persona — `personaId` is not the persona the model was told to speak as, so its
+   *    sprite keys can never match (the failure mode expected on queued/chained turns).
+   * 2. Right persona, unknown label — the model invented a sprite key, or the sprite exists
+   *    but its avatar is unusable (`resolveSpriteIdentity` returning null).
+   *
+   * @param modifier - The modifier text the model used, e.g. "mad"
+   * @param spriteStatus - Whether the sprite lookup matched before identity resolution
+   * @param context - Active stream context (supplies the persona used for the lookup)
+   */
+  private async logUnresolvedRenderModifierTarget(
+    modifier: string,
+    spriteStatus: SpriteRenderModifierResolution["status"],
+    context: StreamContext,
+  ): Promise<void> {
+    const personaId = context.tomoriState.persona_id;
+    // 1. Read back the sprite roster actually visible to the lookup; a cache miss here is
+    //    itself a finding, so failures degrade to an explicit marker rather than throwing.
+    let availableSpriteKeys: string[] | "lookup_failed" = "lookup_failed";
+    if (typeof personaId === "number") {
+      availableSpriteKeys = await getCachedPersonaSprites(personaId)
+        .then((sprites) => sprites.map((sprite) => sprite.sprite_key))
+        .catch(() => "lookup_failed" as const);
+    }
+
+    log.warn(
+      `Stream RenderModifier Diagnostic: label parsed but no render target resolved in channel ${context.channel.id}. ` +
+        `modifier=${JSON.stringify(modifier)} ` +
+        `normalizedSpriteKey=${JSON.stringify(normalizePersonaSpriteKey(modifier))} ` +
+        `spriteStatus=${spriteStatus} ` +
+        `personaId=${personaId ?? "null"} ` +
+        `personaNickname=${JSON.stringify(context.tomoriState.persona_nickname)} ` +
+        `isAlter=${context.tomoriState.is_alter} ` +
+        `availableSpriteKeys=${JSON.stringify(availableSpriteKeys)}`,
+    );
+  }
+
+  /**
    * Returns the sprite identity with its webhook username chosen to avoid Discord's
    * consecutive-message grouping collapsing different sprites under one avatar.
    *
@@ -329,23 +459,21 @@ export class StreamSegmentProcessor {
    * merge. A parity toggle flipped on each sprite change guarantees that adjacent
    * different-sprite messages alternate clean/decorated and therefore never match;
    * same-sprite runs keep an identical username and still group naturally.
+   *
+   * The alternation is tracked per CHANNEL, not per stream. Discord's grouping spans turns,
+   * so bookkeeping held in `StreamState` was reset at every turn boundary and let a queued
+   * turn's first sprite collide with the previous turn's last sprite.
+   * See {@link advanceChannelSpriteGroupParity}.
    */
   private resolveSpriteGroupBreakIdentity(
     identity: ResolvedWebhookIdentity,
     decoratedUsername: string,
     spriteKey: string,
-    state: StreamState,
+    channelId: string,
   ): ResolvedWebhookIdentity {
-    // 1. Flip parity only when switching away from a *previous* sprite. Skipping the
-    //    very first sprite (no prior key) keeps it on the clean name.
-    if (state.lastDeliveredSpriteKey !== undefined && state.lastDeliveredSpriteKey !== spriteKey) {
-      state.spriteGroupParity = !state.spriteGroupParity;
-    }
-    state.lastDeliveredSpriteKey = spriteKey;
-
-    // 2. The "false" half keeps the clean persona name; the "true" half uses the
+    // 1. The "false" half keeps the clean persona name; the "true" half uses the
     //    decorated "Persona (sprite)" name so it reads as a distinct Discord author.
-    if (!state.spriteGroupParity) {
+    if (!advanceChannelSpriteGroupParity(channelId, spriteKey)) {
       return identity;
     }
     return { ...identity, username: decoratedUsername };

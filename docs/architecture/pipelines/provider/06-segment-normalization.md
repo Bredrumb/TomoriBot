@@ -140,15 +140,28 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
     newlines and only switch when a *different* `SourcePersona (sprite):` label appears — an
     expression is a sustained visual state, e.g. `"Touko (mad): ARGGHHH!\nFine... I'll do it"` keeps
     the `mad` sprite for the second line.
-- **`state.lastDeliveredSpriteKey`** / **`state.spriteGroupParity`** — track the last non-identity
-  sprite delivered and a toggle flipped on each sprite change. The toggle decides whether the sprite
-  uses the clean persona name (`false`) or the decorated `Persona (sprite)` name (`true`). Discord
-  groups consecutive webhook messages by `webhook_id` + `username` (ignoring the avatar) and strips
-  zero-width/blank chars from usernames, so a visibly distinct name is the only reliable break:
-  adjacent different-sprite messages alternate clean/decorated and never match, forcing Discord to
-  render each avatar instead of grouping them under the first one, while same-sprite runs keep an
-  identical username and still group. Identity sprites are excluded (their decorated name is already
-  distinct).
+- **Sprite group-break alternation** (`channelDeliveryContinuity.ts`, keyed by channel — *not*
+  `StreamState`) — tracks the last non-identity sprite delivered in the channel plus a toggle flipped
+  on each sprite change. The toggle decides whether the sprite uses the clean persona name (`false`)
+  or the decorated `Persona (sprite)` name (`true`). Discord groups consecutive webhook messages by
+  `webhook_id` + `username` (ignoring the avatar) and strips zero-width/blank chars from usernames,
+  so a visibly distinct name is the only reliable break: adjacent different-sprite messages alternate
+  clean/decorated and never match, forcing Discord to render each avatar instead of grouping them
+  under the first one, while same-sprite runs keep an identical username and still group. Identity
+  sprites are excluded (their decorated name is already distinct).
+
+  The state is channel-scoped because Discord's grouping spans turns. It previously lived in
+  `StreamState`, which is rebuilt for every SDK call, so any turn boundary (queued chain, follow-up,
+  persona job, tool-loop continuation) reset the alternation and let the new turn's first sprite
+  collide with the previous turn's last one. Entries expire after
+  `SPRITE_GROUP_CONTINUITY_TTL_MINUTES` (default 10) — past Discord's own grouping window, continuity
+  no longer matters.
+
+  The same module also records the **identity each message was actually delivered under**
+  (`recordChannelDeliveredWebhookIdentity` on a webhook send, `recordChannelDeliveredBotMessage`
+  on an ordinary bot send). Post-turn artifacts read it back via
+  `getChannelDeliveredWebhookIdentity()` so they group with the message they follow — see
+  stage 07.
 - **`requestStop(channelId, "speaker_guard")`** — queued if the speaker guard fires; the stop
   is consumed by the stage 04 orchestrator on the next loop iteration. The opening-label leak
   guard (step 3) queues the same stop with nothing sent, which the state machine classifies as

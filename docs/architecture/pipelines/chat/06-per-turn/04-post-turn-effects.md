@@ -32,11 +32,22 @@ Steps run in this order:
 
 If a completed `GenerationTurnResult` carries `selectedSticker`:
 
-- An alter persona first sends the sticker URL through its identity webhook,
-  forwarding the thread ID where applicable.
-- If that fails, or the active persona is not an alter, a queued turn replies
-  to the trigger message with the native sticker; a non-queued turn sends it
-  directly to the channel.
+- The sticker URL is sent through a webhook using the identity the stream last
+  delivered under, read from `getChannelDeliveredWebhookIdentity()`, forwarding
+  the thread ID where applicable. The webhook is taken from
+  `responseTarget.webhook` when present and otherwise resolved lazily via
+  `resolveManagedChannelWebhook()`, since the main persona has none.
+- This is **not** gated on `is_alter`: the main persona also delivers through a
+  webhook whenever a sprite renders, and the sticker must match it.
+- The recorded username is reused **verbatim** — it may be the decorated
+  `Persona (sprite)` form chosen by the group-break alternation. Re-resolving the
+  persona's default identity would yield a different name, and Discord would
+  split the sticker into its own message group instead of attaching it to the
+  message it belongs with.
+- A null identity means the last delivery was an ordinary bot message, so the
+  sticker follows: a queued turn replies to the trigger message with the native
+  sticker; a non-queued turn sends it directly to the channel. The same path is
+  the fallback if the webhook send fails.
 - Final delivery failures are logged with the server and sticker IDs and do
   not propagate.
 
@@ -149,7 +160,7 @@ extend or replace:
 
 | Step | Named helper | Plugin-relevance |
 |---|---|---|
-| Sticker delivery | `sendSelectedSticker` | Post-stream media companion path; alter identity webhook with native-sticker fallback |
+| Sticker delivery | `sendSelectedSticker` | Post-stream media companion path; reuses the last delivered webhook identity, with native-sticker fallback |
 | Empty-response retry | `maybeScheduleEmptyResponseRetry` | Retry policy (provider-specific) — extension via per-provider hook |
 | Text-quota consumption | `incrementTextQuota` | Quota-manager subsystem; plugins shipping their own quotas would add hooks here |
 | Self-reply bookkeeping | `setLastRespondedPersona`, `getSelfReplyChainState` | Cascade-trigger limit semantics; coupled to stage 05 |

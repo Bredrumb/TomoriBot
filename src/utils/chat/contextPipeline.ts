@@ -56,6 +56,7 @@ import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
+import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
@@ -95,9 +96,14 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   }
   streamingContext.suppressUserErrors = !turn.shouldSurfaceUserErrors || streamingContext.suppressUserErrors === true;
 
-  // Initialize reply notice state for alter personas responding from the queue so
-  // the "Replying to..." embed fires before the first webhook chunk is sent.
-  if (incoming.isFromQueue && turn.persona.is_alter) {
+  // Initialize reply notice state for any queued turn so the "Replying to..." embed can fire
+  // before the first webhook chunk is sent. Deliberately NOT gated on `is_alter`: the main
+  // persona also switches to a webhook whenever a sprite renders, and webhooks cannot use
+  // Discord's native reply, so it needs the standalone notice for exactly the same reason.
+  // Whether a sprite fires is only known at delivery time, so the allocation happens up front
+  // and the uiUpdater gates the actual send on real webhook delivery — leaving this an inert
+  // no-op for queued turns that end up replying natively.
+  if (incoming.isFromQueue) {
     streamingContext.replyNoticeState = { attempted: false, sent: false };
   }
 
@@ -337,6 +343,15 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     messageIdMap,
   });
 
+  // Mirror buildPersonaSpriteContextItem's own gating so the queued-reply directive only
+  // offers the "Persona (sprite):" opening on turns where the sprite prompt was actually
+  // injected. Any disagreement between the two would put the model back in the bind of
+  // having to violate one instruction to satisfy the other.
+  const allowSpriteLabel =
+    !incoming.isUserImpersonation &&
+    typeof effectivePersona.persona_id === "number" &&
+    (await getCachedPersonaSprites(effectivePersona.persona_id).catch(() => [])).length > 0;
+
   const contextItems = attachPersonaMentionMapToContextItems(
     appendTailDirectives({
       turn,
@@ -346,6 +361,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       tailDirectives: contextBuild.tailDirectives,
       uncensorDirective: contextBuild.uncensorDirective,
       messageIdMap,
+      allowSpriteLabel,
     }),
     buildPersonaMentionMap(turn.allPersonas),
   );
@@ -983,6 +999,8 @@ function appendTailDirectives(args: {
   tailDirectives: string[];
   uncensorDirective?: string;
   messageIdMap?: MessageIdMap;
+  /** True when this turn also carries the persona-sprite prompt (see buildPersonaSpriteContextItem). */
+  allowSpriteLabel?: boolean;
 }): ChatTurnContext["contextItems"] {
   const incoming = args.turn.lockedTurn.admission.incoming;
   const contextItems = [...args.contextItems];
@@ -1083,6 +1101,7 @@ function appendTailDirectives(args: {
           queuedReplyTargetName,
           args.turn.persona.persona_nickname,
           args.messageIdMap,
+          args.allowSpriteLabel ?? false,
         )
       : null;
 

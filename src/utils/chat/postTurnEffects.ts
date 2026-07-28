@@ -1,7 +1,8 @@
 import { PrivacyLevel } from "@/types/db/schema";
 import { storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
+import { resolveManagedChannelWebhook, sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
+import { getChannelDeliveredWebhookIdentity } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
@@ -46,27 +47,33 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
   if (!sticker || result.status !== "completed") return;
 
   let stickerSent = false;
-  const webhook = context.responseTarget?.webhook;
-  const personaUsername = context.responseTarget?.personaUsername;
-  const personaAvatarUrl = context.responseTarget?.personaAvatarUrl;
+  // Post the sticker as whoever actually delivered the last message, so Discord groups the two
+  // instead of splitting the sticker off under a different author. Crucially this reuses the
+  // recorded username verbatim — which may be the decorated `Persona (sprite)` form picked by
+  // the group-break alternation. Re-resolving the persona's default identity here would produce
+  // a different name and force exactly the split we are avoiding.
+  //
+  // Not gated on `is_alter`: the main persona also delivers through a webhook whenever a sprite
+  // renders. A null identity means the last delivery was an ordinary bot message, so the sticker
+  // should be one too — which the bot path below handles.
+  const deliveredIdentity = getChannelDeliveredWebhookIdentity(context.channel.id);
 
-  if (context.currentPersona.is_alter && webhook && personaUsername) {
+  if (deliveredIdentity) {
     const threadId = context.channel.isThread() ? context.channel.id : undefined;
     try {
-      await sendWebhookMessageWithIdentity(
-        webhook,
-        {
-          content: sticker.url,
-          ...(threadId ? { threadId } : {}),
-        },
-        {
-          username: personaUsername,
-          avatarUrl: personaAvatarUrl,
-          avatarDataUri: personaAvatarUrl?.startsWith("data:image/") ? personaAvatarUrl : undefined,
-        },
-      );
-      stickerSent = true;
-      log.info(`Sent sticker URL for '${sticker.name}' via webhook.`);
+      const webhook = context.responseTarget?.webhook ?? (await resolveManagedChannelWebhook(context.channel));
+      if (webhook) {
+        await sendWebhookMessageWithIdentity(
+          webhook,
+          {
+            content: sticker.url,
+            ...(threadId ? { threadId } : {}),
+          },
+          deliveredIdentity,
+        );
+        stickerSent = true;
+        log.info(`Sent sticker URL for '${sticker.name}' via webhook as "${deliveredIdentity.username}".`);
+      }
     } catch (error) {
       log.warn("Failed to send sticker URL via webhook, falling back to bot sticker send", error);
     }

@@ -51,8 +51,18 @@ payload. It handles:
   `STREAMING_LIMITS.MAX_FLUSH_COUNT` is also enforced here with a user-facing embed.
 - **Webhook path** — when `context.webhook` and `context.personaUsername` are set (alter persona
   mode), the message is sent via `sendWebhookMessageWithIdentity()` with the persona's name and
-  avatar. For the *first* message of an alter persona response that has a `replyToMessage`, a
-  standalone reply notice is sent first via `sendWebhookReplyNotice()`.
+  avatar. Webhooks cannot use Discord's native reply, so for the *first* message of any webhook
+  response that has a `replyToMessage`, a standalone reply notice is sent first via
+  `sendWebhookReplyNotice()`. This covers the main persona too whenever a sprite pushes it onto the
+  webhook path — the notice is gated on webhook delivery, not on `is_alter`. Sprite identity
+  overrides (carrying a `spriteRecord`) still get the notice since the persona is speaking as itself;
+  **copied** identities (impersonating a user or another persona) are excluded, because a notice
+  posted under the disguise would attribute the reply to the wrong speaker.
+- **Delivered-identity recording** — after every successful send, the identity Discord actually
+  saw is recorded per channel in `channelDeliveryContinuity.ts`: the webhook identity on a
+  webhook send, or a cleared marker on an ordinary bot send. Post-turn artifacts (stickers, the
+  "Fallback Used" notice) read it back so they post as the same author and group with the
+  message they follow, instead of splitting off under the persona's default name.
 - **Render-modifier identity override** — when stage 06 resolves `SourcePersona (modifier): text`,
   the payload carries `identityOverride`. The UI updater lazily creates or reuses the managed
   channel webhook even for the main persona. Ordinary sprite matches send with the clean username

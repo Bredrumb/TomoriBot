@@ -8,6 +8,10 @@ import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { sendWebhookReplyNotice } from "@/utils/discord/webhookReply";
+import {
+  recordChannelDeliveredBotMessage,
+  recordChannelDeliveredWebhookIdentity,
+} from "@/utils/discord/stream/channelDeliveryContinuity";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
 
@@ -141,6 +145,9 @@ export class StreamUiUpdater {
       }
 
       let sentMessage: Message | null = null;
+      // Captured so recordSuccessfulSend can remember exactly which identity Discord saw —
+      // including the decorated group-break username — for later sends to reuse.
+      let deliveredWebhookIdentity: ResolvedWebhookIdentity | undefined;
       const webhookForIdentity = identityOverride
         ? await this.resolveWebhookForIdentityOverride(context)
         : context.webhook;
@@ -161,10 +168,20 @@ export class StreamUiUpdater {
           }`,
         );
 
+        // Any webhook delivery forfeits Discord's native reply (webhooks cannot reply), so the
+        // standalone notice embed is the only reply indicator available — for the main persona
+        // rendering a sprite just as much as for an alter. Gating this on `is_alter` hid the
+        // notice whenever the main persona switched to a webhook for a sprite, and gating on
+        // `!identityOverride` hid it from sprite renders generally, alters included.
+        //
+        // Sprites are the persona speaking as itself, so a notice is correct; COPIED identities
+        // (impersonating a user or another persona) must stay silent, since a notice posted
+        // under the disguise would attribute the reply to the wrong speaker. `spriteRecord` is
+        // exactly what distinguishes the two.
+        const isSpriteIdentity = Boolean(payload.spriteRecord);
         if (
-          !identityOverride &&
+          (!identityOverride || isSpriteIdentity) &&
           !strictUserImpersonation &&
-          context.tomoriState.is_alter &&
           context.replyToMessage &&
           context.replyNoticeState &&
           !context.replyNoticeState.attempted &&
@@ -200,6 +217,7 @@ export class StreamUiUpdater {
           identity,
         );
 
+        deliveredWebhookIdentity = identity;
         state.hasRepliedToOriginalMessage = true;
       } else if (!state.hasRepliedToOriginalMessage && context.replyToMessage) {
         sentMessage = await context.replyToMessage.reply({
@@ -216,7 +234,7 @@ export class StreamUiUpdater {
         });
       }
 
-      this.recordSuccessfulSend(payload, textForAccumulation, context, state, sentMessage);
+      this.recordSuccessfulSend(payload, textForAccumulation, context, state, sentMessage, deliveredWebhookIdentity);
       return sentMessage;
     } catch (discordError) {
       const recoveredMessage = await this.tryRecoverWebhookSend(
@@ -283,9 +301,22 @@ export class StreamUiUpdater {
     context: StreamContext,
     state: StreamState,
     sentMessage: Message | null,
+    deliveredWebhookIdentity?: ResolvedWebhookIdentity,
   ): void {
     if (!state.firstReplyUrl && sentMessage?.url) {
       state.firstReplyUrl = sentMessage.url;
+    }
+
+    // Remember what Discord will group against, so post-turn artifacts (stickers, the
+    // "Fallback Used" notice) can reuse the same author instead of splitting off under a
+    // different name. A bot-message send clears it: reverting to the bot means artifacts must
+    // follow, or they would group with nothing.
+    if (sentMessage) {
+      if (deliveredWebhookIdentity && sentMessage.webhookId) {
+        recordChannelDeliveredWebhookIdentity(context.channel.id, deliveredWebhookIdentity);
+      } else {
+        recordChannelDeliveredBotMessage(context.channel.id);
+      }
     }
     // Persist the message → sprite mapping fire-and-forget; webhook sends only
     // (bot-fallback messages can't carry persona identity in context anyway).
