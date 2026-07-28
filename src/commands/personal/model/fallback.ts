@@ -1,9 +1,7 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from "discord.js";
-import { createStandardEmbed } from "@/utils/discord/embedHelper";
+import { MessageFlags } from "discord.js";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { safeReply } from "@/utils/discord/safeReply";
-import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
@@ -11,7 +9,6 @@ import type {
   ErrorContext,
   LlmRow,
   UserRow,
-  SavedProviderConfigRow,
   FallbackModelRef,
   FallbackEntry,
   CustomEndpointRow,
@@ -19,11 +16,22 @@ import type {
 import type { SelectOption } from "@/types/discord/modal";
 
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { resolveActivePersonalProviderModelSelections } from "@/utils/provider/personalProviderHelpers";
+import {
+  beginAnchorPrivateWorkflow,
+  buildPersonaWorkflowNotice,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/anchorWorkflow";
+import {
+  acquireModalOptionRange,
+  acquireModelModalOpener,
+  buildOpenRouterMovedNotice,
+  buildOpenSelectorPayload,
+  buildProviderPickerPayload,
+  openAnchorModal,
+} from "@/utils/discord/ui/anchorModelFlow";
 
 const SLOT_IDS = [
   "fallback_slot_1",
@@ -41,6 +49,10 @@ const SLOT_LABEL_KEYS = [
 ] as const;
 const CLEAR_SLOT_VALUE = "__none__";
 const CUSTOM_ENDPOINT_VALUE_PREFIX = "ce:";
+/** Custom-id root for this command's anchor provider picker / opener buttons. */
+const ID_ROOT = "personal_model_fallback";
+// One of Discord's 25 select options is reserved for the explicit "None" / clear choice,
+// which is re-prepended to every page — so only 24 models fit per range.
 const ITEMS_PER_PAGE = 24;
 
 function getLocalizedDescription(model: LlmRow, locale: string): string {
@@ -137,33 +149,43 @@ export async function execute(
     return;
   }
 
+  // Anchor one-message controller, tracked so the outer catch can render an
+  // unexpected-error terminal on the same ephemeral message.
+  let anchorMessage: PersonaWorkflowMessageController | null = null;
+
   try {
-    // 1. Load all personal text providers and present the picker.
-    //    UserSavedProviderConfigRow shares the `provider` field that promptForSavedProvider reads,
-    //    so the cast is safe — the picker only uses that field to build button labels.
+    // 1. Load all personal text providers and open the anchor message with the right
+    //    initial control for the provider count.
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "text");
-    if (savedProviders.length === 0) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.personal.model.fallback.no_provider_title",
-        descriptionKey: "commands.personal.model.fallback.no_provider_description",
-        color: ColorCode.WARN,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+    const currentSelections =
+      savedProviders.length > 1 ? await resolveActivePersonalProviderModelSelections(savedProviders, "text") : [];
+    const initialPayload =
+      savedProviders.length === 0
+        ? buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.personal.model.fallback.no_provider_title",
+            descriptionKey: "commands.personal.model.fallback.no_provider_description",
+            color: ColorCode.WARN,
+          })
+        : savedProviders.length === 1
+          ? buildOpenSelectorPayload(locale, `${ID_ROOT}_open`)
+          : buildProviderPickerPayload(
+              locale,
+              ID_ROOT,
+              savedProviders.map((row) => row.provider),
+              currentSelections,
+            );
 
-    const providerSelection = await promptForSavedProvider(
-      interaction,
-      locale,
-      savedProviders as unknown as SavedProviderConfigRow[],
-      {
-        currentSelections: await resolveActivePersonalProviderModelSelections(savedProviders, "text"),
-      },
-    );
-    if (!providerSelection) return;
+    const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+    anchorMessage = phase.message;
+    if (savedProviders.length === 0) return;
 
-    const selectedProvider = providerSelection.provider;
-    const responseInteraction = providerSelection.interaction;
+    const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, ID_ROOT);
+    if (!opener) return;
+    const selectedProvider = opener.provider;
+    // The button the modal will finally open from. The range step (if any) consumes this
+    // one and hands back the range button in its place.
+    let modalButton: ButtonInteraction = opener.button;
 
     // 2. Find the selected provider's config row to read existing fallback_model_refs
     const selectedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
@@ -201,12 +223,14 @@ export async function execute(
       availableEndpoints = label ? allEndpoints.filter((ep) => ep.label === label && ep.capability === "text") : [];
 
       if (availableEndpoints.length === 0) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.fallback.no_models_title",
-          descriptionKey: "commands.model.fallback.no_models_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
+        await phase.useButton(modalButton).replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.fallback.no_models_title",
+            descriptionKey: "commands.model.fallback.no_models_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
@@ -223,12 +247,14 @@ export async function execute(
         })) ?? [];
 
       if (availableModels.length === 0) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.fallback.no_models_title",
-          descriptionKey: "commands.model.fallback.no_models_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
+        await phase.useButton(modalButton).replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.fallback.no_models_title",
+            descriptionKey: "commands.model.fallback.no_models_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
@@ -255,83 +281,42 @@ export async function execute(
       description: safeSelectOptionText(localizer(locale, "commands.model.fallback.clear_option_description")),
     };
 
-    // 6. Pagination if needed
-    let optionsForModal = allModelOptions;
-    let modalInteraction: ChatInputCommandInteraction | ButtonInteraction = responseInteraction;
-
+    // 6. Past 24 models the user picks a range on the anchor message first. This modal
+    //    can't use the engine's own >25 bridge: it has five selects over one shared list
+    //    (the bridge slices only the first) and reserves a slot for the clear option.
+    let optionsForModal: SelectOption[];
     if (allModelOptions.length > ITEMS_PER_PAGE) {
-      const totalPages = Math.ceil(allModelOptions.length / ITEMS_PER_PAGE);
-      const pageButtons = Array.from({ length: Math.min(totalPages, 9) }, (_, index) =>
-        new ButtonBuilder()
-          .setCustomId(`personal_fallback_page_${index + 1}`)
-          .setLabel((index + 1).toString())
-          .setStyle(ButtonStyle.Primary),
+      const range = await acquireModalOptionRange(
+        phase,
+        modalButton,
+        interaction.user.id,
+        locale,
+        allModelOptions.length,
+        ITEMS_PER_PAGE,
       );
-
-      const pageSelectEmbed = createStandardEmbed(locale, {
-        titleKey: "general.pagination.select_page_title",
-        descriptionKey: "general.pagination.select_page_description",
-        descriptionVars: { totalItems: allModelOptions.length, totalPages },
-        color: ColorCode.INFO,
-      });
-
-      const pageSelectMessage = providerSelection.pickerInteraction
-        ? await (responseInteraction as ButtonInteraction).editReply({
-            embeds: [pageSelectEmbed],
-            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(...pageButtons)],
-          })
-        : await interaction.reply({
-            embeds: [pageSelectEmbed],
-            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(...pageButtons)],
-            flags: MessageFlags.Ephemeral,
-          });
-
-      try {
-        const pageButtonInteraction = await pageSelectMessage.awaitMessageComponent({
-          filter: (componentInteraction) =>
-            componentInteraction.user.id === interaction.user.id &&
-            componentInteraction.customId.startsWith("personal_fallback_page_"),
-          time: 300000,
-        });
-        const selectedPage = Number.parseInt(pageButtonInteraction.customId.replace("personal_fallback_page_", ""), 10);
-        const startIndex = (selectedPage - 1) * ITEMS_PER_PAGE;
-        optionsForModal = [clearOption, ...allModelOptions.slice(startIndex, startIndex + ITEMS_PER_PAGE)];
-        modalInteraction = pageButtonInteraction as ButtonInteraction;
-      } catch {
-        await safeReply(
-          interaction.editReply({ embeds: [], components: [] }),
-          "personal fallback model timeout cleanup",
-        );
-        return;
-      }
-    }
-
-    if (allModelOptions.length <= ITEMS_PER_PAGE) {
+      if (!range) return;
+      modalButton = range.button;
+      optionsForModal = [clearOption, ...allModelOptions.slice(range.start, range.end)];
+    } else {
       optionsForModal = [clearOption, ...allModelOptions];
     }
 
-    const modalResult = await promptWithRawModal(
-      modalInteraction,
-      locale,
-      {
-        modalCustomId: `personal_model_fallback_modal_${interaction.id}`,
-        modalTitleKey: "commands.model.fallback.modal_title",
-        components: SLOT_IDS.map((customId, index) => ({
-          customId,
-          labelKey: SLOT_LABEL_KEYS[index],
-          placeholder: currentFallbackPlaceholders[index],
-          required: false,
-          options: optionsForModal,
-        })),
-      },
-      MessageFlags.Ephemeral,
-    );
+    const modalPhase = await openAnchorModal(phase, modalButton, locale, {
+      modalCustomId: `personal_model_fallback_modal_${interaction.id}`,
+      modalTitleKey: "commands.model.fallback.modal_title",
+      components: SLOT_IDS.map((customId, index) => ({
+        customId,
+        labelKey: SLOT_LABEL_KEYS[index],
+        placeholder: currentFallbackPlaceholders[index],
+        required: false,
+        options: optionsForModal,
+      })),
+    });
+    if (!modalPhase) return;
 
-    if (modalResult.outcome !== "submit" || !modalResult.interaction) {
-      return;
-    }
-
-    const values = modalResult.values ?? {};
+    // 6a. Acknowledge the modal submit within 3s; every terminal below edits in place.
+    const work = await modalPhase.beginInPlaceWork();
+    const values = modalPhase.values;
 
     // 7. Build lookup maps
     const resolvedModelMap = new Map<number, LlmRow>();
@@ -367,7 +352,7 @@ export async function execute(
         if (!Number.isNaN(epId)) mergedRefs.push({ type: "custom_endpoint", id: epId });
       } else {
         if (selectedProvider === "openrouter" && raw === "other-model") {
-          await replyLegacyOpenRouterOtherModelMoved(modalResult.interaction, locale, "personal");
+          await work.message.replace(buildOpenRouterMovedNotice(locale, "personal"));
           return;
         }
         const match = availableModels.find((model) => model.llm_codename === raw);
@@ -390,21 +375,27 @@ export async function execute(
     const primaryLlmId = selectedConfig?.llm_id ?? null;
     if (primaryLlmId && finalRefs.some((r) => r.type === "llm" && r.id === primaryLlmId)) {
       const primaryModel = resolvedModelMap.get(primaryLlmId);
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "commands.model.fallback.primary_conflict_title",
-        descriptionKey: "commands.model.fallback.primary_conflict_description",
-        descriptionVars: { model: primaryModel?.llm_codename ?? `#${primaryLlmId}` },
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.fallback.primary_conflict_title",
+          descriptionKey: "commands.model.fallback.primary_conflict_description",
+          descriptionVars: { model: primaryModel?.llm_codename ?? `#${primaryLlmId}` },
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
     if (!selectedConfig) {
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
@@ -414,22 +405,28 @@ export async function execute(
       fallback_model_refs: finalRefs,
     });
     if (!writeOk) {
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.update_failed_title",
+          descriptionKey: "general.errors.update_failed_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
-    // 12. Success embed
+    // 12. Render the terminal on the anchor message
     if (finalRefs.length === 0) {
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "commands.personal.model.fallback.cleared_title",
-        descriptionKey: "commands.personal.model.fallback.cleared_description",
-        descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
-        color: ColorCode.SUCCESS,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.personal.model.fallback.cleared_title",
+          descriptionKey: "commands.personal.model.fallback.cleared_description",
+          descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
+          color: ColorCode.SUCCESS,
+        }),
+      );
       return;
     }
 
@@ -447,15 +444,18 @@ export async function execute(
       })
       .join("\n");
 
-    await replyInfoEmbed(modalResult.interaction, locale, {
-      titleKey: "commands.personal.model.fallback.success_title",
-      descriptionKey: "commands.personal.model.fallback.success_description",
-      descriptionVars: {
-        model_list: modelList,
-        provider: getProviderDisplayName(selectedProvider),
-      },
-      color: ColorCode.SUCCESS,
-    });
+    await work.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.personal.model.fallback.success_title",
+        descriptionKey: "commands.personal.model.fallback.success_description",
+        descriptionVars: {
+          model_list: modelList,
+          provider: getProviderDisplayName(selectedProvider),
+        },
+        color: ColorCode.SUCCESS,
+      }),
+    );
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
@@ -467,6 +467,25 @@ export async function execute(
       },
     };
     await log.error("Error executing /personal model fallback", error as Error, context);
+
+    // Render the unexpected-error terminal on the anchor message; fall back to a fresh
+    // reply only if the message is already gone (fatal) or was never created.
+    if (anchorMessage) {
+      try {
+        await anchorMessage.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+        return;
+      } catch {
+        // Fall through to a fresh reply below.
+      }
+    }
+
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

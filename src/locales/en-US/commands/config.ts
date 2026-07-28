@@ -718,7 +718,7 @@ Disabled ({omitted_count}): {omitted_list}`,
         success_title: `System Prompt Updated`,
         success_description: `Custom system prompt has been set successfully:
 \`\`\`
-{preview}...
+{preview}
 \`\`\``,
       },
       clear: {
@@ -729,9 +729,12 @@ Disabled ({omitted_count}): {omitted_list}`,
 {defaultPrompt}
 \`\`\``,
         success_title: `System Prompt Cleared`,
-        success_description: `Custom system prompt has been cleared. Now using the default prompt:
+        success_description: `Custom system prompt has been cleared. Now using the default prompt.`,
+        success_description_with_prompt: `Custom system prompt has been cleared. Now using the default prompt.
+
+Your removed custom prompt, in case you want to keep a copy:
 \`\`\`
-{defaultPrompt}
+{removed_prompt}
 \`\`\``,
       },
       preset: {
@@ -743,7 +746,7 @@ Disabled ({omitted_count}): {omitted_list}`,
         success_description: `System prompt preset applied: **{presetName}**
 Preview:
 \`\`\`
-{preview}...
+{preview}
 \`\`\``,
         no_presets_title: `No Presets Available`,
         no_presets_description: `No system prompt presets found. Please contact the bot administrator.`,

@@ -11,7 +11,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
 import { addRotationKey, purgeRotationKeys, getRotationKeyCount } from "@/utils/security/keyRotation";
-import { isCustomProvider } from "@/utils/discord/customProviderModal";
+import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
 /** Action choices for the rotation command */
 const ACTION_ADD = "add";

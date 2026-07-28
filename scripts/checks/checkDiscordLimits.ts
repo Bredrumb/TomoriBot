@@ -7,7 +7,18 @@ import { log } from "@/utils/misc/logger";
  * Discord API Limits
  */
 const DISCORD_LIMITS = {
-  MAX_STRING_LENGTH: 256,
+  /**
+   * Upper bound for `.setMaxLength()` on modal text inputs.
+   *
+   * Discord allows a modal text input `max_length` of 1–4000 (a slash-command
+   * string option allows up to 6000). Patterns 2 and 4 below share a single
+   * `.setMaxLength()` regex and cannot tell the two builders apart, so this
+   * uses the stricter of the two limits.
+   *
+   * Previously 256, which is not a Discord limit for either builder and
+   * produced five false positives on correct, shipped code.
+   */
+  MAX_TEXT_INPUT_LENGTH: 4000,
   MAX_CHOICE_COUNT: 25,
   MAX_SELECT_OPTIONS: 25,
 } as const;
@@ -71,23 +82,23 @@ function checkStringLengthLimits(content: string, file: string): Violation[] {
         file,
         line: getLineNumber(content, match.index),
         type: "missing_max_length",
-        description: "TextInputBuilder missing .setMaxLength() - should not exceed 256 characters",
+        description: `TextInputBuilder missing .setMaxLength() - should not exceed ${DISCORD_LIMITS.MAX_TEXT_INPUT_LENGTH} characters`,
       });
     }
     match = textInputPattern.exec(content);
   }
 
-  // Pattern 2: TextInputBuilder with maxLength > 256
+  // Pattern 2: TextInputBuilder with maxLength above Discord's modal limit
   const textInputExcessPattern = /\.setMaxLength\s*\(\s*(\d+)\s*\)/g;
   match = textInputExcessPattern.exec(content);
   while (match !== null) {
     const maxLength = Number.parseInt(match[1], 10);
-    if (maxLength > DISCORD_LIMITS.MAX_STRING_LENGTH) {
+    if (maxLength > DISCORD_LIMITS.MAX_TEXT_INPUT_LENGTH) {
       violations.push({
         file,
         line: getLineNumber(content, match.index),
         type: "exceeds_max_length",
-        description: `TextInputBuilder maxLength (${maxLength}) exceeds Discord limit of ${DISCORD_LIMITS.MAX_STRING_LENGTH}`,
+        description: `TextInputBuilder maxLength (${maxLength}) exceeds Discord limit of ${DISCORD_LIMITS.MAX_TEXT_INPUT_LENGTH}`,
         value: maxLength,
       });
     }
@@ -109,7 +120,7 @@ function checkStringLengthLimits(content: string, file: string): Violation[] {
           file,
           line: getLineNumber(content, match.index),
           type: "missing_max_length",
-          description: "SlashCommandStringOption missing .setMaxLength() - should not exceed 256 characters",
+          description: `SlashCommandStringOption missing .setMaxLength() - should not exceed ${DISCORD_LIMITS.MAX_TEXT_INPUT_LENGTH} characters`,
         });
       }
     }

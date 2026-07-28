@@ -1,6 +1,5 @@
 import {
   MessageFlags,
-  type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
   type SlashCommandSubcommandBuilder,
@@ -9,11 +8,18 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { personaRepository } from "@/utils/db/repositories";
 
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import { hasVoiceDesignPrompt } from "@/utils/discord/ui/personaEligibility";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  PersonaWorkflowUpdateError,
+  runPersonaPickerWorkflow,
+} from "@/utils/discord/ui/personaWorkflow";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
-import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
+import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.speech.voice-design.remove.description"));
@@ -25,7 +31,7 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-  let selectedPersona: TomoriState | null = null;
+  let personaWorkflowStarted = false;
 
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
@@ -38,6 +44,8 @@ export async function execute(
   }
 
   try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -75,65 +83,147 @@ export async function execute(
       return;
     }
 
-    const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
+    // Pre-picker eligibility guard. Like `/persona prompt remove`, this command
+    // previously wrote unconditionally and reported clearing nothing; the shared
+    // `hasVoiceDesignPrompt` predicate now gates the caller, the picker filter,
+    // and the post-selection backstop.
+    const eligiblePersonas = allPersonas.filter(hasVoiceDesignPrompt);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.speech.voice_design.no_prompt_title",
+        descriptionKey: "commands.speech.voice_design.no_prompt_description",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    personaWorkflowStarted = true;
+    await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
-      preserveSelectedInteraction: true,
       titleKey: "commands.speech.voice_design.select_persona_title",
-      onSelect: async () => {},
-    });
+      eligibility: {
+        isEligible: hasVoiceDesignPrompt,
+        emptyTitleKey: "commands.speech.voice_design.no_prompt_title",
+        emptyDescriptionKey: "commands.speech.voice_design.no_prompt_description",
+        itemsLabelKey: "general.persona_workflow.items.voice_designs",
+      },
+      onSelected: async (selection) => {
+        const { message } = await selection.beginInPlaceWork();
+        const selectedPersona = selection.persona;
 
-    if (!personaSelection.success || personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-      return;
-    }
+        try {
+          if (!selectedPersona.persona_id) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
 
-    const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
-    selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-    if (!selectedPersona?.persona_id) {
-      await replyInfoEmbed(personaButtonInteraction, locale, {
-        titleKey: "general.errors.invalid_option_title",
-        descriptionKey: "general.errors.invalid_option_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
+          // Post-selection concurrency backstop (this command had none before):
+          // the design prompt can be cleared between filter and click.
+          if (!hasVoiceDesignPrompt(selectedPersona)) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.speech.voice_design.no_prompt_title",
+                descriptionKey: "commands.speech.voice_design.no_prompt_description",
+                color: ColorCode.WARN,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
 
-    const voiceNameIfOtherVoiceRemains = selectedPersona.speech_voice_sample_id
-      ? selectedPersona.speech_voice_name === "VoiceDesign"
-        ? "Voice Clone"
-        : (selectedPersona.speech_voice_name ?? null)
-      : selectedPersona.speech_voice_id?.trim()
-        ? (selectedPersona.speech_voice_name ?? null)
-        : null;
+          // 1. Capture the design prompt before the write, so the success
+          //    notice can echo it back — voice prompts are tuned by ear and
+          //    effectively unrecoverable once nulled.
+          const removedPreview = buildTextPreview(selectedPersona.speech_voice_design_prompt);
 
-    const updatedTomori = await personaRepository.setVoiceConfig(selectedPersona.persona_id, {
-      speech_voice_sample_id: selectedPersona.speech_voice_sample_id ?? null,
-      speech_voice_id: selectedPersona.speech_voice_id ?? null,
-      speech_voice_design_prompt: null,
-      speech_voice_name: voiceNameIfOtherVoiceRemains,
-    });
+          const voiceNameIfOtherVoiceRemains = selectedPersona.speech_voice_sample_id
+            ? selectedPersona.speech_voice_name === "VoiceDesign"
+              ? "Voice Clone"
+              : (selectedPersona.speech_voice_name ?? null)
+            : selectedPersona.speech_voice_id?.trim()
+              ? (selectedPersona.speech_voice_name ?? null)
+              : null;
 
-    if (!updatedTomori) {
-      await replyInfoEmbed(personaButtonInteraction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
+          const updatedTomori = await personaRepository.setVoiceConfig(selectedPersona.persona_id, {
+            speech_voice_sample_id: selectedPersona.speech_voice_sample_id ?? null,
+            speech_voice_id: selectedPersona.speech_voice_id ?? null,
+            speech_voice_design_prompt: null,
+            speech_voice_name: voiceNameIfOtherVoiceRemains,
+          });
 
-    invalidateTomoriStateCache(serverDiscId);
-    await replyInfoEmbed(personaButtonInteraction, locale, {
-      titleKey: "commands.speech.voice_design.cleared_title",
-      descriptionKey: "commands.speech.voice_design.cleared_description",
-      descriptionVars: { persona: selectedPersona.persona_nickname },
-      color: ColorCode.SUCCESS,
+          if (!updatedTomori) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.update_failed_title",
+                descriptionKey: "general.errors.update_failed_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+
+          invalidateTomoriStateCache(serverDiscId);
+          // 2. Show the removed prompt when there was one; fall back to the
+          //    plain notice for personas that had nothing set.
+          const hadPrompt = removedPreview.totalChars > 0;
+          await message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.speech.voice_design.cleared_title",
+              descriptionKey: hadPrompt
+                ? "commands.speech.voice_design.cleared_description_with_prompt"
+                : "commands.speech.voice_design.cleared_description",
+              descriptionVars: {
+                persona: selectedPersona.persona_nickname,
+                removed_prompt: removedPreview.text,
+              },
+              footerKey: textPreviewFooterKey(removedPreview),
+              footerVars: textPreviewFooterVars(removedPreview),
+              color: ColorCode.SUCCESS,
+            }),
+          );
+        } catch (error) {
+          if (error instanceof PersonaWorkflowUpdateError) throw error;
+          const context: ErrorContext = {
+            userId: userData.user_id,
+            serverId: selectedPersona.server_id,
+            personaId: selectedPersona.persona_id,
+            errorType: "CommandExecutionError",
+            metadata: {
+              command: "speech voice-design remove",
+              guildId: interaction.guild?.id ?? interaction.user.id,
+              executorDiscordId: interaction.user.id,
+            },
+          };
+          await log.error("Error executing /speech voice-design remove", error as Error, context);
+          await message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.unknown_error_title",
+              descriptionKey: "general.errors.unknown_error_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+        }
+
+        return completePersonaWorkflow();
+      },
     });
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
-      serverId: selectedPersona?.server_id ?? null,
-      personaId: selectedPersona?.persona_id ?? null,
+      serverId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech voice-design remove",
@@ -142,6 +232,7 @@ export async function execute(
       },
     };
     await log.error("Error executing /speech voice-design remove", error as Error, context);
+    if (personaWorkflowStarted) return;
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

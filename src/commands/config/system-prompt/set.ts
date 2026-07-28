@@ -13,6 +13,12 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
+import {
+  buildTextPreview,
+  CONFIRMATION_PREVIEW_BUDGET,
+  textPreviewFooterKey,
+  textPreviewFooterVars,
+} from "@/utils/text/textPreview";
 
 const MODAL_CUSTOM_ID = "config_prompt_change_modal";
 const PROMPT_PART_MAX_LENGTH = 4000;
@@ -171,12 +177,15 @@ export async function execute(
     // 10. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverId);
 
-    // 11. Success response with preview
-    const preview = systemPrompt.substring(0, 200);
+    // 11. Success response with a fence-safe preview. The footer only appears
+    //     when the prompt actually exceeded the preview width.
+    const preview = buildTextPreview(systemPrompt, CONFIRMATION_PREVIEW_BUDGET);
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.config.prompt.change.success_title",
       descriptionKey: "commands.config.prompt.change.success_description",
-      descriptionVars: { preview },
+      descriptionVars: { preview: preview.text },
+      footerKey: textPreviewFooterKey(preview),
+      footerVars: textPreviewFooterVars(preview),
       color: ColorCode.SUCCESS,
       flags: MessageFlags.Ephemeral,
     });

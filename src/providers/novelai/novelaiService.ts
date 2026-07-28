@@ -683,9 +683,15 @@ export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
       return true;
     }
 
-    // Non-OK response — key is invalid or something else went wrong
+    // Non-OK response — key is invalid or something else went wrong.
+    // Carry the response body into the error message: NovelaiStreamAdapter
+    // classifies some failures by matching the body text (e.g. trial-account
+    // recaptcha 400s), and it is what makes host/endpoint migrations
+    // self-diagnosing rather than surfacing as a bare "Bad Request".
     const errorText = await response.text().catch(() => "Unknown error");
-    const error: Error & { statusCode?: number } = new Error(`API request failed: ${response.statusText}`);
+    const error: Error & { statusCode?: number } = new Error(
+      `API request failed: ${response.statusText}${errorText ? ` - ${errorText}` : ""}`,
+    );
     error.statusCode = response.status;
 
     log.warn(`NovelAI API key validation failed with status ${response.status}: ${errorText}`);
@@ -742,8 +748,17 @@ export function isNovelAIRateLimitError(error: string, statusCode?: number): boo
 // Subscription API
 // =============================================
 
-/** Base URL for NovelAI account-management endpoints (distinct from the text generation URL) */
-const NOVELAI_ACCOUNT_API_BASE_URL = "https://api.novelai.net";
+/**
+ * Base URL for NovelAI account-management endpoints (/user/*).
+ *
+ * NovelAI retired third-party access to the legacy api.novelai.net host: every
+ * /user/* route there now answers a valid persistent token with
+ * HTTP 400 "Please refresh NovelAI.net. If using a third-party tool, update to
+ * the image URL." The route paths themselves are unchanged and are served by
+ * both text.novelai.net and image.novelai.net; the text host is used here so
+ * account calls share an origin with text generation.
+ */
+const NOVELAI_ACCOUNT_API_BASE_URL = "https://text.novelai.net";
 
 /**
  * Shape of the perks object returned by GET /user/subscription.
@@ -772,8 +787,9 @@ export interface NovelAISubscription {
 /**
  * Fetches the current NovelAI subscription for a given API key.
  *
- * Uses the account management API (api.novelai.net), which is separate from
- * the text generation API (text.novelai.net).
+ * Uses the account management routes (/user/*), which are served by the same
+ * host as text generation. See NOVELAI_ACCOUNT_API_BASE_URL for why the legacy
+ * api.novelai.net host can no longer be used.
  *
  * @param apiKey - Plaintext NovelAI API key
  * @returns Subscription data including perks.contextTokens, or null on failure

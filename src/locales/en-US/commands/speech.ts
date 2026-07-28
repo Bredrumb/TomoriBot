@@ -126,10 +126,17 @@ Reference text: {ref_text_hint}`,
       prompt_required_description: `Enter a voice design prompt.`,
       success_title: `VoiceDesign Prompt Set`,
       success_description: `**{persona}** will use this voice design prompt for local voice messages:
-
-> {preview}`,
+\`\`\`
+{preview}
+\`\`\``,
+      no_prompt_title: `No VoiceDesign Prompt`,
+      no_prompt_description: `There is no voice design prompt to clear. Set one with \`/speech voice-design set\`.`,
       cleared_title: `VoiceDesign Prompt Cleared`,
       cleared_description: `Removed the voice design prompt from **{persona}**.`,
+      cleared_description_with_prompt: `Removed the voice design prompt from **{persona}**. Here it is in case you want to keep a copy:
+\`\`\`
+{removed_prompt}
+\`\`\``,
     },
     validation: {
       sample_not_found: `Voice sample not found.`,

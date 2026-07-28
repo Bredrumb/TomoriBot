@@ -39,6 +39,7 @@ import {
   PRESET_EXPORT_VERSION,
 } from "../../types/preset/presetExport";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
+import { CONFIRMATION_PREVIEW_BUDGET } from "@/utils/text/textPreview";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExport } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
@@ -872,9 +873,14 @@ export async function execute(
     // 19. Detect DM context and create success container with main image
     const isDM = !interaction.guild;
 
-    // Format attribute preview (first attribute, truncated to 200 chars)
-    const attributePreview = genResult.preset.attribute_list[0]
-      ? `${genResult.preset.attribute_list[0].substring(0, 200)}...`
+    // Format attribute preview (first attribute). The ellipsis is conditional:
+    // it previously appended unconditionally, claiming truncation that had not
+    // happened for any attribute under the preview width.
+    const firstAttribute = genResult.preset.attribute_list[0];
+    const attributePreview = firstAttribute
+      ? firstAttribute.length > CONFIRMATION_PREVIEW_BUDGET
+        ? `${firstAttribute.substring(0, CONFIRMATION_PREVIEW_BUDGET)}...`
+        : firstAttribute
       : "No attributes generated";
 
     // Format dialogue preview (up to 3 examples, 100 chars each)

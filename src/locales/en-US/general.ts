@@ -42,6 +42,11 @@ export default {
       cancel_description: `The command has been cancelled.`,
       timeout_title: `⏰ Command Timed Out`,
       timeout_description: `You didn't respond in time. Please try again.`,
+      selector_opened_title: `Selector Opened`,
+      selector_opened_description: `The selection form is open. Submit it to continue, or dismiss it to cancel.`,
+    },
+    text_preview: {
+      truncated_footer: `Showing the first {shown} of {total} characters.`,
     },
     pagination: {
       page_info: `Page {current} of {total}`,
@@ -58,6 +63,28 @@ export default {
       reloading_persona_picker: `Refreshing the persona picker...`,
       persona_no_attributes: `No attributes configured yet.`,
       persona_select_button: `Select`,
+    },
+    persona_workflow: {
+      loading_title: `Preparing Your Selection`,
+      loading_description: `Loading the available options...`,
+      modal_ready_title: `Ready to Continue`,
+      modal_ready_description: `Open the form to continue with your selection.`,
+      open_modal_button: `Open Form`,
+      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
+      // below is interpolated in, so remove/edit variants of a family reuse it.
+      filtered_notice: `Only showing personas that have {items}.`,
+      items: {
+        attributes: `attributes`,
+        sample_dialogues: `sample dialogues`,
+        trigger_words: `trigger words`,
+        persona_prompts: `persona prompts`,
+        voice_designs: `voice designs`,
+        documents: `documents`,
+        chat_history: `chat history`,
+        server_memories: `server memories`,
+        personal_memories: `personal memories`,
+        sprites: `sprites`,
+      },
     },
     errors: {
       guild_only_title: `Server Only Command`,

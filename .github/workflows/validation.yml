@@ -74,6 +74,25 @@ jobs:
       - name: Check schema drift
         run: bun run check-schema
 
+      # Guards that existed but were never wired into a workflow, so violations
+      # could land unnoticed. Each exits non-zero on violation and passes at the
+      # time of wiring.
+      #
+      # The persona-workflow-boundary and text-preview scanners have no step here
+      # by design: tests/unit/checks/ asserts both against the real source tree,
+      # and the "Run unit/integration tests" step below already executes them.
+      - name: Check Discord API limits
+        run: bun run check-limits
+
+      - name: Check command reference is current
+        run: bun run check-command-reference
+
+      - name: Check tracked media size
+        run: bun run check-media-size
+
+      - name: Check seed catalogs
+        run: bun run check-seed-catalogs
+
       - name: Check localization keys
         if: github.event_name != 'pull_request'
         run: |

@@ -33,7 +33,8 @@ The system prompt sits above the persona and shapes overall behavior:
 
 - `/config system-prompt set` — set a custom system instruction (up to 16,000 characters).
 - `/config system-prompt preset` — choose from preset system prompts.
-- `/config system-prompt remove` — reset to the default.
+- `/config system-prompt remove` — reset to the default. The confirmation shows the prompt it just
+  removed, so you can copy it back out if you cleared it by accident.
 
 When a [SillyTavern preset](/features/integrations/sillytavern-support/) is active, the built-in fallback
 system prompt is replaced — but a custom one you set here is still sent.

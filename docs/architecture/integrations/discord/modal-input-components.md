@@ -349,8 +349,65 @@ Is the input free-form text?
 - **Radio Group**: 2-10 options. No emoji support. No placeholder text.
 - **Checkbox Group**: 1-10 options. Supports `min_values`/`max_values` for range control. Also serves as the workaround for required single-boolean inputs.
 - **Checkbox**: Cannot be `required`. Use a Checkbox Group with 1 option if required behavior is needed.
-- **String Select**: Up to 25 options natively, 25+ via `promptWithPaginatedModal()`. Supports emoji, descriptions, and placeholder text.
+- **String Select**: Up to 25 options natively. Flows on the anchor message workflow must use `selection.openModal(...)` / `openAnchorModal(...)`, whose `>25` bridge keeps the range selector on the anchor Components V2 message. Flows still on `promptWithPaginatedModal()` may pass `selectorStyle: "componentsV2"` to render that same `>25` selector (`1-25`/`26-50` + Previous/Cancel/Next), or omit it for the legacy numbered page-button embed (default). Both selectors share `buildRangeSelectorPayload`. Supports emoji, descriptions, and placeholder text.
 - **All new components** must be wrapped in a **Label** (type 18), not an Action Row.
+
+### Anchor workflow modal bridge
+
+Inside a anchor message workflow, do not call `promptWithPaginatedModal()` or
+`promptWithRawModal()` directly — they would open the modal outside the anchor message
+and strand its controls. Open the modal from the workflow instead. After a persona is
+selected that means the selection phase from `runPersonaPickerWorkflow(...)`:
+
+```ts
+const modal = await selection.openModal(modalOptions);
+```
+
+Non-persona commands reach the same bridge through `openAnchorModal(...)`
+(`src/utils/discord/ui/anchorModelFlow.ts`), which wraps the call below and renders the
+error terminal for transport failures.
+
+When `modalOptions` are already in memory and the select has at most 25 choices,
+`openModal` calls `showModal()` as the selected button's first acknowledgment. Do not call
+`beginInPlaceWork()` first; a deferred button cannot open a modal.
+
+If building the options requires DB, filesystem, or network work, pass an asynchronous
+factory instead:
+
+```ts
+const modal = await selection.openModal(async () => {
+  const rows = await repository.loadOptions(selection.persona.persona_id);
+  return buildModalOptions(rows);
+});
+```
+
+The factory form immediately update-defers the persona button, replaces the picker with a
+localized loading state, and only then runs the factory. Because that button is now consumed,
+the workflow renders a fresh **Open Form** button for at most 25 choices or a range selector
+for more than 25. The fresh button opens the modal as its first acknowledgment.
+
+For larger sets, range buttons represent absolute slices of 25 (`1-25`, `26-50`, ...).
+Range navigation, cancellation, and timeout replace the same anchor message. The chosen
+range button opens the sliced modal, and a submitted phase reports `optionOffset`; add it to
+page-local indexes when the option values themselves are not stable IDs.
+
+The bridge slices **exactly one** select component and treats every entry as a selectable
+option. A modal that breaks either assumption — several selects sharing one option list, or
+a reserved entry such as an explicit "None" that must appear on every page — cannot use it.
+Those pick a range up front with `acquireModalOptionRange(...)`, passing a `pageSize` below
+25 to leave room for the reserved entries, and then open a modal whose list is already
+sliced to 25 or fewer.
+
+After submission, call `modal.phase.beginInPlaceWork()` before any slow validation or write.
+It update-defers the message-backed modal submission and returns the anchor-message
+controller. For an already-built terminal payload, `modal.phase.replace(payload)` instead
+uses the unacknowledged message-backed submission's `update()` as the first acknowledgment.
+Do not call both operations for one submission. If `openModal(...)` returns `fatal`, stop the callback (the normal pattern is
+`throw modal.error`). The runner also records that fatal state, so even an accidental retry
+directive cannot reopen the picker.
+
+`PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS` controls how long the in-place launcher/range
+buttons remain active (default 120000 ms). It does not alter Discord's modal lifetime.
 
 ### Bulk Configuration Management Pattern
 
@@ -441,12 +498,12 @@ These modals have dynamic or large option sets that exceed Radio Group/Checkbox 
 | `/model fallback`         | `config/model/fallback.ts`       | Dynamic model list, uses pagination                       |
 | `/config system-prompt preset`       | `config/system-prompt/preset.ts`     | Dynamic preset list from DB                               |
 | `/config provider add`            | `config/provider/add.ts`          | Provider select + text input combo; list may grow         |
-| `/persona prompt set`            | `persona/prompt/set.ts`         | Persona picker embed first, then a prefilled free-form prompt modal (up to 16000 chars, 4 fields) |
+| `/persona prompt set`            | `persona/prompt/set.ts`         | Components V2 persona workflow first, then a prefilled free-form prompt modal (up to 16000 chars, 4 fields) |
 | `/persona attribute add`         | `persona/attribute/add.ts`      | Dynamic persona list, uses pagination                     |
 | `/persona sample-dialogue add`   | `persona/sample-dialogue/add.ts`| Dynamic persona list, uses pagination                     |
 | `/memory personal add`           | `memory/personal/add.ts`        | Dynamic memory list                                       |
 | `/memory server add`             | `memory/server/add.ts`          | Dynamic memory list                                       |
-| `/persona image-tags`        | `persona/image-tags.ts`      | Persona picker first, then a prefilled free-form tag modal |
+| `/persona image-tags`        | `persona/image-tags.ts`      | Components V2 persona workflow, then a prefilled free-form tag modal |
 | `/persona attribute remove`      | `persona/attribute/remove.ts`   | Dynamic attribute list, uses pagination                   |
 | `/scheduled-task remove`      | `scheduled-task/remove.ts`   | Dynamic reminder list                                     |
 | `/server welcome-channel set`    | `server/welcome-channel/set.ts`  | Channel option + dynamic persona list                     |

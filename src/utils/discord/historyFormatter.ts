@@ -8,7 +8,7 @@ import type { Message } from "discord.js";
 import { MessageType } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { isRefreshMarkerEmbed } from "@/utils/discord/embedDetection";
-import { stripBridgePrefix } from "@/utils/bridges";
+import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridges";
 import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { getCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { getCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
@@ -19,7 +19,10 @@ export interface FormattedHistoryResult {
   /** Formatted dialogue text for the extraction prompt */
   text: string;
 
-  /** Unique tomori IDs detected from webhook-authored messages (for automatic scope) */
+  /**
+   * Unique persona IDs detected in the batch (for automatic scope) — from webhook-authored
+   * messages, plus the main persona when the bot posted under its own account.
+   */
   detectedPersonaTomoriIds: number[];
 
   /** Number of messages that made it into the formatted text */
@@ -100,11 +103,14 @@ function resolveMentions(content: string, msg: Message): string {
  *
  * @param messages - Array of Discord messages in chronological order
  * @param serverPersonas - All personas for the server (for webhook author matching)
+ * @param clientUserId - The bot's own user id, so replies it sent directly (rather than
+ *        through a persona webhook) can still be attributed to the main persona
  * @returns Formatted text, detected persona IDs, and message count
  */
 export function formatMessagesForExtraction(
   messages: Message[],
   serverPersonas: TomoriState[],
+  clientUserId?: string,
 ): FormattedHistoryResult {
   const lines: string[] = [];
   const detectedTomoriIds = new Set<number>();
@@ -116,6 +122,11 @@ export function formatMessagesForExtraction(
       nicknameToTomoriId.set(normalizeRenderModifierName(persona.persona_nickname), persona.persona_id);
     }
   }
+
+  // The main (non-alter) persona owns any message the bot account posted itself. Webhook
+  // delivery is not guaranteed — it is skipped when webhooks are unavailable for the
+  // channel — so keying detection purely off `webhookId` misses those turns entirely.
+  const mainPersonaId = serverPersonas.find((persona) => !persona.is_alter)?.persona_id;
 
   for (const msg of messages) {
     // 1. Skip system messages
@@ -183,6 +194,10 @@ export function formatMessagesForExtraction(
     //    identities ("impersonated (SourcePersona)") put it inside the parens,
     //    legacy decorations ("SourcePersona (modifier)") put it first.
     if (msg.webhookId && msg.author) {
+      // Matrix bridge messages also arrive as webhooks; a bridged user whose display name
+      // happens to match a persona nickname must not register as that persona.
+      if (isMatrixBridgeWebhookUsername(msg.author.username)) continue;
+
       const renderModifierName = parseRenderModifierWebhookName(msg.author.username);
       const authorKeys = renderModifierName
         ? [renderModifierName.modifier, renderModifierName.sourceName]
@@ -194,6 +209,12 @@ export function formatMessagesForExtraction(
           break;
         }
       }
+      continue;
+    }
+
+    // 10. Non-webhook turns the bot posted under its own account belong to the main persona.
+    if (mainPersonaId !== undefined && clientUserId && msg.author?.id === clientUserId) {
+      detectedTomoriIds.add(mainPersonaId);
     }
   }
 

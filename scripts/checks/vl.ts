@@ -440,14 +440,21 @@ function isDbConfigured(): boolean {
 const isNamedCheck = (r: ResultItem): boolean => r._category === undefined;
 
 const CATEGORIES = {
+  // Architectural guards (persona-workflow boundary, text-preview conventions)
+  // are deliberately absent: their scanners are asserted against the real source
+  // tree by tests/unit/checks/, which the test lanes below already run. A named
+  // check here would scan the repo a second time for the same answer. For a
+  // targeted local report, run those test files directly.
   CODE: (r: ResultItem) =>
     isNamedCheck(r) &&
     (r.name.includes("Type Check") ||
       r.name.includes("Linting") ||
       r.name.includes("Runtime Imports") ||
-      r.name.includes("SQL Audit") ||
-      r.name.includes("Media Size") ||
-      r.name.includes("Seed Catalog")),
+      r.name.includes("SQL Audit")),
+  // Assets and seed data rather than source code — these fail on *content*
+  // (an oversized PNG, a malformed catalog entry), not on how code is written.
+  CONTENT: (r: ResultItem) =>
+    isNamedCheck(r) && (r.name.includes("Media Size") || r.name.includes("Seed Catalog")),
   SECURITY: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Dependency Audit"),
   UNIT_TESTS: (r: ResultItem) => r._category === "unit-test",
   REGRESSION_TESTS: (r: ResultItem) => r._category === "regression-test",
@@ -463,9 +470,9 @@ async function main() {
   config({ quiet: true });
   const dbConfigured = isDbConfigured();
 
-  console.log("Running Validation Checks in parallel...\n");
+  console.log("Running Validation Checks...\n");
 
-  // All checks are independent — run them concurrently and collect results
+  // Run the checks that do not load the complete command graph concurrently.
   const [
     typeCheckResult,
     lintResult,
@@ -480,7 +487,6 @@ async function main() {
     dbLifecycleResult,
     localesResult,
     localeLengthsResult,
-    commandReferenceResult,
   ] = await Promise.all([
     runCheck("Type Check (bun run check)", ["bun", "run", "check"], true),
     runLint(),
@@ -509,12 +515,15 @@ async function main() {
       ["bun", "run", "check-locale-lengths"],
       true,
     ),
-    runCheck(
-      "Command Reference Freshness (bun run check-command-reference)",
-      ["bun", "run", "check-command-reference"],
-      true,
-    ),
   ]);
+
+  // This check imports the complete command graph. Keep it outside the parallel
+  // block so Windows/Bun does not run multiple command-graph loaders at once.
+  const commandReferenceResult = await runCheck(
+    "Command Reference Freshness (bun run check-command-reference)",
+    ["bun", "run", "check-command-reference"],
+    true,
+  );
 
   const results: ResultItem[] = [
     typeCheckResult,
@@ -607,6 +616,8 @@ async function main() {
   };
 
   printSection("Code Quality", results.filter((r) => CATEGORIES.CODE(r)));
+
+  printSection("\nContent Guards", results.filter((r) => CATEGORIES.CONTENT(r)));
 
   printSection("\nProject Security", results.filter((r) => CATEGORIES.SECURITY(r)));
 

@@ -60,6 +60,56 @@ const modalResolvedAttachments = new Map<string, Record<string, APIAttachment>>(
 const rawModalAcknowledged = new WeakMap<ChatInputCommandInteraction | ButtonInteraction, boolean>();
 
 /**
+ * Reports whether a command or button interaction was acknowledged through the
+ * raw REST modal path. Discord.js does not update `replied`/`deferred` for that
+ * response, so workflow code must consult this state explicitly.
+ */
+export function hasRawModalAcknowledgement(interaction: ChatInputCommandInteraction | ButtonInteraction): boolean {
+  return rawModalAcknowledged.get(interaction) === true;
+}
+
+/**
+ * Tracks interactions whose reply message has been rendered as a Components V2
+ * payload. Discord permanently stamps `IsComponentsV2` on such a message, and that
+ * flag can never be removed by a later edit — nor can a V2 message carry legacy
+ * `embeds`/`content`. So once a selector (or any V2 writer) renders onto an
+ * interaction's reply, a subsequent legacy `editReply({ embeds })` on the SAME
+ * interaction would be rejected by Discord.
+ *
+ * The shared legacy sinks below ({@link replyInfoEmbed}, {@link replySummaryEmbed},
+ * {@link replyPaginatedStatusPages}) consult this set and emit a V2-safe notice
+ * instead. Mirrors the {@link rawModalAcknowledged} `WeakMap` pattern in this file:
+ * interaction-keyed state that avoids an extra Discord fetch to read live flags.
+ */
+const componentsV2Reply = new WeakSet<ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction>();
+
+/**
+ * Marks an interaction's reply message as carrying `IsComponentsV2`. Callers that
+ * write a Components V2 payload onto an interaction's own reply must call this so the
+ * legacy sinks stay V2-safe if they later target the same interaction.
+ *
+ * @param interaction - The interaction whose reply now carries a V2 payload.
+ */
+export function markComponentsV2Reply(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+): void {
+  componentsV2Reply.add(interaction);
+}
+
+/**
+ * Reports whether {@link markComponentsV2Reply} previously flagged this interaction's
+ * reply as a Components V2 message.
+ *
+ * @param interaction - The interaction to check.
+ * @returns `true` when the reply carries `IsComponentsV2` and legacy embeds are unsafe.
+ */
+export function hasComponentsV2Reply(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+): boolean {
+  return componentsV2Reply.has(interaction);
+}
+
+/**
  * Transform Component Type 18 modal submission to standard ActionRow format
  * This makes Discord.js process the submission as if it were a normal modal from the start
  */
@@ -241,9 +291,9 @@ import type {
   SummaryEmbedOptions,
 } from "../../../types/discord/embed";
 import type {
+  ModalComponent,
   ModalOptions,
   ModalResult,
-  ModalSelectField,
   ModalRadioGroupField,
   ModalCheckboxGroupField,
   ModalCheckboxField,
@@ -267,6 +317,58 @@ const TEXT_INPUT_PLACEHOLDER_MAX_LENGTH = 100;
 const SELECT_PLACEHOLDER_MAX_LENGTH = 150;
 const SELECT_OPTION_TEXT_MAX_LENGTH = 100;
 const CONFIRMATION_DESCRIPTION_LIMIT = 3800; // Budget for description, leaving room for title/buttons in the 4000-char total component limit
+
+/**
+ * @description Detects a discord.js collector expiry across every awaiting surface
+ * (`awaitMessageComponent`, `awaitModalSubmit`, and raw component collectors).
+ * discord.js is inconsistent about the rejection shape, so both are handled:
+ *   1. Raw collectors reject with the bare end-reason string (`"time"` / `"idle"`).
+ *   2. `Message#awaitMessageComponent` and `awaitModalSubmit` reject with an
+ *      `InteractionCollectorError` whose message embeds the end reason, e.g.
+ *      "Collector received no interactions before ending with reason: time".
+ * Only `time`/`idle` count as expiry — `limit`, `messageDelete`, and channel/guild
+ * deletions are genuine failures the caller must surface as errors.
+ * @param error The rejection value from an await/collector helper
+ * @returns True when the wait ended because the user simply never responded
+ */
+export function isCollectorTimeoutError(error: unknown): boolean {
+  // 1. Bare end-reason string form.
+  if (error === "time" || error === "idle") return true;
+  if (!error || typeof error !== "object") return false;
+
+  // 2. InteractionCollectorError form — identify by code/name, then read the reason.
+  const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
+  const code = typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
+  const name = typeof candidate.name === "string" ? candidate.name.toLowerCase() : "";
+  const message = typeof candidate.message === "string" ? candidate.message.toLowerCase() : "";
+  const isInteractionCollectorError =
+    code === "interactioncollectorerror" ||
+    name === "interactioncollectorerror" ||
+    message.includes("collector received");
+
+  return isInteractionCollectorError && (message.includes("reason: time") || message.includes("reason: idle"));
+}
+
+function createRawModalRestError(response: Response, responseBody: string): Error {
+  let rawError: unknown;
+  try {
+    rawError = JSON.parse(responseBody);
+  } catch {
+    rawError = responseBody;
+  }
+
+  const rawErrorRecord = rawError && typeof rawError === "object" ? (rawError as Record<string, unknown>) : undefined;
+  const discordMessage = typeof rawErrorRecord?.message === "string" ? rawErrorRecord.message : response.statusText;
+  const error = new Error(`Discord API error: ${response.status} ${discordMessage}`) as Error & {
+    code?: unknown;
+    rawError: unknown;
+    status: number;
+  };
+  error.code = rawErrorRecord?.code;
+  error.rawError = rawError;
+  error.status = response.status;
+  return error;
+}
 
 /**
  * Safely localizes a string for modal usage, truncating if necessary to prevent Discord API errors
@@ -748,6 +850,75 @@ export async function promptWithModal(
 }
 
 /**
+ * Maps the title/description/footer of a legacy embed-style options object onto the
+ * {@link NoticeContainerOptions} shape used by {@link buildNoticeContainer}. Used by
+ * the V2-collision fallback in the legacy sinks so a marked interaction still receives
+ * the same copy, rendered as a Components V2 notice rather than an embed.
+ *
+ * @param locale - Locale for the notice.
+ * @param options - The standard embed options to translate.
+ * @param descriptionOverride - Optional pre-composed body (e.g. summary fields flattened).
+ * @returns A {@link NoticeContainerOptions} carrying the same title/description/footer.
+ */
+function standardOptionsToNotice(
+  locale: string,
+  options: StandardEmbedOptions,
+  descriptionOverride?: string,
+): NoticeContainerOptions {
+  return {
+    locale,
+    // ColorResolvable is a superset of AccentColorInput; resolveAccentColor tolerates
+    // any string/number and falls back to INFO, so the cast is safe at runtime.
+    color: options.color as AccentColorInput | undefined,
+    titleKey: options.titleKey,
+    titleVars: options.titleVars,
+    descriptionKey: descriptionOverride ? undefined : options.descriptionKey,
+    description: descriptionOverride ?? options.description,
+    descriptionVars: descriptionOverride ? undefined : options.descriptionVars,
+    footerKey: options.footerKey,
+    footerVars: options.footerVars,
+  };
+}
+
+/**
+ * Delivers a {@link buildNoticeContainer} payload to an interaction whose reply message
+ * already carries `IsComponentsV2`. Mirrors the three delivery situations of the legacy
+ * embed sinks — `editReply` when acknowledged, `webhook.send` after a raw modal, `reply`
+ * otherwise — but never emits legacy `embeds`, which Discord rejects on a V2 message.
+ *
+ * A marked interaction is, by construction, an ephemeral private workflow message, so
+ * the fresh-response paths stay ephemeral.
+ *
+ * @param interaction - The interaction whose reply carries IsComponentsV2.
+ * @param notice - The notice content to render.
+ */
+async function replyNoticeContainerV2(
+  interaction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+  notice: NoticeContainerOptions,
+): Promise<void> {
+  const components = buildNoticeContainer(notice);
+  const wasRawModalSent = rawModalAcknowledged.get(interaction as ChatInputCommandInteraction | ButtonInteraction);
+
+  try {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ components, flags: MessageFlags.IsComponentsV2 });
+    } else if (wasRawModalSent) {
+      await interaction.webhook.send({ components, flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
+    } else {
+      await interaction.reply({ components, flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
+    }
+  } catch (error) {
+    // Last-resort: try webhook.send so a state-desync still surfaces the notice.
+    log.warn("Failed to deliver V2 notice fallback via primary method:", error);
+    try {
+      await interaction.webhook.send({ components, flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
+    } catch (fallbackError) {
+      log.error("All methods failed for V2 notice fallback:", fallbackError);
+    }
+  }
+}
+
+/**
  * @description Shows a simple info/status embed without any interactive components.
  * Handles interaction state management defensively to prevent acknowledgment conflicts.
  * @param interaction The interaction to show the embed for
@@ -784,6 +955,16 @@ export async function replyInfoEmbed(
       finalOptions.titleKey === "general.errors.api_key_missing_title")
   ) {
     finalOptions.footerKey = "general.errors.tomori_not_setup_dm_footer";
+  }
+
+  // 2.5. Components V2 collision guard. If this interaction's reply already carries
+  //      IsComponentsV2 (e.g. a range selector rendered onto it), a legacy
+  //      `editReply({ embeds })` would be rejected by Discord. Render the same
+  //      title/description/footer as a V2 notice container instead. Tip embeds are
+  //      dropped here — they are rare on the error/info paths that hit this guard.
+  if (hasComponentsV2Reply(interaction)) {
+    await replyNoticeContainerV2(interaction, standardOptionsToNotice(locale, finalOptions));
+    return;
   }
 
   // 3. Build the embed using the shared helper for consistency. When tip-item keys are supplied,
@@ -905,6 +1086,24 @@ export async function replySummaryEmbed(
     | MessageFlags.SuppressNotifications
     | undefined = MessageFlags.Ephemeral,
 ): Promise<void> {
+  // Components V2 collision guard (see replyInfoEmbed step 2.5). A summary embed cannot
+  // be edited onto a V2 message, so flatten the title/description plus each field into a
+  // single notice container. Docs link and appended embeds are dropped — this path is a
+  // rare defensive fallback for a marked interaction.
+  if (hasComponentsV2Reply(interaction)) {
+    const fieldLines = options.fields.map((field) => {
+      const name = field.nameKey ? localizer(locale, field.nameKey, field.nameVars) : (field.name ?? "");
+      const value = field.valueKey ? localizer(locale, field.valueKey, field.valueVars) : (field.value ?? "");
+      return name ? `**${name}**\n${value}` : value;
+    });
+    const baseDescription =
+      options.description ??
+      (options.descriptionKey ? localizer(locale, options.descriptionKey, options.descriptionVars) : "");
+    const composedDescription = [baseDescription, ...fieldLines].filter((line) => line.length > 0).join("\n\n");
+    await replyNoticeContainerV2(interaction, standardOptionsToNotice(locale, options, composedDescription));
+    return;
+  }
+
   const embed = createSummaryEmbed(locale, options);
   // Optional pre-built embeds (e.g. a separate yellow "notes" embed) ride in the same message.
   const embeds = options.appendEmbeds?.length ? [embed, ...options.appendEmbeds] : [embed];
@@ -1014,8 +1213,14 @@ interface PersonaPaginatedChoiceOptions {
   onSelect?: (index: number) => Promise<void>;
   onCancel?: () => Promise<void>;
   preserveSelectedInteraction?: boolean;
-  /** Persistent avatar cache to share across multiple picker calls in an outer retry loop. */
+  /** Workflow-owned avatar cache shared across internal picker retries. */
   avatarSessionCache?: AvatarSessionCache;
+  /**
+   * Pre-localized notice appended under the picker description when the list has
+   * been narrowed by an eligibility filter. Rendered only when at least one
+   * persona was excluded so an unfiltered picker stays visually unchanged.
+   */
+  filteredNotice?: string;
 }
 
 type AccentColorInput = string | number | readonly [red: number, green: number, blue: number];
@@ -1158,7 +1363,7 @@ export interface NoticeContainerOptions {
   locale: string;
   /** Accent color of the container's left bar (maps to the old embed color). */
   color?: AccentColorInput;
-  /** Locale key for the H2 title line. */
+  /** Locale key for the H3 title line. */
   titleKey: string;
   /** Variables for the title. */
   titleVars?: Record<string, string | number | boolean>;
@@ -1191,7 +1396,7 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     options.description ??
     (options.descriptionKey ? localizer(locale, options.descriptionKey, options.descriptionVars) : "");
 
-  // 1. Title line, rendered as an H2 heading like every other CV2 container.
+  // 1. Title line, rendered as an H3 heading like every other CV2 container.
   components.push({
     type: ComponentType.TextDisplay,
     content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
@@ -1237,6 +1442,122 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
   };
 
   return [container];
+}
+
+/** A Components V2 edit/send payload: a component tree flagged `IsComponentsV2`. */
+export interface ComponentsV2Payload {
+  components: TopLevelComponentData[];
+  flags: MessageFlags.IsComponentsV2;
+}
+
+/**
+ * How many option ranges (`1-25`, `26-50`, …) a single selector page shows before
+ * paginating with Previous/Next. Shared with `personaWorkflow.ts` so both consumers
+ * of {@link buildRangeSelectorPayload} agree on the page depth.
+ */
+export const RANGES_PER_SELECTOR_PAGE = 20;
+
+/** How many range buttons fit per Discord action row (max 5 components per row). */
+const RANGE_BUTTONS_PER_ROW = 5;
+
+/**
+ * Builds the Components V2 range-selector container shown when a modal's select has
+ * more than {@link MODAL_OPTIONS_PER_PAGE} options. Each range button opens a modal
+ * scoped to its 25-option slice; a Previous/Cancel/Next nav row paginates the ranges.
+ *
+ * This is the single source of the `>25` selector shell. Both the persona anchor
+ * workflow (`personaWorkflow.ts`) and the legacy `promptWithPaginatedModal`
+ * `componentsV2` branch render it, replacing the two divergent renderers that used to
+ * read the same two `general.pagination.*` locale keys.
+ *
+ * @param locale - Locale for the selector's localized strings.
+ * @param customIdPrefix - Per-session prefix scoping every button custom id
+ *   (`${prefix}_range_${index}`, `${prefix}_previous`, `${prefix}_cancel`, `${prefix}_next`).
+ * @param optionCount - Total number of options across all ranges.
+ * @param rangePage - Zero-based selector page currently shown.
+ * @param pageSize - How many options each range covers. Defaults to
+ *   {@link MODAL_OPTIONS_PER_PAGE}. Callers that reserve select entries for their own
+ *   fixed choices (e.g. `/model fallback` prepends a "None" option to every page, so only
+ *   24 models fit) pass the smaller number here, keeping the button labels honest about
+ *   what the modal will actually show.
+ * @returns A {@link ComponentsV2Payload} ready for an `IsComponentsV2` send/edit.
+ */
+export function buildRangeSelectorPayload(
+  locale: string,
+  customIdPrefix: string,
+  optionCount: number,
+  rangePage: number,
+  pageSize: number = MODAL_OPTIONS_PER_PAGE,
+): ComponentsV2Payload {
+  const totalRanges = Math.ceil(optionCount / pageSize);
+  const totalRangePages = Math.ceil(totalRanges / RANGES_PER_SELECTOR_PAGE);
+  const firstRange = rangePage * RANGES_PER_SELECTOR_PAGE;
+  const lastRange = Math.min(firstRange + RANGES_PER_SELECTOR_PAGE, totalRanges);
+  const components: ComponentInContainerData[] = [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${localizer(locale, "general.pagination.select_page_title")}`,
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, "general.pagination.select_page_description", {
+        totalItems: optionCount,
+        totalPages: totalRanges,
+      }),
+    },
+  ];
+
+  const rangeButtons: ButtonComponentData[] = [];
+  for (let rangeIndex = firstRange; rangeIndex < lastRange; rangeIndex += 1) {
+    const start = rangeIndex * pageSize + 1;
+    const end = Math.min(start + pageSize - 1, optionCount);
+    rangeButtons.push({
+      type: ComponentType.Button,
+      style: ButtonStyle.Primary,
+      customId: `${customIdPrefix}_range_${rangeIndex}`,
+      label: `${start}-${end}`,
+    });
+  }
+  for (let offset = 0; offset < rangeButtons.length; offset += RANGE_BUTTONS_PER_ROW) {
+    components.push({
+      type: ComponentType.ActionRow,
+      components: rangeButtons.slice(offset, offset + RANGE_BUTTONS_PER_ROW),
+    } satisfies ActionRowData<ButtonComponentData>);
+  }
+
+  const navigation: ButtonComponentData[] = [
+    {
+      type: ComponentType.Button,
+      style: ButtonStyle.Secondary,
+      customId: `${customIdPrefix}_previous`,
+      label: localizer(locale, "general.pagination.previous"),
+      disabled: rangePage === 0,
+    },
+    {
+      type: ComponentType.Button,
+      style: ButtonStyle.Danger,
+      customId: `${customIdPrefix}_cancel`,
+      label: localizer(locale, "general.pagination.cancel"),
+    },
+    {
+      type: ComponentType.Button,
+      style: ButtonStyle.Secondary,
+      customId: `${customIdPrefix}_next`,
+      label: localizer(locale, "general.pagination.next"),
+      disabled: rangePage >= totalRangePages - 1,
+    },
+  ];
+  components.push({
+    type: ComponentType.ActionRow,
+    components: navigation,
+  } satisfies ActionRowData<ButtonComponentData>);
+
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
+    components,
+  };
+  return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
 /**
@@ -1343,7 +1664,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
   const useThumbnailLayout =
     options.layout === "thumbnail-section" && Boolean(options.imageAttachmentName) && sections.length > 0;
 
-  // 1. Title line, rendered as an H2 heading like every other CV2 container.
+  // 1. Title line, rendered as an H3 heading like every other CV2 container.
   components.push({
     type: ComponentType.TextDisplay,
     content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
@@ -1487,6 +1808,9 @@ export async function replyComponentsV2Status(
         flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
       });
     }
+    // The interaction's reply message now carries IsComponentsV2. Flag it so a later
+    // legacy embed sink on the same interaction renders a V2 notice instead of throwing.
+    markComponentsV2Reply(interaction);
   } catch (error) {
     log.warn("Failed to update Components V2 status reply:", error);
   }
@@ -1542,8 +1866,7 @@ export type AvatarCacheEntry = { type: "url"; url: string } | { type: "buffer"; 
 /**
  * Session-scoped avatar cache keyed by absolute persona index (not page-local).
  * Populated lazily on first page visit; reused on re-navigation to the same page.
- * Pass into {@link PersonaPaginatedChoiceOptions.avatarSessionCache} to persist the cache
- * across multiple picker invocations in an outer retry loop.
+ * The persona workflow owns this map and passes it through internal picker retries.
  */
 export type AvatarSessionCache = Map<number, AvatarCacheEntry>;
 
@@ -1671,6 +1994,23 @@ function buildPersonaPageComponents(
       },
     },
   ];
+
+  if (options.descriptionKey) {
+    containerComponents.push({
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, options.descriptionKey),
+    });
+  }
+
+  // Filtered-notice line. The workflow pre-localizes this and only supplies it
+  // when the eligibility filter actually excluded a persona, so an unfiltered
+  // picker never shows it. Rendered as muted subtext beneath the description.
+  if (options.filteredNotice) {
+    containerComponents.push({
+      type: ComponentType.TextDisplay,
+      content: `-# ${options.filteredNotice}`,
+    });
+  }
 
   pagePersonas.forEach((persona, idx) => {
     const personaPrompt = persona.persona_prompt?.trim();
@@ -2121,8 +2461,9 @@ export async function replyPaginatedChoices(
 }
 
 /**
- * Displays a Components V2 persona selector with avatar cards and inline select buttons.
- * Designed for persona-targeting flows in /forget commands.
+ * Low-level Components V2 persona renderer used by `runPersonaPickerWorkflow`.
+ * Command and feature callers must use the workflow API so acknowledgment,
+ * retry, cache, and anchor-message invariants remain enforced.
  */
 export async function replyPaginatedPersonaChoicesV2(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
@@ -2136,12 +2477,21 @@ export async function replyPaginatedPersonaChoicesV2(
   const onSelect = options.onSelect ?? (async () => {});
 
   if (totalItems === 0) {
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: options.titleKey ?? "general.pagination.select_persona_title",
-      descriptionKey: "general.pagination.no_items",
-      color: ColorCode.INFO,
-      flags: MessageFlags.Ephemeral,
-    });
+    const components = buildV2StatusComponents(
+      locale,
+      options.titleKey ?? "general.pagination.select_persona_title",
+      "general.pagination.no_items",
+      ColorCode.INFO,
+    );
+    if (interaction.replied || interaction.deferred) {
+      await interaction.editReply({ components, attachments: [], flags: MessageFlags.IsComponentsV2 });
+    } else {
+      await interaction.reply({
+        components,
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        withResponse: true,
+      });
+    }
 
     return {
       success: false,
@@ -2169,7 +2519,7 @@ export async function replyPaginatedPersonaChoicesV2(
   // Discord API calls — by the time an error escapes the inner try, the interaction
   // token may already be dead and any recovery attempt just wastes rate-limit quota.
   const sessionStart = Date.now();
-  // Use a provided cache (outer retry loop) or create a fresh one for this session.
+  // Reuse the workflow-owned cache across retries, or create one for direct internal use.
   const avatarSessionCache: AvatarSessionCache = options.avatarSessionCache ?? new Map();
   try {
     while (true) {
@@ -2199,6 +2549,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 "general.pagination.timeout",
                 ColorCode.WARN,
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
           } catch (error) {
@@ -2244,14 +2595,16 @@ export async function replyPaginatedPersonaChoicesV2(
         if (interaction.replied || interaction.deferred) {
           message = await interaction.editReply({
             ...baseReplyOptions,
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
         } else {
-          await interaction.reply({
+          const response = await interaction.reply({
             ...baseReplyOptions,
             flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+            withResponse: true,
           });
-          message = await interaction.fetchReply();
+          message = response.resource?.message ?? (await interaction.fetchReply());
         }
 
         const buttonInteraction = await message.awaitMessageComponent({
@@ -2282,6 +2635,7 @@ export async function replyPaginatedPersonaChoicesV2(
               "general.pagination.cancelled",
               ColorCode.WARN,
             ),
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
 
@@ -2320,6 +2674,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 "general.errors.invalid_option_description",
                 ColorCode.ERROR,
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
             return {
@@ -2369,6 +2724,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 ColorCode.SUCCESS,
                 { item: selectedItem },
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
 
@@ -2387,6 +2743,7 @@ export async function replyPaginatedPersonaChoicesV2(
                 ColorCode.ERROR,
                 { item: selectedItem },
               ),
+              attachments: [],
               flags: MessageFlags.IsComponentsV2,
             });
             return {
@@ -2396,10 +2753,12 @@ export async function replyPaginatedPersonaChoicesV2(
           }
         }
       } catch (innerError) {
-        // Discord.js signals awaitMessageComponent timeout by rejecting with the
-        // string "time". Any other value is a real Discord API error (rate limit,
-        // expired token, lost permission, etc.).
-        const isTimeout = innerError === "time";
+        // Discord.js signals an awaitMessageComponent expiry either with the bare
+        // string "time" or with an InteractionCollectorError carrying the end
+        // reason, depending on the surface — isCollectorTimeoutError covers both.
+        // Any other value is a real Discord API error (rate limit, expired token,
+        // lost permission, etc.) and must stay classified as fatal.
+        const isTimeout = isCollectorTimeoutError(innerError);
 
         if (isTimeout) {
           log.warn(`Pagination interaction timed out for user ${interaction.user.id}`);
@@ -2418,6 +2777,7 @@ export async function replyPaginatedPersonaChoicesV2(
               isTimeout ? "general.pagination.timeout" : "general.errors.unknown_error_description",
               isTimeout ? ColorCode.WARN : ColorCode.ERROR,
             ),
+            attachments: [],
             flags: MessageFlags.IsComponentsV2,
           });
         } catch (error) {
@@ -2688,7 +3048,7 @@ export async function promptWithRawModal(
     if (!response.ok) {
       const errorText = await response.text();
       log.error(`Failed to send raw modal via REST API: ${response.status} ${response.statusText} - ${errorText}`);
-      throw new Error(`Discord API error: ${response.status} ${response.statusText}`);
+      throw createRawModalRestError(response, errorText);
     }
 
     // Mark this interaction as acknowledged via raw API for state tracking
@@ -2841,15 +3201,79 @@ export async function promptWithRawModal(
         interaction: submitted,
       };
     } catch (error) {
-      // This will only catch actual errors, not artificial timeouts
-      // Discord's natural timeout or user cancellation will be handled by command timeout
       log.warn(`Modal submission failed for user ${interaction.user.id}:`, error);
-      return { outcome: "timeout" };
+      return isCollectorTimeoutError(error) ? { outcome: "timeout" } : { outcome: "error", error };
     }
   } catch (error) {
     log.error("Failed to show raw modal:", error);
-    return { outcome: "timeout" };
+    return { outcome: "error", error };
   }
+}
+
+/**
+ * Shared page size for the `>25`-option paginated modal selector. Both the legacy
+ * page-button path in {@link promptWithPaginatedModal} and the Components V2 range
+ * selector in `personaWorkflow.ts` slice option lists into chunks of this size, so a
+ * single exported value keeps them in lockstep (previously `ITEMS_PER_PAGE` and
+ * `OPTIONS_PER_MODAL` duplicated the same `25`).
+ */
+export const MODAL_OPTIONS_PER_PAGE = 25;
+
+/**
+ * Finds the single option-bearing select component in a modal's component list.
+ * Radio/checkbox groups also carry `options`, but they are capped well under the
+ * page size so pagination never triggers for them — matching prior behavior in
+ * both the legacy and persona paths.
+ *
+ * @param options - The modal configuration to inspect.
+ * @returns The paginatable select component, or `undefined` when none exists.
+ */
+export function getPaginatedModalComponent(options: ModalOptions): ModalComponent | undefined {
+  return options.components.find((component) => "options" in component && Array.isArray(component.options));
+}
+
+/**
+ * Returns a shallow copy of `options` whose `target` select component has its
+ * option list narrowed to the half-open range `[start, end)`. Every other
+ * component is passed through by reference. Shared by both selector paths so the
+ * index math that maps a chosen page/range back to a modal is defined once.
+ *
+ * @param options - The full modal configuration.
+ * @param target - The select component to slice (from {@link getPaginatedModalComponent}).
+ * @param start - Inclusive start index into the target's option list.
+ * @param end - Exclusive end index into the target's option list.
+ * @returns A new {@link ModalOptions} carrying the sliced option list.
+ */
+export function sliceModalOptions(
+  options: ModalOptions,
+  target: ModalComponent,
+  start: number,
+  end: number,
+): ModalOptions {
+  return {
+    ...options,
+    components: options.components.map((component) => {
+      if (component !== target || !("options" in component)) return component;
+      return { ...component, options: component.options.slice(start, end) } as ModalComponent;
+    }),
+  };
+}
+
+/**
+ * Parses a `${prefix}_range_${index}` custom id emitted by the shared range
+ * selector, returning the 0-based range index or `null` when the id is not a
+ * valid range button. Centralizing the parse keeps the selector's custom-id
+ * scheme in one place for every consumer of the range payload.
+ *
+ * @param customId - The button custom id to parse.
+ * @param prefix - The selector's per-session custom-id prefix.
+ * @returns The parsed 0-based range index, or `null` on a mismatch.
+ */
+export function parseModalRangeIndex(customId: string, prefix: string): number | null {
+  const marker = `${prefix}_range_`;
+  if (!customId.startsWith(marker)) return null;
+  const parsed = Number.parseInt(customId.slice(marker.length), 10);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 /**
@@ -2865,9 +3289,8 @@ export async function promptWithPaginatedModal(
   options: ModalOptions,
 ): Promise<ModalResult> {
   // Find the select component (should only be one per modal in current usage)
-  const selectComponent = options.components.find(
-    (comp): comp is ModalSelectField => "options" in comp && Array.isArray(comp.options),
-  );
+  const selectComponent = getPaginatedModalComponent(options);
+  const optionCount = selectComponent && "options" in selectComponent ? selectComponent.options.length : 0;
 
   // If no select component or (≤25 options and interaction not yet acknowledged), use direct modal.
   // On loop re-entry the original slash interaction is already acknowledged — either via Discord.js
@@ -2877,21 +3300,35 @@ export async function promptWithPaginatedModal(
   const wasRawModalAcked = rawModalAcknowledged.get(interaction) ?? false;
   if (
     !selectComponent ||
-    (selectComponent.options.length <= 25 && !interaction.deferred && !interaction.replied && !wasRawModalAcked)
+    (optionCount <= MODAL_OPTIONS_PER_PAGE && !interaction.deferred && !interaction.replied && !wasRawModalAcked)
   ) {
     return promptWithRawModal(interaction, locale, options);
   }
 
+  // Opt-in Components V2 range selector (see ModalOptions.selectorStyle). Shares the
+  // payload + index math with the persona workflow via buildRangeSelectorPayload, but
+  // keeps its own transport + await loop: the global path's three delivery situations
+  // (reply / editReply / webhook.send) differ from the persona anchor message.
+  if (options.selectorStyle === "componentsV2") {
+    return runComponentsV2RangeSelectorModal(
+      interaction,
+      locale,
+      options,
+      selectComponent,
+      optionCount,
+      wasRawModalAcked,
+    );
+  }
+
   // Paginated modal system for >25 options
-  const allOptions = selectComponent.options;
-  const ITEMS_PER_PAGE = 25;
-  const totalPages = Math.ceil(allOptions.length / ITEMS_PER_PAGE);
+  const ITEMS_PER_PAGE = MODAL_OPTIONS_PER_PAGE;
+  const totalPages = Math.ceil(optionCount / ITEMS_PER_PAGE);
 
   // Create page selection embed
   const pageSelectEmbed = createStandardEmbed(locale, {
     titleKey: "general.pagination.select_page_title",
     descriptionKey: "general.pagination.select_page_description",
-    descriptionVars: { totalItems: allOptions.length, totalPages },
+    descriptionVars: { totalItems: optionCount, totalPages },
     color: ColorCode.INFO,
   });
 
@@ -2944,25 +3381,138 @@ export async function promptWithPaginatedModal(
 
     // Calculate page items
     const startIndex = (selectedPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, allOptions.length);
-    const pageOptions = allOptions.slice(startIndex, endIndex);
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, optionCount);
 
-    // Create new modal options with paginated items
-    const paginatedModalOptions: ModalOptions = {
-      ...options,
-      components: options.components.map((comp) => {
-        if ("options" in comp && Array.isArray(comp.options)) {
-          return { ...comp, options: pageOptions };
-        }
-        return comp;
-      }),
-    };
+    // Create new modal options with paginated items via the shared slicer
+    const paginatedModalOptions = sliceModalOptions(options, selectComponent, startIndex, endIndex);
 
     // Show modal with selected page items
     return promptWithRawModal(pageButtonInteraction as ButtonInteraction, locale, paginatedModalOptions);
   } catch (error) {
     log.warn(`Page selection timed out or failed for user ${interaction.user.id}:`, error);
     return { outcome: "timeout" };
+  }
+}
+
+/**
+ * Components V2 range-selector implementation of the `>25`-option paginated modal.
+ * Renders the shared {@link buildRangeSelectorPayload} shell (identical to the persona
+ * workflow's `>25` selector) and drives its own await loop.
+ *
+ * Delivery is path-specific by design (see the plan's "Delivery must stay path-specific"):
+ * this branch preserves the global path's three situations — `reply` when unacknowledged,
+ * `editReply` when deferred/replied, and `webhook.send` after a raw modal — rather than
+ * routing through the persona anchor-message controller.
+ *
+ * @param interaction - The command/button interaction the selector renders onto.
+ * @param locale - Locale for the selector strings.
+ * @param options - The modal configuration (its select is sliced per chosen range).
+ * @param selectComponent - The paginatable select (already guaranteed non-null by the caller).
+ * @param optionCount - Total option count across all ranges.
+ * @param wasRawModalAcked - Whether a raw REST modal already consumed the initial response.
+ * @returns The modal result: `submit`/`timeout`/`error` from the opened modal, or
+ *   `cancelled` when the user clicks the selector's Cancel button.
+ */
+async function runComponentsV2RangeSelectorModal(
+  interaction: ChatInputCommandInteraction | ButtonInteraction,
+  locale: string,
+  options: ModalOptions,
+  selectComponent: ModalComponent,
+  optionCount: number,
+  wasRawModalAcked: boolean,
+): Promise<ModalResult> {
+  // Per-session prefix so concurrent selectors never collide on custom ids.
+  const prefix = `paginated_modal_${interaction.id}_${Date.now().toString(36)}`;
+  const totalRangePages = Math.ceil(Math.ceil(optionCount / MODAL_OPTIONS_PER_PAGE) / RANGES_PER_SELECTOR_PAGE);
+  let rangePage = 0;
+
+  // 1. Render the initial selector via the path-specific transport, always resolving
+  //    to a Message so awaitMessageComponent works on ephemeral replies. The reply now
+  //    carries IsComponentsV2 — mark the interaction so a later legacy embed sink renders
+  //    a V2 notice instead of throwing (Phase 1 collision guard).
+  const payload = buildRangeSelectorPayload(locale, prefix, optionCount, rangePage);
+  let selectorMessage: Message;
+  try {
+    if (interaction.deferred || interaction.replied) {
+      selectorMessage = await interaction.editReply({
+        components: payload.components,
+        flags: MessageFlags.IsComponentsV2,
+      });
+    } else if (wasRawModalAcked) {
+      selectorMessage = (await interaction.webhook.send({
+        components: payload.components,
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+      })) as Message;
+    } else {
+      await interaction.reply({
+        components: payload.components,
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+      });
+      selectorMessage = await interaction.fetchReply();
+    }
+    markComponentsV2Reply(interaction);
+  } catch (error) {
+    log.error("Failed to render Components V2 range selector:", error);
+    return { outcome: "error", error };
+  }
+
+  // 2. Await loop: paginate ranges (Previous/Next), cancel, or pick a range → open modal.
+  while (true) {
+    let button: ButtonInteraction;
+    try {
+      button = (await selectorMessage.awaitMessageComponent({
+        componentType: ComponentType.Button,
+        filter: (candidate) => candidate.user.id === interaction.user.id && candidate.customId.startsWith(prefix),
+        time: 300_000, // 5 minutes, matching the legacy page selector
+      })) as ButtonInteraction;
+    } catch (error) {
+      log.warn(`Range selection timed out or failed for user ${interaction.user.id}:`, error);
+      return { outcome: "timeout" };
+    }
+
+    // 2a. Cancel: acknowledge with a cancelled notice and report the cancellation.
+    if (button.customId === `${prefix}_cancel`) {
+      try {
+        await button.update({
+          components: buildNoticeContainer({
+            locale,
+            color: ColorCode.WARN,
+            titleKey: "general.interaction.cancel_title",
+            descriptionKey: "general.pagination.cancelled",
+          }),
+          flags: MessageFlags.IsComponentsV2,
+        });
+      } catch (error) {
+        log.warn("Failed to render range-selector cancellation notice:", error);
+      }
+      return { outcome: "cancelled" };
+    }
+
+    // 2b. Previous / Next: re-render the selector page in place via the button update.
+    if (button.customId === `${prefix}_previous` || button.customId === `${prefix}_next`) {
+      rangePage =
+        button.customId === `${prefix}_previous`
+          ? Math.max(0, rangePage - 1)
+          : Math.min(totalRangePages - 1, rangePage + 1);
+      try {
+        await button.update(buildRangeSelectorPayload(locale, prefix, optionCount, rangePage));
+      } catch (error) {
+        log.warn("Failed to paginate the range selector:", error);
+        return { outcome: "error", error };
+      }
+      continue;
+    }
+
+    // 2c. Range button: slice options to the chosen 25 and open the modal on this button.
+    const rangeIndex = parseModalRangeIndex(button.customId, prefix);
+    if (rangeIndex === null) {
+      log.warn(`Unrecognized range-selector custom id: ${button.customId}`);
+      return { outcome: "error", error: new Error("Invalid range selector custom id") };
+    }
+    const startIndex = rangeIndex * MODAL_OPTIONS_PER_PAGE;
+    const endIndex = Math.min(startIndex + MODAL_OPTIONS_PER_PAGE, optionCount);
+    const rangedOptions = sliceModalOptions(options, selectComponent, startIndex, endIndex);
+    return promptWithRawModal(button, locale, rangedOptions);
   }
 }
 
@@ -2996,6 +3546,16 @@ export async function replyPaginatedStatusPages(
 
   // 2. Single page: skip navigation buttons entirely
   if (pages.length === 1) {
+    await replySummaryEmbed(interaction, locale, pages[0], flags);
+    return;
+  }
+
+  // 2.5. Components V2 collision guard. Legacy nav buttons + embeds cannot render onto a
+  //      V2 message. This co-occurrence (multi-page status after a V2 selector) is not
+  //      expected in practice, so degrade to the first page rendered as a V2 notice via
+  //      the guarded replySummaryEmbed rather than throw.
+  if (hasComponentsV2Reply(interaction)) {
+    log.warn("Paginated status pages targeting a Components V2 reply; degrading to first page only.");
     await replySummaryEmbed(interaction, locale, pages[0], flags);
     return;
   }

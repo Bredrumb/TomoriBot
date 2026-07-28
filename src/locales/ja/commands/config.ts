@@ -718,7 +718,7 @@ export default {
         success_title: `システムプロンプトが更新されました`,
         success_description: `カスタムシステムプロンプトを設定しました：
 \`\`\`
-{preview}...
+{preview}
 \`\`\``,
       },
       clear: {
@@ -729,9 +729,12 @@ export default {
 {defaultPrompt}
 \`\`\``,
         success_title: `システムプロンプトがクリアされました`,
-        success_description: `カスタムシステムプロンプトをクリアしました。現在はデフォルトのプロンプトを使用します：
+        success_description: `カスタムシステムプロンプトをクリアしました。現在はデフォルトのプロンプトを使用します。`,
+        success_description_with_prompt: `カスタムシステムプロンプトをクリアしました。現在はデフォルトのプロンプトを使用します。
+
+削除されたカスタムプロンプトです。控えが必要な場合はコピーしてください：
 \`\`\`
-{defaultPrompt}
+{removed_prompt}
 \`\`\``,
       },
       preset: {
@@ -743,7 +746,7 @@ export default {
         success_description: `システムプロンプトプリセットを適用しました：**{presetName}**
 プレビュー：
 \`\`\`
-{preview}...
+{preview}
 \`\`\``,
         no_presets_title: `プリセットがありません`,
         no_presets_description: `システムプロンプトプリセットが見つかりません。ボット管理者にお問い合わせください。`,

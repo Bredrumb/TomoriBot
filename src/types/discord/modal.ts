@@ -198,13 +198,33 @@ export interface ModalOptions {
   modalTitleKey: string;
   modalCustomId: string;
   components: ModalComponent[]; // Changed from inputs to components
+  /**
+   * Which `>25`-option page selector to render in `promptWithPaginatedModal`.
+   *
+   * - `"legacy"` (default): numbered page-button embed on the interaction's reply.
+   * - `"componentsV2"`: the shared Components V2 range selector
+   *   (`1-25`/`26-50` ranges + Previous/Cancel/Next), identical to the persona
+   *   workflow's `>25` shell.
+   *
+   * At `<=25` options both styles are byte-identical (a direct modal), so this only
+   * affects the paginated path. Defaults to `"legacy"` so existing callers are
+   * unchanged by construction until they explicitly opt in.
+   */
+  selectorStyle?: "legacy" | "componentsV2";
 }
 
 /**
  * Result type for modal interactions
  */
 export type ModalResult = {
-  outcome: "submit" | "timeout";
+  /**
+   * `submit` — the user completed the modal. `timeout` — the selector or modal
+   * expired. `error` — a delivery/collection failure (see {@link ModalResult.error}).
+   * `cancelled` — the user clicked the Cancel button on the `componentsV2` range
+   * selector (the legacy page selector has no Cancel button, so it never returns this).
+   * Callers that gate on `outcome !== "submit"` already handle every non-submit case.
+   */
+  outcome: "submit" | "timeout" | "error" | "cancelled";
   /** Scalar string values from text inputs, radio groups (selected value), and checkboxes ("true"/"false") */
   values?: Record<string, string>;
   /** Array values from checkbox groups — keyed by customId, value is the array of selected option values */
@@ -213,4 +233,6 @@ export type ModalResult = {
   attachments?: Record<string, APIAttachment>;
   /** The raw modal submit interaction for further Discord API calls */
   interaction?: ModalSubmitInteraction;
+  /** Preserved failure when displaying or collecting the modal fails for a reason other than timeout. */
+  error?: unknown;
 };

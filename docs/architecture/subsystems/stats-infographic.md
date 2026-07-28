@@ -224,12 +224,19 @@ Personal cards refuse fully-private users (`PrivacyLevel.FULL`) before deferring
 
 ## Persona picker flow
 
-For `type=persona`, the command shows an ephemeral picker via
-`replyPaginatedPersonaChoicesV2` with `preserveSelectedInteraction: true`.
-After a selection, it consumes that picker with the same localized
-`{persona} has been selected` notice used by `/stats persona`; the PNG reply is
-then sent from the returned `ButtonInteraction` (not the original slash command
-interaction) to avoid double-acknowledging Discord.
+For `type=persona`, the command uses `runPersonaPickerWorkflow(...)` with the
+explicit `separate-public` delivery policy. The picker cards are private. After
+selection, `selection.beginSeparatePublicReply(...)` updates that same private
+message to the localized `{persona} has been selected` notice before any public
+delivery occurs.
+
+The returned public phase creates exactly one public PNG response. Its payload
+cannot be ephemeral, and a second public reply raises a typed workflow error.
+Observers therefore see the generated card but never the picker; the invoker
+does not receive a second private status or card. Local persona avatar files are
+read into the card renderer, while the public response attaches only the finished
+PNG. Compacting the private picker clears its no-longer-referenced avatar
+attachments.
 
 ## Env config
 
