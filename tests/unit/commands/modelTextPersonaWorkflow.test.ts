@@ -2,6 +2,23 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { ComponentType, MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { LlmRow, TomoriState, UserRow } from "@/types/db/schema";
+// Real namespaces captured at link time, before any `mock.module` below runs.
+// `mock.module` is process-global and never restored, so every factory spreads
+// the real surface and overrides only what this file controls.
+import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realRepositories from "@/utils/db/repositories";
+import * as realCommandRegistry from "@/utils/discord/commandRegistry";
+import * as realOpenrouterModelMigrationNotice from "@/utils/discord/openrouterModelMigrationNotice";
+import * as realProviderPicker from "@/utils/discord/providerPicker";
+import * as realEmbeds from "@/utils/discord/ui/embeds";
+import * as realModals from "@/utils/discord/ui/modals";
+import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
+import * as realLogger from "@/utils/misc/logger";
+import * as realLogitBiasResolver from "@/utils/provider/logitBiasResolver";
+import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
+import * as realSavedProviderConfig from "@/utils/provider/savedProviderConfig";
+import * as realLocalizer from "@/utils/text/localizer";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 type Payload = Record<string, unknown>;
 
@@ -211,10 +228,26 @@ function selectionPhase(iteration: number) {
   };
 }
 
-mock.module("@/utils/discord/ui/personaWorkflow", () => ({
-  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
-  // Present only for module linking — the persona scope never enters the anchor
-  // private workflow (that path is exercised by modelTextGlobalPersistence.test.ts).
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/discord/ui/personaWorkflow": realPersonaWorkflow,
+  "@/utils/discord/ui/modals": realModals,
+  "@/utils/discord/ui/embeds": realEmbeds,
+  "@/utils/text/localizer": realLocalizer,
+  "@/utils/misc/logger": realLogger,
+  "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/provider/savedProviderConfig": realSavedProviderConfig,
+  "@/utils/db/repositories": realRepositories,
+  "@/utils/provider/logitBiasResolver": realLogitBiasResolver,
+  "@/utils/discord/providerPicker": realProviderPicker,
+  "@/utils/discord/openrouterModelMigrationNotice": realOpenrouterModelMigrationNotice,
+  "@/utils/provider/providerInfoRegistry": realProviderInfoRegistry,
+  "@/utils/discord/commandRegistry": realCommandRegistry,
+});
+
+scopedMock.module("@/utils/discord/ui/personaWorkflow", () => ({
+  ...realPersonaWorkflow,
+  // Overridden so an accidental entry fails loudly — the persona scope never enters
+  // the anchor private workflow (that path is exercised by modelTextGlobalPersistence.test.ts).
   beginAnchorPrivateWorkflow: async () => {
     throw new Error("beginAnchorPrivateWorkflow is not used by the persona scope");
   },
@@ -260,12 +293,14 @@ mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   },
 }));
 
-mock.module("@/utils/discord/ui/modals", () => ({
+scopedMock.module("@/utils/discord/ui/modals", () => ({
+  ...realModals,
   safeSelectOptionText: (value: string) => value,
   promptWithPaginatedModal: async () => ({ outcome: "timeout" }),
 }));
 
-mock.module("@/utils/discord/ui/embeds", () => ({
+scopedMock.module("@/utils/discord/ui/embeds", () => ({
+  ...realEmbeds,
   replyInfoEmbed: async (
     interaction: {
       replied?: boolean;
@@ -284,33 +319,24 @@ mock.module("@/utils/discord/ui/embeds", () => ({
   },
 }));
 
-mock.module("@/utils/text/localizer", () => ({
+scopedMock.module("@/utils/text/localizer", () => ({
+  ...realLocalizer,
   localizer: (_locale: string, key: string, variables?: Record<string, unknown>) =>
     variables ? `${key}:${JSON.stringify(variables)}` : key,
-  // Complete the export surface so a later-linked module that statically imports any of
-  // these (e.g. interactionCore → getBaseTriggerWords) does not break this file's linking.
-  initializeLocalizer: async () => undefined,
-  getSupportedLocales: () => ["en-US", "ja"],
-  getLocaleSubKeys: () => [],
-  getDefaultBotName: () => "Tomori",
-  getBaseTriggerWords: () => [],
 }));
 
-mock.module("@/utils/misc/logger", () => ({
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-  },
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: async () => undefined,
     info: () => undefined,
     warn: () => undefined,
   },
 }));
 
-mock.module("@/utils/cache/tomoriStateCache", () => ({
+scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
+  ...realTomoriStateCache,
   getCachedTomoriState: async () => {
     chronology.push("cache.state");
     return serverState;
@@ -319,29 +345,26 @@ mock.module("@/utils/cache/tomoriStateCache", () => ({
     chronology.push("cache.personas");
     return [selectedPersona];
   },
-  invalidateTomoriStateCache: () => undefined,
-  // Rest of the module's export surface. `mock.module` is process-wide, so a partial stub
-  // breaks module linking as soon as anything else in this process imports a missing name —
-  // and text.ts now reaches interactionCore through the shared anchor helpers.
   getCachedMainPersona: async () => serverState,
   getLastDbError: () => null,
-  clearTomoriStateCache: () => undefined,
-  getTomoriStateCacheStats: () => ({ size: 0, hits: 0, misses: 0 }),
+  invalidateTomoriStateCache: () => undefined,
 }));
 
-mock.module("@/utils/provider/savedProviderConfig", () => ({
+scopedMock.module("@/utils/provider/savedProviderConfig", () => ({
+  ...realSavedProviderConfig,
   loadSavedProvidersForCapability: async () => scenario.providers,
 }));
 
-mock.module("@/utils/db/repositories", () => ({
-  llmModelRepo: {
+scopedMock.module("@/utils/db/repositories", () => ({
+  ...realRepositories,
+  llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
     loadAvailableModelsForProvider: async (provider: string, _refresh: boolean, owner: { ownerId: number }) => {
       chronology.push(`repo.models:${provider}`);
       modelLoads.push({ provider, ownerId: owner.ownerId });
       return scenario.modelsByProvider[provider] ?? [];
     },
-  },
-  llmOverrideRepo: {
+  }),
+  llmOverrideRepo: overrideMembers(realRepositories.llmOverrideRepo, {
     setPersonaLlmOverride: async (personaId: number, llmId: number, options: { serverDiscId: string }) => {
       chronology.push("repo.set-persona-override");
       overrideWrites.push({ personaId, llmId, serverDiscId: options.serverDiscId });
@@ -349,34 +372,41 @@ mock.module("@/utils/db/repositories", () => ({
     },
     getChannelLlmOverride: async () => null,
     setChannelLlmOverride: async () => true,
-  },
-  configRepository: {
+  }),
+  configRepository: overrideMembers(realRepositories.configRepository, {
     updateModelConfig: async () => null,
     updateChatConfig: async () => null,
     loadNaiPresets: async () => [],
     applyNaiPreset: async () => undefined,
-  },
+  }),
 }));
 
-mock.module("@/utils/provider/logitBiasResolver", () => ({
+scopedMock.module("@/utils/provider/logitBiasResolver", () => ({
+  ...realLogitBiasResolver,
   resolveLogitBiasEntriesForLlm: () => ({ entries: [] }),
 }));
 
-mock.module("@/utils/discord/providerPicker", () => ({
+scopedMock.module("@/utils/discord/providerPicker", () => ({
+  ...realProviderPicker,
   promptForSavedProvider: async () => null,
   replaceProviderPickerWithInfo: async () => false,
 }));
 
-mock.module("@/utils/discord/openrouterModelMigrationNotice", () => ({
+scopedMock.module("@/utils/discord/openrouterModelMigrationNotice", () => ({
+  ...realOpenrouterModelMigrationNotice,
   replyLegacyOpenRouterOtherModelMoved: async () => undefined,
 }));
 
-mock.module("@/utils/provider/providerInfoRegistry", () => ({
+scopedMock.module("@/utils/provider/providerInfoRegistry", () => ({
+  ...realProviderInfoRegistry,
   getProviderDisplayName: (provider: string) => provider,
 }));
 
-mock.module("@/utils/discord/commandRegistry", () => ({
-  commandRegistry: { getCommandMention: () => "/openrouter model" },
+scopedMock.module("@/utils/discord/commandRegistry", () => ({
+  ...realCommandRegistry,
+  commandRegistry: overrideMembers(realCommandRegistry.commandRegistry, {
+    getCommandMention: () => "/openrouter model",
+  }),
 }));
 
 function makeInteraction(): ChatInputCommandInteraction {

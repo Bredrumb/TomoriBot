@@ -14,6 +14,23 @@ import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 // in its own process (per-file isolation in runTests.ts) fails to link exports
 // like `serverScheduleRepository` that the graph imports but the stub omitted.
 import * as realRepositories from "@/utils/db/repositories";
+// Same link-time capture for every other module mocked below, for the same
+// reason: a partial factory leaks for the rest of the run and breaks files
+// loaded later. Spreading the real namespace keeps each mock full-surface.
+import * as realChannelLlmCache from "@/utils/cache/channelLlmCache";
+import * as realGeminiCapabilityCache from "@/utils/cache/geminiCapabilityCache";
+import * as realNovelaiCapabilityCache from "@/utils/cache/novelaiCapabilityCache";
+import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
+import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabilityCache";
+import * as realToolLoop from "@/utils/chat/toolLoop";
+import * as realFallbackModelNotice from "@/utils/discord/fallbackModelNotice";
+import * as realStreamOrchestrator from "@/utils/discord/streamOrchestrator";
+import * as realLogger from "@/utils/misc/logger";
+import * as realPersonalProviderRuntime from "@/utils/provider/personalProviderRuntime";
+import * as realProviderFactory from "@/utils/provider/providerFactory";
+import * as realCrypto from "@/utils/security/crypto";
+import * as realKeyRotation from "@/utils/security/keyRotation";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 const queuedResults: GenerationTurnResult[] = [];
 // Parallel to queuedResults: the delivered-message refs each runToolLoop call should push into the
@@ -29,24 +46,30 @@ type TestStopContext = {
   client: Client;
 };
 
-mock.module("@/utils/misc/logger", () => ({
-  // ColorCode must be included so that command modules imported by other test
-  // files can satisfy their static `import { ColorCode }` bindings even when
-  // this file's mock is the one in effect (bun applies mocks globally).
-  // Values must stay hex STRINGS mirroring the real enum: modules evaluated
-  // under this mock call string methods on them at load time (e.g.
-  // contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    MEMORY_UPDATE: "#25d4da",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-    SECTION: "#E066FF",
-    AFFECTION: "#ff10cb",
-    RATE_LIMIT: "#FFA500",
-  },
+// The real `ColorCode` enum passes through the spread, so its values stay the
+// hex STRINGS modules call string methods on at load time (e.g. contextEmbeds.ts
+// does ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/misc/logger": realLogger,
+  "@/utils/cache/channelLlmCache": realChannelLlmCache,
+  "@/utils/cache/geminiCapabilityCache": realGeminiCapabilityCache,
+  "@/utils/cache/novelaiCapabilityCache": realNovelaiCapabilityCache,
+  "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
+  "@/utils/cache/openrouterCapabilityCache": realOpenrouterCapabilityCache,
+  "@/utils/db/repositories": realRepositories,
+  "@/utils/discord/fallbackModelNotice": realFallbackModelNotice,
+  "@/utils/discord/streamOrchestrator": realStreamOrchestrator,
+  "@/utils/provider/personalProviderRuntime": realPersonalProviderRuntime,
+  "@/utils/provider/providerFactory": realProviderFactory,
+  "@/utils/security/crypto": realCrypto,
+  "@/utils/security/keyRotation": realKeyRotation,
+  "@/utils/chat/toolLoop": realToolLoop,
+});
+
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: () => undefined,
     info: () => undefined,
     section: () => undefined,
@@ -55,24 +78,29 @@ mock.module("@/utils/misc/logger", () => ({
   },
 }));
 
-mock.module("@/utils/cache/channelLlmCache", () => ({
+scopedMock.module("@/utils/cache/channelLlmCache", () => ({
+  ...realChannelLlmCache,
   getCachedChannelLlm: async () => null,
 }));
 
-mock.module("@/utils/cache/geminiCapabilityCache", () => ({
+scopedMock.module("@/utils/cache/geminiCapabilityCache", () => ({
+  ...realGeminiCapabilityCache,
   getGeminiTokenLimits: () => undefined,
 }));
 
-mock.module("@/utils/cache/novelaiCapabilityCache", () => ({
+scopedMock.module("@/utils/cache/novelaiCapabilityCache", () => ({
+  ...realNovelaiCapabilityCache,
   getNovelAITokenLimits: () => undefined,
 }));
 
-mock.module("@/utils/cache/novelaiSubscriptionCache", () => ({
+scopedMock.module("@/utils/cache/novelaiSubscriptionCache", () => ({
+  ...realNovelaiSubscriptionCache,
   getCachedContextTokens: () => undefined,
   refreshNovelAISubscription: async () => undefined,
 }));
 
-mock.module("@/utils/cache/openrouterCapabilityCache", () => ({
+scopedMock.module("@/utils/cache/openrouterCapabilityCache", () => ({
+  ...realOpenrouterCapabilityCache,
   clearOpenRouterOnDemandCapabilityCache: () => undefined,
   getOpenRouterCapabilities: () => undefined,
   getOpenRouterCapabilityCacheSize: () => 0,
@@ -87,36 +115,40 @@ mock.module("@/utils/cache/openrouterCapabilityCache", () => ({
   testAccountSettingModel: async () => ({ valid: false }),
 }));
 
-mock.module("@/utils/db/repositories", () => ({
+scopedMock.module("@/utils/db/repositories", () => ({
   // Spread the real barrel first so every export the SUT graph imports is present,
   // then override only the repository methods this test's code path actually drives.
   ...realRepositories,
-  llmProviderRepo: {
+  // Each repository is a class INSTANCE: its methods live on the prototype and
+  // a spread would drop them, so delegate and shadow only what this file drives.
+  llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
     loadSavedProviderConfig: async () => null,
-  },
-  configRepository: {
+  }),
+  configRepository: overrideMembers(realRepositories.configRepository, {
     updateNsfwConfig: async () => true,
-  },
-  personaRepository: {
+  }),
+  personaRepository: overrideMembers(realRepositories.personaRepository, {
     loadAllForServer: async () => [],
-  },
-  userRepository: {
+  }),
+  userRepository: overrideMembers(realRepositories.userRepository, {
     loadOrCreateUser: async () => null,
     updateLastSeen: async () => undefined,
-  },
-  serverRepository: {
+  }),
+  serverRepository: overrideMembers(realRepositories.serverRepository, {
     loadServerState: async () => null,
-  },
+  }),
 }));
 
-mock.module("@/utils/discord/fallbackModelNotice", () => ({
+scopedMock.module("@/utils/discord/fallbackModelNotice", () => ({
+  ...realFallbackModelNotice,
   sendFallbackModelUsageNotice: async (args: { failures: FallbackNoticeAttempt[]; successModel: LlmRow }) => {
     fallbackNoticeCalls.push({ failures: args.failures, successModel: args.successModel });
   },
 }));
 
-mock.module("@/utils/discord/streamOrchestrator", () => ({
-  StreamOrchestrator: {
+scopedMock.module("@/utils/discord/streamOrchestrator", () => ({
+  ...realStreamOrchestrator,
+  StreamOrchestrator: overrideMembers(realStreamOrchestrator.StreamOrchestrator, {
     requestStop(channelId: string, requesterId?: string, stopContext?: TestStopContext): boolean {
       void requesterId;
       testStopRequests.set(channelId, { type: "stop", stopContext });
@@ -148,31 +180,29 @@ mock.module("@/utils/discord/streamOrchestrator", () => ({
       testStopRequests.delete(channelId);
       return request.stopContext;
     },
-  },
+  }),
 }));
 
-mock.module("@/utils/provider/personalProviderRuntime", () => ({
+scopedMock.module("@/utils/provider/personalProviderRuntime", () => ({
+  ...realPersonalProviderRuntime,
   applyPersonalProviderSelectionsToTomoriState: async (tomoriState: TomoriState) => ({
     tomoriState,
     activeConfigs: {},
   }),
 }));
 
-mock.module("@/utils/provider/providerFactory", () => ({
+scopedMock.module("@/utils/provider/providerFactory", () => ({
+  ...realProviderFactory,
   getProviderForTomori: async () => fakeProvider,
-  ProviderFactory: {
+  ProviderFactory: overrideMembers(realProviderFactory.ProviderFactory, {
     getProviderByName: async () => fakeProvider,
-  },
+  }),
 }));
 
-// Stub the FULL export surface of crypto. `mock.module` is process-wide and is
-// never restored, so it replaces crypto.ts for every test file loaded after
-// this one. If any real export is omitted here, later files that import it fail
-// to link ("Export named X not found"), and which files become victims depends
-// on module load order — making the suite fragile to unrelated import changes.
-mock.module("@/utils/security/crypto", () => ({
-  encryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
+scopedMock.module("@/utils/security/crypto", () => ({
+  ...realCrypto,
   decryptApiKey: async () => "decrypted-key",
+  encryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
   reencryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
   storeOptApiKey: async () => true,
   getOptApiKey: async () => null,
@@ -181,7 +211,8 @@ mock.module("@/utils/security/crypto", () => ({
   hasOptApiKey: async () => false,
 }));
 
-mock.module("@/utils/security/keyRotation", () => ({
+scopedMock.module("@/utils/security/keyRotation", () => ({
+  ...realKeyRotation,
   MAX_KEY_ATTEMPTS: 3,
   hasAvailableRotationKey: async () => false,
   recordKeyError: async () => undefined,
@@ -189,7 +220,8 @@ mock.module("@/utils/security/keyRotation", () => ({
   selectApiKey: async () => null,
 }));
 
-mock.module("@/utils/chat/toolLoop", () => ({
+scopedMock.module("@/utils/chat/toolLoop", () => ({
+  ...realToolLoop,
   providerIsApiFamily: (providerName: string, apiFamily: string) => {
     const families: Record<string, string> = {
       google: "google-genai",

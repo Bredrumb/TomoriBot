@@ -17,6 +17,15 @@ import { describe, expect, it, mock } from "bun:test";
 import type { Client } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { makeFakeInteraction, callMethods } from "../../helpers/fakeInteraction";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+// Real namespaces captured at link time, before any `mock.module` below runs.
+// Spreading them keeps each factory full-surface: `mock.module` is process-global
+// and never restored, so an omitted export breaks files loaded later.
+import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realRepositories from "@/utils/db/repositories";
+import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
+import * as realLogger from "@/utils/misc/logger";
+import * as realLocalizer from "@/utils/text/localizer";
 
 // ─── Module mocks ──────────────────────────────────────────────────────────────
 // All mock.module() calls are hoisted by bun before static imports are resolved.
@@ -29,21 +38,21 @@ import { makeFakeInteraction, callMethods } from "../../helpers/fakeInteraction"
 // errors that arise when two barrels independently re-export the same name
 // (e.g. safeSelectOptionText) while one of them is replaced with a mock.
 
-mock.module("@/utils/misc/logger", () => ({
-  // Values must stay hex STRINGS mirroring the real enum: modules evaluated
-  // under this mock call string methods on them at load time (e.g.
-  // contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    MEMORY_UPDATE: "#25d4da",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-    SECTION: "#E066FF",
-    AFFECTION: "#ff10cb",
-    RATE_LIMIT: "#FFA500",
-  },
+// The real `ColorCode` enum passes through the spread, keeping its hex STRING
+// values for modules that call string methods on them at load time (e.g.
+// contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/misc/logger": realLogger,
+  "@/utils/text/localizer": realLocalizer,
+  "@/utils/discord/ui/interactionCore": realInteractionCore,
+  "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/db/repositories": realRepositories,
+});
+
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: () => undefined,
     info: () => undefined,
     warn: () => undefined,
@@ -52,7 +61,8 @@ mock.module("@/utils/misc/logger", () => ({
   },
 }));
 
-mock.module("@/utils/text/localizer", () => ({
+scopedMock.module("@/utils/text/localizer", () => ({
+  ...realLocalizer,
   /**
    * Returns the key so assertions don't depend on locale file content.
    * Image-footer keys are rendered because generated image payload tests can run
@@ -80,7 +90,8 @@ mock.module("@/utils/text/localizer", () => ({
  * promptWithRawModal and promptWithPaginatedModal call showModal() then return
  * "timeout" so commands exit cleanly without a real awaitModalSubmit loop.
  */
-mock.module("@/utils/discord/ui/interactionCore", () => ({
+scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
+  ...realInteractionCore,
   // ── used directly by commands under test ────────────────────────────────
   replyInfoEmbed: async (
     interaction: {
@@ -150,44 +161,45 @@ const fakeTomoriState = {
   },
 };
 
-mock.module("@/utils/cache/tomoriStateCache", () => ({
+scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
+  ...realTomoriStateCache,
   getCachedTomoriState: async () => fakeTomoriState,
   invalidateTomoriStateCache: () => undefined,
   getLastDbError: () => null,
 }));
 
 /**
- * Repositories mock — re-declared here to ensure it is comprehensive even when
- * a prior test file (e.g. generationTurnFallback.test.ts) applied a partial mock
- * that only exports llmProviderRepo.  Bun's mock registry is global across files,
- * so the last mock.module call for a path wins; we must explicitly set what our
- * test commands need rather than relying on the partial mock from another file.
+ * Repositories mock. Bun's mock registry is global across files and the last
+ * mock.module call for a path wins, so this must not rely on another file's
+ * factory — it spreads the real barrel and delegates through each repository
+ * instance's prototype, overriding only the methods these commands drive.
  *
  * Commands under test:
  *   /nsfw jailbreaks  — imports configRepository (never calls it in our paths)
  *   /tool ping        — no repository imports
  *   /tool comment     — no repository imports
  */
-mock.module("@/utils/db/repositories", () => ({
-  configRepository: {
+scopedMock.module("@/utils/db/repositories", () => ({
+  ...realRepositories,
+  configRepository: overrideMembers(realRepositories.configRepository, {
     updateNsfwConfig: async () => true,
-  },
-  personaRepository: {
+  }),
+  personaRepository: overrideMembers(realRepositories.personaRepository, {
     loadAllForServer: async () => [],
     hasNicknameConflict: async () => false,
     renamePersona: async () => true,
     addTrigger: async () => true,
-  },
-  llmProviderRepo: {
+  }),
+  llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
     loadSavedProviderConfig: async () => null,
-  },
-  userRepository: {
+  }),
+  userRepository: overrideMembers(realRepositories.userRepository, {
     loadOrCreateUser: async () => null,
     updateLastSeen: async () => undefined,
-  },
-  serverRepository: {
+  }),
+  serverRepository: overrideMembers(realRepositories.serverRepository, {
     loadServerState: async () => null,
-  },
+  }),
 }));
 
 // ─── Shared test helpers ───────────────────────────────────────────────────────

@@ -93,6 +93,7 @@ Testing your changes:
 
 - [`contributing/testing-db-changes.md`](./contributing/testing-db-changes)
 - [`contributing/testing-chat-changes.md`](./contributing/testing-chat-changes)
+- [`contributing/testing-module-mocks.md`](./contributing/testing-module-mocks) — leak-safe Bun module mocks
 
 ## Architecture (order 5)
 

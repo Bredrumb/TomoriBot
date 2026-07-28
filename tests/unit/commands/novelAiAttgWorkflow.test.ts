@@ -2,6 +2,15 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
+// Real namespaces captured at link time, before any `mock.module` below runs.
+// `mock.module` is process-global and never restored, so every factory spreads
+// the real surface and overrides only what this file controls.
+import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realRepositories from "@/utils/db/repositories";
+import * as realInteractionHelper from "@/utils/discord/interactionHelper";
+import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
+import * as realLogger from "@/utils/misc/logger";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 type Payload = Record<string, unknown>;
 
@@ -36,36 +45,43 @@ const controller = {
   },
 };
 
-mock.module("@/utils/cache/tomoriStateCache", () => ({
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/db/repositories": realRepositories,
+  "@/utils/discord/interactionHelper": realInteractionHelper,
+  "@/utils/misc/logger": realLogger,
+  "@/utils/discord/ui/personaWorkflow": realPersonaWorkflow,
+});
+
+scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
+  ...realTomoriStateCache,
   invalidateTomoriStateCache: (serverDiscId: string) => {
     chronology.push("cache.invalidate");
     invalidations.push(serverDiscId);
   },
 }));
 
-mock.module("@/utils/db/repositories", () => ({
-  personaRepository: {
+scopedMock.module("@/utils/db/repositories", () => ({
+  ...realRepositories,
+  personaRepository: overrideMembers(realRepositories.personaRepository, {
     loadAllForServer: async () => [selectedPersona],
     setNaiAttg: async (personaId: number, values: Payload) => {
       chronology.push("repo.setNaiAttg");
       writes.push({ personaId, values });
       return false;
     },
-  },
+  }),
 }));
 
-mock.module("@/utils/discord/interactionHelper", () => ({
+scopedMock.module("@/utils/discord/interactionHelper", () => ({
+  ...realInteractionHelper,
   replyInfoEmbed: async () => undefined,
 }));
 
-mock.module("@/utils/misc/logger", () => ({
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-  },
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     info: () => undefined,
     error: async (message: string, error: unknown, context?: Payload) => {
       chronology.push("log.error");
@@ -74,7 +90,8 @@ mock.module("@/utils/misc/logger", () => ({
   },
 }));
 
-mock.module("@/utils/discord/ui/personaWorkflow", () => ({
+scopedMock.module("@/utils/discord/ui/personaWorkflow", () => ({
+  ...realPersonaWorkflow,
   buildPersonaWorkflowNotice: (options: Payload) => options,
   completePersonaWorkflow: () => ({ action: "complete" }),
   retryPersonaWorkflow: () => ({ action: "retry" }),

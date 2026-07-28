@@ -2,6 +2,21 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import type { ModalOptions, SelectOption } from "@/types/discord/modal";
+// Real namespaces captured at link time, before any `mock.module` below runs.
+// `mock.module` is process-global and never restored, so every factory spreads
+// the real surface and overrides only what this file controls.
+import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realRepositories from "@/utils/db/repositories";
+import * as realCommandRegistry from "@/utils/discord/commandRegistry";
+import * as realEmbeds from "@/utils/discord/ui/embeds";
+import * as realModals from "@/utils/discord/ui/modals";
+import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
+import * as realLogger from "@/utils/misc/logger";
+import * as realCustomProviderUtils from "@/utils/provider/customProviderUtils";
+import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
+import * as realSavedProviderConfig from "@/utils/provider/savedProviderConfig";
+import * as realLocalizer from "@/utils/text/localizer";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 /**
  * Anchor-migration tests for `/model fallback`.
@@ -89,96 +104,94 @@ const tomoriState = {
   fallback_chain: [],
 } as unknown as TomoriState;
 
-// Full export surface — see the repositories mock below for why partial stubs are unsafe.
-mock.module("@/utils/cache/tomoriStateCache", () => ({
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/provider/savedProviderConfig": realSavedProviderConfig,
+  "@/utils/db/repositories": realRepositories,
+  "@/utils/discord/ui/embeds": realEmbeds,
+  "@/utils/discord/ui/modals": realModals,
+  "@/utils/provider/providerInfoRegistry": realProviderInfoRegistry,
+  "@/utils/provider/customProviderUtils": realCustomProviderUtils,
+  "@/utils/discord/commandRegistry": realCommandRegistry,
+  "@/utils/misc/logger": realLogger,
+  "@/utils/text/localizer": realLocalizer,
+  "@/utils/discord/ui/personaWorkflow": realPersonaWorkflow,
+});
+
+scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
+  ...realTomoriStateCache,
   getCachedTomoriState: async () => tomoriState,
   getCachedAllPersonas: async () => [],
   getCachedMainPersona: async () => tomoriState,
   invalidateTomoriStateCache: () => undefined,
   getLastDbError: () => null,
-  clearTomoriStateCache: () => undefined,
-  getTomoriStateCacheStats: () => ({ size: 0, hits: 0, misses: 0 }),
 }));
 
-mock.module("@/utils/provider/savedProviderConfig", () => ({
+scopedMock.module("@/utils/provider/savedProviderConfig", () => ({
+  ...realSavedProviderConfig,
   loadSavedProvidersForCapability: async () => [{ provider: "provider-a" }],
   loadUserSavedProvidersForCapability: async () => [{ provider: "provider-a" }],
 }));
 
-// Full barrel surface — `mock.module` is process-wide, so a partial stub would break
-// module linking for anything else importing a missing repository name.
-mock.module("@/utils/db/repositories", () => ({
-  llmModelRepo: {
+// Spreading the real barrel replaces the hand-maintained list of repository
+// placeholders this mock used to carry: every repository stays real except the
+// three whose methods this command drives, which delegate through their
+// prototype so their remaining methods survive for later test files.
+scopedMock.module("@/utils/db/repositories", () => ({
+  ...realRepositories,
+  llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
     loadAvailableModelsForProvider: async () => makeModels(scenario.modelCount),
     getLlmsByIds: async () => [],
-  },
-  llmOverrideRepo: {
+  }),
+  llmOverrideRepo: overrideMembers(realRepositories.llmOverrideRepo, {
     setFallbackModelRefs: async (_serverId: number, refs: FallbackRef[]) => {
       chronology.push("repo.write");
       writtenRefs.push(refs);
       return scenario.writeSucceeds;
     },
-  },
-  llmProviderRepo: {
+  }),
+  llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
     loadCustomEndpointsForServer: async () => [],
     loadCustomEndpointsByIds: async () => [],
-  },
-  configRepository: {},
-  errorLogRepository: {},
-  mcpRepository: {},
-  quotaRepository: {},
-  speechRepository: {},
-  channelContextNoteRepo: {},
-  channelPromptRepo: {},
-  conditioningMemoryRepository: {},
-  cooldownRepository: {},
-  exportRepository: {},
-  importRepository: {},
-  personalMemoryRepository: {},
-  personaUserBlockRepository: {},
-  personaSpriteMessageRepository: {},
-  personaSpriteRepository: {},
-  personaRepository: {},
-  presetRepository: {},
-  ragRepository: {},
-  serverMemoryRepository: {},
-  serverRepository: {},
-  serverScheduleRepository: {},
-  shortTermMemoryRepository: {},
-  statRepository: {},
-  toolRepository: {},
-  userRepository: {},
-  whitelistRepository: {},
+  }),
 }));
 
-mock.module("@/utils/discord/ui/embeds", () => ({
+scopedMock.module("@/utils/discord/ui/embeds", () => ({
+  ...realEmbeds,
   replyInfoEmbed: async (_interaction: unknown, _locale: string, options: NoticeOptions) => {
     chronology.push("reply.info");
     infoReplies.push(options);
   },
 }));
 
-mock.module("@/utils/discord/ui/modals", () => ({
+scopedMock.module("@/utils/discord/ui/modals", () => ({
+  ...realModals,
   safeSelectOptionText: (value: string) => value,
 }));
 
-mock.module("@/utils/provider/providerInfoRegistry", () => ({
+scopedMock.module("@/utils/provider/providerInfoRegistry", () => ({
+  ...realProviderInfoRegistry,
   getProviderDisplayName: (provider: string) => provider,
   getStaticProviderInfo: () => null,
 }));
 
-mock.module("@/utils/provider/customProviderUtils", () => ({
+scopedMock.module("@/utils/provider/customProviderUtils", () => ({
+  ...realCustomProviderUtils,
   isCustomProvider: () => false,
   parseCustomProvider: () => null,
 }));
 
-mock.module("@/utils/discord/commandRegistry", () => ({
-  commandRegistry: { getCommandMention: () => "/openrouter model" },
+scopedMock.module("@/utils/discord/commandRegistry", () => ({
+  ...realCommandRegistry,
+  commandRegistry: overrideMembers(realCommandRegistry.commandRegistry, {
+    getCommandMention: () => "/openrouter model",
+  }),
 }));
 
-mock.module("@/utils/misc/logger", () => ({
-  ColorCode: { INFO: "#3498DB", SUCCESS: "#2ECC71", WARN: "#F1C40F", ERROR: "#E74C3C" },
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: async (_message: string, _error: Error, _context: ErrorContext) => {
       chronology.push("log.error");
     },
@@ -187,13 +200,9 @@ mock.module("@/utils/misc/logger", () => ({
   },
 }));
 
-mock.module("@/utils/text/localizer", () => ({
+scopedMock.module("@/utils/text/localizer", () => ({
+  ...realLocalizer,
   localizer: (_locale: string, key: string) => key,
-  initializeLocalizer: async () => undefined,
-  getSupportedLocales: () => ["en-US", "ja"],
-  getLocaleSubKeys: () => [],
-  getDefaultBotName: () => "Tomori",
-  getBaseTriggerWords: () => [],
 }));
 
 /**
@@ -241,10 +250,8 @@ function makeAnchorController() {
   };
 }
 
-mock.module("@/utils/discord/ui/personaWorkflow", () => ({
-  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
-  MIGRATED_ANCHOR_CALLERS: [],
-  PRE_ANCHOR_PRIMITIVES: [],
+scopedMock.module("@/utils/discord/ui/personaWorkflow", () => ({
+  ...realPersonaWorkflow,
   isCollectorTimeoutError: () => false,
   buildPersonaWorkflowNotice: (options: NoticeOptions) => options,
   completePersonaWorkflow: () => ({ action: "complete" }),

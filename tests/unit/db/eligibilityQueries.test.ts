@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import * as realClient from "@/utils/db/client";
+import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
 // Captured query text + queued row results for the mocked `sql` tag. Each query
 // method issues exactly one `sql` call, so the queue stays in lockstep with the
@@ -21,7 +23,12 @@ function sqlTag(strings: TemplateStringsArray, ...values: unknown[]): Promise<un
 // Stub the FULL runtime export surface of db/client. Bun's mock.module is
 // process-wide for the test run, so a partial mock would break the module
 // linking of any later test file that imports one of these names.
-mock.module("@/utils/db/client", () => ({
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/db/client": realClient,
+});
+
+scopedMock.module("@/utils/db/client", () => ({
+  ...realClient,
   sql: sqlTag,
   resetDatabaseConnection: () => undefined,
   resolveProductionPostgresTls: () => undefined,

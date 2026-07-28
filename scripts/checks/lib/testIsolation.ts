@@ -20,12 +20,14 @@
  * scanner, which also reads comments.)
  */
 export const MODULE_MOCK_MARKER = `mock${"."}module`;
+export const SCOPED_MODULE_MOCK_MARKER = "createScopedModuleMocker";
 
 /** Gateways to the shared fixture database, which only the DB lane may touch. */
 const DB_HARNESS_MARKERS = [`setup${"/"}testDb`, `TEST_DB${"_"}READY`];
 
 /**
- * True when the source stubs shared modules with `mock.module()`.
+ * True when the source stubs shared modules with `mock.module()` directly or
+ * through the scoped module-mock helper.
  *
  * Bun applies module mocks process-wide and never restores them between files,
  * so such a file corrupts every file loaded after it in the same process. The
@@ -33,7 +35,7 @@ const DB_HARNESS_MARKERS = [`setup${"/"}testDb`, `TEST_DB${"_"}READY`];
  * process-wide state they mutate is harmless too.
  */
 export function usesModuleMocks(source: string): boolean {
-  return source.includes(MODULE_MOCK_MARKER);
+  return source.includes(MODULE_MOCK_MARKER) || source.includes(SCOPED_MODULE_MOCK_MARKER);
 }
 
 /**

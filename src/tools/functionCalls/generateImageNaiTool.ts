@@ -99,8 +99,13 @@ interface NAIIdentityProfile {
   refUrl: string | null;
 }
 
-export async function loadUserNaiProfileByDiscordId(userDiscId: string): Promise<NAIIdentityProfile | null> {
-  const user = await userRepository.loadByDiscordId(userDiscId);
+type UserProfileRepository = Pick<typeof userRepository, "loadByDiscordId">;
+
+export async function loadUserNaiProfileByDiscordId(
+  userDiscId: string,
+  repository: UserProfileRepository = userRepository,
+): Promise<NAIIdentityProfile | null> {
+  const user = await repository.loadByDiscordId(userDiscId);
   if (!user) {
     return null;
   }

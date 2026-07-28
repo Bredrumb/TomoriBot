@@ -15,6 +15,13 @@ import type {
   PersonaWorkflowModalResult,
   PersonaWorkflowUpdateError,
 } from "@/utils/discord/ui/personaWorkflow";
+// Real namespaces captured before any `mock.module` runs (static imports are
+// hoisted). Spreading them keeps each factory full-surface so a later test file
+// in the monolithic `bun test` never links against a missing export.
+import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
+import * as realLogger from "@/utils/misc/logger";
+import * as realLocalizer from "@/utils/text/localizer";
+import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
 interface RecordedCall {
   method: string;
@@ -75,21 +82,24 @@ const resolutionOrder: string[] = [];
 let collapseGate: Promise<void> | null = null;
 let rejectCollapse = false;
 
-mock.module("@/utils/misc/logger", () => ({
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-  },
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/misc/logger": realLogger,
+  "@/utils/text/localizer": realLocalizer,
+  "@/utils/discord/ui/interactionCore": realInteractionCore,
+});
+
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: () => undefined,
     info: () => undefined,
     warn: (message: string, context?: unknown) => warnings.push({ message, context }),
   },
 }));
 
-mock.module("@/utils/text/localizer", () => ({
+scopedMock.module("@/utils/text/localizer", () => ({
+  ...realLocalizer,
   localizer: (_locale: string, key: string, variables?: Record<string, unknown>) =>
     variables ? `${key}:${JSON.stringify(variables)}` : key,
 }));
@@ -99,7 +109,8 @@ mock.module("@/utils/text/localizer", () => ({
 const MOCK_OPTIONS_PER_PAGE = 25;
 const MOCK_RANGES_PER_SELECTOR_PAGE = 20;
 
-mock.module("@/utils/discord/ui/interactionCore", () => ({
+scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
+  ...realInteractionCore,
   buildNoticeContainer: (options: {
     titleKey: string;
     descriptionKey: string;

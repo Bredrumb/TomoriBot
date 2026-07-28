@@ -1,6 +1,23 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { ErrorContext, LlmRow, NaiPresetRow, TomoriState, UserRow } from "@/types/db/schema";
+// Real namespaces captured at link time, before any `mock.module` below runs.
+// `mock.module` is process-global and never restored, so every factory spreads
+// the real surface and overrides only what this file controls.
+import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realRepositories from "@/utils/db/repositories";
+import * as realCommandRegistry from "@/utils/discord/commandRegistry";
+import * as realOpenrouterModelMigrationNotice from "@/utils/discord/openrouterModelMigrationNotice";
+import * as realProviderPicker from "@/utils/discord/providerPicker";
+import * as realEmbeds from "@/utils/discord/ui/embeds";
+import * as realModals from "@/utils/discord/ui/modals";
+import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
+import * as realLogger from "@/utils/misc/logger";
+import * as realLogitBiasResolver from "@/utils/provider/logitBiasResolver";
+import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
+import * as realSavedProviderConfig from "@/utils/provider/savedProviderConfig";
+import * as realLocalizer from "@/utils/text/localizer";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 interface Scenario {
   branch: "custom" | "regular";
@@ -90,23 +107,36 @@ function makeScenario(): Scenario {
   };
 }
 
-mock.module("@/utils/cache/tomoriStateCache", () => ({
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/provider/savedProviderConfig": realSavedProviderConfig,
+  "@/utils/db/repositories": realRepositories,
+  "@/utils/discord/ui/modals": realModals,
+  "@/utils/discord/ui/embeds": realEmbeds,
+  "@/utils/discord/providerPicker": realProviderPicker,
+  "@/utils/provider/logitBiasResolver": realLogitBiasResolver,
+  "@/utils/misc/logger": realLogger,
+  "@/utils/text/localizer": realLocalizer,
+  "@/utils/discord/openrouterModelMigrationNotice": realOpenrouterModelMigrationNotice,
+  "@/utils/provider/providerInfoRegistry": realProviderInfoRegistry,
+  "@/utils/discord/commandRegistry": realCommandRegistry,
+  "@/utils/discord/ui/personaWorkflow": realPersonaWorkflow,
+});
+
+scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
+  ...realTomoriStateCache,
   getCachedTomoriState: async () => tomoriState,
   getCachedAllPersonas: async () => [],
+  getCachedMainPersona: async () => tomoriState,
+  getLastDbError: () => null,
   invalidateTomoriStateCache: (serverDiscId: string) => {
     chronology.push("cache.invalidate");
     invalidations.push(serverDiscId);
   },
-  // Rest of the module's export surface. `mock.module` is process-wide, so a partial stub
-  // breaks module linking as soon as anything else in this process imports a missing name —
-  // and text.ts now reaches interactionCore through the shared anchor helpers.
-  getCachedMainPersona: async () => tomoriState,
-  getLastDbError: () => null,
-  clearTomoriStateCache: () => undefined,
-  getTomoriStateCacheStats: () => ({ size: 0, hits: 0, misses: 0 }),
 }));
 
-mock.module("@/utils/provider/savedProviderConfig", () => ({
+scopedMock.module("@/utils/provider/savedProviderConfig", () => ({
+  ...realSavedProviderConfig,
   loadSavedProvidersForCapability: async () => [
     {
       provider: scenario.selectedModel.llm_provider,
@@ -118,16 +148,17 @@ mock.module("@/utils/provider/savedProviderConfig", () => ({
   ],
 }));
 
-mock.module("@/utils/db/repositories", () => ({
-  llmModelRepo: {
+scopedMock.module("@/utils/db/repositories", () => ({
+  ...realRepositories,
+  llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
     loadAvailableModelsForProvider: async () => [scenario.selectedModel],
-  },
-  llmOverrideRepo: {
+  }),
+  llmOverrideRepo: overrideMembers(realRepositories.llmOverrideRepo, {
     getChannelLlmOverride: async () => null,
     setChannelLlmOverride: async () => true,
     setPersonaLlmOverride: async () => true,
-  },
-  configRepository: {
+  }),
+  configRepository: overrideMembers(realRepositories.configRepository, {
     updateModelConfig: async () => {
       chronology.push("repo.update-model");
       return scenario.modelUpdated;
@@ -142,10 +173,11 @@ mock.module("@/utils/db/repositories", () => ({
       presetCalls.push({ serverId, preset, model, serverDiscId });
       return scenario.presetApplied;
     },
-  },
+  }),
 }));
 
-mock.module("@/utils/discord/ui/modals", () => ({
+scopedMock.module("@/utils/discord/ui/modals", () => ({
+  ...realModals,
   safeSelectOptionText: (value: string) => value,
   promptWithPaginatedModal: async (interaction: unknown) => ({
     outcome: "submit",
@@ -154,14 +186,16 @@ mock.module("@/utils/discord/ui/modals", () => ({
   }),
 }));
 
-mock.module("@/utils/discord/ui/embeds", () => ({
+scopedMock.module("@/utils/discord/ui/embeds", () => ({
+  ...realEmbeds,
   replyInfoEmbed: async (_interaction: unknown, _locale: string, options: InfoOptions) => {
     chronology.push("reply.info");
     infoReplies.push(options);
   },
 }));
 
-mock.module("@/utils/discord/providerPicker", () => ({
+scopedMock.module("@/utils/discord/providerPicker", () => ({
+  ...realProviderPicker,
   promptForSavedProvider: async (interaction: unknown) => ({
     provider: scenario.selectedModel.llm_provider.toLowerCase(),
     interaction,
@@ -178,18 +212,15 @@ mock.module("@/utils/discord/providerPicker", () => ({
   },
 }));
 
-mock.module("@/utils/provider/logitBiasResolver", () => ({
+scopedMock.module("@/utils/provider/logitBiasResolver", () => ({
+  ...realLogitBiasResolver,
   resolveLogitBiasEntriesForLlm: () => ({ entries: [] }),
 }));
 
-mock.module("@/utils/misc/logger", () => ({
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-  },
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: async (message: string, error: Error, context: ErrorContext) => {
       chronology.push("log.error");
       errorLogs.push({ message, error, context });
@@ -199,25 +230,26 @@ mock.module("@/utils/misc/logger", () => ({
   },
 }));
 
-mock.module("@/utils/text/localizer", () => ({
+scopedMock.module("@/utils/text/localizer", () => ({
+  ...realLocalizer,
   localizer: (_locale: string, key: string) => key,
-  initializeLocalizer: async () => undefined,
-  getSupportedLocales: () => ["en-US", "ja"],
-  getLocaleSubKeys: () => [],
-  getDefaultBotName: () => "Tomori",
-  getBaseTriggerWords: () => [],
 }));
 
-mock.module("@/utils/discord/openrouterModelMigrationNotice", () => ({
+scopedMock.module("@/utils/discord/openrouterModelMigrationNotice", () => ({
+  ...realOpenrouterModelMigrationNotice,
   replyLegacyOpenRouterOtherModelMoved: async () => undefined,
 }));
 
-mock.module("@/utils/provider/providerInfoRegistry", () => ({
+scopedMock.module("@/utils/provider/providerInfoRegistry", () => ({
+  ...realProviderInfoRegistry,
   getProviderDisplayName: (provider: string) => provider,
 }));
 
-mock.module("@/utils/discord/commandRegistry", () => ({
-  commandRegistry: { getCommandMention: () => "/openrouter model" },
+scopedMock.module("@/utils/discord/commandRegistry", () => ({
+  ...realCommandRegistry,
+  commandRegistry: overrideMembers(realCommandRegistry.commandRegistry, {
+    getCommandMention: () => "/openrouter model",
+  }),
 }));
 
 // Fake anchor one-message engine. It drives text.ts's global scope: the provider
@@ -244,8 +276,8 @@ function makeAnchorController() {
   };
 }
 
-mock.module("@/utils/discord/ui/personaWorkflow", () => ({
-  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
+scopedMock.module("@/utils/discord/ui/personaWorkflow", () => ({
+  ...realPersonaWorkflow,
   isCollectorTimeoutError: () => false,
   buildPersonaWorkflowNotice: (options: unknown) => options,
   completePersonaWorkflow: () => ({ action: "complete" }),

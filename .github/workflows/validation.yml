@@ -56,6 +56,9 @@ jobs:
       - name: Verify runtime dependency imports
         run: bun run check-runtime-imports
 
+      - name: Check Bun module mock surfaces
+        run: bun run check-mock-module-surfaces
+
       - name: Run linting and type checks
         run: bun run lint && bun run check
 

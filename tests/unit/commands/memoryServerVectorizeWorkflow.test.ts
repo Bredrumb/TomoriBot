@@ -2,6 +2,23 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
+// Real namespaces captured at link time, before any `mock.module` below runs.
+// `mock.module` is process-global and never restored, so every factory spreads
+// the real surface and overrides only what this file controls.
+import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realRagAvailability from "@/utils/db/ragAvailability";
+import * as realRepositories from "@/utils/db/repositories";
+import * as realEmbeds from "@/utils/discord/ui/embeds";
+import * as realModals from "@/utils/discord/ui/modals";
+import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
+import * as realEmbeddingProvider from "@/utils/embeddings/embeddingProvider";
+import * as realLogger from "@/utils/misc/logger";
+import * as realMemoryLimits from "@/utils/misc/memoryLimits";
+import * as realCredentialResolver from "@/utils/provider/credentialResolver";
+import * as realPersonalProviderRuntime from "@/utils/provider/personalProviderRuntime";
+import * as realRateLimiter from "@/utils/security/rateLimiter";
+import * as realLocalizer from "@/utils/text/localizer";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 type Payload = Record<string, unknown>;
 
@@ -80,8 +97,24 @@ function submittedPhase(values: Record<string, string>, phaseId: string) {
   };
 }
 
-mock.module("@/utils/discord/ui/personaWorkflow", () => ({
-  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/discord/ui/personaWorkflow": realPersonaWorkflow,
+  "@/utils/discord/ui/modals": realModals,
+  "@/utils/discord/ui/embeds": realEmbeds,
+  "@/utils/text/localizer": realLocalizer,
+  "@/utils/misc/logger": realLogger,
+  "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/db/repositories": realRepositories,
+  "@/utils/db/ragAvailability": realRagAvailability,
+  "@/utils/misc/memoryLimits": realMemoryLimits,
+  "@/utils/security/rateLimiter": realRateLimiter,
+  "@/utils/embeddings/embeddingProvider": realEmbeddingProvider,
+  "@/utils/provider/credentialResolver": realCredentialResolver,
+  "@/utils/provider/personalProviderRuntime": realPersonalProviderRuntime,
+});
+
+scopedMock.module("@/utils/discord/ui/personaWorkflow", () => ({
+  ...realPersonaWorkflow,
   buildPersonaWorkflowNotice: (options: Payload) => options,
   completePersonaWorkflow: () => ({ action: "complete" }),
   retryPersonaWorkflow: () => ({ action: "retry" }),
@@ -124,26 +157,25 @@ mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   },
 }));
 
-mock.module("@/utils/discord/ui/modals", () => ({
+scopedMock.module("@/utils/discord/ui/modals", () => ({
+  ...realModals,
   safeSelectOptionText: (value: string) => value,
 }));
 
-mock.module("@/utils/discord/ui/embeds", () => ({
+scopedMock.module("@/utils/discord/ui/embeds", () => ({
+  ...realEmbeds,
   replyInfoEmbed: async () => undefined,
 }));
 
-mock.module("@/utils/text/localizer", () => ({
+scopedMock.module("@/utils/text/localizer", () => ({
+  ...realLocalizer,
   localizer: (_locale: string, key: string) => key,
 }));
 
-mock.module("@/utils/misc/logger", () => ({
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-  },
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     info: () => undefined,
     success: (message: string) => {
       chronology.push("log.success");
@@ -156,7 +188,8 @@ mock.module("@/utils/misc/logger", () => ({
   },
 }));
 
-mock.module("@/utils/cache/tomoriStateCache", () => ({
+scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
+  ...realTomoriStateCache,
   getCachedTomoriState: async () => selectedPersona,
   invalidateTomoriStateCache: (serverDiscId: string) => {
     chronology.push("cache.invalidate");
@@ -164,22 +197,23 @@ mock.module("@/utils/cache/tomoriStateCache", () => ({
   },
 }));
 
-mock.module("@/utils/db/repositories", () => ({
-  userRepository: {
+scopedMock.module("@/utils/db/repositories", () => ({
+  ...realRepositories,
+  userRepository: overrideMembers(realRepositories.userRepository, {
     isBlacklisted: async () => false,
-  },
-  personaRepository: {
+  }),
+  personaRepository: overrideMembers(realRepositories.personaRepository, {
     loadAllForServer: async () => [selectedPersona],
-  },
-  llmModelRepo: {
+  }),
+  llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
     loadEmbeddingModelById: async () => ({
       embedding_model_id: 901,
       provider: "test-provider",
       codename: "test-embedding-model",
       model_family: "test-family",
     }),
-  },
-  serverMemoryRepository: {
+  }),
+  serverMemoryRepository: overrideMembers(realRepositories.serverMemoryRepository, {
     // Eligibility source for the pre-picker filter: the selected persona's
     // lineage (700) must be present so it survives the eligibility gate.
     lineageIdsWithServerMemories: async () => new Set([700]),
@@ -192,8 +226,8 @@ mock.module("@/utils/db/repositories", () => ({
       removals.push(memoryId);
       return scenario.removeResult;
     },
-  },
-  ragRepository: {
+  }),
+  ragRepository: overrideMembers(realRepositories.ragRepository, {
     normalizeText: (content: string) => content,
     chunkText: () => ["The moonlit archive opens only at midnight."],
     insertWithChunks: async (params: Payload) => {
@@ -201,14 +235,16 @@ mock.module("@/utils/db/repositories", () => ({
       insertCalls.push(params);
       return 501;
     },
-  },
+  }),
 }));
 
-mock.module("@/utils/db/ragAvailability", () => ({
+scopedMock.module("@/utils/db/ragAvailability", () => ({
+  ...realRagAvailability,
   isRagAvailable: () => true,
 }));
 
-mock.module("@/utils/misc/memoryLimits", () => ({
+scopedMock.module("@/utils/misc/memoryLimits", () => ({
+  ...realMemoryLimits,
   getMemoryLimits: () => ({
     maxMemoryLength: 4_000,
     maxDocumentsPerServer: 20,
@@ -219,27 +255,30 @@ mock.module("@/utils/misc/memoryLimits", () => ({
   validateMemoryContent: () => ({ isValid: true, maxAllowed: 4_000 }),
 }));
 
-mock.module("@/utils/security/rateLimiter", () => ({
-  memoryGuard: { checkMemory: () => ({ status: "normal" }) },
+scopedMock.module("@/utils/security/rateLimiter", () => ({
+  ...realRateLimiter,
+  memoryGuard: overrideMembers(realRateLimiter.memoryGuard, {
+    checkMemory: () => ({ status: "normal" }),
+  }),
   reserveDocumentQuota: () => ({ allowed: true, resetAt: null }),
 }));
 
-mock.module("@/utils/embeddings/embeddingProvider", () => ({
+scopedMock.module("@/utils/embeddings/embeddingProvider", () => ({
+  ...realEmbeddingProvider,
   providerSupportsEmbeddingTaskType: async () => true,
   generateEmbeddingsBatched: async () => [[0.1, 0.2]],
 }));
 
-class PersonalProviderRequiredError extends Error {}
-class CredentialUnavailableError extends Error {}
-
-mock.module("@/utils/provider/credentialResolver", () => ({
-  PersonalProviderRequiredError,
-  CredentialUnavailableError,
+// The real error classes pass through the spread, so `instanceof` checks in the
+// command under test still match what the real credential resolver would throw.
+scopedMock.module("@/utils/provider/credentialResolver", () => ({
+  ...realCredentialResolver,
   resolveCapabilityCredentials: async () => ({ apiKey: "test-key" }),
   getResolvedCapabilityModelId: () => 901,
 }));
 
-mock.module("@/utils/provider/personalProviderRuntime", () => ({
+scopedMock.module("@/utils/provider/personalProviderRuntime", () => ({
+  ...realPersonalProviderRuntime,
   applyPersonalProviderSelectionsToTomoriState: async (state: TomoriState) => ({ tomoriState: state }),
 }));
 

@@ -15,12 +15,14 @@ jobs:
         with:
           script: |
             const body = context.payload.pull_request.body || "";
-            const labels = ["Unspecified"];
+            const labels = [];
 
             // Parse Type(s) from PR body
             if (body.match(/- \[x\] Bug Fix/i)) labels.push("bug");
             if (body.match(/- \[x\] Feature/i)) labels.push("enhancement");
             if (body.match(/- \[x\] Refactor \/ Chore/i)) labels.push("chore");
+
+            if (labels.length === 0) labels.push("Unspecified");
 
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,

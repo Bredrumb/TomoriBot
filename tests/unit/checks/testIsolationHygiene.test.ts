@@ -81,10 +81,12 @@ describe("testIsolation detectors", () => {
   // occurrence — the scanners above read test sources, and a bare marker here
   // would make the suite flag its own fixtures.
   const MOCK_CALL = `mock${"."}module("@/x", () => ({}))`;
+  const SCOPED_MOCK_CALL = `createScopedModuleMocker(mock, { "@/x": realX })`;
   const DB_IMPORT = `import { testSql } from "./setup${"/"}testDb"`;
 
   it("detects module mocks", () => {
     expect(usesModuleMocks(MOCK_CALL)).toBe(true);
+    expect(usesModuleMocks(SCOPED_MOCK_CALL)).toBe(true);
     expect(usesModuleMocks("const spy = spyOn(obj, 'method');")).toBe(false);
   });
 

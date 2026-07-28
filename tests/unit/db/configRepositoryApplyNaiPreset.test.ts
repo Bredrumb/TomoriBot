@@ -1,9 +1,18 @@
 import { beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { NaiPresetRow } from "@/types/db/schema";
+// Hoisted real namespace so the mock below stays full-surface; `mock.module` is
+// process-global for the whole run and a partial factory breaks later files.
+import * as realTomoriStateCacheStore from "@/utils/cache/tomoriStateCacheStore";
+import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
 const invalidations: string[] = [];
 
-mock.module("@/utils/cache/tomoriStateCacheStore", () => ({
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/cache/tomoriStateCacheStore": realTomoriStateCacheStore,
+});
+
+scopedMock.module("@/utils/cache/tomoriStateCacheStore", () => ({
+  ...realTomoriStateCacheStore,
   invalidateTomoriStateCache: (serverDiscId: string) => invalidations.push(serverDiscId),
 }));
 

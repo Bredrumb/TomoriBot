@@ -4,6 +4,18 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 // REAL deliberateToolMode module; we re-register it in afterAll to undo the
 // simplified stub for files loaded later in the monolithic run.
 import * as realDeliberateToolMode from "@/utils/tools/deliberateToolMode";
+// Same link-time capture for every other module mocked below. Spreading these
+// namespaces makes each factory full-surface, so a partial mock can never break
+// the module linking of a file loaded later in the monolithic `bun test`.
+import * as realToolRegistry from "@/tools/toolRegistry";
+import * as realChannelQueue from "@/utils/chat/channelQueue";
+import * as realContextAnnotations from "@/utils/chat/contextAnnotations";
+import * as realEmbedHelper from "@/utils/discord/embedHelper";
+import * as realStreamOrchestrator from "@/utils/discord/streamOrchestrator";
+import * as realToolProgressNotice from "@/utils/discord/toolProgressNotice";
+import * as realLogger from "@/utils/misc/logger";
+import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ChatTurnContext } from "@/utils/chat/types";
 import type { TomoriState } from "@/types/db/schema";
@@ -11,7 +23,7 @@ import type { ToolResult } from "@/types/tool/interfaces";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 
 // Set env vars before any lazy import so module-level constants pick them up.
-process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS = "10";
+process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS = "100";
 process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS = "5";
 process.env.NAI_TOOL_FAILURE_RETRY_THRESHOLD = "3";
 
@@ -30,21 +42,25 @@ let standardEmbedCalls: Array<{ titleKey?: string; descriptionKey?: string }> = 
 // Module mocks — all must appear before the first lazy import of toolLoop.ts
 // --------------------------------------------------------------------------
 
-mock.module("@/utils/misc/logger", () => ({
-  // Values must stay hex STRINGS mirroring the real enum: modules evaluated
-  // while this global mock is in effect call string methods on them at load
-  // time (e.g. contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    MEMORY_UPDATE: "#25d4da",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-    SECTION: "#E066FF",
-    AFFECTION: "#ff10cb",
-    RATE_LIMIT: "#FFA500",
-  },
+// The real `ColorCode` enum comes through the spread, so its values stay the hex
+// STRINGS other modules rely on at load time (e.g. contextEmbeds.ts calls
+// ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/misc/logger": realLogger,
+  "@/utils/discord/embedHelper": realEmbedHelper,
+  "@/utils/discord/toolProgressNotice": realToolProgressNotice,
+  "@/utils/discord/streamOrchestrator": realStreamOrchestrator,
+  "@/utils/provider/providerInfoRegistry": realProviderInfoRegistry,
+  "@/utils/tools/deliberateToolMode": realDeliberateToolMode,
+  "@/utils/chat/channelQueue": realChannelQueue,
+  "@/utils/chat/contextAnnotations": realContextAnnotations,
+  "@/tools/toolRegistry": realToolRegistry,
+});
+
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: () => undefined,
     info: () => undefined,
     warn: () => undefined,
@@ -53,7 +69,8 @@ mock.module("@/utils/misc/logger", () => ({
   },
 }));
 
-mock.module("@/utils/discord/embedHelper", () => ({
+scopedMock.module("@/utils/discord/embedHelper", () => ({
+  ...realEmbedHelper,
   sendStandardEmbed: async (
     _channel: unknown,
     _locale: string,
@@ -61,19 +78,17 @@ mock.module("@/utils/discord/embedHelper", () => ({
   ) => {
     standardEmbedCalls.push(options);
   },
-  // Stub additional exports so modules imported by other test files can satisfy
-  // their static import bindings when this mock is in effect globally.
-  createStandardEmbed: () => ({ setTitle: () => ({}), setDescription: () => ({}) }),
-  createSummaryEmbed: () => ({ setTitle: () => ({}), setDescription: () => ({}) }),
-  sendTranslationEmbed: async () => undefined,
 }));
 
-mock.module("@/utils/discord/toolProgressNotice", () => ({
+scopedMock.module("@/utils/discord/toolProgressNotice", () => ({
+  ...realToolProgressNotice,
   routeHiddenToolNotice: async () => undefined,
 }));
 
-mock.module("@/utils/discord/streamOrchestrator", () => ({
-  StreamOrchestrator: {
+scopedMock.module("@/utils/discord/streamOrchestrator", () => ({
+  ...realStreamOrchestrator,
+  // Statics are non-enumerable, so a spread would drop the whole class surface.
+  StreamOrchestrator: overrideMembers(realStreamOrchestrator.StreamOrchestrator, {
     hasStopRequest: (_channelId: string) => hasStopRequest,
     isFollowUpRequest: (_channelId: string) => isFollowUpRequest,
     clearStopRequest: (_channelId: string) => {
@@ -81,10 +96,11 @@ mock.module("@/utils/discord/streamOrchestrator", () => ({
       hasStopRequest = false;
     },
     getAndClearStopContext: (_channelId: string) => null,
-  },
+  }),
 }));
 
-mock.module("@/utils/provider/providerInfoRegistry", () => ({
+scopedMock.module("@/utils/provider/providerInfoRegistry", () => ({
+  ...realProviderInfoRegistry,
   providerUsesApiFamily: (providerName: string, apiFamily: string) => {
     const families: Record<string, string> = {
       google: "google-genai",
@@ -103,9 +119,10 @@ mock.module("@/utils/provider/providerInfoRegistry", () => ({
 // (e.g. deliberateToolMode.test.ts, which asserts the real behavior). Spreading
 // a statically-captured namespace is safe — unlike `await import()` inside a
 // factory, it was evaluated before any mock.module call took effect.
-mock.module("@/utils/tools/deliberateToolMode", () => ({ ...realDeliberateToolMode }));
+scopedMock.module("@/utils/tools/deliberateToolMode", () => ({ ...realDeliberateToolMode }));
 
-mock.module("@/utils/chat/channelQueue", () => ({
+scopedMock.module("@/utils/chat/channelQueue", () => ({
+  ...realChannelQueue,
   channelLocks: new Map(),
   setChannelStreamKill: () => undefined,
   setChannelToolCallChainActive: () => undefined,
@@ -115,34 +132,20 @@ mock.module("@/utils/chat/channelQueue", () => ({
   queueStopResponseAtFront: () => undefined,
 }));
 
-// This mock must stub the module's COMPLETE export surface: bun module mocks
-// are process-wide for the rest of the test run, so any test file loaded later
-// that imports an omitted named export (e.g. contextMedia ->
-// formatInlineSystemContent) fails module linking. Only the first three stubs
-// carry behavior this test depends on; the rest exist to satisfy linking and
-// mirror the real signatures inertly.
-mock.module("@/utils/chat/contextAnnotations", () => ({
+// Only the annotation entry point needs an inert stub for the loop tests; every
+// other export passes through to the real module so this mock stays harmless
+// when it leaks into a later file (e.g. contextMedia -> formatInlineSystemContent).
+scopedMock.module("@/utils/chat/contextAnnotations", () => ({
+  ...realContextAnnotations,
   annotateRecentMessageMetadataInContext: () => ({ annotatedCount: 0, patchedReplyReferenceCount: 0 }),
-  buildTailDirectiveMessage: () => null,
-  buildRevealedMessageMetadataTailDirective: () => "",
-  buildCombinedTailDirectiveMessage: () => null,
-  buildSpeakerGuardRetryDirective: () => null,
-  buildReplyReferenceContextAnnotation: async () => null,
-  buildReactionContextAnnotation: async () => null,
-  createReactionContextBudgetState: () => ({}),
-  findReplyContextTargetInMessage: () => null,
-  mergeForcedMentions: () => [],
-  mergeInjectedContextItems: (items: unknown) => items,
-  appendInjectedContextItems: () => undefined,
-  insertBeforeLatestDialoguePair: () => undefined,
-  stripAtPersonaTriggers: (content: string) => content,
-  formatInlineSystemContent: (content: string | null | undefined) =>
-    content?.replace(/\s+/g, " ").trim() || "[System: No text content was included]",
 }));
 
 // The ToolRegistry singleton — executeTool drains toolExecuteQueue.
-mock.module("@/tools/toolRegistry", () => ({
-  ToolRegistry: {
+scopedMock.module("@/tools/toolRegistry", () => ({
+  ...realToolRegistry,
+  // A class instance: its methods live on the prototype, so delegate rather
+  // than spread or the remaining registry methods vanish for later files.
+  ToolRegistry: overrideMembers(realToolRegistry.ToolRegistry, {
     executeTool: async (name: string, args: Record<string, unknown>) => {
       toolExecuteCalls.push({ name, args });
       const next = toolExecuteQueue.shift();
@@ -152,7 +155,7 @@ mock.module("@/tools/toolRegistry", () => ({
       requiresFollowUpCalls.push({ name, provider, serverId });
       return requiresFollowUp;
     },
-  },
+  }),
 }));
 
 // --------------------------------------------------------------------------
@@ -512,7 +515,7 @@ describe("runToolLoop — contract tests", () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
     // Provider never produces a terminal result — always requests another tool.
-    const limit = 10; // matches BOT_MAX_FUNCTION_CALL_ITERATIONS set above
+    const limit = 100; // matches the production default and the test override above
     const { provider } = makeProvider(
       Array.from({ length: limit + 5 }, () => makeFunctionCallResult("infinite_tool", {})),
     );
@@ -764,13 +767,13 @@ describe("runToolLoop — contract tests", () => {
     const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/sticker.png" };
     const { provider } = makeProvider([
       makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }),
-      ...Array.from({ length: 9 }, () => makeFunctionCallResult("infinite_tool")),
+      ...Array.from({ length: 99 }, () => makeFunctionCallResult("infinite_tool")),
     ]);
     toolExecuteQueue.push({
       success: true,
       data: { status: "sticker_selected_successfully", sticker_id: sticker.id, sticker_name: sticker.name },
     });
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 99; i++) {
       toolExecuteQueue.push({ success: true, data: { ok: true } });
     }
 

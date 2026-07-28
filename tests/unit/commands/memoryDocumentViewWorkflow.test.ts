@@ -2,6 +2,22 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { ComponentType, MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
+// Real namespaces captured at link time, before any `mock.module` below runs.
+// `mock.module` is process-global and never restored, so every factory spreads
+// the real surface and overrides only what this file controls.
+import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realRagAvailability from "@/utils/db/ragAvailability";
+import * as realRepositories from "@/utils/db/repositories";
+import * as realEmbeds from "@/utils/discord/ui/embeds";
+import * as realModals from "@/utils/discord/ui/modals";
+import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
+import * as realDocumentService from "@/utils/documents/documentService";
+import * as realEmbeddingProvider from "@/utils/embeddings/embeddingProvider";
+import * as realLogger from "@/utils/misc/logger";
+import * as realCredentialResolver from "@/utils/provider/credentialResolver";
+import * as realPersonalProviderRuntime from "@/utils/provider/personalProviderRuntime";
+import * as realLocalizer from "@/utils/text/localizer";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 type Payload = Record<string, unknown>;
 
@@ -185,8 +201,23 @@ function makePhase() {
   };
 }
 
-mock.module("@/utils/discord/ui/personaWorkflow", () => ({
-  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/discord/ui/personaWorkflow": realPersonaWorkflow,
+  "@/utils/discord/ui/modals": realModals,
+  "@/utils/discord/ui/embeds": realEmbeds,
+  "@/utils/text/localizer": realLocalizer,
+  "@/utils/misc/logger": realLogger,
+  "@/utils/db/ragAvailability": realRagAvailability,
+  "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/db/repositories": realRepositories,
+  "@/utils/documents/documentService": realDocumentService,
+  "@/utils/embeddings/embeddingProvider": realEmbeddingProvider,
+  "@/utils/provider/credentialResolver": realCredentialResolver,
+  "@/utils/provider/personalProviderRuntime": realPersonalProviderRuntime,
+});
+
+scopedMock.module("@/utils/discord/ui/personaWorkflow", () => ({
+  ...realPersonaWorkflow,
   buildPersonaWorkflowNotice: (options: {
     titleKey: string;
     descriptionKey: string;
@@ -245,11 +276,13 @@ mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   },
 }));
 
-mock.module("@/utils/discord/ui/modals", () => ({
+scopedMock.module("@/utils/discord/ui/modals", () => ({
+  ...realModals,
   safeSelectOptionText: (value: string) => value,
 }));
 
-mock.module("@/utils/discord/ui/embeds", () => ({
+scopedMock.module("@/utils/discord/ui/embeds", () => ({
+  ...realEmbeds,
   replyInfoEmbed: async (
     interaction: {
       replied?: boolean;
@@ -269,26 +302,24 @@ mock.module("@/utils/discord/ui/embeds", () => ({
   },
 }));
 
-mock.module("@/utils/text/localizer", () => ({
+scopedMock.module("@/utils/text/localizer", () => ({
+  ...realLocalizer,
   localizer: (_locale: string, key: string, variables?: Record<string, unknown>) =>
     variables ? `${key}:${JSON.stringify(variables)}` : key,
 }));
 
-mock.module("@/utils/misc/logger", () => ({
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-  },
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: async () => undefined,
     info: () => undefined,
     warn: () => undefined,
   },
 }));
 
-mock.module("@/utils/db/ragAvailability", () => ({
+scopedMock.module("@/utils/db/ragAvailability", () => ({
+  ...realRagAvailability,
   isRagAvailable: () => true,
 }));
 
@@ -303,7 +334,8 @@ const tomoriState = {
   llm: { llm_codename: "model", llm_provider: "provider" },
 } as unknown as TomoriState;
 
-mock.module("@/utils/cache/tomoriStateCache", () => ({
+scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
+  ...realTomoriStateCache,
   getCachedTomoriState: async () => {
     chronology.push("cache.state");
     return tomoriState;
@@ -314,14 +346,15 @@ mock.module("@/utils/cache/tomoriStateCache", () => ({
   },
 }));
 
-mock.module("@/utils/db/repositories", () => ({
-  personaRepository: {
+scopedMock.module("@/utils/db/repositories", () => ({
+  ...realRepositories,
+  personaRepository: overrideMembers(realRepositories.personaRepository, {
     loadAllForServer: async () => {
       chronology.push("repo.personas");
       return [tomoriState];
     },
-  },
-  llmModelRepo: {
+  }),
+  llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
     loadEmbeddingModelById: async (...args: unknown[]) => {
       chronology.push("repo.embedding-model");
       repositoryCalls.push({ method: "loadEmbeddingModelById", args });
@@ -332,8 +365,8 @@ mock.module("@/utils/db/repositories", () => ({
         model_family: "family",
       };
     },
-  },
-  serverMemoryRepository: {
+  }),
+  serverMemoryRepository: overrideMembers(realRepositories.serverMemoryRepository, {
     // Pre-picker eligibility source. Kept unconditionally eligible so existing
     // scenarios still flow through the picker and exercise the post-selection
     // `loadDocuments` backstop (which is what renders the in-place none state).
@@ -376,11 +409,11 @@ mock.module("@/utils/db/repositories", () => ({
       repositoryCalls.push({ method: "removeDocument", args });
       return scenario.removeDocumentResult;
     },
-  },
+  }),
 }));
 
-mock.module("@/utils/documents/documentService", () => ({
-  formatVector: (embedding: number[]) => `[${embedding.join(",")}]`,
+scopedMock.module("@/utils/documents/documentService", () => ({
+  ...realDocumentService,
   rebuildDocumentTextContent: async (documentId: number) => {
     chronology.push("repo.rebuild-document");
     repositoryCalls.push({ method: "rebuildDocumentTextContent", args: [documentId] });
@@ -388,7 +421,8 @@ mock.module("@/utils/documents/documentService", () => ({
   },
 }));
 
-mock.module("@/utils/embeddings/embeddingProvider", () => ({
+scopedMock.module("@/utils/embeddings/embeddingProvider", () => ({
+  ...realEmbeddingProvider,
   providerSupportsEmbeddingTaskType: async () => true,
   generateEmbeddingsBatched: async () => {
     chronology.push("embedding.generate");
@@ -397,12 +431,10 @@ mock.module("@/utils/embeddings/embeddingProvider", () => ({
   },
 }));
 
-class PersonalProviderRequiredError extends Error {}
-class CredentialUnavailableError extends Error {}
-
-mock.module("@/utils/provider/credentialResolver", () => ({
-  PersonalProviderRequiredError,
-  CredentialUnavailableError,
+// The real error classes pass through the spread, so `instanceof` checks in the
+// command under test still match what the real credential resolver would throw.
+scopedMock.module("@/utils/provider/credentialResolver", () => ({
+  ...realCredentialResolver,
   resolveCapabilityCredentials: async () => {
     chronology.push("embedding.credentials");
     return { apiKey: "test-key", modelIds: { embedding: 901 } };
@@ -410,7 +442,8 @@ mock.module("@/utils/provider/credentialResolver", () => ({
   getResolvedCapabilityModelId: () => 901,
 }));
 
-mock.module("@/utils/provider/personalProviderRuntime", () => ({
+scopedMock.module("@/utils/provider/personalProviderRuntime", () => ({
+  ...realPersonalProviderRuntime,
   applyPersonalProviderSelectionsToTomoriState: async (state: TomoriState) => {
     chronology.push("provider.overlay");
     return { tomoriState: state };

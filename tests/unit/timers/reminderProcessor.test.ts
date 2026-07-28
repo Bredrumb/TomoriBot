@@ -1,5 +1,19 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
 
+// 1. Capture the real modules BEFORE any `mock.module` runs. Static imports are
+//    hoisted and evaluated first, so these namespaces hold the genuine exports.
+//    Spreading them keeps every mock full-surface: `mock.module` is process-global
+//    and never restored, so a partial factory would break unrelated test files
+//    loaded later in a monolithic `bun test`.
+import * as realMatrix from "@/utils/bridges/matrix";
+import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
+import * as realRepositories from "@/utils/db/repositories";
+import * as realMentionHelper from "@/utils/discord/mentionHelper";
+import * as realWebhookManager from "@/utils/discord/webhookManager";
+import * as realTomoriChat from "@/events/messageCreate/tomoriChat";
+import * as realLogger from "@/utils/misc/logger";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+
 const getDueRemindersMock = mock(async () => []);
 const rescheduleReminderMock = mock(async (_reminderId: number, nextReminderTime: Date) => ({
   reminder_id: _reminderId,
@@ -10,42 +24,61 @@ const tomoriChatMock = mock(async () => "run");
 const suppressNextSelfReplyMock = mock(() => {});
 const ensureDiscordUserMentionMock = mock(async () => {});
 
-mock.module("@/utils/db/repositories", () => ({
-  serverScheduleRepository: {
+// 2. Every factory spreads the real surface first, then overrides only the
+//    exports this file actually needs to control.
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/db/repositories": realRepositories,
+  "@/events/messageCreate/tomoriChat": realTomoriChat,
+  "@/utils/discord/mentionHelper": realMentionHelper,
+  "@/utils/cache/tomoriStateCache": realTomoriStateCache,
+  "@/utils/discord/webhookManager": realWebhookManager,
+  "@/utils/bridges/matrix": realMatrix,
+  "@/utils/misc/logger": realLogger,
+});
+
+scopedMock.module("@/utils/db/repositories", () => ({
+  ...realRepositories,
+  // Repositories are class instances — delegate through the prototype so the
+  // methods this file does not stub stay available to later test files.
+  serverScheduleRepository: overrideMembers(realRepositories.serverScheduleRepository, {
     getDueReminders: getDueRemindersMock,
     rescheduleReminder: rescheduleReminderMock,
     deleteReminderById: deleteReminderByIdMock,
-  },
+  }),
 }));
 
-mock.module("@/events/messageCreate/tomoriChat", () => ({
+scopedMock.module("@/events/messageCreate/tomoriChat", () => ({
+  ...realTomoriChat,
   tomoriChat: tomoriChatMock,
   suppressNextSelfReply: suppressNextSelfReplyMock,
 }));
 
-mock.module("@/utils/discord/mentionHelper", () => ({
+scopedMock.module("@/utils/discord/mentionHelper", () => ({
+  ...realMentionHelper,
   ensureDiscordUserMention: ensureDiscordUserMentionMock,
 }));
 
-mock.module("@/utils/cache/tomoriStateCache", () => ({
+scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
+  ...realTomoriStateCache,
   getCachedAllPersonas: mock(async () => []),
 }));
 
-mock.module("@/utils/discord/webhookManager", () => ({
+scopedMock.module("@/utils/discord/webhookManager", () => ({
+  ...realWebhookManager,
   getOrCreateWebhook: mock(async () => ({ webhook: null })),
   resolvePersonaWebhookIdentity: mock(async () => ({})),
   sendWebhookMessageWithIdentity: mock(async () => {}),
 }));
 
-mock.module("@/utils/bridges/matrix", () => ({
+scopedMock.module("@/utils/bridges/matrix", () => ({
+  ...realMatrix,
   sendMatrixReminderMention: mock(async () => {}),
 }));
 
-mock.module("@/utils/misc/logger", () => ({
-  ColorCode: {
-    INFO: 0x3498db,
-  },
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: mock(() => {}),
     info: mock(() => {}),
     success: mock(() => {}),
