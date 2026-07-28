@@ -28,6 +28,7 @@ import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/ut
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
+import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -315,43 +316,19 @@ export class GenerateVideoTool extends BaseTool {
     context: ToolContext,
   ): Promise<{ mimeType: string; data: string; url: string; fallbackUrl?: string } | null> {
     try {
-      const message = await context.channel.messages.fetch(messageId);
-      if (!message) return null;
-
-      // A forwarded wrapper carries its media inside messageSnapshots (its own
-      // attachment/embed lists are empty), so scan the snapshots as well.
-      const sources = [message, ...message.messageSnapshots.values()];
-
-      // Check attachments first
-      const imageAttachment = sources
-        .flatMap((source) => [...source.attachments.values()])
-        .find((a) => a.contentType?.startsWith("image/"));
-
-      let imageUrl: string | undefined;
-      let mimeType = "image/png";
-
-      if (imageAttachment) {
-        imageUrl = imageAttachment.proxyURL || imageAttachment.url;
-        mimeType = imageAttachment.contentType ?? "image/png";
-      } else {
-        // Fallback to embed images
-        const embedImage = sources.flatMap((source) => source.embeds).find((e) => e.image?.url || e.thumbnail?.url);
-        imageUrl = embedImage?.image?.url ?? embedImage?.thumbnail?.url;
-      }
-
-      if (!imageUrl) {
-        log.warn(`No image found in message ${messageId} for image-to-video`);
-        return null;
+      const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
+      const image = imageUrls[0];
+      if (!image) return null;
+      if (sourceMessageId !== messageId) {
+        log.info(`Using image from replied-to message ${sourceMessageId} for image-to-video reference ${messageId}`);
       }
 
       // Return the URL directly — embedding large images as base64 in the request body
       // can exceed provider body size limits. Providers fetch the URL themselves.
       return {
-        url: imageUrl,
-        ...(imageAttachment?.proxyURL && imageAttachment.proxyURL !== imageAttachment.url
-          ? { fallbackUrl: imageAttachment.url }
-          : {}),
-        mimeType,
+        url: image.proxyUrl || image.url,
+        ...(image.proxyUrl && image.proxyUrl !== image.url ? { fallbackUrl: image.url } : {}),
+        mimeType: image.mimeType,
         data: "", // Empty — providers that need base64 must fetch the url themselves
       };
     } catch (error) {

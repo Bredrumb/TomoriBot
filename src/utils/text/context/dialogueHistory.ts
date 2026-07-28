@@ -243,9 +243,9 @@ function appendMediaDescriptors(
 ): boolean {
   if (!params.isWithinMediaWindow) {
     const extendByNeeded = Math.min(params.mediaWindowCutoff - params.index, params.maxExtendBy);
-    const mediaId = params.messageIdMap?.register(params.msg.id, "media") ?? params.msg.id;
     for (const attachment of params.msg.imageAttachments) {
       if (attachment.isEmoji) continue;
+      const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
       params.mediaDescriptors.push({
         kind: "image",
         uri: attachment.proxyUrl,
@@ -258,6 +258,7 @@ function appendMediaDescriptors(
       });
     }
     for (const attachment of params.msg.videoAttachments) {
+      const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
       params.mediaDescriptors.push({
         kind: "video",
         uri: attachment.isYouTubeLink ? attachment.url : attachment.proxyUrl,
@@ -284,7 +285,6 @@ function appendImageDescriptors(params: Parameters<typeof appendMediaDescriptors
   const shouldRenderCountedImages = !hasCountedImages || params.renderedImageMessageIds.has(params.msg.id);
   let skippedCountedImageCount = 0;
   let skippedDuplicateImageCount = 0;
-  const mediaId = params.messageIdMap?.register(params.msg.id, "media") ?? params.msg.id;
 
   for (const attachment of params.msg.imageAttachments) {
     if (attachment.isEmoji) continue;
@@ -301,6 +301,7 @@ function appendImageDescriptors(params: Parameters<typeof appendMediaDescriptors
       continue;
     }
 
+    const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
     params.mediaDescriptors.push({
       kind: "image",
       uri: attachment.proxyUrl,
@@ -332,8 +333,8 @@ function appendImageDescriptors(params: Parameters<typeof appendMediaDescriptors
 function appendVideoDescriptors(params: Parameters<typeof appendMediaDescriptors>[0]): void {
   if (params.msg.videoAttachments.length === 0) return;
 
-  const mediaId = params.messageIdMap?.register(params.msg.id, "media") ?? params.msg.id;
   for (const attachment of params.msg.videoAttachments) {
+    const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
     params.mediaDescriptors.push({
       kind: "video",
       uri: attachment.isYouTubeLink ? attachment.url : attachment.proxyUrl,
@@ -346,6 +347,20 @@ function appendVideoDescriptors(params: Parameters<typeof appendMediaDescriptors
   }
 }
 
+/**
+ * Register the fetchable Discord message that owns one media attachment.
+ *
+ * Copied reply media carries the referenced source message. Local media and
+ * forwarded snapshots fall back to the current wrapper message.
+ */
+function registerAttachmentMediaId(
+  params: Parameters<typeof appendMediaDescriptors>[0],
+  sourceMessageId?: string,
+): string {
+  const resolvedMessageId = sourceMessageId ?? params.msg.id;
+  return params.messageIdMap?.register(resolvedMessageId, "media") ?? resolvedMessageId;
+}
+
 async function buildMediaAttributionHint(
   params: Parameters<typeof appendDialogueHistoryContext>[0] & {
     msg: SimplifiedMessageForContext;
@@ -353,7 +368,14 @@ async function buildMediaAttributionHint(
     hasVideos: boolean;
   },
 ): Promise<string> {
-  const mediaMessageIds = params.msg.mediaSourceMessageIds ?? [params.msg.id];
+  const mediaMessageIds = [
+    ...new Set([
+      ...params.msg.imageAttachments
+        .filter((attachment) => !attachment.isEmoji)
+        .map((attachment) => attachment.sourceMessageId ?? params.msg.id),
+      ...params.msg.videoAttachments.map((attachment) => attachment.sourceMessageId ?? params.msg.id),
+    ]),
+  ];
   const nonEmojiImageCount = params.msg.imageAttachments.filter((attachment) => !attachment.isEmoji).length;
   const videoCount = params.msg.videoAttachments.length;
   const totalMediaCount = nonEmojiImageCount + videoCount;

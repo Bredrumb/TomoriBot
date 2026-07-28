@@ -737,6 +737,13 @@ async function simplifyMessage(
     appendComponentMediaFromMessage(replyContext.referencedMessage, imageAttachments, videoAttachments);
     imageAttachments.push(...extractEmojiImageAttachments(replyContext.referencedMessage.content));
     if (imageAttachments.length > preRefImageCount || videoAttachments.length > preRefVideoCount) {
+      tagNewMediaWithSource(
+        imageAttachments,
+        preRefImageCount,
+        videoAttachments,
+        preRefVideoCount,
+        replyContext.referencedMessage.id,
+      );
       mediaSourceMessageIds.push(replyContext.referencedMessage.id);
       remoteMediaSourceKind = "reply";
     }
@@ -790,6 +797,8 @@ async function simplifyMessage(
     content = stripAtPersonaTriggers(content, turn.allPersonas);
   }
 
+  const preForwardImageCount = imageAttachments.length;
+  const preForwardVideoCount = videoAttachments.length;
   const forwardContext = await buildForwardContext({
     message: msg,
     content,
@@ -802,6 +811,9 @@ async function simplifyMessage(
     selfDebugEnabled: turn.persona.config.self_debug_enabled ?? false,
   });
   content = forwardContext.content;
+  if (imageAttachments.length > preForwardImageCount || videoAttachments.length > preForwardVideoCount) {
+    tagNewMediaWithSource(imageAttachments, preForwardImageCount, videoAttachments, preForwardVideoCount, msg.id);
+  }
   mediaSourceMessageIds.push(...forwardContext.mediaSourceMessageIds);
   remoteMediaSourceKind = forwardContext.remoteMediaSourceKind;
 
@@ -880,6 +892,23 @@ async function simplifyMessage(
     },
     isDebug,
   };
+}
+
+function tagNewMediaWithSource(
+  imageAttachments: SimplifiedMessageForContext["imageAttachments"],
+  imageStartIndex: number,
+  videoAttachments: SimplifiedMessageForContext["videoAttachments"],
+  videoStartIndex: number,
+  sourceMessageId: string,
+): void {
+  for (let index = imageStartIndex; index < imageAttachments.length; index++) {
+    const attachment = imageAttachments[index];
+    if (attachment) attachment.sourceMessageId = sourceMessageId;
+  }
+  for (let index = videoStartIndex; index < videoAttachments.length; index++) {
+    const attachment = videoAttachments[index];
+    if (attachment) attachment.sourceMessageId = sourceMessageId;
+  }
 }
 
 async function withReplyContext(

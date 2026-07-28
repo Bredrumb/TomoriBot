@@ -36,6 +36,8 @@ export type SimplifiedMessageForContext = {
     mimeType: string | null;
     filename: string;
     isEmoji?: boolean;
+    /** Discord message that media-reference tools should fetch for this attachment. */
+    sourceMessageId?: string;
   }>;
   videoAttachments: Array<{
     url: string;
@@ -43,6 +45,8 @@ export type SimplifiedMessageForContext = {
     mimeType: string | null;
     filename: string;
     isYouTubeLink: boolean;
+    /** Discord message that media-reference tools should fetch for this attachment. */
+    sourceMessageId?: string;
   }>;
 };
 

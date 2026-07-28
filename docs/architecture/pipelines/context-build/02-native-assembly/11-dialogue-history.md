@@ -82,9 +82,15 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   - Drops duplicate images that recur in a later in-window message
     (`duplicateImageLastIndex` lookup).
   - Adds per-message `mediaDescriptors` carrying URI, MIME type,
-    registered media ID, media-window membership, and `extendBy` for older
+    a source-aware registered media ID, media-window membership, and `extendBy` for older
     out-of-window media. Custom emoji images are not descriptors; they remain
     text via emoji normalization.
+  - Media copied from a directly replied-to message registers that original
+    message as its media ID owner. This lets image generation, image analysis,
+    and image-to-video tools fetch the referenced bytes even though the
+    descriptor appears on the text-only reply's dialogue entry. As a defensive
+    fallback, the shared image resolver also follows one direct reply hop when
+    a tool is given the wrapper message ID.
 - **Budget-only media notes**:
   - Rendered-image-limit skips emit a capability-neutral
     `[System: N image(s) omitted due to rendered-image limit]` note.
@@ -102,7 +108,8 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - **Media attribution hint** — `[System: These images (Media IDs: X, Y) were
   sent by Z]`, with dedicated wording for reply-referenced media ("included in
   the message being replied to") and forwarded media ("attached to the
-  forwarded message described above"). Forwarded media registers the forward
+  forwarded message described above"). Reply media registers the referenced
+  message that owns the bytes, while forwarded media registers the forward
   *wrapper's* own message ID as its media ID: the original message lives in the
   source channel, so only the wrapper ID is resolvable by media-ID tools
   fetching from the current channel (the shared image extractor scans the
