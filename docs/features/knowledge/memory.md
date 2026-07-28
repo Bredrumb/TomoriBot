@@ -95,6 +95,12 @@ History imports are stored as documents, so `/memory document view` and
 **Requires an embedding model**, configured with `/model embedding`. See
 [Providers & Models](/features/setup-administration/providers-and-models/).
 
+Fact extraction needs a text model that can return structured JSON output. If the model
+fails to produce it, the import stops and reports the provider's own error rather than
+claiming no facts were found — switching to a model that supports JSON schema output
+usually resolves it. A batch that genuinely contained nothing worth keeping still reports
+"No Facts Extracted" as before.
+
 ## Short-Term Memory (STM)
 
 Beyond persistent memories, she keeps a short-term memory of recent conversations for

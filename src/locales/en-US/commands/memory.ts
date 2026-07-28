@@ -121,6 +121,8 @@ export default {
         no_extractable_content_description: `This batch of messages contained only system messages or empty content. Continue from the message ID below to process more.`,
         no_facts_extracted_title: `No Facts Extracted`,
         no_facts_extracted_description: `The AI could not extract any meaningful facts from this batch. The conversation may be too short or consist only of trivial messages.`,
+        extraction_failed_title: `Fact Extraction Failed`,
+        extraction_failed_description: `The model could not produce structured output, so no facts could be extracted ({failed_windows} of {total_windows} batches failed). This usually means the selected model does not support JSON schema output, try a different model. The provider reported:`,
         duplicate_title: `Document Name Already Exists`,
         duplicate_description: `A document named \`{name}\` already exists in this scope. Please choose a different name.`,
         limit_exceeded_title: `Document Limit Reached`,

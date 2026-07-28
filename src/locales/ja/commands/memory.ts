@@ -121,6 +121,8 @@ export default {
         no_extractable_content_description: `このバッチのメッセージはすべてシステムメッセージか空でした。続きを処理するには、下記のメッセージIDから再開してください。`,
         no_facts_extracted_title: `ファクトが抽出されませんでした`,
         no_facts_extracted_description: `AIはこのバッチから有意義なファクトを抽出できませんでした。会話が短すぎるか、些細なメッセージのみの場合に発生します。`,
+        extraction_failed_title: `ファクト抽出に失敗しました`,
+        extraction_failed_description: `モデルが構造化出力を生成できなかったため、ファクトを抽出できませんでした（{total_windows}件中{failed_windows}件のバッチが失敗）。通常、選択したモデルがJSONスキーマ出力に対応していないことが原因です。別のモデルをお試しください。プロバイダーからのエラー内容：`,
         duplicate_title: `ドキュメント名が既に存在します`,
         duplicate_description: `\`{name}\`という名前のドキュメントがこのスコープに既に存在します。別の名前を選んでください。`,
         limit_exceeded_title: `ドキュメント上限に達しました`,

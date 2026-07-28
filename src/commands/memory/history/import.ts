@@ -52,9 +52,12 @@ import {
 } from "@/utils/documents/historyExtractionPrompt";
 import { ragRepository } from "@/utils/db/repositories";
 import type { RetrievedDocumentChunk } from "@/utils/documents/documentService";
-import type { HistoryMemoryEntry } from "@/providers/utils/historyExtractionSchema";
 import type { EmbeddingModelRow, ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
-import { extractHistoryWindowForProvider } from "@/providers/utils/providerFeatureExecutors";
+import {
+  extractHistoryWindowForProvider,
+  type HistoryExtractionOutcome,
+} from "@/providers/utils/providerFeatureExecutors";
+import { truncateForEmbedDescription } from "@/utils/discord/embedHelper";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import {
@@ -256,6 +259,51 @@ async function showNoFactsExtractedEmbed(
 }
 
 /**
+ * Shows the "extraction failed" embed, quoting the provider's own error text.
+ *
+ * Kept distinct from {@link showNoFactsExtractedEmbed} so a model that cannot emit
+ * structured output reports the real cause instead of a misleading empty-result notice.
+ */
+async function showExtractionFailedEmbed(
+  statusTarget: HistoryImportStatusTarget,
+  locale: string,
+  footer: string,
+  failure: { error: string; failedWindows: number; totalWindows: number },
+): Promise<void> {
+  const headline = localizer(locale, "commands.memory.history.import.extraction_failed_description", {
+    failed_windows: failure.failedWindows.toString(),
+    total_windows: failure.totalWindows.toString(),
+  });
+  const suffix = `\n\n${footer}`;
+  // 1. Provider errors can be long (schema-validation dumps in particular), so reserve room
+  //    for the headline, the code fence, and the pagination footer before truncating.
+  const fenceOverhead = "\n\n```\n\n```".length;
+  const detail = truncateForEmbedDescription(failure.error, headline.length + suffix.length + fenceOverhead);
+  await replaceHistoryImportStatus(statusTarget, locale, {
+    titleKey: "commands.memory.history.import.extraction_failed_title",
+    description: `${headline}\n\n\`\`\`\n${detail}\n\`\`\`${suffix}`,
+    color: ColorCode.ERROR,
+  });
+}
+
+/**
+ * Renders the correct terminal embed for a failed extraction run, so every import flow
+ * reports a provider error as an error and an empty result as an empty result.
+ */
+async function showExtractionFailureTerminal(
+  statusTarget: HistoryImportStatusTarget,
+  locale: string,
+  footer: string,
+  failure: Extract<IncrementalExtractionResult, { ok: false }>,
+): Promise<void> {
+  if (failure.reason === "extraction-failed") {
+    await showExtractionFailedEmbed(statusTarget, locale, footer, failure);
+    return;
+  }
+  await showNoFactsExtractedEmbed(statusTarget, locale, footer);
+}
+
+/**
  * Configures the /memory history import subcommand options.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -403,6 +451,9 @@ function splitIntoWindows(lines: string[], windowSize: number): string[] {
 
 /**
  * Runs the LLM extraction for a single text window.
+ *
+ * Returns the provider outcome verbatim so a failed window stays distinguishable from
+ * an empty one; {@link runIncrementalExtraction} decides how to aggregate the two.
  */
 async function extractWindow(
   windowText: string,
@@ -412,7 +463,7 @@ async function extractWindow(
   apiKey: string,
   systemPrompt: string,
   endpointUrl?: string,
-): Promise<HistoryMemoryEntry[]> {
+): Promise<HistoryExtractionOutcome> {
   const userPrompt = buildExtractionUserPrompt(windowText, previousRestatements);
   return await extractHistoryWindowForProvider({
     providerName: provider,
@@ -485,7 +536,7 @@ async function fetchAndFormatMessages(params: {
     reachedEnd = false;
   }
 
-  const formattedResult = formatMessagesForExtraction(messages, allPersonas);
+  const formattedResult = formatMessagesForExtraction(messages, allPersonas, channel.client.user?.id);
 
   return {
     formattedResult,
@@ -588,11 +639,23 @@ async function createDocumentForImport(params: {
 }
 
 /**
+ * Aggregate outcome of an incremental extraction run.
+ *
+ * `no-facts` means every window succeeded but yielded nothing worth keeping;
+ * `extraction-failed` means at least one window errored and none produced facts, and
+ * carries the provider's own error text so the terminal embed can show the real cause.
+ */
+type IncrementalExtractionResult =
+  | { ok: true; totalFactCount: number; allChunkText: string }
+  | { ok: false; reason: "no-facts" }
+  | { ok: false; reason: "extraction-failed"; error: string; failedWindows: number; totalWindows: number };
+
+/**
  * Runs incremental LLM extraction over message windows, embedding and persisting each
  * window's facts immediately after extraction to avoid interaction token timeouts.
  *
- * @returns Total fact count and joined chunk text for document finalization, or null
- *          if no facts were extracted (error already replied, caller should clean up documents).
+ * @returns Fact count and joined chunk text on success, otherwise a typed failure the
+ *          caller renders (and cleans up its documents for).
  */
 async function runIncrementalExtraction(params: {
   formattedResult: ReturnType<typeof formatMessagesForExtraction>;
@@ -610,7 +673,7 @@ async function runIncrementalExtraction(params: {
   embeddingProvider: string;
   embeddingCodename: string;
   embeddingApiKey: string;
-}): Promise<{ totalFactCount: number; allChunkText: string } | null> {
+}): Promise<IncrementalExtractionResult> {
   const {
     formattedResult,
     provider,
@@ -633,6 +696,13 @@ async function runIncrementalExtraction(params: {
   const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
   const allChunks: string[] = [];
   let previousRestatements: string[] = [];
+  // 1. Failure bookkeeping: the first provider error is the one shown to the user, since
+  //    a model that cannot emit structured output fails identically on every window.
+  //    `discardedEntries` counts facts the model returned in an unusable shape, which is a
+  //    softer failure than a window erroring outright but must not vanish silently.
+  let failedWindows = 0;
+  let firstExtractionError: string | null = null;
+  let discardedEntries = 0;
   const chunkStartIndex = new Map<number, number>();
   for (const t of writeTargets) chunkStartIndex.set(t.documentId, 0);
 
@@ -653,7 +723,7 @@ async function runIncrementalExtraction(params: {
     });
 
     const composedSystemPrompt = await composeSystemPrompt(windows[i], i);
-    const windowEntries = await extractWindow(
+    const windowOutcome = await extractWindow(
       windows[i],
       previousRestatements,
       provider,
@@ -663,6 +733,17 @@ async function runIncrementalExtraction(params: {
       endpointUrl,
     );
 
+    // 2. A failed window is recorded and skipped rather than treated as "found nothing",
+    //    so the run can still report the real cause if no window ever succeeds.
+    if (!windowOutcome.ok) {
+      failedWindows++;
+      firstExtractionError ??= windowOutcome.error;
+      continue;
+    }
+
+    discardedEntries += windowOutcome.discarded;
+
+    const windowEntries = windowOutcome.entries;
     if (windowEntries.length > 0) {
       const windowChunks = windowEntries.map((e) => e.lossless_restatement);
 
@@ -705,11 +786,40 @@ async function runIncrementalExtraction(params: {
     }
   }
 
+  // 3. Nothing persisted: report the provider failure when one occurred, and fall back to
+  //    the genuine "nothing worth extracting" terminal only when every window succeeded.
   if (allChunks.length === 0) {
-    return null;
+    if (firstExtractionError !== null) {
+      return {
+        ok: false,
+        reason: "extraction-failed",
+        error: firstExtractionError,
+        failedWindows,
+        totalWindows: windows.length,
+      };
+    }
+    // Every window "succeeded" yet nothing survived validation — that is a malformed-output
+    // problem, not an empty conversation, so it must not read as "no facts found".
+    if (discardedEntries > 0) {
+      return {
+        ok: false,
+        reason: "extraction-failed",
+        error: `The model returned ${discardedEntries} fact(s), none of which were in a usable format.`,
+        failedWindows: windows.length,
+        totalWindows: windows.length,
+      };
+    }
+    return { ok: false, reason: "no-facts" };
   }
 
-  return { totalFactCount: allChunks.length, allChunkText: allChunks.join("\n\n") };
+  if (discardedEntries > 0) {
+    log.warn(
+      `History import kept ${allChunks.length} facts but discarded ${discardedEntries} malformed ` +
+        `entries across ${windows.length} window(s).`,
+    );
+  }
+
+  return { ok: true, totalFactCount: allChunks.length, allChunkText: allChunks.join("\n\n") };
 }
 
 interface HistoryImportNotice {
@@ -1188,9 +1298,9 @@ export async function execute(
             writeTargets: [{ documentId, dbServerId: activeTomoriState.server_id, personaId: targetPersonaId }],
             ...embeddingParams,
           });
-          if (!extractResult) {
+          if (!extractResult.ok) {
             await serverMemoryRepository.removeDocument(documentId, activeTomoriState.server_id, targetPersonaId);
-            await showNoFactsExtractedEmbed(work.message, locale, footer);
+            await showExtractionFailureTerminal(work.message, locale, footer, extractResult);
             return completePersonaWorkflow();
           }
 
@@ -1318,9 +1428,9 @@ export async function execute(
         ...embeddingParams,
       });
 
-      if (!extractResult) {
+      if (!extractResult.ok) {
         await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, null);
-        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
+        await showExtractionFailureTerminal(modalSubmitInteraction, locale, footer, extractResult);
         return;
       }
 
@@ -1446,9 +1556,9 @@ export async function execute(
         ...embeddingParams,
       });
 
-      if (!extractResult) {
+      if (!extractResult.ok) {
         await serverMemoryRepository.removeDocument(documentId, tomoriState.server_id, null);
-        await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
+        await showExtractionFailureTerminal(modalSubmitInteraction, locale, footer, extractResult);
         return;
       }
 
@@ -1544,15 +1654,15 @@ export async function execute(
     });
 
     for (const { target } of personaTargets) {
-      if (!extractResult) {
+      if (!extractResult.ok) {
         await serverMemoryRepository.removeDocument(target.documentId, tomoriState.server_id, target.personaId);
       } else {
         await finalizeDocumentContent(target.documentId, extractResult.allChunkText);
       }
     }
 
-    if (!extractResult) {
-      await showNoFactsExtractedEmbed(modalSubmitInteraction, locale, footer);
+    if (!extractResult.ok) {
+      await showExtractionFailureTerminal(modalSubmitInteraction, locale, footer, extractResult);
       return;
     }
 

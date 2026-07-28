@@ -119,7 +119,7 @@ function extractGoogleEmbeddings(response: unknown): number[][] {
 
   const embeddingsList = Array.isArray(raw?.embeddings) ? raw.embeddings : raw?.embedding ? [raw.embedding] : [];
 
-  return embeddingsList
+  const extracted = embeddingsList
     .map((entry) => {
       if (Array.isArray(entry)) {
         return entry;
@@ -130,6 +130,17 @@ function extractGoogleEmbeddings(response: unknown): number[][] {
       return [];
     })
     .filter((values) => values.length > 0);
+
+  // Dropping unreadable entries silently would make a malformed response look like a short
+  // batch, so record it: the caller only sees a count, not the shape that produced it.
+  if (extracted.length !== embeddingsList.length) {
+    log.warn(
+      `Google embedding response contained ${embeddingsList.length} entries but only ` +
+        `${extracted.length} had usable values.`,
+    );
+  }
+
+  return extracted;
 }
 
 // Google-specific configuration extending the base ProviderConfig
