@@ -133,9 +133,16 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
    *
    * @param userDiscordId - Discord user snowflake
    * @param serverDiscId  - Optional Discord server snowflake (filters to that server)
+   * @param personaId     - Active persona ID (filters reminders to that persona)
+   * @param includeUnassigned - Whether legacy reminders with no persona should be included
    */
-  async getPendingRemindersForUser(userDiscordId: string, serverDiscId?: string): Promise<ReminderRow[] | null> {
-    return this.sqlGetPendingRemindersForUser(userDiscordId, serverDiscId);
+  async getPendingRemindersForUser(
+    userDiscordId: string,
+    serverDiscId?: string,
+    personaId?: number,
+    includeUnassigned = false,
+  ): Promise<ReminderRow[] | null> {
+    return this.sqlGetPendingRemindersForUser(userDiscordId, serverDiscId, personaId, includeUnassigned);
   }
 
   /**
@@ -454,12 +461,34 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
   private async sqlGetPendingRemindersForUser(
     userDiscordId: string,
     serverDiscId?: string,
+    personaId?: number,
+    includeUnassigned = false,
   ): Promise<ReminderRow[] | null> {
     try {
       // 1. Query for pending reminders (reminder_time > now) for the user
       let reminderData: unknown[];
-      if (serverDiscId) {
+      if (serverDiscId && typeof personaId === "number") {
         // Join with servers table to filter by server_disc_id
+        reminderData = includeUnassigned
+          ? await sql`
+              SELECT r.* FROM reminders r
+              JOIN servers s ON r.server_id = s.server_id
+              WHERE r.user_discord_id = ${userDiscordId}
+              AND s.server_disc_id = ${serverDiscId}
+              AND (r.persona_id = ${personaId} OR r.persona_id IS NULL)
+              AND r.reminder_time > CURRENT_TIMESTAMP
+              ORDER BY r.reminder_time ASC
+            `
+          : await sql`
+          SELECT r.* FROM reminders r
+          JOIN servers s ON r.server_id = s.server_id
+          WHERE r.user_discord_id = ${userDiscordId}
+          AND s.server_disc_id = ${serverDiscId}
+          AND r.persona_id = ${personaId}
+          AND r.reminder_time > CURRENT_TIMESTAMP
+          ORDER BY r.reminder_time ASC
+            `;
+      } else if (serverDiscId) {
         reminderData = await sql`
           SELECT r.* FROM reminders r
           JOIN servers s ON r.server_id = s.server_id
@@ -468,6 +497,22 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
           AND r.reminder_time > CURRENT_TIMESTAMP
           ORDER BY r.reminder_time ASC
         `;
+      } else if (typeof personaId === "number") {
+        reminderData = includeUnassigned
+          ? await sql`
+              SELECT * FROM reminders
+              WHERE user_discord_id = ${userDiscordId}
+              AND (persona_id = ${personaId} OR persona_id IS NULL)
+              AND reminder_time > CURRENT_TIMESTAMP
+              ORDER BY reminder_time ASC
+            `
+          : await sql`
+              SELECT * FROM reminders
+              WHERE user_discord_id = ${userDiscordId}
+              AND persona_id = ${personaId}
+              AND reminder_time > CURRENT_TIMESTAMP
+              ORDER BY reminder_time ASC
+            `;
       } else {
         // Get all pending reminders for user across all servers
         reminderData = await sql`

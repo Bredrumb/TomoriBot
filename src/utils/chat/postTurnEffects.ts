@@ -1,9 +1,10 @@
 import { PrivacyLevel } from "@/types/db/schema";
 import { storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
+import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
 import { resolveManagedChannelWebhook, sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
 import { getChannelDeliveredWebhookIdentity } from "@/utils/discord/stream/channelDeliveryContinuity";
-import { log } from "@/utils/misc/logger";
+import { ColorCode, log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
 import { localizer } from "@/utils/text/localizer";
@@ -279,16 +280,53 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
 
 async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   const incoming = context.turn.lockedTurn.admission.incoming;
-  if (!shouldRetryEmptyResponse(incoming, result)) {
+  if (result.status !== "empty_response") {
     return;
   }
 
-  await new Promise((resolve) => setTimeout(resolve, EMPTY_RESPONSE_RETRY_DELAY_MS));
   const lastStreamResult = result.streamResults.at(-1);
   const streamResultData =
     lastStreamResult?.data && typeof lastStreamResult.data === "object"
       ? (lastStreamResult.data as Record<string, unknown>)
       : undefined;
+  const terminalFinishReason =
+    typeof streamResultData?.finishReason === "string" ? streamResultData.finishReason : undefined;
+
+  if (!shouldRetryEmptyResponse(incoming, result)) {
+    log.warn(`Empty response after ${MAX_EMPTY_RESPONSE_RETRIES} retries.`);
+
+    if (context.isUserImpersonation) {
+      throw new Error("User impersonation returned an empty response.");
+    }
+
+    if (!context.shouldSurfaceUserErrors) {
+      log.warn(`Suppressing empty response embed for non-deliberate chat turn ${context.message.id}`);
+      return;
+    }
+
+    await sendStandardEmbed(
+      context.channel as Parameters<typeof sendStandardEmbed>[0],
+      context.locale,
+      {
+        titleKey: "genai.empty_response_title",
+        descriptionKey: "genai.empty_response_description",
+        color: ColorCode.WARN,
+        footerKey: "genai.generic_error_footer",
+      },
+      {
+        webhook: context.responseTarget?.webhook,
+        personaUsername: context.responseTarget?.personaUsername,
+        personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
+      },
+    ).catch((error) => log.warn("Failed to send empty response embed to channel", error));
+    return;
+  }
+
+  log.info(
+    `Empty response detected (attempt ${incoming.retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES + 1}). ` +
+      `finishReason=${terminalFinishReason ?? "unknown"}. Retrying with fresh context in ${EMPTY_RESPONSE_RETRY_DELAY_MS}ms...`,
+  );
+  await new Promise((resolve) => setTimeout(resolve, EMPTY_RESPONSE_RETRY_DELAY_MS));
   const emptyResponseReason =
     typeof streamResultData?.emptyResponseReason === "string" ? streamResultData.emptyResponseReason : undefined;
   const speakerGuardRetryDirective =

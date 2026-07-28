@@ -56,6 +56,7 @@ If a completed `GenerationTurnResult` carries `selectedSticker`:
 If `result.status === "empty_response"` and `incoming.retryCount <
 MAX_EMPTY_RESPONSE_RETRIES` (default 2):
 
+- Logs the current attempt and terminal finish reason.
 - Sleeps `EMPTY_RESPONSE_RETRY_DELAY_MS` (default 1000ms).
 - If the empty-response reason was `"speaker_guard"`, prepends a synthetic
   speaker-guard directive to `injectedContextItems` via
@@ -71,6 +72,15 @@ stage 06). The stream side reads `incoming.retryCount` (threaded through
 `StreamingContext.emptyResponseRetryCount`) to strip-and-deliver instead of
 discarding once this retry budget is exhausted, so leak turns degrade to a
 label-stripped reply rather than silence.
+
+When the retry budget is exhausted:
+
+- Deliberate turns (`context.shouldSurfaceUserErrors === true`) receive the
+  localized `genai.empty_response_*` warning embed.
+- Passive autochat and other non-deliberate turns log the exhaustion without
+  posting an error embed into the conversation.
+- User-impersonation turns throw an error back to their command flow instead
+  of posting the standard warning embed.
 
 ### 3. `consumeTextQuota`
 
@@ -151,6 +161,8 @@ After this stage runs:
   with the appropriate flags (`skipLock=true` for retry,
   `suppressNextSelfReply` for boomerang) so they do not interfere with the
   outer lock or self-reply chain semantics.
+- Empty-response exhaustion is user-visible only for deliberate turns;
+  passive and internal chat turns remain silent.
 
 ## Extension points
 

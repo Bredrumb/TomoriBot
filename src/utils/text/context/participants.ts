@@ -372,6 +372,8 @@ async function buildUserDetailLines(
   const pendingReminders = await serverScheduleRepository.getPendingRemindersForUser(
     params.userRow.user_disc_id,
     params.guildId,
+    params.tomoriState?.persona_id,
+    !params.tomoriState?.is_alter,
   );
   if (pendingReminders && pendingReminders.length > 0) {
     detailLines.push("- Reminders:");
