@@ -17,7 +17,7 @@ function selectedCallback(source: string): string {
 }
 
 describe("composite persona workflow migrations", () => {
-  it("keeps history-import persona progress and results on the canonical controller", () => {
+  it("keeps history-import persona progress and results on the anchor controller", () => {
     const source = readSource("src/commands/memory/history/import.ts");
     const personaMarker = source.indexOf("// SCOPE: PERSONA");
     const personaStart = source.indexOf('if (scope === "persona")', personaMarker);

@@ -169,8 +169,8 @@ async function paginatePersonaStatus(
   if (pages.length === 0) return;
 
   let currentPage = 0;
-  const previousCustomId = `${selection.message.canonicalMessageId}${PERSONA_STATUS_PREV_SUFFIX}`;
-  const nextCustomId = `${selection.message.canonicalMessageId}${PERSONA_STATUS_NEXT_SUFFIX}`;
+  const previousCustomId = `${selection.message.anchorMessageId}${PERSONA_STATUS_PREV_SUFFIX}`;
+  const nextCustomId = `${selection.message.anchorMessageId}${PERSONA_STATUS_NEXT_SUFFIX}`;
   const buildPayload = (includeControls: boolean) =>
     buildPersonaStatusPayload(
       pages[currentPage],
@@ -183,11 +183,11 @@ async function paginatePersonaStatus(
     );
 
   await selection.message.replace(buildPayload(true));
-  const canonicalMessage = await selection.message.fetchMessage();
+  const anchorMessage = await selection.message.fetchMessage();
 
   try {
     while (true) {
-      const button = await canonicalMessage.awaitMessageComponent({
+      const button = await anchorMessage.awaitMessageComponent({
         componentType: ComponentType.Button,
         filter: (candidate) =>
           candidate.user.id === interaction.user.id &&

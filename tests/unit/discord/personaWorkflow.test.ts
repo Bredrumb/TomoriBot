@@ -228,7 +228,7 @@ mock.module("@/utils/discord/ui/interactionCore", () => ({
 }));
 
 const {
-  beginCanonicalPrivateWorkflow,
+  beginAnchorPrivateWorkflow,
   completePersonaWorkflow,
   retryPersonaWorkflow,
   runPersonaPickerWorkflow,
@@ -239,7 +239,7 @@ type AwaitedButtonFactory = (renderedPayload: unknown) => ButtonInteraction;
 type AwaitedButton = ButtonInteraction | AwaitedButtonFactory | "time" | Error;
 
 interface WorkflowHarness {
-  canonicalMessageId: string;
+  anchorMessageId: string;
   message: Message;
   root: ChatInputCommandInteraction;
   awaitQueue: AwaitedButton[];
@@ -296,9 +296,9 @@ function makeComponentMessage(id: string, harness: WorkflowHarness): Message {
   } as unknown as Message;
 }
 
-function makeHarness(canonicalMessageId = "canonical-message"): WorkflowHarness {
+function makeHarness(anchorMessageId = "anchor-message"): WorkflowHarness {
   const harness = {
-    canonicalMessageId,
+    anchorMessageId,
     awaitQueue: [],
     lastRenderedPayload: undefined,
     record(method: string, source: string, payload?: unknown) {
@@ -306,7 +306,7 @@ function makeHarness(canonicalMessageId = "canonical-message"): WorkflowHarness 
     },
   } as unknown as WorkflowHarness;
 
-  harness.message = makeComponentMessage(canonicalMessageId, harness);
+  harness.message = makeComponentMessage(anchorMessageId, harness);
   harness.root = {
     id: "root-interaction",
     user: { id: "workflow-user" },
@@ -342,7 +342,7 @@ function makeHarness(canonicalMessageId = "canonical-message"): WorkflowHarness 
 function makeButton(
   harness: WorkflowHarness,
   customId = "persona_select_0",
-  messageId: string | null = harness.canonicalMessageId,
+  messageId: string | null = harness.anchorMessageId,
 ): ButtonInteraction {
   const id = `button-${++interactionSequence}`;
   const button = {
@@ -373,7 +373,7 @@ function makeButton(
 
 function makeModalSubmit(
   harness: WorkflowHarness,
-  messageId: string | null = harness.canonicalMessageId,
+  messageId: string | null = harness.anchorMessageId,
 ): ModalSubmitInteraction {
   const id = `modal-${++interactionSequence}`;
   const modal = {
@@ -465,7 +465,7 @@ function expectTypedError(error: unknown, code: PersonaWorkflowUpdateError["code
 function expectFatalLog(stage: string): void {
   const fatalLog = warnings.find((warning) => {
     const context = warning.context as
-      | { errorType?: unknown; metadata?: { stage?: unknown; canonicalMessageId?: unknown } }
+      | { errorType?: unknown; metadata?: { stage?: unknown; anchorMessageId?: unknown } }
       | undefined;
     return context?.errorType === "PersonaWorkflowFatal" && context.metadata?.stage === stage;
   });
@@ -511,7 +511,7 @@ describe("runPersonaPickerWorkflow selection and terminal outcomes", () => {
       onSelected: async (selection) => {
         expect(selection.persona).toBe(personas[0]);
         expect(selection.absoluteIndex).toBe(0);
-        expect(selection.message.canonicalMessageId).toBe(harness.canonicalMessageId);
+        expect(selection.message.anchorMessageId).toBe(harness.anchorMessageId);
         return completePersonaWorkflow("selected-zero");
       },
     });
@@ -558,7 +558,7 @@ describe("runPersonaPickerWorkflow selection and terminal outcomes", () => {
     ];
 
     for (const testCase of cases) {
-      const harness = makeHarness(`canonical-${testCase.name}`);
+      const harness = makeHarness(`anchor-${testCase.name}`);
       const button = makeButton(harness);
       pickerQueue.push({
         success: true,
@@ -584,7 +584,7 @@ describe("runPersonaPickerWorkflow selection and terminal outcomes", () => {
 
   it("preserves cancelled, timeout, error, and fatal as distinct outcomes", async () => {
     for (const reason of ["cancelled", "timeout", "error", "fatal"] as const) {
-      const harness = makeHarness(`canonical-${reason}`);
+      const harness = makeHarness(`anchor-${reason}`);
       pickerQueue.push({ success: false, reason });
       let cancelCount = 0;
       let selectedCount = 0;
@@ -626,7 +626,7 @@ describe("runPersonaPickerWorkflow selection and terminal outcomes", () => {
     expectFatalLog("picker");
   });
 
-  it("does not retry after a caught fatal canonical-message controller failure", async () => {
+  it("does not retry after a caught fatal anchor-message controller failure", async () => {
     const harness = makeHarness();
     queueSelection(makeButton(harness), 0);
     queueSelection(makeButton(harness), 0);
@@ -645,7 +645,7 @@ describe("runPersonaPickerWorkflow selection and terminal outcomes", () => {
       },
     });
 
-    expectTypedError(caughtError, "canonical-message-unavailable");
+    expectTypedError(caughtError, "anchor-message-unavailable");
     expect(result.outcome).toBe("fatal");
     expect(pickerCalls).toHaveLength(1);
     expectFatalLog("root-edit");
@@ -671,7 +671,7 @@ describe("runPersonaPickerWorkflow selection and terminal outcomes", () => {
     expectFatalLog("root-edit");
   });
 
-  it("replaces the canonical message after an acknowledged callback throws", async () => {
+  it("replaces the anchor message after an acknowledged callback throws", async () => {
     const harness = makeHarness();
     queueSelection(makeButton(harness), 0);
     const callbackError = new Error("unexpected callback failure");
@@ -708,7 +708,7 @@ describe("runPersonaPickerWorkflow selection and terminal outcomes", () => {
 
     expect(result.outcome).toBe("fatal");
     if (result.outcome === "fatal") {
-      expectTypedError(result.error, "canonical-message-unavailable");
+      expectTypedError(result.error, "anchor-message-unavailable");
     }
     expect(pickerCalls).toHaveLength(1);
     expectFatalLog("root-edit");
@@ -785,7 +785,7 @@ describe("workflow acknowledgment and modal phases", () => {
     expectAllInPlacePayloadsAreV2();
   });
 
-  it("replaces the canonical V2 message through an unacknowledged message-backed modal submit", async () => {
+  it("replaces the anchor V2 message through an unacknowledged message-backed modal submit", async () => {
     const harness = makeHarness();
     const selectedButton = makeButton(harness);
     const modalSubmit = makeModalSubmit(harness);
@@ -936,7 +936,7 @@ describe("workflow acknowledgment and modal phases", () => {
       modalMessageId: string | null;
       preAcknowledge?: boolean;
     }> = [
-      { expectedCode: "already-acknowledged", modalMessageId: "canonical-message", preAcknowledge: true },
+      { expectedCode: "already-acknowledged", modalMessageId: "anchor-message", preAcknowledge: true },
       { expectedCode: "message-mismatch", modalMessageId: "legacy-message" },
       { expectedCode: "non-message-backed-interaction", modalMessageId: null },
     ];
@@ -1002,7 +1002,7 @@ describe("workflow acknowledgment and modal phases", () => {
           const modal = await selection.openModal(modalOptions(1));
           expect(modal.outcome).toBe("fatal");
           if (modal.outcome === "fatal") {
-            expectTypedError(modal.error, "canonical-message-unavailable");
+            expectTypedError(modal.error, "anchor-message-unavailable");
           }
           return retryPersonaWorkflow();
         },
@@ -1017,13 +1017,13 @@ describe("workflow acknowledgment and modal phases", () => {
   }
 });
 
-describe("canonical persona message controller", () => {
-  it("starts a non-persona sibling scope on the same canonical controller", async () => {
+describe("anchor persona message controller", () => {
+  it("starts a non-persona sibling scope on the same anchor controller", async () => {
     const harness = makeHarness();
-    const phase = await beginCanonicalPrivateWorkflow(harness.root, "en-US", v2Payload("initial"));
+    const phase = await beginAnchorPrivateWorkflow(harness.root, "en-US", v2Payload("initial"));
     const nested = makeButton(harness, "serverwide-next");
 
-    expect(phase.message.canonicalMessageId).toBe(harness.canonicalMessageId);
+    expect(phase.message.anchorMessageId).toBe(harness.anchorMessageId);
     expect(phase.phaseId).toBe(harness.root.id);
     await phase.useButton(nested).replace(v2Payload("next"));
     await phase.message.disableControls();
@@ -1036,9 +1036,9 @@ describe("canonical persona message controller", () => {
     expect(calls.some((call) => call.method === "root.editReply")).toBe(true);
   });
 
-  it("logs a fatal canonical-controller failure outside the persona runner", async () => {
+  it("logs a fatal anchor-controller failure outside the persona runner", async () => {
     const harness = makeHarness();
-    const phase = await beginCanonicalPrivateWorkflow(harness.root, "en-US", v2Payload("initial"));
+    const phase = await beginAnchorPrivateWorkflow(harness.root, "en-US", v2Payload("initial"));
     harness.rootEditError = { code: 50027, message: "Invalid webhook token" };
     let failure: unknown;
 
@@ -1048,11 +1048,11 @@ describe("canonical persona message controller", () => {
       failure = error;
     }
 
-    expectTypedError(failure, "canonical-message-unavailable");
+    expectTypedError(failure, "anchor-message-unavailable");
     expectFatalLog("root-edit");
   });
 
-  it("replaces, edits, fetches, disables controls, handles attachments, and deletes one canonical message", async () => {
+  it("replaces, edits, fetches, disables controls, handles attachments, and deletes one anchor message", async () => {
     const harness = makeHarness();
     const selectedButton = makeButton(harness);
     queueSelection(selectedButton, 0);
@@ -1063,7 +1063,7 @@ describe("canonical persona message controller", () => {
       onSelected: async (selection) => {
         await selection.beginInPlaceWork();
         const controller = selection.message;
-        expect(controller.canonicalMessageId).toBe(harness.canonicalMessageId);
+        expect(controller.anchorMessageId).toBe(harness.anchorMessageId);
 
         const replaced = await controller.replace(v2Payload("replace and clear stale avatar"));
         const edited = await controller.edit(v2Payload("edit and retain attachments"));
@@ -1086,10 +1086,10 @@ describe("canonical persona message controller", () => {
         await controller.replace(withFile);
 
         expect([replaced.id, edited.id, fetched.id, disabled.id]).toEqual([
-          harness.canonicalMessageId,
-          harness.canonicalMessageId,
-          harness.canonicalMessageId,
-          harness.canonicalMessageId,
+          harness.anchorMessageId,
+          harness.anchorMessageId,
+          harness.anchorMessageId,
+          harness.anchorMessageId,
         ]);
         await controller.delete();
         try {
@@ -1131,7 +1131,7 @@ describe("canonical persona message controller", () => {
       personas: [makePersona(1)],
       onSelected: async (selection) => {
         const nestedMessage = await selection.useButton(nested).replace(v2Payload("nested replacement"));
-        expect(nestedMessage.id).toBe(harness.canonicalMessageId);
+        expect(nestedMessage.id).toBe(harness.anchorMessageId);
         const deferredPhase = await selection.useButton(deferredNested).beginInPlaceWork();
         await deferredPhase.message.replace(v2Payload("deferred nested replacement"));
         for (const button of [wrongMessage, missingMessage]) {
@@ -1173,7 +1173,7 @@ describe("canonical persona message controller", () => {
         },
       },
       {
-        expectedCode: "canonical-message-unavailable",
+        expectedCode: "anchor-message-unavailable",
         configure: (harness) => {
           harness.rootEditError = { code: 10062, message: "Unknown interaction" };
           return v2Payload("fatal failure");
@@ -1243,7 +1243,7 @@ describe("in-place paginated modal bridge", () => {
 
   it("maps the first and last ranges of exactly 26 options to absolute offsets", async () => {
     for (const rangeIndex of [0, 1] as const) {
-      const harness = makeHarness(`canonical-range-${rangeIndex}`);
+      const harness = makeHarness(`anchor-range-${rangeIndex}`);
       queueSelection(makeButton(harness), 0);
       harness.awaitQueue.push(() => renderedButton(harness, `_range_${rangeIndex}`));
       rawModalQueue.push({
@@ -1278,9 +1278,9 @@ describe("in-place paginated modal bridge", () => {
     }
   });
 
-  it("keeps range cancellation and timeout on the canonical message", async () => {
+  it("keeps range cancellation and timeout on the anchor message", async () => {
     for (const outcome of ["cancelled", "timeout"] as const) {
-      const harness = makeHarness(`canonical-${outcome}`);
+      const harness = makeHarness(`anchor-${outcome}`);
       queueSelection(makeButton(harness), 0);
       harness.awaitQueue.push(outcome === "timeout" ? "time" : () => renderedButton(harness, "_cancel"));
       let modalResult: PersonaWorkflowModalResult | undefined;
@@ -1302,7 +1302,7 @@ describe("in-place paginated modal bridge", () => {
     }
   });
 
-  it("supports previous/next range pages without changing the canonical message", async () => {
+  it("supports previous/next range pages without changing the anchor message", async () => {
     const harness = makeHarness();
     queueSelection(makeButton(harness), 0);
     harness.awaitQueue.push(
@@ -1324,7 +1324,7 @@ describe("in-place paginated modal bridge", () => {
     expect(modalResult?.outcome).toBe("submitted");
     expect(calls.filter((call) => call.method === "message.awaitMessageComponent")).toHaveLength(3);
     expect(calls.filter((call) => call.method === "button.update")).toHaveLength(3);
-    expect(rawModalCalls[0]?.button.message.id).toBe(harness.canonicalMessageId);
+    expect(rawModalCalls[0]?.button.message.id).toBe(harness.anchorMessageId);
     expectAllInPlacePayloadsAreV2();
   });
 
@@ -1360,7 +1360,7 @@ describe("in-place paginated modal bridge", () => {
       rangedComponent && "options" in rangedComponent ? rangedComponent.options.map((item) => item.value) : [];
     expect(values).toEqual(["item-500"]);
     expect(rawModalCalls[0]?.button.customId).toEndWith("_range_20");
-    expect(rawModalCalls[0]?.button.message.id).toBe(harness.canonicalMessageId);
+    expect(rawModalCalls[0]?.button.message.id).toBe(harness.anchorMessageId);
     expect(calls.filter((call) => call.method === "message.awaitMessageComponent")).toHaveLength(2);
     expectAllInPlacePayloadsAreV2();
   });
@@ -1575,7 +1575,7 @@ describe("runPersonaPickerWorkflow eligibility filtering", () => {
     expect(result.outcome).not.toBe("cancelled");
   });
 
-  it("replaces the canonical message in place and returns empty when a retry filters to empty", async () => {
+  it("replaces the anchor message in place and returns empty when a retry filters to empty", async () => {
     const harness = makeHarness();
     const selectedButton = makeButton(harness);
     queueSelection(selectedButton, 0);
@@ -1591,7 +1591,7 @@ describe("runPersonaPickerWorkflow eligibility filtering", () => {
     expect(result.outcome).toBe("empty");
     // Exactly one picker was rendered; the empty state did not open a second one.
     expect(pickerCalls).toHaveLength(1);
-    // The selected button was acknowledged for the retry and the canonical message
+    // The selected button was acknowledged for the retry and the anchor message
     // was replaced in place (root editReply), not via a new ephemeral message.
     expect(calls.some((call) => call.method === "button.deferUpdate" && call.source === selectedButton.id)).toBe(true);
     expect(calls.some((call) => call.method === "root.editReply")).toBe(true);

@@ -25,7 +25,7 @@ interface RecordedPayload {
   payload: Payload;
 }
 
-const CANONICAL_MESSAGE_ID = "canonical-model-text";
+const CANONICAL_MESSAGE_ID = "anchor-model-text";
 const chronology: string[] = [];
 const rootCalls: string[] = [];
 const payloads: RecordedPayload[] = [];
@@ -213,10 +213,10 @@ function selectionPhase(iteration: number) {
 
 mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
-  // Present only for module linking — the persona scope never enters the canonical
+  // Present only for module linking — the persona scope never enters the anchor
   // private workflow (that path is exercised by modelTextGlobalPersistence.test.ts).
-  beginCanonicalPrivateWorkflow: async () => {
-    throw new Error("beginCanonicalPrivateWorkflow is not used by the persona scope");
+  beginAnchorPrivateWorkflow: async () => {
+    throw new Error("beginAnchorPrivateWorkflow is not used by the persona scope");
   },
   isCollectorTimeoutError: () => false,
   buildPersonaWorkflowNotice: (options: {
@@ -322,7 +322,7 @@ mock.module("@/utils/cache/tomoriStateCache", () => ({
   invalidateTomoriStateCache: () => undefined,
   // Rest of the module's export surface. `mock.module` is process-wide, so a partial stub
   // breaks module linking as soon as anything else in this process imports a missing name —
-  // and text.ts now reaches interactionCore through the shared canonical helpers.
+  // and text.ts now reaches interactionCore through the shared anchor helpers.
   getCachedMainPersona: async () => serverState,
   getLastDbError: () => null,
   clearTomoriStateCache: () => undefined,
@@ -435,7 +435,7 @@ function payloadText(payload: unknown): string {
   return texts.join("\n");
 }
 
-function expectCanonicalV2Only(): void {
+function expectAnchorV2Only(): void {
   expect(new Set(payloads.map((entry) => entry.messageId))).toEqual(new Set([CANONICAL_MESSAGE_ID]));
   for (const entry of payloads) {
     expect(entry.payload.flags).toBe(MessageFlags.IsComponentsV2);
@@ -498,7 +498,7 @@ describe("/model text persona workflow", () => {
         expectBefore("ack:persona-button.deferUpdate:0", "repo.models:provider-a");
         expectBefore("ack:modal.deferUpdate", "repo.set-persona-override");
         expect(workflowDirectives).toEqual(["retry"]);
-        expectCanonicalV2Only();
+        expectAnchorV2Only();
 
         scenario = makeScenario();
         selectedPersona = resetPersona();
@@ -529,7 +529,7 @@ describe("/model text persona workflow", () => {
     expect(overrideWrites).toEqual([{ personaId: 77, llmId: 1025, serverDiscId: "guild-1" }]);
     const providerPickerText = payloads.map((entry) => payloadText(entry.payload)).join("\n");
     expect(providerPickerText).toContain("commands.model.providerPicker.title");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("re-enters the persona picker in place after provider cancellation", async () => {
@@ -549,10 +549,10 @@ describe("/model text persona workflow", () => {
     expect(chronology).toContain("ack:button.update:persona_model_model-phase-0_provider_cancel");
     expect(modelLoads).toEqual([{ provider: "provider-a", ownerId: 7 }]);
     expect(overrideWrites).toHaveLength(1);
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
-  it("recovers on the same canonical message after model-launch timeout", async () => {
+  it("recovers on the same anchor message after model-launch timeout", async () => {
     scenario.runnerIterations = 2;
     scenario.buttons.push("timeout", "persona_model_model-phase-1_open");
     scenario.modals.push({ outcome: "submitted", values: { model_select: "model-0" } });
@@ -568,10 +568,10 @@ describe("/model text persona workflow", () => {
       { provider: "provider-a", ownerId: 7 },
     ]);
     expect(overrideWrites).toHaveLength(1);
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
-  it("recovers on the same canonical message after model-modal timeout", async () => {
+  it("recovers on the same anchor message after model-modal timeout", async () => {
     scenario.runnerIterations = 2;
     scenario.buttons.push("persona_model_model-phase-0_open", "persona_model_model-phase-1_open");
     scenario.modals.push({ outcome: "timeout" }, { outcome: "submitted", values: { model_select: "model-24" } });
@@ -581,7 +581,7 @@ describe("/model text persona workflow", () => {
     expect(workflowDirectives).toEqual(["retry", "retry"]);
     expect(chronology.filter((entry) => entry.startsWith("ack:button.showModal:"))).toHaveLength(2);
     expect(overrideWrites).toEqual([{ personaId: 77, llmId: 1024, serverDiscId: "guild-1" }]);
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("keeps the prior persona model and renders an in-place failure when persistence returns false", async () => {
@@ -596,6 +596,6 @@ describe("/model text persona workflow", () => {
       "general.errors.update_failed_title",
     );
     expect(workflowDirectives).toEqual(["complete"]);
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 });

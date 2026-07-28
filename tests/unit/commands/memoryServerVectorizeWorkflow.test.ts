@@ -43,7 +43,7 @@ const selectedMemory = {
 };
 
 const controller = {
-  canonicalMessageId: "canonical-vectorize",
+  anchorMessageId: "anchor-vectorize",
   replace: async (payload: unknown) => {
     const notice = payload as Payload;
     chronology.push(
@@ -52,14 +52,14 @@ const controller = {
     renderedNotices.push(notice);
   },
   fetchMessage: async () => ({
-    id: "canonical-vectorize",
+    id: "anchor-vectorize",
     awaitMessageComponent: async () => {
       chronology.push("confirmation.await");
       return {
         id: "confirm-button",
         customId: "memory_server_vectorize_confirm_persona-phase",
         user: { id: "user-1" },
-        message: { id: "canonical-vectorize" },
+        message: { id: "anchor-vectorize" },
       };
     },
   }),

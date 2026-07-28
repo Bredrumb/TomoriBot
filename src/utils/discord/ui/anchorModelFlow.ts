@@ -16,40 +16,40 @@ import {
   buildPersonaWorkflowNotice,
   isCollectorTimeoutError,
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
-  type CanonicalPrivateWorkflowPhase,
+  type AnchorPrivateWorkflowPhase,
   type PersonaWorkflowComponentsV2Payload,
   type PersonaWorkflowModalPhase,
 } from "./personaWorkflow";
 
 /**
- * Shared delivery mechanics for the canonical one-message model-config commands
+ * Shared delivery mechanics for the anchor one-message model-config commands
  * (`/model text|vision|video|image|embedding` and their personal-scope siblings).
  *
  * Each command owns its business logic — which model table, which config field, which
  * terminal copy — and calls these helpers only for the lifecycle: render the provider
- * step on the canonical message, collect the opening button, and open the model modal
- * (routing `>25` options through the canonical range selector automatically). This is
+ * step on the anchor message, collect the opening button, and open the model modal
+ * (routing `>25` options through the anchor range selector automatically). This is
  * what keeps "adding a picker→modal command touches one file": the lifecycle lives here,
  * the intent lives in the command.
  */
 
-/** Minimal shape a saved-provider row needs for the canonical picker. */
-export interface CanonicalProviderChoice {
+/** Minimal shape a saved-provider row needs for the anchor picker. */
+export interface AnchorProviderChoice {
   provider: string;
 }
 
 /** One active model/provider pair rendered as muted subtext beneath the picker guidance. */
-export interface CanonicalCurrentSelection {
+export interface AnchorCurrentSelection {
   model: string;
   provider: string;
 }
 
 /**
- * Which config surface a canonical model command writes to. Server-scope commands
+ * Which config surface a anchor model command writes to. Server-scope commands
  * (`/model *`) and personal-scope commands (`/personal provider model-*`) share every
  * lifecycle mechanic but differ in a few terminal copy strings and command mentions.
  */
-export type CanonicalModelScopeKind = "server" | "personal";
+export type AnchorModelScopeKind = "server" | "personal";
 
 /**
  * Builds the Components V2 provider picker: one Secondary button per provider (4 per row)
@@ -64,7 +64,7 @@ export function buildProviderPickerPayload(
   locale: string,
   customIdPrefix: string,
   providers: readonly string[],
-  currentSelections: readonly CanonicalCurrentSelection[],
+  currentSelections: readonly AnchorCurrentSelection[],
   options?: { note?: string },
 ): PersonaWorkflowComponentsV2Payload {
   const components: ComponentInContainerData[] = [
@@ -149,7 +149,7 @@ export function buildProviderPickerPayload(
 
 /**
  * Single "open model selector" button for the single-provider case: no provider picker
- * is shown, but the flow still opens its modal from a button click on the one canonical
+ * is shown, but the flow still opens its modal from a button click on the one anchor
  * message. The button's custom id is `openId`.
  */
 export function buildOpenSelectorPayload(locale: string, openId: string): PersonaWorkflowComponentsV2Payload {
@@ -173,7 +173,7 @@ export function buildOpenSelectorPayload(locale: string, openId: string): Person
  */
 export function buildOpenRouterMovedNotice(
   locale: string,
-  scopeKind: CanonicalModelScopeKind = "server",
+  scopeKind: AnchorModelScopeKind = "server",
 ): PersonaWorkflowComponentsV2Payload {
   const mention = (action: "add" | "remove"): string =>
     scopeKind === "server"
@@ -193,13 +193,13 @@ export function buildOpenRouterMovedNotice(
 }
 
 /**
- * The no-saved-providers terminal notice, used as the initial canonical payload.
+ * The no-saved-providers terminal notice, used as the initial anchor payload.
  * Personal scope points the user at `/personal provider add` instead of the server
  * setup flow, and treats it as a warning rather than an error.
  */
 export function buildNoProvidersPayload(
   locale: string,
-  scopeKind: CanonicalModelScopeKind = "server",
+  scopeKind: AnchorModelScopeKind = "server",
 ): PersonaWorkflowComponentsV2Payload {
   if (scopeKind === "personal") {
     return buildPersonaWorkflowNotice({
@@ -219,12 +219,12 @@ export function buildNoProvidersPayload(
 }
 
 /**
- * Awaits a button click on the canonical message. On timeout it renders the timeout
+ * Awaits a button click on the anchor message. On timeout it renders the timeout
  * notice in place and returns null; the returned button is left unacknowledged so the
- * caller can open a modal on it via {@link CanonicalPrivateWorkflowPhase.useButton}.
+ * caller can open a modal on it via {@link AnchorPrivateWorkflowPhase.useButton}.
  */
-export async function awaitCanonicalButton(
-  phase: CanonicalPrivateWorkflowPhase,
+export async function awaitAnchorButton(
+  phase: AnchorPrivateWorkflowPhase,
   userId: string,
   prefix: string,
   locale: string,
@@ -258,29 +258,29 @@ export async function awaitCanonicalButton(
  * Renders the provider-selection step and returns the unacknowledged button the model
  * modal will open from, plus the chosen provider.
  *
- * - 1 provider: the canonical message already shows the "open selector" button; this just
+ * - 1 provider: the anchor message already shows the "open selector" button; this just
  *   collects the click and returns the lone provider.
  * - 2+ providers: collects the picker click, handling cancel and invalid selection.
  *
- * Returns null when the user cancels/times out — the canonical message already shows the
+ * Returns null when the user cancels/times out — the anchor message already shows the
  * terminal notice in those cases.
  */
 export async function acquireModelModalOpener(
-  phase: CanonicalPrivateWorkflowPhase,
+  phase: AnchorPrivateWorkflowPhase,
   userId: string,
   locale: string,
-  savedProviders: readonly CanonicalProviderChoice[],
+  savedProviders: readonly AnchorProviderChoice[],
   idRoot: string,
 ): Promise<{ button: ButtonInteraction; provider: string } | null> {
   // 1. Single provider: the only control is the "open selector" button.
   if (savedProviders.length === 1) {
-    const button = await awaitCanonicalButton(phase, userId, `${idRoot}_open`, locale);
+    const button = await awaitAnchorButton(phase, userId, `${idRoot}_open`, locale);
     if (!button) return null;
     return { button, provider: savedProviders[0].provider.toLowerCase() };
   }
 
   // 2. Multiple providers: collect the picker click.
-  const button = await awaitCanonicalButton(phase, userId, idRoot, locale);
+  const button = await awaitAnchorButton(phase, userId, idRoot, locale);
   if (!button) return null;
   if (button.customId === `${idRoot}_cancel`) {
     await phase.useButton(button).replace(
@@ -310,18 +310,18 @@ export async function acquireModelModalOpener(
 }
 
 /**
- * Renders the shared `>25` range selector on the canonical message and returns the chosen
+ * Renders the shared `>25` range selector on the anchor message and returns the chosen
  * half-open option range, or null when the user cancelled or timed out (both rendered in
  * place). The returned button is left unacknowledged so the caller can open its modal from it.
  *
- * The canonical engine's own bridge (see {@link openCanonicalModal}) already does this for
+ * The anchor engine's own bridge (see {@link openAnchorModal}) already does this for
  * the common case, but it slices exactly one select component and assumes every entry is a
  * real option. This helper exists for modals that neither assumption fits — `/model fallback`
  * and its personal sibling render **five** selects over one shared option list and reserve one
  * entry per page for an explicit "None" choice. They pick a range here first, then hand
- * {@link openCanonicalModal} an already-sliced `<=25` list, which opens directly.
+ * {@link openAnchorModal} an already-sliced `<=25` list, which opens directly.
  *
- * @param phase - The live canonical workflow phase.
+ * @param phase - The live anchor workflow phase.
  * @param button - The unacknowledged button the selector replaces (the provider/opener click).
  * @param userId - Discord id allowed to drive the selector.
  * @param locale - Locale for the selector shell.
@@ -330,7 +330,7 @@ export async function acquireModelModalOpener(
  * @returns The chosen range plus the button to open the modal from, or null.
  */
 export async function acquireModalOptionRange(
-  phase: CanonicalPrivateWorkflowPhase,
+  phase: AnchorPrivateWorkflowPhase,
   button: ButtonInteraction,
   userId: string,
   locale: string,
@@ -338,7 +338,7 @@ export async function acquireModalOptionRange(
   pageSize: number,
 ): Promise<{ button: ButtonInteraction; start: number; end: number } | null> {
   // A per-invocation prefix keeps a previous run's stale selector buttons from resolving here.
-  const prefix = `canonical_range_${button.id}_${Date.now().toString(36)}`;
+  const prefix = `anchor_range_${button.id}_${Date.now().toString(36)}`;
   const totalRanges = Math.ceil(optionCount / pageSize);
   const totalRangePages = Math.ceil(totalRanges / RANGES_PER_SELECTOR_PAGE);
   let rangePage = 0;
@@ -348,7 +348,7 @@ export async function acquireModalOptionRange(
 
   // 2. Drive Previous/Next until a range button (or Cancel/timeout) settles the step.
   while (true) {
-    const rangeButton = await awaitCanonicalButton(phase, userId, prefix, locale);
+    const rangeButton = await awaitAnchorButton(phase, userId, prefix, locale);
     if (!rangeButton) return null;
 
     if (rangeButton.customId === `${prefix}_cancel`) {
@@ -393,13 +393,13 @@ export async function acquireModalOptionRange(
 }
 
 /**
- * Opens the model-selection modal on the canonical message from `button`, routing the
- * `>25` case through the canonical range selector automatically. Returns the submitted
+ * Opens the model-selection modal on the anchor message from `button`, routing the
+ * `>25` case through the anchor range selector automatically. Returns the submitted
  * modal phase, or null when the flow ended without a submit — cancel and timeout are
  * rendered in place by the bridge; a transport error renders the generic error notice.
  */
-export async function openCanonicalModal(
-  phase: CanonicalPrivateWorkflowPhase,
+export async function openAnchorModal(
+  phase: AnchorPrivateWorkflowPhase,
   button: ButtonInteraction,
   locale: string,
   modalOptions: ModalOptions,

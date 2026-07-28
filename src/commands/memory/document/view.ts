@@ -5,7 +5,7 @@
  * - persona:    Documents scoped to a specific persona (persona picker shown first)
  * - serverwide: Documents with persona_id IS NULL
  *
- * Flow: scope → [persona picker] → document select → chunk view, all on one canonical
+ * Flow: scope → [persona picker] → document select → chunk view, all on one anchor
  * ephemeral Components V2 message. Edit/Delete buttons appear only for users with Manage
  * Server. Editing channel tags from a per-chunk modal updates the parent document
  * (channel_tags is document-scoped, not chunk-scoped).
@@ -32,12 +32,12 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import {
-  beginCanonicalPrivateWorkflow,
+  beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
   completePersonaWorkflow,
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
   runPersonaPickerWorkflow,
-  type CanonicalPrivateWorkflowPhase,
+  type AnchorPrivateWorkflowPhase,
   type PersonaWorkflowComponentsV2Payload,
   type PersonaWorkflowModalResult,
   type PersonaWorkflowSelectionPhase,
@@ -75,7 +75,7 @@ const EDIT_TAGS_INPUT_MAX = 200;
 
 type DocumentScope = "persona" | "serverwide";
 type NavMode = "normal" | "confirm_delete";
-type DocumentWorkflowPhase = Pick<CanonicalPrivateWorkflowPhase, "phaseId" | "message" | "useButton">;
+type DocumentWorkflowPhase = Pick<AnchorPrivateWorkflowPhase, "phaseId" | "message" | "useButton">;
 
 interface ChunkRow {
   document_chunk_id: number;
@@ -912,7 +912,7 @@ export async function execute(
     phase: DocumentWorkflowPhase | null;
   } = { tomoriState: null, targetPersonaId: null, phase: null };
   const scope: DocumentScope = interaction.options.getString("scope") === "serverwide" ? "serverwide" : "persona";
-  let serverwidePhase: CanonicalPrivateWorkflowPhase | null = null;
+  let serverwidePhase: AnchorPrivateWorkflowPhase | null = null;
 
   try {
     if (!isRagAvailable()) {
@@ -928,7 +928,7 @@ export async function execute(
     if (scope === "persona") {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     } else {
-      serverwidePhase = await beginCanonicalPrivateWorkflow(
+      serverwidePhase = await beginAnchorPrivateWorkflow(
         interaction,
         locale,
         buildPersonaWorkflowNotice({
@@ -992,7 +992,7 @@ export async function execute(
     if (scope === "serverwide") {
       const phase = serverwidePhase;
       if (!phase) {
-        throw new Error("Serverwide document view is missing its canonical workflow phase.");
+        throw new Error("Serverwide document view is missing its anchor workflow phase.");
       }
       const documents = await serverMemoryRepository.loadDocuments(tomoriState.server_id, null);
       if (!documents.length) {

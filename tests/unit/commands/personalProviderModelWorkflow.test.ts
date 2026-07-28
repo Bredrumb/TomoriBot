@@ -3,12 +3,12 @@ import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 
 /**
- * Canonical-migration tests for the personal provider-model family
+ * Anchor-migration tests for the personal provider-model family
  * (`/personal provider model-text|vision|video|image|embedding`).
  *
- * The engine is replaced with a fake canonical controller (same template as
+ * The engine is replaced with a fake anchor controller (same template as
  * `modelTextGlobalPersistence.test.ts`) so these tests assert the two things a migration
- * can silently get wrong: that the terminal notice lands on the ONE canonical message
+ * can silently get wrong: that the terminal notice lands on the ONE anchor message
  * rather than escaping to a fresh `replyInfoEmbed`, and that the capability write still
  * targets the right column with the right provider.
  */
@@ -143,7 +143,7 @@ mock.module("@/utils/provider/savedProviderConfig", () => ({
 // The commands under test only touch `llmModelRepo`, but the mock must still expose the
 // barrel's whole export surface: `mock.module` is process-wide, so a partial stub breaks
 // module linking for anything else in this process that imports a missing name (the
-// canonical helpers pull in `interactionCore`, which reaches most of these).
+// anchor helpers pull in `interactionCore`, which reaches most of these).
 mock.module("@/utils/db/repositories", () => ({
   llmModelRepo: {
     loadAvailableModelsForProvider: async () => llmModels,
@@ -241,19 +241,19 @@ mock.module("@/utils/text/localizer", () => ({
   getBaseTriggerWords: () => [],
 }));
 
-// Fake canonical one-message engine. The provider step always resolves to the single
+// Fake anchor one-message engine. The provider step always resolves to the single
 // "open selector" button, the modal opens and submits the scenario's value, and every
 // terminal `replace` is recorded so assertions can inspect what landed on the message.
-function makeCanonicalController() {
+function makeAnchorController() {
   const replace = async (payload: NoticeOptions) => {
     chronology.push("message.replace");
     replacements.push(payload);
     return {};
   };
   return {
-    canonicalMessageId: "canonical-msg",
+    anchorMessageId: "anchor-msg",
     fetchMessage: async () => ({
-      id: "canonical-msg",
+      id: "anchor-msg",
       // Stands in for the collector: hands back the opener click immediately. The single
       // -provider path resolves its provider from the saved list rather than the button's
       // id, so this fake stays agnostic of each subcommand's ID_ROOT.
@@ -269,16 +269,16 @@ function makeCanonicalController() {
 
 mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
-  MIGRATED_CANONICAL_CALLERS: [],
-  PRE_CANONICAL_PRIMITIVES: [],
+  MIGRATED_ANCHOR_CALLERS: [],
+  PRE_ANCHOR_PRIMITIVES: [],
   isCollectorTimeoutError: () => false,
   buildPersonaWorkflowNotice: (options: NoticeOptions) => options,
   completePersonaWorkflow: () => ({ action: "complete" }),
   retryPersonaWorkflow: () => ({ action: "retry" }),
   runPersonaPickerWorkflow: async () => undefined,
-  beginCanonicalPrivateWorkflow: async (_interaction: unknown, _locale: string, initialPayload: NoticeOptions) => {
+  beginAnchorPrivateWorkflow: async (_interaction: unknown, _locale: string, initialPayload: NoticeOptions) => {
     initialPayloads.push(initialPayload);
-    const controller = makeCanonicalController();
+    const controller = makeAnchorController();
     const modalPhase = {
       values: { model_select: scenario.submittedValue },
       message: controller,
@@ -381,9 +381,9 @@ beforeEach(() => {
   errorLogs.length = 0;
 });
 
-describe("personal provider model-* canonical workflow", () => {
+describe("personal provider model-* anchor workflow", () => {
   for (const subcommand of subcommands) {
-    it(`${subcommand.name} writes its own column and renders success on the canonical message`, async () => {
+    it(`${subcommand.name} writes its own column and renders success on the anchor message`, async () => {
       scenario.submittedValue = subcommand.submittedValue;
 
       await runSubcommand(subcommand.module);
@@ -397,7 +397,7 @@ describe("personal provider model-* canonical workflow", () => {
       });
       expect(assignCalls[0]?.result).toMatchObject(subcommand.expectedWrite);
 
-      // 2. The terminal lands on the one canonical message, never as a fresh reply.
+      // 2. The terminal lands on the one anchor message, never as a fresh reply.
       expect(infoReplies).toHaveLength(0);
       expect(replacements).toContainEqual(
         expect.objectContaining({
@@ -423,7 +423,7 @@ describe("personal provider model-* canonical workflow", () => {
       ).toBe(false);
     });
 
-    it(`${subcommand.name} opens the canonical message with the no-providers notice and stops`, async () => {
+    it(`${subcommand.name} opens the anchor message with the no-providers notice and stops`, async () => {
       scenario.providers = [];
 
       await runSubcommand(subcommand.module);

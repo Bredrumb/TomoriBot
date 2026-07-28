@@ -349,13 +349,13 @@ Is the input free-form text?
 - **Radio Group**: 2-10 options. No emoji support. No placeholder text.
 - **Checkbox Group**: 1-10 options. Supports `min_values`/`max_values` for range control. Also serves as the workaround for required single-boolean inputs.
 - **Checkbox**: Cannot be `required`. Use a Checkbox Group with 1 option if required behavior is needed.
-- **String Select**: Up to 25 options natively. Flows on the canonical message workflow must use `selection.openModal(...)` / `openCanonicalModal(...)`, whose `>25` bridge keeps the range selector on the canonical Components V2 message. Flows still on `promptWithPaginatedModal()` may pass `selectorStyle: "componentsV2"` to render that same `>25` selector (`1-25`/`26-50` + Previous/Cancel/Next), or omit it for the legacy numbered page-button embed (default). Both selectors share `buildRangeSelectorPayload`. Supports emoji, descriptions, and placeholder text.
+- **String Select**: Up to 25 options natively. Flows on the anchor message workflow must use `selection.openModal(...)` / `openAnchorModal(...)`, whose `>25` bridge keeps the range selector on the anchor Components V2 message. Flows still on `promptWithPaginatedModal()` may pass `selectorStyle: "componentsV2"` to render that same `>25` selector (`1-25`/`26-50` + Previous/Cancel/Next), or omit it for the legacy numbered page-button embed (default). Both selectors share `buildRangeSelectorPayload`. Supports emoji, descriptions, and placeholder text.
 - **All new components** must be wrapped in a **Label** (type 18), not an Action Row.
 
-### Canonical workflow modal bridge
+### Anchor workflow modal bridge
 
-Inside a canonical message workflow, do not call `promptWithPaginatedModal()` or
-`promptWithRawModal()` directly — they would open the modal outside the canonical message
+Inside a anchor message workflow, do not call `promptWithPaginatedModal()` or
+`promptWithRawModal()` directly — they would open the modal outside the anchor message
 and strand its controls. Open the modal from the workflow instead. After a persona is
 selected that means the selection phase from `runPersonaPickerWorkflow(...)`:
 
@@ -363,8 +363,8 @@ selected that means the selection phase from `runPersonaPickerWorkflow(...)`:
 const modal = await selection.openModal(modalOptions);
 ```
 
-Non-persona commands reach the same bridge through `openCanonicalModal(...)`
-(`src/utils/discord/ui/canonicalModelFlow.ts`), which wraps the call below and renders the
+Non-persona commands reach the same bridge through `openAnchorModal(...)`
+(`src/utils/discord/ui/anchorModelFlow.ts`), which wraps the call below and renders the
 error terminal for transport failures.
 
 When `modalOptions` are already in memory and the select has at most 25 choices,
@@ -387,7 +387,7 @@ the workflow renders a fresh **Open Form** button for at most 25 choices or a ra
 for more than 25. The fresh button opens the modal as its first acknowledgment.
 
 For larger sets, range buttons represent absolute slices of 25 (`1-25`, `26-50`, ...).
-Range navigation, cancellation, and timeout replace the same canonical message. The chosen
+Range navigation, cancellation, and timeout replace the same anchor message. The chosen
 range button opens the sliced modal, and a submitted phase reports `optionOffset`; add it to
 page-local indexes when the option values themselves are not stable IDs.
 
@@ -399,7 +399,7 @@ Those pick a range up front with `acquireModalOptionRange(...)`, passing a `page
 sliced to 25 or fewer.
 
 After submission, call `modal.phase.beginInPlaceWork()` before any slow validation or write.
-It update-defers the message-backed modal submission and returns the canonical-message
+It update-defers the message-backed modal submission and returns the anchor-message
 controller. For an already-built terminal payload, `modal.phase.replace(payload)` instead
 uses the unacknowledged message-backed submission's `update()` as the first acknowledgment.
 Do not call both operations for one submission. If `openModal(...)` returns `fatal`, stop the callback (the normal pattern is

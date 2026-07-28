@@ -44,7 +44,7 @@ Command files import Discord UI helpers from responsibility-owned modules:
 - `src/utils/discord/ui/embeds.ts` - info and summary embed replies
 - `src/utils/discord/ui/statusComponents.ts` - Components V2 status replies and status-page pagination
 - `src/utils/discord/ui/pagination.ts` - generic choice pagination
-- `src/utils/discord/ui/personaWorkflow.ts` - command-facing persona picker lifecycle, acknowledgment phases, and canonical-message controller
+- `src/utils/discord/ui/personaWorkflow.ts` - command-facing persona picker lifecycle, acknowledgment phases, and anchor-message controller
 
 The low-level persona renderer remains private to `interactionCore.ts` and
 `personaWorkflow.ts`; it has no command-facing barrel or compatibility export.
@@ -88,10 +88,10 @@ commands resolve their scoped override before falling back to the server text mo
 
 The `/model *` and `/personal provider model-*` families no longer use that primitive.
 They render the provider picker, the `>25` range selector, the modal, and the terminal
-result on one canonical ephemeral message through the shared helpers in
-`src/utils/discord/ui/canonicalModelFlow.ts` (see the canonical message controller section
+result on one anchor ephemeral message through the shared helpers in
+`src/utils/discord/ui/anchorModelFlow.ts` (see the anchor message controller section
 below). `promptForSavedProvider()` is forbidden in those files, and the allow-list audit in
-`tests/unit/commands/canonicalMigrationLockdown.test.ts` enforces it.
+`tests/unit/commands/anchorMigrationLockdown.test.ts` enforces it.
 
 Root commands are represented by top-level command files:
 
@@ -352,8 +352,8 @@ Rules:
 - `promptWithPaginatedModal(...)` does not expose an auto-defer parameter; defer on submission manually when needed
 - commands that begin with a persona picker use Pattern 4A; the workflow owns picker acknowledgment and retries
 
-**`>25`-option selector style (pre-canonical).** This applies to callers still on
-`promptWithPaginatedModal(...)`. Commands migrated to the canonical message workflow
+**`>25`-option selector style (pre-anchor).** This applies to callers still on
+`promptWithPaginatedModal(...)`. Commands migrated to the anchor message workflow
 (Pattern 4A/4B) never set `selectorStyle`: their `>25` handling is chosen for them by the
 engine's range-selector bridge, which always renders the Components V2 selector.
 
@@ -378,9 +378,9 @@ interaction reaching the helper is unacknowledged (fresh-reply path) rather than
 deferred/replied **legacy** message, since Discord cannot convert a legacy reply to V2 via
 `editReply`.
 
-### Pattern 4A: Canonical Message Workflow (persona picker)
+### Pattern 4A: Anchor Message Workflow (persona picker)
 
-The **canonical message workflow** is the engine behind Patterns 4A and 4B. Its rule: one
+The **anchor message workflow** is the engine behind Patterns 4A and 4B. Its rule: one
 command invocation owns exactly **one** ephemeral message, edited in place through every
 stage — picker, `>25` range selector, modal, progress, and terminal result. Opening a modal
 is an acknowledgment, not a second message.
@@ -395,10 +395,10 @@ Two specializations share the engine:
 
 - **Pattern 4A** (below) — the persona picker, via `runPersonaPickerWorkflow`.
 - **Pattern 4B** — one-shot picker → modal config commands, via
-  `beginCanonicalPrivateWorkflow` plus the shared helpers in `canonicalModelFlow.ts`.
+  `beginAnchorPrivateWorkflow` plus the shared helpers in `anchorModelFlow.ts`.
 
-Non-persona callers import the engine from `src/utils/discord/ui/canonicalWorkflow.ts`,
-which also exports neutral `Canonical*` aliases for the generic types. The implementation
+Non-persona callers import the engine from `src/utils/discord/ui/anchorWorkflow.ts`,
+which also exports neutral `Anchor*` aliases for the generic types. The implementation
 itself lives in `personaWorkflow.ts`, alongside the persona specialization it shares its
 internals with.
 
@@ -472,7 +472,7 @@ Rules:
 - **Refresh the set for mid-loop drains.** When a retry loop deletes items, refresh the
   closed-over set in place with `refreshEligibilitySet(set, freshSet)` after each successful
   write so a persona whose last item was removed drops out on the next retry and the last
-  such removal reaches the `empty` terminal state on the canonical message.
+  such removal reaches the `empty` terminal state on the anchor message.
 - The caller renders its own pre-picker empty notice on its deferred reply (it already
   computes the eligible set for its own guard) and returns before calling the workflow. The
   workflow renders the `empty` terminal state in place only for the mid-loop case.
@@ -555,8 +555,8 @@ await runPersonaPickerWorkflow(interaction, locale, {
 });
 ```
 
-Every same-visibility workflow owns one canonical ephemeral Components V2 message. Its
-message ID is exposed as `selection.message.canonicalMessageId` and must remain unchanged
+Every same-visibility workflow owns one anchor ephemeral Components V2 message. Its
+message ID is exposed as `selection.message.anchorMessageId` and must remain unchanged
 through loading, selectors, validation, progress, results, errors, and timeouts. Opening a
 modal is an interaction acknowledgment, not another message. The only normal visibility
 change is the typed `separate-public` phase described below.
@@ -579,7 +579,7 @@ before it.
 | `selection.useButton(button).replace(payload)` | `update()` on that nested button | A fast private-view transition whose payload is ready |
 | `selection.useButton(button).beginInPlaceWork()` | `deferUpdate()` on that nested button | A nested view action needs asynchronous work |
 | `selection.useButton(button).openModal(...)` | The same direct/factory modal rules above | A private view button opens a modal |
-| `selection.useButton(button).delete()` | `deferUpdate()`, then canonical-message deletion | Closing a private view |
+| `selection.useButton(button).delete()` | `deferUpdate()`, then anchor-message deletion | Closing a private view |
 | `selection.beginSeparatePublicReply(compactPayload)` | `update()` compacts the private picker; `publicPhase.reply()` then sends one public follow-up | The result is intentionally public |
 
 Calling two first-ack operations for the same interaction throws a
@@ -591,7 +591,7 @@ Persona arrays are loaded before the workflow entry today, so acknowledge the sl
 with `deferReply({ flags: MessageFlags.Ephemeral })` before that asynchronous load. If the
 command also has a root-modal scope, resolve the scope synchronously and defer only the persona
 branch; a deferred root interaction cannot open its own modal. The workflow reuses the deferred
-canonical response and still owns every component acknowledgment after the picker renders.
+anchor response and still owns every component acknowledgment after the picker renders.
 
 The bare message controller edits the root reply; it does not acknowledge the currently
 pending button or modal submission. Do not call `selection.message.replace(...)` before
@@ -606,17 +606,17 @@ submitted phase exposes single values in `values`, string-select/checkbox values
 controller, direct `replace(payload)`, `beginInPlaceWork()`, and the narrowly scoped `unsafeInteraction()` escape
 hatch. Check the outcome before accessing the phase.
 
-#### Canonical message controller
+#### Anchor message controller
 
 `selection.message`, in-place phases, and modal phases expose the same typed controller:
 
-- `replace(payload)` edits the canonical message and clears old attachments unless the
+- `replace(payload)` edits the anchor message and clears old attachments unless the
   payload explicitly supplies `attachments`;
 - `edit(payload)` edits while retaining existing attachments when `attachments` is omitted;
-- `fetchMessage()` returns the canonical `Message` and verifies its ID;
+- `fetchMessage()` returns the anchor `Message` and verifies its ID;
 - `disableControls()` keeps the current view readable and disables every interactive
   component;
-- `delete()` deletes the canonical reply and makes later operations fail with `deleted`.
+- `delete()` deletes the anchor reply and makes later operations fail with `deleted`.
 
 Both `replace` and `edit` accept only `PersonaWorkflowComponentsV2Payload`: `components`
 and `MessageFlags.IsComponentsV2` are required, while `content` and `embeds` are forbidden
@@ -742,7 +742,7 @@ await runPersonaPickerWorkflow(interaction, locale, {
 });
 ```
 
-When a modal select contains more than 25 options, `openModal` replaces the canonical
+When a modal select contains more than 25 options, `openModal` replaces the anchor
 message with localized range buttons and opens the modal from the chosen range button.
 `modal.phase.optionOffset` is the absolute offset of that slice for callers whose option
 values are page-local indexes.
@@ -832,13 +832,13 @@ must include all of the following:
 
 1. A narrow, exact-path entry with rationale in
    `scripts/checks/lib/personaWorkflowBoundary.ts`.
-2. A focused test proving acknowledgment timing, canonical-message identity, V2-only
+2. A focused test proving acknowledgment timing, anchor-message identity, V2-only
    payloads, and no private fallback reply.
 3. An update to this section documenting why the workflow API could not express the case.
 
 An exception must never weaken the repository-wide scanner or add a directory-wide bypass.
 
-### Pattern 4B: Canonical One-Shot Picker -> Modal
+### Pattern 4B: Anchor One-Shot Picker -> Modal
 
 Use for a config command shaped *pick a provider -> choose a value in a modal -> show the
 result*. The whole `/model *` family and its `/personal provider model-*` siblings are built
@@ -846,7 +846,7 @@ this way, plus `/model fallback` and `/personal model fallback`.
 
 The command expresses only business intent — which model table to read, which column to
 write, which terminal copy to show. All lifecycle branching lives in the shared helpers in
-`src/utils/discord/ui/canonicalModelFlow.ts`:
+`src/utils/discord/ui/anchorModelFlow.ts`:
 
 ```ts
 const initialPayload =
@@ -856,14 +856,14 @@ const initialPayload =
       ? buildOpenSelectorPayload(locale, `${ID_ROOT}_open`)
       : buildProviderPickerPayload(locale, ID_ROOT, providers, currentSelections);
 
-const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
-canonicalMessage = phase.message;                        // for the outer catch
+const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+anchorMessage = phase.message;                        // for the outer catch
 if (savedProviders.length === 0) return;
 
 const opener = await acquireModelModalOpener(phase, userId, locale, savedProviders, ID_ROOT);
 if (!opener) return;                                     // cancel/timeout already rendered
 
-const modalPhase = await openCanonicalModal(phase, opener.button, locale, modalOptions);
+const modalPhase = await openAnchorModal(phase, opener.button, locale, modalOptions);
 if (!modalPhase) return;                                 // dismiss/cancel already rendered
 
 const work = await modalPhase.beginInPlaceWork();        // acks the submit within 3s
@@ -874,13 +874,13 @@ Rules:
 
 - **Never** call `promptForSavedProvider`, `promptWithPaginatedModal`, `promptWithRawModal`,
   or `replaceProviderPickerWithInfo` from a file that uses this pattern. List the file in
-  `MIGRATED_CANONICAL_CALLERS`; the audit in
-  `tests/unit/commands/canonicalMigrationLockdown.test.ts` then fails the build if one of
+  `MIGRATED_ANCHOR_CALLERS`; the audit in
+  `tests/unit/commands/anchorMigrationLockdown.test.ts` then fails the build if one of
   those primitives reappears in it.
 - Every terminal — success, validation failure, write failure, and the outer `catch` —
-  renders through `work.message.replace(...)` or the tracked `canonicalMessage`, never
+  renders through `work.message.replace(...)` or the tracked `anchorMessage`, never
   `replyInfoEmbed`. Absence of the banned primitives is what transitively guarantees this.
-- `>25` options need no caller handling: `openCanonicalModal` routes through the engine's
+- `>25` options need no caller handling: `openAnchorModal` routes through the engine's
   range-selector bridge automatically.
 - Single-provider flows still show an explicit "open selector" button. A modal must open from
   an interaction the controller owns, so the slash command cannot open it directly.
@@ -888,8 +888,8 @@ Rules:
 **When the bridge does not fit.** The bridge slices exactly one select component and assumes
 every entry is a selectable option. `/model fallback` violates both — five selects over one
 shared option list, with one entry per page reserved for an explicit "None" choice. Such a
-command picks its range on the canonical message first via `acquireModalOptionRange(...)`
-(passing a `pageSize` below 25 to reserve entries), then hands `openCanonicalModal` an
+command picks its range on the anchor message first via `acquireModalOptionRange(...)`
+(passing a `pageSize` below 25 to reserve entries), then hands `openAnchorModal` an
 already-sliced `<=25` list, which opens directly.
 
 ### Pattern 5: Manual Deferral Timing
@@ -968,7 +968,7 @@ Rules:
 
 `/server channel-prompt` is a flat, modal-driven command that scopes a system prompt to one channel. It takes a required `channel` option, then opens a prefilled 4-part modal (up to 16000 chars, part 1 optional) plus a Radio Group for Prompt Mode (`Append` / `Replace`). `Append` injects the channel prompt as a distinct `SYSTEM_CHANNEL_PROMPT` block after the server system prompt; `Replace` substitutes the channel prompt for the server system prompt's slot — persona prompt and persona attributes are never affected. Submitting with all prompt parts empty removes the channel's override. State lives in the standalone `channel_prompt_overrides` table (per-channel, never exported) and is resolved per request via `getCachedChannelPrompt`. The override surfaces in `/tool prompt snapshot` under the `Channel Prompt` header.
 
-`/persona sprites add` is a one-modal Manage Server flow that selects a persona, validates a sprite label, uploads an image, converts it to PNG, and upserts a `persona_sprites` row. Reusing a normalized label replaces the existing sprite. `/persona sprites edit` uses the persona workflow, sprite picker, and confirmation bridge before opening a prefilled modal for name, optional replacement image, usage instructions, and identity status; replacement images consume the shared avatar quota, while metadata-only edits do not. `/persona sprites remove` starts from `runPersonaPickerWorkflow(...)`, then uses its in-place modal bridge for checkbox groups where checked sprites are kept and unchecked sprites are deleted. When a persona has more than 25 modal options, the workflow shows localized range buttons on the canonical message before opening the selected checkbox slice. `/persona sprites export` selects a persona and bundles its sprites into a shareable `.zip` through the explicit public-result phase. `/persona sprites import` opens a single modal with a persona select plus a `.zip` file-upload field; it validates and converts every image up front, reserves one import-quota slot for the whole batch, overwrites on name conflicts, and rejects the entire import if it would exceed `PERSONA_SPRITE_MAX_PER_PERSONA`. The archive format (manifest + `sprites/` images) and its ZIP-bomb guards live in `src/utils/persona/spriteArchive.ts`. See [multi-persona](multi-persona) for the format details.
+`/persona sprites add` is a one-modal Manage Server flow that selects a persona, validates a sprite label, uploads an image, converts it to PNG, and upserts a `persona_sprites` row. Reusing a normalized label replaces the existing sprite. `/persona sprites edit` uses the persona workflow, sprite picker, and confirmation bridge before opening a prefilled modal for name, optional replacement image, usage instructions, and identity status; replacement images consume the shared avatar quota, while metadata-only edits do not. `/persona sprites remove` starts from `runPersonaPickerWorkflow(...)`, then uses its in-place modal bridge for checkbox groups where checked sprites are kept and unchecked sprites are deleted. When a persona has more than 25 modal options, the workflow shows localized range buttons on the anchor message before opening the selected checkbox slice. `/persona sprites export` selects a persona and bundles its sprites into a shareable `.zip` through the explicit public-result phase. `/persona sprites import` opens a single modal with a persona select plus a `.zip` file-upload field; it validates and converts every image up front, reserves one import-quota slot for the whole batch, overwrites on name conflicts, and rejects the entire import if it would exceed `PERSONA_SPRITE_MAX_PER_PERSONA`. The archive format (manifest + `sprites/` images) and its ZIP-bomb guards live in `src/utils/persona/spriteArchive.ts`. See [multi-persona](multi-persona) for the format details.
 
 `/bot generate image` is a modal-driven, fire-and-forget scene snapshot command. It plans against the current channel context with the active text provider, then renders with either the current provider's native image path or NovelAI's tag-based image tool when a NovelAI backend is available. Personal provider overlays apply before the hidden turn is built so personal text/image routing is respected.
 

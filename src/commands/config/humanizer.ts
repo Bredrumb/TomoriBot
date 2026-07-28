@@ -163,7 +163,7 @@ export async function execute(
       return;
     }
 
-    // 5a. Persona scope is fully owned by the canonical picker workflow.
+    // 5a. Persona scope is fully owned by the anchor picker workflow.
     if (scope === "persona") {
       const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
 

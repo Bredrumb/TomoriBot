@@ -4,14 +4,14 @@ import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import type { ModalOptions, SelectOption } from "@/types/discord/modal";
 
 /**
- * Canonical-migration tests for `/model fallback`.
+ * Anchor-migration tests for `/model fallback`.
  *
  * This command could not ride the engine's own `>25` bridge — it renders five selects over
  * one shared option list (the bridge slices only the first) and reserves one entry per page
- * for the explicit "None" choice. It therefore picks a range on the canonical message via
+ * for the explicit "None" choice. It therefore picks a range on the anchor message via
  * `acquireModalOptionRange` and hands the modal an already-sliced list. These tests cover
  * that hand-off plus the per-slot merge rules, and assert every terminal lands on the one
- * canonical message rather than escaping to `replyInfoEmbed`.
+ * anchor message rather than escaping to `replyInfoEmbed`.
  */
 
 interface NoticeOptions {
@@ -28,7 +28,7 @@ interface FallbackRef {
 const chronology: string[] = [];
 const infoReplies: NoticeOptions[] = [];
 const replacements: NoticeOptions[] = [];
-/** Option lists handed to each modal opened through the canonical engine. */
+/** Option lists handed to each modal opened through the anchor engine. */
 const modalOptionLists: SelectOption[][] = [];
 const writtenRefs: FallbackRef[][] = [];
 
@@ -218,7 +218,7 @@ function collectCustomIds(node: unknown, found: string[] = []): string[] {
 
 let lastRendered: unknown = null;
 
-function makeCanonicalController() {
+function makeAnchorController() {
   const replace = async (payload: NoticeOptions) => {
     chronology.push("message.replace");
     lastRendered = payload;
@@ -226,9 +226,9 @@ function makeCanonicalController() {
     return {};
   };
   return {
-    canonicalMessageId: "canonical-msg",
+    anchorMessageId: "anchor-msg",
     fetchMessage: async () => ({
-      id: "canonical-msg",
+      id: "anchor-msg",
       awaitMessageComponent: async () => {
         // Prefer a real range button from the payload on screen; otherwise this is the
         // provider/opener step, which resolves from the saved-provider list.
@@ -243,15 +243,15 @@ function makeCanonicalController() {
 
 mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
-  MIGRATED_CANONICAL_CALLERS: [],
-  PRE_CANONICAL_PRIMITIVES: [],
+  MIGRATED_ANCHOR_CALLERS: [],
+  PRE_ANCHOR_PRIMITIVES: [],
   isCollectorTimeoutError: () => false,
   buildPersonaWorkflowNotice: (options: NoticeOptions) => options,
   completePersonaWorkflow: () => ({ action: "complete" }),
   retryPersonaWorkflow: () => ({ action: "retry" }),
   runPersonaPickerWorkflow: async () => undefined,
-  beginCanonicalPrivateWorkflow: async (_interaction: unknown, _locale: string, initialPayload: NoticeOptions) => {
-    const controller = makeCanonicalController();
+  beginAnchorPrivateWorkflow: async (_interaction: unknown, _locale: string, initialPayload: NoticeOptions) => {
+    const controller = makeAnchorController();
     lastRendered = initialPayload;
     const modalPhase = {
       get values() {
@@ -309,7 +309,7 @@ beforeEach(() => {
   lastRendered = null;
 });
 
-describe("/model fallback canonical workflow", () => {
+describe("/model fallback anchor workflow", () => {
   it("prepends the clear option and skips the range step at or below 24 models", async () => {
     scenario.modelCount = 5;
     scenario.submitted = { fallback_slot_1: "model-2" };

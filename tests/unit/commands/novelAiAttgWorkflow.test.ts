@@ -29,7 +29,7 @@ function resetPersona(): TomoriState {
 }
 
 const controller = {
-  canonicalMessageId: "canonical-attg",
+  anchorMessageId: "anchor-attg",
   replace: async (payload: unknown) => {
     chronology.push("message.replace");
     renderedPayloads.push(payload as Payload);

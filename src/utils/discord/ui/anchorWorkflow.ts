@@ -1,9 +1,9 @@
 /**
- * Neutral entry point for the **canonical one-message workflow** engine — the
+ * Neutral entry point for the **anchor one-message workflow** engine — the
  * persona-agnostic controller that renders a whole picker → selector → modal → result
  * flow on a single ephemeral message edited in place.
  *
- * New non-persona callers (e.g. the `/model *` command family) import the canonical API
+ * New non-persona callers (e.g. the `/model *` command family) import the anchor API
  * from here rather than from `personaWorkflow.ts`, so no caller has to reach into a
  * persona-named module for a generic mechanism. The engine's implementation still lives
  * in `personaWorkflow.ts` alongside `runPersonaPickerWorkflow` (its persona specialization).
@@ -11,7 +11,7 @@
  * **Keep it that way.** The persona specialization (`createSelectionPhase`,
  * `normalizeSelectedPersona`, `runPersonaPickerWorkflow`) calls about ten intentionally
  * private engine helpers — `noticePayload`, `awaitWorkflowButton`, `createModalPhase`,
- * `openModalWithBridge`, the `CanonicalMessageController` class, the `logWorkflow*` family.
+ * `openModalWithBridge`, the `AnchorMessageController` class, the `logWorkflow*` family.
  * Moving the generic half into this file would mean exporting every one of them just so a
  * sibling module could reach it, while `scripts/checks/lib/personaWorkflowBoundary.ts` exists
  * to keep exactly those internals unreachable. This module already provides the neutral
@@ -21,16 +21,16 @@
  * and continues to be imported from `personaWorkflow.ts`.
  */
 export {
-  beginCanonicalPrivateWorkflow,
+  beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
   isCollectorTimeoutError,
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
-  MIGRATED_CANONICAL_CALLERS,
-  PRE_CANONICAL_PRIMITIVES,
+  MIGRATED_ANCHOR_CALLERS,
+  PRE_ANCHOR_PRIMITIVES,
 } from "./personaWorkflow";
 
 export type {
-  CanonicalPrivateWorkflowPhase,
+  AnchorPrivateWorkflowPhase,
   PersonaWorkflowComponentsV2Payload,
   PersonaWorkflowInPlacePhase,
   PersonaWorkflowMessageController,
@@ -56,11 +56,11 @@ export type {
  * `personaWorkflow.ts` directly.
  */
 export type {
-  PersonaWorkflowComponentsV2Payload as CanonicalMessagePayload,
-  PersonaWorkflowInPlacePhase as CanonicalInPlacePhase,
-  PersonaWorkflowMessageController as CanonicalMessageController,
-  PersonaWorkflowModalPhase as CanonicalModalPhase,
-  PersonaWorkflowModalResult as CanonicalModalResult,
-  PersonaWorkflowNestedButtonPhase as CanonicalNestedButtonPhase,
-  PersonaWorkflowUpdateError as CanonicalWorkflowUpdateError,
+  PersonaWorkflowComponentsV2Payload as AnchorMessagePayload,
+  PersonaWorkflowInPlacePhase as AnchorInPlacePhase,
+  PersonaWorkflowMessageController as AnchorMessageController,
+  PersonaWorkflowModalPhase as AnchorModalPhase,
+  PersonaWorkflowModalResult as AnchorModalResult,
+  PersonaWorkflowNestedButtonPhase as AnchorNestedButtonPhase,
+  PersonaWorkflowUpdateError as AnchorWorkflowUpdateError,
 } from "./personaWorkflow";

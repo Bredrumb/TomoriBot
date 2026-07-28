@@ -288,7 +288,7 @@ export function scanPersonaWorkflowSource(
           callee,
           "competing-persona-helper",
           COMPETING_PERSONA_HELPER,
-          "Remove the competing persona-selection helper and use the canonical workflow.",
+          "Remove the competing persona-selection helper and use the anchor workflow.",
         );
       }
     }
@@ -305,7 +305,7 @@ export function scanPersonaWorkflowSource(
         node,
         "competing-persona-helper",
         COMPETING_PERSONA_HELPER,
-        `Remove this competing persona-selection helper ${location} and use the canonical workflow.`,
+        `Remove this competing persona-selection helper ${location} and use the anchor workflow.`,
       );
     }
 

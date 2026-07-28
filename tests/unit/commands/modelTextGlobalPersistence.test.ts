@@ -99,7 +99,7 @@ mock.module("@/utils/cache/tomoriStateCache", () => ({
   },
   // Rest of the module's export surface. `mock.module` is process-wide, so a partial stub
   // breaks module linking as soon as anything else in this process imports a missing name —
-  // and text.ts now reaches interactionCore through the shared canonical helpers.
+  // and text.ts now reaches interactionCore through the shared anchor helpers.
   getCachedMainPersona: async () => tomoriState,
   getLastDbError: () => null,
   clearTomoriStateCache: () => undefined,
@@ -220,20 +220,20 @@ mock.module("@/utils/discord/commandRegistry", () => ({
   commandRegistry: { getCommandMention: () => "/openrouter model" },
 }));
 
-// Fake canonical one-message engine. It drives text.ts's global scope: the provider
+// Fake anchor one-message engine. It drives text.ts's global scope: the provider
 // step resolves to a single "open selector" button, the modal opens and submits the
 // scenario's model, and every terminal `replace` is recorded so the persistence and
-// terminal-rendering assertions can inspect what landed on the one canonical message.
-function makeCanonicalController() {
+// terminal-rendering assertions can inspect what landed on the one anchor message.
+function makeAnchorController() {
   const replace = async (payload: InfoOptions) => {
     chronology.push("message.replace");
     replacements.push(payload);
     return {};
   };
   return {
-    canonicalMessageId: "canonical-msg",
+    anchorMessageId: "anchor-msg",
     fetchMessage: async () => ({
-      id: "canonical-msg",
+      id: "anchor-msg",
       awaitMessageComponent: async () => ({
         id: "opener-button",
         customId: "model_text_global_open",
@@ -251,8 +251,8 @@ mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   completePersonaWorkflow: () => ({ action: "complete" }),
   retryPersonaWorkflow: () => ({ action: "retry" }),
   runPersonaPickerWorkflow: async () => undefined,
-  beginCanonicalPrivateWorkflow: async () => {
-    const controller = makeCanonicalController();
+  beginAnchorPrivateWorkflow: async () => {
+    const controller = makeAnchorController();
     const modalPhase = {
       values: { model_select: scenario.selectedModel.llm_codename },
       message: controller,
@@ -297,7 +297,7 @@ async function runCommand(): Promise<void> {
 }
 
 function expectUpdateFailure(): void {
-  // Terminal notices now render through the canonical controller, so the payload also
+  // Terminal notices now render through the anchor controller, so the payload also
   // carries `locale`/`color`; match on the title key rather than the whole object.
   const rendered = [...infoReplies, ...replacements];
   expect(rendered.some((options) => options.titleKey === "general.errors.update_failed_title")).toBe(true);

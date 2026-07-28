@@ -43,7 +43,7 @@ interface Scenario {
   throwAt: "documents" | "meta" | "chunks" | "rebuild" | null;
 }
 
-const CANONICAL_MESSAGE_ID = "canonical-document-view";
+const CANONICAL_MESSAGE_ID = "anchor-document-view";
 const chronology: string[] = [];
 const payloads: RecordedPayload[] = [];
 const rootCalls: string[] = [];
@@ -205,7 +205,7 @@ mock.module("@/utils/discord/ui/personaWorkflow", () => ({
         : undefined,
     ),
   completePersonaWorkflow: (value?: unknown) => ({ action: "complete", value }),
-  beginCanonicalPrivateWorkflow: async (
+  beginAnchorPrivateWorkflow: async (
     interaction: { reply: (payload: unknown) => Promise<unknown> },
     _locale: string,
     payload: unknown,
@@ -496,7 +496,7 @@ function allRenderedText(): string {
   return payloads.map((entry) => payloadText(entry.payload)).join("\n");
 }
 
-function expectCanonicalV2Only(): void {
+function expectAnchorV2Only(): void {
   expect(new Set(payloads.map((entry) => entry.messageId))).toEqual(new Set([CANONICAL_MESSAGE_ID]));
   for (const entry of payloads) {
     expect(entry.payload.flags).toBe(MessageFlags.IsComponentsV2);
@@ -533,7 +533,7 @@ beforeEach(() => {
   invalidations.length = 0;
 });
 
-describe("/memory document view canonical workflow", () => {
+describe("/memory document view anchor workflow", () => {
   it("keeps no-document state on the persona picker message after acknowledging selection", async () => {
     scenario.documents = [];
 
@@ -543,7 +543,7 @@ describe("/memory document view canonical workflow", () => {
     expectBefore("ack:root.deferReply", "repo.personas");
     expectBefore("ack:persona-button.deferUpdate", "repo.documents");
     expect(allRenderedText()).toContain("commands.memory.document.view.none_title");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("rejects an invalid selected document before metadata or chunk reads", async () => {
@@ -555,7 +555,7 @@ describe("/memory document view canonical workflow", () => {
     expect(repositoryCalls.some((call) => call.method === "loadDocumentMeta")).toBe(false);
     expect(repositoryCalls.some((call) => call.method === "loadDocumentChunks")).toBe(false);
     expect(allRenderedText()).toContain("general.errors.invalid_option_title");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("renders missing metadata and no-chunk states in place after document acknowledgement", async () => {
@@ -573,7 +573,7 @@ describe("/memory document view canonical workflow", () => {
         expectBefore("ack:modal.deferUpdate", "repo.chunks");
         expect(allRenderedText()).toContain("commands.memory.document.view.no_chunks_title");
       }
-      expectCanonicalV2Only();
+      expectAnchorV2Only();
 
       scenario = makeScenario();
       chronology.length = 0;
@@ -596,7 +596,7 @@ describe("/memory document view canonical workflow", () => {
     expect(chronology).toContain("ack:button.update:doc_view_next");
     expect(chronology).toContain("ack:button.update:doc_view_prev");
     expect(chronology.at(-1)).toBe("ack:button.deleteReply:doc_view_close");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("edits content and tags only after acknowledging the edit modal, then invalidates after writes", async () => {
@@ -635,7 +635,7 @@ describe("/memory document view canonical workflow", () => {
     ]);
     expect(allRenderedText()).toContain("commands.memory.document.view.edit_success_both");
     expect(invalidations).toEqual(["guild-1", "guild-1", "guild-1"]);
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("retains the immediate chunk invalidation when rebuilding document text fails", async () => {
@@ -653,7 +653,7 @@ describe("/memory document view canonical workflow", () => {
     expectBefore("cache.invalidate", "repo.rebuild-document");
     expect(invalidations).toEqual(["guild-1"]);
     expect(allRenderedText()).toContain("general.errors.unknown_error_title");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("handles empty and unchanged edits without embedding or persistence", async () => {
@@ -677,7 +677,7 @@ describe("/memory document view canonical workflow", () => {
           ? "commands.memory.document.view.edit_empty_content_title"
           : "commands.memory.document.view.edit_no_changes_title",
       );
-      expectCanonicalV2Only();
+      expectAnchorV2Only();
 
       scenario = makeScenario();
       chronology.length = 0;
@@ -705,7 +705,7 @@ describe("/memory document view canonical workflow", () => {
       expect(invalidations).toHaveLength(0);
       if (variant === "embedding") expect(chronology).not.toContain("repo.update-chunk");
       else expect(chronology).toContain("repo.update-chunk");
-      expectCanonicalV2Only();
+      expectAnchorV2Only();
 
       scenario = makeScenario();
       chronology.length = 0;
@@ -726,7 +726,7 @@ describe("/memory document view canonical workflow", () => {
     expect(allRenderedText()).toContain("commands.memory.document.view.delete_confirm_title");
     expect(chronology).not.toContain("repo.delete-chunk");
     expect(chronology).toContain("ack:button.update:doc_view_cancel_delete");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("deletes one chunk, rebuilds the document, and keeps browsing", async () => {
@@ -745,7 +745,7 @@ describe("/memory document view canonical workflow", () => {
     expect(invalidationIndexes[1]).toBeGreaterThan(chronology.indexOf("repo.rebuild-document"));
     expect(allRenderedText()).toContain("commands.memory.document.view.delete_success_title");
     expect(invalidations).toEqual(["guild-1", "guild-1"]);
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("deletes the parent document after deleting its final chunk", async () => {
@@ -759,17 +759,17 @@ describe("/memory document view canonical workflow", () => {
     expectBefore("repo.delete-chunk", "repo.remove-document");
     expect(allRenderedText()).toContain("commands.memory.document.view.delete_document_title");
     expect(invalidations).toEqual(["guild-1", "guild-1"]);
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
-  it("closes by deleting the workflow-owned canonical response", async () => {
+  it("closes by deleting the workflow-owned anchor response", async () => {
     openDocument();
     scenario.buttons.push("doc_view_close");
 
     await runCommand();
 
     expect(chronology.at(-1)).toBe("ack:button.deleteReply:doc_view_close");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("removes controls on timeout while preserving the current chunk", async () => {
@@ -782,10 +782,10 @@ describe("/memory document view canonical workflow", () => {
     expect(terminalText).toContain("alpha");
     expect(terminalText).toContain("general.interaction.timeout_title");
     expect(terminalText).not.toContain("commands.memory.document.view.btn_close");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
-  it("reports unexpected selected-persona errors on the canonical message", async () => {
+  it("reports unexpected selected-persona errors on the anchor message", async () => {
     scenario.throwAt = "meta";
     openDocument();
 
@@ -793,7 +793,7 @@ describe("/memory document view canonical workflow", () => {
 
     expect(allRenderedText()).toContain("general.errors.unknown_error_title");
     expect(rootCalls).toEqual(["deferReply", "editReply"]);
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("routes serverwide documents with a null persona after acknowledging the root", async () => {
@@ -810,7 +810,7 @@ describe("/memory document view canonical workflow", () => {
     expect(repositoryCalls.find((call) => call.method === "loadDocumentMeta")?.args).toEqual([11, 7, null]);
     expect(repositoryCalls.find((call) => call.method === "loadDocumentChunks")?.args).toEqual([11, 7, null]);
     expect(chronology).not.toContain("repo.personas");
-    expectCanonicalV2Only();
+    expectAnchorV2Only();
   });
 
   it("passes exactly 25 and 26 documents to the modal bridge without losing absolute IDs", async () => {
@@ -834,7 +834,7 @@ describe("/memory document view canonical workflow", () => {
       expect(options[0]?.value).toBe("1000");
       expect(options.at(-1)?.value).toBe(String(1000 + count - 1));
       expect(repositoryCalls.find((call) => call.method === "loadDocumentMeta")?.args[0]).toBe(1000 + count - 1);
-      expectCanonicalV2Only();
+      expectAnchorV2Only();
 
       scenario = makeScenario();
       chronology.length = 0;

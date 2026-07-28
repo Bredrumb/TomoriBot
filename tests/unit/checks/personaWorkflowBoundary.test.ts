@@ -105,7 +105,7 @@ describe("persona workflow boundary scanner — synthetic cases", () => {
 });
 
 describe("persona workflow boundary — real source tree", () => {
-  it("has no command or feature code bypassing the canonical workflow", async () => {
+  it("has no command or feature code bypassing the anchor workflow", async () => {
     const { violations } = await auditPersonaWorkflowBoundary();
     const detail = violations
       .map((violation) => `${violation.file}:${violation.line}:${violation.column} [${violation.kind}]`)

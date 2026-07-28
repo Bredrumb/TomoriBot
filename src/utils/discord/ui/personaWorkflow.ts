@@ -29,7 +29,7 @@ import {
 import type { AvatarSessionCache } from "./interactionCore";
 import type { NoticeContainerOptions } from "./interactionCore";
 
-// Re-exported so canonical-workflow callers (e.g. commands/model/text.ts) can detect a
+// Re-exported so anchor-workflow callers (e.g. commands/model/text.ts) can detect a
 // collector timeout without importing the heavy interactionCore module directly, keeping
 // their unit-test module graph small.
 export { isCollectorTimeoutError } from "./interactionCore";
@@ -42,16 +42,16 @@ export const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
     : DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS;
 
 /**
- * Command files built on the canonical one-message workflow. The lock-down audit
- * (`tests/unit/commands/canonicalMigrationLockdown.test.ts`) forbids every file listed here
- * from calling the pre-canonical picker/modal primitives (`promptForSavedProvider`,
+ * Command files built on the anchor one-message workflow. The lock-down audit
+ * (`tests/unit/commands/anchorMigrationLockdown.test.ts`) forbids every file listed here
+ * from calling the pre-anchor picker/modal primitives (`promptForSavedProvider`,
  * `promptWithPaginatedModal`, `replaceProviderPickerWithInfo`, `promptWithRawModal`). Their
- * absence transitively guarantees the only modal path is the canonical controller, so no
+ * absence transitively guarantees the only modal path is the anchor controller, so no
  * post-modal terminal can escape it via `replyInfoEmbed`/`followUp`.
  *
- * Add a file here only once every one of its terminals renders on the canonical message.
+ * Add a file here only once every one of its terminals renders on the anchor message.
  */
-export const MIGRATED_CANONICAL_CALLERS: readonly string[] = [
+export const MIGRATED_ANCHOR_CALLERS: readonly string[] = [
   "src/commands/model/text.ts",
   "src/commands/model/vision.ts",
   "src/commands/model/video.ts",
@@ -66,8 +66,8 @@ export const MIGRATED_CANONICAL_CALLERS: readonly string[] = [
   "src/commands/personal/model/fallback.ts",
 ];
 
-/** Primitives a migrated caller must not reach for; see {@link MIGRATED_CANONICAL_CALLERS}. */
-export const PRE_CANONICAL_PRIMITIVES: readonly string[] = [
+/** Primitives a migrated caller must not reach for; see {@link MIGRATED_ANCHOR_CALLERS}. */
+export const PRE_ANCHOR_PRIMITIVES: readonly string[] = [
   "promptForSavedProvider",
   "promptWithPaginatedModal",
   "replaceProviderPickerWithInfo",
@@ -104,7 +104,7 @@ export type PersonaWorkflowPublicPayload = Omit<
 
 export type PersonaWorkflowUpdateErrorCode =
   | "already-acknowledged"
-  | "canonical-message-unavailable"
+  | "anchor-message-unavailable"
   | "deleted"
   | "discord-update-failed"
   | "message-mismatch"
@@ -113,7 +113,7 @@ export type PersonaWorkflowUpdateErrorCode =
   | "public-reply-must-not-be-ephemeral"
   | "unsupported-replacement";
 
-/** Typed failure raised by canonical-message and acknowledgment operations. */
+/** Typed failure raised by anchor-message and acknowledgment operations. */
 export class PersonaWorkflowUpdateError extends Error {
   public readonly code: PersonaWorkflowUpdateErrorCode;
   public readonly cause?: unknown;
@@ -127,7 +127,7 @@ export class PersonaWorkflowUpdateError extends Error {
 }
 
 export interface PersonaWorkflowMessageController {
-  readonly canonicalMessageId: string;
+  readonly anchorMessageId: string;
   readonly deliveryPolicy: "replace-picker";
   replace(payload: PersonaWorkflowComponentsV2Payload): Promise<Message>;
   edit(payload: PersonaWorkflowComponentsV2Payload): Promise<Message>;
@@ -161,7 +161,7 @@ export interface PersonaWorkflowModalPhase {
   /** Absolute offset of the first option in a paginated modal range. */
   readonly optionOffset: number;
   readonly message: PersonaWorkflowMessageController;
-  /** Uses the unacknowledged, message-backed modal submit to replace the canonical message directly. */
+  /** Uses the unacknowledged, message-backed modal submit to replace the anchor message directly. */
   replace(payload: PersonaWorkflowComponentsV2Payload): Promise<Message>;
   beginInPlaceWork(): Promise<PersonaWorkflowInPlacePhase>;
   unsafeInteraction(): ModalSubmitInteraction;
@@ -176,10 +176,10 @@ export interface PersonaWorkflowNestedButtonPhase {
 }
 
 /**
- * Canonical private-message phase for a non-persona sibling scope. Persona
+ * Anchor private-message phase for a non-persona sibling scope. Persona
  * branches must still enter through `runPersonaPickerWorkflow`.
  */
-export interface CanonicalPrivateWorkflowPhase {
+export interface AnchorPrivateWorkflowPhase {
   readonly phaseId: string;
   readonly message: PersonaWorkflowMessageController;
   useButton(button: ButtonInteraction): PersonaWorkflowNestedButtonPhase;
@@ -306,7 +306,7 @@ function assertComponentsV2Payload(payload: PersonaWorkflowComponentsV2Payload):
   if (payload.flags !== MessageFlags.IsComponentsV2 || !Array.isArray(payload.components)) {
     throw new PersonaWorkflowUpdateError(
       "unsupported-replacement",
-      "Canonical persona workflow updates must be Components V2 payloads.",
+      "Anchor persona workflow updates must be Components V2 payloads.",
     );
   }
 
@@ -317,7 +317,7 @@ function assertComponentsV2Payload(payload: PersonaWorkflowComponentsV2Payload):
   if (unsafePayload.content !== undefined || unsafePayload.embeds !== undefined) {
     throw new PersonaWorkflowUpdateError(
       "unsupported-replacement",
-      "Canonical persona workflow updates cannot contain legacy content or embeds.",
+      "Anchor persona workflow updates cannot contain legacy content or embeds.",
     );
   }
 }
@@ -335,7 +335,7 @@ function getInteractionMessageId(interaction: PersonaWorkflowMessageInteraction)
 
 function isFatalInteractionFailure(error: unknown): boolean {
   if (error instanceof PersonaWorkflowUpdateError) {
-    return error.code === "canonical-message-unavailable" || isFatalInteractionFailure(error.cause);
+    return error.code === "anchor-message-unavailable" || isFatalInteractionFailure(error.cause);
   }
   const candidate = error as { code?: unknown; rawError?: { code?: unknown }; message?: unknown };
   const code = candidate?.code ?? candidate?.rawError?.code;
@@ -349,7 +349,7 @@ function isFatalInteractionFailure(error: unknown): boolean {
 
 function classifyUpdateFailure(message: string, error: unknown): PersonaWorkflowUpdateError {
   return new PersonaWorkflowUpdateError(
-    isFatalInteractionFailure(error) ? "canonical-message-unavailable" : "discord-update-failed",
+    isFatalInteractionFailure(error) ? "anchor-message-unavailable" : "discord-update-failed",
     message,
     error,
   );
@@ -357,7 +357,7 @@ function classifyUpdateFailure(message: string, error: unknown): PersonaWorkflow
 
 function logWorkflowFailure(
   action: string,
-  canonicalMessageId: string,
+  anchorMessageId: string,
   error: unknown,
   metadata: Record<string, unknown> = {},
 ): void {
@@ -365,7 +365,7 @@ function logWorkflowFailure(
     errorType: "PersonaWorkflowFailure",
     metadata: {
       action,
-      canonicalMessageId,
+      anchorMessageId,
       ...metadata,
       error,
     },
@@ -374,14 +374,14 @@ function logWorkflowFailure(
 
 function logWorkflowTimeout(
   stage: string,
-  canonicalMessageId: string | null,
+  anchorMessageId: string | null,
   metadata: Record<string, unknown> = {},
 ): void {
   log.warn(`Persona workflow ${stage} timed out`, {
     errorType: "PersonaWorkflowTimeout",
     metadata: {
       stage,
-      canonicalMessageId,
+      anchorMessageId,
       ...metadata,
     },
   });
@@ -389,14 +389,14 @@ function logWorkflowTimeout(
 
 function logWorkflowEmpty(
   stage: string,
-  canonicalMessageId: string | null,
+  anchorMessageId: string | null,
   counts: { totalPersonas: number; eligiblePersonas: number; interactionId?: string },
 ): void {
   // Empty is a normal terminal state, not a warning, so it uses info-level
   // logging. The total-vs-eligible counts are folded into the message because
   // the info channel does not carry structured metadata.
   log.info(
-    `Persona workflow ${stage} reached an empty eligible set (message=${canonicalMessageId ?? "none"}, ` +
+    `Persona workflow ${stage} reached an empty eligible set (message=${anchorMessageId ?? "none"}, ` +
       `total=${counts.totalPersonas}, eligible=${counts.eligiblePersonas}` +
       `${counts.interactionId ? `, interaction=${counts.interactionId}` : ""})`,
   );
@@ -404,7 +404,7 @@ function logWorkflowEmpty(
 
 function logWorkflowFatal(
   stage: string,
-  canonicalMessageId: string | null,
+  anchorMessageId: string | null,
   error?: unknown,
   metadata: Record<string, unknown> = {},
 ): void {
@@ -412,7 +412,7 @@ function logWorkflowFatal(
     errorType: "PersonaWorkflowFatal",
     metadata: {
       stage,
-      canonicalMessageId,
+      anchorMessageId,
       ...metadata,
       ...(error === undefined ? {} : { error }),
     },
@@ -446,7 +446,7 @@ function disableInteractiveComponents(value: unknown): unknown {
   return component;
 }
 
-class CanonicalMessageController implements PersonaWorkflowMessageController {
+class AnchorMessageController implements PersonaWorkflowMessageController {
   public readonly deliveryPolicy = "replace-picker" as const;
   readonly #root: PersonaWorkflowRootInteraction;
   readonly #ledger: AcknowledgementLedger;
@@ -461,7 +461,7 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
 
   public constructor(
     root: PersonaWorkflowRootInteraction,
-    public readonly canonicalMessageId: string,
+    public readonly anchorMessageId: string,
     ledger: AcknowledgementLedger,
   ) {
     this.#root = root;
@@ -474,10 +474,10 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
 
   public recordFailure(
     error: PersonaWorkflowUpdateError,
-    stage = "canonical-message-controller",
+    stage = "anchor-message-controller",
     metadata: Record<string, unknown> = {},
   ): PersonaWorkflowUpdateError {
-    if (error.code === "canonical-message-unavailable") {
+    if (error.code === "anchor-message-unavailable") {
       this.#fatalError ??= error;
       this.logLatchedFatal(stage, metadata);
     }
@@ -487,7 +487,7 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
   public classifyFailure(
     message: string,
     error: unknown,
-    stage = "canonical-message-controller",
+    stage = "anchor-message-controller",
     metadata: Record<string, unknown> = {},
   ): PersonaWorkflowUpdateError {
     return this.recordFailure(classifyUpdateFailure(message, error), stage, metadata);
@@ -496,14 +496,14 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
   public logLatchedFatal(stage: string, metadata: Record<string, unknown> = {}): void {
     if (!this.#fatalError || this.#fatalLogged) return;
     this.#fatalLogged = true;
-    logWorkflowFatal(stage, this.canonicalMessageId, this.#fatalError, metadata);
+    logWorkflowFatal(stage, this.anchorMessageId, this.#fatalError, metadata);
   }
 
   async #verifyMessage(message: Message): Promise<Message> {
-    if (message.id !== this.canonicalMessageId) {
+    if (message.id !== this.anchorMessageId) {
       throw new PersonaWorkflowUpdateError(
         "message-mismatch",
-        `Expected canonical message ${this.canonicalMessageId}, received ${message.id}.`,
+        `Expected anchor message ${this.anchorMessageId}, received ${message.id}.`,
       );
     }
     return message;
@@ -511,7 +511,7 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
 
   #ensureAvailable(): void {
     if (this.#deleted) {
-      throw new PersonaWorkflowUpdateError("deleted", "The canonical persona workflow message was deleted.");
+      throw new PersonaWorkflowUpdateError("deleted", "The anchor persona workflow message was deleted.");
     }
   }
 
@@ -533,8 +533,8 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
       return await this.#verifyMessage(message);
     } catch (error) {
       if (error instanceof PersonaWorkflowUpdateError) throw this.recordFailure(error, "root-edit");
-      logWorkflowFailure("root-edit", this.canonicalMessageId, error);
-      throw this.classifyFailure("Failed to edit the canonical persona workflow message.", error, "root-edit");
+      logWorkflowFailure("root-edit", this.anchorMessageId, error);
+      throw this.classifyFailure("Failed to edit the anchor persona workflow message.", error, "root-edit");
     }
   }
 
@@ -557,7 +557,7 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
   }
 
   /**
-   * Collapse-at-open: fire-and-forget replacement of the canonical message's live
+   * Collapse-at-open: fire-and-forget replacement of the anchor message's live
    * controls with an inert notice as a modal opens. Discord emits no modal-dismiss
    * event, so without this a dismissed modal would strand clickable buttons for the
    * full modal timeout. Not awaited here — the promise is stored (and swallowed at
@@ -588,13 +588,13 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
     if (!sourceMessageId) {
       throw new PersonaWorkflowUpdateError(
         "non-message-backed-interaction",
-        "The interaction is not backed by the canonical picker message.",
+        "The interaction is not backed by the anchor picker message.",
       );
     }
-    if (sourceMessageId !== this.canonicalMessageId) {
+    if (sourceMessageId !== this.anchorMessageId) {
       throw new PersonaWorkflowUpdateError(
         "message-mismatch",
-        `Interaction message ${sourceMessageId} does not match ${this.canonicalMessageId}.`,
+        `Interaction message ${sourceMessageId} does not match ${this.anchorMessageId}.`,
       );
     }
     if (interactionWasAcknowledged(source, this.#ledger)) {
@@ -620,11 +620,11 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
       if (error instanceof PersonaWorkflowUpdateError) {
         throw this.recordFailure(error, "interaction-update", { interactionId: source.id });
       }
-      logWorkflowFailure("interaction-update", this.canonicalMessageId, error, {
+      logWorkflowFailure("interaction-update", this.anchorMessageId, error, {
         interactionId: source.id,
       });
       throw this.classifyFailure(
-        "Failed to replace the canonical message through the interaction.",
+        "Failed to replace the anchor message through the interaction.",
         error,
         "interaction-update",
         {
@@ -640,13 +640,13 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
     if (!sourceMessageId) {
       throw new PersonaWorkflowUpdateError(
         "non-message-backed-interaction",
-        "The interaction cannot update the canonical picker because it has no source message.",
+        "The interaction cannot update the anchor picker because it has no source message.",
       );
     }
-    if (sourceMessageId !== this.canonicalMessageId) {
+    if (sourceMessageId !== this.anchorMessageId) {
       throw new PersonaWorkflowUpdateError(
         "message-mismatch",
-        `Interaction message ${sourceMessageId} does not match ${this.canonicalMessageId}.`,
+        `Interaction message ${sourceMessageId} does not match ${this.anchorMessageId}.`,
       );
     }
     if (interactionWasAcknowledged(source, this.#ledger)) {
@@ -665,7 +665,7 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
       if (error instanceof PersonaWorkflowUpdateError) {
         throw this.recordFailure(error, "defer-update", { interactionId: source.id });
       }
-      logWorkflowFailure("defer-update", this.canonicalMessageId, error, {
+      logWorkflowFailure("defer-update", this.anchorMessageId, error, {
         interactionId: source.id,
       });
       throw this.classifyFailure("Failed to acknowledge in-place persona workflow work.", error, "defer-update", {
@@ -699,8 +699,8 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
       return await this.#verifyMessage(message);
     } catch (error) {
       if (error instanceof PersonaWorkflowUpdateError) throw this.recordFailure(error, "fetch");
-      logWorkflowFailure("fetch", this.canonicalMessageId, error);
-      throw this.classifyFailure("Failed to fetch the canonical persona workflow message.", error, "fetch");
+      logWorkflowFailure("fetch", this.anchorMessageId, error);
+      throw this.classifyFailure("Failed to fetch the anchor persona workflow message.", error, "fetch");
     }
   }
 
@@ -718,8 +718,8 @@ class CanonicalMessageController implements PersonaWorkflowMessageController {
       await this.#root.deleteReply();
       this.#deleted = true;
     } catch (error) {
-      logWorkflowFailure("delete", this.canonicalMessageId, error);
-      throw this.classifyFailure("Failed to delete the canonical persona workflow message.", error, "delete");
+      logWorkflowFailure("delete", this.anchorMessageId, error);
+      throw this.classifyFailure("Failed to delete the anchor persona workflow message.", error, "delete");
     }
   }
 }
@@ -750,16 +750,16 @@ export function buildPersonaWorkflowNotice(options: NoticeContainerOptions): Per
  * and nested-button phase used by persona workflows without adding a competing
  * persona-selection abstraction.
  */
-export async function beginCanonicalPrivateWorkflow(
+export async function beginAnchorPrivateWorkflow(
   interaction: ChatInputCommandInteraction,
   locale: string,
   initialPayload: PersonaWorkflowComponentsV2Payload,
-): Promise<CanonicalPrivateWorkflowPhase> {
+): Promise<AnchorPrivateWorkflowPhase> {
   assertComponentsV2Payload(initialPayload);
   if (interaction.replied || interaction.deferred) {
     throw new PersonaWorkflowUpdateError(
       "already-acknowledged",
-      "The canonical private workflow must perform the command's first acknowledgment.",
+      "The anchor private workflow must perform the command's first acknowledgment.",
     );
   }
 
@@ -772,15 +772,15 @@ export async function beginCanonicalPrivateWorkflow(
     });
     message = response.resource?.message ?? (await interaction.fetchReply());
   } catch (error) {
-    const failure = classifyUpdateFailure("Failed to create the canonical private workflow message.", error);
-    if (failure.code === "canonical-message-unavailable") {
-      logWorkflowFatal("canonical-private-start", null, failure, { interactionId: interaction.id });
+    const failure = classifyUpdateFailure("Failed to create the anchor private workflow message.", error);
+    if (failure.code === "anchor-message-unavailable") {
+      logWorkflowFatal("anchor-private-start", null, failure, { interactionId: interaction.id });
     }
     throw failure;
   }
 
   const ledger = new AcknowledgementLedger();
-  const controller = new CanonicalMessageController(interaction, message.id, ledger);
+  const controller = new AnchorMessageController(interaction, message.id, ledger);
   const phaseId = interaction.id;
   return {
     phaseId,
@@ -832,7 +832,7 @@ function publicPayloadIsEphemeral(flags: unknown): boolean {
 }
 
 async function awaitWorkflowButton(
-  controller: CanonicalMessageController,
+  controller: AnchorMessageController,
   userId: string,
   customIdPrefix: string,
 ): Promise<ButtonInteraction> {
@@ -852,7 +852,7 @@ function createModalPhase(
     interaction: ModalMessageModalSubmitInteraction;
   },
   optionOffset: number,
-  controller: CanonicalMessageController,
+  controller: AnchorMessageController,
 ): PersonaWorkflowModalPhase {
   const modalInteraction = result.interaction;
   return {
@@ -875,7 +875,7 @@ async function openRawWorkflowModal(
   locale: string,
   options: ModalOptions,
   optionOffset: number,
-  controller: CanonicalMessageController,
+  controller: AnchorMessageController,
 ): Promise<PersonaWorkflowModalResult> {
   if (controller.hasAcknowledged(button)) {
     return {
@@ -887,7 +887,7 @@ async function openRawWorkflowModal(
     };
   }
 
-  // Collapse-at-open: as the modal opens, replace the canonical message's live
+  // Collapse-at-open: as the modal opens, replace the anchor message's live
   // controls (provider picker, modal-ready button, or range selector) with an
   // inert notice. Fire-and-forget relative to the modal await below — Discord
   // emits no modal-dismiss event, so this is the only thing that keeps a dismissed
@@ -918,7 +918,7 @@ async function openRawWorkflowModal(
         interactionId: button.id,
       },
     );
-    if (failure.code === "canonical-message-unavailable") {
+    if (failure.code === "anchor-message-unavailable") {
       return { outcome: "fatal", error: failure };
     }
     return { outcome: "error", error: failure };
@@ -933,7 +933,7 @@ async function openRawWorkflowModal(
   }
 
   if (modalResult.outcome === "timeout") {
-    logWorkflowTimeout("raw-modal", controller.canonicalMessageId, {
+    logWorkflowTimeout("raw-modal", controller.anchorMessageId, {
       interactionId: button.id,
     });
     try {
@@ -947,7 +947,7 @@ async function openRawWorkflowModal(
         "raw-modal-timeout-replacement",
         { interactionId: button.id },
       );
-      if (failure.code === "canonical-message-unavailable") {
+      if (failure.code === "anchor-message-unavailable") {
         return { outcome: "fatal", error: failure };
       }
       return { outcome: "error", error: failure };
@@ -969,16 +969,16 @@ async function openRawWorkflowModal(
       outcome: "error",
       error: new PersonaWorkflowUpdateError(
         "non-message-backed-interaction",
-        "The modal submission is not backed by the canonical workflow message.",
+        "The modal submission is not backed by the anchor workflow message.",
       ),
     };
   }
-  if (messageId !== controller.canonicalMessageId) {
+  if (messageId !== controller.anchorMessageId) {
     return {
       outcome: "error",
       error: new PersonaWorkflowUpdateError(
         "message-mismatch",
-        `Modal message ${messageId} does not match ${controller.canonicalMessageId}.`,
+        `Modal message ${messageId} does not match ${controller.anchorMessageId}.`,
       ),
     };
   }
@@ -1002,7 +1002,7 @@ async function openModalWithBridge(
   initialButton: ButtonInteraction,
   locale: string,
   source: PersonaWorkflowModalSource,
-  controller: CanonicalMessageController,
+  controller: AnchorMessageController,
 ): Promise<PersonaWorkflowModalResult> {
   let options: ModalOptions;
   let modalButton = initialButton;
@@ -1047,7 +1047,7 @@ async function openModalWithBridge(
       modalButton = await awaitWorkflowButton(controller, initialButton.user.id, prefix);
     } catch (error) {
       if (isCollectorTimeoutError(error)) {
-        logWorkflowTimeout("modal-launcher", controller.canonicalMessageId, {
+        logWorkflowTimeout("modal-launcher", controller.anchorMessageId, {
           interactionId: initialButton.id,
         });
         await controller.replace(
@@ -1063,7 +1063,7 @@ async function openModalWithBridge(
           interactionId: initialButton.id,
         },
       );
-      if (failure.code === "canonical-message-unavailable") {
+      if (failure.code === "anchor-message-unavailable") {
         return { outcome: "fatal", error: failure };
       }
       return { outcome: "error", error: failure };
@@ -1088,7 +1088,7 @@ async function openModalWithBridge(
       rangeButton = await awaitWorkflowButton(controller, initialButton.user.id, prefix);
     } catch (error) {
       if (isCollectorTimeoutError(error)) {
-        logWorkflowTimeout("range-selector", controller.canonicalMessageId, {
+        logWorkflowTimeout("range-selector", controller.anchorMessageId, {
           interactionId: initialButton.id,
           rangePage,
         });
@@ -1100,7 +1100,7 @@ async function openModalWithBridge(
       const failure = controller.classifyFailure("The workflow range selector failed.", error, "range-selector", {
         interactionId: initialButton.id,
       });
-      if (failure.code === "canonical-message-unavailable") {
+      if (failure.code === "anchor-message-unavailable") {
         return { outcome: "fatal", error: failure };
       }
       return { outcome: "error", error: failure };
@@ -1159,7 +1159,7 @@ function createSelectionPhase<TPersona extends TomoriState>(
   persona: TPersona,
   absoluteIndex: number,
   selectedButton: ButtonInteraction,
-  controller: CanonicalMessageController,
+  controller: AnchorMessageController,
 ): {
   phase: PersonaWorkflowSelectionPhase<TPersona>;
   state: { fatalError?: PersonaWorkflowUpdateError };
@@ -1222,7 +1222,7 @@ function createSelectionPhase<TPersona extends TomoriState>(
           try {
             return await selectedButton.followUp(payload);
           } catch (error) {
-            logWorkflowFailure("separate-public", controller.canonicalMessageId, error, {
+            logWorkflowFailure("separate-public", controller.anchorMessageId, error, {
               interactionId: selectedButton.id,
             });
             throw controller.classifyFailure(
@@ -1339,7 +1339,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
         "The picker returned an invalid selected persona context.",
       );
       if (selectedButton) {
-        const controller = new CanonicalMessageController(interaction, selectedButton.message.id, ledger);
+        const controller = new AnchorMessageController(interaction, selectedButton.message.id, ledger);
         try {
           await controller.replaceFrom(
             selectedButton,
@@ -1351,7 +1351,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
             ),
           );
         } catch (ackError) {
-          logWorkflowFailure("invalid-selection", controller.canonicalMessageId, ackError);
+          logWorkflowFailure("invalid-selection", controller.anchorMessageId, ackError);
           if (isFatalInteractionFailure(ackError)) {
             const failure =
               controller.fatalError ?? controller.classifyFailure("Invalid selection fallback failed.", ackError);
@@ -1363,7 +1363,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
       return { outcome: "error", error };
     }
 
-    const controller = new CanonicalMessageController(interaction, selectedButton.message.id, ledger);
+    const controller = new AnchorMessageController(interaction, selectedButton.message.id, ledger);
     const selectionContext = createSelectionPhase(
       interaction,
       locale,
@@ -1377,7 +1377,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
     try {
       directive = await options.onSelected(selectionContext.phase);
     } catch (error) {
-      logWorkflowFailure("selected-callback", controller.canonicalMessageId, error, {
+      logWorkflowFailure("selected-callback", controller.anchorMessageId, error, {
         absoluteIndex: normalized.absoluteIndex,
         personaId: normalized.persona.persona_id,
       });
@@ -1390,7 +1390,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
         return { outcome: "fatal", error: preexistingFatal };
       }
       if (isFatalInteractionFailure(error)) {
-        logWorkflowFatal("selected-callback", controller.canonicalMessageId, error, {
+        logWorkflowFatal("selected-callback", controller.anchorMessageId, error, {
           absoluteIndex: normalized.absoluteIndex,
           personaId: normalized.persona.persona_id,
         });
@@ -1419,7 +1419,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
           );
         }
       } catch (replacementError) {
-        logWorkflowFailure("selected-callback-fallback", controller.canonicalMessageId, replacementError);
+        logWorkflowFailure("selected-callback-fallback", controller.anchorMessageId, replacementError);
       }
 
       const fatalError = controller.fatalError;
@@ -1455,13 +1455,13 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
         return { outcome: "error", error };
       }
       log.info(
-        `Persona workflow retrying picker ${controller.canonicalMessageId} in place for persona ${normalized.persona.persona_id}`,
+        `Persona workflow retrying picker ${controller.anchorMessageId} in place for persona ${normalized.persona.persona_id}`,
       );
       if (directive.personas) {
         const { filtered, excluded } = filterPersonas(directive.personas);
 
         // Mid-loop empty case: the user just removed the last item from the last
-        // eligible persona. Replace the canonical message in place with the
+        // eligible persona. Replace the anchor message in place with the
         // terminal empty state and return `empty`; never render an empty picker
         // and never emit a second ephemeral message.
         if (eligibility && filtered.length === 0) {
@@ -1478,7 +1478,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
             }
             return { outcome: "error", error };
           }
-          logWorkflowEmpty("retry", controller.canonicalMessageId, {
+          logWorkflowEmpty("retry", controller.anchorMessageId, {
             totalPersonas: directive.personas.length,
             eligiblePersonas: 0,
             interactionId: selectedButton.id,

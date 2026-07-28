@@ -17,13 +17,13 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import {
-  beginCanonicalPrivateWorkflow,
+  beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
   completePersonaWorkflow,
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
   retryPersonaWorkflow,
   runPersonaPickerWorkflow,
-  type CanonicalPrivateWorkflowPhase,
+  type AnchorPrivateWorkflowPhase,
   type PersonaWorkflowComponentsV2Payload,
   type PersonaWorkflowInPlacePhase,
   type PersonaWorkflowMessageController,
@@ -34,8 +34,8 @@ import {
   buildOpenRouterMovedNotice,
   buildOpenSelectorPayload,
   buildProviderPickerPayload,
-  openCanonicalModal,
-} from "@/utils/discord/ui/canonicalModelFlow";
+  openAnchorModal,
+} from "@/utils/discord/ui/anchorModelFlow";
 import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
@@ -112,18 +112,18 @@ function buildPersonaModelModalReady(locale: string, customId: string): PersonaW
 }
 
 /**
- * Opens this command's model-selection modal on the canonical message, delegating the
- * lifecycle (including the `>25` range-selector bridge) to the shared canonical helper.
+ * Opens this command's model-selection modal on the anchor message, delegating the
+ * lifecycle (including the `>25` range-selector bridge) to the shared anchor helper.
  * Only the modal's own copy and field id are this command's business.
  */
 async function openModelModal(
-  phase: CanonicalPrivateWorkflowPhase,
+  phase: AnchorPrivateWorkflowPhase,
   button: ButtonInteraction,
   locale: string,
   modelOptions: SelectOption[],
   modalCustomId: string,
 ): Promise<PersonaWorkflowModalPhase | null> {
-  return openCanonicalModal(phase, button, locale, {
+  return openAnchorModal(phase, button, locale, {
     modalCustomId,
     modalTitleKey: "commands.model.text.modal_title",
     components: [
@@ -201,20 +201,20 @@ export async function execute(
   const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "text");
 
   let selectedModel: LlmRow | null = null;
-  // Canonical one-message controller for channel/global scopes. Tracked so the outer
+  // Anchor one-message controller for channel/global scopes. Tracked so the outer
   // catch can render an unexpected-error terminal on the same ephemeral message.
-  let canonicalMessage: PersonaWorkflowMessageController | null = null;
+  let anchorMessage: PersonaWorkflowMessageController | null = null;
   const personaWorkflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   try {
-    // 1. Channel scope: canonical one-message flow — provider picker → model picker →
+    // 1. Channel scope: anchor one-message flow — provider picker → model picker →
     //    channel override → terminal result, all edited in place on one ephemeral message.
     if (scope === "channel") {
       const currentChannelModel =
         (await llmOverrideRepo.getChannelLlmOverride(tomoriState.server_id, interaction.channelId)) ?? tomoriState.llm;
       const idRoot = "model_text_channel";
 
-      // 1a. Open the canonical message with the correct initial control for the
+      // 1a. Open the anchor message with the correct initial control for the
       //     number of saved providers (none → error, one → open button, many → picker).
       const initialPayload =
         savedProviders.length === 0
@@ -233,8 +233,8 @@ export async function execute(
                 [{ model: currentChannelModel.llm_codename, provider: currentChannelModel.llm_provider }],
               );
 
-      const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
-      canonicalMessage = phase.message;
+      const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+      anchorMessage = phase.message;
       if (savedProviders.length === 0) return;
 
       // 1b. Resolve the provider and the unacknowledged button the modal opens from.
@@ -257,7 +257,7 @@ export async function execute(
         return;
       }
 
-      // 1c. Open the model modal (>25 routes through the canonical range selector).
+      // 1c. Open the model modal (>25 routes through the anchor range selector).
       const modalPhase = await openModelModal(
         phase,
         opener.button,
@@ -571,7 +571,7 @@ export async function execute(
       return;
     }
 
-    // 3. Global scope: canonical one-message flow — provider picker → (custom capability
+    // 3. Global scope: anchor one-message flow — provider picker → (custom capability
     //    activation | model picker) → mirror write → terminal result, all on one message.
     const idRoot = "model_text_global";
     const initialPayload =
@@ -591,8 +591,8 @@ export async function execute(
               [{ model: tomoriState.llm.llm_codename, provider: tomoriState.llm.llm_provider }],
             );
 
-    const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
-    canonicalMessage = phase.message;
+    const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+    anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
     const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
@@ -621,7 +621,7 @@ export async function execute(
       }
 
       // Single registered model activates directly (no modal); multiple show a
-      // string-select modal on the same canonical message.
+      // string-select modal on the same anchor message.
       let work: PersonaWorkflowInPlacePhase;
       let customModel: LlmRow | null;
       if (customAvailableModels.length === 1) {
@@ -757,7 +757,7 @@ export async function execute(
       return;
     }
 
-    // 3b. Regular provider: model picker on the canonical message.
+    // 3b. Regular provider: model picker on the anchor message.
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
@@ -774,7 +774,7 @@ export async function execute(
       return;
     }
 
-    // >25 models route through the canonical range selector automatically.
+    // >25 models route through the anchor range selector automatically.
     const modalPhase = await openModelModal(
       phase,
       opener.button,
@@ -1005,11 +1005,11 @@ export async function execute(
       return;
     }
 
-    // Channel/global scopes render their unexpected-error terminal on the same canonical
+    // Channel/global scopes render their unexpected-error terminal on the same anchor
     // message. Best-effort: if the message is already gone (fatal), fall back to a reply.
-    if (canonicalMessage) {
+    if (anchorMessage) {
       try {
-        await canonicalMessage.replace(
+        await anchorMessage.replace(
           buildPersonaWorkflowNotice({
             locale,
             titleKey: "general.errors.unknown_error_title",

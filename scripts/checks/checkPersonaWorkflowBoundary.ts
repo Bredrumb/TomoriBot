@@ -2,7 +2,7 @@
  * Persona-picker workflow boundary audit (CLI).
  *
  * Run via `bun run check-persona-workflow-boundary`. Any violation exits
- * non-zero so command code cannot bypass the canonical workflow unnoticed.
+ * non-zero so command code cannot bypass the anchor workflow unnoticed.
  */
 
 import {

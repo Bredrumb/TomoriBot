@@ -741,16 +741,16 @@ Implementation notes:
 - Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
 - Re-fetching a generated image by message/media ID (for image-to-image, inpaint, or vision analysis) must scan `message.components` for `MediaGallery`/`Thumbnail`/`File` media, not just top-level attachments/embeds — the generated file is referenced only inside the component. This discovery is centralized in `collectImageUrlsFromMessage` (`src/utils/image/imageExtractor.ts`), which reuses `appendComponentMediaFromMessage` from `src/utils/chat/contextMedia.ts`. `generate_image`, `generate_image_nai`, and `analyze_image` all go through it, so a Components V2 image found in context can also be reloaded by any tool that accepts a media reference.
 
-### Canonical message workflow: one message
+### Anchor message workflow: one message
 
-A same-visibility canonical workflow is one ephemeral Components V2 message for its complete
+A same-visibility anchor workflow is one ephemeral Components V2 message for its complete
 lifecycle. Provider or persona cards, page navigation, loading states, secondary selectors,
 validation, progress, success, errors, timeouts, and final private controls all replace or
-edit that canonical message. A modal is not a message and does not change this count.
+edit that anchor message. A modal is not a message and does not change this count.
 
 Both entry points behave identically here: `runPersonaPickerWorkflow(...)` for persona
-pickers, and `beginCanonicalPrivateWorkflow(...)` for everything else (imported from
-`src/utils/discord/ui/canonicalWorkflow.ts`, which also exports neutral `Canonical*` aliases
+pickers, and `beginAnchorPrivateWorkflow(...)` for everything else (imported from
+`src/utils/discord/ui/anchorWorkflow.ts`, which also exports neutral `Anchor*` aliases
 for the types named below). Each captures its message ID and exposes a
 `PersonaWorkflowMessageController` through selection, modal, in-place, and nested-button
 phases. Every controller operation verifies that it still targets that ID:
@@ -759,7 +759,7 @@ phases. Every controller operation verifies that it still targets that ID:
   `attachments` is supplied explicitly;
 - `edit(payload)` performs an incremental edit and retains attachments when the field is
   omitted;
-- `fetchMessage()` returns only the verified canonical message;
+- `fetchMessage()` returns only the verified anchor message;
 - `disableControls()` preserves the visible state but disables interactive components;
 - `delete()` closes the workflow and prevents later edits.
 
@@ -770,7 +770,7 @@ supported. Operations return the edited `Message` when a collector needs it.
 
 In-place update failures are represented by `PersonaWorkflowUpdateError` codes such as
 `message-mismatch`, `non-message-backed-interaction`, `already-acknowledged`,
-`canonical-message-unavailable`, and `discord-update-failed`. They are logged and returned
+`anchor-message-unavailable`, and `discord-update-failed`. They are logged and returned
 or thrown; the controller never silently falls back to another ephemeral `reply`,
 `followUp`, or `webhook.send`.
 
@@ -787,7 +787,7 @@ its Components V2 tree.
 
 The only normal two-message policy is `separate-public`. Calling
 `selection.beginSeparatePublicReply(compactPrivatePayload)` first updates the selected
-button and compacts the canonical private picker. The returned phase can then create exactly
+button and compacts the anchor private picker. The returned phase can then create exactly
 one public follow-up. Its public payload type forbids the ephemeral option, and a second
 `reply()` call fails with `public-reply-already-sent`.
 
@@ -797,10 +797,10 @@ This policy is used by intentionally public results such as `/stats persona` and
 #### In-place modal range bridge
 
 Discord modal string selects hold at most 25 options. Persona workflows keep larger sets on
-the canonical message:
+the anchor message:
 
 1. With at most 25 preloaded options, the selected persona button opens the modal directly.
-2. With more than 25 options, that button updates the canonical message to localized range
+2. With more than 25 options, that button updates the anchor message to localized range
    buttons (`1-25`, `26-50`, and so on).
 3. The chosen range button opens a modal containing only that slice. The submitted modal
    phase exposes `optionOffset` for converting page-local indexes to absolute indexes.

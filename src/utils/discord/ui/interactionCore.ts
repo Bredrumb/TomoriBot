@@ -1465,7 +1465,7 @@ const RANGE_BUTTONS_PER_ROW = 5;
  * more than {@link MODAL_OPTIONS_PER_PAGE} options. Each range button opens a modal
  * scoped to its 25-option slice; a Previous/Cancel/Next nav row paginates the ranges.
  *
- * This is the single source of the `>25` selector shell. Both the persona canonical
+ * This is the single source of the `>25` selector shell. Both the persona anchor
  * workflow (`personaWorkflow.ts`) and the legacy `promptWithPaginatedModal`
  * `componentsV2` branch render it, replacing the two divergent renderers that used to
  * read the same two `general.pagination.*` locale keys.
@@ -2463,7 +2463,7 @@ export async function replyPaginatedChoices(
 /**
  * Low-level Components V2 persona renderer used by `runPersonaPickerWorkflow`.
  * Command and feature callers must use the workflow API so acknowledgment,
- * retry, cache, and canonical-message invariants remain enforced.
+ * retry, cache, and anchor-message invariants remain enforced.
  */
 export async function replyPaginatedPersonaChoicesV2(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
@@ -3308,7 +3308,7 @@ export async function promptWithPaginatedModal(
   // Opt-in Components V2 range selector (see ModalOptions.selectorStyle). Shares the
   // payload + index math with the persona workflow via buildRangeSelectorPayload, but
   // keeps its own transport + await loop: the global path's three delivery situations
-  // (reply / editReply / webhook.send) differ from the persona canonical message.
+  // (reply / editReply / webhook.send) differ from the persona anchor message.
   if (options.selectorStyle === "componentsV2") {
     return runComponentsV2RangeSelectorModal(
       interaction,
@@ -3402,7 +3402,7 @@ export async function promptWithPaginatedModal(
  * Delivery is path-specific by design (see the plan's "Delivery must stay path-specific"):
  * this branch preserves the global path's three situations — `reply` when unacknowledged,
  * `editReply` when deferred/replied, and `webhook.send` after a raw modal — rather than
- * routing through the persona canonical-message controller.
+ * routing through the persona anchor-message controller.
  *
  * @param interaction - The command/button interaction the selector renders onto.
  * @param locale - Locale for the selector strings.

@@ -14,22 +14,22 @@ import {
   resolveActivePersonalProviderModelSelections,
 } from "@/utils/provider/personalProviderHelpers";
 import {
-  beginCanonicalPrivateWorkflow,
+  beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
   type PersonaWorkflowMessageController,
-} from "@/utils/discord/ui/canonicalWorkflow";
+} from "@/utils/discord/ui/anchorWorkflow";
 import {
   acquireModelModalOpener,
   buildNoProvidersPayload,
   buildOpenRouterMovedNotice,
   buildOpenSelectorPayload,
   buildProviderPickerPayload,
-  openCanonicalModal,
-} from "@/utils/discord/ui/canonicalModelFlow";
+  openAnchorModal,
+} from "@/utils/discord/ui/anchorModelFlow";
 
 const MODEL_SELECT_ID = "model_select";
 
-/** Custom-id root for this command's canonical provider picker / opener buttons. */
+/** Custom-id root for this command's anchor provider picker / opener buttons. */
 const ID_ROOT = "personal_model_text";
 
 function getLocalizedDescription(model: LlmRow, locale: string): string {
@@ -74,14 +74,14 @@ export async function execute(
     return;
   }
 
-  // Canonical one-message controller, tracked so the outer catch can render an
+  // Anchor one-message controller, tracked so the outer catch can render an
   // unexpected-error terminal on the same ephemeral message.
-  let canonicalMessage: PersonaWorkflowMessageController | null = null;
+  let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "text");
 
-    // 1. Open the canonical message with the right initial control for the provider count.
+    // 1. Open the anchor message with the right initial control for the provider count.
     //    The active-selection lookup only matters when a picker is actually rendered.
     const currentSelections =
       savedProviders.length > 1 ? await resolveActivePersonalProviderModelSelections(savedProviders, "text") : [];
@@ -97,8 +97,8 @@ export async function execute(
               currentSelections,
             );
 
-    const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
-    canonicalMessage = phase.message;
+    const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+    anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
     // 2. Resolve the provider and the unacknowledged button the modal opens from.
@@ -128,8 +128,8 @@ export async function execute(
       description: safeSelectOptionText(getLocalizedDescription(model, userData.language_pref)),
     }));
 
-    // 3. >25 models route through the canonical range selector automatically.
-    const modalPhase = await openCanonicalModal(phase, opener.button, locale, {
+    // 3. >25 models route through the anchor range selector automatically.
+    const modalPhase = await openAnchorModal(phase, opener.button, locale, {
       modalCustomId: "personal_provider_model_text_modal",
       modalTitleKey: "commands.model.text.modal_title",
       components: [
@@ -206,11 +206,11 @@ export async function execute(
     };
     await log.error("Error executing /personal provider model-text", error as Error, context);
 
-    // Render the unexpected-error terminal on the canonical message; fall back to a fresh
+    // Render the unexpected-error terminal on the anchor message; fall back to a fresh
     // reply only if the message is already gone (fatal) or was never created.
-    if (canonicalMessage) {
+    if (anchorMessage) {
       try {
-        await canonicalMessage.replace(
+        await anchorMessage.replace(
           buildPersonaWorkflowNotice({
             locale,
             titleKey: "general.errors.unknown_error_title",

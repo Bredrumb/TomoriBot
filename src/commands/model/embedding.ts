@@ -8,18 +8,18 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { ErrorContext, UserRow, EmbeddingModelRow } from "@/types/db/schema";
 import {
-  beginCanonicalPrivateWorkflow,
+  beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
   type PersonaWorkflowInPlacePhase,
   type PersonaWorkflowMessageController,
-} from "@/utils/discord/ui/canonicalWorkflow";
+} from "@/utils/discord/ui/anchorWorkflow";
 import {
   acquireModelModalOpener,
   buildNoProvidersPayload,
   buildOpenSelectorPayload,
   buildProviderPickerPayload,
-  openCanonicalModal,
-} from "@/utils/discord/ui/canonicalModelFlow";
+  openAnchorModal,
+} from "@/utils/discord/ui/anchorModelFlow";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { configRepository, llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
@@ -85,16 +85,16 @@ export async function execute(
     return;
   }
 
-  // Canonical one-message controller, tracked so the outer catch can render an
+  // Anchor one-message controller, tracked so the outer catch can render an
   // unexpected-error terminal on the same ephemeral message.
   let selectedModel: EmbeddingModelRow | null = null;
-  let canonicalMessage: PersonaWorkflowMessageController | null = null;
+  let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "embedding");
     const idRoot = "model_embedding";
 
-    // 1. Open the canonical message with the right initial control for the provider count.
+    // 1. Open the anchor message with the right initial control for the provider count.
     const activeEmbeddingModel = tomoriState.config.embedding_model_id
       ? await llmModelRepo.loadEmbeddingModelById(tomoriState.config.embedding_model_id)
       : null;
@@ -113,8 +113,8 @@ export async function execute(
               [{ model: currentModel, provider: currentProvider }],
             );
 
-    const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
-    canonicalMessage = phase.message;
+    const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+    anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
     // 2. Resolve the provider and the unacknowledged button the modal opens from.
@@ -156,8 +156,8 @@ export async function execute(
       work = await phase.useButton(opener.button).beginInPlaceWork();
       chosenModel = availableModels[0];
     } else {
-      // >25 models route through the canonical range selector automatically.
-      const modalPhase = await openCanonicalModal(phase, opener.button, locale, {
+      // >25 models route through the anchor range selector automatically.
+      const modalPhase = await openAnchorModal(phase, opener.button, locale, {
         modalCustomId: isCustom ? "config_model_embedding_custom_modal" : MODAL_CUSTOM_ID,
         modalTitleKey: "commands.model.embedding.modal_title",
         components: [
@@ -246,7 +246,7 @@ export async function execute(
 
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // Re-embed in place: show the progress notice on the canonical message, run the
+    // Re-embed in place: show the progress notice on the anchor message, run the
     // (potentially long) re-embed, then land the success terminal on the same message.
     if (shouldReembed && isRagAvailable()) {
       const docCount = await serverMemoryRepository.countDocuments(tomoriState.server_id);
@@ -302,11 +302,11 @@ export async function execute(
     };
     await log.error(`Error executing /model embedding for user ${userData.user_disc_id}`, error as Error, context);
 
-    // Render the unexpected-error terminal on the canonical message; fall back to a fresh
+    // Render the unexpected-error terminal on the anchor message; fall back to a fresh
     // reply only if the message is already gone (fatal) or was never created.
-    if (canonicalMessage) {
+    if (anchorMessage) {
       try {
-        await canonicalMessage.replace(
+        await anchorMessage.replace(
           buildPersonaWorkflowNotice({
             locale,
             titleKey: "general.errors.unknown_error_title",

@@ -109,7 +109,7 @@ async function replaceHistoryImportStatus(
   locale: string,
   options: HistoryImportStatusOptions,
 ): Promise<void> {
-  if ("canonicalMessageId" in target) {
+  if ("anchorMessageId" in target) {
     await target.replace(
       buildPersonaWorkflowNotice({
         locale,

@@ -43,7 +43,7 @@ function makeHarness(outcome: PickerOutcome): PickerHarness {
   const edits: InteractionEditReplyOptions[] = [];
   const deferredButtons: string[] = [];
   const message = {
-    id: "canonical-picker-message",
+    id: "anchor-picker-message",
     awaitMessageComponent: async () => {
       if (outcome === "timeout") return Promise.reject("time");
       if (outcome === "collector-timeout") return Promise.reject(makeInteractionCollectorError("time"));

@@ -92,7 +92,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Interaction patterns used:
  * - The slash interaction is deferred before state/persona loads.
  * - With `select_persona`, the persona workflow edits that reply, then
- *   update-defers the selected button and keeps the canonical message in place.
+ *   update-defers the selected button and keeps the anchor message in place.
  *
  * @param client - Discord client instance
  * @param interaction - ChatInputCommandInteraction

@@ -7,18 +7,18 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import {
-  beginCanonicalPrivateWorkflow,
+  beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
   type PersonaWorkflowInPlacePhase,
   type PersonaWorkflowMessageController,
-} from "@/utils/discord/ui/canonicalWorkflow";
+} from "@/utils/discord/ui/anchorWorkflow";
 import {
   acquireModelModalOpener,
   buildNoProvidersPayload,
   buildOpenSelectorPayload,
   buildProviderPickerPayload,
-  openCanonicalModal,
-} from "@/utils/discord/ui/canonicalModelFlow";
+  openAnchorModal,
+} from "@/utils/discord/ui/anchorModelFlow";
 import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
@@ -182,16 +182,16 @@ export async function execute(
     return;
   }
 
-  // Canonical one-message controller, tracked so the outer catch can render an
+  // Anchor one-message controller, tracked so the outer catch can render an
   // unexpected-error terminal on the same ephemeral message.
   let selectedModel: ImageDiffusionModelRow | null = null;
-  let canonicalMessage: PersonaWorkflowMessageController | null = null;
+  let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "image");
     const idRoot = "model_image";
 
-    // 1. Open the canonical message with the right initial control for the provider count.
+    // 1. Open the anchor message with the right initial control for the provider count.
     const hasNaiProviders = savedProviders.some(
       (provider) => getStaticProviderInfo(provider.provider)?.featureSupport.imageGeneration === "nai-pipeline",
     );
@@ -217,8 +217,8 @@ export async function execute(
               { note: hasNaiProviders ? localizer(locale, "commands.model.image.nai_picker_note") : undefined },
             );
 
-    const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
-    canonicalMessage = phase.message;
+    const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+    anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
     // 2. Resolve the provider and the unacknowledged button the modal opens from.
@@ -269,8 +269,8 @@ export async function execute(
       work = await phase.useButton(opener.button).beginInPlaceWork();
       chosenModel = availableModels[0];
     } else {
-      // >25 models route through the canonical range selector automatically.
-      const modalPhase = await openCanonicalModal(phase, opener.button, locale, {
+      // >25 models route through the anchor range selector automatically.
+      const modalPhase = await openAnchorModal(phase, opener.button, locale, {
         modalCustomId: isCustom ? "config_model_image_custom_modal" : MODAL_CUSTOM_ID,
         modalTitleKey: "commands.model.image.modal_title",
         components: [
@@ -398,11 +398,11 @@ export async function execute(
     };
     await log.error(`Error executing /model image for user ${userData.user_disc_id}`, error as Error, context);
 
-    // Render the unexpected-error terminal on the canonical message; fall back to a fresh
+    // Render the unexpected-error terminal on the anchor message; fall back to a fresh
     // reply only if the message is already gone (fatal) or was never created.
-    if (canonicalMessage) {
+    if (anchorMessage) {
       try {
-        await canonicalMessage.replace(
+        await anchorMessage.replace(
           buildPersonaWorkflowNotice({
             locale,
             titleKey: "general.errors.unknown_error_title",

@@ -20,18 +20,18 @@ import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderC
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import {
-  beginCanonicalPrivateWorkflow,
+  beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
   type PersonaWorkflowMessageController,
-} from "@/utils/discord/ui/canonicalWorkflow";
+} from "@/utils/discord/ui/anchorWorkflow";
 import {
   acquireModalOptionRange,
   acquireModelModalOpener,
   buildOpenRouterMovedNotice,
   buildOpenSelectorPayload,
   buildProviderPickerPayload,
-  openCanonicalModal,
-} from "@/utils/discord/ui/canonicalModelFlow";
+  openAnchorModal,
+} from "@/utils/discord/ui/anchorModelFlow";
 
 // Modal field identifiers
 // Note: MODAL_CUSTOM_ID is generated per-invocation (see execute()) to prevent stale
@@ -55,7 +55,7 @@ const CLEAR_SLOT_VALUE = "__none__";
 // Prefix used to distinguish custom endpoint values from LLM codenames in modal select values
 const CUSTOM_ENDPOINT_VALUE_PREFIX = "ce:";
 
-/** Custom-id root for this command's canonical provider picker / opener buttons. */
+/** Custom-id root for this command's anchor provider picker / opener buttons. */
 const ID_ROOT = "model_fallback";
 // One of Discord's 25 select options is reserved for the explicit "None" / clear choice,
 // which is re-prepended to every page — so only 24 models fit per range.
@@ -220,12 +220,12 @@ export async function execute(
     );
   }
 
-  // Canonical one-message controller, tracked so the outer catch can render an
+  // Anchor one-message controller, tracked so the outer catch can render an
   // unexpected-error terminal on the same ephemeral message.
-  let canonicalMessage: PersonaWorkflowMessageController | null = null;
+  let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
-    // 3. Load saved providers and open the canonical message with the right initial control
+    // 3. Load saved providers and open the anchor message with the right initial control
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "text");
     const initialPayload =
       savedProviders.length === 0
@@ -244,8 +244,8 @@ export async function execute(
               [{ model: tomoriState.llm.llm_codename, provider: tomoriState.llm.llm_provider }],
             );
 
-    const phase = await beginCanonicalPrivateWorkflow(interaction, locale, initialPayload);
-    canonicalMessage = phase.message;
+    const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+    anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
     const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, ID_ROOT);
@@ -329,7 +329,7 @@ export async function execute(
       description: safeSelectOptionText(localizer(locale, "commands.model.fallback.clear_option_description")),
     };
 
-    // 6. Past 24 models the user picks a range on the canonical message first. This modal
+    // 6. Past 24 models the user picks a range on the anchor message first. This modal
     //    can't use the engine's own >25 bridge: it has five selects over one shared list
     //    (the bridge slices only the first) and reserves a slot for the clear option.
     let optionsForModal: SelectOption[];
@@ -350,7 +350,7 @@ export async function execute(
     }
 
     // 7. Show modal with 5 select fields (one per fallback slot)
-    const modalPhase = await openCanonicalModal(phase, modalButton, locale, {
+    const modalPhase = await openAnchorModal(phase, modalButton, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.model.fallback.modal_title",
       components: SLOT_IDS.map((customId, index) => ({
@@ -458,7 +458,7 @@ export async function execute(
       return;
     }
 
-    // 13. Render the terminal on the canonical message
+    // 13. Render the terminal on the anchor message
     if (finalRefs.length === 0) {
       await work.message.replace(
         buildPersonaWorkflowNotice({
@@ -508,11 +508,11 @@ export async function execute(
     };
     await log.error(`Error executing /model fallback for user ${userData.user_disc_id}`, error as Error, context);
 
-    // Render the unexpected-error terminal on the canonical message; fall back to a fresh
+    // Render the unexpected-error terminal on the anchor message; fall back to a fresh
     // reply only if the message is already gone (fatal) or was never created.
-    if (canonicalMessage) {
+    if (anchorMessage) {
       try {
-        await canonicalMessage.replace(
+        await anchorMessage.replace(
           buildPersonaWorkflowNotice({
             locale,
             titleKey: "general.errors.unknown_error_title",
