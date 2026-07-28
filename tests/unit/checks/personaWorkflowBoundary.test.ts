@@ -116,7 +116,7 @@ describe("persona workflow boundary — real source tree", () => {
       `Persona workflow boundary violations:\n${detail}\n\n` +
         "Fix: migrate callers to src/utils/discord/ui/personaWorkflow.ts. Low-level picker access and " +
         "legacy preservation/callback boilerplate are internal-only.\n" +
-        "Run `bun run check-persona-workflow-boundary` for the full report.",
+        "Every violation is listed above; the scanner lives in scripts/checks/lib/personaWorkflowBoundary.ts.",
     ).toHaveLength(0);
   });
 });

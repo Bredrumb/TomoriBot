@@ -78,10 +78,9 @@ jobs:
       # could land unnoticed. Each exits non-zero on violation and passes at the
       # time of wiring.
       #
-      # Deliberately NOT listed here: check-persona-workflow-boundary and
-      # check-text-preview. Both scanners are asserted against the real source
-      # tree by tests/unit/checks/, which the "Run unit/integration tests" step
-      # below already executes — a separate step would only duplicate coverage.
+      # The persona-workflow-boundary and text-preview scanners have no step here
+      # by design: tests/unit/checks/ asserts both against the real source tree,
+      # and the "Run unit/integration tests" step below already executes them.
       - name: Check Discord API limits
         run: bun run check-limits
 

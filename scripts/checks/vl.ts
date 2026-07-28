@@ -443,9 +443,8 @@ const CATEGORIES = {
   // Architectural guards (persona-workflow boundary, text-preview conventions)
   // are deliberately absent: their scanners are asserted against the real source
   // tree by tests/unit/checks/, which the test lanes below already run. A named
-  // check here would scan the repo a second time for the same answer. The
-  // `check-persona-workflow-boundary` / `check-text-preview` CLIs remain for
-  // targeted local reports.
+  // check here would scan the repo a second time for the same answer. For a
+  // targeted local report, run those test files directly.
   CODE: (r: ResultItem) =>
     isNamedCheck(r) &&
     (r.name.includes("Type Check") ||

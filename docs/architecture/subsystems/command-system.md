@@ -823,7 +823,7 @@ and the one public response are the two messages only because visibility changed
 Command and feature code must not import or invoke `replyPaginatedPersonaChoicesV2`, set
 `preserveSelectedInteraction: true`, provide an empty picker `onSelect`, or introduce a
 competing persona-selection helper such as `selectConditioningPersona`. The
-`bun run check-persona-workflow-boundary` audit enforces this across `src/`.
+`tests/unit/checks/personaWorkflowBoundary.test.ts` audit enforces this across `src/`.
 
 If Discord exposes an operation that the typed phases cannot represent, use
 `selection.unsafeInteractions()` only for that operation and keep all message mutations on

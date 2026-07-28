@@ -112,7 +112,7 @@ describe("text-preview conventions — real source tree", () => {
       `Baked-ellipsis violations:\n${detail}\n\n` +
         "Fix: drop the '...' from the locale string and attach textPreviewFooterKey()/" +
         "textPreviewFooterVars() so truncation is reported only when it happens.\n" +
-        "Run `bun run check-text-preview` for the full report.",
+        "Every violation is listed above; the scanner lives in scripts/checks/lib/textPreviewAudit.ts.",
     ).toHaveLength(0);
   });
 
@@ -126,7 +126,7 @@ describe("text-preview conventions — real source tree", () => {
       `Unguarded fenced placeholders:\n${detail}\n\n` +
         `Fix: build the interpolated value with ${REQUIRED_HELPER}() from @/utils/text/textPreview ` +
         "so backtick runs cannot escape the fence.\n" +
-        "Run `bun run check-text-preview` for the full report.",
+        "Every violation is listed above; the scanner lives in scripts/checks/lib/textPreviewAudit.ts.",
     ).toHaveLength(0);
   });
 });

@@ -36,8 +36,6 @@
     "compress-media": "bun run scripts/devtools/compressMedia.ts",
     "audit-keys": "bun run scripts/devtools/auditKeyVersions.ts",
     "audit-sql": "bun run scripts/checks/audit_sql.ts",
-    "check-persona-workflow-boundary": "bun run scripts/checks/checkPersonaWorkflowBoundary.ts",
-    "check-text-preview": "bun run scripts/checks/checkTextPreview.ts",
     "rotate-keys": "bun run scripts/devtools/rotateAllKeys.ts",
     "setup:tokenizers": "bun run scripts/devtools/downloadTokenizers.ts",
     "//audit": "audit:clean runs bun audit --audit-level=high — only high/critical advisories block the pipeline",
