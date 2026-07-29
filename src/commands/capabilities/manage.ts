@@ -23,8 +23,6 @@ import {
 
 const PERMISSIONS_MAX_OPTIONS_PER_GROUP = 10;
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 // Note: MODAL_CUSTOM_ID is generated per-invocation (see execute()) to prevent stale
 // awaitModalSubmit listeners from a previous run resolving on the same submission.
 const PERMISSIONS_CHECKBOX_ID = "config_permissions_checkbox";
@@ -36,10 +34,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Configures various permissions for Tomori's behavior on the server using
  * a checkbox modal. Checked items = enabled.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -51,7 +45,6 @@ export async function execute(
   //    listeners from a prior (un-submitted) run resolving on this submission.
   const MODAL_CUSTOM_ID = `config_permissions_modal_${interaction.id}`;
 
-  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -69,7 +62,6 @@ export async function execute(
   let modalInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // Load the Tomori state for this server
     const guildKey = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(guildKey);
     if (!tomoriState) {
@@ -89,7 +81,6 @@ export async function execute(
     }
     const activeDefinitions = getCapabilitiesManagePermissionDefinitions({ includeElevenLabs });
 
-    // Build checkbox options, pre-checking currently-enabled permissions
     const checkboxOptions: CheckboxGroupOption[] = activeDefinitions.map((def) => ({
       label: localizer(locale, def.labelKey),
       value: def.value,
@@ -137,7 +128,6 @@ export async function execute(
     }
     modalInteraction = modalResult.interaction;
 
-    // Determine which permissions changed
     const newlyEnabled = new Set<string>();
     for (let groupIndex = 0; groupIndex < checkboxGroups.length; groupIndex++) {
       const selectedValues = modalResult.multiValues?.[`${PERMISSIONS_CHECKBOX_ID}_${groupIndex}`] ?? [];
@@ -151,7 +141,6 @@ export async function execute(
       label: localizer(locale, change.labelKey),
     }));
 
-    // If nothing changed, say so and exit
     if (changes.length === 0) {
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "commands.capabilities.manage.no_changes_title",
@@ -161,7 +150,6 @@ export async function execute(
       return;
     }
 
-    // Apply changed permissions to the owning split config tables.
     const updateTargets: Array<{
       tableName: "server_member_permissions_configs" | "server_capabilities_configs";
       columns: string[];
@@ -216,7 +204,6 @@ export async function execute(
     // Invalidate cache so next message picks up the fresh config
     invalidateTomoriStateCache(guildKey);
 
-    // Build the success result embed listing what was enabled/disabled
     const enabledLabels = changes.filter((c) => c.isEnabled).map((c) => `\`${c.label}\``);
     const disabledLabels = changes.filter((c) => !c.isEnabled).map((c) => `\`${c.label}\``);
 
@@ -239,7 +226,6 @@ export async function execute(
       ],
     });
   } catch (error) {
-    // Log the error with context
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {

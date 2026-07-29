@@ -1,5 +1,3 @@
-// locales/en-US/commands/support.ts
-
 export default {
   support: {
     discord: {

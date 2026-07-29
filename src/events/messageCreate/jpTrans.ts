@@ -8,9 +8,6 @@ import { TranslationProvider } from "../../types/discord/embed";
 
 /**
  * Automatically translates Japanese messages to English using multiple providers.
- * @param client - The Discord client instance
- * @param message - The message to potentially translate
- * @returns Promise<void>
  */
 const handler = async (_client: Client, message: Message): Promise<void> => {
   try {
@@ -36,7 +33,6 @@ const handler = async (_client: Client, message: Message): Promise<void> => {
 
     log.info("Japanese message detected, translating...");
 
-    // Get translations from each provider
     const [bingResult, googleResult] = await Promise.all([
       translate(message.content, undefined, "en") as Promise<BingResponse>,
       googleTranslate(message.content, {
@@ -45,7 +41,6 @@ const handler = async (_client: Client, message: Message): Promise<void> => {
       }) as Promise<GoogleResponse>,
     ]);
 
-    // Show translations with swappable buttons
     await sendTranslationEmbed(message, {
       text: message.content,
       translations: {

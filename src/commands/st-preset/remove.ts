@@ -13,31 +13,22 @@ import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { UserRow, ErrorContext, StPresetRow } from "@/types/db/schema";
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 
-// ─── Constants ───────────────────────────────────────────────────────
-
 const MODAL_CUSTOM_ID = "st_preset_remove_modal";
 const CHECKBOX_ID_PREFIX = "st_preset_remove_group";
 const MAX_OPTIONS_PER_GROUP = 10;
 
-// ─── Subcommand Configuration ────────────────────────────────────────
-
 /**
  * Configure the /st-preset remove subcommand.
  * No options — lists all imported presets as a checklist; unchecked ones are deleted.
- * @param subcommand - The subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.st-preset.remove.description"));
-
-// ─── Helpers ─────────────────────────────────────────────────────────
 
 /**
  * Build checkbox group components from the preset list.
  * Each group holds up to MAX_OPTIONS_PER_GROUP presets, all pre-checked.
  * The preset_id is stored as each option's value for direct DB lookup.
  *
- * @param presets - All presets for the server
- * @returns Array of ModalCheckboxGroupField components for the modal
  */
 function buildPresetCheckboxGroups(presets: (StPresetRow & { preset_id: number })[]): ModalCheckboxGroupField[] {
   const groups: ModalCheckboxGroupField[] = [];
@@ -50,7 +41,6 @@ function buildPresetCheckboxGroups(presets: (StPresetRow & { preset_id: number }
       label: safeSelectOptionText(preset.preset_name, 50),
       value: preset.preset_id.toString(),
       description: preset.is_active ? "★ Active" : undefined,
-      // Pre-check all so the user only needs to uncheck what they want removed
       default: true,
     }));
 
@@ -71,18 +61,12 @@ function buildPresetCheckboxGroups(presets: (StPresetRow & { preset_id: number }
   return groups;
 }
 
-// ─── Execution ───────────────────────────────────────────────────────
-
 /**
  * Execute /st-preset remove.
  * Shows a checklist of all imported presets for this server.
  * Unchecking a preset removes it (cascade-deletes its nodes).
  * The active preset is indicated with ★ in the list.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -90,7 +74,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Verify server setup
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -104,7 +87,6 @@ export async function execute(
   }
 
   try {
-    // Load all presets for this server (filter rows where preset_id is defined)
     const allPresets = (await presetRepository.loadPresetsForServer(tomoriState.server_id)).filter(
       (p): p is StPresetRow & { preset_id: number } => p.preset_id !== undefined,
     );
@@ -119,7 +101,6 @@ export async function execute(
       return;
     }
 
-    // Build the checkbox groups (one group per 10 presets, all pre-checked)
     const checkboxGroups = buildPresetCheckboxGroups(allPresets);
     const groupCount = checkboxGroups.length;
 
@@ -135,7 +116,6 @@ export async function execute(
       return;
     }
 
-    // Collect all preset_ids that were still checked (= kept)
     // biome-ignore lint/style/noNonNullAssertion: Modal "submit" outcome guarantees interaction exists
     const modalSubmitInteraction = modalResult.interaction!;
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -148,7 +128,6 @@ export async function execute(
       }
     }
 
-    // Determine which presets were unchecked (= to be removed)
     const presetsToRemove = allPresets.filter((p) => !keptPresetIds.has(p.preset_id));
 
     if (presetsToRemove.length === 0) {
@@ -160,10 +139,8 @@ export async function execute(
       return;
     }
 
-    // Record whether the active preset is among those being removed
     const removingActivePreset = presetsToRemove.some((p) => p.is_active);
 
-    // Delete each unchecked preset; track any failures
     let successCount = 0;
     const failedNames: string[] = [];
     for (const preset of presetsToRemove) {
@@ -179,7 +156,6 @@ export async function execute(
       }
     }
 
-    // Report full failure early
     if (failedNames.length > 0 && successCount === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.st-preset.remove.failed_title",
@@ -207,7 +183,6 @@ export async function execute(
       }
     }
 
-    // Build success reply with optional auto-promotion note
     const removedNames = presetsToRemove
       .filter((p) => !failedNames.includes(p.preset_name))
       .map((p) => `**${p.preset_name}**`)

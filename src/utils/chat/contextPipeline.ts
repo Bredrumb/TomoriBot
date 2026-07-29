@@ -110,7 +110,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   const assets = await loadPersonaAssets(turn);
   const history = await buildSimplifiedHistory(turn, messageIdMap);
 
-  // Resolve impersonation identity fields needed by contextBuilder (Fix #4).
   let impersonatedUserNickname: string | undefined;
   let impersonatedUserPrompt: string | undefined;
   if (incoming.isUserImpersonation && incoming.impersonatedUserId) {
@@ -547,7 +546,6 @@ async function buildSimplifiedHistory(
     const blockComparableId = getBlockComparableAuthorId(msg);
     const activeContextBlock = blockedContextBlocksById.get(blockComparableId);
     if (activeContextBlock) {
-      // Collapse a run of messages from the same blocked user into one notice.
       if (previousBlockNoticeAuthorId === blockComparableId) {
         continue;
       }
@@ -580,7 +578,6 @@ async function buildSimplifiedHistory(
     );
     if (!result) continue;
     const { message: simplified, isDebug } = result;
-    // A real (non-blocked) message breaks any run of block notices.
     previousBlockNoticeAuthorId = null;
     userIds.add(simplified.authorId);
 
@@ -638,11 +635,9 @@ async function buildSimplifiedHistory(
       previousEntry.individualContents?.push(simplified.content);
       previousEntry.combinedCreatedAts?.push(simplified.createdAt ?? 0);
       previousEntry.content = `${previousEntry.content}\n${simplified.content}`;
-      // The merged-into entry keeps its debug/normal kind, so previousEntryWasDebug is unchanged.
       continue;
     }
 
-    // Otherwise start a new turn.
     simplifiedMessages.push(simplified);
     previousEntryWasDebug = isDebug;
   }
@@ -651,7 +646,6 @@ async function buildSimplifiedHistory(
     userIds.add(turn.lockedTurn.admission.client.user.id);
   }
 
-  // Inject reminder prompt as a synthetic System message so the LLM knows what to remind about.
   const incoming = turn.lockedTurn.admission.incoming;
   if (incoming.reminderData && (incoming.reminderRecipientID || incoming.reminderData.self_reminder)) {
     const isSelfReminder = incoming.reminderData.self_reminder === true;
@@ -880,7 +874,6 @@ async function simplifyMessage(
         imageAttachments.length > 0 || videoAttachments.length > 0
           ? hasLocalMedia
             ? // Forwarded media registers the wrapper id (= msg.id), so dedupe
-              // against the local-media entry to avoid listing it twice.
               [...new Set([msg.id, ...mediaSourceMessageIds])]
             : mediaSourceMessageIds.length > 0
               ? mediaSourceMessageIds
@@ -976,7 +969,6 @@ function getBlockComparableAuthorId(msg: Message): string {
  *
  * @param msg - The original (blocked) Discord message.
  * @param comparableId - The block-comparable author ID from getBlockComparableAuthorId.
- * @returns A human-readable label for the blocked user.
  */
 async function resolveBlockedAuthorLabel(msg: Message, comparableId: string): Promise<string> {
   const row = await getCachedUserRow(comparableId);

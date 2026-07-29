@@ -23,7 +23,6 @@ describe("model seed scoped-registration guard", () => {
 
   it("guards every backing model table's upsert", () => {
     for (const [table, guard] of Object.entries(expectedGuards)) {
-      // Find the statement targeting this table.
       const statement = statements.find((s) => s.startsWith(`INSERT INTO ${table} `));
       expect(statement, `no seed statement for table ${table}`).toBeDefined();
 

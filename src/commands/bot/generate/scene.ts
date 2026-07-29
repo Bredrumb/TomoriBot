@@ -391,9 +391,6 @@ export async function execute(
     additionalInstructions,
   };
 
-  // Summarize the modal input so the executor can confirm what they queued at a
-  //    glance: the per-round speaking order, the round/turn count, and any one-off
-  //    instructions they supplied.
   const speakingOrder = speakers.map((speaker) => speaker.personaName).join(" → ");
   const descriptionLines = [
     localizer(locale, "commands.bot.generate.scene.success_order_line", { order: speakingOrder }),

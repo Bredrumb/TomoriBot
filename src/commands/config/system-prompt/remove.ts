@@ -20,23 +20,16 @@ import {
 
 /**
  * Configure the slash command subcommand metadata
- * @returns Configured SlashCommandSubcommandBuilder
  */
 export function configureSubcommand(): SlashCommandSubcommandBuilder {
   return new SlashCommandSubcommandBuilder()
     .setName("remove")
     .setDescription("Remove the custom system prompt and use the default prompt")
-    .setDescriptionLocalizations({
-      // Add localizations as needed
-    });
+    .setDescriptionLocalizations({});
 }
 
 /**
  * Execute the /config system-prompt remove command
- * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
- * @param userData - User data from database
- * @param locale - User's locale for localization
  */
 export async function execute(
   _client: Client,
@@ -48,7 +41,6 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // Determine server context (guild or DM)
     const serverId = interaction.guildId ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverId);
 
@@ -62,7 +54,6 @@ export async function execute(
       return;
     }
 
-    // Check if there's a custom prompt set
     if (!tomoriState.config.system_prompt) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.prompt.clear.no_custom_prompt_title",
@@ -79,7 +70,6 @@ export async function execute(
     //    from source; the custom one is gone the moment this write lands.
     const removedPreview = buildTextPreview(tomoriState.config.system_prompt, EMBED_TEXT_PREVIEW_BUDGET);
 
-    // Clear the system prompt (set to NULL)
     await configRepository.updateChatConfig(tomoriState.server_id, {
       system_prompt: null,
     });
@@ -87,7 +77,6 @@ export async function execute(
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverId);
 
-    // Success response, echoing the removed prompt when there was one
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.config.prompt.clear.success_title",
       descriptionKey:

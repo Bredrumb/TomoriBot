@@ -26,7 +26,6 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "preset_default_modal";
 const PRESET_SELECT_ID = "preset_select";
 export const PRESET_LINEAGE_BY_AVATAR: Record<string, number> = {
@@ -129,7 +128,6 @@ export function resolvePresetLineageId(preset: TomoriPresetRow): number | null {
   return null;
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("default")
@@ -167,7 +165,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -206,7 +203,6 @@ export async function execute(
   }
 
   try {
-    // Load the Tomori state for this server
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
@@ -219,10 +215,8 @@ export async function execute(
       return;
     }
 
-    // Fetch available presets for the user's locale using shared helper
     const presets = await configRepository.loadPresetRowsByLocale(locale);
 
-    // Check if there are any presets available
     if (!presets || presets.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.default.no_presets_title",
@@ -239,7 +233,6 @@ export async function execute(
       description: safeSelectOptionText(preset.persona_preset_desc),
     }));
 
-    // Show the modal with preset selection
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -260,13 +253,11 @@ export async function execute(
       MessageFlags.Ephemeral,
     );
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Preset selection modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
     }
 
-    // Extract values from the modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const modalSubmitInteraction = modalResult.interaction!;
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
@@ -282,7 +273,6 @@ export async function execute(
       return;
     }
 
-    // Build preset payloads for database update/insert
     const presetPersonaPrompt = selectedPreset.persona_preset_desc || null;
 
     const presetTriggerWords = resolvePresetTriggerWords(selectedPreset, locale);
@@ -346,7 +336,6 @@ export async function execute(
         personaPrompt: presetPersonaPrompt,
       });
 
-      // Validate the result
       if (!updatedTomoriResult) {
         const context: ErrorContext = {
           userId: userData.user_id,
@@ -388,7 +377,6 @@ export async function execute(
         await deletePersonaAvatarFromStorage(previousMainAvatarUrl);
       }
 
-      // Update guild avatar/nickname only for main/default target
       const isDM = !interaction.guild;
       let avatarUpdateFailed = false;
       let nicknameUpdateFailed = false;
@@ -533,7 +521,6 @@ export async function execute(
       return;
     }
 
-    // Alter target flow: create a new alter persona from the selected preset
     const personaLimits = getMemoryLimits();
     if (allPersonas.length >= personaLimits.maxPersonasPerServer) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -711,7 +698,6 @@ export async function execute(
       return;
     }
 
-    // Log error with context
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
@@ -734,7 +720,6 @@ export async function execute(
     };
     await log.error(`Error executing /persona default for user ${userData.user_disc_id}`, error as Error, context);
 
-    // Inform user of unknown error
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content: localizer(locale, "general.errors.unknown_error_description"),

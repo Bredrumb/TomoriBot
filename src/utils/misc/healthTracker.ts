@@ -31,7 +31,6 @@ class HealthTracker {
 
   /**
    * Initialize the health tracker with a Discord client
-   * @param client - Discord.js client instance
    */
   initialize(client: Client): void {
     this.client = client;
@@ -49,13 +48,11 @@ class HealthTracker {
 
   /**
    * Get comprehensive health status of the bot
-   * @returns Health check result with detailed status
    */
   getHealthStatus(): HealthStatus {
     const now = Date.now();
     const timeSinceLastActivity = now - this.lastActivityTimestamp;
 
-    // Check if client is initialized
     if (!this.client) {
       return {
         healthy: false,
@@ -121,7 +118,6 @@ class HealthTracker {
 		}
 		*/
 
-    // All checks passed - bot is healthy
     return {
       healthy: true,
       reason: "All systems operational",

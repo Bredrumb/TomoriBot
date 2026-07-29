@@ -4,8 +4,6 @@ import type { AssembledServerConfig } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { DEFAULT_SYSTEM_PROMPT, buildPromptContextItems } from "@/utils/text/context/templates";
 
-// ─── Test helpers ───────────────────────────────────────────────────────────
-
 const SERVER_PROMPT = "SERVER SYSTEM PROMPT";
 const CHANNEL_PROMPT = "CHANNEL-SCOPED PROMPT";
 const PERSONA_PROMPT = "PERSONA PROMPT";
@@ -49,8 +47,6 @@ function textForTag(items: StructuredContextItem[], tag: ContextItemTag): string
     .map((p) => p.text)
     .join("");
 }
-
-// ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe("buildPromptContextItems — per-channel prompt override", () => {
   test("no override: system-prompt slot holds the server prompt; no channel block", async () => {

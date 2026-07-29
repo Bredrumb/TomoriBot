@@ -71,7 +71,6 @@ export const personalSettingsExportDataSchema = z.object({
   impersonation_prompt: z.string().nullable().optional(),
   physical_appearance_tags: z.array(z.string()).default([]),
   nai_char_ref_url: z.string().nullable().optional(),
-  // Behavioral preferences (added since initial schema)
   privacy_level: z.nativeEnum(PrivacyLevel).optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).optional(),
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),

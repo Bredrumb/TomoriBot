@@ -77,7 +77,6 @@ export class MessageIdMap {
   /**
    * Check whether a string matches the opaque key pattern.
    * Useful for determining if a tool argument needs resolution.
-   * @param value - String to test
    * @returns True if value matches `media_N` or `ref_N` format
    */
   static isOpaqueKey(value: string): boolean {

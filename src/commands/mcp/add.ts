@@ -16,8 +16,6 @@ import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { type McpUrlValidationResult, validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
 
-// ─── Constants ───────────────────────────────────────────────────────
-
 const MODAL_CUSTOM_ID = "config_mcp_add_modal";
 const NAME_INPUT_ID = "mcp_server_name";
 const URL_INPUT_ID = "mcp_server_url";
@@ -30,26 +28,17 @@ const MAX_SERVERS_PER_GUILD = Number(process.env.MAX_MCP_SERVERS_PER_GUILD) || 5
 /** Name format: alphanumeric + hyphens, 1-32 chars */
 const NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,31}$/;
 
-// ─── Subcommand Configuration ────────────────────────────────────────
-
 /**
  * Configure the /config mcp add subcommand.
  * Shows a modal for name, URL, optional auth token, and optional server type.
- * @param subcommand - The subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.mcp.add.description"));
-
-// ─── Execution ───────────────────────────────────────────────────────
 
 /**
  * Execute /config mcp add.
  * Opens a modal, validates inputs, tests the MCP connection, then persists.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -57,7 +46,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Validate context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -172,7 +160,6 @@ export async function execute(
       return;
     }
 
-    // Validate name format
     if (!NAME_REGEX.test(name)) {
       await replyInfoEmbed(replyInteraction, locale, {
         titleKey: "commands.mcp.add.invalid_name_title",
@@ -195,7 +182,6 @@ export async function execute(
       return;
     }
 
-    // Check server count limit
     const currentCount = await toolRepository.countMcpServers(tomoriState.server_id);
     if (currentCount >= MAX_SERVERS_PER_GUILD) {
       await replyInfoEmbed(replyInteraction, locale, {
@@ -250,7 +236,6 @@ export async function execute(
       maskedUrl = `${url.substring(0, 30)}...`;
     }
 
-    // Success reply
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "commands.mcp.add.success_title",
       descriptionKey: "commands.mcp.add.success_description",

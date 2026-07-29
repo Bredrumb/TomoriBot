@@ -16,8 +16,6 @@ import { resolve } from "node:path";
 import satori from "satori";
 import type { VNode } from "@/utils/stats/statsInfographic";
 
-// ── Font constants ─────────────────────────────────────────────────────────────
-
 const FONT_NAME = "Noto Sans JP";
 const FONT_REGULAR_PATH = resolve("assets/fonts/NotoSansJP-Regular.ttf");
 const FONT_BOLD_PATH = resolve("assets/fonts/NotoSansJP-Bold.ttf");
@@ -36,8 +34,6 @@ function ensureFonts(): { regular: Buffer; bold: Buffer } {
   return { regular: cachedRegular, bold: cachedBold };
 }
 
-// ── Public API ─────────────────────────────────────────────────────────────────
-
 /**
  * Rasterizes a satori VNode to a PNG buffer.
  *
@@ -45,14 +41,12 @@ function ensureFonts(): { regular: Buffer; bold: Buffer } {
  * 2. Runs satori (JSX → SVG) with both weights registered.
  * 3. Runs @resvg/resvg-js (SVG → PNG) with the same font buffers.
  *
- * @param node   - The VNode returned by a renderXxxCard() function.
  * @param width  - Output image width in pixels.
  * @param height - Output image height in pixels.
  */
 export async function renderCardToPng(node: VNode, width: number, height: number): Promise<Buffer> {
   const { regular, bold } = ensureFonts();
 
-  // satori: JSX → SVG (uses font buffers for glyph measurement)
   const svg = await satori(node, {
     width,
     height,

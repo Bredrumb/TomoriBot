@@ -101,10 +101,7 @@ export function processEmbedsFromMessage(args: {
  * so real embeds and reconstructed Components V2 notices produce byte-identical
  * context strings.
  *
- * @param source - Title and description of the notice, from either transport.
- * @param embedType - The classification returned by `checkTargetEmbedTitle`.
  * @param tomoriNickname - Used to strip a leading "Nickname:" prefix from the body.
- * @returns The formatted context string for this notice.
  */
 function formatTargetEmbedForContext(
   source: { title: string | null; description: string },

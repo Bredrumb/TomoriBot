@@ -17,27 +17,20 @@ import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimi
 
 import { dedupeSampleDialoguePairs, parseSampleDialogueBatch, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
-// Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Constants (Modal IDs, Input IDs)
 const MODAL_CUSTOM_ID = "teach_sampledialogue_add_modal";
 const PERSONA_SELECT_ID = "persona_select";
 const USER_INPUT_ID = "user_input";
 const BOT_INPUT_ID = "bot_input";
 const SAMPLE_DIALOGUE_FILE_UPLOAD_ID = "sampledialogue_file_upload";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.persona.sample-dialogue.add.description"));
 
 /**
  * JSDoc comment for exported function
  * Adds a sample dialogue pair to Tomori's memory for the server.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -79,10 +72,8 @@ export async function execute(
       }
     }
 
-    // Load server's Tomori state
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
 
-    // Check if Tomori is set up and if sample dialogue teaching is enabled
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -93,7 +84,6 @@ export async function execute(
       return;
     }
 
-    // Resolve target persona options
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.persona_id !== undefined)
@@ -170,7 +160,6 @@ export async function execute(
       ],
     });
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Sample dialogue add modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -179,7 +168,6 @@ export async function execute(
     // biome-ignore lint/style/noNonNullAssertion: Modal submit guarantees interaction exists
     modalSubmitInteraction = modalResult.interaction!;
 
-    // Resolve selected persona from modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submit + required=true guarantees value
     const selectedPersonaId = modalResult.values![PERSONA_SELECT_ID];
     selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
@@ -324,7 +312,6 @@ export async function execute(
       return;
     }
 
-    // Check sample dialogue limit after persona resolution
     const dialogueLimitCheck = await personaRepository.checkSampleDialogueLimit(selectedPersona.persona_id);
     const currentCount = dialogueLimitCheck.currentCount ?? currentUserDialogues.length;
     const maxAllowed = dialogueLimitCheck.maxAllowed ?? memoryLimits.maxSampleDialogues;
@@ -364,7 +351,6 @@ export async function execute(
     );
 
     if (!added) {
-      // Log error with context (Access IDs directly)
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id, // Direct access
@@ -389,7 +375,6 @@ export async function execute(
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // Success! Confirm addition
     const firstDialogue = dialoguesToAdd[0] ?? {
       userInput: "",
       botInput: "",
@@ -421,7 +406,6 @@ export async function execute(
       flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,

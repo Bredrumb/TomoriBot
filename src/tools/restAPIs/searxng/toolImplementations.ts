@@ -22,10 +22,6 @@ import sharp from "sharp";
 import { searxngSearch, formatSearxngResults, extractSearxngImageUrls } from "./searxngService";
 import type { SearxngCategory } from "./types";
 
-// =============================================
-// Constants (shared with Brave image-handling)
-// =============================================
-
 const SEARXNG_IMAGE_DISCORD_LIMIT_MB = Math.max(
   1,
   Number.parseInt(process.env.BRAVE_IMAGE_DISCORD_LIMIT_MB ?? "8", 10) || 8,
@@ -53,10 +49,6 @@ const SEARXNG_IMAGE_POOL = Math.min(
   20,
 );
 
-// =============================================
-// Helpers
-// =============================================
-
 function createToolResult(
   success: boolean,
   message: string,
@@ -73,10 +65,6 @@ function createToolResult(
     ...(error && { error }),
   };
 }
-
-// =============================================
-// Text-like categories — uniform text-result formatting
-// =============================================
 
 /**
  * Execute a generic text-like search via SearXNG and return a formatted
@@ -151,10 +139,6 @@ export async function searxng_video_search(args: Record<string, unknown>, contex
 export async function searxng_news_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
   return await searxng_category_search(args, "news", context);
 }
-
-// =============================================
-// Image search — download/compress/send-to-Discord
-// =============================================
 
 /**
  * Compress an image to fit Discord's per-attachment size limit. Returns the

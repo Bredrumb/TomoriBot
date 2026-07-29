@@ -41,8 +41,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
   /**
    * Check if review capabilities tool is available for the given provider
-   * @param _provider - LLM provider name (unused - works with all providers)
-   * @returns True - this tool works with all providers
    */
   isAvailableFor(_provider: string): boolean {
     // This tool is available for all providers since it just reads documentation
@@ -52,11 +50,9 @@ export class ReviewCapabilitiesTool extends BaseTool {
   /**
    * Execute capability review
    * @param args - Arguments containing capability_type
-   * @param context - Tool execution context
    * @returns Promise resolving to tool result with capability information
    */
   async execute(args: Record<string, unknown>, _context: ToolContext): Promise<ToolResult> {
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -76,10 +72,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
         // Dynamically generate chat capabilities based on model flags
         return await this.getChatCapabilities(_context);
       } else if (capabilityType === "commands") {
-        // Dynamically scan and return slash command information
         return await this.getSlashCommands();
       } else if (capabilityType === "settings") {
-        // Dynamically generate settings and configuration report
         return await this.getSettingsCapabilities(_context);
       }
 
@@ -113,7 +107,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
    */
   private async getChatCapabilities(context: ToolContext): Promise<ToolResult> {
     try {
-      // Extract capability flags from tomoriState
       const llm = context.tomoriState.llm;
       const config = context.tomoriState.config;
       const provider = llm.llm_provider.toLowerCase();
@@ -195,7 +188,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "- **Attachments** (Files with readable content)\n\n";
 
         if (seesImages || seesVideos) {
-          // Build dynamic warning based on what's actually supported
           const supportedMediaTypes: string[] = [];
           if (seesImages) supportedMediaTypes.push("images");
           if (seesVideos) supportedMediaTypes.push("videos");
@@ -288,7 +280,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "Video generation is **disabled** by server configuration.\n\n";
       }
 
-      // Voice System section (conditional on speech voice assignment + server permission)
       const hasVoiceAssignment = Boolean(
         context.tomoriState.speech_voice_sample_id ||
           context.tomoriState.speech_voice_design_prompt?.trim() ||
@@ -324,7 +315,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
           "Voice messages are not configured for this persona. An admin can assign a voice with `/config speech voice-assign`.\n\n";
       }
 
-      // SillyTavern Preset section (conditional on active ST preset)
       const serverId = context.tomoriState.server_id;
       if (serverId) {
         const presetData = await getCachedActivePreset(serverId);
@@ -475,7 +465,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += "- Send messages to channels you don't have access to\n";
       capabilitiesContent += "- Execute arbitrary code on the server (security restriction)\n\n";
 
-      // Add "Why Features May Be Unavailable" section
       capabilitiesContent += "---\n\n";
       capabilitiesContent += "## Why Some Features May Be Unavailable\n\n";
 
@@ -484,7 +473,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       const unavailableReasons: string[] = [];
 
-      // Check for missing vision capabilities
       if (!seesImages || !seesVideos || !seesYouTube) {
         const missingVision: string[] = [];
         if (!seesImages) missingVision.push("images");
@@ -496,14 +484,12 @@ export class ReviewCapabilitiesTool extends BaseTool {
         );
       }
 
-      // Check for missing function calling
       if (!hasTools) {
         unavailableReasons.push(
           "**No Function Calling**: Current model does not support tools/functions. Many features (search, reminders, etc.) require function calling. Switch to a model with tool support using `/model` or `/config api-key`.",
         );
       }
 
-      // Check for disabled server features
       const disabledFeatures: Array<{ feature: string; command: string }> = [];
       if (!config.web_search_enabled)
         disabledFeatures.push({
@@ -579,7 +565,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       log.info(`Successfully generated dynamic chat capabilities for model: ${displayModelName}`);
 
-      // Return the dynamically generated content
       return {
         success: true,
         message: capabilitiesContent,
@@ -616,7 +601,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
    */
   private async getSettingsCapabilities(context: ToolContext): Promise<ToolResult> {
     try {
-      // Extract configuration and capabilities
       const llm = context.tomoriState.llm;
       const config = context.tomoriState.config;
       const serverId = context.tomoriState.server_id;
@@ -626,7 +610,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(serverId);
       const mainApiKeySet = !!config.api_key;
 
-      // Build settings report
       let settingsContent = "# Current Configuration & Feature Availability\n\n";
 
       // Model Information Section
@@ -677,7 +660,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
       }
       settingsContent += "\n";
 
-      // Server Feature Flags Section
       settingsContent += "## Server Configuration\n\n";
       const featureFlags = [
         {
@@ -735,7 +717,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "Image generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
 
-      // 6b-1b. Video Generation Configuration
       settingsContent += "## Video Generation\n\n";
       if (config.videogen_enabled && config.video_model_id) {
         settingsContent += "Video generation is **enabled** and configured.\n";
@@ -748,7 +729,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "Video generation is **disabled**. Enable with `/capabilities manage`.\n\n";
       }
 
-      // 6b-2. Voice System Configuration
       settingsContent += "## Voice System\n\n";
       const voiceEnabledSettings = config.voice_message_enabled ?? true;
       const hasPersonaVoice = Boolean(
@@ -773,7 +753,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += `- Re-enable with \`/capabilities manage\`\n\n`;
       }
 
-      // 6b-3. SillyTavern Preset Configuration
       settingsContent += "## SillyTavern Preset\n\n";
       const settingsServerId = context.tomoriState.server_id;
       if (settingsServerId) {
@@ -790,7 +769,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         }
       }
 
-      // System Prompt Configuration
       settingsContent += "## System Prompt\n\n";
       if (config.system_prompt) {
         settingsContent += `A custom system prompt is active (${config.system_prompt.length} characters).\n`;
@@ -826,7 +804,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
           "No rotation keys configured. Use `/config api-key rotation` to add backup keys for automatic failover.\n\n";
       }
 
-      // Available Tools Section (Dynamic Query)
       settingsContent += "## Available Tools\n\n";
 
       try {
@@ -865,7 +842,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         if (totalToolCount > 0) {
           settingsContent += `Currently available: **${totalToolCount} tools** (${toolsResult.builtInTools.length} built-in + ${toolsResult.mcpFunctionNames.length} MCP)\n\n`;
 
-          // Group built-in tools by category
           const builtInTools = toolsResult.builtInTools;
           const visionTools = builtInTools.filter(
             (t) => t.name.includes("youtube") || t.name.includes("gif") || t.name.includes("profile"),
@@ -953,7 +929,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "*Unable to query available tools (registry error)*\n\n";
       }
 
-      // Disabled Features Section
       settingsContent += "## Why Features May Be Disabled\n\n";
 
       const disabledReasons: string[] = [];
@@ -969,7 +944,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         disabledReasons.push(`**Model Limitations**: Current model does not support ${modelLimitations.join(", ")}`);
       }
 
-      // Check for disabled server features
       const disabledFeatures: string[] = [];
       if (!config.web_search_enabled) disabledFeatures.push("web search");
       if (!config.imagegen_enabled) disabledFeatures.push("image generation");
@@ -1004,7 +978,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "✅ All features are enabled and configured!\n\n";
       }
 
-      // How to Enable Features Section
       settingsContent += "## How to Enable Disabled Features\n\n";
       settingsContent += "- **Model Limitations**: Switch models using `/model` or `/config api-key`\n";
       settingsContent += "- **Server Configuration**: Server admin can enable features via `/config [feature]`\n";
@@ -1013,7 +986,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       log.info(`Successfully generated settings capabilities for server ${serverId}`);
 
-      // Return the dynamically generated settings report
       return {
         success: true,
         message: settingsContent,
@@ -1045,7 +1017,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
   /**
    * Create a mock subcommand builder for extracting command details
-   * @returns Mock builder object
    */
   private createMockBuilder() {
     return {
@@ -1095,10 +1066,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
    */
   private async getSlashCommands(): Promise<ToolResult> {
     try {
-      // Build path to commands directory
       const commandsPath = path.join(process.cwd(), "src", "commands");
 
-      // Get all category directories
       const categoryDirs = await getAllFiles(commandsPath, true);
 
       // Build markdown documentation
@@ -1108,38 +1077,29 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       let totalCommands = 0;
 
-      // Process each category directory
       for (const categoryDir of categoryDirs) {
         const categoryName = path.basename(categoryDir);
 
-        // Get category description from localizations
         const categoryDescription =
           localizer("en-US", `commands.${categoryName}.description`) || `${categoryName} commands`;
 
         commandsMarkdown += `## /${categoryName}\n`;
         commandsMarkdown += `${categoryDescription}\n\n`;
 
-        // Get direct command files (immediate children - direct subcommands)
         const directCommandFiles = (await getAllFiles(categoryDir)).filter((file) => file.endsWith(".ts"));
 
-        // Process direct subcommands (no subcommand group)
         for (const commandFile of directCommandFiles) {
           try {
-            // Import the command module
             const commandModule = await import(commandFile);
 
-            // Validate exports
             if (!commandModule.configureSubcommand) {
               continue;
             }
 
-            // Create a mock subcommand builder to extract command details
             const mockBuilder = this.createMockBuilder();
 
-            // Call configureSubcommand to populate the mock builder
             commandModule.configureSubcommand(mockBuilder as unknown as SlashCommandSubcommandBuilder);
 
-            // Extract command information
             const subcommandName = mockBuilder.name;
             const subcommandDescription = mockBuilder.description;
 
@@ -1148,49 +1108,37 @@ export class ReviewCapabilitiesTool extends BaseTool {
               totalCommands++;
             }
           } catch (_error) {
-            // Skip files that fail to import (might be helpers or non-command files)
             log.warn(`Skipped command file during capability scan: ${commandFile}`);
           }
         }
 
-        // Get subdirectories (potential subcommand groups)
         const subcommandGroups = await getAllFiles(categoryDir, true);
 
-        // Process subcommand groups
         for (const groupDir of subcommandGroups) {
           const groupName = path.basename(groupDir);
 
-          // Get command files in this subcommand group
           const groupCommandFiles = (await getAllFiles(groupDir)).filter((file) => file.endsWith(".ts"));
 
-          // Process each command file in the group
           for (const commandFile of groupCommandFiles) {
             try {
-              // Import the command module
               const commandModule = await import(commandFile);
 
-              // Validate exports
               if (!commandModule.configureSubcommand) {
                 continue;
               }
 
-              // Create a mock subcommand builder to extract command details
               const mockBuilder = this.createMockBuilder();
 
-              // Call configureSubcommand to populate the mock builder
               commandModule.configureSubcommand(mockBuilder as unknown as SlashCommandSubcommandBuilder);
 
-              // Extract command information
               const subcommandName = mockBuilder.name;
               const subcommandDescription = mockBuilder.description;
 
               if (subcommandName && subcommandDescription) {
-                // Format with subcommand group: /{category} {group} {subcommand}
                 commandsMarkdown += `- **/${categoryName} ${groupName} ${subcommandName}** - ${subcommandDescription}\n`;
                 totalCommands++;
               }
             } catch (_error) {
-              // Skip files that fail to import (might be helpers or non-command files)
               log.warn(`Skipped command file during capability scan: ${commandFile}`);
             }
           }
@@ -1199,7 +1147,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         commandsMarkdown += "\n";
       }
 
-      // Add footer with command count
       commandsMarkdown += `---\n\n**Total Commands**: ${totalCommands} slash commands across ${categoryDirs.length} categories\n`;
 
       log.success(`Successfully generated slash command documentation: ${totalCommands} commands`);

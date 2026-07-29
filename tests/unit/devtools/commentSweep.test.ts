@@ -296,6 +296,55 @@ describe("comment sweep apply", () => {
     expect(await Bun.file(sourcePath).text()).toContain("// Redundant");
   });
 
+  it("applies multiple ledgers against one source snapshot", async () => {
+    const root = await createTemporaryRoot();
+    const sourcePath = join(root, "fixture.ts");
+    await Bun.write(
+      sourcePath,
+      [
+        "/**",
+        " * Uses a value.",
+        " * @param value - Value",
+        " */",
+        "function useValue(value: number): void {}",
+        "// Invoke useValue",
+        "useValue(1);",
+        "",
+      ].join("\n"),
+    );
+    const candidates = await scanCommentSweepCandidates({
+      paths: ["fixture.ts"],
+      repoRoot: root,
+      tiers: ["2", "2b"],
+    });
+    const lineCandidate = candidates.find((candidate) => candidate.text === "// Invoke useValue");
+    const tagCandidate = candidates.find((candidate) => candidate.kind === "jsdoc-tag");
+    expect(lineCandidate).toBeDefined();
+    expect(tagCandidate).toBeDefined();
+    if (!lineCandidate || !tagCandidate) {
+      throw new Error("Expected both line and JSDoc candidates");
+    }
+
+    const lineLedgerPath = join(root, "line-ledger.jsonl");
+    const tagLedgerPath = join(root, "tag-ledger.jsonl");
+    await writeLedger(lineLedgerPath, [{ ...lineCandidate, confidence: 1, verdict: "delete" }]);
+    await writeLedger(tagLedgerPath, [{ ...tagCandidate, confidence: 1, verdict: "delete" }]);
+
+    const result = await applyCommentSweepLedger({
+      additionalLedgerPaths: [tagLedgerPath],
+      ledgerPath: lineLedgerPath,
+      minConfidence: 0.9,
+      repoRoot: root,
+    });
+    const updated = await Bun.file(sourcePath).text();
+
+    expect(result.appliedEdits).toBe(2);
+    expect(result.driftSkipped).toBe(0);
+    expect(result.gateFailures).toBe(0);
+    expect(updated).not.toContain("@param value");
+    expect(updated).not.toContain("Invoke useValue");
+  });
+
   it("leaves a file unchanged when the gate rejects a rewrite", async () => {
     const root = await createTemporaryRoot();
     const sourcePath = join(root, "fixture.ts");

@@ -70,7 +70,6 @@ export async function generateGoogleNativeVideo(
     requiresEightSecondOutput ? 8 : undefined,
   );
 
-  // Build generation parameters
   const generateParams: GenerateVideosParameters = {
     model: request.model,
     prompt: request.prompt,
@@ -100,16 +99,13 @@ export async function generateGoogleNativeVideo(
     `Google video generation: submitting request (model: ${request.model}, aspectRatio: ${request.aspectRatio ?? "16:9"}, durationSeconds: ${normalizedDurationSeconds}, resolution: ${normalizedResolution}, hasReferenceImage: ${!!(request.referenceImages && request.referenceImages.length > 0)})`,
   );
 
-  // Submit the generation request
   let operation: GenerateVideosOperation = await ai.models.generateVideos(generateParams);
 
-  // Poll for completion
   const completedOp = await pollForCompletion<typeof operation>({
     pollFn: async () => {
       if (operation.done) {
         return { done: true, result: operation };
       }
-      // Poll for updated status
       operation = await ai.operations.getVideosOperation({ operation });
       if (operation.done) {
         return { done: true, result: operation };
@@ -121,7 +117,6 @@ export async function generateGoogleNativeVideo(
     logLabel: "GoogleVideoGeneration",
   });
 
-  // Extract video from the completed operation
   const generatedVideos = completedOp?.response?.generatedVideos;
   if (!generatedVideos || generatedVideos.length === 0) {
     log.warn(`Google video generation completed but returned no videos (model: ${request.model})`);
@@ -133,7 +128,6 @@ export async function generateGoogleNativeVideo(
   // Download the video file
   //    The SDK provides video.uri for download, or video bytes may be inline
   if (video?.videoBytes) {
-    // Video bytes available directly
     const videoData = Buffer.from(video.videoBytes);
     log.info(
       `Google video generation: got inline video bytes (model: ${request.model}, sizeBytes: ${videoData.length})`,

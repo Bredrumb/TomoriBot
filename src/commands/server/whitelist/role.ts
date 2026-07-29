@@ -59,7 +59,6 @@ export async function execute(
   };
 
   try {
-    // Validate guild context
     if (!interaction.guild || !interaction.guildId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -72,7 +71,6 @@ export async function execute(
     // Defer the interaction before async work to prevent timeout
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Get Tomori state for server
     const tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -86,11 +84,9 @@ export async function execute(
     errorContext.serverId = tomoriState.server_id;
     errorContext.personaId = tomoriState.persona_id;
 
-    // Get command parameters
     const role = interaction.options.getRole("role", true);
     const action = interaction.options.getString("action", true);
 
-    // Validate role input
     if (role.id === interaction.guildId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -103,7 +99,6 @@ export async function execute(
     const roleMention = `<@&${role.id}>`;
 
     if (action === "add") {
-      // Add role to whitelist
       const alreadySet = await whitelistRepository.isRoleWhitelisted(tomoriState.server_id, role.id);
       if (alreadySet) {
         await replyInfoEmbed(interaction, locale, {
@@ -133,7 +128,6 @@ export async function execute(
       return;
     }
 
-    // Remove role from whitelist
     const removed = await whitelistRepository.removeRoleWhitelist(tomoriState.server_id, role.id);
     if (!removed) {
       await replyInfoEmbed(interaction, locale, {

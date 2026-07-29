@@ -22,12 +22,9 @@ export type ToolExportShape = {
 };
 
 export class ToolRepository implements IRepository<ToolExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
   /**
    * Loads all MCP server configs for a guild.
    *
-   * @param serverId - Internal server DB ID
    */
   async loadMcpServers(serverId: number): Promise<GuildMcpServerRow[]> {
     return this.sqlLoadGuildMcpServers(serverId);
@@ -44,7 +41,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
   /**
    * Returns the count of registered MCP servers for a guild.
    *
-   * @param serverId - Internal server DB ID
    */
   async countMcpServers(serverId: number): Promise<number> {
     return this.sqlCountGuildMcpServers(serverId);
@@ -53,7 +49,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
   /**
    * Returns true if a Brave Search API key is configured for the server.
    *
-   * @param serverId - Internal server DB ID
    */
   async getBraveApiKeyStatus(serverId: number): Promise<boolean> {
     return this.sqlGetBraveApiKeyStatus(serverId);
@@ -69,15 +64,10 @@ export class ToolRepository implements IRepository<ToolExportShape> {
     return this.sqlDecryptGuildMcpAuthToken(row);
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Registers a new MCP server for a guild.
    * Invalidates the guild MCP config cache and tomori state cache after write.
    *
-   * @param serverId    - Internal server DB ID
-   * @param name        - Human-readable server name
-   * @param url         - MCP server URL
    * @param authToken   - Optional auth token (stored encrypted)
    * @param serverType  - MCP server type for tool deduplication
    * @param serverDiscId - Discord server snowflake (required for cache invalidation)
@@ -103,8 +93,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
    * Deletes an MCP server from a guild by name.
    * Invalidates caches after write.
    *
-   * @param serverId     - Internal server DB ID
-   * @param name         - Server name to delete
    * @param serverDiscId - Discord server snowflake (required for tomori state cache invalidation)
    */
   async deleteMcpServer(serverId: number, name: string, serverDiscId: string): Promise<boolean> {
@@ -120,9 +108,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
    * Enables or disables an MCP server for a guild.
    * Invalidates caches after write.
    *
-   * @param serverId     - Internal server DB ID
-   * @param name         - Server name to toggle
-   * @param enabled      - New enabled state
    * @param serverDiscId - Discord server snowflake (required for tomori state cache invalidation)
    */
   async updateMcpServerEnabled(
@@ -138,8 +123,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
     }
     return ok;
   }
-
-  // ── private SQL ────────────────────────────────────────────────────────────
 
   private async sqlLoadGuildMcpServers(serverId: number): Promise<GuildMcpServerRow[]> {
     try {
@@ -324,8 +307,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
       return [];
     }
   }
-
-  // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
    * Tool config export is handled by ImportExportRepository.

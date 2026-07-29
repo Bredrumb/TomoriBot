@@ -15,33 +15,22 @@ import type { SelectOption } from "@/types/discord/modal";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 
-// ─── Constants ───────────────────────────────────────────────────────
-
 const MODAL_CUSTOM_ID = "config_mcp_toggle_modal";
 const SERVER_SELECT_ID = "mcp_server_select";
 const STATE_SELECT_ID = "mcp_enabled_select";
 
-// ─── Subcommand Configuration ────────────────────────────────────────
-
 /**
  * Configure the /config mcp toggle subcommand.
  * No options needed — server and state selection happen via modal string selects.
- * @param subcommand - The subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("toggle").setDescription(localizer("en-US", "commands.mcp.toggle.description"));
-
-// ─── Execution ───────────────────────────────────────────────────────
 
 /**
  * Execute /config mcp toggle.
  * Shows a modal with a string select for the server name and an enable/disable select,
  * then updates the database and manages the connection pool accordingly.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -72,7 +61,6 @@ export async function execute(
   }
 
   try {
-    // Load registered MCP servers for this guild
     const configs = await getCachedGuildMcpConfigs(tomoriState.server_id);
     if (configs.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -84,7 +72,6 @@ export async function execute(
       return;
     }
 
-    // Build select options from registered servers (show current status in description)
     const serverOptions: SelectOption[] = configs.map((config) => ({
       label: safeSelectOptionText(config.name),
       value: config.name,
@@ -157,7 +144,6 @@ export async function execute(
     // Checkbox Group: "enable" in multiValues = enabled, absent = disabled
     const enabled = (modalResult.multiValues?.[STATE_SELECT_ID] ?? []).includes("enable");
 
-    // Update DB
     const updated = await toolRepository.updateMcpServerEnabled(tomoriState.server_id, name, enabled, serverId);
     if (!updated) {
       await replyInfoEmbed(replyInteraction, locale, {
@@ -174,7 +160,6 @@ export async function execute(
       await getGuildMcpManager().disconnectGuildServer(tomoriState.server_id, name);
     }
 
-    // Success
     const titleKey = enabled
       ? "commands.mcp.toggle.enabled_success_title"
       : "commands.mcp.toggle.disabled_success_title";

@@ -7,18 +7,12 @@ import type { UserRow } from "@/types/db/schema";
 
 /**
  * Configure the github subcommand for contribute category
- * @param subcommand - The slash command subcommand builder
- * @returns The configured subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("github").setDescription(localizer("en-US", "commands.contribute.github.description"));
 
 /**
  * Execute the contribute github command - show GitHub repository link and contribution information
- * @param client - Discord client instance
- * @param interaction - Command interaction
- * @param _userData - User data from database (not used)
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -29,21 +23,18 @@ export async function execute(
   // Defer the interaction before async file I/O to prevent timeout
   await interaction.deferReply();
 
-  // Load gitbanner.png image as attachment
   const bannerFile = Bun.file("assets/img/gitbanner.png");
   const bannerBuffer = await bannerFile.arrayBuffer();
   const attachment = new AttachmentBuilder(Buffer.from(bannerBuffer), {
     name: "gitbanner.png",
   });
 
-  // Create embed with image attachment
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.contribute.github.title"))
     .setDescription(localizer(locale, "commands.contribute.github.description_text"))
     .setColor(ColorCode.INFO)
     .setImage("attachment://gitbanner.png");
 
-  // Reply with embed and attachment
   await interaction.editReply({
     embeds: [embed],
     files: [attachment],

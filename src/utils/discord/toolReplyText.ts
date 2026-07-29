@@ -25,8 +25,6 @@ import { cleanLLMOutput } from "@/utils/text/processors/llmOutputProcessor";
  * because `cleanLLMOutput` only strips the *active* persona's own-name label.
  *
  * @param content - Raw reply text supplied by the model in the tool's `content` argument
- * @param context - Tool execution context (channel, persona, emoji list, conversation items)
- * @returns Cleaned text with emoji shortcodes/tags and @mentions resolved, ready to send
  */
 export async function cleanToolReplyText(content: string, context: ToolContext): Promise<string> {
   const contextItems = context.contextItems ?? [];
@@ -35,7 +33,6 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
   //    path uses, so tool replies resolve @mentions identically to normal replies.
   const { mentionMap, mentionIdSet, personaMentionMap } = buildMentionLookup(contextItems);
 
-  // Drop custom emojis already used in recent bot turns (matches the stream pre-clean).
   const filtered = filterDuplicateCustomEmojis(content, contextItems);
 
   // Run the shared LLM-output cleaner: resolves emoji shortcodes/tags against the server
@@ -69,8 +66,6 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
   ]);
   const deLabeled = stripLeadingKnownSpeakerPrefixes(cleaned, speakerNames);
 
-  // Resolve guild-wide @mentions: searches guild members for handles not present in the
-  //    conversation context map, then replaces all resolved handles with `<@id>` tags.
   const resolved = await resolveGuildMentions(deLabeled, context.channel, mentionMap, mentionIdSet, personaMentionMap);
 
   return resolved.trim();

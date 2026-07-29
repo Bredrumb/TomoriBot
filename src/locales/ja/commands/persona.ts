@@ -1,5 +1,3 @@
-// locales/ja/commands/persona.ts
-
 export default {
   persona: {
     description: `人格プリセットを管理する`,

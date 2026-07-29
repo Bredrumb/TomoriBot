@@ -25,7 +25,6 @@ export function splitSqlStatements(sql: string): string[] {
   while (i < len) {
     const ch = sql[i];
 
-    // Line comment: consume from -- through the end of the line
     if (ch === "-" && sql[i + 1] === "-") {
       const newline = sql.indexOf("\n", i + 2);
       if (newline === -1) {
@@ -38,7 +37,6 @@ export function splitSqlStatements(sql: string): string[] {
       continue;
     }
 
-    // Block comment: consume from /* through the closing */
     if (ch === "/" && sql[i + 1] === "*") {
       const end = sql.indexOf("*/", i + 2);
       if (end === -1) {
@@ -51,7 +49,6 @@ export function splitSqlStatements(sql: string): string[] {
       continue;
     }
 
-    // Single-quoted string: '' is an escaped literal quote, not a terminator
     if (ch === "'") {
       let j = i + 1;
       while (j < len) {
@@ -93,7 +90,6 @@ export function splitSqlStatements(sql: string): string[] {
       // dollar-quoted block we consumed earlier) — fall through to normal char.
     }
 
-    // Statement terminator
     if (ch === ";") {
       current += ";";
       const trimmed = current.trim();

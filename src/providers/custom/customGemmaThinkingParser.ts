@@ -85,12 +85,9 @@ export class GemmaThinkingParser {
     return { visibleText: "", thoughts };
   }
 
-  // ─── Private helpers ────────────────────────────────────────────────────────
-
   private scanForStart(text: string): GemmaThinkingResult {
     const combined = this.scanHoldback + text;
 
-    // Find whichever start token variant appears earliest in the chunk.
     let earliest = -1;
     let matchedLen = 0;
     for (const token of START_TOKENS) {
@@ -102,7 +99,6 @@ export class GemmaThinkingParser {
     }
 
     if (earliest !== -1) {
-      // Found a start token: visible text before it passes through, remainder begins accumulation.
       const visibleBefore = combined.slice(0, earliest);
       this.scanHoldback = "";
       this.thinkBuffer = combined.slice(earliest + matchedLen);
@@ -128,7 +124,6 @@ export class GemmaThinkingParser {
       return { visibleText: prependVisible, thoughts: [] };
     }
 
-    // Extract and normalise the thinking content.
     let content = this.thinkBuffer.slice(0, endIdx);
     const remaining = this.thinkBuffer.slice(endIdx + END_TOKEN.length);
     this.reset();

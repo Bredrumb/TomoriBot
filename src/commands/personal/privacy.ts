@@ -12,14 +12,11 @@ import { type UserRow, type ErrorContext, PrivacyLevel } from "../../types/db/sc
 import type { RadioGroupOption } from "../../types/discord/modal";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "personal_privacy_modal";
 const PRIVACY_SELECT_ID = "privacy_select";
 
 /**
  * Creates privacy level options with localized descriptions
- * @param locale - The locale to use for localization
- * @returns Array of SelectOption with localized descriptions
  */
 function createPrivacyOptions(locale: string): RadioGroupOption[] {
   return [
@@ -43,9 +40,6 @@ function createPrivacyOptions(locale: string): RadioGroupOption[] {
 
 /**
  * Helper function to get a user-friendly label for privacy levels
- * @param locale - The user's locale
- * @param level - Privacy level value
- * @returns Localized privacy label
  */
 function getPrivacyLevelLabel(locale: string, level: PrivacyLevel): string {
   switch (level) {
@@ -61,7 +55,6 @@ function getPrivacyLevelLabel(locale: string, level: PrivacyLevel): string {
   }
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("privacy").setDescription(localizer("en-US", "commands.personal.privacy.description"));
 
@@ -74,10 +67,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * - Level 2 (FULL): Completely invisible, cannot trigger bot
  *
  * This setting applies across all servers where TomoriBot is present.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database (the command executor)
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -89,10 +78,8 @@ export async function execute(
   let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
 
   try {
-    // Get current privacy level
     const currentLevel = userData.privacy_level ?? PrivacyLevel.MINIMAL;
 
-    // Show the modal with privacy level selection
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.personal.privacy.modal_title",
@@ -108,20 +95,17 @@ export async function execute(
       ],
     });
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Privacy level selection modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
     }
 
-    // Extract values from the modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     modalSubmitInteraction = modalResult.interaction!;
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedValue = modalResult.values![PRIVACY_SELECT_ID];
     const requestedLevel = Number.parseInt(selectedValue, 10) as PrivacyLevel;
 
-    // Validate the parsed value
     if (
       Number.isNaN(requestedLevel) ||
       ![PrivacyLevel.MINIMAL, PrivacyLevel.PARTIAL, PrivacyLevel.FULL].includes(requestedLevel)
@@ -134,7 +118,6 @@ export async function execute(
       return;
     }
 
-    // Check if this is the same as the current level
     if (requestedLevel === currentLevel) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.personal.privacy.already_set_title",
@@ -150,7 +133,6 @@ export async function execute(
     // Defer the modal submit interaction before async DB work (3-second Discord limit)
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Update privacy level in database
     const updatedUser = await userRepository.setPrivacyLevel(interaction.user.id, requestedLevel);
 
     if (!updatedUser) {
@@ -166,7 +148,6 @@ export async function execute(
     // Invalidate user cache so next message gets fresh data
     invalidateUserCache(interaction.user.id);
 
-    // Send success confirmation message
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.personal.privacy.success_title",
       descriptionKey: "commands.personal.privacy.success_description",
@@ -181,7 +162,6 @@ export async function execute(
       `User ${interaction.user.id} (${userData.user_nickname}) changed privacy level from ${currentLevel} to ${requestedLevel}`,
     );
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
@@ -193,7 +173,6 @@ export async function execute(
     };
     await log.error(`Error executing /personal privacy for user ${userData.user_disc_id}`, error as Error, context);
 
-    // Inform user of unknown error
     const replyTarget = modalSubmitInteraction ?? interaction;
     await replyInfoEmbed(replyTarget, locale, {
       titleKey: "general.errors.unknown_error_title",

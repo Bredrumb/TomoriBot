@@ -33,8 +33,6 @@ import {
 /**
  * Configures the /stats persona subcommand: pick a persona, then view that
  * persona's usage stats on this server for the chosen timeframe.
- * @param subcommand - The subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -52,10 +50,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Opens the persona picker, then renders the selected persona's stats dashboard.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -76,7 +70,6 @@ export async function execute(
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Resolve the internal server id and the server's persona roster.
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
     if (!serverId) {

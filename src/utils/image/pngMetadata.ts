@@ -37,9 +37,6 @@ type PngTextChunk = {
 
 /**
  * Reads a 4-byte big-endian unsigned integer from a byte array
- * @param data - Byte array to read from
- * @param offset - Position to start reading
- * @returns 32-bit unsigned integer
  */
 function readUint32(data: Uint8Array, offset: number): number {
   return (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
@@ -47,9 +44,6 @@ function readUint32(data: Uint8Array, offset: number): number {
 
 /**
  * Writes a 4-byte big-endian unsigned integer to a byte array
- * @param data - Byte array to write to
- * @param offset - Position to start writing
- * @param value - 32-bit unsigned integer to write
  */
 function writeUint32(data: Uint8Array, offset: number, value: number): void {
   data[offset] = (value >>> 24) & 0xff;
@@ -60,7 +54,6 @@ function writeUint32(data: Uint8Array, offset: number, value: number): void {
 
 /**
  * Converts a string to a UTF-8 byte array
- * @param str - String to convert
  * @returns Uint8Array containing UTF-8 encoded bytes
  */
 function stringToBytes(str: string): Uint8Array {
@@ -72,12 +65,9 @@ function stringToBytes(str: string): Uint8Array {
  * Calculates CRC32 checksum for PNG chunk data
  * CRC32 is used to detect data corruption in PNG chunks
  * @param data - Byte array containing chunk type and chunk data
- * @param offset - Starting position in the array
  * @param length - Number of bytes to include in CRC calculation
- * @returns 32-bit CRC32 checksum
  */
 function calculateCRC(data: Uint8Array, offset: number, length: number): number {
-  // Generate CRC32 lookup table (standard polynomial 0xEDB88320)
   const crcTable: number[] = [];
   for (let i = 0; i < 256; i++) {
     let c = i;
@@ -87,28 +77,22 @@ function calculateCRC(data: Uint8Array, offset: number, length: number): number 
     crcTable[i] = c;
   }
 
-  // Calculate CRC32 over the data
   let crc = 0xffffffff;
   for (let i = 0; i < length; i++) {
     crc = crcTable[(crc ^ data[offset + i]) & 0xff] ^ (crc >>> 8);
   }
 
-  // Return final CRC (inverted)
   return crc ^ 0xffffffff;
 }
 
 /**
  * Verifies that a buffer starts with a valid PNG signature
- * @param data - Buffer to verify
- * @returns True if buffer starts with PNG signature
  */
 function verifyPNGSignature(data: Uint8Array): boolean {
-  // Check if buffer is long enough to contain signature
   if (data.length < PNG_SIGNATURE.length) {
     return false;
   }
 
-  // Compare each byte of the signature
   for (let i = 0; i < PNG_SIGNATURE.length; i++) {
     if (data[i] !== PNG_SIGNATURE[i]) {
       return false;
@@ -307,7 +291,6 @@ export function extractSillyTavernMetadataFromPNG(pngBuffer: Buffer): SillyTaver
     const textChunks = extractAllTextChunksFromPNGData(data);
     const candidates = textChunks.filter((chunk) => SILLY_TAVERN_METADATA_KEYS.has(chunk.key.toLowerCase()));
 
-    // Process in reverse order so newest metadata wins when duplicates exist.
     for (const candidate of [...candidates].reverse()) {
       const rawValue = candidate.value.trim();
       if (!rawValue) {
@@ -351,21 +334,17 @@ export function extractSillyTavernMetadataFromPNG(pngBuffer: Buffer): SillyTaver
 
 /**
  * Extracts TomoriBot preset metadata from a PNG file
- * @param pngBuffer - PNG file as Buffer
  * @returns PresetExport object if found, null otherwise
  */
 export function extractMetadataFromPNG(pngBuffer: Buffer): PresetExport | null {
   try {
-    // Convert Buffer to Uint8Array for processing
     const data = new Uint8Array(pngBuffer);
 
-    // Verify PNG signature
     if (!verifyPNGSignature(data)) {
       log.warn("Invalid PNG signature detected during metadata extraction");
       return null;
     }
 
-    // Parse supported text chunks and pick TomoriPreset entries
     const textChunks = extractAllTextChunksFromPNGData(data);
     const presetChunks = textChunks.filter((chunk) => chunk.key === METADATA_KEY);
 
@@ -390,7 +369,6 @@ export function extractMetadataFromPNG(pngBuffer: Buffer): PresetExport | null {
       return lastPreset;
     }
 
-    // No metadata found
     log.info("No TomoriPreset metadata found in PNG");
     return null;
   } catch (error) {
@@ -403,15 +381,12 @@ export function extractMetadataFromPNG(pngBuffer: Buffer): PresetExport | null {
  * Embeds TomoriBot preset metadata into a PNG file
  * Inserts a tEXt chunk before the IEND chunk
  * @param pngBuffer - Original PNG file as Buffer
- * @param metadata - PresetExport object to embed
  * @returns New PNG Buffer with embedded metadata
  */
 export function embedMetadataInPNG(pngBuffer: Buffer, metadata: PresetExport): Buffer {
   try {
-    // Convert Buffer to Uint8Array for processing
     const data = new Uint8Array(pngBuffer);
 
-    // Verify PNG signature
     if (!verifyPNGSignature(data)) {
       throw new Error("Invalid PNG signature");
     }
@@ -447,7 +422,6 @@ export function embedMetadataInPNG(pngBuffer: Buffer, metadata: PresetExport): B
     const keyBytes = stringToBytes(`${METADATA_KEY}\0`); // Null terminator
     const valueBytes = stringToBytes(metadataJSON);
 
-    // Combine key and value into chunk data
     const chunkData = new Uint8Array(keyBytes.length + valueBytes.length);
     chunkData.set(keyBytes, 0);
     chunkData.set(valueBytes, keyBytes.length);
@@ -459,22 +433,17 @@ export function embedMetadataInPNG(pngBuffer: Buffer, metadata: PresetExport): B
     const newPngSize = data.length + 12 + chunkLength;
     const newPngData = new Uint8Array(newPngSize);
 
-    // Build the new PNG file
-    // Copy everything up to the IEND chunk
     newPngData.set(data.slice(0, iendOffset));
 
     let writeOffset = iendOffset;
 
-    // Write chunk length
     writeUint32(newPngData, writeOffset, chunkLength);
     writeOffset += 4;
 
-    // Write chunk type (tEXt)
     const typeBytes = stringToBytes(TEXT_CHUNK_TYPE);
     newPngData.set(typeBytes, writeOffset);
     writeOffset += 4;
 
-    // Write chunk data
     newPngData.set(chunkData, writeOffset);
     writeOffset += chunkLength;
 
@@ -487,12 +456,10 @@ export function embedMetadataInPNG(pngBuffer: Buffer, metadata: PresetExport): B
     writeUint32(newPngData, writeOffset, crc);
     writeOffset += 4;
 
-    // Copy IEND chunk and everything after
     newPngData.set(data.slice(iendOffset), writeOffset);
 
     log.success(`Successfully embedded TomoriPreset metadata (${metadataJSON.length} bytes) into PNG`);
 
-    // Convert back to Buffer and return
     return Buffer.from(newPngData);
   } catch (error) {
     log.error("Error embedding metadata in PNG:", error as Error);

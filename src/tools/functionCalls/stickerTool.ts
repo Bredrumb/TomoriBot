@@ -101,7 +101,6 @@ export class StickerTool extends BaseTool {
     if (!query || !candidate) return 0;
     if (query === candidate) return 1;
 
-    // Prefer strong partial matches when users omit separators/punctuation.
     if (candidate.includes(query) || query.includes(candidate)) {
       const overlapRatio = Math.min(query.length, candidate.length) / Math.max(query.length, candidate.length);
       return 0.9 + overlapRatio * 0.08;
@@ -125,7 +124,6 @@ export class StickerTool extends BaseTool {
    * Check if sticker tool is available for the given provider.
    * Disabled for NovelAI — GLM 4.6 can't reliably generate Japanese/CJK sticker
    * names as tool arguments due to token-level instability.
-   * @param provider - LLM provider name
    * @returns True if provider supports sticker selection
    */
   isAvailableFor(provider: string): boolean {
@@ -135,7 +133,6 @@ export class StickerTool extends BaseTool {
 
   /**
    * Check if sticker functionality is enabled in Tomori config
-   * @param context - Tool execution context
    * @returns True if sticker usage is enabled
    */
   protected isEnabled(context: ToolContext): boolean {
@@ -145,8 +142,6 @@ export class StickerTool extends BaseTool {
   /**
    * Execute sticker selection - Real implementation from tomoriChat.ts
    * @param args - Arguments containing sticker_name (preferred) or sticker_id
-   * @param context - Tool execution context
-   * @returns Promise resolving to tool result
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const rawStickerName = args.sticker_name;
@@ -156,7 +151,6 @@ export class StickerTool extends BaseTool {
     const hasStickerName = stickerName.length > 0;
     const hasStickerId = stickerId.length > 0;
 
-    // Check if tool is enabled
     if (!this.isEnabled(context)) {
       return {
         success: false,
@@ -213,7 +207,6 @@ export class StickerTool extends BaseTool {
     try {
       log.info(`Attempting to select sticker: ${normalizedStickerName || stickerId}`);
 
-      // Get the guild from channel context
       const guild = context.channel.guild;
       let ambiguousMatches: Array<{
         id: string;
@@ -238,14 +231,12 @@ export class StickerTool extends BaseTool {
         if (normalizedStickerName) {
           const stickers = guild.stickers.cache.filter((sticker) => sticker.name?.trim()).map((sticker) => sticker);
 
-          // 1) Strict normalized exact match (case/whitespace tolerant).
           const exactMatches = stickers.filter(
             (sticker) => StickerTool.normalizeStickerNameForExact(sticker.name) === normalizedStickerName,
           );
           const exactMatch = StickerTool.pickNewestSticker(exactMatches);
           if (exactMatch) return exactMatch;
 
-          // 2) Loose normalized exact match (separator/quote tolerant).
           const looseQuery = StickerTool.normalizeStickerNameForLoose(normalizedStickerName);
           if (!looseQuery) return null;
 
@@ -332,7 +323,6 @@ export class StickerTool extends BaseTool {
           }
         } catch (fetchError) {
           log.warn(`Failed to refresh sticker cache from Discord API: ${(fetchError as Error).message}`);
-          // Continue to "not found" logic below
         }
       } else {
         log.success(`Sticker '${selectedSticker.name}' (${selectedSticker.id}) found in local cache`);
@@ -344,12 +334,10 @@ export class StickerTool extends BaseTool {
           success: true,
           message: "Sticker selected successfully",
           data: {
-            // Return format matching tomoriChat.ts functionExecutionResult
             status: "sticker_selected_successfully",
             sticker_id: selectedSticker.id,
             sticker_name: selectedSticker.name,
             sticker_description: selectedSticker.description || "No description available",
-            // Additional data for compatibility
             sticker: selectedSticker,
           },
         };
@@ -400,7 +388,6 @@ export class StickerTool extends BaseTool {
         error: "Sticker not found",
         message: notFoundMessage,
         data: {
-          // Return format matching tomoriChat.ts functionExecutionResult
           status: "sticker_not_found",
           sticker_name_attempted: normalizedStickerName || undefined,
           sticker_id_attempted: !normalizedStickerName ? stickerId : undefined,
@@ -435,7 +422,6 @@ export class StickerTool extends BaseTool {
   /**
    * Get available stickers for context building
    * This helper method can be used to provide sticker options to the LLM
-   * @param context - Tool context
    * @returns Array of available sticker information
    */
   static getAvailableStickers(context: ToolContext): Array<{

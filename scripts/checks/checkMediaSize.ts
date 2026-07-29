@@ -26,7 +26,6 @@ config({ quiet: true });
 function main(): void {
   const limit = resolveLimitBytes();
 
-  // Collect in-scope media that exceeds the budget.
   const offenders = listInScopeMedia().filter((file) => file.size > limit);
 
   // Report. Persona art is listed first and tagged, since it ships to Discord.

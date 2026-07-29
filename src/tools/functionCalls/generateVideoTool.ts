@@ -130,7 +130,6 @@ export class GenerateVideoTool extends BaseTool {
   /**
    * Standard video generation is available for any tool-capable chat model.
    * The actual execution provider is resolved from the configured video slot.
-   * @param _provider - LLM provider name
    * @returns Always true — actual availability is gated by config + credential resolution
    */
   isAvailableFor(_provider: string): boolean {
@@ -146,7 +145,6 @@ export class GenerateVideoTool extends BaseTool {
 
   /**
    * Check if video generation is enabled in Tomori config.
-   * @param context - Tool execution context
    * @returns True if video generation is enabled
    */
   protected isEnabled(context: ToolContext): boolean {
@@ -155,7 +153,6 @@ export class GenerateVideoTool extends BaseTool {
 
   /**
    * Get the video model codename from the database via repository.
-   * @param videoModelId - Database ID of the video generation model
    * @returns The model codename string (e.g., "veo-3.1-generate-preview")
    */
   private async getVideoModelCodename(videoModelId: number): Promise<string> {
@@ -176,11 +173,8 @@ export class GenerateVideoTool extends BaseTool {
    * above the attachment). Each path falls back to a plain attachment-only message
    * if Components V2 is rejected — that fallback preserves Discord's native inline
    * video player, just without the timing footer.
-   * @param context - Tool execution context
    * @param videoData - Raw video bytes
-   * @param filename - Attachment filename to send
    * @param elapsedMs - Wall-clock generation time in milliseconds, used for the "Generated in Xs" footer
-   * @returns The sent Discord message
    */
   private async sendGeneratedVideo(
     context: ToolContext,
@@ -192,7 +186,6 @@ export class GenerateVideoTool extends BaseTool {
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
-    // Build the Components V2 payload: Media Gallery (video) + "Generated in Xs" footer below
     const componentsPayload = buildGeneratedVideoComponentsV2Payload(filename, elapsedMs, context.locale);
 
     // Try persona webhook first (Components V2, then plain attachment fallback)
@@ -307,8 +300,6 @@ export class GenerateVideoTool extends BaseTool {
   /**
    * Extract the first image from a Discord message for image-to-video generation.
    * Returns the source URL directly — providers that need base64 can fetch it themselves.
-   * @param messageId - Discord message ID to fetch image from
-   * @param context - Tool execution context
    * @returns Reference image with url and mimeType, or null if no image found
    */
   private async extractReferenceImageFromMessage(
@@ -354,7 +345,6 @@ export class GenerateVideoTool extends BaseTool {
     // Capture generation start time for the "Generated in Xs" caption (mirrors image tool)
     const startedAtMs = Date.now();
 
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -363,7 +353,6 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // Check if tool is enabled
     if (!this.isEnabled(context)) {
       return {
         success: false,
@@ -380,7 +369,6 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // Extract arguments
     const prompt = args.prompt as string;
     const rawMediaId = args.media_id as string | undefined;
     const messageId = this.resolveMediaId(rawMediaId, context);
@@ -519,7 +507,6 @@ export class GenerateVideoTool extends BaseTool {
         );
       }
 
-      // Extract reference image if media_id provided
       let referenceImages: Array<{ mimeType: string; data: string; url?: string; fallbackUrl?: string }> | undefined;
 
       if (messageId) {
@@ -533,7 +520,6 @@ export class GenerateVideoTool extends BaseTool {
         }
       }
 
-      // Route to appropriate provider implementation
       log.info(
         `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, duration: ${durationSeconds}s, resolution: ${resolution})`,
       );
@@ -612,7 +598,6 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // Validate result
       if (!videoData) {
         return {
           success: false,
@@ -654,12 +639,10 @@ export class GenerateVideoTool extends BaseTool {
           userId: context.internalUserId,
           lineageId: context.tomoriState.persona_lineage_id ?? 0,
           metric: "video_generated",
-          // Key by model codename for a per-model generation breakdown at read time.
           metricKey: modelCodename,
         });
       }
 
-      // Build success message
       let successMessage = `Successfully generated and sent video to Discord (message ID: ${sentMessage.id}). The video has been created based on your prompt${
         referenceImages ? " and the reference image" : ""
       } at ${resolution} for approximately ${durationSeconds} second(s).`;
@@ -695,7 +678,6 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // Check for common error patterns
       if (errorMessage.includes("timed out")) {
         return {
           success: false,

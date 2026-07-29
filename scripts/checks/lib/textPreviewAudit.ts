@@ -76,10 +76,6 @@ export interface TextPreviewAuditResult {
  *
  * Pure and synchronous so unit tests can exercise it without touching disk.
  *
- * @param key - Dotted locale key the string belongs to.
- * @param value - The locale string itself.
- * @param locale - Locale the string came from, used to label the violation.
- * @returns Violations found in this string.
  */
 export function scanBakedEllipsis(key: string, value: string, locale = "en-US"): TextPreviewViolation[] {
   const violations: TextPreviewViolation[] = [];
@@ -97,8 +93,6 @@ export function scanBakedEllipsis(key: string, value: string, locale = "en-US"):
 /**
  * Reports whether a locale string interpolates a placeholder inside a fence.
  *
- * @param value - The locale string.
- * @returns True when the string is subject to rule 2.
  */
 export function hasFencedPlaceholder(value: string): boolean {
   return FENCED_PLACEHOLDER.test(value);
@@ -111,10 +105,6 @@ export function hasFencedPlaceholder(value: string): boolean {
  * sites build key names dynamically (e.g. `embed${n}_description`), and a
  * static scan cannot resolve those without false positives.
  *
- * @param key - Dotted locale key.
- * @param value - The locale string.
- * @param sources - Map of repo-relative file path to file contents (non-locale sources).
- * @returns Violations, one per unguarded consumer.
  */
 export function scanFencedPlaceholderUsage(
   key: string,
@@ -139,7 +129,6 @@ export function scanFencedPlaceholderUsage(
 /**
  * Loads one locale tree as a single object.
  *
- * @param locale - Locale directory name under `src/locales/`.
  * @returns The merged locale object across every slice file.
  */
 async function loadLocale(locale: string): Promise<Record<string, unknown>> {
@@ -157,9 +146,6 @@ async function loadLocale(locale: string): Promise<Record<string, unknown>> {
 /**
  * Flattens a locale tree into dotted key/value pairs.
  *
- * @param node - Current locale subtree.
- * @param path - Accumulated key segments.
- * @param out - Collector for resolved string entries.
  */
 export function flattenLocale(node: unknown, path: string[], out: Map<string, string>): void {
   if (typeof node === "string") {
@@ -174,7 +160,6 @@ export function flattenLocale(node: unknown, path: string[], out: Map<string, st
 /**
  * Runs both rules across the real repository.
  *
- * @returns Violations found plus the number of source files scanned.
  */
 export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   const violations: TextPreviewViolation[] = [];
@@ -197,7 +182,6 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
     for (const [key, value] of flat) violations.push(...scanBakedEllipsis(key, value, locale));
   }
 
-  // Load non-locale sources once for rule 2's consumer lookup.
   const sourceFiles = (await Array.fromAsync(new Glob("src/**/*.ts").scan(TEXT_PREVIEW_REPO_ROOT))).filter(
     (file) => !file.replaceAll("\\", "/").includes("src/locales/"),
   );

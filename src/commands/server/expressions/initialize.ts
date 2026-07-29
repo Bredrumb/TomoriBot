@@ -44,7 +44,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Convert ColorCode hex string to Discord number format
  * @param hexColor - Hex color string (e.g., "#3498DB")
- * @returns Numeric color code for Discord embeds
  */
 function hexToNumber(hexColor: string): number {
   return Number.parseInt(hexColor.replace("#", ""), 16);
@@ -74,7 +73,6 @@ function buildStickerCDNUrl(stickerId: string): string {
 
 /**
  * Build system prompt for LLM
- * @returns System instruction text
  */
 function buildSystemPrompt(): string {
   return `You are an expert visual analyzer specializing in classifying emojis and stickers based on their emotional expression.
@@ -93,14 +91,10 @@ Guidelines:
 /**
  * Build user prompt for LLM
  *
- * @param items - Array of items to analyze (with name and type)
- * @returns User prompt text
  */
 function buildUserPrompt(items: Array<{ name: string; type: "emoji" | "sticker" }>): string {
-  // Build numbered list of items
   const itemList = items.map((item, idx) => `${idx + 1}. ${item.name} (${item.type})`).join("\n");
 
-  // Construct prompt
   return `Analyze the following ${items.length} Discord expressions and classify each one:
 
 ${itemList}
@@ -115,10 +109,6 @@ Return results in the specified JSON format.`;
 /**
  * Execute the /server expressions initialize command
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -126,7 +116,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild (not DM)
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -137,7 +126,6 @@ export async function execute(
     return;
   }
 
-  // Load Tomori state for this server
   const baseTomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!baseTomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -178,7 +166,6 @@ export async function execute(
     let effectiveLlm = llm;
 
     if (!llm.sees_images || !llm.supports_structoutput) {
-      // Primary model is missing a required capability — try vision model fallback
       const visionLlm = tomoriState.vision_llm;
 
       if (visionLlm?.sees_images && visionLlm.supports_structoutput) {
@@ -187,12 +174,9 @@ export async function execute(
         );
         effectiveLlm = visionLlm;
       } else {
-        // Neither model meets requirements
         const effectiveModelName = getEffectiveLlmModelName(llm, tomoriState.config.custom_model_name);
 
-        // Determine which error message to show
         if (!visionLlm) {
-          // No vision model configured — show original single-model error
           const missingCapability = !llm.sees_images ? "IMAGE VISION" : "STRUCTURED OUTPUT";
           await interaction.editReply({
             embeds: [
@@ -211,7 +195,6 @@ export async function execute(
             ],
           });
         } else {
-          // Vision model exists but also lacks capabilities
           await interaction.editReply({
             embeds: [
               {
@@ -283,7 +266,6 @@ export async function execute(
     ]);
     const grandTotalUninitialized = initialEmojis.length + initialStickers.length;
 
-    // Nothing to do — every expression has already been classified
     if (grandTotalUninitialized === 0) {
       await interaction.editReply({
         embeds: [
@@ -310,11 +292,9 @@ export async function execute(
     const maxChunkRetries = Number.parseInt(process.env.EXPRESSION_INIT_MAX_CHUNK_RETRIES || "3", 10);
     const batchDelayMs = Number.parseInt(process.env.EXPRESSION_INIT_BATCH_DELAY_MS || "1000", 10);
 
-    // Constants shared by every batch
     const systemPrompt = buildSystemPrompt();
     const temperature = 1.0;
 
-    // Mutable loop state
     let totalEmojiProcessed = 0;
     let totalStickerProcessed = 0;
     let batchNumber = 0;
@@ -329,7 +309,6 @@ export async function execute(
       ]);
       const remaining = pendingEmojis.length + pendingStickers.length;
 
-      // Backlog fully drained — we are done
       if (remaining === 0) {
         break;
       }
@@ -347,17 +326,14 @@ export async function execute(
           break;
         }
       } else {
-        // Backlog shrank since the last iteration → real progress, reset the guard
         chunkRetries = 0;
       }
       previousRemaining = remaining;
       batchNumber++;
 
-      // Build this iteration's image/item batch, capped at the provider batch size
       const images: Array<{ url: string; name: string }> = [];
       const items: Array<{ name: string; type: "emoji" | "sticker" }> = [];
 
-      // Add emojis
       for (const emoji of pendingEmojis) {
         images.push({
           url: buildEmojiCDNUrl(emoji.emoji_disc_id),
@@ -366,7 +342,6 @@ export async function execute(
         items.push({ name: emoji.emoji_name, type: "emoji" });
       }
 
-      // Add stickers
       for (const sticker of pendingStickers) {
         images.push({
           url: buildStickerCDNUrl(sticker.sticker_disc_id),
@@ -384,7 +359,6 @@ export async function execute(
         );
       }
 
-      // Progress update for this batch
       await interaction.editReply({
         embeds: [
           {
@@ -400,7 +374,6 @@ export async function execute(
         ],
       });
 
-      // Build the per-batch prompt and call the provider
       const userPrompt = buildUserPrompt(items);
 
       log.info(
@@ -458,7 +431,6 @@ export async function execute(
         continue;
       }
 
-      // Persist this batch's classifications and accumulate running totals
       const { emojiCount, stickerCount } = await serverRepository.initializeExpressions(
         tomoriState.server_id,
         validationResult.data.expressions,
@@ -473,11 +445,9 @@ export async function execute(
       }
     }
 
-    // Final report based on the accumulated totals across every batch
     const totalProcessed = totalEmojiProcessed + totalStickerProcessed;
 
     if (totalProcessed === 0) {
-      // No expressions were updated at all (every batch failed to match)
       await interaction.editReply({
         embeds: [
           {
@@ -488,7 +458,6 @@ export async function execute(
         ],
       });
     } else if (totalProcessed < grandTotalUninitialized) {
-      // Partial success — the loop stopped (stuck chunk) with some expressions left over
       const failed = grandTotalUninitialized - totalProcessed;
       await interaction.editReply({
         embeds: [
@@ -504,7 +473,6 @@ export async function execute(
         ],
       });
     } else {
-      // Full success — entire backlog drained
       await interaction.editReply({
         embeds: [
           {
@@ -520,7 +488,6 @@ export async function execute(
       });
     }
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
@@ -534,7 +501,6 @@ export async function execute(
 
     await log.error("Error executing /server expressions initialize command", error as Error, context);
 
-    // Show error message to user
     await interaction.editReply({
       embeds: [
         {

@@ -259,8 +259,6 @@ async function getCommandFiles(directory: string): Promise<string[]> {
 
 /**
  * Helper function to apply localizations to a command/subcommand and its options/choices
- * @param configuredCommand - The configured command/subcommand builder
- * @param categoryName - The category name
  * @param subcommandPath - Optional subcommand path (flat: 'name', grouped: 'group.name')
  * @param availableLocales - Array of available locale codes
  */
@@ -461,7 +459,6 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
  * This is the single source of truth for "which commands exist", derived from the
  * loaded modules — never a hardcoded list — so the persisted catalog cannot drift.
  *
- * @param executionMap - The runtime execution map from {@link loadCommandData}.
  * @returns One {@link CommandCatalogEntry} per registered (sub)command.
  */
 export function getCommandCatalogEntries(executionMap: CommandExecutionMap): CommandCatalogEntry[] {

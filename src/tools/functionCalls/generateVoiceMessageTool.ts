@@ -214,7 +214,6 @@ export class GenerateVoiceMessageTool extends BaseTool {
         allowed_mentions: { parse: [] },
       };
 
-      // Username and avatar override for persona identity
       if (username) payloadJson.username = username;
       // data: URIs cannot be used as avatar_url — only HTTP(S) URLs are accepted
       if (avatarUrl && !avatarUrl.startsWith("data:image/")) {
@@ -537,7 +536,6 @@ export class GenerateVoiceMessageTool extends BaseTool {
       };
     }
 
-    // --- TTS clone path ---
     if (voiceSampleId && speechEndpoint?.endpoint.api_style === "tts-clone") {
       const cloneResult = await synthesizeSpeechViaTtsClone({
         endpoint: speechEndpoint.endpoint,
@@ -601,7 +599,6 @@ export class GenerateVoiceMessageTool extends BaseTool {
       return { success: true, message: "Voice message generated and sent to Discord.", endTurn: true };
     }
 
-    // --- ElevenLabs path ---
     if (!voiceId) {
       return {
         success: false,

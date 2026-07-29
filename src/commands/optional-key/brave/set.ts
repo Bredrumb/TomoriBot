@@ -14,8 +14,6 @@ import { braveWebSearch } from "../../../tools/restAPIs/brave/braveSearchService
 
 /**
  * Configure the subcommand for setting Brave Search API key
- * @param subcommand - Discord slash command subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -30,10 +28,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Sets the Brave Search API key for the server's MCP configuration
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -41,7 +35,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -52,7 +45,6 @@ export async function execute(
     return;
   }
 
-  // Defer the interaction before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   let apiKey: string | null = null; // For error context
@@ -62,7 +54,6 @@ export async function execute(
     // Get the API key from options
     apiKey = interaction.options.getString("key", true);
 
-    // Basic validation (no specific Brave API validation available)
     if (!apiKey || apiKey.length < 10) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.optional-key.brave.set.invalid_key_title",
@@ -72,7 +63,6 @@ export async function execute(
       return;
     }
 
-    // Load the Tomori state for this server
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -143,7 +133,6 @@ export async function execute(
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // Success message
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.optional-key.brave.set.success_title",
       descriptionKey: "commands.optional-key.brave.set.success_description",
@@ -151,7 +140,6 @@ export async function execute(
       flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
@@ -171,7 +159,6 @@ export async function execute(
       context,
     );
 
-    // Inform user of unknown error
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

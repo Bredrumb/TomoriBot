@@ -41,8 +41,6 @@ export async function forkPointerForAvatarChange(
 
 /**
  * Configure the avatar subcommand
- * @param subcommand - SlashCommandSubcommandBuilder instance
- * @returns Configured subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("avatar").setDescription(localizer("en-US", "commands.persona.avatar.description"));
@@ -59,7 +57,6 @@ function validateImage(attachment: AvatarAttachment): {
   const contentType = "contentType" in attachment ? attachment.contentType : attachment.content_type;
   const filename = "name" in attachment ? attachment.name : attachment.filename;
 
-  // Check file size against the shared persona/avatar upload limit.
   const maxSize = PERSONA_LIMITS.MAX_AVATAR_SIZE_MB * 1024 * 1024;
   if (attachment.size > maxSize) {
     return {
@@ -68,7 +65,6 @@ function validateImage(attachment: AvatarAttachment): {
     };
   }
 
-  // Check content type
   const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif"];
   if (!contentType || !allowedTypes.includes(contentType)) {
     return {
@@ -101,14 +97,12 @@ async function downloadAttachmentBuffer(attachment: AvatarAttachment): Promise<{
   error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
   details?: string;
 }> {
-  // Use safeDownload with the shared persona/avatar upload limit.
   const downloadResult = await safeDownload(attachment.url, {
     maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
     timeoutMs: 15000, // 15 seconds
     knownSize: attachment.size,
   });
 
-  // If download failed, return error
   if (!downloadResult.success) {
     return {
       success: false,
@@ -142,15 +136,12 @@ async function updateGuildAvatar(
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    // Prepare the API endpoint
     const endpoint = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
 
-    // Prepare the payload
     const payload = {
       avatar: avatarDataUri,
     };
 
-    // Make the API call with timeout
     const response = await fetch(endpoint, {
       method: "PATCH",
       headers: {
@@ -181,7 +172,6 @@ async function updateGuildAvatar(
   } catch (error) {
     clearTimeout(timeoutId);
 
-    // Handle abort (timeout)
     if (error instanceof Error && error.name === "AbortError") {
       log.warn("Discord API call timed out after 15s", {
         metadata: { guildId },
@@ -193,7 +183,6 @@ async function updateGuildAvatar(
       };
     }
 
-    // Handle other errors
     await log.error("Error updating guild avatar via Discord API", error, {
       errorType: "DiscordApiError",
       metadata: { guildId },
@@ -208,10 +197,6 @@ async function updateGuildAvatar(
 
 /**
  * Sets or removes TomoriBot's custom avatar for the current guild
- * @param client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -219,7 +204,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -244,7 +228,6 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
 
   try {
-    // Load personas and prompt user to choose target persona
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.persona_id !== undefined)
@@ -315,7 +298,6 @@ export async function execute(
     // Defer the reply to prevent timeout during image processing
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Memory guard check (defense-in-depth)
     const memCheck = memoryGuard.checkMemory();
     if (memCheck.status === "critical") {
       await responseInteraction.editReply({
@@ -362,11 +344,9 @@ export async function execute(
       return;
     }
 
-    // Resolve the optional modal upload
     const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
     const isMainPersona = !selectedPersona.is_alter;
 
-    // Handle avatar removal (no attachment provided)
     if (!imageAttachment) {
       if (isMainPersona) {
         const result = await updateGuildAvatar(interaction.guild.id, null);
@@ -412,7 +392,6 @@ export async function execute(
       return;
     }
 
-    // Validate the image attachment
     const validation = validateImage(imageAttachment);
     if (!validation.isValid) {
       let errorKey = "invalid_image_description";

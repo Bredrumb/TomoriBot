@@ -13,8 +13,6 @@ import { localizer } from "../../utils/text/localizer";
 
 /**
  * Configure the kill subcommand
- * @param subcommand - The slash command subcommand builder
- * @returns The configured subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("kill").setDescription(localizer("en-US", "commands.bot.kill.description"));
@@ -22,10 +20,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the kill command for this channel.
  * Stops the active stream if one exists and clears any queued responses.
- * @param _client - Discord client instance (unused)
- * @param interaction - Command interaction
- * @param _userData - User data from database (unused)
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -66,7 +60,6 @@ export async function execute(
   }
 
   if (hasActiveStream) {
-    // Signal the stream processing loop to stop gracefully.
     StreamOrchestrator.requestStop(channelId, interaction.user.id);
     // Abort the underlying HTTP request and unblock Promise.race so the lock releases immediately.
     forceKillChannelStream(channelId);

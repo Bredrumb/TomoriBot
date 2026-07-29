@@ -34,7 +34,6 @@ const INSTRUCTIONS_MAX_LENGTH = Number.parseInt(process.env.EXPRESSION_DESC_MAX_
 //    offer the curated 25-key subset (getManualEditEmotionKeys) rather than all 28.
 //    Building it once at module load avoids recomputing per invocation.
 const EMOTION_SELECT_OPTIONS: SelectOption[] = getManualEditEmotionKeys().map((key) => ({
-  // Title-case the label for display while keeping the raw lowercase key as the value.
   label: key.charAt(0).toUpperCase() + key.slice(1),
   value: key,
 }));
@@ -84,9 +83,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /server expressions edit command.
  *
- * @param _client - Discord client instance (unused)
- * @param interaction - The slash command interaction
- * @param userData - Invoking user's DB row
  * @param locale - Resolved locale for all user-facing text
  */
 export async function execute(
@@ -98,7 +94,6 @@ export async function execute(
   let tomoriState: TomoriState | null = null;
 
   try {
-    // Guild-only command — expressions are a server resource.
     if (!interaction.guild) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.guild_only_title",
@@ -180,7 +175,6 @@ export async function execute(
       }
     }
 
-    // No matching expression — guide the user and stop.
     if (!match) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.expressions.edit.not_found_title",
@@ -193,7 +187,6 @@ export async function execute(
       return;
     }
 
-    // Derive a friendly display name and current values for the modal pre-fill.
     const displayName = match.type === "emoji" ? `:${match.row.emoji_name}:` : match.row.sticker_name;
     // Both row types expose emotion_key; only the description column name differs.
     const currentEmotion = match.row.emotion_key;
@@ -235,7 +228,6 @@ export async function execute(
       ],
     });
 
-    // User dismissed the modal or it timed out — nothing further to do.
     if (modalResult.outcome !== "submit" || !modalResult.interaction) {
       log.info(`Server expression edit modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -244,7 +236,6 @@ export async function execute(
     const submitted = modalResult.interaction;
     const selectedEmotion = modalResult.values?.[EMOTION_INPUT_ID]?.trim() ?? "";
     const instructions = modalResult.values?.[INSTRUCTIONS_INPUT_ID]?.trim() ?? "";
-    // Keep the existing emotion when the picker is left untouched.
     const emotionKey = selectedEmotion || currentEmotion;
 
     // The select only offers valid keys, so emotionKey can only be invalid when the
@@ -270,7 +261,6 @@ export async function execute(
       return;
     }
 
-    // Write the new values to the correct table.
     const updated =
       match.type === "emoji"
         ? await serverRepository.updateEmojiExpression(
@@ -303,7 +293,6 @@ export async function execute(
       `Updated ${match.type} expression "${displayName}" in server ${tomoriState.server_id} by ${userData.user_disc_id}: emotion=${emotionKey}`,
     );
 
-    // Confirm success to the user.
     await replyInfoEmbed(submitted, locale, {
       titleKey: "commands.server.expressions.edit.success_title",
       descriptionKey: "commands.server.expressions.edit.success_description",

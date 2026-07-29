@@ -27,10 +27,6 @@ const MODAL_CUSTOM_ID = "scheduled_task_remove_modal";
 const REMINDER_SELECT_ID = "reminder_select";
 
 /**
- * @param reminderToRemove - Reminder data to remove
- * @param replyInteraction - Interaction to reply to
- * @param locale - User locale
- * @param suppressSuccessReply - Skip the success embed when true
  */
 async function performReminderRemoval(
   reminderToRemove: { reminder_id: number; reminder_purpose: string },
@@ -74,10 +70,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.scheduled-task.remove.description"));
 
 /**
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -113,7 +105,6 @@ export async function execute(
     const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
     const state = tomoriState;
 
-    // Load all reminders for this server, tagged with their owning persona name
     const reminders = await serverScheduleRepository.loadReminderSelections(
       tomoriState.server_id,
       hasManagePermission ? undefined : userData.user_id,
@@ -177,7 +168,6 @@ export async function execute(
       };
     });
 
-    // Prompt user to pick a reminder to remove
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.scheduled-task.remove.modal_title",
@@ -223,7 +213,6 @@ export async function execute(
       return;
     }
 
-    // Delete and show result
     const removalSucceeded = await performReminderRemoval(selectedReminder, modalSubmitInteraction, locale, true);
     if (!removalSucceeded) {
       return;

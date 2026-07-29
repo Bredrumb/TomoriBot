@@ -400,7 +400,6 @@ async function clearServerScopedLiveReferences(
   switch (capability) {
     case "text":
       if (scope.baseConfig.llm_id === modelId) {
-        // Promote to a sibling model when one exists; otherwise clear the slot.
         modelPatch.llm_id = siblingModelId;
         modelPatch.custom_endpoint_url = null;
         modelPatch.custom_model_name = null;
@@ -514,7 +513,6 @@ export async function registerCustomEndpoint(
   const existingConfig = await getExistingSavedConfig(input.scope, provider);
   const isEdit = input.editingEndpointId != null;
 
-  // On the edit path, recover the row being edited (model link, prior auth/default flags).
   const editingRow = isEdit
     ? ((await llmProviderRepo.loadCustomEndpointsByIds([input.editingEndpointId as number]))[0] ?? null)
     : null;
@@ -534,7 +532,6 @@ export async function registerCustomEndpoint(
   const shouldActivateNewRegistration = !isEdit;
   const shouldBeDefault = isEdit ? (editingRow?.is_default ?? false) : false;
 
-  // Insert (add) or update-in-place (edit) the synthetic model row.
   const modelId = await writeSyntheticCapabilityModel(provider, input, editingRow?.model_ref_id ?? null);
 
   // Auth is shared per label (one stored key). A new sibling inherits requires_auth from an existing
@@ -682,7 +679,6 @@ export async function setActiveCustomEndpoint(params: {
  * the fallback since they have no synthetic model.
  *
  * @param provider      - Internal custom provider name
- * @param capability    - Endpoint capability
  * @param activeModelId - Optional id of the currently-active synthetic model for this capability
  */
 export async function resolveCustomEndpointForProvider(
@@ -825,7 +821,6 @@ export async function cleanupCustomProviderArtifacts(provider: string): Promise<
 
   const matchingEndpoints = registeredEndpoints.filter((endpoint) => endpoint.label === parsed.label);
 
-  // Delete each model row under the label (a label+capability may now own several).
   for (const endpoint of matchingEndpoints) {
     if (endpoint.custom_endpoint_id != null) {
       await llmProviderRepo.deleteCustomEndpointById(endpoint.custom_endpoint_id, {

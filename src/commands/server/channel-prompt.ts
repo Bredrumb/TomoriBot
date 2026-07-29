@@ -86,9 +86,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Execute the /server channel-prompt command.
- * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
- * @param userData - Invoking user's row
  * @param locale - Resolved locale for the interaction
  */
 export async function execute(
@@ -108,7 +105,6 @@ export async function execute(
     return;
   }
 
-  // Read the target channel option.
   const selectedChannel = interaction.options.getChannel("channel", true);
 
   // Load server state (cached) before showing the modal — stays within the 3s window.
@@ -127,7 +123,6 @@ export async function execute(
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
 
   try {
-    // Load any existing override for this channel to prefill the modal.
     const existing = await getCachedChannelPrompt(tomoriState.server_id, selectedChannel.id);
     const existingParts = splitPromptIntoModalParts(
       existing?.prompt ?? null,
@@ -207,7 +202,6 @@ export async function execute(
       return;
     }
 
-    // Combine the 4 parts and read the selected mode.
     const channelPrompt = combineModalPromptParts(
       [
         modalResult.values?.channel_prompt_part1 || "",
@@ -272,7 +266,6 @@ export async function execute(
       return;
     }
 
-    // Success — show the resolved mode + a short preview.
     const modeLabel = localizer(
       locale,
       mode === "replace"

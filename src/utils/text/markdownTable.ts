@@ -339,7 +339,6 @@ export function hasTrailingIncompleteMarkdownTable(text: string): boolean {
  * EOF is treated as terminating a block here (unlike {@link hasTrailingIncompleteMarkdownTable})
  * so a table that is still streaming is protected from a cut just as much as a finished one.
  *
- * @param text - Text to scan for table blocks
  * @param index - Absolute offset a caller intends to cut at
  * @returns The enclosing table's `[start, end)` range, or null when the offset is at a
  *   block boundary or outside every table

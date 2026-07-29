@@ -19,8 +19,6 @@ const ACTION_PURGE = "purge";
 
 /**
  * Configure the subcommand for API key rotation management
- * @param subcommand - Discord slash command subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -53,10 +51,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Manages API key rotation pool for load balancing and failover.
  * Supports adding keys to the rotation pool and purging all rotation keys.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -64,7 +58,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -78,11 +71,9 @@ export async function execute(
   // Defer the interaction before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Get command options
   const action = interaction.options.getString("action", true);
   const apiKey = interaction.options.getString("key", false);
 
-  // Load Tomori state
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
 
@@ -120,7 +111,6 @@ export async function execute(
   }
 
   try {
-    // Handle action: add or purge
     if (action === ACTION_ADD) {
       await handleAddAction(interaction, tomoriState, apiKey, locale, userData);
     } else if (action === ACTION_PURGE) {
@@ -135,7 +125,6 @@ export async function execute(
       });
     }
   } catch (error) {
-    // Error handling
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState.server_id,
@@ -173,7 +162,6 @@ async function handleAddAction(
   locale: string,
   userData: UserRow,
 ): Promise<void> {
-  // Validate API key is provided
   if (!apiKey) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.provider.api-key.rotation.key_required_title",
@@ -184,7 +172,6 @@ async function handleAddAction(
     return;
   }
 
-  // Basic key length validation
   if (apiKey.length < 10) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.provider.api-key.set.invalid_key_title",
@@ -197,7 +184,6 @@ async function handleAddAction(
 
   const currentProvider = tomoriState.llm.llm_provider.toLowerCase();
 
-  // Validate the API key with the provider
   try {
     const provider = await ProviderFactory.getProviderByName(currentProvider);
 
@@ -225,7 +211,6 @@ async function handleAddAction(
     return;
   }
 
-  // Add the key to the rotation pool
   const success = await addRotationKey(tomoriState.server_id, currentProvider, apiKey);
 
   if (!success) {
@@ -238,14 +223,11 @@ async function handleAddAction(
     return;
   }
 
-  // Invalidate cache
   const serverId = interaction.guild?.id ?? interaction.user.id;
   invalidateTomoriStateCache(serverId);
 
-  // Get updated count for success message
   const keyCount = await getRotationKeyCount(tomoriState.server_id);
 
-  // Success message
   await replyInfoEmbed(interaction, locale, {
     titleKey: "commands.provider.api-key.rotation.add_success_title",
     descriptionKey: "commands.provider.api-key.rotation.add_success_description",
@@ -270,7 +252,6 @@ async function handlePurgeAction(
   tomoriState: NonNullable<Awaited<ReturnType<typeof getCachedTomoriState>>>,
   locale: string,
 ): Promise<void> {
-  // Check if there are any rotation keys to purge
   const currentCount = await getRotationKeyCount(tomoriState.server_id);
 
   if (currentCount === 0) {
@@ -283,14 +264,11 @@ async function handlePurgeAction(
     return;
   }
 
-  // Purge all rotation keys
   const deletedCount = await purgeRotationKeys(tomoriState.server_id);
 
-  // Invalidate cache
   const serverId = interaction.guild?.id ?? interaction.user.id;
   invalidateTomoriStateCache(serverId);
 
-  // Success message
   await replyInfoEmbed(interaction, locale, {
     titleKey: "commands.provider.api-key.rotation.purge_success_title",
     descriptionKey: "commands.provider.api-key.rotation.purge_success_description",

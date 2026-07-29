@@ -26,23 +26,16 @@ const PROMPT_PART_COUNT = 4;
 
 /**
  * Configure the slash command subcommand metadata
- * @returns Configured SlashCommandSubcommandBuilder
  */
 export function configureSubcommand(): SlashCommandSubcommandBuilder {
   return new SlashCommandSubcommandBuilder()
     .setName("set")
     .setDescription("Set a custom system prompt to guide my behavior")
-    .setDescriptionLocalizations({
-      // Add localizations as needed
-    });
+    .setDescriptionLocalizations({});
 }
 
 /**
  * Execute the /config system-prompt set command
- * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
- * @param userData - User data from database
- * @param locale - User's locale for localization
  */
 export async function execute(
   _client: Client,
@@ -61,7 +54,6 @@ export async function execute(
     return;
   }
 
-  // Determine server context (guild or DM)
   const serverId = interaction.guildId ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
 
@@ -85,7 +77,6 @@ export async function execute(
       PROMPT_PART_MAX_LENGTH,
     );
 
-    // Show modal with 4 text fields (first required, others optional)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -143,13 +134,11 @@ export async function execute(
     // ASSIGN (not declare) modalSubmitInteraction
     modalSubmitInteraction = modalResult.interaction;
 
-    // Safety check for modalSubmitInteraction
     if (!modalSubmitInteraction) {
       log.error("Modal submit interaction is undefined after successful submit");
       return;
     }
 
-    // Extract and concatenate all parts
     const systemPrompt = combineModalPromptParts(
       [
         modalResult.values?.prompt_part1 || "",
@@ -160,7 +149,6 @@ export async function execute(
       PROMPT_PART_MAX_LENGTH,
     );
 
-    // Validate non-empty
     if (!systemPrompt) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.prompt.change.empty_prompt_title",
@@ -171,7 +159,6 @@ export async function execute(
       return;
     }
 
-    // Update database
     await configRepository.updateChatConfig(tomoriState.server_id, { system_prompt: systemPrompt });
 
     // Invalidate cache so next message gets fresh config

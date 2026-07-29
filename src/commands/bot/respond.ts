@@ -21,8 +21,6 @@ import type { TomoriState } from "@/types/db/schema";
 
 /**
  * Configure the respond subcommand
- * @param subcommand - The slash command subcommand builder
- * @returns The configured subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -66,10 +64,6 @@ function getChannelAutoTriggerPersona(
 
 /**
  * Execute the respond command - manually trigger Tomori to respond to the latest message
- * @param client - Discord client instance
- * @param interaction - Command interaction
- * @param _userData - User data from database (not used)
- * @param locale - Locale of the interaction
  */
 export async function execute(
   client: Client,
@@ -87,7 +81,6 @@ export async function execute(
     return;
   }
 
-  // Check if bot has required permissions to read message history
   const botMember = interaction.guild?.members.me;
   if (!botMember || !interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
@@ -102,7 +95,6 @@ export async function execute(
   // Check both regular channels and threads
   const guildChannel = interaction.guild.channels.cache.get(interaction.channel.id) ?? interaction.channel;
 
-  // Verify it's a guild-based channel with permissions
   if (!("permissionsFor" in guildChannel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
@@ -123,7 +115,6 @@ export async function execute(
     return;
   }
 
-  // Load tomori state for this server
   const tomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -151,7 +142,6 @@ export async function execute(
   );
 
   if (cooldownResult.isOnCooldown) {
-    // If blocked by whitelist, show a specific "not whitelisted" message instead of cooldown
     if (cooldownResult.blockedByWhitelist) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.message_cooldown_title",
@@ -161,7 +151,6 @@ export async function execute(
       return;
     }
 
-    // Show cooldown warning via DM (with ephemeral fallback)
     const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
     await sendCooldownDM(
       interaction.user,
@@ -179,7 +168,6 @@ export async function execute(
     return;
   }
 
-  // Load all personas and check if alters exist
   const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
   const isThread = "isThread" in guildChannel && typeof guildChannel.isThread === "function" && guildChannel.isThread();
   const parentChannelId = isThread && "parent" in guildChannel ? guildChannel.parent?.id : undefined;
@@ -265,10 +253,8 @@ export async function execute(
   let llmOverrideCodename: string | undefined;
 
   if (extraOptions) {
-    // Build modal components (persona select + reasoning + prompt + prefill)
     const modalComponents: ModalComponent[] = [];
 
-    // Persona select dropdown — show when multiple personas are available
     if (availablePersonas.length > 1) {
       const personaOptions: SelectOption[] = availablePersonas.map((persona, index) => ({
         label: safeSelectOptionText(persona.persona_nickname),
@@ -299,7 +285,6 @@ export async function execute(
       default: false,
     });
 
-    // Optional system prompt input
     modalComponents.push({
       customId: "prompt",
       labelKey: "commands.bot.respond.prompt_label",
@@ -310,7 +295,6 @@ export async function execute(
       style: 2, // TextInputStyle.Paragraph
     });
 
-    // Optional assistant prefill input
     modalComponents.push({
       customId: "prefill",
       labelKey: "commands.bot.respond.prefill_label",
@@ -321,7 +305,6 @@ export async function execute(
       style: 2, // TextInputStyle.Paragraph
     });
 
-    // Show modal with extra options
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: "respond_persona_select",
       modalTitleKey: "commands.bot.respond.extra_options_title",
@@ -340,7 +323,6 @@ export async function execute(
     // Defer the modal submission — opens a new 3-second window
     await replyInteraction.deferReply({ flags: deferFlags });
 
-    // Process persona selection
     const selectedIndex = Number.parseInt(modalResult.values?.persona_choice ?? "0", 10);
     if (availablePersonas.length > 1) {
       selectedPersona = availablePersonas[selectedIndex] ?? fallbackPersona;
@@ -361,13 +343,11 @@ export async function execute(
       return;
     }
 
-    // Process prompt and prefill from modal
     const manualPromptRaw = modalResult.values?.prompt;
     manualPrompt = manualPromptRaw?.trim() || undefined;
     const manualPrefillRaw = modalResult.values?.prefill;
     manualPrefill = manualPrefillRaw?.trim() || undefined;
 
-    // Determine if reasoning mode was requested
     const useReasoning = modalResult.values?.use_reasoning === "true";
     if (useReasoning) {
       const currentProvider = tomoriState.llm.llm_provider;
@@ -389,7 +369,6 @@ export async function execute(
       llmOverrideCodename = smartestModel.llm_codename;
     }
   } else {
-    // Direct response — skip modal, use default persona
     await interaction.deferReply({ flags: deferFlags });
 
     if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona?.persona_id)) {
@@ -406,13 +385,11 @@ export async function execute(
   }
 
   try {
-    // Build success embed
     const successEmbed = new EmbedBuilder()
       .setTitle(localizer(locale, "commands.bot.respond.success_title"))
       .setDescription(localizer(locale, "commands.bot.respond.success_description"))
       .setColor(ColorCode.SUCCESS);
 
-    // Add footer notice if embed is visible
     if (!hideEmbed) {
       successEmbed.setFooter({
         text: localizer(locale, "commands.bot.respond.embed_hide_notice"),
@@ -431,7 +408,6 @@ export async function execute(
     // and the last message in history is from the bot
     const passportMessage = latestMessage;
 
-    // Manually trigger tomoriChat with command flags
     log.info(
       `Manual respond command triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id}`,
     );
@@ -478,7 +454,6 @@ export async function execute(
       },
     });
 
-    // Try to send error feedback if possible
     try {
       await replyInteraction.followUp({
         content: localizer(locale, "general.errors.unknown_error_description"),

@@ -19,7 +19,6 @@ import { personaRepository } from "@/utils/db/repositories";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-// ─── Modal field IDs ───────────────────────────────────────────────────────────
 const MODAL_CUSTOM_ID = "nai_attg_modal";
 const FIELD_AUTHOR = "nai_attg_author";
 const FIELD_TITLE = "nai_attg_title";
@@ -30,8 +29,6 @@ const FIELD_STARS = "nai_attg_stars";
 /**
  * Configure the subcommand for Discord slash command registration.
  *
- * @param subcommand - The subcommand builder to configure
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("attg").setDescription(localizer("en-US", "commands.novelai.attg.description"));
@@ -54,10 +51,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * 7. Otherwise → write non-empty values to DB and invalidate cache
  * 8. Reply with success or cleared embed
  *
- * @param _client - Discord client instance (unused)
- * @param interaction - Command interaction from Discord
- * @param userData - User data from database
- * @param locale - User's locale preference
  */
 export async function execute(
   _client: Client,
@@ -65,7 +58,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -84,7 +76,6 @@ export async function execute(
   } = { message: null, selectedPersona: null };
 
   try {
-    // Load all personas for the server
     const allPersonas = await personaRepository.loadAllForServer(guildId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {

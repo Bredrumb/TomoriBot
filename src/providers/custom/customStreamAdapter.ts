@@ -113,12 +113,12 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
    * Intercept text chunks to handle two Gemma 4 token formats that KoboldCPP
    * does not always convert to standard OpenAI fields:
    *
-   * 1. `<|channel>thought\n[reasoning]\n<channel|>` — thinking block. KoboldCPP
+   * - `<|channel>thought\n[reasoning]\n<channel|>` — thinking block. KoboldCPP
    *    converts this to `reasoning_content` for pure-text responses, but when a
    *    tool call follows in the same chunk the entire blob arrives as raw content.
    *    GemmaThinkingParser runs first to extract thoughts before the tool parser sees it.
    *
-   * 2. `<|tool_call>call:name{...}<tool_call|>` or `<tool_code>name(...)</tool_code>`
+   * - `<|tool_call>call:name{...}<tool_call|>` or `<tool_code>name(...)</tool_code>`
    *    — hallucinated tool call leaked as text. GemmaToolCallParser recognises both
    *    dialects and converts completed blocks into function_call chunks.
    *
@@ -132,7 +132,6 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       return base;
     }
 
-    // End-of-stream: flush both parsers and merge any recovered thoughts.
     if (base.type === "done") {
       const thinkFlush =
         GEMMA_TOOL_PARSER_ENABLED && GEMMA_THINKING_PARSER_ENABLED
@@ -175,14 +174,12 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       return base;
     }
 
-    // Strip any <|channel>thought...<channel|> block, routing its content to thoughts.
     const thinkResult =
       GEMMA_TOOL_PARSER_ENABLED && GEMMA_THINKING_PARSER_ENABLED
         ? this.gemmaThinkingParser.feed(base.content)
         : { visibleText: base.content, thoughts: [] };
     const allThoughts = mergeThoughts(base.thoughts, thinkResult.thoughts);
 
-    // Scan remaining visible text for <|tool_call>...<tool_call|> tokens.
     const toolResult = GEMMA_TOOL_PARSER_ENABLED
       ? this.gemmaParser.feed(thinkResult.visibleText)
       : { visibleText: thinkResult.visibleText, functionCall: null };

@@ -107,7 +107,6 @@ function buildEndpointSelectOptions(
     labelCounts.set(base, (labelCounts.get(base) ?? 0) + 1);
   }
 
-  // Second pass: build options, appending a counter to colliding base labels.
   const labelIndex = new Map<string, number>();
   return endpoints.map((endpoint) => {
     const primaryName = endpoint.model_name?.trim() || endpoint.display_name;
@@ -329,7 +328,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       time: 300_000,
     });
   } catch {
-    // Timed out or user ignored.
     await selectInteraction.editReply({ components: [] });
     return;
   }
@@ -414,7 +412,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       existingEndpoint.capability,
     );
 
-    // Merge parsed values with existing, treating blank text inputs as "keep existing".
     const endpointUrl = parsed.endpointUrl || existingEndpoint.endpoint_url;
     const displayName = parsed.displayName || existingEndpoint.display_name;
     const modelName =
@@ -431,7 +428,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
     const authTokenProvided = Boolean(parsed.authToken);
     const authToken = authTokenProvided ? parsed.authToken : undefined;
 
-    // Build extra_config (merge with existing).
     let extraConfig = { ...(existingEndpoint.extra_config as Record<string, unknown>) };
     if (existingEndpoint.capability === "speech") {
       extraConfig = {
@@ -505,7 +501,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
         });
         return;
       }
-      // No attachment + existing workflow → keep existing workflow as-is.
     }
 
     const registered = await registerCustomEndpoint({

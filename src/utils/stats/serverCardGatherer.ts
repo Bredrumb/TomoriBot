@@ -128,7 +128,6 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     log.warn("serverCardGatherer: persona resolution failed", error as Error);
   }
 
-  // Most active members (horizontal bars) — avatar + per-avatar bar tint.
   const humanMembers = await resolveHumanMembers(guild, rawTopMembers, 3);
   const topMembers: ServerMemberBar[] = await Promise.all(
     humanMembers.map(async ({ entry, icon }, index) => ({
@@ -139,7 +138,6 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     })),
   );
 
-  // Top models (horizontal bars) — token-ranked, no avatar.
   const topModels: ServerModelBar[] = modelCosts.map((entry) => ({
     name: prettifyModelCodename(entry.model),
     totalTokens: entry.inputTokens + entry.outputTokens,

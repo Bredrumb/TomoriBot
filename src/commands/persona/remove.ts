@@ -14,7 +14,6 @@ import type { SelectOption } from "../../types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
 import { deletePersonaAvatarFromStorage } from "../../utils/storage/avatarStorage";
 
-// Constants for modal configuration
 const MODAL_CUSTOM_ID = "persona_remove_modal";
 const PERSONA_SELECT_ID = "persona_select";
 
@@ -31,10 +30,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'remove' command
  * Removes an alter persona from the server
- * @param _client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param _userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -67,7 +62,6 @@ export async function execute(
       return;
     }
 
-    // Load all personas for this server
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
 
     // Filter to removable personas:
@@ -75,7 +69,6 @@ export async function execute(
     // - duplicate-tagged personas created by schema migration cleanup, even if marked as main
     const removablePersonas = allPersonas.filter((p) => p.is_alter || isDuplicateTaggedName(p.persona_nickname));
 
-    // Error if no alters exist
     if (removablePersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.remove.no_alters_error_title",
@@ -86,13 +79,11 @@ export async function execute(
       return;
     }
 
-    // Build select options for modal
     const alterSelectOptions: SelectOption[] = removablePersonas.map((persona, index) => ({
       label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(), // Use index to avoid truncation issues
     }));
 
-    // Show modal with alter selection
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.persona.remove.modal_title",
@@ -107,13 +98,11 @@ export async function execute(
       ],
     });
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Persona removal modal ${modalResult.outcome} for user ${interaction.user.id}`);
       return;
     }
 
-    // Extract selected persona from modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const modalSubmitInteraction = modalResult.interaction!;
     if (!modalSubmitInteraction.deferred && !modalSubmitInteraction.replied) {
@@ -172,7 +161,6 @@ export async function execute(
     // Invalidate cache
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // Show success embed with deleted persona's nickname
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.persona.remove.success_title",
       description: localizer(locale, "commands.persona.remove.success_description", {
@@ -190,7 +178,6 @@ export async function execute(
       metadata: { commandName: "persona remove" },
     });
 
-    // If we haven't replied yet, reply with error
     if (!interaction.replied && !interaction.deferred) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",

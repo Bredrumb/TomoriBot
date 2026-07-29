@@ -74,11 +74,8 @@ import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from 
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const PERSONA_SELECT_ID = "prompt_snapshot_persona_select";
 
-// Matches YouTube links in message content — same pattern as /tool estimate cost
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
   /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/i,
@@ -90,8 +87,6 @@ type SnapshotToolFilter = {
   disabledByDeliberateMode: boolean;
   allowedToolNames: string[];
 };
-
-// ─── Tail directive helpers (mirrors cost.ts / tomoriChat.ts) ─────────────────
 
 function normalizeTailDirective(text: string): string {
   let trimmed = text.trim();
@@ -265,8 +260,6 @@ async function resolveSnapshotAnsweringState(params: {
   }
 }
 
-// ─── Subcommand registration ──────────────────────────────────────────────────
-
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("snapshot")
@@ -286,13 +279,10 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setDescription(localizer("en-US", "commands.tool.prompt.snapshot.fetch_tools_description")),
     );
 
-// ─── Execute ──────────────────────────────────────────────────────────────────
-
 /**
  * Dumps the compiled LLM prompt for a chosen persona + current channel to a file,
  * then sends it to the invoking user via DM (or as an ephemeral attachment if DMs are closed).
  *
- * @param client - Discord client instance
  * @param interaction - Command interaction (must be in a guild channel)
  * @param userData - Invoker's user row — passed to buildContext so STM loads correctly
  * @param locale - Resolved locale for the interaction
@@ -306,7 +296,6 @@ export async function execute(
   // Unique modal ID per invocation prevents stale awaitModalSubmit collisions
   const MODAL_CUSTOM_ID = `tool_promptsnapshot_modal_${interaction.id}`;
 
-  // Require a guild channel — DM context cannot fetch server state
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.prompt.snapshot.guild_only_title",
@@ -318,7 +307,6 @@ export async function execute(
   }
 
   try {
-    // Load server state for permission check
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -330,7 +318,6 @@ export async function execute(
       return;
     }
 
-    // Permission gate — ManageGuild always bypasses; prompt_snapshot_enabled extends to non-admins
     const hasManageGuild = interaction.memberPermissions?.has("ManageGuild") ?? false;
     const snapshotEnabled = tomoriState.config.prompt_snapshot_enabled ?? false;
     if (!hasManageGuild && !snapshotEnabled) {
@@ -343,7 +330,6 @@ export async function execute(
       return;
     }
 
-    // Read optional format choice (defaults to "text") and fetch_tools flag
     const format = interaction.options.getString("format") ?? "text";
     const fetchTools = interaction.options.getBoolean("fetch_tools") ?? false;
 
@@ -419,7 +405,6 @@ export async function execute(
     // live pipeline would inject for this channel (append/replace). Mirrors contextPipeline.ts.
     const channelPromptOverride = await getCachedChannelPrompt(selectedPersona.server_id, interaction.channelId);
 
-    // Resolve any per-channel context note so the snapshot reflects the additive injection.
     const channelContextNote = await getCachedChannelContextNote(selectedPersona.server_id, interaction.channelId);
 
     let effectivePersona = selectedPersona;
@@ -461,7 +446,6 @@ export async function execute(
       userId: userData.user_id ?? null,
     });
 
-    // Fetch channel message history — same pattern as /tool estimate cost
     const textChannel = interaction.channel;
     if (!("messages" in textChannel)) {
       await modalInteraction.editReply({
@@ -630,12 +614,10 @@ export async function execute(
           if (embedCheck.isTarget && embed.description) {
             const type = embedCheck.type;
             if (type === "system_injection" || type === "compact_summary" || type === "compact_refresh") {
-              // System injection / compact summary / compact refresh — bare [System:] wrapper
               const titleLine =
                 (type === "compact_summary" || type === "compact_refresh") && embed.title ? `## ${embed.title}\n` : "";
               embedTextSegments.push(`[System: ${titleLine}${embed.description}]`);
             } else {
-              // Strip bot-name prefix (e.g., "Tomori: foo" → "foo") for non-system-injection kinds
               let cleanedDescription = embed.description;
               if (botNickname) {
                 const escapedNickname = botNickname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -647,8 +629,6 @@ export async function execute(
               const includeTitle = type === "memory_learning" || type === "reminder_set";
               const titleLine = includeTitle && embed.title ? `${embed.title}\n` : "";
               const embedBody = `${titleLine}${cleanedDescription}`;
-              // memory_learning / reward / punish → plain [System: ...];
-              //    reminder_set → formatSystemProducedEmbedHint
               embedTextSegments.push(
                 type === "memory_learning" || type === "reward" || type === "punish"
                   ? `[System: ${embedBody}]`
@@ -656,7 +636,6 @@ export async function execute(
               );
             }
           } else if (!isTomoriAuthored) {
-            // Link preview extraction for non-bot messages
             const linkEmbedData = processLinkEmbed(embed);
             if (linkEmbedData.isLinkPreview) {
               if (linkEmbedData.textContent) embedTextSegments.push(linkEmbedData.textContent);
@@ -707,7 +686,6 @@ export async function execute(
         }
       }
 
-      // Merge embed-derived text into the message content (appended after original text)
       const baseContent = message.content?.trim() ? message.content : "";
       const combinedContent = [baseContent, ...embedTextSegments].filter((s) => s.length > 0).join("\n");
       const messageContent = combinedContent.length > 0 ? combinedContent : null;
@@ -807,7 +785,6 @@ export async function execute(
       isDMChannel,
     });
 
-    // Mutable copy — tail directives are spliced/pushed in below
     const contextItems = [...contextBuild.contextItems];
 
     // Apply tail directives in the same order as the live chat pipeline so the
@@ -836,7 +813,6 @@ export async function execute(
 
     const resolvedContextItems = await resolveMediaForModel(contextItems, answeringState);
 
-    // Retrieve the active preset name for the snapshot header
     const presetData = await getCachedActivePreset(selectedPersona.server_id);
     const presetName = presetData?.preset.preset_name ?? null;
 
@@ -862,7 +838,6 @@ export async function execute(
     //      Shown in DM for BOTH formats and baked into JSON file top-level
     const requestConfig = buildRequestConfig(answeringState, providerName, modelName);
 
-    // Build snapshot file content
     let fileContent: string;
     let fileName: string;
 
@@ -882,13 +857,9 @@ export async function execute(
       fileName = `prompt-snapshot-${interaction.channelId}-${selectedPersona.persona_lineage_id}-${Date.now()}.txt`;
     }
 
-    // Create the attachment buffer
     const attachment = new AttachmentBuilder(Buffer.from(fileContent, "utf-8"), { name: fileName });
     const formatLabel = format === "json" ? "JSON" : "Text";
 
-    // Compose the DM description — intro + metadata code block + format-switch hint
-    //     + (TXT) note about `=== === ` headers being annotations
-    //     + (TXT + fetch_tools) note that tools are JSON-only
     const descriptionParts: string[] = [];
     descriptionParts.push(
       localizer(locale, "commands.tool.prompt.snapshot.dm_description", {
@@ -909,7 +880,6 @@ export async function execute(
         "```",
       ].join("\n"),
     );
-    // Second code block: per-provider sampling/request config (shown in both TXT and JSON formats)
     descriptionParts.push(
       [
         localizer(locale, "commands.tool.prompt.snapshot.dm_config_heading"),
@@ -932,7 +902,6 @@ export async function execute(
     }
     const dmDescription = descriptionParts.join("\n\n");
 
-    // DM the file; fall back to ephemeral attachment if DMs are closed
     try {
       await interaction.user.send({
         embeds: [
@@ -982,8 +951,6 @@ export async function execute(
     }
   }
 }
-
-// ─── Tag → user-facing label mapping ─────────────────────────────────────────
 
 /**
  * Human-readable label (and optional command hint) for each `ContextItemTag`.
@@ -1037,7 +1004,6 @@ function renderTagHeader(tag: string | undefined): string {
   if (!label) return `=== ${tag} (system-managed) ===`;
 
   const lines: string[] = [];
-  // Main title — composite tags use just the title since sub-sections carry the hints
   if (label.hint === "composite") {
     lines.push(`=== ${label.title} ===`);
   } else if (label.hint === "system-managed") {
@@ -1045,7 +1011,6 @@ function renderTagHeader(tag: string | undefined): string {
   } else {
     lines.push(`=== ${label.title} (\`${label.hint}\`) ===`);
   }
-  // Sub-sections (if any) — composite tags like KNOWLEDGE_USERS_IN_CONVERSATION list their feeders
   if (label.subsections) {
     for (const sub of label.subsections) {
       if (sub.hint === "system-managed") {
@@ -1057,8 +1022,6 @@ function renderTagHeader(tag: string | undefined): string {
   }
   return lines.join("\n");
 }
-
-// ─── Text formatter ───────────────────────────────────────────────────────────
 
 /**
  * Serializes `contextItems` (already rearranged by preset routing, if applicable) into
@@ -1095,8 +1058,6 @@ function buildTextSnapshot(contextItems: StructuredContextItem[]): string {
 
   return lines.join("\n");
 }
-
-// ─── JSON formatter ───────────────────────────────────────────────────────────
 
 /**
  * Produces a provider-specific JSON snapshot that matches the format emitted by
@@ -1147,7 +1108,6 @@ async function buildJsonSnapshot(
   const googleSnapshotAdapterFactory = googleSnapshotAdapterFactories[providerKey];
 
   if (googleSnapshotAdapterFactory) {
-    // Assemble context into Google/Vertex Content[] format
     const adapter = googleSnapshotAdapterFactory();
     const payload = await adapter.buildTokenCountPayload(contextItems, modelName);
 
@@ -1170,7 +1130,6 @@ async function buildJsonSnapshot(
       contents: sanitizedContents,
     };
   } else if (providerFamily === "openrouter" || providerFamily === "openai-compatible") {
-    // Assemble context into OpenAI-compatible messages format
     const adapter = new OpenrouterStreamAdapter();
     const messages = await adapter.buildProbeMessages(contextItems, seesImages, seesVideos);
 
@@ -1193,7 +1152,6 @@ async function buildJsonSnapshot(
 
     requestData = { model: modelName, messages: sanitized };
   } else if (providerFamily === "anthropic") {
-    // Assemble context into Anthropic system + messages format
     const adapter = new AnthropicStreamAdapter();
     const { system, messages } = await adapter.buildProbeMessages(contextItems, seesImages);
 
@@ -1243,13 +1201,11 @@ async function buildJsonSnapshot(
       messagesList.push({ role: "system", content: systemTextChunks.join("\n\n") });
     }
 
-    // Map the remaining non-system items to OpenAI-style messages
     for (const item of nonSystemItems) {
       const role = item.role === "model" ? "assistant" : item.role;
       const hasMedia = item.parts.some((p) => p.type !== "text");
 
       if (!hasMedia) {
-        // Text-only: plain string content
         const text = item.parts
           .filter((p): p is { type: "text"; text: string } => p.type === "text")
           .map((p) => p.text)
@@ -1258,13 +1214,11 @@ async function buildJsonSnapshot(
         continue;
       }
 
-      // Mixed media: OpenAI-vision array-content form
       const content = item.parts.map((part) => {
         if (part.type === "text") return { type: "text", text: part.text };
         if (part.type === "image") {
           return { type: "image_url", image_url: { url: "[MEDIA_HIDDEN]" }, mime_type: part.mimeType };
         }
-        // video
         return {
           type: "video_url",
           video_url: { url: "[MEDIA_HIDDEN]" },
@@ -1294,8 +1248,6 @@ async function buildJsonSnapshot(
 
   return requestData;
 }
-
-// ─── Tool fetcher ─────────────────────────────────────────────────────────────
 
 /**
  * Resolves the tool adapter matching the given provider. Non-OpenAI providers
@@ -1370,7 +1322,6 @@ async function fetchProviderTools(
     },
   };
 
-  // Ask registry which built-in tools + MCP functions pass feature-flag gates
   let { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(providerName, toolStateForContext);
 
   if (toolFilter?.allowedToolNames.length) {
@@ -1379,12 +1330,9 @@ async function fetchProviderTools(
     mcpFunctionNames = filterDeliberateToolNames(mcpFunctionNames, toolFilter.allowedToolNames);
   }
 
-  // Route through the provider adapter to get native tool shape
   const adapter = selectToolAdapter(providerName);
   return adapter.getAllToolsInProviderFormat(builtInTools, persona.server_id, mcpFunctionNames);
 }
-
-// ─── Request-config builder ──────────────────────────────────────────────────
 
 /**
  * Produces a provider-specific sampling/request-config block matching what each
@@ -1398,8 +1346,8 @@ async function fetchProviderTools(
  *   - openai-compat    : `{temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens, stop}`
  *
  * Used in two places:
- *   1. Baked into the JSON snapshot file at the top level (alongside `messages`/`contents`)
- *   2. Rendered as a second ```json code block in the DM body (shown for BOTH text and JSON formats)
+ *   - Baked into the JSON snapshot file at the top level (alongside `messages`/`contents`)
+ *   - Rendered as a second ```json code block in the DM body (shown for BOTH text and JSON formats)
  */
 function buildRequestConfig(persona: TomoriState, providerName: string, modelName: string): Record<string, unknown> {
   const activeLlm = persona.persona_llm ?? persona.llm;
@@ -1440,7 +1388,6 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
   }
 
   if (providerFamily === "anthropic") {
-    // Anthropic: uses selectAnthropicSamplingParams to coalesce temp+top_p
     const selection = selectAnthropicSamplingParams({
       temperature: config.llm_temperature,
       topP: config.llm_top_p,

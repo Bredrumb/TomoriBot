@@ -3,10 +3,8 @@
  * Provides direct HTTP access to Brave Search API endpoints
  */
 
-// Export all types
 export * from "../../types/tool/braveTypes";
 
-// Export all service functions
 export {
   braveWebSearch,
   braveImageSearch,

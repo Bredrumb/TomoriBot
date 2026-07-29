@@ -766,7 +766,6 @@ async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void>
         continue;
       }
 
-      // End of CREATE TABLE body
       if (trimmed === ");") {
         if (!EXEMPT_TABLES.has(currentTable) && columnCount > COLUMN_THRESHOLD) {
           console.warn(
@@ -780,7 +779,6 @@ async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void>
       }
 
       if (!trimmed || trimmed.startsWith("--")) continue;
-      // Skip SQL constraint-level lines (not column definitions)
       if (/^(CONSTRAINT|PRIMARY\s+KEY|UNIQUE\b|CHECK\s*\(|FOREIGN\s+KEY)/i.test(trimmed)) continue;
 
       columnCount++;

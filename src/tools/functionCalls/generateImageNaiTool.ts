@@ -224,7 +224,6 @@ export class GenerateImageNaiTool extends BaseTool {
    * NovelAI image generation is available for any provider that supports tools.
    * When the active provider is not 'novelai', the tool requires a NovelAI opt API key
    * (checked by the tool registry's post-filtering in getAvailableToolsWithMCP).
-   * @param _provider - LLM provider name (accepted for all providers)
    * @returns Always true — actual availability is gated by opt key check in the registry
    */
   isAvailableFor(_provider: string): boolean {
@@ -240,7 +239,6 @@ export class GenerateImageNaiTool extends BaseTool {
 
   /**
    * Check if image generation is enabled in Tomori config
-   * @param context - Tool execution context
    * @returns True if image generation feature flag is enabled
    */
   protected isEnabled(context: ToolContext): boolean {
@@ -250,9 +248,6 @@ export class GenerateImageNaiTool extends BaseTool {
   /**
    * Sends a generated image to the Discord channel via webhook (for persona avatar) or direct message.
    * Prefers webhook for consistent persona appearance, falls back to bot message.
-   * @param context - Tool execution context with channel and webhook info
-   * @param attachment - The image attachment to send
-   * @returns The sent Discord message
    */
   private async sendGeneratedImage(
     context: ToolContext,
@@ -324,13 +319,10 @@ export class GenerateImageNaiTool extends BaseTool {
    * Calls NovelAI's suggest-tags API to normalize a single tag.
    * Automatically detects Japanese characters for language selection.
    * @param tag - The raw tag to normalize
-   * @param model - The diffusion model codename
-   * @param apiKey - Decrypted NovelAI API key
    * @returns The best-matching normalized tag, or the original if suggestion fails
    */
   private async suggestTag(tag: string, model: string, apiKey: string): Promise<string> {
     try {
-      // Detect language based on character content
       const lang = JAPANESE_CHAR_PATTERN.test(tag) ? "jp" : "en";
 
       const response = await fetch(`${NAI_IMAGE_BASE_URL}/ai/generate-image/suggest-tags`, {
@@ -353,7 +345,6 @@ export class GenerateImageNaiTool extends BaseTool {
 
       const data = (await response.json()) as SuggestTagsResponse;
 
-      // Pick the suggestion with highest confidence, or keep original
       if (data.tags && data.tags.length > 0) {
         const bestMatch = data.tags.reduce((best, current) => (current.confidence > best.confidence ? current : best));
         return bestMatch.tag;
@@ -370,8 +361,6 @@ export class GenerateImageNaiTool extends BaseTool {
    * Normalizes all tags in the prompt by calling the suggest-tags API in parallel.
    * Each tag is independently resolved; failures fall back to the original tag.
    * @param tags - Array of raw tags to normalize
-   * @param model - The diffusion model codename
-   * @param apiKey - Decrypted NovelAI API key
    * @returns Array of normalized tags in the same order
    */
   private async normalizeTags(tags: string[], model: string, apiKey: string): Promise<string[]> {
@@ -383,7 +372,6 @@ export class GenerateImageNaiTool extends BaseTool {
   /**
    * Checks whether the given model codename is a v4+ model that requires the v4_prompt format.
    * V4 models use a structured caption object instead of a flat prompt string.
-   * @param model - Diffusion model codename
    * @returns True if the model requires v4_prompt format
    */
   /**
@@ -400,7 +388,6 @@ export class GenerateImageNaiTool extends BaseTool {
   /**
    * Resolve a Google API key for Gemini segmentation.
    *
-   * @param context - Tool execution context
    * @returns Decrypted Google API key, or null if unavailable
    */
   private async resolveGoogleApiKey(context: ToolContext): Promise<string | null> {
@@ -718,8 +705,6 @@ export class GenerateImageNaiTool extends BaseTool {
    * 2. Send POST request to NovelAI image generation endpoint
    * 3. Extract the resulting PNG from the ZIP response
    *
-   * @param apiKey - Decrypted NovelAI API key
-   * @param model - Inpainting model codename (with -inpainting suffix)
    * @param prompt - Tag prompt describing what to draw in the masked region
    * @param imageBase64 - Base64-encoded source image
    * @param maskBase64 - Base64-encoded mask (white = redraw, black = preserve)
@@ -738,8 +723,6 @@ export class GenerateImageNaiTool extends BaseTool {
   ): Promise<Buffer> {
     const seed = Math.floor(Math.random() * 2147483647);
 
-    // Build infill request payload
-    // Inpainting uses action: "infill" and includes image + mask in parameters
     let requestPayload: Record<string, unknown>;
 
     if (isNaiV4Model(model)) {
@@ -809,7 +792,6 @@ export class GenerateImageNaiTool extends BaseTool {
         },
       };
     } else {
-      // V3 infill structure
       requestPayload = {
         action: "infill",
         input: prompt,
@@ -834,7 +816,6 @@ export class GenerateImageNaiTool extends BaseTool {
 
     log.info(`[NAI] Inpainting with model "${model}" (seed: ${seed})`);
 
-    // Send infill request
     const response = await fetch(`${NAI_IMAGE_BASE_URL}/ai/generate-image`, {
       method: "POST",
       headers: {
@@ -853,7 +834,6 @@ export class GenerateImageNaiTool extends BaseTool {
       );
     }
 
-    // Extract PNG from ZIP response
     const zipBuffer = Buffer.from(await response.arrayBuffer());
     const zip = await JSZip.loadAsync(zipBuffer);
 
@@ -881,13 +861,11 @@ export class GenerateImageNaiTool extends BaseTool {
    * 8. Increment quota and return success
    *
    * @param args - Tool arguments (prompt, orientation, characters, inpaint params)
-   * @param context - Tool execution context
    * @returns Tool result with success/error status
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startedAtMs = Date.now();
 
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -896,7 +874,6 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
-    // Check if tool is enabled
     if (!this.isEnabled(context)) {
       return {
         success: false,
@@ -913,7 +890,6 @@ export class GenerateImageNaiTool extends BaseTool {
       };
     }
 
-    // Extract arguments
     const prompt = args.prompt as string;
     const orientation = (args.orientation as string) || "portrait";
     const artistRaw = (args.artist as string | undefined)?.trim();
@@ -922,7 +898,6 @@ export class GenerateImageNaiTool extends BaseTool {
     const messageId = args.media_id as string | undefined;
     const editTarget = args.edit_target as string | undefined;
 
-    // Determine if this is an inpainting request
     const isInpaintMode = !!(messageId && editTarget);
     const characterValidationError = this.validateCharacterArgs(characters, context);
 
@@ -948,7 +923,6 @@ export class GenerateImageNaiTool extends BaseTool {
       }
 
       if (!quotaCheck.allowed) {
-        // Build user-friendly error message based on quota type
         let errorMessage = "";
         let resetInfo = "";
 
@@ -1071,7 +1045,6 @@ export class GenerateImageNaiTool extends BaseTool {
         log.info("[NAI] Server negative tags are empty; using fallback negative prompt from env");
       }
 
-      // Parse model-provided tags (these need normalization)
       const modelTags = prompt
         .split(/[,\u3001]/)
         .map((t) => t.trim())
@@ -1122,14 +1095,11 @@ export class GenerateImageNaiTool extends BaseTool {
       }
 
       if (spokenEntries.length > 0) {
-        // Inject meta tags so NAI knows to render text
         normalizedTags.push("text", "english text");
       }
 
-      // Base tag portion of the prompt
       let normalizedPrompt = normalizedTags.join(", ");
 
-      // Append natural-language attribution + "Text:" lines
       if (spokenEntries.length > 0) {
         const ordinals = [
           "first",
@@ -1179,7 +1149,6 @@ export class GenerateImageNaiTool extends BaseTool {
 
         const extractedImages = await extractImagesFromMessage(messageId, context);
 
-        // Use the first image found as the inpainting source
         const sourceImage = extractedImages[0];
 
         // Resolve Google API key for Gemini segmentation
@@ -1213,7 +1182,6 @@ export class GenerateImageNaiTool extends BaseTool {
             const debugFiles: AttachmentBuilder[] = [];
             const ts = Date.now();
 
-            // Bounding box overlay on original image (most useful for verifying detection)
             if (segResult.debugOverlayBuffer) {
               debugFiles.push(
                 new AttachmentBuilder(segResult.debugOverlayBuffer, {
@@ -1222,7 +1190,6 @@ export class GenerateImageNaiTool extends BaseTool {
               );
             }
 
-            // Raw binary mask (white = redraw region)
             if (segResult.debugMaskBuffer) {
               debugFiles.push(
                 new AttachmentBuilder(segResult.debugMaskBuffer, {
@@ -1305,7 +1272,6 @@ export class GenerateImageNaiTool extends BaseTool {
         });
       }
 
-      // Build success message with remaining quota info
       let successMessage: string;
 
       if (isInpaintMode) {
@@ -1362,7 +1328,6 @@ export class GenerateImageNaiTool extends BaseTool {
         };
       }
 
-      // Segmentation-specific errors
       if (errorMessage.includes("segmentation") || errorMessage.includes("segment")) {
         return {
           success: false,
@@ -1370,7 +1335,6 @@ export class GenerateImageNaiTool extends BaseTool {
         };
       }
 
-      // Generic error fallback
       return {
         success: false,
         error: `Failed to ${isInpaintMode ? "inpaint" : "generate"} NAI image: ${errorMessage}`,

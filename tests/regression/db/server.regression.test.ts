@@ -24,8 +24,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server — regression", () => {
     await cleanupFixtures(testSql);
   });
 
-  // ── blacklist ─────────────────────────────────────────────────────────────
-
   it("isBlacklisted returns false for a user not in the blacklist", async () => {
     const result = await userRepository.isBlacklisted(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId);
     expect(result).toBe(false);

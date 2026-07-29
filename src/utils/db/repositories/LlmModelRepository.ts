@@ -33,8 +33,6 @@ function normalizeProviderName(providerName: string): string | null {
  * Read-only; model catalog is global seed data, not exportable per-server state.
  */
 export class LlmModelRepository {
-  // ── llm catalog ────────────────────────────────────────────────────────────
-
   /**
    * Returns all non-deprecated LLMs, or all LLMs when includeDeprecated is true.
    *
@@ -182,7 +180,6 @@ export class LlmModelRepository {
    * Returns available LLMs for a provider. For the openrouter provider with a scope,
    * delegates to LlmProviderRepository to filter by registration.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    * @param scope             - Optional OpenRouter scope filter
    */
@@ -240,7 +237,6 @@ export class LlmModelRepository {
   /**
    * Returns the default LLM for a provider (is_default=true, or first available as fallback).
    *
-   * @param providerName - Provider name
    */
   async loadDefaultModel(providerName: string): Promise<LlmRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -285,7 +281,6 @@ export class LlmModelRepository {
   /**
    * Returns the highest-capability (smartest) LLM for a provider.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    */
   async loadSmartestModel(providerName: string, includeDeprecated = false): Promise<LlmRow | null> {
@@ -330,7 +325,6 @@ export class LlmModelRepository {
   /**
    * Returns the default vision-capable LLM for a provider.
    *
-   * @param providerName - Provider name
    */
   async loadDefaultVisionModel(providerName: string): Promise<LlmRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -419,13 +413,10 @@ export class LlmModelRepository {
     }
   }
 
-  // ── embedding model catalog ────────────────────────────────────────────────
-
   /**
    * Returns available embedding models for a provider. Delegates scoped OpenRouter
    * filtering to LlmProviderRepository.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    * @param scope             - Optional OpenRouter scope filter
    */
@@ -483,7 +474,6 @@ export class LlmModelRepository {
   /**
    * Returns the default embedding model for a provider.
    *
-   * @param providerName - Provider name
    */
   async loadDefaultEmbeddingModel(providerName: string): Promise<EmbeddingModelRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -559,8 +549,6 @@ export class LlmModelRepository {
   /**
    * Returns an embedding model by provider + codename, or null if not found.
    *
-   * @param provider - Provider name
-   * @param codename - Model codename
    */
   async loadEmbeddingModelByProviderAndCodename(provider: string, codename: string): Promise<EmbeddingModelRow | null> {
     const normalizedProvider = provider.trim().toLowerCase();
@@ -592,13 +580,10 @@ export class LlmModelRepository {
     }
   }
 
-  // ── diffusion model catalog ────────────────────────────────────────────────
-
   /**
    * Returns available image diffusion models for a provider. Delegates scoped
    * OpenRouter filtering to LlmProviderRepository.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    * @param scope             - Optional OpenRouter scope filter
    */
@@ -656,7 +641,6 @@ export class LlmModelRepository {
   /**
    * Returns the default image diffusion model for a provider.
    *
-   * @param providerName - Provider name
    */
   async loadDefaultDiffusionModel(providerName: string): Promise<DiffusionModelRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -695,8 +679,6 @@ export class LlmModelRepository {
   /**
    * Returns a diffusion model by provider + codename, or null if not found.
    *
-   * @param provider - Provider name
-   * @param codename - Model codename
    */
   async loadDiffusionModelByProviderAndCodename(provider: string, codename: string): Promise<DiffusionModelRow | null> {
     const normalizedProvider = provider.trim().toLowerCase();
@@ -728,13 +710,10 @@ export class LlmModelRepository {
     }
   }
 
-  // ── video generation model catalog ─────────────────────────────────────────
-
   /**
    * Returns available video generation models for a provider. Delegates scoped
    * OpenRouter filtering to LlmProviderRepository.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    * @param scope             - Optional OpenRouter scope filter
    */
@@ -792,7 +771,6 @@ export class LlmModelRepository {
   /**
    * Returns the default video generation model for a provider.
    *
-   * @param providerName - Provider name
    */
   async loadDefaultVideoGenerationModel(providerName: string): Promise<VideoGenerationModelRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -834,8 +812,6 @@ export class LlmModelRepository {
   /**
    * Returns a video generation model by provider + codename, or null if not found.
    *
-   * @param provider - Provider name
-   * @param codename - Model codename
    */
   async loadVideoGenerationModelByProviderAndCodename(
     provider: string,
@@ -932,8 +908,6 @@ export class LlmModelRepository {
       return null;
     }
   }
-
-  // ── OpenRouter scoped model upserts ──────────────────────────────────────
 
   /**
    * Capability flags passed to upsertScopedLlm.
@@ -1254,8 +1228,6 @@ export class LlmModelRepository {
     }
   }
 
-  // ── OpenRouter reference checks ───────────────────────────────────────────
-
   /**
    * Returns true when any config row (server_model_configs, persona_configs,
    * channel_llm_overrides, saved_provider_configs, user_saved_provider_configs)
@@ -1373,8 +1345,6 @@ export class LlmModelRepository {
     return Boolean(row?.in_use);
   }
 
-  // ── OpenRouter registration counts ────────────────────────────────────────
-
   /**
    * Count active scope registrations for a scoped LLM.
    * Zero means the catalog row can be deleted if also unreferenced.
@@ -1426,8 +1396,6 @@ export class LlmModelRepository {
     `;
     return Number(row?.count ?? 0);
   }
-
-  // ── OpenRouter orphan deletes ─────────────────────────────────────────────
 
   /**
    * Delete an orphaned scoped OpenRouter LLM catalog row.

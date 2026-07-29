@@ -12,8 +12,6 @@ import { log } from "@/utils/misc/logger";
  * mapping or the mapping belongs to a different persona (e.g. the nickname now
  * matches a recreated persona) — callers fall back to the plain persona name.
  *
- * @param messageDiscId - Discord message ID of the webhook message
- * @param personaId - persona_id of the persona matched by nickname
  * @param personaNickname - current nickname used to build the label
  */
 export async function resolveSpriteMessageDisplayName(

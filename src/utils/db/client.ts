@@ -7,10 +7,6 @@ import { log } from "@/utils/misc/logger";
  * Parse an integer environment flag with a default and enforced minimum.
  * Mirrors the local helper used across the chat modules for consistency.
  *
- * @param value - Raw environment string (may be undefined)
- * @param defaultValue - Fallback when unset or unparseable
- * @param minimum - Lower clamp to keep pathological values out
- * @returns Parsed integer, never below `minimum`
  */
 function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
   if (typeof value !== "string") return defaultValue;
@@ -43,7 +39,6 @@ export interface PostgresPoolOptions {
  * tuning without a rebuild. (Azure Flexible Server's public endpoint, whose gateway
  * reaps at ~4 minutes, is one such path.)
  *
- * @returns Pool options resolved from env with production-safe defaults
  */
 function resolveProductionPoolOptions(): PostgresPoolOptions {
   return {
@@ -51,7 +46,6 @@ function resolveProductionPoolOptions(): PostgresPoolOptions {
     idleTimeout: parseIntegerEnvFlag(process.env.POSTGRES_IDLE_TIMEOUT_SECONDS, 30, 5),
     // Hard age cap so no connection lingers indefinitely even under steady load.
     maxLifetime: parseIntegerEnvFlag(process.env.POSTGRES_MAX_LIFETIME_SECONDS, 600, 30),
-    // Fail fast on a dead path instead of hanging into a downstream turn timeout.
     connectionTimeout: parseIntegerEnvFlag(process.env.POSTGRES_CONNECTION_TIMEOUT_SECONDS, 10, 1),
   };
 }
@@ -66,13 +60,11 @@ function resolveProductionPoolOptions(): PostgresPoolOptions {
  * Azure and other public-CA providers use the operating-system trust store.
  * AWS RDS retains its maintained provider bundle for compatibility.
  *
- * @returns Configured SQL instance with appropriate TLS settings
  */
 function createDatabaseClient(): SQL {
   const runEnv = process.env.RUN_ENV || "development";
   const isProduction = runEnv === "production" && process.env.TEST_PRODUCTION !== "true";
 
-  // Build connection parameters from environment
   const host = process.env.POSTGRES_HOST || "localhost";
   const port = Number.parseInt(process.env.POSTGRES_PORT || "5432", 10);
   const user = process.env.POSTGRES_USER || "postgres";
@@ -197,7 +189,6 @@ let cachedClient: SQL | null = null;
 /**
  * Gets the singleton database client, creating it on first access.
  *
- * @returns Configured SQL client instance
  */
 function getClient(): SQL {
   if (!cachedClient) {

@@ -32,7 +32,6 @@ export interface BuildStreamContextParams {
   initialInteraction?: CommandInteraction;
   replyToMessage?: Message;
 
-  // Application context
   tomoriState: TomoriState;
   contextItems: StructuredContextItem[];
   currentTurnModelParts: Array<Record<string, unknown>>;
@@ -46,7 +45,6 @@ export interface BuildStreamContextParams {
   //    forced mentions, abort signal, message ID map, NAI continuation, etc.).
   streamingContext?: StreamingContext;
 
-  // Multi-persona webhook identity
   webhook?: Webhook;
   personaAvatarUrl?: string;
   personaUsername?: string;
@@ -60,7 +58,6 @@ export interface BuildStreamContextParams {
  * the same shared stream behavior. Optional fields left unset by the caller (or absent from the
  * streaming context) remain `undefined`, matching the previous per-provider literals.
  *
- * @param params - Provider-supplied inputs, see {@link BuildStreamContextParams}.
  * @returns The runtime streaming context consumed by the orchestrator.
  */
 export function buildStreamContext(params: BuildStreamContextParams): StreamContext {
@@ -73,7 +70,6 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     initialInteraction: params.initialInteraction,
     replyToMessage: params.replyToMessage,
 
-    // Application context
     tomoriState: params.tomoriState,
     contextItems: params.contextItems,
     currentTurnModelParts: params.currentTurnModelParts,
@@ -90,23 +86,19 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     outputPrefillState: streamingContext?.outputPrefillState,
     replyNoticeState: streamingContext?.replyNoticeState,
 
-    // Multi-persona webhook support
     webhook: params.webhook,
     personaAvatarUrl: params.personaAvatarUrl,
     personaUsername: params.personaUsername,
     prefixStrippingName: params.prefixStrippingName,
 
-    // Forced mentions (e.g., reminder recipients)
     forcedMentions: streamingContext?.forcedMentions,
 
     // NAI GLM-4.6 prompt continuation — trailing fragment from a previous truncated stream.
     //    Only ever populated for NovelAI streams; a no-op copy-through for other providers.
     naiContinuationPrefill: streamingContext?.naiContinuationPrefill,
 
-    // External abort signal for SDK call timeout cancellation
     abortSignal: streamingContext?.abortSignal,
 
-    // Empty-response retry count for the opening-label leak guard's budget decision
     emptyResponseRetryCount: streamingContext?.emptyResponseRetryCount,
 
     // Opaque message ID map for snowflake ID abstraction in LLM-visible text

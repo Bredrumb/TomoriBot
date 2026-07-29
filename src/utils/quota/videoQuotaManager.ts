@@ -44,13 +44,10 @@ export async function checkUserDailyVideoQuota(
   }
 
   try {
-    // Get current date in YYYY-MM-DD format
     const today = new Date().toISOString().split("T")[0];
 
-    // Get or create user's quota record for today
     const userQuota = await touchUserVideoQuota(serverId, userDiscId, today);
 
-    // Check if user has exceeded their daily quota
     const remaining = config.daily_user_quota - userQuota.usage_count;
 
     if (remaining <= 0) {
@@ -88,10 +85,8 @@ export async function checkServerwideVideoQuota(
   }
 
   try {
-    // Get or create server-wide quota record
     const serverwideQuota = await touchServerwideVideoQuota(serverId, config.serverwide_quota_resets_in);
 
-    // Check if quota period has expired (needs reset)
     const now = new Date();
     const periodEnd = new Date(serverwideQuota.quota_period_end);
 
@@ -105,7 +100,6 @@ export async function checkServerwideVideoQuota(
       };
     }
 
-    // Check if server has exceeded its quota
     const remaining = config.serverwide_quota - serverwideQuota.usage_count;
 
     if (remaining <= 0) {
@@ -134,7 +128,6 @@ export async function checkServerwideVideoQuota(
  */
 export async function checkVideoQuota(serverId: number, userDiscId: string): Promise<VideoQuotaCheckResult> {
   try {
-    // Get quota configuration
     const config = await getVideoQuotaConfig(serverId);
 
     // Check user daily quota first (most common limit)
@@ -144,13 +137,11 @@ export async function checkVideoQuota(serverId: number, userDiscId: string): Pro
       return userCheck;
     }
 
-    // Check server-wide quota
     const serverwideCheck = await checkServerwideVideoQuota(serverId, config);
     if (!serverwideCheck.allowed) {
       return serverwideCheck;
     }
 
-    // Both checks passed
     return {
       allowed: true,
       userRemaining: userCheck.userRemaining,

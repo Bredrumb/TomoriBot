@@ -43,10 +43,7 @@ const singleInputEmbeddingModels = new Set<string>();
  * Kept free of provider resolution so the retry policy is testable on its own; callers
  * supply whatever performs the actual request.
  *
- * @param inputs - Texts to embed.
  * @param modelKey - `provider:model`, used to remember non-batching models for the process.
- * @param embed - Performs one request for the given texts.
- * @returns One embedding per input, in order.
  * @throws When a single-input request returns anything other than one embedding.
  */
 export async function embedWithBatchFallback(
@@ -66,7 +63,6 @@ export async function embedWithBatchFallback(
     return embeddings;
   };
 
-  // Skip the batch attempt entirely for a model already known not to honour batching.
   if (inputs.length > 1 && singleInputEmbeddingModels.has(modelKey)) {
     return await runSequentially();
   }

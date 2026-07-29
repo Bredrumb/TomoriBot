@@ -31,9 +31,6 @@ function shouldDelayTrailingPeriodFlush(buffer: string, periodMatch: RegExpExecA
  * cut moves past the table's end instead, and 0 is returned when even that is unavailable
  * (the caller treats 0 as "no safe cut, hold the buffer").
  *
- * @param buffer - Buffer being flushed
- * @param index - Candidate flush offset chosen by the length heuristics
- * @returns A flush offset that does not split a table, or 0 when none exists
  */
 function snapFlushIndexOutOfMarkdownTable(buffer: string, index: number): number {
   const enclosingTable = findMarkdownTableBlockAt(buffer, index);
@@ -263,8 +260,6 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
  * repair over prose only, so a table's cell contents never influence the counts and the
  * closers never land on a table row.
  *
- * @param buffer - Text to inspect and repair
- * @returns The text with any missing closing markers appended
  */
 function appendUnbalancedMarkerClosers(buffer: string): string {
   let fixedBuffer = buffer;

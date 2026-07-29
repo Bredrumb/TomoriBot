@@ -17,7 +17,6 @@ import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimit
 
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
-// Constants for modal and input IDs
 const MODAL_CUSTOM_ID = "teach_servermemory_add_modal";
 const MEMORY_INPUT_ID = "memory_input";
 const MEMORY_FILE_UPLOAD_ID = "server_memory_file_upload";
@@ -26,20 +25,14 @@ const MEMORY_TAGS_INPUT_ID = "memory_tags_input";
 const MAX_TAGS = 5;
 const MAX_TAG_LENGTH = 32;
 
-// Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.memory.server.add.description"));
 
 /**
  * JSDoc comment for exported function
  * Adds a server memory to Tomori's knowledge for the server by inserting into the server_memories table.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -58,11 +51,9 @@ export async function execute(
     return;
   }
 
-  // Define state and modal result outside try for catch block
   let tomoriState: TomoriState | null = null;
   let selectedPersona: TomoriState | null = null;
   let modalResult: ModalResult | null = null;
-  // Define modalSubmitInteraction here to be accessible in catch block
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
   try {
@@ -84,10 +75,8 @@ export async function execute(
       }
     }
 
-    // Load server's Tomori state - Still needed for server_id and config checks
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
 
-    // Check if Tomori is set up
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -98,7 +87,6 @@ export async function execute(
       return;
     }
 
-    // Resolve target persona (default: current main persona)
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -121,7 +109,6 @@ export async function execute(
       }))
       .filter((option) => option.value !== "");
 
-    // Check if server memory teaching is enabled
     if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.memory.server.teaching_disabled_title",
@@ -132,7 +119,6 @@ export async function execute(
       return;
     }
 
-    // Prompt user with persona selector + memory input in one modal
     modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.teach.memory.server.modal_title",
@@ -175,7 +161,6 @@ export async function execute(
       ],
     });
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Server memory add modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -185,7 +170,6 @@ export async function execute(
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' guarantees interaction
     modalSubmitInteraction = modalResult.interaction!;
 
-    // Get input from modal
     const typedMemory = modalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
     const uploadedTextFile = modalResult.attachments?.[MEMORY_FILE_UPLOAD_ID];
     const rawTagsInput = modalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
@@ -265,7 +249,6 @@ export async function execute(
 
     const dedupedMemories = dedupeCaseInsensitive(pendingMemories);
 
-    // Validate memory content lengths
     for (const memory of dedupedMemories) {
       const contentValidation = validateMemoryContent(memory);
       if (!contentValidation.isValid) {
@@ -298,7 +281,6 @@ export async function execute(
       return;
     }
 
-    // Check server memory limit after final persona resolution
     const serverLimitCheck = await serverMemoryRepository.checkServerMemoryLimit(
       targetServerId,
       targetPersonaLineageId,
@@ -331,7 +313,6 @@ export async function execute(
       return;
     }
 
-    // Insert into persona-scoped server memories table
     let insertSuccess = true;
     if (memoriesToAdd.length === 1) {
       const insertedMemory = await serverMemoryRepository.add(
@@ -369,7 +350,6 @@ export async function execute(
     }
 
     if (!insertSuccess) {
-      // Log error with context
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: targetServerId,
@@ -397,7 +377,6 @@ export async function execute(
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // Success! Confirm addition
     const firstMemory = memoriesToAdd[0] ?? "";
     const memoryPreview = firstMemory.length > 96 ? `${firstMemory.slice(0, 96)}...` : firstMemory;
 
@@ -421,7 +400,6 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
@@ -435,8 +413,6 @@ export async function execute(
     };
     await log.error("Error in /teach servermemory command", error, context);
 
-    // Reply with unknown error embed
-    // Determine which interaction to use
     const errorReplyInteraction =
       modalSubmitInteraction && (modalSubmitInteraction.replied || modalSubmitInteraction.deferred)
         ? modalSubmitInteraction

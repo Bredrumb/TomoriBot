@@ -18,8 +18,6 @@ import {
   SERVER_MEMBER_PERMISSION_DEFINITIONS,
 } from "@/utils/discord/memberPermissionsConfigMapping";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 // Note: MODAL_CUSTOM_ID is generated per-invocation (see execute()) to prevent stale
 // awaitModalSubmit listeners from a previous run resolving on the same submission.
 const MEMBERPERMISSIONS_CHECKBOX_ID = "memberpermissions_checkbox";
@@ -33,10 +31,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Configures which Teach permissions members with no Manage Server permissions have,
  * using a checkbox modal. Checked items = allowed.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -48,7 +42,6 @@ export async function execute(
   //    listeners from a prior (un-submitted) run resolving on this submission.
   const MODAL_CUSTOM_ID = `server_memberpermissions_modal_${interaction.id}`;
 
-  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -66,7 +59,6 @@ export async function execute(
   let modalInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -78,7 +70,6 @@ export async function execute(
       return;
     }
 
-    // Build checkbox options, pre-checking currently-allowed permissions
     const checkboxOptions: CheckboxGroupOption[] = SERVER_MEMBER_PERMISSION_DEFINITIONS.map((def) => ({
       label: localizer(locale, def.labelKey),
       value: def.value,
@@ -116,7 +107,6 @@ export async function execute(
     }
     modalInteraction = modalResult.interaction;
 
-    // Determine which permissions changed
     const newlyEnabled = new Set(modalResult.multiValues?.[MEMBERPERMISSIONS_CHECKBOX_ID] ?? []);
     const writePlan = buildServerMemberPermissionsConfigWritePlan(tomoriState.config, newlyEnabled);
     const changes = writePlan.changes.map((change) => ({
@@ -124,7 +114,6 @@ export async function execute(
       label: localizer(locale, change.labelKey),
     }));
 
-    // If nothing changed, say so and exit
     if (changes.length === 0) {
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "commands.server.member-permissions.no_changes_title",
@@ -162,7 +151,6 @@ export async function execute(
     // Invalidate cache so next message picks up the fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // Build the success result embed
     const enabledLabels = changes.filter((c) => c.isEnabled).map((c) => `\`${c.label}\``);
     const disabledLabels = changes.filter((c) => !c.isEnabled).map((c) => `\`${c.label}\``);
 
@@ -185,7 +173,6 @@ export async function execute(
       ],
     });
   } catch (error) {
-    // Log the error with context
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {

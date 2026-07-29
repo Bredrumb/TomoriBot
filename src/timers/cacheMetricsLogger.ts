@@ -72,7 +72,6 @@ function collectDiscordCacheSizes(client: Client): Record<string, number> {
       presences += guild.presences.cache.size;
       voiceStates += guild.voiceStates.cache.size;
 
-      // Messages and threads live inside text-capable channels
       for (const channel of guild.channels.cache.values()) {
         if ("messages" in channel) {
           const mgr = (channel as unknown as { messages?: { cache?: { size?: number } } }).messages;
@@ -83,9 +82,7 @@ function collectDiscordCacheSizes(client: Client): Record<string, number> {
           if (mgr?.cache?.size) threads += mgr.cache.size;
         }
       }
-    } catch {
-      // Ignore unavailable guilds (shard disconnect, partial data, etc.)
-    }
+    } catch {}
   }
 
   return {
@@ -177,7 +174,6 @@ function emitSnapshot(client: Client): void {
  * intended for CloudWatch Logs Insights and are not useful in local dev.
  * Safe to call multiple times — a subsequent call is a no-op if already running.
  *
- * @param client - Discord client (needed for `.guilds.cache` iteration)
  * @param intervalMs - Optional override; defaults to CACHE_METRICS_INTERVAL_MS env or 5 min
  */
 export function initializeCacheMetricsLogger(client: Client, intervalMs?: number): void {
@@ -198,7 +194,6 @@ export function initializeCacheMetricsLogger(client: Client, intervalMs?: number
   // Emit an immediate sample so CloudWatch has a baseline right after boot
   emitSnapshot(client);
 
-  // Schedule periodic samples
   intervalId = setInterval(() => emitSnapshot(client), finalInterval);
 
   log.success(`Cache metrics logger started (interval: ${finalInterval / 1000}s)`);

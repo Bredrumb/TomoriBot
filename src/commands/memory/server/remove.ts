@@ -17,21 +17,15 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import type { SelectOption } from "@/types/discord/modal";
 import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 
-// Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_servermemory_modal";
 const MEMORY_SELECT_ID = "memory_select";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.memory.server.remove.description"));
 
 /**
  * JSDoc comment for exported function
  * Removes a server memory from the server_memories table using a paginated embed.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -50,7 +44,6 @@ export async function execute(
     return;
   }
 
-  // Define state and result variables outside try for catch block context
   let tomoriState: TomoriState | null = null;
   let selectedPersona: TomoriState | null = null;
   const workflowState: {
@@ -62,7 +55,6 @@ export async function execute(
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Load server's Tomori state - Needed for server_id and config checks
     tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -272,7 +264,6 @@ export async function execute(
       );
     }
   } catch (error) {
-    // Catch unexpected errors
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,

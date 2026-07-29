@@ -160,7 +160,6 @@ function buildThoughtLogEmbeds(args: {
       continue;
     }
 
-    // Standard sections: split across multiple embeds if needed
     let remaining = section.content;
 
     while (remaining.length > 0) {

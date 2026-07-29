@@ -48,7 +48,6 @@ export interface TomoriSecrets {
   CHARREF_S3_REGION?: string;
   CHARREF_S3_PREFIX?: string;
   CHARREF_PUBLIC_BASE_URL?: string;
-  // Matrix Appservice Bridge (optional — leave unset to disable the bridge entirely)
   MATRIX_HOMESERVER_URL?: string; // e.g., http://localhost:8448 or https://your-hs.example.com
   MATRIX_ACCESS_TOKEN?: string; // Appservice token (as_token) used to authenticate to the homeserver
   MATRIX_BOT_USER_ID?: string; // e.g., @tomoribot:yourdomain.com
@@ -99,7 +98,6 @@ export interface TomoriSecrets {
  * process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
  */
 export async function getAppSecrets(): Promise<TomoriSecrets> {
-  // Default to 'development' if RUN_ENV is not set (safe for local users)
   const runEnv = process.env.RUN_ENV || "development";
   const isProduction = runEnv === "production";
   const isTestProduction = process.env.TEST_PRODUCTION === "true";
@@ -252,7 +250,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         );
       }
 
-      // Re-throw with context for file-not-found and other I/O errors
       log.error(
         "Failed to read secrets from mounted JSON secret file",
         error instanceof Error ? error : new Error(String(error)),
@@ -304,7 +301,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Optional fields
     const optionalFields: (keyof TomoriSecrets)[] = [
       "DISCORD_WEBHOOK_URL",
       "AVATAR_GCS_BUCKET",
@@ -372,7 +368,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Re-throw with context
     log.error(
       "Failed to fetch secrets from AWS Secrets Manager",
       error instanceof Error ? error : new Error(String(error)),

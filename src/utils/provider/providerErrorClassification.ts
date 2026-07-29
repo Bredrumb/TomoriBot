@@ -73,7 +73,6 @@ export function isCreditAffordabilityError(error: ProviderError): boolean {
 /**
  * Tests a message against a set of patterns after collapsing whitespace.
  * @param message - Candidate message (nullable).
- * @param patterns - Regexes to test.
  * @returns True when the normalized message matches any pattern.
  */
 function matchesAnyPattern(message: string | null | undefined, patterns: RegExp[]): boolean {

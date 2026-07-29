@@ -167,7 +167,6 @@ function isPlausibleSpeakerLabelName(name: string): boolean {
 /**
  * Returns true when `name` matches any of `names` after render-modifier normalization
  * (the same comparison used by isAllowedRenderModifierSpeakerLabel).
- * @param name - Candidate speaker name
  * @param names - Names to compare against (not yet normalized)
  */
 export function matchesRenderModifierName(name: string, names: readonly string[]): boolean {
@@ -195,10 +194,10 @@ export function isAllowedRenderModifierSpeakerLabel(label: string, sourceNames: 
  * name orientations, and rebuilds the model-facing "SourcePersona (modifier)"
  * label:
  *
- * 1. Flipped copied-identity format (current): "impersonated (SourcePersona)" —
+ * - Flipped copied-identity format (current): "impersonated (SourcePersona)" —
  *    Discord shows the impersonated name first so the disguise reads naturally,
  *    while the model-facing label keeps the source persona first.
- * 2. Legacy format: "SourcePersona (modifier)" — pre-flip copied identities and
+ * - Legacy format: "SourcePersona (modifier)" — pre-flip copied identities and
  *    pre-clean-name sprite messages still in fetched history windows.
  *
  * When BOTH parts match personas (persona impersonating another persona) the

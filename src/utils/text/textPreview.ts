@@ -5,10 +5,10 @@
  *
  * Two problems recur across every command that does this:
  *
- * 1. **Fence breakout.** The text is interpolated into a locale string that
+ * - **Fence breakout.** The text is interpolated into a locale string that
  *    already owns a code fence. Text containing its own triple backtick closes
  *    that fence early and mangles the rest of the card.
- * 2. **Dishonest truncation.** Callers slice to a fixed width and either bake a
+ * - **Dishonest truncation.** Callers slice to a fixed width and either bake a
  *    trailing ellipsis into the locale string unconditionally (claiming
  *    truncation that did not happen) or drop the cut silently.
  *
@@ -73,7 +73,6 @@ export interface TextPreview {
  * the text visually unchanged while making the run inert.
  *
  * @param text - Raw user-authored text.
- * @returns The same text with every backtick run neutralized.
  */
 function neutralizeCodeFences(text: string): string {
   return text.replace(/`{2,}/g, (run) => run.split("").join(FENCE_GUARD));
@@ -93,13 +92,11 @@ function neutralizeCodeFences(text: string): string {
  *
  * @param text - The text to preview; `null`/`undefined`/blank yields a preview with `totalChars === 0`.
  * @param budget - Maximum characters to render, defaulting to {@link CV2_TEXT_PREVIEW_BUDGET}.
- * @returns A {@link TextPreview} describing what to render.
  */
 export function buildTextPreview(
   text: string | null | undefined,
   budget: number = CV2_TEXT_PREVIEW_BUDGET,
 ): TextPreview {
-  // Normalize away the empty cases so callers can branch on totalChars.
   const source = text?.trim() ?? "";
   if (source.length === 0) {
     return { text: "", truncated: false, shownChars: 0, totalChars: 0 };
@@ -127,7 +124,6 @@ export function buildTextPreview(
 /**
  * Resolves the muted footer describing how much of a preview was cut, if any.
  *
- * @param preview - The preview returned by {@link buildTextPreview}.
  * @returns The shared truncation footer key, or `undefined` when nothing was cut.
  */
 export function textPreviewFooterKey(preview: TextPreview): string | undefined {
@@ -137,7 +133,6 @@ export function textPreviewFooterKey(preview: TextPreview): string | undefined {
 /**
  * Builds the interpolation vars for {@link textPreviewFooterKey}.
  *
- * @param preview - The preview returned by {@link buildTextPreview}.
  * @returns Localizer vars with thousands-separated counts.
  */
 export function textPreviewFooterVars(preview: TextPreview): Record<string, string> {

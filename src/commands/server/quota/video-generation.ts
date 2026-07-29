@@ -12,7 +12,6 @@ import {
 } from "@/utils/db/repositories/QuotaRepository";
 import { localizer } from "@/utils/text/localizer";
 
-// Quota limit constants
 const MIN_USER_QUOTA = 0; // 0 = unlimited
 const MAX_USER_QUOTA = 100;
 const MIN_SERVERWIDE_QUOTA = 0; // 0 = unlimited

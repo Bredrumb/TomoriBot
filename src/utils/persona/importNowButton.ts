@@ -52,8 +52,6 @@ type ImportNowButtonState = "active" | "done" | "expired";
  * Builds the Import Now button config for a given state. The label is a locale
  * key resolved later by {@link buildPersonaResultContainer}, so no locale is needed here.
  *
- * @param state - "active" (clickable), "done" (imported, disabled), or "expired" (timed out, disabled).
- * @returns A {@link PersonaResultButtonOptions} for {@link buildPersonaResultContainer}.
  */
 export function importNowButton(state: ImportNowButtonState): PersonaResultButtonOptions {
   if (state === "done") {
@@ -99,7 +97,6 @@ export interface ImportNowCollectorParams {
 /**
  * Maps an {@link importAlterPreset} failure reason to a localized error embed.
  *
- * @param locale - Locale for the error strings.
  * @param result - The failed import result.
  * @returns An EmbedBuilder describing the failure.
  */
@@ -145,7 +142,6 @@ function buildImportErrorEmbed(
  * and replies ephemerally with the outcome. The button is one-shot — a successful
  * import stops the collector; a failure re-arms it for another attempt.
  *
- * @param params - {@link ImportNowCollectorParams} message, import inputs, and re-render layout.
  */
 export function attachImportNowCollector(params: ImportNowCollectorParams): void {
   const {
@@ -188,7 +184,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // One-shot guard: ignore clicks once an import is in flight or succeeded.
     if (consumed) {
       await interaction
         .reply({
@@ -225,7 +220,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
     });
 
     if (!result.ok) {
-      // Re-arm the button so the manager can retry after fixing the cause.
       consumed = false;
       await interaction
         .followUp({ embeds: [buildImportErrorEmbed(locale, result)], flags: MessageFlags.Ephemeral })
@@ -233,7 +227,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // Disable the button on the public message to reflect the completed import.
     try {
       await interaction.editReply({
         components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("done") }),

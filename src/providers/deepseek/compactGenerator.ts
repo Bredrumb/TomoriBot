@@ -22,8 +22,6 @@ const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions
 /**
  * Generate a plain-text conversation summary using the DeepSeek API.
  *
- * @param request - Compact summary request with model, prompts, and auth
- * @returns Plain-text summary or an error object
  */
 export async function generateConversationSummaryDeepseek(
   request: ProviderCompactSummaryRequest,
@@ -33,14 +31,12 @@ export async function generateConversationSummaryDeepseek(
       return { error: "Invalid DeepSeek API key" };
     }
 
-    // Build the message array
     const messages: Array<Record<string, unknown>> = [];
     if (request.systemPrompt) {
       messages.push({ role: "system", content: request.systemPrompt });
     }
     messages.push({ role: "user", content: request.userPrompt });
 
-    // Build the request body
     const body: Record<string, unknown> = {
       model: request.model,
       messages,
@@ -53,7 +49,6 @@ export async function generateConversationSummaryDeepseek(
       body.temperature = request.temperature ?? 0.7;
     }
 
-    // Send the request
     const response = await fetch(DEEPSEEK_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -78,7 +73,6 @@ export async function generateConversationSummaryDeepseek(
       };
     }
 
-    // Extract the response text
     const result = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };
@@ -104,8 +98,6 @@ export async function generateConversationSummaryDeepseek(
  * Delegates to callDeepseekStructuredJSON, which uses json_object mode
  * with schema/example injected into the system prompt and Zod validation.
  *
- * @param request - Compact summary request with model, prompts, and auth
- * @returns Structured roleplay summary or an error object
  */
 export async function generateRoleplaySummaryDeepseek(
   request: ProviderCompactSummaryRequest,

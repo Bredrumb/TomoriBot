@@ -7,7 +7,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("model-randomizer")
@@ -37,10 +36,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Enabling is refused unless the server has at least one fallback model configured (`/model fallback`),
  * so the pool always has >=2 members and the toggle is never a silent no-op.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -100,7 +95,6 @@ export async function execute(
       return;
     }
 
-    // Persist the new flag through the generic chat-config writer.
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
       model_randomizer_enabled: isEnabled,
     });

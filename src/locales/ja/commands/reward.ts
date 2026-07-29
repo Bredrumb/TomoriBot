@@ -1,5 +1,3 @@
-// locales/ja/commands/reward.ts
-
 export default {
   reward: {
     description: `私へのご褒美インタラクション。`,

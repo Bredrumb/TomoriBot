@@ -160,7 +160,6 @@ async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBu
     .toBuffer({ resolveWithObject: true });
   const buckets = new Map<string, { red: number; green: number; blue: number; count: number }>();
 
-  // Quantize each opaque, sufficiently-saturated pixel into a coarse bucket.
   for (let index = 0; index < data.length; index += info.channels) {
     if (data[index + 3] < 200) continue;
     const red = Math.round(data[index] / 32) * 32;
@@ -175,7 +174,6 @@ async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBu
   }
 
   if (buckets.size === 0) return null;
-  // Attach HSL to every surviving bucket for downstream selection.
   return [...buckets.values()].map((bucket) => ({ ...bucket, ...rgbToHsl(bucket.red, bucket.green, bucket.blue) }));
 }
 
@@ -241,7 +239,6 @@ export async function extractAvatarAccentColor(avatarDataUri: string | null, fal
     if (!colorBuckets) return fallback;
     const dominant = [...colorBuckets].sort((left, right) => right.count - left.count)[0];
     if (!dominant) return fallback;
-    // Boost saturation and pin lightness so every bar reads as a vivid, even tone.
     return hslToHex(dominant.hue, clamp(Math.round(dominant.saturation * 100), 50, 84), 48);
   } catch (error) {
     log.warn("cardColor: avatar accent extraction failed", error as Error);

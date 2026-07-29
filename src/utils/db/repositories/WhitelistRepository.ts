@@ -21,8 +21,6 @@ type PersonaWhitelistStatus = Pick<
 >;
 
 export class WhitelistRepository {
-  // ── private helpers ────────────────────────────────────────────────────────
-
   private normalizeTomoriIds(rows: Array<{ persona_id: number | string | bigint }>): number[] {
     return rows
       .map((row) => {
@@ -33,13 +31,9 @@ export class WhitelistRepository {
       .filter((personaId): personaId is number => Number.isInteger(personaId) && personaId > 0);
   }
 
-  // ── channel whitelist ──────────────────────────────────────────────────────
-
   /**
    * Check whitelist status (channel + role + persona metadata) and get channel cooldown settings.
    *
-   * @param serverDiscId       - Discord server snowflake
-   * @param channelDiscId      - Discord channel snowflake
    * @param memberRoleDiscIds  - Optional role IDs for the triggering member
    * @param parentChannelDiscId - Optional parent channel for thread inheritance
    * @returns WhitelistCheckResult with status and settings
@@ -204,11 +198,8 @@ export class WhitelistRepository {
   /**
    * Add or update a channel in the whitelist with optional cooldown override settings.
    *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord channel snowflake
    * @param cooldownType  - Cooldown type override, or null to inherit global
    * @param cooldownLength - Cooldown length override in seconds, or null to inherit global
-   * @returns The upserted ChannelWhitelistRow
    */
   async upsertChannelWhitelist(
     serverId: number,
@@ -234,8 +225,6 @@ export class WhitelistRepository {
   /**
    * Returns one channel whitelist row for exact settings comparisons.
    *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord channel snowflake
    */
   async getChannelWhitelist(serverId: number, channelDiscId: string): Promise<ChannelWhitelistRow | null> {
     const [result] = await sql`
@@ -252,8 +241,6 @@ export class WhitelistRepository {
   /**
    * Remove a channel from the whitelist.
    *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord channel snowflake
    * @returns True if a row was deleted, false if not found
    */
   async removeChannelWhitelist(serverId: number, channelDiscId: string): Promise<boolean> {
@@ -266,8 +253,6 @@ export class WhitelistRepository {
   /**
    * Get all whitelisted channels for a server, ordered by creation time.
    *
-   * @param serverId - Internal server DB ID
-   * @returns Array of ChannelWhitelistRow
    */
   async getAllWhitelistChannels(serverId: number): Promise<ChannelWhitelistRow[]> {
     const result = await sql`
@@ -276,14 +261,10 @@ export class WhitelistRepository {
     return result as ChannelWhitelistRow[];
   }
 
-  // ── persona-channel whitelist ──────────────────────────────────────────────
-
   /**
    * Replace the full channel whitelist set for a persona.
    * Passing an empty array clears the persona-specific channel restriction.
    *
-   * @param serverId       - Internal server DB ID
-   * @param personaId       - Internal tomori DB ID
    * @param channelDiscIds - Discord channel snowflakes to allow for this persona
    */
   async replacePersonaWhitelistChannels(serverId: number, personaId: number, channelDiscIds: string[]): Promise<void> {
@@ -306,9 +287,6 @@ export class WhitelistRepository {
   /**
    * Remove a single persona-channel whitelist entry.
    *
-   * @param serverId      - Internal server DB ID
-   * @param channelDiscId - Discord channel snowflake
-   * @param personaId      - Internal tomori DB ID
    * @returns True if an entry was deleted, false if not found
    */
   async removeChannelPersonaWhitelist(serverId: number, channelDiscId: string, personaId: number): Promise<boolean> {
@@ -322,8 +300,6 @@ export class WhitelistRepository {
   /**
    * Get the channel whitelist entries for a single persona.
    *
-   * @param serverId - Internal server DB ID
-   * @param personaId - Internal tomori DB ID
    * @returns Array of ChannelPersonaWhitelistRow ordered by channel then creation time
    */
   async getPersonaWhitelistChannels(serverId: number, personaId: number): Promise<ChannelPersonaWhitelistRow[]> {
@@ -339,7 +315,6 @@ export class WhitelistRepository {
   /**
    * Get all persona whitelist entries for a server.
    *
-   * @param serverId - Internal server DB ID
    * @returns Array of ChannelPersonaWhitelistRow ordered by persona then channel
    */
   async getAllWhitelistPersonas(serverId: number): Promise<ChannelPersonaWhitelistRow[]> {
@@ -352,14 +327,10 @@ export class WhitelistRepository {
     return result as ChannelPersonaWhitelistRow[];
   }
 
-  // ── persona whitelist helpers (pure, no DB) ────────────────────────────────
-
   /**
    * Check whether a persona is allowed by the effective persona-channel whitelist.
    * Restricted personas are allowed only in their configured channels; unrestricted personas are always allowed.
    *
-   * @param whitelistStatus - The current whitelist status for the channel
-   * @param personaId        - Internal tomori DB ID to check
    * @returns True if this persona may respond in the current channel
    */
   isPersonaAllowedByWhitelistStatus(
@@ -376,8 +347,6 @@ export class WhitelistRepository {
    * Filter a persona list down to only entries allowed by the effective persona-channel whitelist.
    * Returns the original list unchanged when no persona whitelist is active.
    *
-   * @param personas        - List of persona-like objects with optional persona_id
-   * @param whitelistStatus - The current whitelist status for the channel
    * @returns Filtered array of allowed personas
    */
   filterPersonasByWhitelist<T extends { persona_id?: number | null | undefined }>(
@@ -388,14 +357,9 @@ export class WhitelistRepository {
     return personas.filter((persona) => this.isPersonaAllowedByWhitelistStatus(whitelistStatus, persona.persona_id));
   }
 
-  // ── role whitelist ─────────────────────────────────────────────────────────
-
   /**
    * Add a role to the whitelist for a server.
    *
-   * @param serverId   - Internal server DB ID
-   * @param roleDiscId - Discord role snowflake
-   * @returns The upserted RoleWhitelistRow
    */
   async upsertRoleWhitelist(serverId: number, roleDiscId: string): Promise<RoleWhitelistRow> {
     const [result] = await sql`
@@ -412,8 +376,6 @@ export class WhitelistRepository {
   /**
    * Remove a role from the whitelist.
    *
-   * @param serverId   - Internal server DB ID
-   * @param roleDiscId - Discord role snowflake
    * @returns True if a row was deleted, false if not found
    */
   async removeRoleWhitelist(serverId: number, roleDiscId: string): Promise<boolean> {
@@ -426,7 +388,6 @@ export class WhitelistRepository {
   /**
    * Get all whitelisted roles for a server.
    *
-   * @param serverId - Internal server DB ID
    * @returns Array of RoleWhitelistRow ordered by creation time
    */
   async getAllWhitelistRoles(serverId: number): Promise<RoleWhitelistRow[]> {
@@ -439,8 +400,6 @@ export class WhitelistRepository {
   /**
    * Check whether a specific role is currently whitelisted.
    *
-   * @param serverId   - Internal server DB ID
-   * @param roleDiscId - Discord role snowflake
    * @returns True if the role is whitelisted
    */
   async isRoleWhitelisted(serverId: number, roleDiscId: string): Promise<boolean> {

@@ -106,7 +106,6 @@ async function patchGuildAvatar(guildDiscId: string, avatarDataUri: string): Pro
  * one image), PATCHes the guild avatar, and stamps applied_avatar_hash on
  * success so the persona is skipped next time.
  *
- * @param client - The ready Discord client
  */
 export async function reconcilePresetMainAvatars(client: Client): Promise<void> {
   // Operational kill switch. Default-on; an operator can disable the fan-out
@@ -190,7 +189,6 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
 
     const result = await patchGuildAvatar(target.server_disc_id, avatarDataUri);
     if (result === "ok") {
-      // Stamp the applied hash so this persona is skipped until the art changes again.
       try {
         await personaRepository.stampPointerAvatarHash(target.persona_id, target.preset_avatar_hash);
         applied++;
@@ -202,7 +200,6 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
         );
       }
     } else if (result === "rate_limited") {
-      // Leave applied_avatar_hash unchanged so this persona is retried next boot.
       rateLimited++;
       log.warn(`[Preset Avatar Fanout] Guild ${target.server_disc_id} rate limited; deferring to next boot`);
     }

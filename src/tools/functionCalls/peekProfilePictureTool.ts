@@ -83,7 +83,6 @@ export class PeekProfilePictureTool extends BaseTool {
   /**
    * Check if profile picture tool is available for the given provider.
    * Availability is provider-agnostic; model vision support is handled by `isAvailableForContext()`.
-   * @param _provider - LLM provider name
    * @returns True (availability gated by isAvailableForContext)
    */
   isAvailableFor(_provider: string): boolean {
@@ -92,8 +91,6 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Enhanced availability check that considers context flags and model vision capabilities
-   * @param provider - LLM provider name
-   * @param context - Tool context that may contain disable flags and tomoriState
    * @returns True if tool should be available
    */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
@@ -102,7 +99,6 @@ export class PeekProfilePictureTool extends BaseTool {
       return false;
     }
 
-    // Require context with tomoriState
     if (!context?.tomoriState) {
       log.warn("PeekProfilePictureTool: No tomoriState in context, defaulting to unavailable");
       return false;
@@ -121,7 +117,6 @@ export class PeekProfilePictureTool extends BaseTool {
       return false;
     }
 
-    // Check for profile picture processing disable flag in context
     if (context?.streamContext?.disableProfilePictureProcessing) {
       log.info("PeekProfilePictureTool: Temporarily disabled during enhanced context restart");
       return false;
@@ -133,11 +128,9 @@ export class PeekProfilePictureTool extends BaseTool {
   /**
    * Execute profile picture processing
    * @param args - Arguments containing target_identity and optional reason
-   * @param context - Tool execution context
    * @returns Promise resolving to tool result with processed image data
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Check if profile picture processing is temporarily disabled during enhanced context restart
     if (context.streamContext?.disableProfilePictureProcessing) {
       log.info(
         "PeekProfilePictureTool: Execution blocked - Profile picture processing temporarily disabled during enhanced context restart",
@@ -153,7 +146,6 @@ export class PeekProfilePictureTool extends BaseTool {
       };
     }
 
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -204,7 +196,6 @@ export class PeekProfilePictureTool extends BaseTool {
 
       log.success(`Profile picture fetched for ${targetIdentity} (Username: ${avatarData.username})`);
 
-      // Build display text with optional server nickname
       let userDisplayText = avatarData.username;
       if (avatarData.serverNickname) {
         userDisplayText += ` (Nickname: ${avatarData.serverNickname})`;
@@ -299,7 +290,6 @@ export class PeekProfilePictureTool extends BaseTool {
     } catch (error) {
       log.error(`Profile picture processing failed for identity: ${targetIdentity}`, error as Error);
 
-      // Categorize errors for better user experience
       let errorMessage = "Failed to process the user's profile picture.";
       let errorStatus = "profile_processing_failed";
 
@@ -344,11 +334,7 @@ export class PeekProfilePictureTool extends BaseTool {
    * Used when the primary chat model cannot see images but a vision_llm is configured.
    * Calls the vision model's API directly with the resolved profile images and returns a text description.
    * @param images - Base64-encoded profile image inputs
-   * @param targetTypeLabel - "user", "webhook", or "persona"
    * @param userDisplayText - Display name (with optional nickname)
-   * @param reason - Original reason for the request
-   * @param context - Tool execution context
-   * @returns Promise resolving to a text-description ToolResult
    */
   private async redirectToVisionModel(
     images: PreparedProfileImage[],
@@ -438,7 +424,6 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Resolve the chat completions endpoint URL for a given provider.
-   * @param provider - Lowercase provider name
    * @param context - Tool context (for custom endpoint URL)
    * @returns Chat completions URL
    */
@@ -456,11 +441,8 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Call the Google GenAI vision API with one or more profile images.
-   * @param apiKey - Decrypted Google API key
    * @param model - Model name (e.g., "gemini-2.0-flash")
    * @param images - Base64-encoded profile image inputs
-   * @param prompt - Analysis prompt
-   * @returns Text description from the vision model
    */
   private async callGoogleVisionWithBase64(
     apiKey: string,
@@ -497,12 +479,8 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Call an OpenAI-compatible vision API with one or more profile images.
-   * @param apiKey - Decrypted API key
-   * @param model - Model name
    * @param endpointUrl - Chat completions endpoint URL
    * @param images - Base64-encoded profile image inputs
-   * @param prompt - Analysis prompt
-   * @returns Text description from the vision model
    */
   private async callOpenAICompatibleVisionWithBase64(
     apiKey: string,
@@ -596,7 +574,6 @@ export class PeekProfilePictureTool extends BaseTool {
         throw new Error(`Failed to fetch avatar image: ${response.details ?? response.error ?? "unknown error"}`);
       }
 
-      // Convert array buffer to base64
       const base64String = response.buffer.toString("base64");
 
       return base64String;
@@ -613,13 +590,11 @@ export class PeekProfilePictureTool extends BaseTool {
   /**
    * Get and remove a pending enhanced context item
    * Used by tomoriChat during restart processing
-   * @param pendingContextKey - Opaque key to get pending context for
    * @returns Enhanced context item if found, undefined otherwise
    */
   static getPendingEnhancedContext(pendingContextKey: string): StructuredContextItem | undefined {
     const contextItem = PeekProfilePictureTool.pendingEnhancedContextItems.get(pendingContextKey);
     if (contextItem) {
-      // Remove from map to prevent memory leaks
       PeekProfilePictureTool.pendingEnhancedContextItems.delete(pendingContextKey);
     }
     return contextItem;
@@ -627,7 +602,6 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Check if a user has pending enhanced context
-   * @param pendingContextKey - Opaque key to check
    * @returns True if user has pending enhanced context
    */
   static hasPendingEnhancedContext(pendingContextKey: string): boolean {

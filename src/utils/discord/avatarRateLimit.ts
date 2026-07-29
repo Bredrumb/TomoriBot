@@ -49,9 +49,7 @@ export function isAvatarUpdateRateLimited(status: number, errorText: string): bo
     if (parsed.message?.toLowerCase().includes("rate limit")) {
       return true;
     }
-  } catch {
-    // Fall through to text matching below
-  }
+  } catch {}
 
   return /AVATAR_RATE_LIMIT/i.test(errorText) || /RATE_LIMIT/i.test(errorText) || /too fast/i.test(errorText);
 }

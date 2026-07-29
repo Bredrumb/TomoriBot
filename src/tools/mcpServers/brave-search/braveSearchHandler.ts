@@ -37,7 +37,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 
   /**
    * Check if this handler supports a specific function
-   * @param functionName - Function name to check
    * @returns True if this handler supports the function
    */
   public supportsFunction(functionName: string): boolean {
@@ -46,10 +45,8 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 
   /**
    * Process MCP function result before returning to LLM
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
    * @param context - Execution context with Discord channel access
-   * @param args - Function arguments used
    * @returns Processed tool result
    */
   public async processResult(
@@ -93,8 +90,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
    * Process Brave Image Search results by extracting image URLs and sending as Discord attachments
    * @param mcpResult - The raw MCP result from brave_image_search
    * @param context - Execution context containing Discord channel
-   * @param args - The modified arguments used for the search (contains query)
-   * @returns Promise<TypedMCPToolResult> - Simplified result for the LLM
    */
   private async processBraveImageSearch(
     mcpResult: MCPServerResponse,
@@ -269,7 +264,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
   /**
    * Process Brave Web Search results by adding fetch capability reminder
    * @param mcpResult - The raw MCP result from brave_web_search
-   * @param args - The modified arguments used for the search (contains query)
    * @returns Promise<TypedMCPToolResult> - Enhanced result with fetch capability reminder
    */
   private async processBraveWebSearch(
@@ -277,7 +271,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
     _args: Record<string, unknown>,
   ): Promise<TypedMCPToolResult> {
     try {
-      // Extract the original search result text
       let originalText = "";
       if (mcpResult.text) {
         originalText = mcpResult.text;
@@ -288,7 +281,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
         originalText = JSON.stringify(mcpResult, null, 2);
       }
 
-      // Extract URLs from the search results to count them
       const urlPattern = /https?:\/\/[^\s)]+/g;
       const foundUrls = originalText.match(urlPattern) || [];
       const urlCount = foundUrls.length;
@@ -301,7 +293,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 
       const enhancedMessage = originalText;
 
-      // Log the enhanced message that TomoriBot will receive
       log.info(`Enhanced web search response for TomoriBot: ${enhancedMessage.substring(0, 200)}...`);
       log.info(`Fetch capability reminder appended - Found ${urlCount} URLs`);
 
@@ -322,7 +313,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
       };
     } catch (error) {
       log.error("Error processing brave_web_search result:", error as Error);
-      // Fall back to original behavior
       return {
         success: true,
         message: mcpResult.text || "Web search completed successfully",
@@ -340,10 +330,7 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 
   /**
    * Process standard Brave Search results (video, news, local, summarizer)
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
-   * @param context - Execution context
-   * @param args - Function arguments used
    * @returns Promise<TypedMCPToolResult> - Standard processed result
    */
   private processStandardBraveResult(
@@ -364,7 +351,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
         resultText = JSON.stringify(mcpResult, null, 2);
       }
 
-      // Check if this is an error result
       if (mcpResult.isError) {
         return {
           success: false,
@@ -381,7 +367,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
         };
       }
 
-      // Successful execution
       return {
         success: true,
         message: resultText || `${functionName} executed successfully`,
@@ -420,7 +405,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
    */
   private cleanImageSearchResult(mcpResult: MCPServerResponse): Record<string, unknown> {
     try {
-      // Create a deep copy to avoid mutating the original
       const cleanedResult = JSON.parse(JSON.stringify(mcpResult));
 
       // Remove image data from various possible locations
@@ -440,15 +424,12 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
             try {
               const parsedText = JSON.parse(item.text);
               if (parsedText.image_url || parsedText.thumbnail_url) {
-                // Replace with summary instead of removing entirely
                 contentArray[i] = {
                   type: "text",
                   text: "[Image data removed - already sent to Discord]",
                 };
               }
-            } catch {
-              // Not JSON, keep as is
-            }
+            } catch {}
           }
 
           // Remove image objects entirely
@@ -458,7 +439,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
         }
       }
 
-      // Add summary of what was processed
       if (cleanedResult.functionResponse?.response) {
         cleanedResult.functionResponse.response.summary =
           "Image search completed - images have been sent to Discord channel";
@@ -471,7 +451,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
       return cleanedResult;
     } catch (error) {
       log.warn("Failed to clean image search result:", error as Error);
-      // Return minimal result if cleaning fails
       return {
         imageDataRemoved: true,
       };

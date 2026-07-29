@@ -95,7 +95,6 @@ export function selectUnclaimedTriggerWords(
   claimedTriggers: Iterable<string>,
   options: NormalizeTriggerWordOptions = {},
 ): string[] {
-  // Build a case-insensitive lookup of words that are already taken.
   const claimedKeys = new Set<string>();
   for (const claimed of claimedTriggers) {
     const normalizedClaimed = normalizeTriggerWord(claimed);
@@ -104,8 +103,6 @@ export function selectUnclaimedTriggerWords(
     }
   }
 
-  // Keep each candidate that is neither already claimed nor a duplicate of
-  //    an earlier kept candidate.
   const keptTriggers: string[] = [];
   const seenKeys = new Set<string>();
   for (const candidate of candidateTriggers) {

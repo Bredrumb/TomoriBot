@@ -27,7 +27,6 @@ export function getReplyContextAuthorName(message: Message, botUserId?: string, 
   if (botUserId && message.author.id === botUserId) {
     return message.member?.displayName ?? botName ?? stripBridgePrefix(message.author.username);
   }
-  // Normal user messages.
   return message.member?.displayName ?? message.author.globalName ?? stripBridgePrefix(message.author.username);
 }
 

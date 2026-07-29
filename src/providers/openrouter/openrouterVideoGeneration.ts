@@ -35,8 +35,6 @@ interface ExternalHttpResponse {
 /** Whether the current platform is Windows (determines which HTTP backend to use) */
 const IS_WINDOWS = process.platform === "win32";
 
-// ─── PowerShell 7 backend (Windows) ─────────────────────────────────────────────
-
 /**
  * Inline pwsh script that reads a JSON request envelope from stdin and performs
  * the HTTP request using Invoke-WebRequest.
@@ -86,7 +84,6 @@ async function pwshHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // Build the request envelope that pwsh reads from stdin
   const requestEnvelope = JSON.stringify({ url, method, headers, body });
 
   // Spawn pwsh with the inline HTTP script
@@ -98,11 +95,9 @@ async function pwshHttpRequest(
     stderr: "pipe",
   });
 
-  // Write the request envelope to stdin and close it
   proc.stdin.write(requestEnvelope);
   proc.stdin.end();
 
-  // Collect stdout and stderr in parallel
   const [rawOutput, rawStderr] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -114,7 +109,6 @@ async function pwshHttpRequest(
     throw new Error(`pwsh HTTP request failed (exit ${exitCode}): ${rawStderr.slice(0, 500)}`);
   }
 
-  // Parse the JSON response envelope from pwsh
   let envelope: { status: number; bodyBase64: string };
   try {
     envelope = JSON.parse(rawOutput) as typeof envelope;
@@ -122,13 +116,10 @@ async function pwshHttpRequest(
     throw new Error(`pwsh HTTP response is not valid JSON: ${rawOutput.slice(0, 300)}`);
   }
 
-  // Decode the base64 body back to a Buffer (handles both JSON and binary MP4 content)
   const bodyBuffer = Buffer.from(envelope.bodyBase64, "base64");
 
   return { status: envelope.status, headers: {}, bodyBuffer };
 }
-
-// ─── curl backend (Linux / Docker) ──────────────────────────────────────────────
 
 /**
  * HTTP request via curl subprocess.
@@ -146,7 +137,6 @@ async function curlHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // Build curl arguments
   const args: string[] = ["-s", "-S", "--max-time", "120", "--proto", "=https", "-X", method];
 
   // Suppress Expect: 100-continue — curl sends this for POST bodies over ~1KB,
@@ -159,18 +149,14 @@ async function curlHttpRequest(
     args.push("-H", `${key}: ${value}`);
   }
 
-  // Add request body via --data-raw (no @filename expansion)
   if (body !== undefined) {
     args.push("--data-raw", body);
   }
 
-  // Include response headers in output via -i
   args.push("-i");
 
-  // Target URL last
   args.push(url);
 
-  // Spawn curl
   const proc = Bun.spawn(["curl", ...args], {
     stdout: "pipe",
     stderr: "pipe",
@@ -187,7 +173,6 @@ async function curlHttpRequest(
     throw new Error(`curl exited with code ${exitCode}: ${rawStderr.slice(0, 500)}`);
   }
 
-  // Parse the -i output: headers separated from body by \r\n\r\n
   const fullBuffer = Buffer.from(rawOutput);
   const headerEndIndex = fullBuffer.indexOf("\r\n\r\n");
 
@@ -198,12 +183,10 @@ async function curlHttpRequest(
   const headerSection = fullBuffer.subarray(0, headerEndIndex).toString("utf8");
   const bodyBuffer = fullBuffer.subarray(headerEndIndex + 4);
 
-  // Parse status line (e.g. "HTTP/1.1 200 OK" or "HTTP/2 200")
   const headerLines = headerSection.split("\r\n");
   const statusMatch = headerLines[0]?.match(/HTTP\/[\d.]+ (\d+)/);
   const status = statusMatch ? Number.parseInt(statusMatch[1], 10) : 0;
 
-  // Parse response headers into lowercase key-value map
   const responseHeaders: Record<string, string> = {};
   for (let i = 1; i < headerLines.length; i++) {
     const colonIdx = headerLines[i].indexOf(":");
@@ -217,8 +200,6 @@ async function curlHttpRequest(
   return { status, headers: responseHeaders, bodyBuffer };
 }
 
-// ─── Platform dispatcher ────────────────────────────────────────────────────────
-
 /**
  * Makes an HTTP request via an external process to bypass Bun's TLS fingerprint.
  * Dispatches to the appropriate backend based on the current platform:
@@ -227,7 +208,6 @@ async function curlHttpRequest(
  *
  * @param url - The full URL to request (must be HTTPS)
  * @param method - HTTP method (GET or POST)
- * @param headers - HTTP headers to include in the request
  * @param body - Optional JSON body string for POST requests
  * @returns Object with HTTP status code, response headers, and raw body as a Buffer
  */
@@ -248,7 +228,6 @@ async function externalHttpRequest(
     sanitizedHeaders[key] = value.replace(/[\r\n]/g, "");
   }
 
-  // Dispatch to platform-appropriate backend
   return IS_WINDOWS
     ? pwshHttpRequest(url, method, sanitizedHeaders, body)
     : curlHttpRequest(url, method, sanitizedHeaders, body);
@@ -416,7 +395,6 @@ export async function generateOpenRouterNativeVideo(
         case "expired":
           return { done: true, error: "OpenRouter video generation expired" };
         default:
-          // "pending" or "in_progress"
           return { done: false };
       }
     },

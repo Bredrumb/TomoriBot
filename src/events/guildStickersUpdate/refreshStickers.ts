@@ -5,16 +5,13 @@ import type { ErrorContext } from "../../types/db/schema"; // Import ServerRow
 import { log } from "../../utils/misc/logger";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { invalidateEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
-// Removed loadServerState import
 
 /**
  * JSDoc comment for exported function
  * Handles sticker create, delete, and update events by refreshing the guild's sticker list in the database.
- * @param _client - Discord client instance (unused)
  * @param args - Event arguments (expected: Sticker or [Sticker, Sticker])
  */
 const handleGuildStickersUpdate: EventFunction = async (_client: Client, ...args: EventArg[]): Promise<void> => {
-  // Identify the Sticker and Guild from the event arguments
   const sticker = args[0];
   if (!(sticker instanceof Sticker) || !sticker.guild) {
     log.warn("guildStickersUpdate event triggered without a valid Sticker or Guild.", { args });
@@ -26,7 +23,6 @@ const handleGuildStickersUpdate: EventFunction = async (_client: Client, ...args
   let serverId: number | undefined; // Variable to hold the internal server ID
 
   try {
-    // Check if server is registered and get internal server_id via repository
     serverId = (await serverRepository.loadServerIdByDiscId(guild.id)) ?? undefined;
 
     if (!serverId) {
@@ -40,7 +36,6 @@ const handleGuildStickersUpdate: EventFunction = async (_client: Client, ...args
     const currentStickers = Array.from(guild.stickers.cache.values());
     log.info(`Fetched and cached ${currentStickers.length} stickers for guild ${guild.id}. Refreshing DB...`);
 
-    // Sync stickers to database using shared helper
     await sql.transaction(async (tx) => {
       // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
       await serverRepository.syncStickers(tx, serverId!, currentStickers);

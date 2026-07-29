@@ -17,8 +17,6 @@ import {
 /**
  * Configures the /stats personal subcommand: the invoking user's own usage stats,
  * with a required timeframe and a scope toggle (this server vs. across all servers).
- * @param subcommand - The subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -35,7 +33,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           { name: localizer("en-US", "commands.choices.global"), value: "global" },
         ),
     )
-    // Optional timeframe — defaults to all-time when omitted.
     .addStringOption((option) =>
       option
         .setName("timeframe")
@@ -48,10 +45,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Renders the personal stats dashboard for the invoking user.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -86,7 +79,6 @@ export async function execute(
       return;
     }
 
-    // Resolve options: timeframe → window floor, scope → optional server filter.
     const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const scope = interaction.options.getString("scope", true) as StatsScope;
     const from = resolveWindowFrom(timeframe);
@@ -98,7 +90,6 @@ export async function execute(
     );
     const subtitle = `${interaction.user.displayName} • **${timeframeLabel}** (${scopeLabel})`;
 
-    // Build the tabs and render the invoker-controlled tabbed dashboard.
     const tabs = await buildPersonalTabs({
       locale,
       userId,
@@ -112,7 +103,6 @@ export async function execute(
       timezoneOffset: userData.timezone_offset ?? null,
     });
 
-    // Pin the invoking user's avatar to the dashboard's top-right corner.
     const iconUrl = interaction.user.displayAvatarURL({ extension: "png", size: 256 });
     await renderStatsDashboard(interaction, interaction.user.id, locale, tabs, iconUrl);
   } catch (error) {

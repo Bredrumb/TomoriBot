@@ -49,7 +49,6 @@ import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 
-// Modal constants
 const MODAL_CUSTOM_ID = "preset_generate_modal";
 const CHARACTER_NAME_ID = "character_name";
 const CHARACTER_INFO_ID = "character_info"; // Combined description and speech examples
@@ -82,24 +81,19 @@ function formatDialoguePreview(
   maxExamples = 3,
   maxLength = 100,
 ): string {
-  // Determine how many dialogues to show (min of array lengths and maxExamples)
   const numDialogues = Math.min(dialoguesIn.length, dialoguesOut.length, maxExamples);
 
-  // Build preview string with truncated dialogues
   const previews: string[] = [];
   for (let i = 0; i < numDialogues; i++) {
     const userInput = dialoguesIn[i].substring(0, maxLength);
     const botResponse = dialoguesOut[i].substring(0, maxLength);
 
-    // Add ellipsis if truncated
     const userText = dialoguesIn[i].length > maxLength ? `${userInput}...` : userInput;
     const botText = dialoguesOut[i].length > maxLength ? `${botResponse}...` : botResponse;
 
-    // Format as User/Bot pair
     previews.push(`**User:** ${userText}\n**Bot:** ${botText}`);
   }
 
-  // Join all examples with line breaks
   return previews.join("\n\n");
 }
 
@@ -233,10 +227,6 @@ function isToolContextChannel(channel: unknown): channel is ToolContextChannel {
  * Executes the 'generate' command
  * AI-powered personality generation using structured output providers
  *
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   client: Client,
@@ -326,7 +316,6 @@ export async function execute(
       return;
     }
 
-    // Show modal with generation fields
     const modalComponents: ModalComponent[] = [
       {
         customId: CHARACTER_NAME_ID,
@@ -392,7 +381,6 @@ export async function execute(
       true, // Auto-defer with public reply
     );
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Generate modal ${modalResult.outcome}`);
       return;
@@ -405,7 +393,6 @@ export async function execute(
     const webSearch = modalResult.values?.[WEB_SEARCH_ID];
     const additionalInst = modalResult.values?.[ADDITIONAL_INST_ID];
 
-    // Safety checks
     if (!modalSubmitInteraction || !characterNameInput || !characterInfo || !webSearch) {
       log.error("Modal result unexpectedly missing values");
       return;
@@ -422,7 +409,6 @@ export async function execute(
     }
     const characterName = parsedNames[0];
 
-    // Capture optional image attachment and prep snapshot attachment
     const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
     let imageBase64: string | undefined;
     let imageMimeType: string | undefined;
@@ -472,7 +458,6 @@ export async function execute(
     let generationProviderName = providerName;
 
     if (imageAttachment) {
-      // Early memory guard check
       const memCheck = memoryGuard.checkMemory();
       if (memCheck.status === "critical") {
         // Preserve modal inputs for user convenience
@@ -481,7 +466,6 @@ export async function execute(
           .setDescription(localizer(locale, "rate_limit.error_memory_critical_description"))
           .setColor(ColorCode.ERROR);
 
-        // Add modal inputs as fields (excluding image)
         embed.addFields(
           {
             name: localizer(locale, "commands.persona.generate.field_character_name"),
@@ -512,7 +496,6 @@ export async function execute(
         return;
       }
 
-      // Validate image type
       if (!imageAttachment.content_type?.startsWith("image/")) {
         await modalSubmitInteraction.editReply({
           embeds: [
@@ -534,7 +517,6 @@ export async function execute(
       });
 
       if (!downloadResult.success) {
-        // Handle different error types with localized messages
         let errorKey: string;
         if (downloadResult.error === "size_exceeded") {
           errorKey = "commands.persona.generate.error_file_too_large";
@@ -582,7 +564,6 @@ export async function execute(
       // This enables "transform/tweak" workflows where users upload a card
       // and ask the AI to modify it (e.g., "make it more conversational")
 
-      // Try Tomori preset format first (native format)
       const tomoriPreset = extractMetadataFromPNG(imageBuffer);
       if (tomoriPreset?.data) {
         extractedPresetContext = JSON.stringify(tomoriPreset.data);
@@ -672,7 +653,6 @@ export async function execute(
       }
     }
 
-    // Validate web search capability before processing
     const webSearchRequested = webSearch.trim().toLowerCase() === "yes";
     const useWebSearch = webSearchRequested && tomoriState.config.web_search_enabled;
 
@@ -696,7 +676,6 @@ export async function execute(
       return;
     }
 
-    // Show processing status
     await editGenerateStatusReply(modalSubmitInteraction, {
       locale,
       titleKey: "commands.persona.generate.processing_title",
@@ -705,7 +684,6 @@ export async function execute(
     });
     replyUsesComponentsV2 = true;
 
-    // Prepare generation parameters
     const genParams: GeneratePresetParams = {
       characterName,
       characterDescription: characterDesc,
@@ -734,7 +712,6 @@ export async function execute(
       log.warn("Preset generation web search skipped: no channel context available.");
     }
 
-    // Generate preset data
     log.info(`Generating preset data with ${generationTomoriState.llm.llm_provider}...`);
 
     const genResult = await generatePresetForProvider({
@@ -747,7 +724,6 @@ export async function execute(
     });
 
     if (genResult.error || !genResult.preset) {
-      // Show error status
       await editGenerateStatusReply(modalSubmitInteraction, {
         locale,
         titleKey: "commands.persona.generate.generation_failed_title",
@@ -769,15 +745,12 @@ export async function execute(
       );
     }
 
-    // Validate generated data against schema
     const validationResult = presetExportDataSchema.safeParse(genResult.preset);
     if (!validationResult.success) {
-      // Log detailed validation errors
       log.error("Generated preset failed validation:");
       log.error("Validation errors:", JSON.stringify(validationResult.error.format(), null, 2));
       log.error("Generated preset data:", JSON.stringify(genResult.preset, null, 2));
 
-      // Extract specific error messages for user
       const errorDetails = validationResult.error.issues
         .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("\n");
@@ -801,7 +774,6 @@ export async function execute(
     if (imageBuffer) {
       // Use uploaded image (already downloaded earlier, reuse buffer)
       try {
-        // Crop to 1:1 square
         pngBuffer = await centerCropToSquare(imageBuffer);
         log.info("Uploaded image cropped to 1:1 square (reused buffer)");
       } catch (error) {
@@ -834,7 +806,6 @@ export async function execute(
       }
     }
 
-    // Create preset export structure with metadata
     const presetExport: PresetExport = {
       version: PRESET_EXPORT_VERSION,
       type: "preset",
@@ -842,7 +813,6 @@ export async function execute(
       data: genResult.preset,
     };
 
-    // Embed metadata in PNG
     let finalPngBuffer: Buffer;
     try {
       finalPngBuffer = await embedMetadataInPNG(pngBuffer, presetExport);
@@ -859,7 +829,6 @@ export async function execute(
       return;
     }
 
-    // Create attachment
     const sanitizedNickname = sanitizeAttachmentFilenamePart(characterName, {
       fallback: "persona",
       maxLength: 50,
@@ -870,7 +839,6 @@ export async function execute(
       name: filename,
     });
 
-    // Detect DM context and create success container with main image
     const isDM = !interaction.guild;
 
     // Format attribute preview (first attribute). The ellipsis is conditional:
@@ -921,7 +889,6 @@ export async function execute(
         },
       ],
       buttonAlignment: "right",
-      // Closing note sits on its own row below the button.
       trailingNoteKey: "commands.persona.generate.success_next_steps_footer",
       ...(isDM ? { footerKey: "commands.persona.generate.avatar_update_skipped_dm" } : {}),
     };
@@ -945,7 +912,6 @@ export async function execute(
         flags: MessageFlags.IsComponentsV2,
       });
 
-      // Wire the Import Now collector to the just-sent public message.
       const sentMessage = await modalSubmitInteraction.fetchReply();
       attachImportNowCollector({
         message: sentMessage,
@@ -966,7 +932,6 @@ export async function execute(
     log.error("Error in preset generate command:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-    // Try to send an error response if possible.
     try {
       const errorEmbed = new EmbedBuilder()
         .setTitle(localizer(locale, "general.errors.unexpected_title"))
@@ -996,7 +961,6 @@ export async function execute(
         });
       }
     } catch {
-      // If we can't send the error embed, just log it
       log.error("Failed to send error embed");
     }
   }

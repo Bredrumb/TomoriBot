@@ -123,7 +123,6 @@ function isIrodoriTtsEndpoint(endpoint: CustomEndpointRow): boolean {
 export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Promise<TtsCloneResult> {
   const { endpoint, voiceSampleId, script, apiKey, chatterbox } = request;
 
-  // Load voice sample metadata from DB via repository.
   const voiceSample = await loadVoiceSampleById(voiceSampleId);
 
   if (!voiceSample) {
@@ -137,7 +136,6 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
 
   const sample = voiceSample;
 
-  // Read the audio from stable storage and base64-encode it.
   const refAudioBuffer = await loadStoredVoiceSampleBuffer(sample.file_path);
   if (!refAudioBuffer) {
     log.warn(`[TtsClone] Failed to read voice sample ${voiceSampleId} from ${sample.file_path}`);
@@ -181,7 +179,6 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
     };
   }
 
-  // Build the /synthesize request body per the TomoriBot TTS spec.
   const body: Record<string, unknown> = {
     text: processedScript,
     ref_audio: refAudioBuffer.toString("base64"),
@@ -205,7 +202,6 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
     headers.Authorization = `Bearer ${apiKey}`;
   }
 
-  // POST to {endpoint_url}/synthesize with a configurable timeout.
   let response: Response;
   try {
     const abortController = new AbortController();
@@ -236,14 +232,11 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
       const errorBody = (await response.json()) as { error?: unknown; detail?: unknown };
       const structuredDetail = stringifyErrorDetail(errorBody.error ?? errorBody.detail);
       if (structuredDetail) errorDetails += `: ${structuredDetail}`;
-    } catch {
-      // Ignore JSON parse failures on error responses.
-    }
+    } catch {}
     log.warn(`[TtsClone] ${endpointUrl}/synthesize returned error: ${errorDetails}`);
     return { success: false, errorKind: "request_failed", details: errorDetails };
   }
 
-  // Read the binary audio body.
   const rawContentType = response.headers.get("content-type") ?? "audio/wav";
   // Bare MIME type only — Discord rejects waveform metadata for non-bare types.
   const contentType = rawContentType.split(";")[0].trim();

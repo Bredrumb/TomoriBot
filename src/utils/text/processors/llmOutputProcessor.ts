@@ -27,7 +27,6 @@ function shouldPreserveUnresolvedEmojiShortcodes(): boolean {
  * Returns all code-span and code-block ranges in `text` as [{start, end}] pairs.
  * Used to skip over code regions when scanning for speaker-stop labels.
  * @param text - Text to scan for markdown code ranges
- * @returns Array of {start, end} index pairs covering each code span/block
  */
 export function findMarkdownCodeRanges(text: string): Array<{ start: number; end: number }> {
   if (!text.includes("`")) return [];
@@ -77,7 +76,6 @@ export function isGenericSpeakerStopLabel(rawLabel: string): boolean {
 /**
  * Truncates text at the first generic speaker-turn line (e.g. "User:\n..."), optionally
  * including the very first line if it matches.
- * @param text - LLM output to scan
  * @param options.includeStart - Also check the very first line for a speaker label
  * @returns Object with `text` (possibly truncated), `stopTriggered`, and `matchedSpeaker`
  */
@@ -118,8 +116,6 @@ export function truncateBeforeGenericSpeakerLine(
  * "**Name**:" bold forms, for any of the supplied names. Names are escaped, de-duplicated, and
  * ordered longest-first so a longer name ("Shy Tomori") is preferred over a shorter one it
  * contains ("Tomori"). Blank names are dropped.
- * @param names - Speaker names the label may use
- * @returns Regex source string (a non-capturing group), or null if no usable names remain
  */
 function buildNameLabelAlternation(names: string[]): string | null {
   const escapedForms: string[] = [];
@@ -178,10 +174,7 @@ const IDENTITY_MACRO_LABEL_ALTERNATION = `(?:\\*\\*${IDENTITY_MACRO_SOURCE}:\\*\
  * NOTE: this function owns the leading-label strip, so it must run on text where that label is
  * still present (callers must not pre-strip it) — otherwise the branch-A/B decision is wrong.
  *
- * @param text - LLM text (post emoji-resolution)
- * @param botName - Active persona / bot display name
  * @param aliasNames - Additional names the active persona answers to (e.g. lore/default name)
- * @returns Text with leaked self-labels removed
  */
 export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNames: string[] = []): string {
   if (!text || !botName.trim()) return text;
@@ -212,7 +205,6 @@ export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNam
     ? working // Real turn — leading self/alias chain dropped.
     : stripLeakedPreamble(text, labelAlternation); // Leaked preamble — drop everything before the turn.
 
-  // Clean any self-labels that re-introduce the persona at a later turn boundary.
   return stripBoundaryOwnNameLabels(deleaked, labelAlternation);
 }
 
@@ -236,8 +228,6 @@ const CUSTOM_EMOJI_TAG_SOURCE = "<a?:[^\\s:>]+:\\d+>";
  * stripBoundaryOwnNameLabels. Labels inside markdown code spans/blocks are ignored.
  *
  * @param text - LLM text that does not open with the persona label
- * @param labelAlternation - Regex source matching the own-name label (plain/bold forms)
- * @returns Text with any leaked preamble removed
  */
 function stripLeakedPreamble(text: string, labelAlternation: string): string {
   const codeRanges = findMarkdownCodeRanges(text);
@@ -257,7 +247,6 @@ function stripLeakedPreamble(text: string, labelAlternation: string): string {
   let match: RegExpExecArray | null = null;
   // biome-ignore lint/suspicious/noAssignInExpressions: standard exec loop
   while ((match = leakLabelPattern.exec(text)) !== null) {
-    // Ignore a label that lives inside a code span/block.
     if (isIndexInsideRanges(match.index, codeRanges)) continue;
     // Cut the preamble + this label only when a real response follows; a trailing-only label
     //    keeps its preceding text (it is the response) and is dropped downstream instead.
@@ -280,9 +269,6 @@ function stripLeakedPreamble(text: string, labelAlternation: string): string {
  * Mid-text labels collapse to a newline (so the following clause splits onto its own line);
  * a leading/trailing label is removed (any inserted newline is trimmed by the caller).
  *
- * @param text - LLM text
- * @param labelAlternation - Regex source matching the own-name label (plain/bold forms)
- * @returns Text with boundary self-labels stripped
  */
 function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): string {
   const codeRanges = findMarkdownCodeRanges(text);
@@ -308,7 +294,6 @@ function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): str
   let match: RegExpExecArray | null = null;
   // biome-ignore lint/suspicious/noAssignInExpressions: standard exec loop
   while ((match = labelPattern.exec(text)) !== null) {
-    // The char/tag kept before the inserted newline is whichever shape matched (start → "").
     const kept = match[1] ?? match[3] ?? match[4] ?? "";
     // Leave labels inside code spans/blocks untouched (do NOT advance lastIndex). match.index
     //    is the start of the kept prefix, within a couple chars of the label — close enough.
@@ -321,7 +306,6 @@ function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): str
     lastIndex = labelPattern.lastIndex;
   }
 
-  // No (strippable) matches — return the input untouched.
   if (lastIndex === 0) return text;
   result += text.slice(lastIndex);
   return result;
@@ -335,13 +319,11 @@ function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): str
  * @param botName - Optional bot name to remove from response prefix
  * @param emojiStrings - Array of valid Discord emoji strings for the server
  * @param emojiUsageEnabled - When false, strips all emoji from the output
- * @param mentionMap - Map of mention handles to user IDs
  * @param mentionIdSet - Set of known user IDs for disambiguation
  * @param uncensorOptions - Optional uncensor cleanup flags (output side)
  * @param botNameAliases - Additional names the active persona answers to (e.g. lore/default name),
  *   used to strip a leaked multi-name opening label chain ("Tomori: Lilya: ...")
  * @param personaMentionMap - Map of known persona handles to canonical trigger words
- * @returns Cleaned text suitable for Discord messages
  */
 export function cleanLLMOutput(
   text: string,

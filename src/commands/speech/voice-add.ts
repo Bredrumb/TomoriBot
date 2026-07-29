@@ -160,7 +160,6 @@ export async function execute(
     return;
   }
 
-  // Pre-flight size check using the reported size.
   if (attachment.size > SPEECH_SAMPLE_MAX_MB * 1024 * 1024) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.speech.voice_add.size_error_title",
@@ -174,7 +173,6 @@ export async function execute(
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Resolve server context.
   const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild?.id ?? interaction.user.id);
   if (!serverId) {
     await replyInfoEmbed(interaction, locale, {
@@ -186,7 +184,6 @@ export async function execute(
   }
 
   try {
-    // Download the audio attachment with the configured size limit.
     const downloadResult = await safeDownload(attachment.url, {
       maxSizeMB: SPEECH_SAMPLE_MAX_MB,
       timeoutMs: 30_000,
@@ -203,7 +200,6 @@ export async function execute(
 
     const rawBuffer = downloadResult.buffer;
 
-    // Parse duration from audio headers.
     let durationSecs = 0;
     try {
       const metadata = await parseBuffer(rawBuffer, {
@@ -279,7 +275,6 @@ export async function execute(
       return;
     }
 
-    // Update the row with the resolved storage reference.
     await updateVoiceSamplePath(sampleId, storedReference);
 
     const durationDisplay = durationSecs > 0 ? `${Math.floor(durationSecs)}s` : localizer(locale, "general.unknown");

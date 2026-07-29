@@ -238,7 +238,6 @@ export function isAutochatCounterHit(tomoriState: TomoriState, channelId: string
  *
  * @param message - The incoming Discord message
  * @param allPersonas - All known personas for this server
- * @param activePersonaId - The persona_id currently streaming/responding
  */
 export function hasExplicitCrossPersonaTrigger(
   message: Message,
@@ -247,7 +246,6 @@ export function hasExplicitCrossPersonaTrigger(
 ): boolean {
   const mainPersona = allPersonas.find((p) => !p.is_alter);
 
-  // Build nickname → persona lookup for webhook/reply resolution
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of allPersonas) {
     const key = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
@@ -256,7 +254,6 @@ export function hasExplicitCrossPersonaTrigger(
 
   const clientUserId = message.client.user?.id;
 
-  // Bot mention or reply-to-bot triggers the main persona
   const isBotMentioned = clientUserId ? message.mentions.users.has(clientUserId) : false;
   const refMessage = message.reference?.messageId
     ? message.channel.messages.cache.get(message.reference.messageId)
@@ -266,7 +263,6 @@ export function hasExplicitCrossPersonaTrigger(
     return true;
   }
 
-  // Reply to a webhook persona message triggers that persona
   if (refMessage?.webhookId) {
     const webhookPersona =
       resolveRenderModifierSourcePersona(refMessage.author.username, personaByNickname)?.persona ??
@@ -276,7 +272,6 @@ export function hasExplicitCrossPersonaTrigger(
     }
   }
 
-  // Trigger words for any persona other than the active one
   for (const persona of allPersonas) {
     if (persona.persona_id === activePersonaId) continue;
     const triggers = persona.trigger_words ?? [];

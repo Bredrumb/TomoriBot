@@ -61,7 +61,6 @@ export async function execute(
       return;
     }
 
-    // Update via per-domain repository (server_trigger_behavior_configs)
     const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       deliberate_tool_context_turns: turns,
     });

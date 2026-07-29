@@ -56,7 +56,6 @@ export class ProcessGifTool extends BaseTool {
    * Model vision support is handled by `requiredModelCapabilities` and
    * `isAvailableForContext()`.
    *
-   * @param _provider - LLM provider name
    * @returns True only if not in production and provider supports vision
    */
   isAvailableFor(_provider: string): boolean {
@@ -72,8 +71,6 @@ export class ProcessGifTool extends BaseTool {
   /**
    * Enhanced availability check that considers context flags and model vision capabilities
    *
-   * @param provider - LLM provider name
-   * @param context - Tool context that may contain disable flags and tomoriState
    * @returns True if tool should be available
    */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
@@ -82,7 +79,6 @@ export class ProcessGifTool extends BaseTool {
       return false;
     }
 
-    // Require context with tomoriState
     if (!context?.tomoriState) {
       log.warn("ProcessGifTool: No tomoriState in context, defaulting to unavailable");
       return false;
@@ -126,7 +122,6 @@ export class ProcessGifTool extends BaseTool {
    * @returns Promise resolving to tool result with restart signal
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Extract and validate parameters
     const messageId = args.media_id as string;
     const reason = (args.reason as string | undefined) || "No reason provided";
 
@@ -148,7 +143,6 @@ export class ProcessGifTool extends BaseTool {
         limit: 100,
       });
 
-      // Find the target message by ID
       const targetMessage = recentMessages.get(messageId);
       if (!targetMessage) {
         log.warn(`ProcessGifTool: Message ${messageId} not found in recent 100 messages`);
@@ -264,7 +258,6 @@ export class ProcessGifTool extends BaseTool {
 
       // Add each keyframe with a label (matching googleStreamAdapter pattern)
       for (const frame of processedFrames) {
-        // Add frame label
         frameParts.push({
           type: "text",
           text: `Frame ${frame.frameNumber + 1}/${processedFrames.length} (original frame ${frame.originalFrameIndex + 1}/${frame.totalFrames}):`,
@@ -288,13 +281,11 @@ export class ProcessGifTool extends BaseTool {
         parts: frameParts,
       };
 
-      // Store in static map for enhanced context restart
       ProcessGifTool.pendingEnhancedContextItems.set(messageId, enhancedContextItem);
       log.info(
         `ProcessGifTool: Stored ${processedFrames.length} frames in pending context map for message ${messageId}`,
       );
 
-      // Return success signal to trigger context restart
       return {
         success: true,
         message: `Successfully processed GIF with ${processedFrames.length} keyframes from message ${messageId}. Processing took ${processingTime}ms.`,
@@ -309,14 +300,12 @@ export class ProcessGifTool extends BaseTool {
         },
       };
     } catch (error) {
-      // Comprehensive error handling with categorization
       log.error(`ProcessGifTool: Failed to process GIF for message ${messageId}`, error as Error);
 
       let errorMessage = "Failed to process GIF due to an unexpected error.";
       let errorStatus = "gif_processing_failed";
 
       if (error instanceof Error) {
-        // Categorize errors for better UX
         if (error.message.includes("timeout")) {
           errorMessage = "GIF processing timed out (exceeded 30 seconds). The GIF might be too complex or too large.";
           errorStatus = "processing_timeout";
@@ -353,7 +342,6 @@ export class ProcessGifTool extends BaseTool {
   static getPendingEnhancedContext(messageId: string): StructuredContextItem | undefined {
     const contextItem = ProcessGifTool.pendingEnhancedContextItems.get(messageId);
     if (contextItem) {
-      // Remove from map to prevent memory leaks
       ProcessGifTool.pendingEnhancedContextItems.delete(messageId);
     }
     return contextItem;
@@ -361,7 +349,6 @@ export class ProcessGifTool extends BaseTool {
 
   /**
    * Check if a message has pending enhanced context
-   * @param messageId - Message ID to check
    * @returns True if message has pending enhanced context
    */
   static hasPendingEnhancedContext(messageId: string): boolean {

@@ -1,9 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type {
-  Client,
-  // Import specific event argument types if needed later for type guards
-} from "discord.js";
+import type { Client } from "discord.js";
 import type { EventArg, EventFunction } from "../types/discord/global";
 import { log } from "../utils/misc/logger";
 import { healthTracker } from "../utils/misc/healthTracker";
@@ -123,7 +120,6 @@ async function loadEventHandlerMap(eventsBasePath: string): Promise<Map<string, 
 /**
  * Sets up all event listeners for the Discord client after loading event modules.
  * Maps specific Discord events to handler folders.
- * @param client - The Discord client instance.
  */
 const setupEventListeners = async (client: Client): Promise<void> => {
   log.section("Starting Event Listeners Setup...");

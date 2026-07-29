@@ -53,7 +53,6 @@ const ALLOWED_PERSONA_CONFIG_FIELDS = schemaKeysExcluding<PersonaConfigRow>(pers
  * Validates that all provided field names are whitelisted for User table updates.
  * Throws an error if any field is not allowed to prevent SQL injection.
  *
- * @param fields - Array of field names to validate
  * @throws Error if any field name is not whitelisted
  */
 export function validateUserFields(fields: string[]): void {
@@ -70,7 +69,6 @@ export function validateUserFields(fields: string[]): void {
  * Validates that all provided field names are whitelisted for Tomori table updates.
  * Throws an error if any field is not allowed to prevent SQL injection.
  *
- * @param fields - Array of field names to validate
  * @throws Error if any field name is not whitelisted
  */
 export function validateTomoriFields(fields: string[]): void {
@@ -87,7 +85,6 @@ export function validateTomoriFields(fields: string[]): void {
  * Validates that all provided field names are whitelisted for TomoriConfig table updates.
  * Throws an error if any field is not allowed to prevent SQL injection.
  *
- * @param fields - Array of field names to validate
  * @throws Error if any field name is not whitelisted
  */
 export function validateTomoriConfigFields(fields: string[]): void {
@@ -104,7 +101,6 @@ export function validateTomoriConfigFields(fields: string[]): void {
  * Validates that all provided field names are whitelisted for PersonaConfig table updates.
  * Throws an error if any field is not allowed to prevent SQL injection.
  *
- * @param fields - Array of field names to validate
  * @throws Error if any field name is not whitelisted
  */
 export function validatePersonaConfigFields(fields: string[]): void {

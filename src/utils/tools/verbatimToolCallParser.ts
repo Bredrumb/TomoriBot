@@ -95,7 +95,6 @@ export class VerbatimToolCallParser {
       return { visibleText: "", functionCall: null };
     }
 
-    // No parseable tools — nothing to detect, pass everything through.
     if (!this.anchorRegex) {
       return { visibleText: text, functionCall: null };
     }
@@ -114,7 +113,6 @@ export class VerbatimToolCallParser {
 
   flush(): VerbatimToolCallFlushResult {
     if (this.mode === "accumulating") {
-      // Stream ended while a call was buffered — attempt a final completion.
       const result = this.tryCompleteCall();
       const pendingText = result.visibleText + this.buffer;
       this.reset();
@@ -138,7 +136,6 @@ export class VerbatimToolCallParser {
    * immediately so a single-chunk call resolves without an extra round-trip.
    */
   private scanForAnchor(): VerbatimToolCallFeedResult {
-    // anchorRegex is non-null here (feed() guards the null case).
     const regex = this.anchorRegex as RegExp;
     regex.lastIndex = 0;
     const match = regex.exec(this.buffer);
@@ -156,7 +153,6 @@ export class VerbatimToolCallParser {
       this.buffer = this.buffer.slice(splitAt);
       this.mode = "accumulating";
 
-      // With no prose to emit first, it is safe to resolve in this feed.
       if (prose.length === 0) {
         return this.tryCompleteCall();
       }

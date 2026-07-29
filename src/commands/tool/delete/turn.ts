@@ -35,7 +35,6 @@ interface DeleteTurnStatus {
 /**
  * Resolves the parent text channel that owns the webhook for the given channel.
  * Threads cannot own webhooks — the parent channel is used instead.
- * @param channel - The channel to resolve the webhook host for
  * @returns The BaseGuildTextChannel that owns webhooks, or null if unavailable
  */
 function resolveWebhookHostChannel(channel: Message["channel"]): BaseGuildTextChannel | null {
@@ -51,7 +50,6 @@ function resolveWebhookHostChannel(channel: Message["channel"]): BaseGuildTextCh
  * Resolves the thread ID for webhook message deletion.
  * When deleting webhook messages inside a thread, the thread ID must be passed
  * as the second argument to `webhook.deleteMessage()`.
- * @param channel - The channel to check for thread context
  * @returns The thread ID if in a thread, otherwise undefined
  */
 function resolveWebhookThreadId(channel: Message["channel"]): string | undefined {
@@ -60,8 +58,6 @@ function resolveWebhookThreadId(channel: Message["channel"]): string | undefined
 
 /**
  * Configures the 'turn' subcommand under the 'delete' group.
- * @param subcommand - SlashCommandSubcommandBuilder
- * @returns Configured builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -94,10 +90,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * - With `select_persona`, the persona workflow edits that reply, then
  *   update-defers the selected button and keeps the anchor message in place.
  *
- * @param client - Discord client instance
- * @param interaction - ChatInputCommandInteraction
- * @param _userData - User row from database (unused)
- * @param locale - User's locale string
  */
 export async function execute(
   client: Client,
@@ -105,7 +97,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Validate guild + channel presence
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -125,7 +116,6 @@ export async function execute(
   // before those reads so the optional persona picker can safely edit this reply.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Load main persona state — needed for permission check and config values
   const tomoriState = await getCachedMainPersona(guildId);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -178,7 +168,6 @@ export async function execute(
   let personaWorkflowStarted = false;
 
   try {
-    // Load all personas for selection and persona-turn detection.
     const allPersonas = await getCachedAllPersonas(guildId);
 
     const performDeletion = async (
@@ -188,7 +177,6 @@ export async function execute(
       // Target persona tracking — null means auto-detect from message history
       let resolvedPersona = initialPersona;
 
-      // Fetch recent messages from the channel
       const fetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
       const fetched = await channel.messages.fetch({ limit: fetchLimit });
 
@@ -196,7 +184,6 @@ export async function execute(
       // so index 0 = oldest and the last index = newest
       const messages: Message[] = [...fetched.values()].reverse();
 
-      // Walk newest-to-oldest to find the last contiguous persona block
       const detectedTurn = findLastPersonaTurnBlock({
         messages,
         allPersonas,
@@ -206,7 +193,6 @@ export async function execute(
       const blockMessages = detectedTurn.blockMessages;
       resolvedPersona = detectedTurn.resolvedPersona;
 
-      // No persona block found in recent history
       if (blockMessages.length === 0) {
         await updateStatus({
           titleKey: "commands.tool.delete.turn.no_persona_found_title",
@@ -219,7 +205,6 @@ export async function execute(
       const displayName = resolvedPersona?.persona_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
       const totalCount = blockMessages.length;
 
-      // Inform user that deletion is in progress
       await updateStatus({
         titleKey: "commands.tool.delete.turn.deleting_title",
         descriptionKey: "commands.tool.delete.turn.deleting_description",
@@ -230,7 +215,6 @@ export async function execute(
         color: ColorCode.INFO,
       });
 
-      // Partition messages into webhook vs direct, then apply deletion strategy
       const now = Date.now();
       const webhookMessages: Message[] = [];
       const directBotMessages: Message[] = [];
@@ -262,7 +246,6 @@ export async function execute(
           messagesByWebhook.set(msg.webhookId, group);
         }
 
-        // Resolve each webhook once, then delete all its messages
         for (const [webhookId, messages] of messagesByWebhook) {
           const webhook = hostChannel ? await resolveManagedWebhookForChannel(hostChannel, webhookId) : null;
 
@@ -273,11 +256,9 @@ export async function execute(
                 await webhook.deleteMessage(msg.id, threadId);
                 deletedCount++;
               } else if (botHasManageMessages) {
-                // Fallback: webhook not resolvable, try direct delete with bot permission
                 await msg.delete();
                 deletedCount++;
               } else {
-                // No webhook and no permission — skip with warning
                 log.warn(
                   `[deleteTurn] Cannot delete webhook messageId=${msg.id}: webhook not resolvable and bot lacks MANAGE_MESSAGES`,
                 );
@@ -285,7 +266,6 @@ export async function execute(
               }
             } catch (delError) {
               log.warn(`[deleteTurn] Webhook deletion failed for messageId=${msg.id}`, delError);
-              // If webhook deletion threw, try direct delete as last resort
               if (botHasManageMessages) {
                 try {
                   await msg.delete();
@@ -341,7 +321,6 @@ export async function execute(
               }
             }
           } else {
-            // Single recent message OR thread channel — delete individually
             for (const id of recentIds) {
               try {
                 const msg = fetched.get(id);
@@ -375,7 +354,6 @@ export async function execute(
         }
       }
 
-      // Build reply embed — includes new zero-deletion error branch
       const embedValues: Record<string, string> = {
         persona_name: displayName,
         count: String(deletedCount),
@@ -388,7 +366,6 @@ export async function execute(
       let embedColor: ColorCode;
 
       if (deletedCount === 0 && failedCount > 0) {
-        // Complete failure — show actionable bot permission error or generic failure
         titleKey = "commands.tool.delete.turn.bot_no_delete_title";
         descKey = !botHasManageMessages
           ? "commands.tool.delete.turn.bot_no_delete_description"
@@ -421,10 +398,8 @@ export async function execute(
         `[deleteTurn] Deleted ${deletedCount}/${totalCount} messages (${failedCount} failed) from persona="${displayName}" in channelId=${channelId}`,
       );
 
-      // Regenerate (fire-and-forget) — re-trigger the persona after deletion
       if (regenerate && resolvedPersona && deletedCount === totalCount) {
         try {
-          // Fetch the most recent remaining message to use as the trigger context
           const remaining = await channel.messages.fetch({ limit: 1 });
           let lastMessage: Message | undefined = remaining.first();
 

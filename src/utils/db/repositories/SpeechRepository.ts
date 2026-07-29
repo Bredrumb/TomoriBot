@@ -28,12 +28,9 @@ export type EndpointCredentialRow = {
   key_version: number;
 };
 
-// ── endpoint resolution ─────────────────────────────────────────────────────
-
 /**
  * Find the active (is_default) custom endpoint for a speech/transcription capability.
  *
- * @param serverId   - Internal server DB ID
  * @param capability - "speech" or "transcription"
  * @returns Parsed CustomEndpointRow or null if none registered
  */
@@ -71,7 +68,6 @@ export async function loadActiveEndpoint(
  * Load encrypted credentials for a provider (keyed by internal provider name).
  * Returns null when no credentials are stored.
  *
- * @param serverId     - Internal server DB ID
  * @param providerName - Internal provider name (e.g. "custom:s123:label")
  * @returns Raw encrypted credential row or null
  */
@@ -94,12 +90,9 @@ export async function loadEndpointCredentials(
   }
 }
 
-// ── voice sample CRUD ───────────────────────────────────────────────────────
-
 /**
  * Load all voice samples registered for a server, ordered by name.
  *
- * @param serverId - Internal server DB ID
  * @returns Array of VoiceSampleRow (may be empty)
  */
 export async function loadVoiceSamples(serverId: number): Promise<VoiceSampleRow[]> {
@@ -120,7 +113,6 @@ export async function loadVoiceSamples(serverId: number): Promise<VoiceSampleRow
 /**
  * Load a single voice sample by ID.
  *
- * @param sampleId - Primary key of the voice sample
  * @returns Parsed VoiceSampleRow or null if not found
  */
 export async function loadVoiceSampleById(sampleId: number): Promise<VoiceSampleRow | null> {
@@ -141,8 +133,6 @@ export async function loadVoiceSampleById(sampleId: number): Promise<VoiceSample
  * Insert a placeholder voice sample row to reserve a sample_id before storage.
  * Callers must follow up with updateVoiceSamplePath once the file is stored.
  *
- * @param serverId   - Internal server DB ID
- * @param name       - Display name for the sample
  * @param refText    - Optional reference transcript text
  * @param durationMs - Audio duration in milliseconds (0 if unknown)
  * @returns Inserted sample_id or null on failure
@@ -169,7 +159,6 @@ export async function insertVoiceSample(
 /**
  * Update the file_path on a voice sample row after successful storage.
  *
- * @param sampleId - Primary key of the voice sample
  * @param filePath - Storage reference (S3 URL or local path)
  */
 export async function updateVoiceSamplePath(sampleId: number, filePath: string): Promise<void> {
@@ -179,7 +168,6 @@ export async function updateVoiceSamplePath(sampleId: number, filePath: string):
 /**
  * Delete a voice sample row by ID.
  *
- * @param sampleId - Primary key of the voice sample
  */
 export async function deleteVoiceSample(sampleId: number): Promise<void> {
   await sql`DELETE FROM voice_samples WHERE sample_id = ${sampleId}`;
@@ -189,8 +177,6 @@ export async function deleteVoiceSample(sampleId: number): Promise<void> {
  * Count how many persona rows currently reference a voice sample.
  * Used to display a warning before deletion.
  *
- * @param serverId - Internal server DB ID
- * @param sampleId - Primary key of the voice sample
  * @returns Reference count (0 when not referenced)
  */
 export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<number> {
@@ -213,8 +199,6 @@ export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: nu
  * Clear the voice sample assignment from all persona rows that reference the given sample.
  * Called before deletion so no persona is left pointing to a deleted sample.
  *
- * @param serverId - Internal server DB ID
- * @param sampleId - Primary key of the voice sample being removed
  */
 export async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<void> {
   await sql`
@@ -226,8 +210,6 @@ export async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: nu
       AND pvc.speech_voice_sample_id = ${sampleId}
   `;
 }
-
-// ── IRepository stub ────────────────────────────────────────────────────────
 
 /**
  * SpeechRepository class — satisfies IRepository; export shape is null because

@@ -51,7 +51,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await cleanupFixtures(testSql);
   });
 
-  // Clean slate each test: drain any leftover buffer, then clear fixture rows.
   beforeEach(async () => {
     await statRepository.flush();
     await testSql`DELETE FROM stat_counters WHERE server_id = ${refs.serverId}`;
@@ -71,8 +70,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     `;
     return row ? Number(row.count) : 0;
   }
-
-  // ── write path / buffer ─────────────────────────────────────────────────────
 
   it("recordStat then flush produces one row with the delta", async () => {
     statRepository.recordStat({
@@ -94,7 +91,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
         metric: "message_sent",
       });
     }
-    // All five increments collapse into a single buffer entry before flush.
     expect(statRepository.bufferedEntryCount).toBe(1);
     await statRepository.flush();
     expect(await readCount("message_sent", "", lineageA, refs.userId)).toBe(5);
@@ -120,7 +116,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
   });
 
   it("persona-agnostic metric (command_used) writes the lineage-0 sentinel", async () => {
-    // Even when a caller passes a lineage, command_used is normalized to 0.
     statRepository.recordStat({
       serverId: refs.serverId,
       userId: refs.userId,
@@ -229,8 +224,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     statRepository.recordStat({ serverId: undefined, userId: refs.userId, metric: "message_sent" });
     expect(statRepository.bufferedEntryCount).toBe(before);
   });
-
-  // ── aggregation reads ──────────────────────────────────────────────────────
 
   it("getUsersPersonaReunionInfo reads prior activity and today's grace count across servers", async () => {
     const previousAt = new Date(`${dayOffset(4)}T18:30:00Z`);
@@ -373,7 +366,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
       metric: "sprite_shown",
       metricKey: "yuki", // identity sprite — present in the leaderboard, absent from emotions
     });
-    // Two casing variants of the same tag exercise the LOWER() + GROUP BY collapse.
     statRepository.recordStat({
       serverId: refs.serverId,
       userId: refs.userId,
@@ -391,19 +383,16 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await statRepository.flush();
 
     const emotions = await statRepository.getEmotionBreakdown({ serverId: refs.serverId });
-    // "happy" + "Happy" collapse to a single lower-cased entry with summed count 2.
     expect(emotions.find((e) => e.emotion === "happy")?.count).toBe(2);
     // The identity sprite never produced a sprite_emotion row, so it is not an emotion.
     expect(emotions.find((e) => e.emotion === "yuki")).toBeUndefined();
 
-    // Both sprites still count toward the standalone leaderboard.
     const sprites = await statRepository.getMetricKeyBreakdown({ metric: "sprite_shown", serverId: refs.serverId });
     expect(sprites.find((s) => s.key === "happy")?.count).toBe(1);
     expect(sprites.find((s) => s.key === "yuki")?.count).toBe(1);
   });
 
   it("windowed reads (bucket >= from) sum only in-window rows", async () => {
-    // Direct inserts let us control the bucket date (recordStat always uses today).
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
       VALUES
@@ -448,13 +437,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
         (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '9',  '2024-01-02'::date, 1)
     `;
     const grid = await statRepository.getActivityHeatmap({ userId: refs.userId });
-    // The two Mondays at 14:00 sum into one joint cell; Tuesday 09:00 is its own.
     expect(grid[1][14]).toBe(5);
     expect(grid[2][9]).toBe(1);
-    // Grid is fully populated — untouched cells are present and zero.
     expect(grid[0][0]).toBe(0);
     expect(grid[6][23]).toBe(0);
-    // Total across every cell equals the seeded total (no rows lost/duplicated).
     const total = Object.values(grid).reduce((sum, row) => sum + Object.values(row).reduce((a, b) => a + b, 0), 0);
     expect(total).toBe(6);
   });
@@ -502,8 +488,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(streak.longestStreak).toBe(3);
     expect(streak.lastActiveDate).toBe(dayOffset(0));
   });
-
-  // ── generation + read-existing aggregation ─────────────────────────────────
 
   it("getGenerationTotals reads canonical stat_counters telemetry with user scope", async () => {
     statRepository.recordStat({

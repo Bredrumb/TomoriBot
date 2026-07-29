@@ -72,7 +72,6 @@ export function getCachedContextTokens(guildId: string): number | undefined {
  *
  * @param guildId - Discord guild (server) ID
  * @param contextLimit - Resolved context limit in tokens
- * @param tier - Raw tier number from the API
  */
 export function setCachedContextTokens(guildId: string, contextLimit: number, tier: number): void {
   subscriptionCache.set(guildId, {

@@ -25,10 +25,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Toggles deliberate trigger mode for the server.
  * When enabled, plain trigger words no longer fire the bot — only direct invocations work:
  * `@{trigger}` prefix, Discord @mention, replies to the persona, or `/bot respond`.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -43,7 +39,6 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -54,10 +49,8 @@ export async function execute(
       return;
     }
 
-    // Toggle the current value
     const newValue = !tomoriState.config.deliberate_trigger_mode;
 
-    // Update the database
     const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       deliberate_trigger_mode: newValue,
     });
@@ -91,7 +84,6 @@ export async function execute(
     // Invalidate cache after successful write
     invalidateTomoriStateCache(guildId);
 
-    // Send success message
     await replyInfoEmbed(interaction, locale, {
       titleKey: newValue
         ? "commands.server.deliberatetriggermode.enabled_title"

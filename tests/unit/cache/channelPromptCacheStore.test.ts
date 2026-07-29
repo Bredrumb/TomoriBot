@@ -12,7 +12,6 @@ import {
 const TTL_MS = Number.parseInt(process.env.TOMORI_STATE_CACHE_TTL_MINUTES || "10", 10) * 60 * 1000;
 
 afterEach(() => {
-  // Reset the simulated clock and wipe the store between tests.
   setSystemTime();
   clearChannelPromptCache();
 });

@@ -19,10 +19,6 @@ import type { TomoriState } from "@/types/db/schema";
  *     path.
  */
 
-// ---------------------------------------------------------------------------
-// Class A — field-backed predicates (no query)
-// ---------------------------------------------------------------------------
-
 /** True when the persona has at least one personality attribute. */
 export function hasAttributes(persona: TomoriState): boolean {
   return (persona.attribute_list?.length ?? 0) > 0;
@@ -52,17 +48,12 @@ export function hasVoiceDesignPrompt(persona: TomoriState): boolean {
   return typeof persona.speech_voice_design_prompt === "string" && persona.speech_voice_design_prompt.trim().length > 0;
 }
 
-// ---------------------------------------------------------------------------
-// Class B — Set-backed predicate factories (one batched query per invocation)
-// ---------------------------------------------------------------------------
-
 /**
  * Builds a predicate keyed on `persona_id`. Callers first resolve the set of
  * eligible persona ids with a single batched query (documents, history
  * documents, sprites), then reuse the returned predicate for both the picker
  * filter and the post-selection guard.
  *
- * @param eligiblePersonaIds - Persona ids the command can act on.
  */
 export function personaIdIsEligible(eligiblePersonaIds: ReadonlySet<number>): (persona: TomoriState) => boolean {
   return (persona) => persona.persona_id !== undefined && eligiblePersonaIds.has(persona.persona_id);
@@ -73,7 +64,6 @@ export function personaIdIsEligible(eligiblePersonaIds: ReadonlySet<number>): (p
  * families (server and personal memories) where several personas can share one
  * lineage and are therefore eligible or ineligible together.
  *
- * @param eligibleLineageIds - Lineage ids the command can act on.
  */
 export function lineageIdIsEligible(eligibleLineageIds: ReadonlySet<number>): (persona: TomoriState) => boolean {
   return (persona) => eligibleLineageIds.has(persona.persona_lineage_id);
@@ -89,7 +79,6 @@ export function lineageIdIsEligible(eligibleLineageIds: ReadonlySet<number>): (p
  * out of the picker on the next retry and the last such removal reaches the
  * workflow's mid-loop empty terminal state.
  *
- * @param target  - The set the eligibility predicate closes over.
  * @param nextSet - A promise (or value) of the freshly batched eligible keys.
  */
 export async function refreshEligibilitySet(

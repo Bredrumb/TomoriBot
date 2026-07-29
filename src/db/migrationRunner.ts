@@ -73,9 +73,7 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
   const pending: PendingMigration[] = [];
 
   for (const file of files) {
-    // Skip rollback files
     if (file.endsWith(".down.sql")) continue;
-    // Skip unrelated files
     if (!file.endsWith(".sql")) continue;
 
     const match = MIGRATION_FILENAME.exec(file);
@@ -111,7 +109,6 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
  * migrations are already represented by schema.sql and replaying them would ask
  * for legacy source tables that correctly do not exist on a clean install.
  *
- * @param client - SQL client to use for the target database
  */
 export async function markAllMigrationsApplied(client: SQL = defaultSql): Promise<void> {
   await ensureMigrationsTable(client);
@@ -135,7 +132,6 @@ export async function markAllMigrationsApplied(client: SQL = defaultSql): Promis
  * from splitSqlStatements and are recorded without executing any SQL —
  * this is intentional for marker migrations.
  *
- * @param migration - Migration to apply
  */
 async function applyMigration(client: SQL, migration: PendingMigration): Promise<void> {
   const sqlText = await readFile(migration.filePath, "utf-8");

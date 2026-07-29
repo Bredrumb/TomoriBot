@@ -54,7 +54,6 @@ export class UpdateLongTermMemoryTool extends BaseTool {
   }
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -109,7 +108,6 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     }
 
     const memoryId = Math.trunc(memoryIdArg);
-    // Sanitize unknown {word} placeholders before saving (e.g. {bredrumb} → bredrumb)
     const newContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
     const isDeleteRequested = newContent.length === 0;
 
@@ -278,7 +276,6 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           };
         }
 
-        // 1) Server memory update (server_id + lineage scoped)
         const updatedServerMemory = await serverMemoryRepository.updateByIdWithLineage(
           memoryId,
           newContent,

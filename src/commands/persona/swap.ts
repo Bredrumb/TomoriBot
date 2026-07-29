@@ -53,9 +53,7 @@ function isAvatarUpdateRateLimited(status: number, errorText: string): boolean {
     if (parsed.message?.toLowerCase().includes("rate limit")) {
       return true;
     }
-  } catch {
-    // Fall through to text matching below
-  }
+  } catch {}
 
   return /AVATAR_RATE_LIMIT/i.test(errorText) || /RATE_LIMIT/i.test(errorText) || /too fast/i.test(errorText);
 }
@@ -85,7 +83,6 @@ async function resolveCurrentBotAvatarUrl(
   );
 }
 
-// Constants for modal configuration
 const MODAL_CUSTOM_ID = "persona_swap_modal";
 const PERSONA_SELECT_ID = "persona_select";
 
@@ -98,10 +95,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'swap' command
  * Swaps the main persona with an alter persona
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param _userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -110,7 +103,6 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // Check if command is run in a guild (not DMs)
     if (!interaction.guild) {
       await replyInfoEmbed(
         interaction,
@@ -125,7 +117,6 @@ export async function execute(
       return;
     }
 
-    // Check permissions (ManageGuild required)
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (!hasPermission) {
@@ -142,14 +133,11 @@ export async function execute(
       return;
     }
 
-    // Load all personas for this server
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
 
-    // Get main and alter personas
     const mainPersona = allPersonas.find((p) => !p.is_alter);
     const alterPersonas = allPersonas.filter((p) => p.is_alter);
 
-    // Error if no alters exist
     if (alterPersonas.length === 0) {
       await replyInfoEmbed(
         interaction,
@@ -179,13 +167,11 @@ export async function execute(
       return;
     }
 
-    // Build select options for modal
     const alterSelectOptions: SelectOption[] = alterPersonas.map((persona, index) => ({
       label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(), // Use index to avoid truncation issues
     }));
 
-    // Show modal with alter selection
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.persona.swap.modal_title",
@@ -200,7 +186,6 @@ export async function execute(
       ],
     });
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Persona swap modal ${modalResult.outcome} for user ${interaction.user.id}`);
       return;
@@ -211,7 +196,6 @@ export async function execute(
     const modalSubmitInteraction = modalResult.interaction!;
     await modalSubmitInteraction.deferReply();
 
-    // Extract selected persona from modal
     const selectedIndex = Number.parseInt(
       // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
       modalResult.values![PERSONA_SELECT_ID],
@@ -337,10 +321,8 @@ export async function execute(
       }
     }
 
-    // Invalidate cache
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // Show success embed with former main's avatar as image
     const descriptionLines = [
       localizer(locale, "commands.persona.swap.success_description", {
         new_main: selectedAlter.persona_nickname,
@@ -403,7 +385,6 @@ export async function execute(
       flags: MessageFlags.SuppressNotifications,
     });
 
-    // Extract former main's avatar URL from success embed and store it
     if (formerMainAvatarReference) {
       try {
         const sentEmbed = reply.embeds[0];
@@ -436,7 +417,6 @@ export async function execute(
       }
     }
 
-    // Ensure selected alter has a stable avatar URL stored (optional)
     if (selectedAlterAvatarBuffer && selectedAlter.persona_id) {
       const selectedAlterS3Url = await uploadPersonaAvatarToStorage({
         personaId: selectedAlter.persona_id,
@@ -471,7 +451,6 @@ export async function execute(
       metadata: { commandName: "persona swap" },
     });
 
-    // If we haven't replied yet, reply with error
     if (!interaction.replied && !interaction.deferred) {
       await replyInfoEmbed(
         interaction,

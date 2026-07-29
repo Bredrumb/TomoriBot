@@ -54,7 +54,6 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
   if (!raw || typeof raw !== "object") return null;
   const u = raw as Record<string, unknown>;
 
-  // Some adapters nest the usage object under `.usage`; unwrap it first.
   if (u.usage && typeof u.usage === "object") {
     const nested = normalizeProviderUsage(u.usage);
     if (nested) return nested;
@@ -109,8 +108,6 @@ export function sumTurnUsage(streamResults: ReadonlyArray<{ usage?: TokenUsage }
 
 /**
  * Estimate token count from a prose character count.
- * @param chars - Number of characters
- * @returns Estimated token count
  */
 export function charsToTokensText(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN_TEXT);
@@ -119,8 +116,6 @@ export function charsToTokensText(chars: number): number {
 /**
  * Estimate token count for JSON-ish strings (tools, schemas), which tokenize
  * slightly denser than prose.
- * @param chars - Number of characters
- * @returns Estimated token count
  */
 export function charsToTokensJson(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN_JSON);

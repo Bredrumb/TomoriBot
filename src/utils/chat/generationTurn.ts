@@ -115,7 +115,6 @@ export async function runGenerationTurn(
 
         if (!hasFallbackKey) break;
 
-        // Record error for the key that just failed, then rotate to the next one.
         context.streamingContext.rotationKeyRetriesUsed = true;
         if (rotationKeyId != null) {
           const errorCode = extractErrorCode(result.streamResults.at(-1));
@@ -225,7 +224,6 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   const fallbackEntries =
     primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 
-  // Build a unified pool: the primary model leads at index 0, then the existing failover chain.
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
 
   // Model randomizer: when enabled, splice a random pool member to the front so a different model
@@ -491,7 +489,6 @@ const MAX_FALLBACK_DETAIL_LENGTH = 600;
  * the provider's verbose message — e.g. "Unsupported model X. Supported IDs: ..." — so users see
  * the actionable reason instead of an opaque error code.
  * @param streamResult - The last stream result recorded for the failed attempt.
- * @returns A trimmed, length-capped detail string.
  */
 function extractErrorDetail(streamResult: StreamResult | undefined): string {
   const data = streamResult?.data;
@@ -502,13 +499,11 @@ function extractErrorDetail(streamResult: StreamResult | undefined): string {
     return truncateFallbackDetail(data.message || "error");
   }
 
-  // Prefer the normalized provider detail (userMessage/message/originalError) used by the error embed.
   const providerDetail = getProviderErrorDetail(data as ProviderError);
   if (providerDetail) {
     return truncateFallbackDetail(providerDetail);
   }
 
-  // Fall back to whatever identifying field is present on the raw result.
   const record = data as Record<string, unknown>;
   return truncateFallbackDetail(
     String(record.message ?? record.code ?? record.type ?? streamResult?.status ?? "unknown"),

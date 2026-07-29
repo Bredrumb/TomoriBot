@@ -15,35 +15,24 @@ import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/disco
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 
-// ─── Constants ───────────────────────────────────────────────────────
-
 const MODAL_CUSTOM_ID = "config_mcp_remove_modal";
 const SERVER_CHECKBOX_ID_PREFIX = "mcp_server_checkbox_group";
 const MAX_OPTIONS_PER_GROUP = 10;
 const MAX_GROUPS_PER_MODAL = 5;
 const MAX_ENTRIES_PER_MODAL = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
 
-// ─── Subcommand Configuration ────────────────────────────────────────
-
 /**
  * Configure the /config mcp remove subcommand.
  * No options needed — server selection happens via modal string select.
- * @param subcommand - The subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.mcp.remove.description"));
-
-// ─── Execution ───────────────────────────────────────────────────────
 
 /**
  * Execute /config mcp remove.
  * Shows checkbox groups of registered guild MCP servers. Checked entries stay;
  * unchecked entries are removed, disconnected, and purged from cache.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -74,7 +63,6 @@ export async function execute(
   }
 
   try {
-    // Load registered MCP servers for this guild
     const configs = await getCachedGuildMcpConfigs(tomoriState.server_id);
     if (configs.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -103,7 +91,6 @@ export async function execute(
       return;
     }
 
-    // Build checkbox groups from registered servers
     const checkboxGroups = buildServerCheckboxGroups(configs);
 
     // Show modal with checkbox groups (modal is the acknowledgment — no pre-defer)
@@ -129,7 +116,6 @@ export async function execute(
     }
     const replyInteraction = modalResult.interaction;
 
-    // Collect checked server names across checkbox groups
     const checkedServerNames = new Set<string>();
     for (let groupIndex = 0; groupIndex < serverGroupCount; groupIndex++) {
       const groupValues = modalResult.multiValues?.[`${SERVER_CHECKBOX_ID_PREFIX}_${groupIndex}`] ?? [];
@@ -149,7 +135,6 @@ export async function execute(
       return;
     }
 
-    // Delete unchecked servers from the database
     const deletionResults = await Promise.all(
       configsToRemove.map(async (config) => ({
         config,
@@ -190,7 +175,6 @@ export async function execute(
       return;
     }
 
-    // Success
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "commands.mcp.remove.success_title",
       descriptionKey: "commands.mcp.remove.success_description",

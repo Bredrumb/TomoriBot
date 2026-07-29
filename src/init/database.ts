@@ -9,7 +9,6 @@ import type { AppEnvironment } from "@/types/config";
  *
  * Exits the process on critical DB initialization failure.
  *
- * @param environment - Resolved runtime environment
  */
 export async function initDatabase(environment: AppEnvironment): Promise<void> {
   log.section("Initializing Database...");
@@ -50,7 +49,6 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     return;
   }
 
-  // Attempt to set up pg_cron for recurring cooldown cleanup (non-critical)
   try {
     const host = process.env.POSTGRES_HOST || "localhost";
     const port = Number.parseInt(process.env.POSTGRES_PORT || "5432", 10);
@@ -60,7 +58,6 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       return;
     }
 
-    // Check if the pg_cron extension is available
     const [extensionCheck] = await sql`
       SELECT EXISTS (
         SELECT 1 FROM pg_available_extensions
@@ -73,7 +70,6 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       return;
     }
 
-    // Enable pg_cron extension
     await sql`CREATE EXTENSION IF NOT EXISTS pg_cron;`;
 
     // Delete any existing job with the same name (idempotent across pg_cron versions)
@@ -82,7 +78,6 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       WHERE jobname = 'tomoribot_cooldown_cleanup'
     `;
 
-    // Insert the new/updated job
     await sql`
       INSERT INTO cron.job (jobname, schedule, command, nodename, nodeport, database, username)
       VALUES (

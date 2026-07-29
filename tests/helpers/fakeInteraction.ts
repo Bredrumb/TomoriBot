@@ -45,7 +45,6 @@ export type FakeInteraction = {
     getBoolean: (_name: string) => boolean | null;
   };
   webhook: { send: (..._args: unknown[]) => Promise<void> };
-  // Acknowledgement methods
   reply: (..._args: unknown[]) => Promise<void>;
   deferReply: (..._args: unknown[]) => Promise<void>;
   showModal: (..._args: unknown[]) => Promise<void>;
@@ -129,12 +128,10 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
       calls.push({ method: "followUp", args });
     },
 
-    // deferUpdate — component interactions only; records for completeness
     deferUpdate: async (...args: unknown[]) => {
       calls.push({ method: "deferUpdate", args });
     },
 
-    // update — component interactions only; records for completeness
     update: async (...args: unknown[]) => {
       calls.push({ method: "update", args });
     },

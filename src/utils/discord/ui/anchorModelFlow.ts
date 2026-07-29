@@ -102,7 +102,6 @@ export function buildProviderPickerPayload(
     });
   }
 
-  // Optional caller guidance (e.g. the NovelAI pipeline note on /model image).
   if (options?.note) {
     components.push({ type: ComponentType.TextDisplay, content: options.note });
   }
@@ -272,14 +271,12 @@ export async function acquireModelModalOpener(
   savedProviders: readonly AnchorProviderChoice[],
   idRoot: string,
 ): Promise<{ button: ButtonInteraction; provider: string } | null> {
-  // Single provider: the only control is the "open selector" button.
   if (savedProviders.length === 1) {
     const button = await awaitAnchorButton(phase, userId, `${idRoot}_open`, locale);
     if (!button) return null;
     return { button, provider: savedProviders[0].provider.toLowerCase() };
   }
 
-  // Multiple providers: collect the picker click.
   const button = await awaitAnchorButton(phase, userId, idRoot, locale);
   if (!button) return null;
   if (button.customId === `${idRoot}_cancel`) {
@@ -321,12 +318,7 @@ export async function acquireModelModalOpener(
  * entry per page for an explicit "None" choice. They pick a range here first, then hand
  * {@link openAnchorModal} an already-sliced `<=25` list, which opens directly.
  *
- * @param phase - The live anchor workflow phase.
- * @param button - The unacknowledged button the selector replaces (the provider/opener click).
- * @param userId - Discord id allowed to drive the selector.
- * @param locale - Locale for the selector shell.
  * @param optionCount - Total selectable options, excluding any reserved entries.
- * @param pageSize - Options per range; pass `< MODAL_OPTIONS_PER_PAGE` when reserving entries.
  * @returns The chosen range plus the button to open the modal from, or null.
  */
 export async function acquireModalOptionRange(
@@ -343,10 +335,8 @@ export async function acquireModalOptionRange(
   const totalRangePages = Math.ceil(totalRanges / RANGES_PER_SELECTOR_PAGE);
   let rangePage = 0;
 
-  // The first render consumes the caller's pending button; later ones edit in place.
   await phase.useButton(button).replace(buildRangeSelectorPayload(locale, prefix, optionCount, rangePage, pageSize));
 
-  // Drive Previous/Next until a range button (or Cancel/timeout) settles the step.
   while (true) {
     const rangeButton = await awaitAnchorButton(phase, userId, prefix, locale);
     if (!rangeButton) return null;

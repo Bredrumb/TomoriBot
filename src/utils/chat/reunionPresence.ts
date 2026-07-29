@@ -63,7 +63,6 @@ interface ReunionCandidate {
  * once the turn produces a response.
  *
  * @param args - Turn scope, the effective persona, and the identities to exclude.
- * @returns `notes` — raw bodies (the dialogue-history stage wraps them in
  *          `[System: ]`), triggerer first, capped at TIME_AWARENESS_MAX_REUNION_NOTES —
  *          and `presence`, the scope handed to {@link recordReunionPresence}.
  */

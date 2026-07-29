@@ -1,5 +1,3 @@
-// locales/en-US/commands/data.ts
-
 export default {
   data: {
     export: {

@@ -17,8 +17,6 @@ import {
 /**
  * Configures the /stats server subcommand: server-wide usage stats for the chosen
  * timeframe (leaderboard, models, tools, expression, generations).
- * @param subcommand - The subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -36,10 +34,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Renders the server-wide stats dashboard.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -73,7 +67,6 @@ export async function execute(
       return;
     }
 
-    // Resolve timeframe → window floor and build the dashboard.
     const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const from = resolveWindowFrom(timeframe);
     const subtitle = buildSubtitle(locale, timeframe);

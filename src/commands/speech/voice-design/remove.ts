@@ -173,8 +173,6 @@ export async function execute(
           }
 
           invalidateTomoriStateCache(serverDiscId);
-          // Show the removed prompt when there was one; fall back to the
-          //    plain notice for personas that had nothing set.
           const hadPrompt = removedPreview.totalChars > 0;
           await message.replace(
             buildPersonaWorkflowNotice({

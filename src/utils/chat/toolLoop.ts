@@ -279,7 +279,6 @@ async function streamOnce(
     return await Promise.race([
       streamPromise,
       new Promise<never>((_, reject) => {
-        // Register the kill callback with the lock entry so external callers can trigger it.
         killStream = (reason: Error) => {
           abortController.abort();
           reject(reason);
@@ -425,7 +424,6 @@ async function executeToolCall(
 
   const startedAt = Date.now();
 
-  // Build a promise that resolves immediately if /bot kill fires (turn abort signal).
   const killPromise: Promise<ToolResult> | null = turnAbortSignal
     ? new Promise<ToolResult>((resolve) => {
         if (turnAbortSignal.aborted) {

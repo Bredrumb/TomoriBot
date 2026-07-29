@@ -56,7 +56,6 @@ import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 async function getDefaultNovelAIModel(): Promise<string> {
   const providerName = "novelai";
 
-  // Try to get default from cache (fastest, no DB query)
   if (isLLMCacheReady()) {
     const cachedDefault = getCachedDefaultLLM(providerName);
     if (cachedDefault) {
@@ -65,7 +64,6 @@ async function getDefaultNovelAIModel(): Promise<string> {
     }
   }
 
-  // Cache not ready or no default found - query database for is_default model
   try {
     const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
@@ -78,7 +76,6 @@ async function getDefaultNovelAIModel(): Promise<string> {
     });
   }
 
-  // Fallback to first non-deprecated model from database
   try {
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
@@ -90,7 +87,6 @@ async function getDefaultNovelAIModel(): Promise<string> {
     log.error(`Failed to load available models for ${providerName}`, error as Error);
   }
 
-  // No models found - throw error
   throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 
@@ -116,13 +112,11 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 
   /**
    * Validate a NovelAI API key by making a test request
-   * @param apiKey - The API key to validate
    * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
    */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     if (!apiKey || apiKey.trim().length < 10) {
       log.warn("NovelAI API key is too short or empty");
-      // Create a generic error for empty/short keys
       const novelaiAdapter = new NovelaiStreamAdapter();
       const error = new Error("API key is too short or empty");
       const providerError = novelaiAdapter.handleProviderError(error);
@@ -136,7 +130,6 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       log.success("NovelAI API key validation successful");
       return { valid: true };
     } catch (error) {
-      // Use NovelaiStreamAdapter to parse and format the error
       const novelaiAdapter = new NovelaiStreamAdapter();
       const providerError = novelaiAdapter.handleProviderError(error);
 
@@ -167,9 +160,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
    * Get available tools/functions based on Tomori's configuration
    * Prompt-based tool calling is supported for GLM-4.6 via manual parsing.
    * Returns empty array when tools are disabled or the model doesn't support them.
-   * @param tomoriState - The current Tomori state
    * @param streamingContext - Optional streaming context for context-aware tool availability
-   * @returns Promise<Array<Record<string, unknown>>> - Array of tool configs
    */
   async getTools(
     tomoriState: TomoriState,
@@ -180,7 +171,6 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       return [];
     }
 
-    // Only enable tools when the model supports them and uses the OpenAI endpoint
     if (!tomoriState.llm.has_tools) {
       log.info("NovelAI provider: Model does not support tools (db flag has_tools=false)");
       return [];
@@ -293,9 +283,6 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 
   /**
    * Convert provider-specific configuration from TomoriState
-   * @param tomoriState - The current Tomori state
-   * @param apiKey - The decrypted API key
-   * @returns Promise<NovelaiProviderConfig> - Provider-specific configuration object
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<NovelaiProviderConfig> {
     const tools = await this.getTools(tomoriState);
@@ -338,10 +325,8 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     log.info(`NovelAIProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`);
 
     try {
-      // Create streaming configuration
       const streamConfig: NovelaiStreamConfig = {
         ...config,
-        // Add Discord streaming constants
         maxMessageLength: DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
         flushBufferSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
         flushBufferSizeCodeBlock: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_CODE_BLOCK,
@@ -353,14 +338,12 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
         emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
       };
 
-      // Override tools with context-aware tools when streaming context is provided
       if (streamingContext) {
         log.info("NovelAIProvider: Reloading tools with streaming context for context-aware availability");
         const contextAwareTools = await this.getTools(tomoriState, streamingContext);
         streamConfig.tools = contextAwareTools;
       }
 
-      // Create streaming context
       const streamContext: StreamContext = buildStreamContext({
         provider: "novelai",
         channel,
@@ -380,11 +363,9 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
         prefixStrippingName,
       });
 
-      // Create the modular streaming components
       const orchestrator = new StreamOrchestrator();
       const novelaiAdapter = new NovelaiStreamAdapter();
 
-      // Execute streaming with the modular architecture
       log.info("NovelAIProvider: Delegating to StreamOrchestrator with NovelAIStreamAdapter");
       const result = await orchestrator.streamToDiscord(novelaiAdapter, streamConfig, streamContext);
 

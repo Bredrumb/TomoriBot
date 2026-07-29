@@ -22,7 +22,6 @@ export interface IRepository<TExport = unknown> {
    * Must be idempotent — re-importing the same shape must not create duplicates.
    *
    * @param ownerId - Discord snowflake or internal DB ID of the import target
-   * @param data    - The previously exported shape to restore
    * @returns true on success, false on validation or write failure
    */
   fromExportShape(ownerId: string | number, data: TExport): Promise<boolean>;

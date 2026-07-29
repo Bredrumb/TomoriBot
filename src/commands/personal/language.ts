@@ -11,11 +11,9 @@ import type { UserRow, ErrorContext } from "../../types/db/schema";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories";
 
-// Define constants at the top (Rule #20)
 const SUPPORTED_LANGUAGES = ["en-US", "ja"] as const;
 const DEFAULT_LANGUAGE = "en-US";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("language")
@@ -41,10 +39,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Configures the user's preferred interface language for TomoriBot.
  * This affects how the bot's messages and interfaces appear to the individual user.
  * Supported languages: English (en-US) and Japanese (ja)
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -52,7 +46,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -66,7 +59,6 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // Get the language value from options
     const languageValue = interaction.options.getString("value", true);
 
     // Additional validation (Discord already handles choices, but just in case)
@@ -96,7 +88,6 @@ export async function execute(
       return;
     }
 
-    // Update the user's language preference in the database
     // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
     const ok = await userRepository.setLanguage(userData.user_id!, languageValue);
 
@@ -112,7 +103,6 @@ export async function execute(
     // Invalidate user cache so next message gets fresh data
     invalidateUserCache(userData.user_disc_id);
 
-    // Success message with explanation of the language change
     await replyInfoEmbed(interaction, languageValue, {
       titleKey: "commands.personal.language.success_title",
       descriptionKey: "commands.personal.language.success_description",
@@ -123,7 +113,6 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
@@ -155,8 +144,6 @@ export async function execute(
 /**
  * Helper function to get a user-friendly label for language values
  * @param locale - The user's locale for localization
- * @param value - Language preference value
- * @returns Localized language label
  */
 function getLanguageLabel(locale: string, value: string): string {
   switch (value) {

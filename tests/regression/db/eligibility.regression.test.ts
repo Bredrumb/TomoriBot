@@ -22,7 +22,6 @@ import {
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
-// Arbitrary preset lineage well clear of real seeded preset ids.
 const RT_PRESET_LINEAGE = 990_001;
 const RT_FOREIGN_SERVER_DISC = "_rt_server_eligibility_foreign";
 
@@ -75,7 +74,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
   let hasDocuments = false;
   let hasSprites = false;
 
-  // Fixture personas on the main server.
   let pOwn: PersonaRef; // own upload + history document, sprites, memories
   let pEmpty: PersonaRef; // nothing
   let pPointer: PersonaRef; // preset pointer, zero own sprite rows
@@ -112,7 +110,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
     });
     pShareA = await insertPersona(serverId, "_rt_p_share_a");
     pShareB = await insertPersona(serverId, "_rt_p_share_b");
-    // Force pShareB onto pShareA's lineage so the pair shares one grouping key.
     await testSql`
       UPDATE personas SET persona_lineage_id = ${pShareA.persona_lineage_id} WHERE persona_id = ${pShareB.persona_id}
     `;
@@ -160,7 +157,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
       VALUES (${serverId}, ${pOwn.persona_id}, ${pOwn.persona_lineage_id}, ${altUserId}, '_rt_sm_own', ARRAY[]::TEXT[])
     `;
 
-    // Personal memories for the alt user: one at pOwn's lineage, one global (0).
     await testSql`
       INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
       VALUES (${altUserId}, ${pOwn.persona_lineage_id}, '_rt_pm_own', ARRAY[]::TEXT[])
@@ -171,7 +167,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
     `;
 
     if (hasSprites) {
-      // pOwn owns a sprite row; pPointer resolves the preset set above.
       await testSql`
         INSERT INTO persona_sprites (persona_id, sprite_name, sprite_key, avatar_url)
         VALUES (${pOwn.persona_id}, '_rt_own_sprite', 'happy', 'http://example.test/own.png')
@@ -193,7 +188,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
       const loaderNonEmpty = (await serverMemoryRepository.loadDocuments(serverId, persona.persona_id)).length > 0;
       expect(batch.has(persona.persona_id)).toBe(loaderNonEmpty);
     }
-    // pOwn (upload+history) and pShareA (upload only) both qualify — no source_type filter.
     expect([...batch].sort()).toEqual([pOwn.persona_id, pShareA.persona_id].sort());
   });
 
@@ -236,7 +230,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
 
   it("shared-lineage personas are eligible together for server memories", async () => {
     const managerBatch = await serverMemoryRepository.lineageIdsWithServerMemories(serverId);
-    // pShareA and pShareB carry the same lineage id, so membership is identical.
     expect(pShareA.persona_lineage_id).toBe(pShareB.persona_lineage_id);
     expect(managerBatch.has(pShareA.persona_lineage_id)).toBe(managerBatch.has(pShareB.persona_lineage_id));
   });
@@ -261,7 +254,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
       const loaderNonEmpty = (await personaSpriteRepository.listForPersona(persona.persona_id)).length > 0;
       expect(batch.has(persona.persona_id)).toBe(loaderNonEmpty);
     }
-    // pOwn via own rows, pPointer via resolved preset sprites despite zero own rows.
     expect([...batch].sort()).toEqual([pOwn.persona_id, pPointer.persona_id].sort());
     expect(batch.has(pEmpty.persona_id)).toBe(false);
   });

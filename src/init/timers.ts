@@ -10,7 +10,6 @@ import { healthTracker } from "@/utils/misc/healthTracker";
  * Non-critical: failures here degrade diagnostics/reminders but do not
  * affect core chat functionality.
  *
- * @param client - The Discord.js Client instance
  */
 export function initTimers(client: Client): void {
   client.once("clientReady", () => {

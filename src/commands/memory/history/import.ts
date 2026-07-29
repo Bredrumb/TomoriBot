@@ -168,7 +168,6 @@ function buildFooter(params: {
  * comparison (server_memories tags are stored with surrounding quotes).
  *
  * @param serverId Internal server id
- * @param personaLineageId Persona lineage id (cross-version persona identity)
  * @param filterChannelTags Channel tag names without `#` prefix (e.g. ["general", "dev"])
  */
 async function loadInCharacterMemoryLines(
@@ -1111,9 +1110,7 @@ export async function execute(
 
     const allPersonas = await personaRepository.loadAllForServer(guildId);
 
-    // ====================================================================
     // SCOPE: PERSONA
-    // ====================================================================
     if (scope === "persona") {
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
@@ -1334,9 +1331,6 @@ export async function execute(
       return;
     }
 
-    // ====================================================================
-    // SCOPE: GLOBAL
-    // ====================================================================
     if (scope === "global") {
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
@@ -1526,7 +1520,6 @@ export async function execute(
     }
 
     if (detectedTomoriIds.length === 0) {
-      // No personas detected — fall back to global scope
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
       if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
@@ -1639,7 +1632,6 @@ export async function execute(
       return;
     }
 
-    // Run extraction once, writing each window's chunks to all persona documents
     const extractResult = await runIncrementalExtraction({
       formattedResult,
       provider,

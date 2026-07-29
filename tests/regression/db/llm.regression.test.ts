@@ -22,7 +22,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
     const llms = await llmModelRepo.loadAvailableLlms();
     if (!llms) throw new Error("loadAvailableLlms returned null");
     expect(llms.length).toBeGreaterThan(0);
-    // All returned rows should be non-deprecated (includeDeprecated defaults to false)
     expect(llms.every((l) => !l.is_deprecated)).toBe(true);
   });
 

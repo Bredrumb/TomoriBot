@@ -17,8 +17,6 @@ import type { WhitelistBlockReason } from "@/types/misc/channelWhitelist";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { log } from "@/utils/misc/logger";
 
-// ── shared types ─────────────────────────────────────────────────────────────
-
 export interface CooldownCheckResult {
   isOnCooldown: boolean;
   remainingSeconds: number;
@@ -34,8 +32,6 @@ export interface CooldownsCleanupResult {
   deletedCount: number;
   error?: string;
 }
-
-// ── repository class ──────────────────────────────────────────────────────────
 
 export class CooldownRepository {
   /**
@@ -106,14 +102,11 @@ export class CooldownRepository {
     `;
   }
 
-  // ── exemption check ────────────────────────────────────────────────────────
-
   /**
    * Checks if a user is exempt from cooldowns based on type and permissions.
    * Server managers are exempt from cooldown types 1–3; only STRICT_SERVER_WIDE (4) has no exemptions.
    *
    * @param member       - Guild member to check
-   * @param cooldownType - The cooldown type configured
    * @returns True if the user is exempt
    */
   isExemptFromCooldown(member: GuildMember | null, cooldownType: CooldownType): boolean {
@@ -122,8 +115,6 @@ export class CooldownRepository {
     }
     return Boolean(member?.permissions.has(PermissionFlagsBits.ManageGuild));
   }
-
-  // ── low-level DB ops ───────────────────────────────────────────────────────
 
   /**
    * Checks whether an active cooldown record exists for the given scope.
@@ -269,8 +260,6 @@ export class CooldownRepository {
     }
   }
 
-  // ── whitelist-aware wrappers (slash command + impersonate + image paths) ───
-
   /**
    * Checks cooldown for message triggers with whitelist awareness.
    * Resolves effective cooldown type from channel-specific overrides before querying.
@@ -291,7 +280,6 @@ export class CooldownRepository {
     member: GuildMember | null = null,
     bypassWhitelistGate = false,
   ): Promise<CooldownCheckResult> {
-    // Resolve whitelist status (includes channel-level cooldown overrides)
     const memberRoleDiscIds = member ? member.roles.cache.map((role) => role.id) : undefined;
     const channel = member?.guild.channels.cache.get(channelId);
     const isThread = channel && "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
@@ -299,7 +287,6 @@ export class CooldownRepository {
 
     const whitelistStatus = await getCachedWhitelistStatus(serverId, channelId, memberRoleDiscIds, parentChannelId);
 
-    // Block if whitelist policy disallows (unless bypassed for autochat channels)
     if (!whitelistStatus.isTriggerAllowed && !bypassWhitelistGate) {
       return {
         isOnCooldown: true,
@@ -310,7 +297,6 @@ export class CooldownRepository {
       };
     }
 
-    // Determine effective cooldown type from channel override or global config
     const effectiveCooldownType = whitelistStatus.hasChannelCooldownOverride
       ? (whitelistStatus.channelCooldownType ?? globalCooldownType)
       : globalCooldownType;
@@ -331,7 +317,6 @@ export class CooldownRepository {
       );
     }
 
-    // Run the DB check
     return this.checkCooldownDb(serverId, userId, channelId, effectiveCooldownType, member);
   }
 
@@ -354,7 +339,6 @@ export class CooldownRepository {
     globalCooldownLength: number,
     member: GuildMember | null = null,
   ): Promise<void> {
-    // Resolve whitelist status to pick effective cooldown settings
     const memberRoleDiscIds = member ? member.roles.cache.map((role) => role.id) : undefined;
     const channel = member?.guild.channels.cache.get(channelId);
     const isThread = channel && "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
@@ -362,7 +346,6 @@ export class CooldownRepository {
 
     const whitelistStatus = await getCachedWhitelistStatus(serverId, channelId, memberRoleDiscIds, parentChannelId);
 
-    // Determine effective settings
     const effectiveCooldownType = whitelistStatus.hasChannelCooldownOverride
       ? (whitelistStatus.channelCooldownType ?? globalCooldownType)
       : globalCooldownType;
@@ -383,11 +366,8 @@ export class CooldownRepository {
       }
     }
 
-    // Write the cooldown
     await this.setCooldownDb(serverId, userId, channelId, effectiveCooldownType, effectiveCooldownLength);
   }
-
-  // ── Message-object overloads (message event path) ──────────────────────────
 
   /**
    * Checks cooldown for a message event. Derives IDs and effective settings from
@@ -584,12 +564,9 @@ export class CooldownRepository {
     }
   }
 
-  // ── locale helper ─────────────────────────────────────────────────────────
-
   /**
    * Gets the locale key for the cooldown type footer text.
    *
-   * @param cooldownType - The cooldown type
    * @returns The locale key for the footer text
    */
   getCooldownTypeFooterKey(cooldownType: CooldownType): string {
@@ -606,8 +583,6 @@ export class CooldownRepository {
         return "general.message_cooldown_footer_per_user";
     }
   }
-
-  // ── maintenance ───────────────────────────────────────────────────────────
 
   /**
    * Cleans up expired cooldowns from the database via the stored PostgreSQL function.

@@ -12,7 +12,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
-// Quota limit constants
 const MIN_USER_QUOTA = 0; // 0 = unlimited
 const MAX_USER_QUOTA = 100;
 const MIN_SERVERWIDE_QUOTA = 0; // 0 = unlimited
@@ -55,10 +54,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute /server quota image-generation command.
  * Processes all provided options and updates quota settings accordingly.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -66,7 +61,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -89,7 +83,6 @@ export async function execute(
   // Defer before async work
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Get server ID from database
   const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild.id);
 
   if (!serverId) {
@@ -101,12 +94,10 @@ export async function execute(
     return;
   }
 
-  // Get which options were provided
   const dailyUserQuota = interaction.options.getInteger("daily_user_quota");
   const serverwideQuota = interaction.options.getInteger("serverwide_quota");
   const resetDays = interaction.options.getInteger("serverwide_quota_resets_in");
 
-  // Check if at least one option was provided
   if (dailyUserQuota === null && serverwideQuota === null && resetDays === null) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.generic_error_title",
@@ -116,11 +107,9 @@ export async function execute(
     return;
   }
 
-  // Process all provided options and collect results
   const updates: string[] = [];
 
   try {
-    // Process daily user quota if provided
     if (dailyUserQuota !== null) {
       const result = await updateDailyUserQuota(serverId, dailyUserQuota, locale);
       if (result) {
@@ -128,7 +117,6 @@ export async function execute(
       }
     }
 
-    // Process serverwide quota if provided
     if (serverwideQuota !== null) {
       const result = await updateServerwideQuota(serverId, serverwideQuota, locale);
       if (result) {
@@ -136,7 +124,6 @@ export async function execute(
       }
     }
 
-    // Process reset days if provided
     if (resetDays !== null) {
       const result = await updateResetDays(serverId, resetDays, locale);
       if (result) {
@@ -146,7 +133,6 @@ export async function execute(
 
     log.info("Updated image generation quota settings");
 
-    // Send combined success message
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "commands.server.quota.imagegen.daily_user_quota_success_title",
       description: updates.join("\n"),
@@ -165,19 +151,15 @@ export async function execute(
 
 /**
  * Update daily user quota setting and return success message.
- * @param serverId - Database server ID
  * @param limit - New daily user quota limit (0 = unlimited)
  * @param locale - User's locale for formatting
- * @returns Success message string
  */
 async function updateDailyUserQuota(serverId: number, limit: number, locale: string): Promise<string> {
   // Ensure quota config exists (creates default if not exists)
   await getQuotaConfig(serverId);
 
-  // Update config
   await updateImageDailyUserQuota(serverId, limit);
 
-  // Format and return success message
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.imagegen.unlimited") : `${limit}`;
 
   return localizer(locale, "commands.server.quota.imagegen.daily_user_quota_success_description", { limit: limitText });
@@ -185,16 +167,13 @@ async function updateDailyUserQuota(serverId: number, limit: number, locale: str
 
 /**
  * Update serverwide quota setting and return success message.
- * @param serverId - Database server ID
  * @param limit - New serverwide quota limit (0 = unlimited)
  * @param locale - User's locale for formatting
- * @returns Success message string
  */
 async function updateServerwideQuota(serverId: number, limit: number, locale: string): Promise<string> {
   // Get current quota config (creates default if not exists)
   const currentConfig = await getQuotaConfig(serverId);
 
-  // Update config
   await updateImageServerwideQuota(
     serverId,
     limit,
@@ -202,7 +181,6 @@ async function updateServerwideQuota(serverId: number, limit: number, locale: st
     currentConfig.serverwide_quota,
   );
 
-  // Format and return success message
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.imagegen.unlimited") : `${limit}`;
 
   return localizer(locale, "commands.server.quota.imagegen.serverwide_quota_success_description", { limit: limitText });
@@ -210,19 +188,15 @@ async function updateServerwideQuota(serverId: number, limit: number, locale: st
 
 /**
  * Update serverwide quota reset period and return success message.
- * @param serverId - Database server ID
  * @param days - Number of days before quota resets (1-365)
  * @param locale - User's locale for formatting
- * @returns Success message string
  */
 async function updateResetDays(serverId: number, days: number, locale: string): Promise<string> {
   // Get current quota config (creates default if not exists)
   const currentConfig = await getQuotaConfig(serverId);
 
-  // Update config
   await updateImageServerwideResetDays(serverId, days, currentConfig.serverwide_quota > 0);
 
-  // Format and return success message
   return localizer(locale, "commands.server.quota.imagegen.serverwide_quota_resets_in_success_description", {
     days: `${days}`,
   });

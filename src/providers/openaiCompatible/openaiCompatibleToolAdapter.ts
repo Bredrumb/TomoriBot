@@ -160,7 +160,6 @@ export class OpenAICompatibleToolAdapter implements MCPCapableToolAdapter {
         log.info(`${this.providerName} adapter: Added ${addedMCPToolsCount} MCP tools using centralized filtering`);
       }
 
-      // Add guild MCP tools (per-guild remote servers)
       if (serverId && allowedMCPFunctions) {
         try {
           const guildMcpManager = getGuildMcpManager();

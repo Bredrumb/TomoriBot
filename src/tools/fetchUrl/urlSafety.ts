@@ -40,10 +40,10 @@ function isProductionRuntime(): boolean {
 /**
  * Whether `fetch_url` may reach private/internal network addresses.
  *
- * 1. Outside production the SSRF blocklist auto-relaxes so local
+ * - Outside production the SSRF blocklist auto-relaxes so local
  *    development can fetch localhost/private endpoints (and admit the
  *    Crawl4AI engine) with zero configuration.
- * 2. In production the blocklist stays enforced unless an operator
+ * - In production the blocklist stays enforced unless an operator
  *    explicitly opts in with `FETCH_URL_ALLOW_PRIVATE_NETWORK`, matching
  *    the production-gated model of `validateRemoteMcpUrl`.
  *
@@ -55,7 +55,6 @@ export function isPrivateNetworkFetchAllowed(): boolean {
     return true;
   }
 
-  // Production stays locked unless an operator explicitly opts in.
   const raw = process.env[PRIVATE_NETWORK_ENV]?.trim().toLowerCase();
   return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
 }

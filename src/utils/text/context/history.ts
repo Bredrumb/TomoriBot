@@ -265,7 +265,6 @@ export async function getUserPresenceDetails(
           `Activity found for ${member?.user.username}: type=${activity.type} name="${activity.name}" details="${activity.details ?? ""}" state="${activity.state ?? ""}" emoji="${activity.emoji?.name ?? ""}" largeText="${largeText ?? ""}" smallText="${smallText ?? ""}" appId="${activity.applicationId ?? ""}"`,
         );
 
-        // Compose extra fields once so each case can surface asset text uniformly
         const timeSpent = getTimeSpent(activity.timestamps?.start, activity.timestamps?.end);
         const appendAssetText = (base: string): string => {
           const extras: string[] = [];
@@ -276,7 +275,6 @@ export async function getUserPresenceDetails(
 
         switch (activity.type) {
           case ActivityType.Playing: {
-            // Surface details, state, and any asset hover text
             const segments: string[] = [`Playing ${activity.name}`];
             if (activity.details) segments.push(activity.details);
             if (activity.state) segments.push(activity.state);

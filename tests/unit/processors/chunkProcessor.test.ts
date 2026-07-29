@@ -39,7 +39,6 @@ describe("createSentenceSplitRegex", () => {
     it("does not split 'Dr. Smith'", () => {
       regex = getRegex();
       const parts = "Dr. Smith visited".split(regex).filter((s) => s !== undefined);
-      // All parts joined should equal the original (no meaningful split occurred)
       expect(parts.join("")).toBe("Dr. Smith visited");
     });
 
@@ -99,7 +98,6 @@ describe("createSentenceSplitRegex", () => {
       regex = getRegex();
       const text = "The U.S. is large";
       const parts = text.split(regex).filter((s) => s !== undefined);
-      // Period is consumed: parts join WITHOUT the trailing dot
       expect(parts.join("")).toBe("The U.S is large");
     });
   });

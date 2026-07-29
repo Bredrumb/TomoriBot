@@ -25,8 +25,6 @@ import { log } from "@/utils/misc/logger";
 import type { SQL } from "bun";
 import type { IRepository } from "./IRepository";
 
-// ── Env knobs (documented in .env.optional.example) ───────────────────────────
-
 /**
  * Reads a non-negative integer env var, falling back to a default when unset or
  * malformed. Mirrors the readIntEnv pattern used by the preset avatar reconciler.
@@ -47,8 +45,6 @@ const FLUSH_MAX_BUFFER = readIntEnv("STAT_FLUSH_MAX_BUFFER", 1000);
 
 /** Delimiter for buffer keys — unit separator, never present in metric data. */
 const KEY_DELIMITER = "\x1f";
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 /** Input accepted by recordStat. lineageId/metricKey/delta have sensible defaults. */
 export interface RecordStatInput {
@@ -106,8 +102,6 @@ function windowFloor(from?: Date | string): string {
   if (from instanceof Date) return from.toISOString().split("T")[0];
   return from;
 }
-
-// ── Read/aggregation result shapes (§6) ───────────────────────────────────────
 
 /** Optional time window: rows with `bucket >= from` (omit for all-time). */
 export interface StatWindow {
@@ -1466,9 +1460,9 @@ export class StatRepository implements IRepository<null> {
 
   /**
    * Top emotion categories expressed, highest first. Sums three streams by emotion:
-   *   1. emoji_used   — joined to the per-server emotion_key on server_emojis
-   *   2. sticker_used — joined to the per-server emotion_key on server_stickers
-   *   3. sprite_emotion — the sprite's user-given tag IS the emotion key (no join;
+   *   - emoji_used   — joined to the per-server emotion_key on server_emojis
+   *   - sticker_used — joined to the per-server emotion_key on server_stickers
+   *   - sprite_emotion — the sprite's user-given tag IS the emotion key (no join;
    *      identity sprites were already excluded upstream when this metric was recorded)
    * Emojis/stickers not yet classified (NULL emotion_key) are excluded; sprite tags are
    * lower-cased so casing variants collapse and align with the lower-case emoji/sticker
@@ -1568,8 +1562,6 @@ export class StatRepository implements IRepository<null> {
       return 0;
     }
   }
-
-  // ── IRepository stub (telemetry is never exported) ─────────────────────────
 
   async toExportShape(_ownerId: string | number): Promise<null> {
     return null;

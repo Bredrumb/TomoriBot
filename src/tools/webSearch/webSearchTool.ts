@@ -124,7 +124,6 @@ export class WebSearchTool extends BaseTool {
         };
       }
 
-      // Validate query.
       if (typeof args.query !== "string" || args.query.trim().length === 0) {
         return {
           success: false,
@@ -133,7 +132,6 @@ export class WebSearchTool extends BaseTool {
         };
       }
 
-      // Normalize category (default to text).
       const rawCategory = typeof args.category === "string" ? args.category : "text";
       const category: SearchCategory = SEARCH_CATEGORIES.includes(rawCategory as SearchCategory)
         ? (rawCategory as SearchCategory)

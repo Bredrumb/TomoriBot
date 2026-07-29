@@ -8,11 +8,9 @@ import { getCachedTomoriState } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories";
 
-// Constants for static values at the top
 const NICKNAME_MIN_LENGTH = 2;
 const NICKNAME_MAX_LENGTH = 32;
 
-// Configure the subcommand (Using updated localization keys)
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("nickname") // Keep name simple as per refactor
@@ -29,10 +27,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * JSDoc comment for exported function
  * Updates how Tomori refers to the user.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -40,7 +34,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -54,7 +47,6 @@ export async function execute(
   let tomoriState: TomoriState | null = null; // Define outside for catch block
 
   try {
-    // Get the new nickname from the command options
     const newNickname = interaction.options.getString("name", true);
 
     // Validate nickname length (redundant check, Discord handles this, but good for safety)
@@ -73,24 +65,19 @@ export async function execute(
       return;
     }
 
-    // Load server's Tomori state to check personalization setting
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
 
-    // Check if Tomori is set up (needed for config check)
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
         descriptionKey: "general.errors.tomori_not_setup_description",
         color: ColorCode.ERROR,
-        // No flags needed
       });
       return;
     }
 
-    // Store the old nickname for the success message
     const oldNickname = userData.user_nickname;
 
-    // Update the user's nickname in the database
     // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
     const ok = await userRepository.setNickname(userData.user_id!, newNickname);
 
@@ -106,7 +93,6 @@ export async function execute(
     // Invalidate user cache so next message gets fresh data
     invalidateUserCache(interaction.user.id);
 
-    // Check if personalization is disabled on this server and prepare message
     let descriptionKey = "commands.personal.nickname.success_description";
     let embedColor = ColorCode.SUCCESS;
 
@@ -117,7 +103,6 @@ export async function execute(
       embedColor = ColorCode.WARN; // Use warning color
     }
 
-    // Success! Show the nickname change (with potential warning if personalization disabled)
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.personal.nickname.success_title",
       descriptionKey: descriptionKey, // Use the determined description key
@@ -126,10 +111,8 @@ export async function execute(
         new_nickname: newNickname,
       },
       color: embedColor, // Use the determined color
-      // No flags needed
     });
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id, // Use optional chaining
@@ -148,7 +131,6 @@ export async function execute(
     if (interaction.deferred || interaction.replied) {
       try {
         await interaction.followUp({
-          // Use followUp
           content: localizer(locale, "general.errors.unknown_error_description"),
           flags: MessageFlags.Ephemeral,
         });

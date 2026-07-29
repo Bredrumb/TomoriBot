@@ -70,9 +70,6 @@ export interface ParsedCapabilityModalFields {
 
 /**
  * Parse modal submission values into typed fields.
- * @param values - Scalar values from text inputs, radio groups, and single checkboxes.
- * @param multiValues - Array values from checkbox groups, keyed by customId.
- * @param capability - Which capability's fields to parse.
  */
 export function parseCapabilityModalFields(
   values: Record<string, string>,

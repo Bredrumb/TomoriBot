@@ -75,7 +75,6 @@ function toComponentRecord(component: unknown): Record<string, unknown> | null {
  * order. Descends through `Container` and `Section` children so a notice keeps
  * its text even if the UI layer later nests it more deeply.
  *
- * @param component - The component (or component subtree) to walk.
  * @param blocks - Accumulator that receives each TextDisplay's content, in order.
  */
 function collectTextDisplayBlocks(component: unknown, blocks: string[]): void {
@@ -109,7 +108,6 @@ function collectTextDisplayBlocks(component: unknown, blocks: string[]): void {
  *   - Lines prefixed with `-# ` (Discord subtext) form the footer.
  *   - Every remaining line forms the description.
  *
- * @param components - The message's top-level components (`message.components`).
  * @returns The reconstructed notice text, or null when the tree holds no text at all.
  */
 export function extractNoticeTextFromComponents(

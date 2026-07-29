@@ -20,10 +20,8 @@ import { serverRepository } from "@/utils/db/repositories/ServerRepository";
  */
 export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceFetch = false): Promise<boolean> {
   try {
-    // Check when emojis were last synced for this server (via repository).
     const lastSync = await serverRepository.getEmojiSyncStatus(serverId);
 
-    // Determine if we need to fetch
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
     const now = new Date();
     const cachedEmojiCount = lastSync.count;
@@ -35,7 +33,6 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
     let guildEmojiCount = guild.emojis.cache.size;
 
     if (discordCachePopulated) {
-      // Discord cache is populated - use it for comparison
       hasCountMismatch = Math.abs(guildEmojiCount - cachedEmojiCount) > 2;
     } else if (cachedEmojiCount > 0) {
       // Discord cache is EMPTY but DB has emojis - suspicious!
@@ -48,7 +45,6 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
       hasCountMismatch = Math.abs(guildEmojiCount - cachedEmojiCount) > 2;
     }
 
-    // Check if sync is needed
     const needsFetch =
       forceFetch ||
       lastSync.count === 0 ||
@@ -60,7 +56,6 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
       return false;
     }
 
-    // Determine refresh reason for logging
     const refreshReason = forceFetch
       ? "forced"
       : hasCountMismatch
@@ -80,7 +75,6 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
 
     log.info(`Fetched ${currentEmojis.length} emoji(s) from Discord for guild ${guild.name}`);
 
-    // Sync to database using shared helper
     await sql.transaction(async (tx) => {
       await serverRepository.syncEmojis(tx, serverId, currentEmojis);
     });
@@ -94,7 +88,6 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
       errorType: "EmojiLazySyncError",
       metadata: { guildId: guild.id },
     });
-    // Don't throw - allow the bot to continue with possibly stale data
     return false;
   }
 }

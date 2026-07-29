@@ -16,8 +16,6 @@ const TIMEZONE_MAX = 14;
 
 /**
  * Configures the /personal timezone subcommand.
- * @param subcommand - The subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -35,10 +33,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Sets or clears the personal timezone offset for the invoking user.
  * Omitting the value option clears the timezone (reverts to server timezone).
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -64,7 +58,6 @@ export async function execute(
     const newOffset = interaction.options.getNumber("value", false);
     const currentOffset = userData.timezone_offset ?? null;
 
-    // Handle the clear path (value omitted)
     if (newOffset === null) {
       if (currentOffset === null) {
         await replyInfoEmbed(interaction, locale, {
@@ -103,7 +96,6 @@ export async function execute(
       return;
     }
 
-    // Check for no-op: already set to the same value
     if (currentOffset === newOffset) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.timezone.already_set_title",
@@ -138,7 +130,6 @@ export async function execute(
       return;
     }
 
-    // Success — distinguish first-time set from update
     if (currentOffset === null) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.timezone.success_new_title",

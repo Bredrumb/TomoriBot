@@ -140,7 +140,6 @@ export async function generateZaiNativeVideo(
     request.resolution,
   );
 
-  // Build request body
   const body: Record<string, unknown> = {
     model: request.model,
     prompt: request.prompt,
@@ -157,7 +156,6 @@ export async function generateZaiNativeVideo(
     body.image_url = [`data:${ref.mimeType};base64,${ref.data}`];
   }
 
-  // Submit generation request
   log.info(
     `Z.ai video generation: submitting request (model: ${request.model}, size: ${normalizedOptions.size}, durationSeconds: ${normalizedOptions.duration}, resolution: ${normalizedOptions.resolution}, hasReferenceImage: ${!!(request.referenceImages && request.referenceImages.length > 0)})`,
   );
@@ -190,7 +188,6 @@ export async function generateZaiNativeVideo(
 
   log.info(`Z.ai video generation: task submitted, polling for completion (taskId: ${taskId})`);
 
-  // Poll for completion
   const completedResult = await pollForCompletion<ZaiVideoResponse>({
     pollFn: async () => {
       const pollResponse = await fetch(`${ZAI_ASYNC_RESULT_URL}/${taskId}`, {
@@ -214,7 +211,6 @@ export async function generateZaiNativeVideo(
       if (pollResult.task_status === "FAIL") {
         return { done: true, error: "Z.ai video generation task failed" };
       }
-      // Still PROCESSING
       return { done: false };
     },
     intervalMs: POLL_INTERVAL_MS,
@@ -222,14 +218,12 @@ export async function generateZaiNativeVideo(
     logLabel: "ZaiVideoGeneration",
   });
 
-  // Extract video URL from result
   const videoUrl = completedResult.video_result?.[0]?.url;
   if (!videoUrl) {
     log.warn(`Z.ai video generation completed but returned no video URL (taskId: ${taskId})`);
     return { videoData: null, mimeType: null };
   }
 
-  // Download the video
   log.info(`Z.ai video generation: downloading video (taskId: ${taskId}, url: ${videoUrl.slice(0, 80)})`);
   const videoResponse = await safeDownload(videoUrl, {
     maxSizeMB: PROVIDER_VIDEO_DOWNLOAD_MAX_MB,

@@ -19,13 +19,11 @@ import {
   textPreviewFooterVars,
 } from "@/utils/text/textPreview";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "config_prompt_preset_modal";
 const PRESET_SELECT_ID = "preset_select";
 
 /**
  * Configure the slash command subcommand metadata
- * @returns Configured SlashCommandSubcommandBuilder
  */
 export function configureSubcommand(): SlashCommandSubcommandBuilder {
   return new SlashCommandSubcommandBuilder()
@@ -38,10 +36,6 @@ export function configureSubcommand(): SlashCommandSubcommandBuilder {
 
 /**
  * Execute the /config system-prompt preset command
- * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
- * @param _userData - User data from database
- * @param locale - User's locale for localization
  */
 export async function execute(
   _client: Client,
@@ -49,7 +43,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Validate interaction channel (before try-catch)
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -60,11 +53,9 @@ export async function execute(
     return;
   }
 
-  // Determine server context (guild or DM)
   const serverId = interaction.guildId ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
 
-  // Validate tomoriState exists (before try-catch)
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.tomori_not_setup_title",
@@ -76,10 +67,8 @@ export async function execute(
   }
 
   try {
-    // Load available system prompt presets
     const presets = await configRepository.loadSystemPromptPresets();
 
-    // Check if presets are available
     if (!presets || presets.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.prompt.preset.no_presets_title",
@@ -90,9 +79,7 @@ export async function execute(
       return;
     }
 
-    // Create preset options for the select menu with locale-specific descriptions
     const presetSelectOptions: SelectOption[] = presets.map((preset: SystemPromptPresetRow) => {
-      // Determine which description to use based on user's locale
       const description =
         locale === "ja" && preset.ja_description ? preset.ja_description : preset.system_prompt_preset_desc;
 
@@ -103,7 +90,6 @@ export async function execute(
       };
     });
 
-    // Show the modal with preset selection
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -123,24 +109,20 @@ export async function execute(
       MessageFlags.Ephemeral, // Auto-defer with ephemeral flag
     );
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Preset selection modal ${modalResult.outcome}`);
       return;
     }
 
-    // Extract values from the modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const modalSubmitInteraction = modalResult.interaction!;
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
-    // Find the selected preset
     const selectedPreset = presets.find(
       (preset: SystemPromptPresetRow) => preset.system_prompt_preset_name === selectedPresetName,
     );
 
-    // Validate selection
     if (!selectedPreset) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.prompt.preset.invalid_preset_title",
@@ -151,7 +133,6 @@ export async function execute(
       return;
     }
 
-    // Update database with the preset prompt text
     await configRepository.updateChatConfig(tomoriState.server_id, {
       system_prompt: selectedPreset.preset_prompt_text,
     });

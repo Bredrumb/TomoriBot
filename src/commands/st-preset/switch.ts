@@ -14,32 +14,21 @@ import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { UserRow, ErrorContext, StPresetRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 
-// ─── Constants ───────────────────────────────────────────────────────
-
 const MODAL_CUSTOM_ID = "st_preset_switch_modal";
 const PRESET_SELECT_ID = "preset_select";
-
-// ─── Subcommand Configuration ────────────────────────────────────────
 
 /**
  * Configure the /st-preset switch subcommand.
  * No options — lists all imported presets for selection.
- * @param subcommand - The subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("switch").setDescription(localizer("en-US", "commands.st-preset.switch.description"));
-
-// ─── Execution ───────────────────────────────────────────────────────
 
 /**
  * Execute /st-preset switch.
  * Shows a paginated modal listing all imported presets for this server.
  * The selected preset becomes the new active preset; all others are deactivated.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -47,7 +36,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Verify server setup
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -61,12 +49,10 @@ export async function execute(
   }
 
   try {
-    // Load all presets for this server (filter rows where preset_id is defined)
     const allPresets = (await presetRepository.loadPresetsForServer(tomoriState.server_id)).filter(
       (p): p is StPresetRow & { preset_id: number } => p.preset_id !== undefined,
     );
 
-    // Guard: no presets imported yet
     if (allPresets.length === 0) {
       const stPresetImportMention = commandRegistry.getCommandMention("st-preset", "import");
       await replyInfoEmbed(interaction, locale, {
@@ -79,7 +65,6 @@ export async function execute(
       return;
     }
 
-    // Guard: only one preset — nothing to switch between
     if (allPresets.length === 1) {
       const stPresetImportMention = commandRegistry.getCommandMention("st-preset", "import");
       await replyInfoEmbed(interaction, locale, {
@@ -92,14 +77,12 @@ export async function execute(
       return;
     }
 
-    // Build select options — mark the current active preset with ★
     const selectOptions: SelectOption[] = allPresets.map((preset) => ({
       label: safeSelectOptionText(preset.preset_name),
       value: preset.preset_id.toString(),
       description: preset.is_active ? "★ Active" : undefined,
     }));
 
-    // Show paginated modal for preset selection
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.st-preset.switch.modal_title",
@@ -119,7 +102,6 @@ export async function execute(
       return;
     }
 
-    // Resolve selected preset from modal value (preset_id stored as string)
     // biome-ignore lint/style/noNonNullAssertion: Modal "submit" outcome guarantees interaction and values exist
     const modalSubmitInteraction = modalResult.interaction!;
     if (!modalSubmitInteraction.deferred && !modalSubmitInteraction.replied) {
@@ -139,7 +121,6 @@ export async function execute(
       return;
     }
 
-    // Activate the selected preset (deactivates all others for this server)
     const activated = await presetRepository.setActivePreset(tomoriState.server_id, selectedPreset.preset_id);
     if (!activated) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -150,7 +131,6 @@ export async function execute(
       return;
     }
 
-    // Confirm switch
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.st-preset.switch.success_title",
       descriptionKey: "commands.st-preset.switch.success_description",

@@ -1,5 +1,3 @@
-// locales/en-US/commands/server.ts
-
 export default {
   server: {
     timezone: {

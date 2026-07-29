@@ -72,7 +72,6 @@ async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry
       userRepository.getPrivacyLevel(userDiscId),
     ]);
 
-    // Create new cache entry (preserve existing blacklist entries if available)
     const newEntry: UserCacheEntry = {
       userRow,
       privacyLevel,
@@ -91,7 +90,6 @@ async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry
       return cachedEntry;
     }
 
-    // No cache available, return default entry
     const defaultEntry: UserCacheEntry = {
       userRow: null,
       privacyLevel: PrivacyLevel.MINIMAL,
@@ -139,14 +137,12 @@ export async function getCachedPrivacyLevel(userDiscId: string): Promise<Privacy
 export async function getCachedBlacklistStatus(serverDiscId: string, userDiscId: string): Promise<boolean> {
   const entry = await getOrCreateCacheEntry(userDiscId);
 
-  // Check if we have blacklist status cached for this server
   if (entry.blacklistStatus.has(serverDiscId)) {
     blacklistCacheHits++;
     // biome-ignore lint/style/noNonNullAssertion: has() check guarantees existence
     return entry.blacklistStatus.get(serverDiscId)!;
   }
 
-  // Blacklist status not cached for this server - query DB
   blacklistCacheMisses++;
 
   try {
@@ -155,7 +151,6 @@ export async function getCachedBlacklistStatus(serverDiscId: string, userDiscId:
     return isUserBlacklisted;
   } catch (error) {
     log.error(`[User Cache] Error checking blacklist for user ${userDiscId} in server ${serverDiscId}:`, error);
-    // Default to false on error to avoid blocking personalization unintentionally
     return false;
   }
 }
@@ -199,7 +194,6 @@ export function clearUserCache(): void {
 /**
  * Gets cache statistics for monitoring and debugging.
  *
- * @returns Object with cache hits, misses, hit rates, and cache size
  */
 export function getUserCacheStats(): {
   hits: number;

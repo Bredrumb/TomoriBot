@@ -232,9 +232,7 @@ export async function executeCompactCommand(
         const newText = submitted.fields.getTextInputValue("compact_edit_text");
         await submitted.deferUpdate();
         await summaryMessage.edit({ embeds: [buildEmbed(newText, editDeadline)], components: [buttonRow] });
-      } catch {
-        // Modal dismissed or timed out — no action needed
-      }
+      } catch {}
     });
 
     collector.on("end", async () => {
@@ -488,9 +486,7 @@ async function executeManualCompact(
         const newText = submitted.fields.getTextInputValue("compact_edit_text");
         await submitted.deferUpdate();
         await summaryMessage.edit({ embeds: [buildEmbed(newText, editDeadline)], components: [buttonRow] });
-      } catch {
-        // Modal dismissed or timed out — no action needed
-      }
+      } catch {}
     });
 
     collector.on("end", async () => {

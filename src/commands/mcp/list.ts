@@ -19,7 +19,6 @@ const SERVER_TYPE_LABEL_KEYS: Record<string, string> = {
 
 /**
  * Configure the /config mcp list subcommand.
- * @param subcommand - The subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("list").setDescription(localizer("en-US", "commands.mcp.list.description"));
@@ -28,10 +27,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Execute /config mcp list.
  * Shows all registered guild MCP servers with status info.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -75,7 +70,6 @@ export async function execute(
       return;
     }
 
-    // Build display list
     const serverLines = configs.map((config) => {
       let maskedDomain: string;
       try {

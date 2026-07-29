@@ -186,7 +186,6 @@ async function runPreSchemaServerwideQuotaRenameBridge(client: SQL, migrationPat
  *
  * @param client - Active SQL connection.
  * @param tableName - Fully-trusted, hardcoded `public`-schema table identifier.
- * @returns Row count for the table.
  */
 async function countTableRows(client: SQL, tableName: string): Promise<number> {
   const [row] = (await client.unsafe(`SELECT COUNT(*)::INT AS count FROM public.${tableName}`)) as Array<{
@@ -209,10 +208,6 @@ async function countTableRows(client: SQL, tableName: string): Promise<number> {
  * where only the legacy table exists — migration 016 renames it normally).
  *
  * @param client - Active SQL connection.
- * @param legacyTable - Legacy table name (e.g. "tomoris").
- * @param renamedTable - Post-rename table name (e.g. "personas").
- * @param legacyExists - Whether the legacy table is present.
- * @param renamedExists - Whether the renamed table is present.
  */
 async function resolveLegacyRenameCollision(
   client: SQL,
@@ -221,12 +216,10 @@ async function resolveLegacyRenameCollision(
   legacyExists: boolean,
   renamedExists: boolean,
 ): Promise<void> {
-  // Only a coexisting (legacy + renamed) pair is a collision worth resolving.
   if (!legacyExists || !renamedExists) {
     return;
   }
 
-  // Classify the collision by inspecting the legacy table's row count.
   const legacyRows = await countTableRows(client, legacyTable);
 
   // Populated legacy table = real data fork. Refuse to auto-resolve.
@@ -265,7 +258,6 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
       to_regclass('public.tomori_configs') IS NOT NULL AS has_tomori_configs
   `;
 
-  // No legacy persona-era tables present: nothing for this bridge to do.
   if (!state?.has_tomoris && !state?.has_tomori_presets && !state?.has_tomori_configs) {
     return;
   }

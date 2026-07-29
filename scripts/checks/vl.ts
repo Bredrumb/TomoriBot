@@ -290,7 +290,6 @@ async function runTests(): Promise<ResultItem[]> {
 
   const output = stdout + stderr;
 
-  // Print full output only on failure so vl stays concise on green runs
   if (exitCode !== 0) {
     console.log(output);
   }
@@ -301,12 +300,10 @@ async function runTests(): Promise<ResultItem[]> {
     const xml = await Bun.file(junitOutfile).text();
     items = parseJUnitSuites(xml);
   } catch {
-    // JUnit file missing/unreadable — fall back below.
   } finally {
     await rm(junitOutfile, { force: true }).catch(() => undefined);
   }
 
-  // Fall back to console parsing if JUnit was unavailable.
   const resolved = items ?? parseConsoleOutput(output, exitCode);
 
   // The runner can exit non-zero without any individual file reporting a failure
@@ -584,7 +581,6 @@ async function main() {
 
   const printItem = (r: ResultItem) => {
     const summary = r.summary ? ` ${r.summary}` : "";
-    // Prefer per-item hint (test files); fall back to global HINTS lookup for named checks
     const hintText = r.hint ? `\n      💡 Hint: ${r.hint}` : getHint(r.name);
 
     if (r.skippedReason) {

@@ -30,7 +30,6 @@ export async function generateConversationSummaryAnthropic(
       return { error: "Invalid Anthropic API key" };
     }
 
-    // Build the request body
     const messages: Array<Record<string, unknown>> = [{ role: "user", content: request.userPrompt }];
 
     const body: Record<string, unknown> = {
@@ -46,7 +45,6 @@ export async function generateConversationSummaryAnthropic(
       body.system = request.systemPrompt;
     }
 
-    // Send the request
     const response = await fetch(ANTHROPIC_MESSAGES_URL, {
       method: "POST",
       headers: {
@@ -72,7 +70,6 @@ export async function generateConversationSummaryAnthropic(
       };
     }
 
-    // Extract the response text from content blocks
     const result = (await response.json()) as {
       content?: Array<{ type: string; text?: string }>;
     };

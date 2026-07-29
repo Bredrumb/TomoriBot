@@ -33,8 +33,6 @@ import { dedupeTriggerWords, normalizeTriggerWord, stripSurroundingTriggerQuotes
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
 
-// ── SillyTavern conversion private types ──────────────────────────────────────
-
 type JsonObject = Record<string, unknown>;
 
 type DialoguePair = {
@@ -113,8 +111,6 @@ function normalizeNullableText(value: string | null | undefined): string | null 
 }
 
 export class PresetRepository {
-  // ── SillyTavern conversion private helpers (from sillyTavernImport.ts) ───────
-
   private asObject(value: unknown): JsonObject | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return null;
@@ -499,8 +495,6 @@ export class PresetRepository {
     return preset ?? null;
   }
 
-  // ── ST preset DB operations (from stPresetDb.ts) ──────────────────────────
-
   /**
    * Insert a new ST preset with its parsed nodes in a single transaction.
    * If a preset with the same name already exists for this server, the
@@ -577,7 +571,6 @@ export class PresetRepository {
   /**
    * Load all ST presets for a server (metadata only, no nodes).
    *
-   * @param serverId - Internal server_id
    * @returns Array of preset rows ordered by creation date
    */
   async loadPresetsForServer(serverId: number): Promise<StPresetRow[]> {
@@ -616,7 +609,6 @@ export class PresetRepository {
   /**
    * Load the currently active preset for a server, if any.
    *
-   * @param serverId - Internal server_id
    * @returns The active preset row or null
    */
   async loadActivePreset(serverId: number): Promise<StPresetRow | null> {
@@ -738,7 +730,6 @@ export class PresetRepository {
    * Set a preset as active and deactivate all others for the same server.
    * Uses a transaction to ensure only one preset is active at a time.
    *
-   * @param serverId - Internal server_id
    * @param presetId - The preset_id to activate
    * @returns True if the activation succeeded
    */
@@ -765,8 +756,6 @@ export class PresetRepository {
       return false;
     }
   }
-
-  // ── Preset export (from presetExport.ts) ──────────────────────────────────
 
   /**
    * Exports TomoriBot preset personality data for a given server.
@@ -942,13 +931,10 @@ export class PresetRepository {
     }
   }
 
-  // ── Preset import + validation (from presetImport.ts) ────────────────────
-
   /**
    * Imports TomoriBot preset personality data, replacing existing personality.
    *
    * @param serverDiscId - Discord server ID to import preset for
-   * @param importData - The validated preset export data to import
    * @param identityMode - preserve: keep/import lineage, fork: assign a fresh lineage
    * @returns ImportResult indicating success or failure with item counts
    */
@@ -1226,8 +1212,6 @@ export class PresetRepository {
 
     return this.validatePresetData(validated.data.data);
   }
-
-  // ── SillyTavern conversion public API (from sillyTavernImport.ts) ─────────
 
   /**
    * Returns true if the given unknown value looks like a SillyTavern character card JSON.

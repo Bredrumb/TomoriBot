@@ -112,7 +112,6 @@ function buildSlotPlaceholder(
     });
   }
 
-  // Custom endpoint
   const epLabel = `${entry.endpoint.label}:${entry.endpoint.model_name ?? entry.endpoint.label}`;
   const parsed = parseCustomProvider(selectedProvider);
   const selectedLabel = parsed?.label ?? null;
@@ -154,8 +153,6 @@ export async function execute(
   let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
-    // Load all personal text providers and open the anchor message with the right
-    //    initial control for the provider count.
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "text");
     const currentSelections =
       savedProviders.length > 1 ? await resolveActivePersonalProviderModelSelections(savedProviders, "text") : [];
@@ -187,11 +184,9 @@ export async function execute(
     // one and hands back the range button in its place.
     let modalButton: ButtonInteraction = opener.button;
 
-    // Find the selected provider's config row to read existing fallback_model_refs
     const selectedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
     const existingRefs = selectedConfig?.fallback_model_refs ?? [];
 
-    // Resolve existing refs into a typed fallback chain for placeholder display
     const llmRefIds = existingRefs.filter((r) => r.type === "llm").map((r) => r.id);
     const epRefIds = existingRefs.filter((r) => r.type === "custom_endpoint").map((r) => r.id);
     const [refLlms, refEndpoints] = await Promise.all([
@@ -211,7 +206,6 @@ export async function execute(
       })
       .filter((e): e is FallbackEntry => e !== null);
 
-    // Load model options for the selected provider
     let availableModels: LlmRow[] = [];
     let availableEndpoints: CustomEndpointRow[] = [];
     let allModelOptions: SelectOption[];
@@ -270,7 +264,6 @@ export async function execute(
       }));
     }
 
-    // Build per-slot placeholders
     const currentFallbackPlaceholders = SLOT_IDS.map((_, index) =>
       buildSlotPlaceholder(locale, existingChain[index] ?? null, existingRefs[index] ?? null, selectedProvider),
     );
@@ -318,7 +311,6 @@ export async function execute(
     const work = await modalPhase.beginInPlaceWork();
     const values = modalPhase.values;
 
-    // Build lookup maps
     const resolvedModelMap = new Map<number, LlmRow>();
     for (const m of availableModels) {
       if (m.llm_id !== undefined) resolvedModelMap.set(m.llm_id, m);
@@ -346,7 +338,6 @@ export async function execute(
       if (raw === "") {
         if (existingRefs[i]) mergedRefs.push(existingRefs[i]);
       } else if (raw === CLEAR_SLOT_VALUE) {
-        // Explicit clear — skip
       } else if (raw.startsWith(CUSTOM_ENDPOINT_VALUE_PREFIX)) {
         const epId = Number.parseInt(raw.slice(CUSTOM_ENDPOINT_VALUE_PREFIX.length), 10);
         if (!Number.isNaN(epId)) mergedRefs.push({ type: "custom_endpoint", id: epId });
@@ -360,7 +351,6 @@ export async function execute(
       }
     }
 
-    // Deduplicate by type+id
     const seen = new Set<string>();
     const finalRefs: FallbackModelRef[] = [];
     for (const ref of mergedRefs) {
@@ -399,7 +389,6 @@ export async function execute(
       return;
     }
 
-    // Write — update only fallback refs on the selected provider config
     const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, {
       ...selectedConfig,
       fallback_model_refs: finalRefs,
@@ -416,7 +405,6 @@ export async function execute(
       return;
     }
 
-    // Render the terminal on the anchor message
     if (finalRefs.length === 0) {
       await work.message.replace(
         buildPersonaWorkflowNotice({
@@ -481,9 +469,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

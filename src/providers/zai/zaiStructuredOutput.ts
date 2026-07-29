@@ -92,7 +92,6 @@ function buildZaiStructuredSystemPrompt(
  * Call Z.ai with JSON Output (`response_format: json_object`).
  * Uses prompt-steered schema injection + Zod validation,
  * similar to the DeepSeek structured output approach.
- * @param request - The structured JSON request parameters
  * @param responseSchema - JSON Schema describing the expected response shape
  * @param zodSchema - Zod schema for runtime validation of the parsed response
  * @returns Structured output result with parsed data or error
@@ -114,7 +113,6 @@ export async function callZaiStructuredJSON<T>(
   }
 
   try {
-    // Build the request body
     const body: Record<string, unknown> = {
       model: apiModel,
       messages: [
@@ -150,7 +148,6 @@ export async function callZaiStructuredJSON<T>(
       body.temperature = request.temperature ?? 1.0;
     }
 
-    // Send the request
     const response = await fetch(request.endpointUrl || ZAI_GENERAL_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -175,7 +172,6 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // Parse the response
     const result = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };
@@ -209,7 +205,6 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // Parse JSON
     let parsed: unknown;
     try {
       parsed = JSON.parse(responseText);
@@ -228,7 +223,6 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // Validate with Zod
     const validationResult = zodSchema.safeParse(parsed);
     if (!validationResult.success) {
       log.error("Z.ai structured JSON validation failed", validationResult.error);

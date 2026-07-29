@@ -24,7 +24,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Memory — regression", () => {
   beforeAll(async () => {
     await setupTestDb();
     refs = await insertFixtures(testSql);
-    // Register an extra user for personal memory tests
     const altUser = await userRepository.register(FIXTURE_IDS.altUserDiscId, "_rt_alt_user", "en");
     if (!altUser) throw new Error("Failed to register alt test user");
     altUserId = altUser.user_id;
@@ -33,8 +32,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Memory — regression", () => {
   afterAll(async () => {
     await cleanupFixtures(testSql);
   });
-
-  // ── server memories ───────────────────────────────────────────────────────
 
   it("addServerMemoryByTomori inserts a server memory", async () => {
     const memory = await serverMemoryRepository.add(
@@ -50,7 +47,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Memory — regression", () => {
   });
 
   it("loadTomoriState reflects the new server memory", async () => {
-    // loadTomoriState embeds server_memories[] in the returned TomoriState
     const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
     const hasMemory = state?.server_memories.some((m) => m.includes("regression test server memory content"));
     expect(hasMemory).toBe(true);
@@ -66,8 +62,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Memory — regression", () => {
     );
     expect(memory).toBeNull();
   });
-
-  // ── personal memories ────────────────────────────────────────────────────
 
   it("addPersonalMemoryByTomori inserts a personal memory", async () => {
     const memory = await personalMemoryRepository.add(

@@ -41,8 +41,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
     await cleanupFixtures(testSql);
   });
 
-  // ── UserRepository — reads ─────────────────────────────────────────────────
-
   describe("UserRepository.loadByDiscordId", () => {
     it("returns null for a non-existent user", async () => {
       const result = await userRepository.loadByDiscordId("_rt_nonexistent_repo");
@@ -88,8 +86,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
     });
   });
 
-  // ── UserRepository — writes + cache side-effects ───────────────────────────
-
   describe("UserRepository.register (cache side-effect)", () => {
     it("creates a new row and invalidates the cache without explicit invalidation call", async () => {
       // Pre-warm the cache with null (simulates a prior miss).
@@ -115,7 +111,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
 
   describe("UserRepository.setPrivacyLevel (cache side-effect)", () => {
     it("updates the row and the cache reflects the new level without manual invalidation", async () => {
-      // Warm cache with the current row.
       await getCachedUserRow(REPO_USER_ID);
 
       const updated = await userRepository.setPrivacyLevel(REPO_USER_ID, PrivacyLevel.PARTIAL);
@@ -143,8 +138,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
     });
   });
 
-  // ── UserRepository — export contract ──────────────────────────────────────
-
   describe("UserRepository.toExportShape / fromExportShape", () => {
     it("toExportShape returns null for a non-existent user", async () => {
       const shape = await userRepository.toExportShape("_rt_nonexistent_export");
@@ -162,7 +155,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
       const original = await userRepository.toExportShape(REPO_USER_ID);
       if (!original) throw new Error("Expected toExportShape to return data");
 
-      // Modify the row, then restore.
       const row = await userRepository.loadByDiscordId(REPO_USER_ID);
       if (!row) throw new Error("Row should exist");
       await userRepository.update(row.user_id, { user_nickname: "_rt_repo_temp" });
@@ -239,8 +231,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
       expect(via.map((l) => l.llm_id).sort()).toEqual(direct.map((l) => l.llm_id).sort());
     });
   });
-
-  // ── Regression probes ──────────────────────────────────────────────────────
 
   it.skip("[REGRESSION PROBE] missing invalidation in register() would fail cache test", async () => {
     // To prove: remove the `invalidateUserCache` call from UserRepository.register()

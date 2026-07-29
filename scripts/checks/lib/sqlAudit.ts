@@ -6,8 +6,8 @@
  * explicitly-listed set of exemptions (security primitives, observability, the
  * RAG service facade). This module is the SINGLE source of truth for detecting
  * violations — it is consumed by both:
- *   1. `scripts/checks/audit_sql.ts` (the CLI report + `bun run vl` gate), and
- *   2. `tests/unit/db/rawSqlBoundary.test.ts` (the unit-test enforcement).
+ *   - `scripts/checks/audit_sql.ts` (the CLI report + `bun run vl` gate), and
+ *   - `tests/unit/db/rawSqlBoundary.test.ts` (the unit-test enforcement).
  *
  * Keeping the scan logic here (instead of duplicated in each caller) guarantees
  * the report and the test can never disagree about what counts as a violation.
@@ -121,8 +121,6 @@ export function classifyQuery(query: string): QueryKind {
  * what lets the unit test exercise the detector against synthetic inputs to
  * prove it has no false positives (comments/strings) or false negatives.
  *
- * @param content - Raw UTF-8 file contents
- * @returns One entry per detected template literal (line is 1-based)
  */
 export function scanFileForSqlQueries(content: string): Array<{ line: number; query: string }> {
   const lines = content.split("\n");
@@ -136,7 +134,6 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
 
-    // Finish out a block comment that opened on a previous line.
     if (inBlockComment) {
       const blockEnd = line.indexOf("*/");
       if (blockEnd === -1) {
@@ -146,13 +143,11 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
       line = line.slice(blockEnd + 2);
     }
 
-    // Whole-line `//` comment — ignore it.
     const trimmedLine = line.trimStart();
     if (trimmedLine.startsWith("//")) {
       continue;
     }
 
-    // Strip an inline/opening block comment from the remainder of the line.
     const blockStart = line.indexOf("/*");
     if (blockStart !== -1) {
       const blockEnd = line.indexOf("*/", blockStart + 2);
@@ -178,22 +173,18 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
         const splitPoint = match.index! + match[0].length;
         const restOfLine = line.substring(splitPoint);
         if (restOfLine.includes("`")) {
-          // Single-line literal — closes on the same line.
           hits.push({ line: queryStartLine, query: restOfLine.split("`")[0].trim() });
         } else {
-          // Multi-line literal — start accumulating.
           inQuery = true;
           currentQuery = `${restOfLine}\n`;
         }
       }
     } else if (line.includes("`")) {
-      // Closing backtick of a multi-line literal.
       inQuery = false;
       currentQuery += line.split("`")[0];
       hits.push({ line: queryStartLine, query: currentQuery.trim() });
       currentQuery = "";
     } else {
-      // Interior line of a multi-line literal.
       currentQuery += `${line}\n`;
     }
   }
@@ -221,7 +212,6 @@ async function getFiles(dir: string): Promise<string[]> {
  * @returns Sorted, deterministic {@link SqlAuditResult}
  */
 export async function auditRawSqlBoundary(): Promise<SqlAuditResult> {
-  // Collect candidate .ts files, dropping ignored paths up front.
   const candidateFiles: string[] = [];
   for (const dir of AUDIT_DIRS) {
     const absoluteDir = resolve(REPO_ROOT, dir);
@@ -237,7 +227,6 @@ export async function auditRawSqlBoundary(): Promise<SqlAuditResult> {
   const violations: QueryHit[] = [];
   const exemptions: ExemptQueryHit[] = [];
 
-  // Scan each candidate; classify and route every hit.
   for (const absolute of candidateFiles) {
     const relativePath = toRepoRelative(absolute);
     const content = readFileSync(absolute, "utf8");

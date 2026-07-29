@@ -81,7 +81,6 @@ mock.module("@/utils/text/localizer", () => ({
  * "timeout" so commands exit cleanly without a real awaitModalSubmit loop.
  */
 mock.module("@/utils/discord/ui/interactionCore", () => ({
-  // ── used directly by commands under test ────────────────────────────────
   replyInfoEmbed: async (
     interaction: {
       deferred: boolean;
@@ -117,7 +116,6 @@ mock.module("@/utils/discord/ui/interactionCore", () => ({
     return { outcome: "timeout" as const };
   },
   safeSelectOptionText: (text: string) => text,
-  // ── stubs for exports not exercised by these tests ────────────────────
   replySummaryEmbed: async () => undefined,
   replyComponentsV2Status: async () => undefined,
   updateButtonComponentsV2Status: async () => undefined,
@@ -189,8 +187,6 @@ mock.module("@/utils/db/repositories", () => ({
     loadServerState: async () => null,
   },
 }));
-
-// ─── Shared test helpers ───────────────────────────────────────────────────────
 
 /** Minimal UserRow that satisfies the execute() signature. */
 function makeUserData(): UserRow {

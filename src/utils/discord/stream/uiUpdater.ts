@@ -47,7 +47,6 @@ function isInvalidWebhookError(error: unknown): boolean {
  * Unlike {@link isInvalidWebhookError}, these are safe to retry with the same
  * persona identity so the persona avatar/username is preserved on the retry.
  *
- * @param error - The error thrown by the webhook send attempt
  * @returns True when the failure is a transient abort worth a single retry
  */
 function isTransientWebhookError(error: unknown): boolean {

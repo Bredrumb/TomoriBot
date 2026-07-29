@@ -44,7 +44,6 @@ export class ChannelPromptRepository {
    *
    * @param serverId      - Internal server DB ID
    * @param channelDiscId - Discord snowflake ID of the channel
-   * @param prompt        - The channel prompt text
    * @param mode          - "append" or "replace"
    */
   async setChannelPromptOverride(

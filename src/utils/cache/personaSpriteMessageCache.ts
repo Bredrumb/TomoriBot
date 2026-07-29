@@ -103,7 +103,6 @@ export async function getPersonaSpriteMessageRecord(messageDiscId: string): Prom
 
   const rows = await personaSpriteMessageRepository.getByMessageIds([messageDiscId]);
   if (!rows) {
-    // Transient DB error: degrade to a plain label this turn without caching.
     return null;
   }
 

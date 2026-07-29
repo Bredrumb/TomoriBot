@@ -78,10 +78,8 @@ export async function generatePresetFromPromptAnthropic(
     input_schema: buildPresetResponseSchema(),
   };
 
-  // Build initial messages
   const messages: Array<Record<string, unknown>> = [{ role: "user", content: buildPresetPrompt(params) }];
 
-  // Build tools list: preset schema tool + any search tools
   const allTools: Array<Record<string, unknown>> = [presetToolDef];
   if (toolsEnabled) {
     allTools.push(...tools);
@@ -91,7 +89,6 @@ export async function generatePresetFromPromptAnthropic(
   let toolRounds = 0;
 
   while (true) {
-    // Build request body
     const body: Record<string, unknown> = {
       model: options.model,
       max_tokens: 8192,
@@ -102,7 +99,6 @@ export async function generatePresetFromPromptAnthropic(
       temperature: options.temperature ?? 1.0,
     };
 
-    // Send the request
     const response = await fetch(ANTHROPIC_MESSAGES_URL, {
       method: "POST",
       headers: {
@@ -141,14 +137,12 @@ export async function generatePresetFromPromptAnthropic(
       };
     }
 
-    // Check for tool_use blocks
     const toolUseBlocks = result.content.filter(
       (block) => block.type === "tool_use",
     ) as unknown as AnthropicToolCallBlock[];
 
     const textBlocks = result.content.filter((block) => block.type === "text");
 
-    // Handle tool calls (search tools, not the preset schema tool)
     const searchToolCalls = toolUseBlocks.filter((tc) => tc.name !== "preset_export_data");
 
     if (searchToolCalls.length > 0) {
@@ -167,13 +161,11 @@ export async function generatePresetFromPromptAnthropic(
         };
       }
 
-      // Add assistant message with all content blocks
       messages.push({
         role: "assistant",
         content: result.content,
       });
 
-      // Build user message with tool results
       const toolResultBlocks: Array<Record<string, unknown>> = [];
 
       for (const toolCall of searchToolCalls) {
@@ -214,7 +206,6 @@ export async function generatePresetFromPromptAnthropic(
       continue;
     }
 
-    // Check for the preset_export_data tool call (structured output)
     const presetToolCall = toolUseBlocks.find((tc) => tc.name === "preset_export_data");
 
     if (presetToolCall) {

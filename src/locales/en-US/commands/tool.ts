@@ -1,5 +1,3 @@
-// locales/en-US/commands/tool.ts
-
 export default {
   tool: {
     ping: {

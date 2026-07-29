@@ -686,7 +686,6 @@ export async function execute(
           fallback_llm_ids: fallbackLlmIds,
           llm_temperature: selectedSavedConfig.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0,
           llm_disabled_params: disabledParams,
-          // custom_* mirrors are resolved at runtime from the custom_endpoints table; null them here
           custom_model_name: null,
           custom_endpoint_url: null,
           custom_num_ctx: null,
@@ -906,7 +905,6 @@ export async function execute(
       return;
     }
 
-    // Auto-apply default NAI sampling preset when switching to Kayra or Erato
     const naiDefaultPresets: Record<string, { name: string; target: "kayra" | "erato" }> = {
       "kayra-v1": { name: "Carefree-Kayra", target: "kayra" },
       "llama-3-erato-v1": { name: "Erato-Shosetsu", target: "erato" },
@@ -1018,9 +1016,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

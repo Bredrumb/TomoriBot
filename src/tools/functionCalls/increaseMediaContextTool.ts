@@ -57,12 +57,10 @@ export class IncreaseMediaContextTool extends BaseTool {
   /**
    * Enhanced availability check that considers model vision capabilities
    *
-   * @param provider - LLM provider name
    * @param context - Tool context containing tomoriState with LLM info
    * @returns True only if model has vision capabilities (sees_images = true)
    */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
-    // Base provider check
     if (!this.isAvailableFor(provider)) {
       return false;
     }
@@ -73,7 +71,6 @@ export class IncreaseMediaContextTool extends BaseTool {
       return false;
     }
 
-    // Check if model has vision capabilities
     const hasVision = context.tomoriState.llm.sees_images;
 
     if (!hasVision) {
@@ -96,14 +93,11 @@ export class IncreaseMediaContextTool extends BaseTool {
    * 4. Return restart signal for tomoriChat.ts to handle actual expansion
    *
    * @param args - Arguments containing optional extend_by parameter
-   * @param context - Tool execution context (used for validation)
    * @returns Promise resolving to tool result with restart signal
    */
   async execute(args: Record<string, unknown>, _context: ToolContext): Promise<ToolResult> {
-    // Extract and validate parameters
     const extendBy = (args.extend_by as number | undefined) ?? 10; // Default 10 if not provided
 
-    // Calculate maximum allowed extend_by
     const configuredFetchLimit = normalizeMessageFetchLimit(_context.tomoriState?.config.message_fetch_limit);
     const currentMediaWindow = memoryGuard.getMediaWindow();
     const maxExtendBy = Math.max(0, configuredFetchLimit - currentMediaWindow);
@@ -132,7 +126,6 @@ export class IncreaseMediaContextTool extends BaseTool {
       };
     }
 
-    // Check memory status
     const memoryStatus = memoryGuard.checkMemory();
     if (memoryStatus.status === "critical") {
       log.warn("IncreaseMediaContextTool: Blocked due to critical memory pressure");

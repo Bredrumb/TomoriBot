@@ -65,13 +65,11 @@ describe("persona default — name resolution helpers", () => {
     });
 
     it("capitalizes the first letter of a trigger word and lowercases the rest", () => {
-      // "ALICE" → "Alice" (first char upper, remaining lower)
       const result = resolveAvailablePersonaName("Tomori", ["ALICE"], ["Tomori"]);
       expect(result).toBe("Alice");
     });
 
     it("does not capitalize trigger words that start with a non-alpha character", () => {
-      // "123abc" does not match the alpha-start regex, so it is returned as-is
       const result = resolveAvailablePersonaName("Tomori", ["123abc"], ["Tomori"]);
       expect(result).toBe("123abc");
     });
@@ -83,7 +81,6 @@ describe("persona default — name resolution helpers", () => {
     });
 
     it("returns the lineage id when preset_lineage_id is stored as a string number", () => {
-      // Schema pre-processes string → number; test via the numeric path after parsing
       expect(resolvePresetLineageId(makePreset({ preset_lineage_id: 42 }))).toBe(42);
     });
 

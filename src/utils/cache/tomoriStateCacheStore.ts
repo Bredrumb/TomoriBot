@@ -43,9 +43,7 @@ export const lastDbError = new Map<string, { message: string; timestamp: number 
  * @param serverDiscId - Discord server ID to invalidate
  */
 export function invalidateTomoriStateCache(serverDiscId: string): void {
-  // Drop any cached persona snapshot for this server
   cache.delete(serverDiscId);
-  // Drop any recorded DB error so next read can re-evaluate freshly
   lastDbError.delete(serverDiscId);
 }
 

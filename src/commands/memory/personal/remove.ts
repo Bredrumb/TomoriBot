@@ -24,7 +24,6 @@ import { invalidateUserCache } from "@/utils/cache/userCache";
 import type { SelectOption } from "@/types/discord/modal";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 
-// Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_personalmemory_modal";
 const MEMORY_SELECT_ID = "memory_select";
 const PERSONAL_SCOPE_VALUE = "persona";
@@ -33,10 +32,7 @@ const GLOBAL_PERSONAL_MEMORY_LINEAGE_ID = 0;
 
 /**
  * Helper function to perform personal memory removal from database
- * @param memoryToRemove - Memory string to remove
- * @param userData - User data
  * @param replyInteraction - Interaction to reply to (can be modal or pagination)
- * @param locale - User locale
  */
 async function performPersonalMemoryRemoval(
   memoryToRemove: { personal_memory_id?: number; content: string },
@@ -67,7 +63,6 @@ async function performPersonalMemoryRemoval(
   // Invalidate user cache so next message gets fresh data
   invalidateUserCache(userData.user_disc_id);
 
-  // Log success and show success message
   log.success(
     `Deleted personal memory "${memoryToRemove.content.slice(0, 30)}..." for user ${userData.user_disc_id} (ID: ${userData.user_id})`,
   );
@@ -87,7 +82,6 @@ async function performPersonalMemoryRemoval(
   return true;
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("remove")
@@ -112,10 +106,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * JSDoc comment for exported function
  * Removes a personal memory from the user's record in the users table using a paginated embed.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -123,7 +113,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -148,7 +137,6 @@ export async function execute(
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    // Load server's Tomori state to check personalization setting
     tomoriState = await personaRepository.loadState(interaction.guild?.id ?? interaction.user.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -353,7 +341,6 @@ export async function execute(
         ? await personalMemoryRepository.loadForUserLineage(userData.user_id, GLOBAL_PERSONAL_MEMORY_LINEAGE_ID, false)
         : [];
 
-      // Check if there are any global memories to remove
       if (globalMemories.length === 0) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "commands.forget.memory.personal.no_memories_title",
@@ -364,7 +351,6 @@ export async function execute(
         return;
       }
 
-      // Create memory select options for the modal
       const memorySelectOptions: SelectOption[] = globalMemories.map((memory, index) => ({
         label: safeSelectOptionText(memory.content, 20),
         value: index.toString(),
@@ -387,13 +373,11 @@ export async function execute(
         ],
       });
 
-      // Handle modal outcome
       if (modalResult.outcome !== "submit") {
         log.info(`Global personal memory deletion modal ${modalResult.outcome} for user ${userData.user_id}`);
         return;
       }
 
-      // Extract selected memory index from modal
       const modalSubmitInteraction = modalResult.interaction;
       const selectedIndex = modalResult.values?.[MEMORY_SELECT_ID];
 
@@ -412,7 +396,6 @@ export async function execute(
         return;
       }
 
-      // Perform deletion via shared helper
       await performPersonalMemoryRemoval(selectedMemory, userData, modalSubmitInteraction, locale);
 
       // If personalization is disabled, send a warning follow-up
@@ -430,7 +413,6 @@ export async function execute(
       }
     }
   } catch (error) {
-    // Catch unexpected errors
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,

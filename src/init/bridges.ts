@@ -5,7 +5,6 @@ import { log } from "@/utils/misc/logger";
  * Initializes optional integration bridges (currently: Matrix Appservice).
  * Silent no-op if credentials are not configured.
  *
- * @param client - The Discord.js Client instance
  */
 export async function initBridges(client: Client): Promise<void> {
   log.section("Initializing Matrix Bridge...");

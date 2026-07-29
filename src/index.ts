@@ -19,7 +19,6 @@ import { log } from "@/utils/misc/logger";
  * failure can be reported as an actionable misconfiguration rather than a
  * silent, never-connected process.
  *
- * @param error - The rejection thrown by client.login()
  * @returns true if the failure is a disallowed/privileged intent rejection
  */
 function isDisallowedIntentsError(error: unknown): boolean {

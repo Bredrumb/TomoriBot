@@ -40,7 +40,6 @@ describe("embedWithBatchFallback", () => {
       singleInputEmbedder(calls),
     );
 
-    // Every input still gets its own embedding, in order.
     expect(result).toEqual([[1], [2], [3]]);
     // One doomed batch attempt, then one call per input.
     expect(calls[0]).toEqual(["a", "bb", "ccc"]);

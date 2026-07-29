@@ -51,7 +51,6 @@ export async function execute(
   };
 
   try {
-    // Validate guild context
     if (!interaction.guild || !interaction.guildId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -61,7 +60,6 @@ export async function execute(
       return;
     }
 
-    // Get Tomori state for server
     const tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -75,7 +73,6 @@ export async function execute(
     errorContext.serverId = tomoriState.server_id;
     errorContext.personaId = tomoriState.persona_id;
 
-    // Get all whitelisted personas, channels, and roles for this server
     const [allPersonas, whitelistPersonas, whitelistChannels, whitelistRoles] = await Promise.all([
       getCachedAllPersonas(interaction.guildId),
       whitelistRepository.getAllWhitelistPersonas(tomoriState.server_id),
@@ -89,7 +86,6 @@ export async function execute(
       }
     }
 
-    // Check if there are any whitelisted entries
     if (whitelistPersonas.length === 0 && whitelistChannels.length === 0 && whitelistRoles.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.WARN,
@@ -121,7 +117,6 @@ export async function execute(
       return;
     }
 
-    // Build checkbox groups by chunking whitelisted personas, channels, and roles into groups of 10
     const checkboxGroups: ModalCheckboxGroupField[] = [];
 
     for (let i = 0; i < whitelistPersonas.length; i += MAX_OPTIONS_PER_GROUP) {
@@ -206,7 +201,6 @@ export async function execute(
       });
     }
 
-    // Show the modal with checkbox groups for whitelist removal
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -218,13 +212,11 @@ export async function execute(
       MessageFlags.Ephemeral,
     );
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Whitelist removal modal ${modalResult.outcome} for user ${user.user_id}`);
       return;
     }
 
-    // Extract checked entry IDs from all checkbox groups in the modal
     const modalSubmitInteraction = modalResult.interaction;
     const checkedPersonaEntries = new Set<string>();
     const checkedChannelIds = new Set<string>();
@@ -256,7 +248,6 @@ export async function execute(
       return;
     }
 
-    // Find entries to remove (those NOT checked in the modal)
     const personasToRemove = whitelistPersonas.filter(
       (entry) => !checkedPersonaEntries.has(getPersonaWhitelistEntryValue(entry)),
     );
@@ -275,7 +266,6 @@ export async function execute(
       }
     }
 
-    // If no entries selected for removal, inform user
     if (personasToRemove.length === 0 && channelsToRemove.length === 0 && rolesToRemove.length === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         color: ColorCode.INFO,
@@ -285,7 +275,6 @@ export async function execute(
       return;
     }
 
-    // Remove all unchecked entries from the whitelist
     const [personaResults, channelResults, roleResults] = await Promise.all([
       Promise.all(
         personasToRemove.map((entry) =>
@@ -320,10 +309,8 @@ export async function execute(
       return;
     }
 
-    // Invalidate whitelist cache for this server
     invalidateWhitelistCache(interaction.guildId);
 
-    // Get names for success message
     const removedChannelNames: string[] = [];
     for (const channelId of channelsToRemove) {
       try {
@@ -348,7 +335,6 @@ export async function execute(
       }
     }
 
-    // Send success message
     await replyInfoEmbed(
       modalSubmitInteraction,
       locale,
@@ -454,9 +440,6 @@ async function formatPersonaWhitelistEntryLabel(
 
 /**
  * Get localized summary text for a whitelist channel's cooldown behavior.
- * @param entry - Whitelist entry to summarize
- * @param locale - The locale to use for localization
- * @returns Localized summary text
  */
 function getWhitelistChannelSummary(
   entry: { cooldown_type: CooldownType | null; cooldown_length: number | null },
@@ -472,9 +455,6 @@ function getWhitelistChannelSummary(
 
 /**
  * Get localized name for a cooldown type
- * @param cooldownType - The cooldown type
- * @param locale - The locale to use for localization
- * @returns Localized cooldown type name
  */
 function getCooldownTypeName(cooldownType: CooldownType, locale: string): string {
   const key = getCooldownTypeKey(cooldownType);
@@ -483,7 +463,6 @@ function getCooldownTypeName(cooldownType: CooldownType, locale: string): string
 
 /**
  * Get the locale key suffix for a cooldown type
- * @param cooldownType - The cooldown type
  * @returns The locale key suffix (e.g., "off", "per_user", "per_channel")
  */
 function getCooldownTypeKey(cooldownType: CooldownType): string {

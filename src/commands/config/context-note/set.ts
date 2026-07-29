@@ -41,8 +41,6 @@ const CONTEXT_NOTE_DEPTH_MAX = 100;
  * Configure the /config context-note set subcommand metadata.
  * The commandLoader auto-localizes descriptions, option descriptions, and choice labels
  * from the keys at commands.config.context-note.set.* in the locale files.
- * @param subcommand - Builder provided by commandLoader
- * @returns Configured builder
  */
 export const configureSubcommand = (subcommand: import("discord.js").SlashCommandSubcommandBuilder) =>
   subcommand
@@ -83,10 +81,6 @@ export const configureSubcommand = (subcommand: import("discord.js").SlashComman
 
 /**
  * Execute /config context-note set.
- * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
- * @param _userData - User row (unused)
- * @param locale - User's locale for localization
  */
 export async function execute(
   _client: Client,
@@ -94,7 +88,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Channel guard
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -112,7 +105,6 @@ export async function execute(
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
 
-  // Resolve server identity and fetch cached state
   const serverId = interaction.guildId ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
 
@@ -262,7 +254,6 @@ export async function execute(
   let selectedChannelDiscId: string | null = null;
 
   try {
-    // Channel scope: read the native channel option from the slash command
     if (scope === "channel") {
       const channelOption = interaction.options.getChannel("channel");
       if (!channelOption) {
@@ -277,7 +268,6 @@ export async function execute(
       selectedChannelDiscId = channelOption.id;
     }
 
-    // Load existing values for pre-fill
     let existingNote: string | null | undefined;
     let existingDepth: number;
 
@@ -290,7 +280,6 @@ export async function execute(
       existingDepth = tomoriState.config.context_note_depth ?? 0;
     }
 
-    // Show modal with note text + depth fields, pre-filled with existing values
     const modalResult = await promptWithRawModal(
       modalHost,
       locale,
@@ -326,7 +315,6 @@ export async function execute(
       return;
     }
 
-    // Assign (not declare) after successful submit
     modalSubmitInteraction = modalResult.interaction;
 
     if (!modalSubmitInteraction) {
@@ -334,7 +322,6 @@ export async function execute(
       return;
     }
 
-    // Parse and validate the submitted values
     const rawNote = (modalResult.values?.context_note_text ?? "").trim();
     const rawDepth = (modalResult.values?.context_note_depth ?? "0").trim();
     const parsedDepth = Number.parseInt(rawDepth, 10);
@@ -354,7 +341,6 @@ export async function execute(
     const depthToStore = rawNote ? parsedDepth : 0;
     const isRemoving = !rawNote;
 
-    // Persist to the appropriate table
     let persisted: boolean;
 
     if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
@@ -384,7 +370,6 @@ export async function execute(
       invalidateTomoriStateCache(serverId);
     }
 
-    // Reply with scoped success message
     const scopeLabel =
       scope === "channel" && selectedChannelDiscId
         ? `<#${selectedChannelDiscId}>`

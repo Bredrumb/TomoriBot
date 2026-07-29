@@ -81,7 +81,6 @@ export async function execute(
   };
 
   try {
-    // Validate guild context
     if (!interaction.guild || !interaction.guildId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -94,7 +93,6 @@ export async function execute(
     // Defer the interaction before async work to prevent timeout
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Get Tomori state for server
     const tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -108,13 +106,11 @@ export async function execute(
     errorContext.serverId = tomoriState.server_id;
     errorContext.personaId = tomoriState.persona_id;
 
-    // Get command parameters
     const channel = interaction.options.getChannel("channel", true);
     const requestedCooldownType = interaction.options.getInteger("cooldown_type", false);
     const requestedCooldownLength = interaction.options.getInteger("cooldown_length", false);
     const hasOverrideInput = requestedCooldownType !== null || requestedCooldownLength !== null;
 
-    // Validate channel type
     if (channel.type !== ChannelType.GuildText) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -124,7 +120,6 @@ export async function execute(
       return;
     }
 
-    // Validate cooldown type (0-3)
     if (requestedCooldownType !== null && (requestedCooldownType < 0 || requestedCooldownType > 3)) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -134,7 +129,6 @@ export async function execute(
       return;
     }
 
-    // Validate cooldown length (0-86400)
     if (requestedCooldownLength !== null && (requestedCooldownLength < 0 || requestedCooldownLength > 86400)) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -148,7 +142,6 @@ export async function execute(
       return;
     }
 
-    // Check if channel already has these exact settings
     const existingEntry = await whitelistRepository.getChannelWhitelist(tomoriState.server_id, channel.id);
 
     const currentCooldownType =
@@ -182,13 +175,10 @@ export async function execute(
       return;
     }
 
-    // Upsert channel whitelist
     await whitelistRepository.upsertChannelWhitelist(tomoriState.server_id, channel.id, cooldownType, cooldownLength);
 
-    // Invalidate whitelist cache for this server
     invalidateWhitelistCache(interaction.guildId);
 
-    // Send success message
     if (cooldownType === null || cooldownLength === null) {
       await replyInfoEmbed(
         interaction,
@@ -209,7 +199,6 @@ export async function execute(
         `commands.config.cooldown.type.choice_${getCooldownTypeKey(cooldownType)}`,
       );
 
-      // Use different message for instant cooldown (length = 0)
       if (cooldownLength === 0) {
         await replyInfoEmbed(
           interaction,
@@ -266,7 +255,6 @@ export async function execute(
 
 /**
  * Get the locale key suffix for a cooldown type
- * @param cooldownType - The cooldown type
  * @returns The locale key suffix (e.g., "off", "per_user", "per_channel")
  */
 function getCooldownTypeKey(cooldownType: CooldownType): string {

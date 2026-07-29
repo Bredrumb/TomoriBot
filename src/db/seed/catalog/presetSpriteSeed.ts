@@ -68,7 +68,6 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
   const usageInstructions = normalizePersonaSpriteInstructions(sprite.usageInstructions);
   const isIdentity = sprite.isIdentity === true;
 
-  // Read + normalize the source image to PNG.
   const imagePath = path.join(process.cwd(), persona.avatarPath, sprite.file);
   let pngBuffer: Buffer;
   try {
@@ -113,7 +112,6 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
     avatarUrl = uploadedUrl;
   }
 
-  // Upsert the row (shared URL + metadata).
   await client`
     INSERT INTO preset_sprites (
       preset_lineage_id, preset_language, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity
@@ -146,7 +144,6 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
  */
 async function reconcileRemovedSprites(client: SQL, persona: PersonaInput, seededKeys: string[]): Promise<void> {
   if (seededKeys.length === 0) {
-    // Empty/failed set: drop every sprite for this preset.
     await client`
       DELETE FROM preset_sprites
       WHERE preset_lineage_id = ${persona.lineageId}

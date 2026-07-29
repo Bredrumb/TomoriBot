@@ -78,7 +78,6 @@ export async function generateZaiNativeImage(
     throw new Error(`Z.ai image generation failed: ${response.status} ${response.statusText}`);
   }
 
-  // Parse response — expects { data: [{ url }] }
   const result = (await response.json()) as {
     data?: Array<{ url?: string }>;
   };
@@ -91,7 +90,6 @@ export async function generateZaiNativeImage(
     return { imageData: null, mimeType: null };
   }
 
-  // Fetch the image from the URL and convert to base64
   const imageResponse = await safeDownload(imageUrl, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
     timeoutMs: 15_000,
@@ -104,11 +102,9 @@ export async function generateZaiNativeImage(
     return { imageData: null, mimeType: null };
   }
 
-  // Determine MIME type from Content-Type header
   const contentType = imageResponse.contentType ?? "image/png";
   const mimeType = contentType.split(";")[0].trim();
 
-  // Convert to base64
   const base64 = imageResponse.buffer.toString("base64");
 
   return {

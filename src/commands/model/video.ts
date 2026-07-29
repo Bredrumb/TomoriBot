@@ -31,7 +31,6 @@ import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderC
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "config_model_video_modal";
 const MODEL_SELECT_ID = "model_select";
 
@@ -84,16 +83,11 @@ function getVideoModelDisplayName(
   return description && description.length > 0 ? description : null;
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("video").setDescription(localizer("en-US", "commands.model.video.description"));
 
 /**
  * Changes Tomori's video generation model.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -101,7 +95,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -111,7 +104,6 @@ export async function execute(
     return;
   }
 
-  // Load the Tomori state for this server
   const tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -328,9 +320,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

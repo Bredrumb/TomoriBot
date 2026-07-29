@@ -45,8 +45,6 @@ import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
-// ── persona config table row shapes ─────────────────────────────────
-
 /** Row shape for persona_context_note_configs (Phase 6). */
 export type PersonaContextNoteConfigsRow = {
   persona_id: number;
@@ -195,8 +193,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     (process.env.FALLBACK_DEBUG_ENABLED ?? "").trim().toLowerCase(),
   );
 
-  // ── reads ──────────────────────────────────────────────────────────────────
-
   /**
    * Loads the full composite TomoriState for a server's main persona.
    * Returns null if the server has no registered persona.
@@ -305,8 +301,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Updates arbitrary fields on a Tomori row.
    * Invalidates the server's tomori state cache after write.
@@ -328,8 +322,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
   }
-
-  // ── persona operations ─────────────────────────────────────────────────────
 
   async replaceAttributes(personaId: number, attributes: string[], publicFlags?: boolean[]): Promise<boolean> {
     try {
@@ -1287,7 +1279,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Errors propagate so the caller can log and retry on the next boot.
    *
    * @param personaId        - Internal persona DB ID
-   * @param presetAvatarHash - The preset avatar hash to record as applied
    */
   async stampPointerAvatarHash(personaId: number, presetAvatarHash: string): Promise<void> {
     await sql`
@@ -1459,8 +1450,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── limit checks ───────────────────────────────────────────────────────────
-
   /**
    * Check if a server has reached its trigger word limit.
    *
@@ -1613,8 +1602,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Exports all personas and their Phase 6 config bundles for a server.
    *
@@ -1686,8 +1673,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── resolve internal server ID ──────────────────────────────────
-
   private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
       SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
@@ -1712,8 +1697,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return [];
     }
   }
-
-  // ── persona config table reads ──────────────────────────────────
 
   private async sqlLoadPersonaContextNoteConfigs(personaId: number): Promise<PersonaContextNoteConfigsRow | null> {
     try {
@@ -1767,8 +1750,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return null;
     }
   }
-
-  // ── persona config table upserts (new tables) ───────────────────
 
   private async sqlUpsertPersonaContextNoteConfigs(row: PersonaContextNoteConfigsRow): Promise<void> {
     await sql`
@@ -1827,8 +1808,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         updated_at      = NOW()
       `;
   }
-
-  // ── private helpers: row normalization ────────────────────────────────────
 
   /**
    * Converts a Postgres bytea hex-string representation (e.g., "\\xDEADBEEF") to Buffer.
@@ -1902,8 +1881,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     return row;
   }
-
-  // ── private SQL: config loading ───────────────────────────────────────────
 
   /**
    * Shared SELECT column list for all split-table config joins.
@@ -2132,8 +2109,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     return parsedConfig.data;
   }
-
-  // ── private SQL: preset pointer helpers ───────────────────────────────────
 
   async materializeIfPointer(personaId: number): Promise<boolean> {
     try {
@@ -2414,8 +2389,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         updated_at = NOW()
     `;
   }
-
-  // ── private SQL: persona reads ────────────────────────────────────────────
 
   private withPersonaSplitConfigFields(row: Record<string, unknown>): TomoriRow & PersonaScopedConfigFields {
     return {
@@ -3211,8 +3184,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return null;
     }
   }
-
-  // ── private SQL: tomori writes ────────────────────────────────────────────
 
   private async updateTomori(personaId: number, tomoriData: Partial<TomoriRow>): Promise<TomoriRow | null> {
     try {

@@ -25,7 +25,6 @@ const MODEL_TARGET_MAP: Record<string, "kayra" | "erato"> = {
   "llama-3-erato-v1": "erato",
 };
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("text").setDescription(localizer("en-US", "commands.novelai.preset.text.description"));
 
@@ -33,10 +32,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Applies a NovelAI sampling preset to this server's text generation config.
  * Only available when the provider is NovelAI and the model is Kayra or Erato.
  *
- * @param _client - Discord client instance (unused)
- * @param interaction - Command interaction
- * @param userData - Requesting user's DB row
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -55,7 +50,6 @@ export async function execute(
     return;
   }
 
-  // Load server state
   const tomoriState = await getCachedTomoriState(interaction.guild.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -90,7 +84,6 @@ export async function execute(
     return;
   }
 
-  // Determine model target category and load available presets
   const modelTarget = MODEL_TARGET_MAP[modelCodename] ?? "kayra";
   const presets = await configRepository.loadNaiPresets(modelTarget);
   if (presets.length === 0) {
@@ -104,7 +97,6 @@ export async function execute(
     return;
   }
 
-  // Build select options — one per preset with locale-appropriate description
   const isJapanese = userData.language_pref.toLowerCase().startsWith("ja");
   const presetOptions: SelectOption[] = presets.map((preset) => {
     const desc = isJapanese ? preset.ja_preset_desc : preset.preset_desc;
@@ -115,7 +107,6 @@ export async function execute(
     };
   });
 
-  // Show the modal — handles >25 options with automatic page navigation
   const modalResult = await promptWithPaginatedModal(interaction, locale, {
     modalCustomId: PRESET_MODAL_CUSTOM_ID,
     modalTitleKey: "commands.novelai.preset.text.modal_title",
@@ -131,7 +122,6 @@ export async function execute(
     ],
   });
 
-  // Silently return on cancel or timeout — no message needed
   if (modalResult.outcome !== "submit") return;
 
   // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees these values exist
@@ -139,7 +129,6 @@ export async function execute(
   // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees these values exist
   const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
-  // Find the chosen preset in the loaded list
   const chosenPreset = presets.find((p) => p.preset_name === selectedPresetName);
   if (!chosenPreset) {
     await replyInfoEmbed(modalInteraction, locale, {
@@ -150,7 +139,6 @@ export async function execute(
     return;
   }
 
-  // Apply the preset — writes schema fields to split server config tables + nai_preset_name
   const updated = await configRepository.applyNaiPreset(
     tomoriState.server_id,
     chosenPreset,

@@ -26,7 +26,6 @@ async function run() {
   console.log("\n=== EXEMPTIONS ===");
   exemptions.forEach((e) => console.log(`exempt: ${normalizePath(e.file)}:${e.line} (${e.kind}; ${e.reason})`));
 
-  // Genuine violations (raw SQL outside repositories/, not exempt) fail the gate.
   if (violations.length > 0) {
     console.error(
       `\n❌ Found ${violations.length} raw SQL ${violations.length === 1 ? "query" : "queries"} outside ` +

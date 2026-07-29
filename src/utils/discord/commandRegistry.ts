@@ -16,7 +16,6 @@ class CommandRegistry {
   /**
    * Initialize the command registry by fetching all registered commands from Discord.
    * This should be called once during bot startup after commands are registered.
-   * @param client - The Discord client instance
    */
   async initialize(client: Client): Promise<void> {
     if (this.initialized) {
@@ -115,7 +114,6 @@ class CommandRegistry {
 
   /**
    * Get all registered command names (for debugging).
-   * @returns Array of all command keys in the registry
    */
   getRegisteredCommands(): string[] {
     return Array.from(this.commandIds.keys());

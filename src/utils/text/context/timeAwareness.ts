@@ -75,15 +75,12 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
     return `${args.displayName} is talking to you for the very first time! If you haven't already, welcome them naturally and ask something friendly to get to know them.`;
   }
 
-  // Calendar-day gap in the person's own timezone, not elapsed 24h periods.
   const nowMs = args.nowMs ?? Date.now();
   const dayGap =
     getCalendarDayWithOffset(nowMs, offsetHours) -
     getCalendarDayWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
   if (dayGap < reunionDays) return null;
 
-  // Returning-user note, phrased for whether they addressed Tomori or simply
-  //    reappeared in the room.
   const lastDate = formatDateWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
   return isTriggerer
     ? `${args.displayName} is talking to you again for the first time since ${lastDate}. It's been ${dayGap} days! If you haven't already, acknowledge their return naturally and ask what they've been up to.`

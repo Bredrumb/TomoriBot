@@ -105,7 +105,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
     ContextItemTag.KNOWLEDGE_SERVER_STICKERS, // Text-based with semantic metadata (deterministic ordering)
     ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-    // REMOVED: KNOWLEDGE_USER_MEMORIES, KNOWLEDGE_CURRENT_CONTEXT (now in KNOWLEDGE_USERS_IN_CONVERSATION)
   ];
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
@@ -165,11 +164,9 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info("GoogleStreamAdapter: Initializing Gemini streaming");
 
-    // Initialize Google AI client
     const genAI = new GoogleGenAI({ apiKey: config.apiKey });
     const googleConfig = config as GoogleStreamConfig;
 
-    // Prepare the request configuration
     const requestConfig: GenerateContentConfig = {
       ...googleConfig.generationConfig,
       safetySettings: googleConfig.safetySettings,
@@ -197,13 +194,11 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       requestConfig.stopSequences = mergedStopSequences;
     }
 
-    // Add thinking configuration if provided
     if (googleConfig.thinkingConfig) {
       requestConfig.thinkingConfig = googleConfig.thinkingConfig;
       log.info("GoogleStreamAdapter: Thinking mode enabled");
     }
 
-    // Assemble context for Google format (shared with token counting path)
     const payload = await this.buildTokenCountPayload(
       context.contextItems,
       config.model,
@@ -217,12 +212,10 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       log.info(`Assembled system instruction. Length: ${payload.systemInstruction.length}`);
     }
 
-    // Add tools if available
     if (config.tools && config.tools.length > 0) {
       requestConfig.tools = config.tools;
     }
 
-    // Add current turn model parts if any
     if (context.currentTurnModelParts.length > 0) {
       finalContents.push({
         role: "model",
@@ -231,7 +224,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       log.info(`Added ${context.currentTurnModelParts.length} accumulated model parts to API history.`);
     }
 
-    // Add function interaction history
     if (context.functionInteractionHistory && context.functionInteractionHistory.length > 0) {
       for (const item of context.functionInteractionHistory) {
         const functionCallPart: Part = {
@@ -244,10 +236,8 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
           functionCallPart.thoughtSignature = item.functionCall.thoughtSignature;
         }
 
-        // Build model parts: pre-tool-call text (if any) + function call
         const modelParts: Part[] = [];
 
-        // Prepend text parts the model generated before the function call
         if (item.preToolCallTextParts && item.preToolCallTextParts.length > 0) {
           for (const textPart of item.preToolCallTextParts) {
             modelParts.push(textPart as Part);
@@ -262,7 +252,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
           parts: modelParts,
         });
 
-        // Build function response parts array
         const responseParts: Part[] = [item.functionResponse as Part];
 
         // Add image parts if present (for tools that send images like brave_image_search)
@@ -304,18 +293,15 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Ensure model is provided
     if (!config.model) {
       throw new Error("Model must be specified in config. Use GoogleProvider.getDefaultModel() if needed.");
     }
 
     log.info(`Generating content with model ${config.model}`);
 
-    // Log sanitized request for debugging
     this.logSanitizedRequest(requestConfig, finalContents);
 
     try {
-      // Start the streaming
       const stream = await genAI.models.generateContentStream({
         model: config.model,
         contents: finalContents,
@@ -403,7 +389,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         }
       }
 
-      // Convert Google API errors to our format
       yield this.createProviderErrorChunk(error);
     }
   }
@@ -709,7 +694,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     const googleChunk = chunk.data as GoogleStreamChunk;
     const thoughts: ThoughtLogEntry[] = [];
 
-    // Handle errors first
     if ("error" in googleChunk && googleChunk.error) {
       return {
         type: "error",
@@ -717,7 +701,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Check for content blocks from prompt feedback
     if (
       googleChunk.promptFeedback?.blockReason &&
       googleChunk.promptFeedback.blockReason !== BlockedReason.BLOCKED_REASON_UNSPECIFIED
@@ -736,7 +719,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Check for finish reason blocks
     const candidate = googleChunk.candidates?.[0];
     if (candidate?.finishReason && this.isBlockingFinishReason(candidate.finishReason)) {
       const error: ProviderError = {
@@ -753,7 +735,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Check for thought signatures and thought summaries
     const metadata: Record<string, unknown> = {};
     // Attach the latest captured token usage (Gemini reports it on the raw
     // chunk, which normalization strips). The orchestrator captures usage from
@@ -780,7 +761,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       log.info(`GoogleStreamAdapter: Received ${partThoughts.length} thought part(s)`);
     }
 
-    // Check for function calls
     const functionCalls = this.extractFunctionCallsFromChunk(googleChunk);
     if (functionCalls.length > 0) {
       const functionCall = this.convertGoogleFunctionCall(functionCalls[0]);
@@ -811,7 +791,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Handle finish reason indicating completion
     if (candidate?.finishReason === FinishReason.STOP) {
       return {
         type: "done",
@@ -820,7 +799,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Default: empty chunk (shouldn't happen but handle gracefully)
     return {
       type: "text",
       content: "",
@@ -854,7 +832,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   handleProviderError(error: unknown): ProviderError {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Try to parse Google API error structure to extract error code
     let googleApiError: {
       code?: number;
       message?: string;
@@ -865,26 +842,22 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     try {
       // Google API errors sometimes have nested JSON in the message
       if (errorMessage.includes('{"error":')) {
-        // Extract the JSON part from the error message
         const jsonMatch = errorMessage.match(/\{.*\}/s);
         if (jsonMatch) {
           const parsedError = JSON.parse(jsonMatch[0]);
           googleApiError = parsedError.error || parsedError;
 
-          // Extract the actual Google error message
           if (googleApiError?.message && typeof googleApiError.message === "string") {
             try {
               // Some Google errors have double-nested JSON
               const nestedError = JSON.parse(googleApiError.message);
               if (nestedError.error?.message) {
                 extractedMessage = nestedError.error.message;
-                // Update the error code from nested structure if available
                 if (nestedError.error?.code) {
                   googleApiError.code = nestedError.error.code;
                 }
               }
             } catch {
-              // If not nested JSON, use the direct message
               extractedMessage = googleApiError.message;
             }
           }
@@ -894,15 +867,12 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       log.warn("GoogleStreamAdapter: Failed to parse Google API error structure", parseError);
     }
 
-    // Determine error type and create localized error based on Google API error codes
     const errorCode = googleApiError?.code;
     let errorType: ProviderError["type"];
     let retryable: boolean;
 
-    // Map Google API error codes to our error types
     switch (errorCode) {
       case 400:
-        // Check if this is a billing-related 400 error
         if (errorMessage.includes("billing") || errorMessage.includes("free tier")) {
           errorType = "api_error";
           retryable = false;
@@ -936,8 +906,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         retryable = true;
         break;
       default:
-        // Fallback for unknown error codes or when code is not available
-        // Try to categorize based on error message content
         if (errorMessage.includes("API key") || errorMessage.includes("PERMISSION_DENIED")) {
           errorType = "api_error";
           retryable = false;
@@ -987,15 +955,12 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
    * Formats errors as "Error Code {code}: {Google message}"
    */
   createErrorDescription(error: ProviderError, locale: string): string | null {
-    // Get Google-specific message based on error code and type
     let googleMessage = error.userMessage;
 
     if (!googleMessage) {
-      // Fallback to locale-based default messages
       const errorCode = error.code;
       let messageKey: string;
 
-      // Map error types to Google-specific locale keys
       switch (error.type) {
         case "content_blocked":
           messageKey = "content_blocked_default_message";
@@ -1010,7 +975,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
           messageKey = "503_default_message";
           break;
         case "api_error":
-          // Check for specific API error codes
           if (errorCode === "400" && error.message.includes("billing")) {
             messageKey = "400_billing_default_message";
           } else {
@@ -1025,7 +989,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       try {
         googleMessage = localizer(locale, `genai.google.${messageKey}`);
 
-        // If this is an unknown error, append the actual API response for debugging
         if (messageKey === "unknown_default_message") {
           // Truncate error message to avoid Discord embed limits
           const maxErrorLength = 1000;
@@ -1034,9 +997,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
           googleMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
         }
       } catch {
-        // If locale key doesn't exist, use a generic fallback with actual API error
         googleMessage = localizer(locale, "genai.google.unknown_default_message");
-        // Append actual API error for unknown errors
         const maxErrorLength = 1000;
         const apiErrorSnippet =
           error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
@@ -1044,7 +1005,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Format as "Error Code {code}: {Google message}"
     const errorCode = error.code || "unknown";
     return `Error Code ${errorCode}: ${googleMessage}`;
   }
@@ -1077,7 +1037,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
           .join("\n");
       }
 
-      // Check if this should be system instruction
       if (
         item.role === "system" ||
         (item.role === "user" &&
@@ -1089,7 +1048,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         // CRITICAL: ALL user/model items go to dialogue (unless in SYSTEM_INSTRUCTION_TAGS)
         // This handles DIALOGUE_HISTORY, DIALOGUE_SAMPLE, and new tags like KNOWLEDGE_USERS_IN_CONVERSATION
 
-        // Convert to Google Parts format
         const geminiParts: Part[] = [];
         for (const part of item.parts) {
           if (part.type === "text") {
@@ -1103,9 +1061,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
               text: "[System: An image is attached to this message that this model cannot process.]",
             });
           } else if (part.type === "image" && part.uri && part.mimeType) {
-            // Handle images with URI - fetch and convert to base64
             try {
-              // Check if this is a GIF - handle based on environment
               if (part.mimeType === "image/gif") {
                 const isProduction = process.env.RUN_ENV === "production";
 
@@ -1118,7 +1074,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                       text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production.]`,
                     });
                   } else {
-                    // Discord attachment GIF: Just note its presence
                     geminiParts.push({
                       text: "[System: This message contains a GIF. GIF processing disabled in production.]",
                     });
@@ -1142,7 +1097,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                   );
                 }
               } else {
-                // Regular image processing (non-GIF) — optimize oversized images
                 const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
 
                 geminiParts.push({
@@ -1177,7 +1131,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
               data: string;
             };
             if (typeof inlineData === "object" && inlineData.mimeType && inlineData.data) {
-              // Check if this is a GIF - handle based on environment
               if (inlineData.mimeType === "image/gif") {
                 const isProduction = process.env.RUN_ENV === "production";
 
@@ -1195,18 +1148,14 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                       "GoogleStreamAdapter: GIF detected in inlineData, extracting keyframes (DEV MODE - memory intensive)",
                     );
 
-                    // Convert base64 to buffer for processing
                     const gifBuffer = Buffer.from(inlineData.data, "base64");
 
-                    // Extract keyframes from GIF buffer
                     const keyframes = await extractGifKeyframes(gifBuffer);
 
-                    // Add a text label before the keyframes
                     geminiParts.push({
                       text: `[System: Animated GIF; ${keyframes.length} keyframes extracted from ${keyframes[0].totalFrames} total frames.]`,
                     });
 
-                    // Add each keyframe as a separate image with a label
                     for (const frame of keyframes) {
                       geminiParts.push({
                         text: `Frame ${frame.frameNumber + 1}/${keyframes.length} (original frame ${frame.originalFrameIndex + 1}/${frame.totalFrames}):`,
@@ -1229,7 +1178,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                   }
                 }
               } else {
-                // Regular image processing (non-GIF)
                 geminiParts.push({
                   inlineData: {
                     mimeType: inlineData.mimeType,
@@ -1242,10 +1190,8 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
               log.warn("GoogleStreamAdapter: Invalid inlineData structure for image part");
             }
           } else if (part.type === "video" && part.uri && part.mimeType) {
-            // Handle videos
             try {
               if ((part as { isYouTubeLink?: boolean }).isYouTubeLink) {
-                // Check if this is an enhanced context video part (should be processed)
                 const isEnhancedContext = (part as { enhancedContext?: boolean }).enhancedContext;
 
                 if (isEnhancedContext) {
@@ -1265,7 +1211,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
                   );
                 }
               } else {
-                // Direct video uploads (handle size limits)
                 const videoResponse = await safeDownload(part.uri, {
                   maxSizeMB: VIDEO_CONTEXT_MAX_INLINE_MB,
                   timeoutMs: 20_000,

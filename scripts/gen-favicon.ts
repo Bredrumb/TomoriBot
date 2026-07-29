@@ -17,7 +17,6 @@ import { resolve } from "node:path";
 const SOURCE = resolve(import.meta.dir, "../assets/img/tomoricon.png");
 const SIZES = [16, 32, 48, 256];
 
-// Resize source to each target size as a compressed PNG buffer.
 const layers: Buffer[] = await Promise.all(
   SIZES.map((size) =>
     sharp(SOURCE)
@@ -58,13 +57,11 @@ for (let i = 0; i < count; i++) {
 
 const ico = Buffer.concat([header, directory, ...layers]);
 
-// Generate optimized 256x256 PNG.
 const png256 = await sharp(SOURCE)
   .resize(256, 256, { fit: "cover", kernel: "lanczos3" })
   .png({ compressionLevel: 9, effort: 10 })
   .toBuffer();
 
-// Write outputs.
 const outputs: [string, Buffer][] = [
   ["assets/img/tomoricon.ico", ico],
   ["apps/docs/public/favicon.ico", ico],

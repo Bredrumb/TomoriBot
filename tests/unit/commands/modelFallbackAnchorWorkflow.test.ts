@@ -318,7 +318,6 @@ describe("/model fallback anchor workflow", () => {
 
     expect(modalOptionLists).toHaveLength(1);
     const options = modalOptionLists[0];
-    // 1 clear entry + 5 models, clear first, and no range selector was rendered.
     expect(options).toHaveLength(6);
     expect(options[0]?.value).toBe("__none__");
     expect(options[1]?.value).toBe("model-1");

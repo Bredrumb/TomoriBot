@@ -13,10 +13,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'license' command
  * Shows a link to the AGPLv3 LICENSE file on GitHub
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -27,7 +23,6 @@ export async function execute(
   // Build GitHub URL to LICENSE file (always in root, no locale variation)
   const githubUrl = "https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE";
 
-  // Create embed with title, description, and link
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.legal.license.title"))
     .setDescription(localizer(locale, "commands.legal.license.description_text"))
@@ -38,7 +33,6 @@ export async function execute(
     .setColor(ColorCode.INFO)
     .setTimestamp();
 
-  // Send ephemeral reply
   await interaction.reply({
     embeds: [embed],
     flags: MessageFlags.Ephemeral,

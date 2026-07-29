@@ -21,22 +21,16 @@ import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
 import type { HumanizerDegree } from "@/types/db/schema";
 
-// Define constants at the top (Rule #20)
 const SETUP_API_KEY_MAX_LENGTH = 500;
 const SETUP_TIMEZONE_MAX_LENGTH = 6;
 const SETUP_CUSTOM_ENDPOINT_PROVIDER = "__custom_endpoint__";
 const SETUP_USER_BYOK_PROVIDER = "__user_byok__";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("setup").setDescription(localizer("en-US", "commands.config.setup.description"));
 
 /**
  * Execute the setup command - guides users through the initial setup of TomoriBot for their server
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction (user-facing language)
  */
 export async function execute(
   _client: Client,
@@ -44,7 +38,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Check if channel exists (required for both guilds and DMs)
   if (!interaction.channel) {
     await interaction.reply({
       content: localizer(userData.language_pref, "general.errors.operation_failed_description"),
@@ -53,7 +46,6 @@ export async function execute(
     return;
   }
 
-  // Determine if this is a DM or guild context
   const isDMChannel = interaction.channel.isDMBased();
   const serverId = isDMChannel ? interaction.user.id : interaction.guild?.id;
   // Use guild locale when available so server-level triggers/localized defaults match the guild language
@@ -79,7 +71,6 @@ export async function execute(
     const existingInternalServerId = await serverRepository.loadServerIdByDiscId(serverId);
 
     if (existingInternalServerId) {
-      // Check if a main persona exists for this server
       const hasMain = await personaRepository.hasMainPersona(existingInternalServerId);
 
       if (hasMain) {
@@ -176,14 +167,12 @@ export async function execute(
       log.info(`[Setup] Cleared stale config for server ${serverId}, preserving alters, proceeding with fresh setup`);
     }
 
-    // Load dynamic data for the modal
     const [uniqueProviders, presetOptions, freeProviders] = await Promise.all([
       llmModelRepo.loadUniqueProviders(),
       configRepository.loadPresetOptionsByLocale(locale, 100),
       llmModelRepo.loadProvidersWithFreeModels(),
     ]);
 
-    // Check if we have the required data
     if (!uniqueProviders || uniqueProviders.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.unknown_error_title",
@@ -202,7 +191,6 @@ export async function execute(
       return;
     }
 
-    // Create provider options for the select menu
     const freeSuffix = localizer(locale, "commands.provider.add.free_suffix");
     const providerSelectOptions: SelectOption[] = uniqueProviders
       .filter((provider) => provider.toLowerCase() !== "custom" && !isCustomProvider(provider))
@@ -227,14 +215,12 @@ export async function execute(
       });
     }
 
-    // Create preset options for the select menu
     const presetSelectOptions: SelectOption[] = presetOptions.map((preset) => ({
       label: preset.name,
       value: preset.name,
       description: preset.description,
     }));
 
-    // Create humanizer degree options for the radio group
     const humanizerSelectOptions: RadioGroupOption[] = [
       {
         label: localizer(locale, "commands.config.setup.humanizer_option_none_label"),
@@ -313,15 +299,12 @@ export async function execute(
       MessageFlags.Ephemeral, // Auto-defer with ephemeral flag
     );
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Setup modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
     }
 
-    // Process modal submission - wrap in try-catch to handle errors within modal context
     try {
-      // Extract values from the modal
       // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
       const modalSubmitInteraction = modalResult.interaction!;
 
@@ -333,7 +316,6 @@ export async function execute(
       const humanizerDegreeStr = modalResult.values?.humanizer_degree;
       const timezoneOffsetStr = modalResult.values?.timezone_offset;
 
-      // Validate that all required values are present - let helper functions manage interaction state
       if (!apiProvider || !presetName || !humanizerDegreeStr) {
         log.error("Missing required modal values:", {
           apiProvider: apiProvider || "MISSING",
@@ -351,9 +333,6 @@ export async function execute(
         return;
       }
 
-      // Validate and transform inputs
-
-      // Validate API Provider (case-insensitive)
       const isCustomEndpointSetup = apiProvider === SETUP_CUSTOM_ENDPOINT_PROVIDER;
       const isUserByokSetup = !isDMChannel && apiProvider === SETUP_USER_BYOK_PROVIDER;
       const normalizedProvider =
@@ -370,7 +349,6 @@ export async function execute(
         return;
       }
 
-      // Handle bootstrap modes vs regular provider setup
       let encryptedKey: Buffer | null = null;
       let keyVersion = 1;
 
@@ -379,7 +357,6 @@ export async function execute(
       } else if (isCustomEndpointSetup) {
         log.info("Deferred custom-endpoint bootstrap selected - skipping immediate server provider credential setup");
       } else {
-        // Regular Provider Flow: Validate API Key
         if (!apiKey || apiKey.length < 10) {
           await replyInfoEmbed(modalSubmitInteraction, locale, {
             titleKey: "general.errors.operation_failed_title",
@@ -389,7 +366,6 @@ export async function execute(
           return;
         }
 
-        // Test the API key with a real API call using provider factory
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "commands.config.setup.api_key_validating",
           description: localizer(locale, "commands.config.setup.api_key_validating_description"),
@@ -434,13 +410,11 @@ export async function execute(
           return;
         }
 
-        // API key is valid, proceed with encryption
         const encryptionResult = await encryptApiKey(apiKey);
         encryptedKey = encryptionResult.encrypted;
         keyVersion = encryptionResult.version;
       }
 
-      // Validate preset name against available presets
       const selectedPresetOption = presetOptions.find((p) => p.name.toLowerCase() === presetName.trim().toLowerCase());
 
       if (!selectedPresetOption) {
@@ -455,7 +429,6 @@ export async function execute(
         return;
       }
 
-      // Get the full preset data from database
       const presetRow = await configRepository.loadPresetByName(selectedPresetOption.name);
 
       if (!presetRow) {
@@ -470,10 +443,8 @@ export async function execute(
       const selectedPresetId = presetRow.persona_preset_id;
       log.info(`Selected preset ID: ${selectedPresetId} (${selectedPresetOption.name})`);
 
-      // Validate humanizer degree (required, must be 0-3)
       const parsedHumanizer = Number.parseInt(humanizerDegreeStr, 10);
 
-      // Check if it's a valid number
       if (Number.isNaN(parsedHumanizer)) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.operation_failed_title",
@@ -483,7 +454,6 @@ export async function execute(
         return;
       }
 
-      // Validate it's a valid HumanizerDegree value (0-3)
       if (parsedHumanizer < 0 || parsedHumanizer > 3) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "general.errors.operation_failed_title",
@@ -496,12 +466,10 @@ export async function execute(
       const humanizerDegree = parsedHumanizer as HumanizerDegree;
       log.info(`Selected humanizer degree: ${humanizerDegree}`);
 
-      // Validate timezone offset (optional, defaults to 0 if not provided or invalid)
       let timezoneOffset = 0; // Default to UTC
       if (timezoneOffsetStr?.trim()) {
         const parsedOffset = Number.parseFloat(timezoneOffsetStr.trim());
 
-        // Check if it's a valid number and within range
         if (Number.isNaN(parsedOffset)) {
           await replyInfoEmbed(modalSubmitInteraction, locale, {
             titleKey: "general.errors.operation_failed_title",
@@ -514,7 +482,6 @@ export async function execute(
           return;
         }
 
-        // Validate range (-12 to +14)
         if (parsedOffset < -12 || parsedOffset > 14) {
           await replyInfoEmbed(modalSubmitInteraction, locale, {
             titleKey: "general.errors.operation_failed_title",
@@ -533,7 +500,6 @@ export async function execute(
         timezoneOffset = Math.round(parsedOffset);
       }
 
-      // Create setup config
       const setupConfig: SetupConfig = {
         serverId: serverId,
         encryptedApiKey: encryptedKey,
@@ -549,7 +515,6 @@ export async function execute(
         deferredCustomEndpointSetup: isCustomEndpointSetup,
       };
 
-      // Validate config using zod schema
       try {
         setupConfigSchema.parse(setupConfig);
       } catch (error) {
@@ -562,7 +527,6 @@ export async function execute(
         return;
       }
 
-      // Setup the server
       try {
         await serverRepository.setup(interaction.guild, setupConfig);
       } catch (error) {
@@ -621,22 +585,18 @@ export async function execute(
         }
       }
 
-      // Update guild avatar to match the selected preset (guild-only operation)
       let avatarUpdateFailed = false;
 
       // Only attempt avatar update in guilds (not available in DMs)
       if (!isDMChannel && interaction.guild) {
         try {
-          // Try to get cached preset avatar
           const cachedAvatar = getCachedPresetAvatar(selectedPresetId);
           const presetAvatarBuffer = cachedAvatar ? null : await getPresetAvatarBuffer(presetRow);
 
-          // Prepare avatar value (base64 data URI or null)
           const avatarValue =
             cachedAvatar ??
             (presetAvatarBuffer ? `data:image/png;base64,${presetAvatarBuffer.toString("base64")}` : null);
 
-          // Update guild avatar via Discord API
           const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
           const response = await fetch(endpoint, {
             method: "PATCH",
@@ -666,13 +626,9 @@ export async function execute(
         }
       }
 
-      // Prepare the success message.
-      // Resolve the provider display name and chosen persona for the inline confirmation line
-      //    (persona/name/humanizer are now named in the confirmation, not shown as separate fields).
       const providerDisplayName = normalizedProvider ? getProviderDisplayName(normalizedProvider) : "";
       const personaName = selectedPresetOption.name;
 
-      // Look up this provider's default model for the "{model_name}" confirmation variants.
       let configuredModelName: string | null = null;
       if (normalizedProvider) {
         const defaultModel = await llmModelRepo.loadDefaultModel(normalizedProvider);
@@ -681,7 +637,6 @@ export async function execute(
         }
       }
 
-      // Green embed fields: an optional DM explanation, then the shared Next Steps + Learn More.
       const helpFeaturesMention = commandRegistry.getCommandMention("help", "features");
       const successFields: Array<{ nameKey: string; value: string }> = [];
 
@@ -694,7 +649,6 @@ export async function execute(
 
       successFields.push({
         nameKey: "commands.config.setup.next_steps_title",
-        // DM drops the server-only `/server initialize` bullet.
         value: localizer(
           locale,
           isDMChannel ? "commands.config.setup.next_steps_value_dm" : "commands.config.setup.next_steps_value",
@@ -757,7 +711,6 @@ export async function execute(
         });
       }
 
-      // Build the yellow embed only when at least one note applies.
       const headsUpEmbed =
         headsUpNotes.length > 0
           ? new EmbedBuilder()
@@ -766,7 +719,6 @@ export async function execute(
               .setDescription(headsUpNotes.map((note) => `- **${note.label}**\n  - ${note.detail}`).join("\n"))
           : null;
 
-      // Pick the confirmation variant for the chosen mode.
       const successDescriptionKey = isUserByokSetup
         ? isDMChannel
           ? "commands.config.setup.success_desc_dm"
@@ -784,7 +736,6 @@ export async function execute(
       await replySummaryEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.setup.success_title",
         descriptionKey: successDescriptionKey,
-        // All confirmation variants pull from the same var set; unused ones are ignored per template.
         descriptionVars: {
           model_name: configuredModelName ?? "",
           provider: providerDisplayName,
@@ -800,10 +751,8 @@ export async function execute(
             : undefined,
       });
     } catch (modalError) {
-      // Handle errors within modal submission context
       log.error("Error during modal submission processing:", modalError);
 
-      // Try to respond to the modal submission interaction if we have it
       const modalSubmitInteraction = modalResult.interaction;
       if (modalSubmitInteraction) {
         try {

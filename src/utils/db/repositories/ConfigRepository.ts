@@ -60,8 +60,6 @@ function toPostgresTextArrayLiteral(values: readonly unknown[]): string {
   return `{${values.map((value) => `"${String(value).replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }
 
-// ── config table row shapes ───────────────────────────────────────────
-
 /** Row shape for server_capabilities_configs (Phase 6). */
 export type ServerCapabilitiesConfigsRow = {
   emoji_usage_enabled: boolean;
@@ -124,8 +122,6 @@ export type ConfigExportShape = {
 };
 
 export class ConfigRepository implements IRepository<ConfigExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
   /**
    * Loads NAI sampling presets available for a given NAI model target.
    *
@@ -270,7 +266,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   /**
    * Loads full preset rows for a given locale.
    *
-   * @param locale - Locale code
    */
   async loadPresetRowsByLocale(locale: string): Promise<TomoriPresetRow[] | null> {
     try {
@@ -446,8 +441,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Applies a NovelAI preset's sampling parameters to a server's config.
    * Writes through typed split-table methods. Because these writes are not
@@ -498,7 +491,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       const normalizedMax = Math.max(maxThreshold, normalizedMin);
 
       if (normalizedMin <= 0 || normalizedMax <= 0) {
-        // Always-reply mode — reset counters to 0 in the runtime table.
         const [runtimeRow] = await sql`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
           VALUES (${personaId}, 0, 0)
@@ -613,7 +605,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   ): Promise<PersonaAutochRuntimeStateRow | null> {
     try {
       const result = await sql.transaction(async (tx) => {
-        // Update the shared range on server_auto_trigger_configs.
         const [configRow] = await tx`
           UPDATE server_auto_trigger_configs
           SET autoch_threshold = ${threshold},
@@ -626,7 +617,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
         }
 
-        // Reset the persona's runtime cycle (upsert handles first-time rows).
         const [runtimeRow] = await tx`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
           VALUES (${personaId}, 0, ${nextTarget})
@@ -719,8 +709,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     if (ok) invalidateTomoriStateCache(serverDiscId);
     return ok;
   }
-
-  // ── split table partial updates ──────────────────────────────────
 
   async updateModelConfig(serverId: number, patch: Partial<ServerModelConfigRow>): Promise<boolean> {
     return this.executeUpdate("server_model_configs", serverId, patch);
@@ -825,7 +813,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
         }
 
-        // Update direct columns on server_auto_trigger_configs (if any provided).
         if (hasColumns) {
           const setParts: string[] = [];
           const values: SqlParameterArray = [];
@@ -920,8 +907,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     ]);
   }
 
-  // ── reads for split tables (used where TomoriState cache is unavailable) ──
-
   async getChatConfig(serverId: number): Promise<ServerChatConfigRow | null> {
     try {
       const [row] = await sql`SELECT * FROM server_chat_configs WHERE server_id = ${serverId}`;
@@ -1013,8 +998,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     values.push(value as never);
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Reads capabilities, NAI imagegen, NSFW, speech, and BYOK configs for the given server.
    * Returns null if the server has no config row (i.e., not yet set up).
@@ -1069,8 +1052,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       return false;
     }
   }
-
-  // ── config table reads ───────────────────────────────────────────
 
   private async resolveServerId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
@@ -1154,8 +1135,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       return null;
     }
   }
-
-  // ── config table upserts (new tables) ────────────────────────────
 
   private async sqlUpsertCapabilitiesConfigs(serverId: number, row: ServerCapabilitiesConfigsRow): Promise<void> {
     await sql`

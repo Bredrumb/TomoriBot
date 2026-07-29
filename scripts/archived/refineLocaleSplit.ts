@@ -20,7 +20,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Glob } from "bun";
 
-// ─── Serializer (mirrors splitLocales.ts) ─────────────────────────────────────
 
 function serializeToTS(value: unknown, depth = 0): string {
   const childIndent = "  ".repeat(depth + 1);
@@ -50,14 +49,12 @@ function serializeToTS(value: unknown, depth = 0): string {
   return String(value);
 }
 
-// ─── Config ───────────────────────────────────────────────────────────────────
 
 const LOCALES = ["en-US", "ja"];
 
 /** Keys under genai.* that belong semantically with tools, not providers. */
 const TOOL_ACTIVITY_KEYS = ["search", "mcp", "tool_notice", "video", "document", "image", "vision", "gif", "fetch"];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Converts a hyphenated key like "st-preset" to a valid JS identifier "stPreset". */
 function toVarName(key: string): string {
@@ -69,7 +66,6 @@ function quoteKey(key: string): string {
   return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : `"${key}"`;
 }
 
-// ─── Task 1: Split commands.ts into per-key sub-files ─────────────────────────
 
 async function splitCommandsLocale(locale: string): Promise<void> {
   console.log(`\n  [${locale}] Splitting commands.ts…`);
@@ -84,7 +80,6 @@ async function splitCommandsLocale(locale: string): Promise<void> {
 
   const keys = Object.keys(commandsObj);
 
-  // Write one sub-file per top-level key
   for (const key of keys) {
     const content = [
       `// locales/${locale}/commands/${key}.ts`,
@@ -99,7 +94,6 @@ async function splitCommandsLocale(locale: string): Promise<void> {
     console.log(`    ✓  commands/${key}.ts`);
   }
 
-  // Rewrite commands.ts as an assembler
   const importLines = keys.map((k) => `import ${toVarName(k)} from "./commands/${k}";`);
   const spreadLines = keys.map((k) => `    ...${toVarName(k)},`);
 
@@ -121,7 +115,6 @@ async function splitCommandsLocale(locale: string): Promise<void> {
   console.log(`    ✓  commands.ts (assembler)`);
 }
 
-// ─── Task 2: Move tool-activity keys from genai.* to tools.* ─────────────────
 
 async function moveToolActivityKeys(locale: string): Promise<void> {
   console.log(`\n  [${locale}] Moving tool-activity keys: genai → tools…`);
@@ -167,7 +160,6 @@ async function moveToolActivityKeys(locale: string): Promise<void> {
   console.log(`    ✓  tools.ts updated`);
 }
 
-// ─── Task 3: Update call-site references in src/ ─────────────────────────────
 
 async function updateCallSites(): Promise<void> {
   console.log("\n  Updating call-site references in src/…");
@@ -205,7 +197,6 @@ async function updateCallSites(): Promise<void> {
   console.log(`  → ${updatedCount} file(s) updated`);
 }
 
-// ─── Main ──────────────────────────────────────────────────────────────────────
 
 console.log("=== refineLocaleSplit.ts ===\n");
 

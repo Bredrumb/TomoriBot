@@ -44,7 +44,6 @@ export async function generateVoiceMessageMetadata(
   mimeType: string,
 ): Promise<VoiceMessageMetadata | null> {
   try {
-    // Parse audio header for duration — pure JS, no subprocess needed
     const metadata = await parseBuffer(audioBuffer, { mimeType });
     const durationSecs = metadata.format.duration;
     if (!durationSecs || durationSecs <= 0) {
@@ -81,7 +80,6 @@ export async function generateVoiceMessageMetadata(
       },
     );
 
-    // Race subprocess exit against a timeout to avoid hanging
     const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), FFMPEG_TIMEOUT_MS));
     const exitPromise = proc.exited.then(() => new Response(proc.stdout).arrayBuffer());
 

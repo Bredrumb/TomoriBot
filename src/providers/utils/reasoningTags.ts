@@ -114,11 +114,9 @@ export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningT
     return null;
   }
 
-  // Split off the optional leading slash and inspect the remaining run.
   const hasSlash = candidate[1] === "/";
   const run = candidate.slice(hasSlash ? 2 : 1);
 
-  // Confirm the run can still complete into a real think tag.
   const colonIdx = run.lastIndexOf(":");
   const plausible =
     colonIdx === -1
@@ -128,7 +126,6 @@ export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningT
     return null;
   }
 
-  // Classify: explicit slash or bare `<` is a close; otherwise an open.
   const kind: ReasoningTagPartialKind = hasSlash || run.length === 0 ? "close" : "open";
   return { index: match.index, kind };
 }

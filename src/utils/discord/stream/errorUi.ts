@@ -105,9 +105,7 @@ export class StreamErrorUi {
    * Tips are composed from atomic keys so conditional items stay declarative:
    * - `model_fallback` is only offered when the server has no fallback chain configured yet.
    * - OpenRouter-specific items (free-model list / model list) are appended only for that provider.
-   * @param providerError - The normalized provider error.
    * @param provider - The active stream provider (used to detect OpenRouter for conditional tips).
-   * @param context - The stream context (fallback config + rotation state drive tip/title choices).
    * @returns The title key, ordered tip-item keys, and embed color.
    */
   private resolveProviderErrorPresentation(
@@ -249,9 +247,7 @@ export class StreamErrorUi {
    * the raw provider detail. The detail is appended for ALL error types — not just model errors —
    * so providers that map known codes to hardcoded locale strings (e.g. OpenRouter) no longer hide
    * the actual provider message from the user.
-   * @param providerError - The normalized provider error.
    * @param provider - The active stream provider (supplies the localized headline).
-   * @param locale - The resolved user locale.
    * @param isModelError - Whether the error classifies as a model-selection error (drives the headline fallback).
    * @returns The composed description, or null when no headline can be produced.
    */

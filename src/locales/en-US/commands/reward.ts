@@ -1,5 +1,3 @@
-// locales/en-US/commands/reward.ts
-
 export default {
   reward: {
     description: `Reward me with fun interactions.`,

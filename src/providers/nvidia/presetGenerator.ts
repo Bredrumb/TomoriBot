@@ -74,10 +74,7 @@ function buildNvidiaPresetSystemPrompt(): string {
 /**
  * Generate preset data from user prompts using the NVIDIA NIM API.
  *
- * @param apiKey - Decrypted NVIDIA API key
- * @param params - Generation parameters (character info, instructions, image)
  * @param _locale - User's locale (reserved for future error localisation)
- * @param options - NVIDIA-specific options (model, tools, temperature)
  * @returns Generated preset or a typed error result
  */
 export async function generatePresetFromPromptNvidia(
@@ -115,7 +112,6 @@ export async function generatePresetFromPromptNvidia(
   // on each request when in json_object fallback mode
   const messages: PresetMessage[] = [{ role: "user", content: userContent }];
 
-  // Try json_schema first; fall back to json_object once if unsupported
   type FormatMode = "json_schema" | "json_object";
   let formatMode: FormatMode = "json_schema";
   let formatFallbackDone = false;
@@ -124,7 +120,6 @@ export async function generatePresetFromPromptNvidia(
   let toolRounds = 0;
 
   while (true) {
-    // Build the response format object based on current mode
     const responseFormat =
       formatMode === "json_schema"
         ? {
@@ -137,7 +132,6 @@ export async function generatePresetFromPromptNvidia(
           }
         : { type: "json_object" };
 
-    // Prepend schema-steered system prompt for json_object fallback mode
     const requestMessages: PresetMessage[] =
       formatMode === "json_object"
         ? [{ role: "system", content: buildNvidiaPresetSystemPrompt() }, ...messages]
@@ -157,7 +151,6 @@ export async function generatePresetFromPromptNvidia(
       body.tool_choice = "auto";
     }
 
-    // Send the request
     const response = await fetch(NVIDIA_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -216,7 +209,6 @@ export async function generatePresetFromPromptNvidia(
       };
     }
 
-    // Handle tool calls
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length > 0) {
       if (!toolsEnabled || !toolContext) {

@@ -238,8 +238,6 @@ async function storeMigratedPersonaAvatar(
  * Attempts to recover persona avatar by scanning guild for surviving webhooks.
  * Used when the stored webhook_avatar_url fails to download (Edge Case 2: last webhook deleted).
  *
- * @param guild - Guild to scan for surviving webhooks
- * @param personaId - Persona ID to recover avatar for
  * @returns Avatar data URI and recovered URL, or null if no recovery possible
  */
 async function attemptWebhookAvatarRecovery(
@@ -252,7 +250,6 @@ async function attemptWebhookAvatarRecovery(
 
   // Scan all text channels in guild for surviving webhooks
   for (const channel of guild.channels.cache.values()) {
-    // Skip non-text channels
     if (!channel.isTextBased()) {
       continue;
     }
@@ -528,7 +525,6 @@ async function resolvePersonaWebhookAvatar(persona: TomoriState, guild?: Guild):
  * 5. If no usable webhook exists, create a new one
  * 6. Cache and persist the webhook for future use
  *
- * @param channel - The text channel to get/create webhook for
  * @returns Webhook object, or null if missing permissions
  */
 /**
@@ -540,7 +536,6 @@ async function resolvePersonaWebhookAvatar(persona: TomoriState, guild?: Guild):
  * "Fallback Used" notice) which — unlike alter turns — have no pre-resolved
  * `responseTarget.webhook` when the main persona reaches the webhook path via a sprite.
  *
- * @param channel - Channel the message will be posted to (thread or text channel)
  * @returns The managed webhook, or null when the channel cannot host one or permissions are missing
  */
 export async function resolveManagedChannelWebhook(channel: unknown): Promise<Webhook | null> {
@@ -599,7 +594,6 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
       }
     }
 
-    // Try restoring from encrypted DB storage (survives process restarts)
     const restoredWebhook = await restoreStoredSharedWebhook(channel);
     if (restoredWebhook) {
       log.info(`[Webhook Manager] Restored shared webhook for channel ${channelId} from stored credentials`);
@@ -611,7 +605,6 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
     const webhooks = await channel.fetchWebhooks();
     let webhook = webhooks.find((wh) => wh.name === WEBHOOK_NAME);
 
-    // Check if webhook has a token (webhooks from fetchWebhooks don't have tokens)
     if (webhook && !webhook.token) {
       log.warn(
         `[Webhook Manager] Found webhook for channel ${channelId} but it has no token (fetched webhook). Deleting and recreating.`,
@@ -652,8 +645,6 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
  * Shared multi-persona webhooks are cached by channel ID. Legacy persona webhooks
  * are cached by `channelId:personaId`, so this helper scans both caches.
  *
- * @param channelId - Base text channel ID that owns the webhook (threads use parent ID)
- * @param webhookId - Webhook snowflake to look up
  * @returns Cached webhook with token, or null when unavailable/not bot-managed
  */
 export function getCachedManagedWebhookForChannel(channelId: string, webhookId?: string | null): Webhook | null {
@@ -837,7 +828,6 @@ export async function getOrCreatePersonaWebhook(
     const personaWebhookName = getPersonaWebhookName(persona.persona_id);
     let webhook = webhooks.find((wh) => wh.name === personaWebhookName);
 
-    // Check if webhook has a token (webhooks from fetchWebhooks don't have tokens)
     if (webhook && !webhook.token) {
       log.warn(
         `[Webhook Manager] Found persona webhook for channel ${channelId} but it has no token (fetched webhook). Deleting and recreating.`,
@@ -897,10 +887,7 @@ export async function getOrCreatePersonaWebhook(
  * Updates existing persona webhooks across a guild to use the latest avatar.
  * Legacy maintenance helper for surviving persona webhooks in non-production.
  *
- * @param guild - Guild to scan for webhooks
- * @param personaId - Persona ID to update webhooks for
  * @param avatar - Avatar data (Buffer or data URI)
- * @returns Number of webhooks updated
  */
 export async function updatePersonaWebhooksAvatar(
   guild: Guild,
@@ -1002,10 +989,6 @@ export async function resolvePersonaWebhookIdentity(
  * 2. Main persona: Use guild avatar or fallback to webhook_avatar_url
  * 3. Fallback: Use bot's global avatar (webhook default)
  *
- * @param webhook - The webhook to send through
- * @param persona - The persona to send as
- * @param content - Message content
- * @param options - Additional options (replyToMessageId, custom avatarURL override)
  * @returns The sent message, or null if failed
  */
 export async function sendAsPersona(
@@ -1087,10 +1070,6 @@ export async function sendAsPersona(
  * The message is prefixed with `> ` (Discord blockquote) to visually distinguish
  * it from a regular typed message.
  *
- * @param channel - The channel or thread where the voice message was sent
- * @param displayName - The sender's display name for the webhook identity
- * @param avatarUrl - The sender's avatar URL for the webhook identity
- * @param transcript - The transcript text to post
  * @returns The sent Discord message, or null if posting failed
  */
 export async function sendUserTranscriptViaWebhook(
@@ -1121,18 +1100,14 @@ export async function sendUserTranscriptViaWebhook(
     return null;
   }
 
-  // Escape newlines so multi-line transcripts stay in the blockquote block
   const quotedTranscript = `> ${transcript.replace(/\n/g, "\n> ")}`;
 
   const payload: WebhookSendPayload = {
     content: quotedTranscript,
-    // Never ping anyone accidentally from transcribed text
     allowedMentions: { parse: [] },
-    // When inside a thread, route the message to it via threadId
     ...(isThread ? { threadId: channel.id } : {}),
   };
 
-  // Impersonate the original sender so the message clearly belongs to them
   const identity: ResolvedWebhookIdentity = {
     username: displayName,
     avatarUrl,
@@ -1155,8 +1130,6 @@ export async function sendUserTranscriptViaWebhook(
  * Resolves the avatar URL for a given persona and guild.
  * Handles fallback chain: alter avatar -> bot's guild avatar -> default avatar.
  *
- * @param persona - The persona to resolve avatar for
- * @param guild - The guild context (for main persona guild-specific avatar)
  * @returns Avatar URL string, or undefined to use webhook default
  */
 export function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild): string | undefined {
@@ -1177,7 +1150,6 @@ export function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild): str
     }
   }
 
-  // Main persona: Try the bot's guild-specific avatar first
   if (!persona.is_alter) {
     const memberAvatar = guild.members.me?.displayAvatarURL({
       extension: "png",
@@ -1205,7 +1177,6 @@ export function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild): str
  * Invalidates the webhook cache for a specific channel.
  * Useful when webhooks are manually deleted or need to be refreshed.
  *
- * @param channelId - The channel ID to invalidate cache for
  */
 export function invalidateWebhookCache(channelId: string): void {
   const hadCache = webhookCache.has(channelId);
@@ -1267,7 +1238,6 @@ export function clearWebhookCache(): void {
 /**
  * Gets webhook cache statistics for monitoring.
  *
- * @returns Object with cache size
  */
 export function getWebhookCacheStats(): {
   cacheSize: number;
@@ -1281,9 +1251,6 @@ export function getWebhookCacheStats(): {
  * Deletes persona-specific webhooks across all channels in a guild.
  * Legacy cleanup helper. Normal avatar/storage flows no longer depend on these webhooks.
  *
- * @param guild - Guild to scan for webhooks
- * @param personaId - Persona ID to delete webhooks for
- * @returns Number of webhooks deleted
  */
 export async function deletePersonaWebhooks(guild: Guild, personaId: number): Promise<number> {
   const personaWebhookName = getPersonaWebhookName(personaId);

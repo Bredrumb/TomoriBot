@@ -44,17 +44,13 @@ export async function checkUserDailyQuota(
   }
 
   try {
-    // Get current date in YYYY-MM-DD format (server's local date)
     const today = new Date().toISOString().split("T")[0];
 
-    // Get or create user's quota record for today
     const userQuota = await touchUserImageQuota(serverId, userDiscId, today);
 
-    // Check if user has exceeded their daily quota
     const remaining = config.daily_user_quota - userQuota.usage_count;
 
     if (remaining <= 0) {
-      // Calculate midnight tonight for reset time
       const resetTime = new Date();
       resetTime.setHours(24, 0, 0, 0); // Next midnight
 
@@ -66,14 +62,12 @@ export async function checkUserDailyQuota(
       };
     }
 
-    // User has remaining quota
     return {
       allowed: true,
       userRemaining: remaining,
     };
   } catch (error) {
     log.error("Failed to check user daily quota", error);
-    // On error, allow (fail-open to prevent blocking legitimate usage)
     return { allowed: true };
   }
 }
@@ -89,15 +83,12 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
   }
 
   try {
-    // Get or create server-wide quota record
     const serverwideQuota = await touchServerwideImageQuota(serverId, config.serverwide_quota_resets_in);
 
-    // Check if quota period has expired (needs reset)
     const now = new Date();
     const periodEnd = new Date(serverwideQuota.quota_period_end);
 
     if (now >= periodEnd) {
-      // Reset the server-wide quota
       const resetQuota = await resetServerwideImagePeriod(serverId, config.serverwide_quota_resets_in);
 
       return {
@@ -107,7 +98,6 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
       };
     }
 
-    // Check if server has exceeded its quota
     const remaining = config.serverwide_quota - serverwideQuota.usage_count;
 
     if (remaining <= 0) {
@@ -119,7 +109,6 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
       };
     }
 
-    // Server has remaining quota
     return {
       allowed: true,
       serverwideRemaining: remaining,
@@ -127,7 +116,6 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
     };
   } catch (error) {
     log.error("Failed to check serverwide quota", error);
-    // On error, allow (fail-open to prevent blocking legitimate usage)
     return { allowed: true };
   }
 }
@@ -138,7 +126,6 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
  */
 export async function checkImageQuota(serverId: number, userDiscId: string): Promise<QuotaCheckResult> {
   try {
-    // Get quota configuration
     const config = await getQuotaConfig(serverId);
 
     // Check user daily quota first (most common limit)
@@ -148,13 +135,11 @@ export async function checkImageQuota(serverId: number, userDiscId: string): Pro
       return userCheck;
     }
 
-    // Check server-wide quota
     const serverwideCheck = await checkServerwideQuota(serverId, config);
     if (!serverwideCheck.allowed) {
       return serverwideCheck;
     }
 
-    // Both checks passed, combine remaining counts
     return {
       allowed: true,
       userRemaining: userCheck.userRemaining,
@@ -163,7 +148,6 @@ export async function checkImageQuota(serverId: number, userDiscId: string): Pro
     };
   } catch (error) {
     log.error("Failed to check image quota", error);
-    // On error, allow (fail-open to prevent blocking legitimate usage)
     return { allowed: true };
   }
 }
@@ -178,7 +162,6 @@ export async function incrementImageQuota(serverId: number, userDiscId: string):
     log.info("Incremented image quotas");
   } catch (error) {
     log.error("Failed to increment image quota", error);
-    // Don't throw - quota increment failure shouldn't block user
   }
 }
 

@@ -1,5 +1,3 @@
-// locales/en-US/commands/persona.ts
-
 export default {
   persona: {
     description: `Manage personality presets`,

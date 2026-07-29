@@ -12,9 +12,9 @@ import {
  * `bun test` process per lane and runs the lanes concurrently, which is only
  * safe while two rules hold:
  *
- *   1. Nothing under `tests/unit/` touches the fixture database, because the
+ *   - Nothing under `tests/unit/` touches the fixture database, because the
  *      unit lanes run CONCURRENTLY with the serial DB lane.
- *   2. No file that shares a process mutates process-wide state without undoing
+ *   - No file that shares a process mutates process-wide state without undoing
  *      it, because Bun does not reset such state between files.
  *
  * Both rules used to hold for free: the old runner gave every file its own

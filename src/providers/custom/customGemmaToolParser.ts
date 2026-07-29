@@ -128,8 +128,6 @@ export class GemmaToolCallParser {
     return { pendingText: "", functionCall };
   }
 
-  // ─── Private helpers ────────────────────────────────────────────────────────
-
   private scanForStart(text: string): GemmaFeedResult {
     const combined = this.scanHoldback + text;
 
@@ -146,7 +144,6 @@ export class GemmaToolCallParser {
     }
 
     if (bestDialect && bestIdx !== -1) {
-      // Found it: emit text before the token, start accumulating after it.
       const visibleText = combined.slice(0, bestIdx);
       this.scanHoldback = "";
       this.activeDialect = bestDialect;
@@ -220,7 +217,6 @@ export class GemmaToolCallParser {
    * Expected format: call:{toolName}{key:<|"|>value<|"|>, ...}
    */
   private parseSpecialTokenBlock(block: string): FunctionCall | null {
-    // Try the full well-formed pattern: call:name{...}
     const full = block.match(/^call:(\w+)\{([\s\S]*)\}$/);
     if (full) {
       return this.buildCall(full[1], full[2]);
@@ -325,7 +321,6 @@ export class GemmaToolCallParser {
     const args: Record<string, unknown> = {};
     const matchedKeys = new Set<string>();
 
-    // Double-quoted strings: key="value"
     for (const m of argsStr.matchAll(/(\w+)\s*=\s*"([\s\S]*?)"/g)) {
       args[m[1]] = m[2];
       matchedKeys.add(m[1]);

@@ -1,5 +1,3 @@
-// locales/en-US/commands/provider.ts
-
 export default {
   provider: {
     description: `Manage saved provider configurations`,

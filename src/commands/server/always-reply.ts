@@ -23,10 +23,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Toggles the always-reply mode for the main persona.
  * When enabled, the main persona replies to ALL user messages in guild channels (like DMs),
  * unless an alter persona's trigger is detected — in which case only the alter responds.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -41,7 +37,6 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -52,10 +47,8 @@ export async function execute(
       return;
     }
 
-    // Toggle the current value
     const newValue = !tomoriState.config.always_reply_enabled;
 
-    // Update the database
     const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       always_reply_enabled: newValue,
     });
@@ -89,7 +82,6 @@ export async function execute(
     // Invalidate cache after successful write
     invalidateTomoriStateCache(guildId);
 
-    // Send success message
     await replyInfoEmbed(interaction, locale, {
       titleKey: newValue ? "commands.server.alwaysreply.enabled_title" : "commands.server.alwaysreply.disabled_title",
       descriptionKey: newValue

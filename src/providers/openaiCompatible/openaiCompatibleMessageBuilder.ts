@@ -332,7 +332,6 @@ async function convertImagePartToOpenAIContentPart(
   }
 
   try {
-    // Fetch and optimize oversized images for LLM context
     const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
     return {
       type: "image_url",

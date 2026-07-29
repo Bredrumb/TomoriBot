@@ -29,6 +29,7 @@ interface CommentSweepLedgerRow {
 }
 
 export interface CommentSweepApplyOptions {
+  additionalLedgerPaths?: string[];
   dryRun?: boolean;
   ledgerPath: string;
   minConfidence: number;
@@ -60,7 +61,11 @@ export async function applyCommentSweepLedger(
   }
 
   const repoRoot = resolve(options.repoRoot ?? process.cwd());
-  const rows = await readLedger(options.ledgerPath);
+  const ledgerPaths = [
+    options.ledgerPath,
+    ...(options.additionalLedgerPaths ?? []),
+  ];
+  const rows = (await Promise.all(ledgerPaths.map(readLedger))).flat();
   const selectedRows = options.tier
     ? rows.filter((row) => row.tier === options.tier)
     : rows;
@@ -470,7 +475,7 @@ function printGateFailure(file: string, result: CommentSweepGateResult): void {
 }
 
 function parseCliArgs(args: string[]): CommentSweepApplyOptions {
-  let ledgerPath: string | undefined;
+  const ledgerPaths: string[] = [];
   let minConfidence: number | undefined;
   let tier: CommentSweepTier | undefined;
   let dryRun = false;
@@ -478,7 +483,11 @@ function parseCliArgs(args: string[]): CommentSweepApplyOptions {
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
     if (argument === "--ledger") {
-      ledgerPath = args[++index];
+      const ledgerPath = args[++index];
+      if (!ledgerPath) {
+        throw new Error("--ledger requires a path");
+      }
+      ledgerPaths.push(ledgerPath);
       continue;
     }
     if (argument === "--min-conf") {
@@ -499,6 +508,7 @@ function parseCliArgs(args: string[]): CommentSweepApplyOptions {
     throw new Error(`Unknown argument: ${argument}`);
   }
 
+  const ledgerPath = ledgerPaths[0];
   if (!ledgerPath) {
     throw new Error("--ledger is required");
   }
@@ -506,7 +516,13 @@ function parseCliArgs(args: string[]): CommentSweepApplyOptions {
     throw new Error("--min-conf is required and must be numeric");
   }
 
-  return { dryRun, ledgerPath, minConfidence, tier };
+  return {
+    additionalLedgerPaths: ledgerPaths.slice(1),
+    dryRun,
+    ledgerPath,
+    minConfidence,
+    tier,
+  };
 }
 
 async function main(): Promise<number> {

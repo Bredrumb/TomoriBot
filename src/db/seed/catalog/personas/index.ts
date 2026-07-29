@@ -16,7 +16,6 @@ export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Tomori-san", rows: [gloomyEn] },
   { comment: "Shy Tomori (Lilya)", rows: [shyEn] },
   { comment: "Nerine (Discontinued Model)", rows: [nerineEn] },
-  // { comment: "Zaya (Esports Champion)", rows: [zayaEn] },
   { comment: "Tomori-kun (Japanese)", rows: [defaultJa] },
   { comment: "Tomori-chan (Japanese)", rows: [brattyJa] },
   { comment: "Tomori-san (Japanese)", rows: [gloomyJa] },

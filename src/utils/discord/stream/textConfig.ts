@@ -37,7 +37,6 @@ export function createStreamTextProcessingConfig(config: StreamConfig, context: 
  * name (`botName`) is excluded — it is handled directly by the cleaner — and matching is
  * case-insensitive to avoid emitting a redundant alias.
  *
- * @param tomoriState - Active persona state for this turn
  * @param botName - The persona's current display name (already handled by the cleaner)
  * @returns De-duplicated alias names (excluding the active display name)
  */

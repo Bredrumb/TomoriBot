@@ -33,8 +33,6 @@ import type { PersonalCardData, PersonalFavoritePersona } from "@/utils/stats/st
  */
 export const extractPersonalCardPalette = extractCardPalette;
 
-// ── Main gather function ───────────────────────────────────────────────────────
-
 /** Arguments for `gatherPersonalCardData`. */
 export interface GatherPersonalCardArgs {
   /** Internal `users` FK (not the Discord snowflake). */

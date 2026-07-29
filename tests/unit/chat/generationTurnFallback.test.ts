@@ -564,7 +564,6 @@ describe("runGenerationTurn fallback behavior", () => {
     const fallbackModel = makeLlm(2, "fallback-model");
     const context = makeContext(primaryModel, fallbackModel);
 
-    // Attach a persona webhook so webhook-delivered partials are removed via the webhook path.
     const deletedWebhookMessageIds: string[] = [];
     (context as unknown as { responseTarget?: unknown }).responseTarget = {
       webhook: {

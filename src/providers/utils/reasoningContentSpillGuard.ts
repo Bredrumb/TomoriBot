@@ -182,7 +182,6 @@ export class ReasoningContentSpillGuard {
  */
 function looksLikeAnswerStart(text: string): boolean {
   if (!text) return false;
-  // Openers: * _ ( [ { straight/curly double+single quotes, CJK quote/paren marks.
   if (/^[*_([{"'“”‘’「『（]/u.test(text)) return true;
   if (/^\p{Lu}/u.test(text)) return true; // uppercase letter (Latin, Cyrillic, etc.)
   if (/^[\p{Lo}\p{Lt}]/u.test(text)) return true; // caseless/titlecase letters (CJK, Hangul, Kana…)

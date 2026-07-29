@@ -76,8 +76,6 @@ export type ImportAlterPresetResult =
  * be surfaced as a friendly conflict instead of an unhandled error.
  * Mirrors the private helper in `commands/persona/import.ts`.
  *
- * @param error - Unknown error thrown by a repository insert.
- * @returns True when the error is a unique violation (SQLSTATE 23505).
  */
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -94,13 +92,11 @@ function isUniqueViolation(error: unknown): boolean {
  * All side effects are completed before returning; the caller only renders the
  * outcome.
  *
- * @param params - {@link ImportAlterPresetParams} import inputs.
  * @returns A {@link ImportAlterPresetResult} describing success or the failure reason.
  */
 export async function importAlterPreset(params: ImportAlterPresetParams): Promise<ImportAlterPresetResult> {
   const { client, guild, serverDiscId, presetData, identityMode, avatarImageBuffer } = params;
 
-  // Load existing personas and enforce the per-server persona cap.
   const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
   const personaLimits = getMemoryLimits();
 
@@ -113,7 +109,6 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     };
   }
 
-  // Reject case-insensitive name collisions early (DB also enforces this).
   const existingNames = allPersonas.map((persona) => normalizePersonaName(persona.persona_nickname));
   const importName = normalizePersonaName(presetData.tomori_nickname);
   if (existingNames.includes(importName)) {
@@ -159,7 +154,6 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     client.user?.displayAvatarURL({ extension: "png", size: 1024, forceStatic: true }) ??
     null;
 
-  // Insert the alter persona row honoring lineage mode and NovelAI fields.
   const importedLineageId = presetData.persona_lineage_id ?? null;
   let newAlterRow: { persona_id?: number } | undefined;
   try {
@@ -217,8 +211,6 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     }
   }
 
-  // Persist the avatar: upload the supplied image to storage, or inherit the
-  //    main persona avatar reference when no image was provided.
   const usedMainAvatarFallback = !avatarImageBuffer && Boolean(fallbackAvatarReference);
   let avatarUrl: string | null;
   if (avatarImageBuffer) {
@@ -266,7 +258,6 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
  * Mirrors the private helper in `commands/persona/import.ts`.
  *
  * @param name - Raw persona nickname.
- * @returns Trimmed, lowercased nickname.
  */
 function normalizePersonaName(name: string): string {
   return name.trim().toLowerCase();

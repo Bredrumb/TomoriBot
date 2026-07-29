@@ -17,7 +17,6 @@ import { log } from "@/utils/misc/logger";
  * @param refs - Messages delivered by the superseded attempt (order preserved).
  * @param options.channel - The channel the turn is streaming into; used for bot-native deletes,
  *   for the webhook-delete fallback, and to resolve the thread ID webhook deletion needs in threads.
- * @param options.webhook - The persona/alter webhook, if this turn streams through one. Preferred
  *   for webhook-delivered messages because it needs no Manage Messages permission.
  */
 export async function deleteSupersededStreamMessages(

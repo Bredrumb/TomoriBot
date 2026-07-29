@@ -539,7 +539,6 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
   }
 
   async #editRoot(payload: PersonaWorkflowComponentsV2Payload, retainAttachments: boolean): Promise<Message> {
-    // A terminal/in-place render must land after any collapse-at-open edit.
     await this.settlePendingCollapse();
     return this.#editRootInner(payload, retainAttachments);
   }
@@ -565,9 +564,7 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
    * lets the terminal edit order itself after it.
    */
   public collapseAtOpen(payload: PersonaWorkflowComponentsV2Payload): void {
-    // One collapse per open; a repeated call keeps the first in-flight edit.
     if (this.#pendingCollapse) return;
-    // Swallow at storage: a rejected collapse must never surface as a submit error.
     this.#pendingCollapse = this.#editRootInner(payload, false).catch(() => undefined);
   }
 

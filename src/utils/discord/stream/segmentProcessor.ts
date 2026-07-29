@@ -356,16 +356,15 @@ export class StreamSegmentProcessor {
    * label visible in the delivered message proves the parse returned null. This logs every
    * input that decision depends on, letting a leaked label be attributed to exactly one of:
    *
-   * 1. `isInsideCodeBlock` / `isUserImpersonation` vetoing render modifiers outright.
-   * 2. A name mismatch — the label's speaker name is absent from the allowlist built from
+   * - `isInsideCodeBlock` / `isUserImpersonation` vetoing render modifiers outright.
+   * - A name mismatch — the label's speaker name is absent from the allowlist built from
    *    `botName` + `botNameAliases`.
-   * 3. Anchor loss — text (notably re-attached orphan punctuation) sits ahead of the label,
+   * - Anchor loss — text (notably re-attached orphan punctuation) sits ahead of the label,
    *    so the `^\s*`-anchored pattern cannot reach it.
    *
    * Fires only when the strict parse failed AND the segment still looks like it carried a
    * decorated label, so ordinary prose never triggers it.
    *
-   * @param args - Parse outcome plus every input that fed it
    */
   private logUnparsedRenderModifierLabel(args: {
     renderModifierMatch: boolean;
@@ -410,9 +409,9 @@ export class StreamSegmentProcessor {
    * Logs the persona the sprite lookup was performed against alongside that persona's actual
    * sprite keys, which distinguishes the two candidate causes:
    *
-   * 1. Wrong persona — `personaId` is not the persona the model was told to speak as, so its
+   * - Wrong persona — `personaId` is not the persona the model was told to speak as, so its
    *    sprite keys can never match (the failure mode expected on queued/chained turns).
-   * 2. Right persona, unknown label — the model invented a sprite key, or the sprite exists
+   * - Right persona, unknown label — the model invented a sprite key, or the sprite exists
    *    but its avatar is unusable (`resolveSpriteIdentity` returning null).
    *
    * @param modifier - The modifier text the model used, e.g. "mad"
@@ -494,9 +493,6 @@ export class StreamSegmentProcessor {
    * A leading chain of the persona's own plain labels ("Tomori: Chris (smug): hi") is peeled
    * before deciding, since those are stripped later by cleanLLMOutput anyway.
    *
-   * @param segment - Segment text at response start (nothing accumulated or sent yet)
-   * @param context - Stream context (guild + conversation participants for the known-name check)
-   * @param allowedSourceNames - Active persona name + aliases (labels these own are not leaks)
    * @returns The leaked-label match (body = text after the label), or null when clean
    */
   private async matchLeadingSpeakerLeak(

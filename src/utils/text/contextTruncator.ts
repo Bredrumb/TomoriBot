@@ -8,8 +8,6 @@ import { ContextItemTag } from "@/types/misc/context";
  * Image and video parts are excluded — their token cost is absorbed by the
  * 10% safety margin in {@link truncateDialogueHistory}.
  *
- * @param items - Structured context items to estimate
- * @returns Estimated token count
  */
 function estimateInputTokens(items: StructuredContextItem[]): number {
   let totalChars = 0;
@@ -53,7 +51,6 @@ export function truncateDialogueHistory(
   //    then apply a 10% margin to absorb tokenizer estimation error
   const safeInputBudget = Math.floor((contextLength - maxCompletionTokens) * 0.9);
 
-  // Work on a mutable copy to avoid modifying the caller's array
   const items = [...contextItems];
   let historyPairsDropped = 0;
   const sampleItemsDropped = 0;
@@ -86,7 +83,6 @@ export function truncateDialogueHistory(
       return false;
     }
 
-    // Find the next history model turn, but do not cross over the protected newest user turn.
     let followingModelIdx = -1;
     for (let i = oldestDroppableUserIdx + 1; i < items.length; i++) {
       if (i === newestDialogueUserIdx) {

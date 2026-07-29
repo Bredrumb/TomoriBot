@@ -1,5 +1,3 @@
-// locales/ja/commands/openrouter.ts
-
 export default {
   openrouter: {
     description: `OpenRouter専用のモデルと設定を管理します。`,

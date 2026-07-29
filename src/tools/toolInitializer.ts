@@ -29,12 +29,10 @@ export async function initializeTools(): Promise<void> {
   try {
     log.info("Initializing tool registry with auto-discovery...");
 
-    // Clear any existing tools (useful for testing/reloading)
     ToolRegistry.clearRegistry();
 
     let totalDiscovered = 0;
 
-    // Auto-discover built-in function call tools
     const functionCallsPath = path.join(process.cwd(), "src", "tools", "functionCalls");
     const functionCallFiles = (await getAllFiles(functionCallsPath)).filter((file) => !file.endsWith("index.ts"));
 
@@ -72,7 +70,6 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // Log final statistics
     const stats = ToolRegistry.getStats();
     log.success(
       `Auto-discovery complete: Found and registered ${totalDiscovered} tools (${stats.totalTools} total in registry)`,
@@ -92,24 +89,18 @@ export async function initializeTools(): Promise<void> {
  * Discover and register tools from a specific file
  * @param filePath - Absolute path to the tool file
  * @param source - Source identifier for logging (e.g., "functionCalls", "brave")
- * @returns Number of tools discovered and registered from this file
  */
 async function discoverAndRegisterTools(filePath: string, source: string): Promise<number> {
   let discoveredCount = 0;
 
   try {
-    // Import the tool module
     const toolModule = await import(filePath);
 
-    // Find all exported classes that extend BaseTool
     for (const [exportName, exportedItem] of Object.entries(toolModule)) {
       try {
-        // Check if this export is a class constructor that extends BaseTool
         if (typeof exportedItem === "function" && exportedItem.prototype instanceof BaseTool) {
-          // Instantiate the tool class
           const toolInstance = new (exportedItem as new () => BaseTool)();
 
-          // Register with the tool registry
           ToolRegistry.registerTool(toolInstance);
 
           log.info(`Auto-registered [${source}]: ${toolInstance.name} (${toolInstance.category}) from ${exportName}`);
@@ -144,7 +135,6 @@ async function discoverAndRegisterTools(filePath: string, source: string): Promi
 
 /**
  * Get initialization status
- * @returns Information about registered tools
  */
 export function getInitializationStatus(): {
   isInitialized: boolean;

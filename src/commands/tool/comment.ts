@@ -8,8 +8,6 @@ import type { UserRow } from "@/types/db/schema";
 
 /**
  * Configures the /tool comment subcommand
- * @param subcommand - The slash command subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) => {
   return subcommand
@@ -27,10 +25,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the /tool comment command
  * Sends an embed with user input text and a footer showing who created the comment
- * @param client - Discord client
- * @param interaction - Command interaction
- * @param userData - User data from database (unused)
- * @param locale - User's locale
  */
 export async function execute(
   _client: Client,
@@ -38,7 +32,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Fast validation
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -49,7 +42,6 @@ export async function execute(
     return;
   }
 
-  // Narrow channel type to TextChannel
   if (!isGuildMessageCommandChannel(interaction.channel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.comment.invalid_channel_title",
@@ -65,13 +57,10 @@ export async function execute(
   // Defer reply ephemerally while processing
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Get comment content from slash command option
   const commentContent = interaction.options.getString("content", true);
 
-  // Create embed with comment content
   const embed = new EmbedBuilder().setDescription(commentContent).setColor(ColorCode.INFO);
 
-  // Add footer showing who created the comment (with profile picture)
   const memberAvatarUrl = interaction.member
     ? (interaction.member as import("discord.js").GuildMember).displayAvatarURL({
         size: 64,
@@ -91,12 +80,10 @@ export async function execute(
     iconURL: memberAvatarUrl,
   });
 
-  // Send as public message in the channel
   await channel.send({
     embeds: [embed],
   });
 
-  // Send confirmation to user
   await replyInfoEmbed(interaction, locale, {
     titleKey: "commands.tool.comment.success_title",
     descriptionKey: "commands.tool.comment.success_description",

@@ -78,14 +78,12 @@ export class MCPManager {
     log.info("Starting MCP server initialization...");
     const startTime = Date.now();
 
-    // Log initialization summary
     const configManager = getMCPConfigManager();
     const summary = configManager.getInitializationSummary();
     log.info(
       `MCP Configuration Summary: ${summary.readyToInitialize}/${summary.totalServers} servers ready to initialize${summary.missingApiKeys.length > 0 ? ` (missing API keys: ${summary.missingApiKeys.join(", ")})` : ""}${summary.disabledServers.length > 0 ? ` (disabled: ${summary.disabledServers.join(", ")})` : ""}`,
     );
 
-    // Define available MCP server configurations
     const serverConfigs = this.getServerConfigurations();
 
     // Initialize each server concurrently with individual error handling
@@ -105,7 +103,6 @@ export class MCPManager {
     this.isInitialized = true;
     log.success(`MCP initialization completed in ${duration}ms: ${successCount}/${totalCount} servers connected`);
 
-    // Log available tools
     if (this.mcpTools.size > 0) {
       const toolNames = Array.from(this.mcpTools.keys());
       log.info(`Available MCP tools: ${toolNames.join(", ")}`);
@@ -119,10 +116,8 @@ export class MCPManager {
     const configManager = getMCPConfigManager();
     const enhancedConfigs = configManager.getConfigurationsByPriority(false); // Get all configs
 
-    // Filter configs that should be initialized
     const readyConfigs = enhancedConfigs.filter((config) => configManager.shouldInitializeServer(config));
 
-    // Convert enhanced configs to manager format
     return readyConfigs.map((config) => configManager.toManagerConfiguration(config));
   }
 
@@ -135,7 +130,6 @@ export class MCPManager {
     log.info(`Initializing ${displayName} MCP server...`);
 
     try {
-      // Create MCP client
       const client = new MCPClient({
         name: `tomoribot-${name}`,
         version: "1.0.0",
@@ -157,7 +151,6 @@ export class MCPManager {
         stderr: "ignore", // Ignore stderr to suppress advertisement output
       });
 
-      // Connect with timeout
       const connectPromise = client.connect(transport);
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error(`${displayName} connection timed out (${timeout}ms)`)), timeout),
@@ -165,16 +158,13 @@ export class MCPManager {
 
       await Promise.race([connectPromise, timeoutPromise]);
 
-      // Convert to CallableTool using Google's mcpToTool()
       const callableTool = mcpToTool(client);
 
-      // Store both client and tool
       this.mcpClients.set(name, client);
       this.mcpTools.set(name, callableTool);
 
       log.success(`${displayName} MCP server connected successfully`);
 
-      // Log available functions for this server
       try {
         const tool = await callableTool.tool();
         if (tool.functionDeclarations) {
@@ -228,7 +218,6 @@ export class MCPManager {
         const tool = await callableTool.tool();
         const availableFunctions = tool.functionDeclarations?.map((f) => f.name) || [];
 
-        // Check if this tool provides any of the requested functions
         const hasMatchingFunction = functionNames.some((name) => availableFunctions.includes(name));
 
         if (hasMatchingFunction) {
@@ -278,7 +267,6 @@ export class MCPManager {
 
   /**
    * Get enhanced server configurations
-   * @returns Array of enhanced server configurations
    */
   getEnhancedServerConfigurations(): EnhancedMCPServerConfig[] {
     const configManager = getMCPConfigManager();
@@ -318,7 +306,6 @@ export class MCPManager {
   }
 }
 
-// Export convenience function for getting the manager instance
 export function getMCPManager(): MCPManager {
   return MCPManager.getInstance();
 }

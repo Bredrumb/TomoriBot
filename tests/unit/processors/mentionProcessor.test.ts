@@ -6,8 +6,6 @@ import {
 } from "@/utils/text/processors/mentionProcessor";
 import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
 
-// ─── sanitizeUnknownTemplatePlaceholders ────────────────────────────────────
-
 describe("sanitizeUnknownTemplatePlaceholders", () => {
   describe("single-brace allowed vars", () => {
     it("preserves {user}", () => {
@@ -76,8 +74,6 @@ describe("sanitizeUnknownTemplatePlaceholders", () => {
   });
 });
 
-// ─── normalizeCustomEmojisForLlm ────────────────────────────────────────────
-
 describe("normalizeCustomEmojisForLlm", () => {
   describe("emoji normalization", () => {
     it("converts static custom emoji to :name:", () => {
@@ -123,8 +119,6 @@ describe("normalizeCustomEmojisForLlm", () => {
     });
   });
 });
-
-// ─── replaceMentionHandles ───────────────────────────────────────────────────
 
 describe("replaceMentionHandles", () => {
   const mentionMap = new Map([

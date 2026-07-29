@@ -34,12 +34,10 @@ import {
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/personaWorkflow";
 
-// Define constants at the top (Rule #20)
 const HUMANIZER_MIN = 0;
 const HUMANIZER_MAX = 3;
 const HUMANIZER_DEFAULT = 1;
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "config_humanizer_modal";
 const HUMANIZER_SELECT_ID = "humanizer_select";
 
@@ -49,7 +47,6 @@ const INHERIT_VALUE = "inherit";
 /**
  * Creates humanizer degree options with localized descriptions.
  * The option matching `selectedValue` is pre-selected when the modal opens.
- * @param locale - The locale to use for localization
  * @param selectedValue - Radio value to pre-select ("0"-"3" or "inherit")
  * @param includeInherit - Whether to prepend the persona-scope "Inherit global" choice
  * @returns Array of RadioGroupOption with localized descriptions
@@ -89,7 +86,6 @@ function createHumanizerOptions(locale: string, selectedValue: string, includeIn
   return options.map((option) => ({ ...option, default: option.value === selectedValue }));
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("humanizer")
@@ -118,10 +114,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * 1 = Active system prompt + live discrete streaming
  * 2 = 1 + typing simulation and pauses between messages
  * 3 = 2 + sentence-level chunking and casual text humanization
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -129,7 +121,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -150,7 +141,6 @@ export async function execute(
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    // Load the Tomori state for this server (Rule #17)
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
@@ -327,7 +317,6 @@ export async function execute(
     }
     const preselectedValue = String(currentGlobal);
 
-    // Show the global-scope modal with humanizer degree selection.
     const modalResult = await promptWithRawModal(modalHost, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.config.humanizer.modal_title",
@@ -343,7 +332,6 @@ export async function execute(
       ],
     });
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Humanizer degree selection modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -374,7 +362,6 @@ export async function execute(
       return;
     }
 
-    // Check if this matches the current stored value for the chosen scope
     if (humanizerValue === currentGlobal) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.humanizer.already_set_title",
@@ -387,12 +374,10 @@ export async function execute(
       return;
     }
 
-    // Persist to the appropriate table (Rule #4, #15)
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
       humanizer_degree: humanizerValue,
     });
 
-    // Check if update succeeded
     if (!updated) {
       const context: ErrorContext = {
         personaId: tomoriState.persona_id,
@@ -423,7 +408,6 @@ export async function execute(
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverDiscId);
 
-    // Success message with previous → new global value.
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.config.humanizer.success_title",
       descriptionKey: "commands.config.humanizer.success_description",
@@ -434,8 +418,6 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // Log error with context (Rule #22)
-    // Attempt to get server/tomori IDs only once if needed
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
@@ -487,9 +469,7 @@ export async function execute(
 
 /**
  * Helper function to get a user-friendly label for humanizer values
- * @param locale - The user's locale
  * @param value - Humanizer degree value, or null for the persona-scope "Inherit" state
- * @returns Localized humanizer label
  */
 function getHumanizerLabel(locale: string, value: number | null): string {
   switch (value) {

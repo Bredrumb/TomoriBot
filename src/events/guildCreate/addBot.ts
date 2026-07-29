@@ -8,30 +8,24 @@ import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 /**
  * Sends welcome message when bot joins a new guild.
  * Shows setup instructions or welcome back message based on existing data.
- * @param client - The Discord client instance
  * @param guild - The guild the bot joined
- * @returns Promise<void>
  */
 const handler = async (client: Client, guild: Guild): Promise<void> => {
   try {
     log.info(`Bot joined new server: ${guild.name} (${guild.id})`);
 
-    // Check if server exists in database via repository
     const serverId = await serverRepository.loadServerIdByDiscId(guild.id);
 
-    // Check if Tomori exists if server found via repository
     let tomoriExists = false;
     if (serverId) {
       const personas = await personaRepository.loadServerPersonaSummaries(serverId);
       tomoriExists = personas !== null && personas.length > 0;
     }
 
-    // Try to send to system channel first, fallback to best channel
     const serverLocale = guild.preferredLocale;
     let channel = guild.systemChannel;
     let sentSuccessfully = false;
 
-    // Try sending to system channel if it exists
     if (channel) {
       try {
         await sendStandardEmbed(channel, serverLocale, {
@@ -46,7 +40,6 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
       }
     }
 
-    // Fallback to best channel if system channel failed or doesn't exist
     if (!sentSuccessfully) {
       channel = await findBestChannel(guild, client);
       if (!channel) {

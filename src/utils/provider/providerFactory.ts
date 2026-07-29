@@ -21,7 +21,6 @@ export namespace ProviderFactory {
   // Map of provider names to their class constructors for lazy loading
   const providerRegistry = new Map<string, () => Promise<new () => LLMProvider>>();
 
-  // Flag to track if discovery has been run
   let discoveryComplete = false;
 
   /**
@@ -104,11 +103,9 @@ export namespace ProviderFactory {
    * Get a provider instance by name (canonical name or alias)
    * Uses singleton pattern to reuse provider instances
    * @param providerName - The name or alias of the provider (e.g., "google", "gemini")
-   * @returns The provider instance
    * @throws Error if provider is not supported
    */
   async function getProviderInstance(providerName: string): Promise<LLMProvider> {
-    // Ensure discovery has run
     await discoverProviders();
 
     const normalizedName = normalizeProviderName(providerName);
@@ -156,7 +153,6 @@ export namespace ProviderFactory {
         const tempInstance = new ProviderClass();
         const info = tempInstance.getInfo();
 
-        // Check if the normalized name matches any alias
         if (info.aliases?.some((alias) => alias.toLowerCase().trim() === normalizedName)) {
           // Found a match! Cache it properly
           providerInstances.set(info.name.toLowerCase(), tempInstance);
@@ -187,7 +183,6 @@ export namespace ProviderFactory {
   /**
    * Get a provider based on the TomoriState configuration
    * @param tomoriState - The Tomori state containing LLM provider information
-   * @returns The appropriate provider instance
    * @throws Error if provider is not supported or not configured
    */
   export async function getProvider(tomoriState: TomoriState): Promise<LLMProvider> {
@@ -231,7 +226,6 @@ export namespace ProviderFactory {
    * Prefer this when the caller only needs provider behavior and does not have
    * a full TomoriState available.
    * @param providerName - Provider canonical name or alias
-   * @returns The provider instance
    */
   export async function getProviderByName(providerName: string): Promise<LLMProvider> {
     return getProviderInstance(providerName);
@@ -239,10 +233,8 @@ export namespace ProviderFactory {
 
   /**
    * Get all available providers and their information
-   * @returns Array of provider information objects
    */
   export async function getAvailableProviders(): Promise<Array<{ name: string; info: ProviderInfo }>> {
-    // Ensure discovery has run
     await discoverProviders();
 
     const availableProviders: Array<{ name: string; info: ProviderInfo }> = [];
@@ -265,16 +257,12 @@ export namespace ProviderFactory {
 
   /**
    * Check if a provider type is supported (including aliases)
-   * @param providerName - The provider name to check
-   * @returns True if the provider is supported
    */
   export async function isProviderSupported(providerName: string): Promise<boolean> {
-    // Ensure discovery has run
     await discoverProviders();
 
     const normalizedName = normalizeProviderName(providerName);
 
-    // Check if it's a canonical name
     if (providerRegistry.has(normalizedName)) {
       return true;
     }
@@ -315,8 +303,6 @@ export namespace ProviderFactory {
 
 /**
  * Convenience function to get a provider from TomoriState
- * @param tomoriState - The Tomori state
- * @returns The appropriate provider instance
  */
 export async function getProviderForTomori(tomoriState: TomoriState): Promise<LLMProvider> {
   return ProviderFactory.getProvider(tomoriState);

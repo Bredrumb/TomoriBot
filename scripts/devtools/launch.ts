@@ -24,9 +24,6 @@ config();
 
 const ROOT = process.cwd();
 
-// ---------------------------------------------------------------------------
-// CLI argument parsing
-// ---------------------------------------------------------------------------
 
 const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith("--")).map((a) => a.slice(2)));
@@ -55,9 +52,6 @@ ${pc.bold("Examples:")}
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// Sidecar registry
-// ---------------------------------------------------------------------------
 
 interface DockerSidecar {
   kind: "docker";
@@ -169,9 +163,6 @@ const SIDECARS: Record<string, SidecarDef> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Docker helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Checks whether a named Docker container exists (regardless of state).
@@ -223,7 +214,6 @@ async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<vo
         const res = await fetch(httpHealthUrl, { signal: AbortSignal.timeout(3_000) });
         if (res.ok) return;
       } catch {
-        // Not ready yet — keep polling.
       }
     }
 
@@ -244,7 +234,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
   const state = await getContainerState(containerName);
 
   if (state === null) {
-    // Container doesn't exist — create and start it.
     console.log(`${label} Container not found. Running docker run...`);
     const run = Bun.spawn(["docker", "run", ...def.runArgs], {
       stdout: "inherit",
@@ -253,7 +242,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
     const code = await run.exited;
     if (code !== 0) throw new Error(`docker run for "${containerName}" failed (exit ${code}).`);
   } else if (state !== "running") {
-    // Container exists but is stopped — start it.
     console.log(`${label} Resuming existing container...`);
     const start = Bun.spawn(["docker", "start", containerName], {
       stdout: "inherit",
@@ -262,7 +250,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
     const code = await start.exited;
     if (code !== 0) throw new Error(`docker start for "${containerName}" failed (exit ${code}).`);
   } else {
-    // Already running.
     console.log(`${label} Already running.`);
   }
 
@@ -271,9 +258,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
   console.log(`${label} ${pc.green("Healthy ✓")}`);
 }
 
-// ---------------------------------------------------------------------------
-// Python helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Spawns a Python sidecar server from its pre-built venv and waits
@@ -309,9 +293,6 @@ async function startPythonSidecar(def: PythonSidecar): Promise<ReturnType<typeof
   return proc;
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   const requested = [...flags].filter((f) => f in SIDECARS);
@@ -323,7 +304,6 @@ async function main(): Promise<void> {
 
   const childProcesses: ReturnType<typeof Bun.spawn>[] = [];
 
-  // Start all requested sidecars.
   for (const flag of requested) {
     const def = SIDECARS[flag];
     try {
@@ -340,7 +320,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // Launch the bot in watch mode.
   console.log(`\n${pc.bold(pc.blue("[TomoriBot]"))} Starting bot in watch mode...\n`);
   const bot = Bun.spawn(["bun", "--watch", "src/index.ts"], {
     stdout: "inherit",

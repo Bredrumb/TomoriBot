@@ -142,7 +142,6 @@ export async function execute(
   }
 
   try {
-    // Validate thinking_level before showing the picker, to surface errors immediately
     const nextThinkingLevel = interaction.options.getString("thinking_level");
     if (nextThinkingLevel && !isThinkingLevelValue(nextThinkingLevel)) {
       await replyInfoEmbed(interaction, locale, {
@@ -154,7 +153,6 @@ export async function execute(
       return;
     }
 
-    // Require at least one sampler value before showing the picker
     const nextMaxOutputTokens = interaction.options.getInteger("max_output_tokens");
     const hasAnyChange =
       interaction.options.getNumber("temperature") !== null ||
@@ -192,7 +190,6 @@ export async function execute(
     const selectedProvider = providerSelection.provider;
     const responseInteraction = providerSelection.interaction;
 
-    // Helper: update the picker message or issue a fresh reply depending on whether a picker was shown
     const replyWithResult = async (options: Parameters<typeof replyInfoEmbed>[2]) => {
       if (providerSelection.pickerInteraction) {
         // A button was clicked — update the picker message in-place (this also acknowledges the button)
@@ -217,7 +214,6 @@ export async function execute(
       return;
     }
 
-    // Build the updated config by overlaying only the options the user explicitly passed
     const samplerPatch = buildModelParametersSamplerPatch(
       {
         temperature: interaction.options.getNumber("temperature"),
@@ -233,7 +229,6 @@ export async function execute(
     );
     const nextConfig = { ...savedConfig, ...samplerPatch };
 
-    // Collect display labels for the success message
     const changedSettings: Array<{ label: string; value: string }> = [];
     if (interaction.options.getNumber("temperature") !== null) {
       changedSettings.push({
@@ -284,7 +279,6 @@ export async function execute(
       });
     }
 
-    // Persist the updated sampler config
     const upserted = await llmProviderRepo.upsertSavedProviderConfig(tomoriState.server_id, nextConfig, {
       serverDiscId: serverId,
     });

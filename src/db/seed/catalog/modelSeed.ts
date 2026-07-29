@@ -186,7 +186,6 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
   sections: embeddingSections,
 };
 
-// Validation
 function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
   return spec.sections.flatMap((s) => s.rows);
 }
@@ -195,7 +194,6 @@ function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
 function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): void {
   const all = rowsOf(spec);
 
-  // Unique (provider, codename)
   const seen = new Set<string>();
   for (const r of all) {
     const key = `${r.provider}/${r.codename}`;
@@ -203,7 +201,6 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
     seen.add(key);
   }
 
-  // Per-provider default/smartest invariants
   const byProvider = new Map<string, T[]>();
   for (const r of all) {
     const list = byProvider.get(r.provider) ?? [];
@@ -243,7 +240,6 @@ const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding
  * (D4), a single un-flagged model would silently emit an invalid body for that backend.
  *
  * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @param rows - The llms catalog rows to validate.
  * @returns A list of violation messages (empty when valid).
  */
 export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
@@ -292,19 +288,15 @@ const PRICING_PENDING_CODENAMES = new Set<string>(["gemini-3.5-pro"]);
  * not published a rate yet).
  *
  * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @param rows - The llms catalog rows to validate.
  * @returns A list of violation messages (empty when valid).
  */
 export function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
-    // Only first-party metered providers are gated
     if (!METERED_FIRST_PARTY_PROVIDERS.has(row.provider)) continue;
-    // Skip rows that are intentionally unpriced
     if (row.isDeprecated || row.isFree) continue;
     if (row.codename.includes("gemma")) continue;
     if (PRICING_PENDING_CODENAMES.has(row.codename)) continue;
-    // The remaining active, billable rows MUST carry both prices
     const hasInput = typeof row.inputPricePerMillion === "number";
     const hasOutput = typeof row.outputPricePerMillion === "number";
     if (!hasInput || !hasOutput) {
@@ -333,7 +325,6 @@ export function validateModels(): string[] {
 
 export const validateCatalog = validateModels;
 
-// Rendering
 function renderStatement<T extends RowLike>(spec: TableSpec<T>): string {
   const values = rowsOf(spec)
     .map((m) => `  (${spec.tuple(m)})`)
@@ -354,12 +345,10 @@ export function buildModelSeedStatements(): string[] {
   ];
 }
 
-// Runtime entry point
 /**
  * Seed all model tables from the typed catalog. Validates invariants first and
  * throws before touching the database if the catalog is malformed, then runs the
  * idempotent upsert for each table.
- * @param client The SQL client to execute against.
  */
 export async function seedModelsFromCatalog(client: SQL): Promise<void> {
   const violations = validateModels();

@@ -33,14 +33,11 @@ type CardType = "personal" | "persona" | "server";
 /**
  * Configures the /stats generate subcommand: generates a shareable PNG image
  * card summarising personal, persona, or server stats for the chosen timeframe.
- * @param subcommand - The subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("generate")
     .setDescription(localizer("en-US", "commands.stats.generate.description"))
-    // type (required) — determines which card is rendered.
     .addStringOption((option) =>
       option
         .setName("type")
@@ -52,7 +49,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           { name: localizer("en-US", "commands.stats.generate.server_option"), value: "server" },
         ),
     )
-    // timeframe (optional) — defaults to all_time.
     .addStringOption((option) =>
       option
         .setName("timeframe")
@@ -62,7 +58,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           ...TIMEFRAME_VALUES.map((value) => ({ name: localizer("en-US", `commands.choices.${value}`), value })),
         ),
     )
-    // scope (optional) — only meaningful for personal cards.
     .addStringOption((option) =>
       option
         .setName("scope")
@@ -82,10 +77,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * - persona:  show private picker → compact it → create exactly one public PNG response.
  * - server:   deferReply → gather → render → editReply with PNG.
  *
- * @param _client     - Discord client instance (unused; required by the command interface)
- * @param interaction - The slash command interaction
  * @param userData    - Caller's user row from the DB
- * @param locale      - BCP-47 locale string for the interaction
  */
 export async function execute(
   _client: Client,
@@ -114,7 +106,6 @@ export async function execute(
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    // Resolve the internal server id from cache.
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
     if (!serverId) {
@@ -142,15 +133,11 @@ export async function execute(
   }
 }
 
-// ── Personal card ─────────────────────────────────────────────────────────────
-
 /**
  * Generates and sends the Personal "Wrapped" infographic card.
  * Fully-private users are refused immediately with an ephemeral error embed.
  *
- * @param interaction - The slash command interaction
  * @param userData    - Caller's user row
- * @param locale      - BCP-47 locale string
  * @param serverId    - Internal servers FK for "this server" scope queries
  * @param timeframe   - Selected time window
  * @param scope       - "this_server" or "global" scope for the personal card
@@ -188,7 +175,6 @@ async function executePersonalCard(
   // Acknowledge the interaction before the DB reads start.
   await interaction.deferReply();
 
-  // Gather data. Omit serverId for global scope.
   const scopedServerId = scope === "this_server" ? serverId : undefined;
   const data = await gatherPersonalCardData({
     userId,
@@ -200,7 +186,6 @@ async function executePersonalCard(
     timeframe,
   });
 
-  // Render the VNode to a PNG buffer and send as an attachment.
   const node = renderPersonalCard(data);
   const png = await renderCardToPng(node, CARD_W, getPersonalCardHeight(data));
   const attachment = new AttachmentBuilder(png, { name: `stats_personal_${Date.now()}.png` });
@@ -208,16 +193,11 @@ async function executePersonalCard(
   await interaction.editReply({ files: [attachment] });
 }
 
-// ── Persona card ──────────────────────────────────────────────────────────────
-
 /**
  * Opens the persona picker then generates the invoking user's Persona Affinity
  * card for the selected persona through the workflow's explicit public-result phase.
  *
  * @param interaction - The original slash command interaction (used for the picker)
- * @param locale      - BCP-47 locale string
- * @param serverId    - Internal servers FK
- * @param guild       - Discord.js Guild for member name resolution
  * @param timeframe   - Selected time window
  */
 async function executePersonaCard(
@@ -238,7 +218,6 @@ async function executePersonaCard(
     return;
   }
 
-  // Guard: this server must have at least one persona to pick.
   const personas = await getCachedAllPersonas(guild.id);
   if (personas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
@@ -297,14 +276,9 @@ async function executePersonaCard(
   });
 }
 
-// ── Server card ───────────────────────────────────────────────────────────────
-
 /**
  * Generates and sends the Server Leaderboard infographic card.
  *
- * @param interaction  - The slash command interaction
- * @param locale       - BCP-47 locale string
- * @param serverId     - Internal servers FK
  * @param guildDiscId  - Discord guild snowflake (for persona cache)
  * @param serverName   - Guild display name shown on the card header
  * @param timeframe    - Selected time window
@@ -320,7 +294,6 @@ async function executeServerCard(
   // Acknowledge immediately — DB reads can take a moment.
   await interaction.deferReply();
 
-  // Gather + render + send.
   const guild = interaction.guild;
   if (!guild) return;
 

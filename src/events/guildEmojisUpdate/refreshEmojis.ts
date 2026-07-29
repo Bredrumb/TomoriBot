@@ -9,7 +9,6 @@ import { invalidateEmojiStickerCache } from "../../utils/cache/emojiStickerCache
 /**
  * JSDoc comment for exported function
  * Handles emoji create, delete, and update events by refreshing the guild's emoji list in the database.
- * @param _client - Discord client instance (unused)
  * @param args - Event arguments (expected: GuildEmoji or [GuildEmoji, GuildEmoji])
  */
 const handleGuildEmojisUpdate: EventFunction = async (_client: Client, ...args: EventArg[]): Promise<void> => {
@@ -26,7 +25,6 @@ const handleGuildEmojisUpdate: EventFunction = async (_client: Client, ...args: 
   let serverId: number | undefined; // Variable to hold the internal server ID
 
   try {
-    // Check if server is registered and get internal server_id via repository
     serverId = (await serverRepository.loadServerIdByDiscId(guild.id)) ?? undefined;
 
     if (!serverId) {
@@ -40,7 +38,6 @@ const handleGuildEmojisUpdate: EventFunction = async (_client: Client, ...args: 
     const currentEmojis = Array.from(guild.emojis.cache.values());
     log.info(`Fetched and cached ${currentEmojis.length} emojis for guild ${guild.id}. Refreshing DB...`);
 
-    // Sync emojis to database using shared helper
     await sql.transaction(async (tx) => {
       // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
       await serverRepository.syncEmojis(tx, serverId!, currentEmojis);
@@ -52,7 +49,6 @@ const handleGuildEmojisUpdate: EventFunction = async (_client: Client, ...args: 
 
     log.success(`Successfully refreshed emojis for guild ${guild.id} (Server ID: ${serverId}).`);
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       serverId: serverId, // Use the serverId if found, otherwise undefined
       errorType: "EmojiRefreshError", // Specific error type

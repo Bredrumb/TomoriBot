@@ -37,7 +37,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the `/persona sprites export` command.
  * @param _client - Discord client (unused; storage handles image resolution)
- * @param interaction - The chat input command interaction
  * @param userData - Invoking user's row (for locale fallback)
  * @param locale - Resolved locale
  */
@@ -166,7 +165,6 @@ export async function execute(
       return;
     }
 
-    // Build the archive and attach it.
     const archive = await buildSpriteArchive({
       personaNickname: selectedPersona.persona_nickname,
       personaId,
@@ -180,8 +178,6 @@ export async function execute(
     const filename = `${sanitizedNickname}-sprites-${Date.now()}.zip`;
     const attachment = new AttachmentBuilder(archive.buffer, { name: filename });
 
-    // Success embed; warn-colored when some images had to be skipped so the
-    //    sharer knows the archive is incomplete.
     const descriptionKey =
       skippedCount > 0
         ? "commands.persona.sprites.export.success_partial_description"
@@ -236,8 +232,6 @@ export async function execute(
 
 /**
  * Builds persona select options for the export modal.
- * @param personas - All personas for the server
- * @param locale - Resolved locale for option descriptions
  */
 function buildPersonaSelectOptions(personas: TomoriState[], locale: string): SelectOption[] {
   return personas

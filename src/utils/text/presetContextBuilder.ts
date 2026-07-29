@@ -23,8 +23,6 @@ import { log } from "@/utils/misc/logger";
 import type { Client } from "discord.js";
 import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 
-// ─── Types ──────────────────────────────────────────────────────────────
-
 /**
  * Parameters for building macro context from the current TomoriBot state.
  * These are extracted from the native buildContext() params.
@@ -57,8 +55,6 @@ interface MentionParams {
   toolPromptMacroResolver?: ToolPromptMacroResolver;
 }
 
-// ─── Marker → MetadataTag Mapping ───────────────────────────────────────
-
 /**
  * Maps well-known ST marker identifiers to the ContextItemTag(s) they represent.
  * When the preset walker encounters a marker, it pulls items from the corresponding bucket.
@@ -71,11 +67,9 @@ const MARKER_TO_TAGS: Record<string, ContextItemTag[]> = {
   charDescription: [ContextItemTag.SYSTEM_PERSONA_PROMPT], // Persona prompt tag
   charPersonality: [ContextItemTag.SYSTEM_PERSONALITY],
 
-  // Dialogue
   dialogueExamples: [ContextItemTag.DIALOGUE_SAMPLE],
   chatHistory: [ContextItemTag.DIALOGUE_HISTORY],
 
-  // World info / RAG
   worldInfoBefore: [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS],
   worldInfoAfter: [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS],
 };
@@ -97,8 +91,6 @@ const TOMORI_ONLY_DIALOGUE_TAGS = new Set([
   ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY,
   ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING,
 ]);
-
-// ─── Anchor Markers ─────────────────────────────────────────────────────
 
 /**
  * Markers that trigger flushing of TomoriBot-only knowledge blocks
@@ -122,16 +114,11 @@ const DIALOGUE_FLUSH_ANCHORS = new Set(["dialogueExamples", "chatHistory"]);
 const TERMINAL_SAMPLE_DIALOGUE_SPACER =
   "[System: The sample dialogues above are reference material showing how {{char}} speaks. They are not the active conversation. Continue from the current scene or live conversation instead of continuing the examples.]";
 
-// ─── Helpers ────────────────────────────────────────────────────────────
-
 /**
  * Build the MacroContext from TomoriBot state for the template engine.
  *
- * @param params - Subset of buildContext params needed for macros
- * @returns MacroContext for the preset template engine
  */
 function buildMacroContext(params: PresetMacroParams): MacroContext {
-  // Format sample dialogues for {{mesExamples}} macro
   const mesExamples: string[] = [];
   for (let i = 0; i < params.sampleDialoguesIn.length; i++) {
     const userLine = params.sampleDialoguesIn[i];
@@ -156,8 +143,6 @@ function buildMacroContext(params: PresetMacroParams): MacroContext {
  * Items without a tag go into an "untagged" bucket.
  * Each bucket is consumed (shifted) as markers pull from it, so items are only used once.
  *
- * @param contextItems - Native buildContext() output
- * @returns Map of tag → array of items
  */
 function groupByTag(contextItems: StructuredContextItem[]): Map<ContextItemTag | "untagged", StructuredContextItem[]> {
   const buckets = new Map<ContextItemTag | "untagged", StructuredContextItem[]>();
@@ -178,8 +163,6 @@ function groupByTag(contextItems: StructuredContextItem[]): Map<ContextItemTag |
 /**
  * Pull all items from a bucket (consuming them so they aren't re-used).
  *
- * @param buckets - The tag-to-items map
- * @param tag - The tag to pull from
  * @returns Array of items (empty if bucket doesn't exist or is exhausted)
  */
 function pullBucket(
@@ -197,8 +180,6 @@ function pullBucket(
  * both use SYSTEM_HUMANIZER_RULES). The first marker takes the first item,
  * the second marker takes remaining items.
  *
- * @param buckets - The tag-to-items map
- * @param tag - The tag to pull from
  * @returns The first item, or null if the bucket is empty
  */
 function pullFirstFromBucket(
@@ -210,7 +191,6 @@ function pullFirstFromBucket(
 
   // biome-ignore lint/style/noNonNullAssertion: items.length > 0 is checked above, shift() always returns a value
   const first = items.shift()!;
-  // If bucket is now empty, delete it
   if (items.length === 0) {
     buckets.delete(tag);
   }
@@ -221,8 +201,6 @@ function pullFirstFromBucket(
  * Append a user-side separator if sample dialogues are the terminal prompt block.
  * Some strict chat APIs reject requests whose final message is an assistant/example turn.
  *
- * @param contextItems - Assembled context items
- * @param mentionParams - Parameters needed to resolve {{char}} safely
  */
 async function appendTerminalSampleDialogueSpacerIfNeeded(
   contextItems: StructuredContextItem[],
@@ -259,14 +237,12 @@ async function appendTerminalSampleDialogueSpacerIfNeeded(
  * and produces cleaner output that more closely matches SillyTavern's
  * contiguous injection behavior.
  *
- * @param contextItems - The assembled context items array
  * @param injections - Array of { depth, content } pairs, already sorted by depth ascending then injection_order ascending
  */
 function batchMergeDepthInjections(
   contextItems: StructuredContextItem[],
   injections: Array<{ depth: number; content: string; name: string }>,
 ): void {
-  // Find all DIALOGUE_HISTORY items and their indices
   const historyIndices: number[] = [];
   for (let i = 0; i < contextItems.length; i++) {
     if (contextItems[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
@@ -279,7 +255,6 @@ function batchMergeDepthInjections(
     return;
   }
 
-  // Group injections by their target context index (clamped depth → actual array index)
   const groupedByTarget = new Map<number, string[]>();
 
   for (const injection of injections) {
@@ -295,7 +270,6 @@ function batchMergeDepthInjections(
     }
   }
 
-  // Append one combined [System: ...] text part per target item
   for (const [actualIndex, contents] of groupedByTarget) {
     const combinedText = contents.join("\n");
     contextItems[actualIndex].parts.push({
@@ -304,8 +278,6 @@ function batchMergeDepthInjections(
     });
   }
 }
-
-// ─── Main Export ─────────────────────────────────────────────────────────
 
 /**
  * Reassemble native context output according to a SillyTavern preset's node order.
@@ -322,10 +294,6 @@ function batchMergeDepthInjections(
  *   6. Process depth-injection nodes (merge into dialogue history)
  *   7. Return in the same format as buildContext()
  *
- * @param nativeOutput - Output from native buildContext()
- * @param presetData - Cached active preset + nodes
- * @param macroParams - Parameters for macro resolution
- * @param mentionParams - Parameters for convertMentions on custom node content
  * @returns Reassembled context in the same format as buildContext()
  */
 export async function reassembleWithPreset(
@@ -346,14 +314,11 @@ export async function reassembleWithPreset(
 }> {
   const { nodes } = presetData;
 
-  // ── Step 1: Resolve preset macros ──
   const macroContext = buildMacroContext(macroParams);
   const { resolved, expandedContentMacros } = resolvePresetMacros(nodes, macroContext);
 
-  // ── Step 2: Group native items into buckets ──
   const buckets = groupByTag(nativeOutput.contextItems);
 
-  // ── Step 3: Separate nodes by injection position ──
   const systemNodes: ResolvedNode[] = [];
   const depthNodes: ResolvedNode[] = [];
 
@@ -377,7 +342,6 @@ export async function reassembleWithPreset(
     return a.injection_order - b.injection_order;
   });
 
-  // ── Step 4: Walk system-position nodes and build output ──
   const contextItems: StructuredContextItem[] = [];
   let knowledgeFlushed = false;
   let dialogueFlushed = false;
@@ -407,7 +371,6 @@ export async function reassembleWithPreset(
       contextItems.push(...pullBucket(buckets, tag));
     }
 
-    // Also flush RAG if it hasn't been consumed by a worldInfo marker
     const ragItems = pullBucket(buckets, ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS);
     if (ragItems.length > 0) {
       contextItems.push(...ragItems);
@@ -416,10 +379,8 @@ export async function reassembleWithPreset(
 
   for (const node of systemNodes) {
     if (node.is_marker) {
-      // ── Marker node: pull from the corresponding native bucket ──
       const markerTags = MARKER_TO_TAGS[node.identifier];
 
-      // Log unrecognized markers for debugging (ST presets may have markers we don't handle)
       if (!markerTags) {
         log.warn(
           `[Preset Builder] Unrecognized marker "${node.identifier}" (node_order ${node.node_order}) — skipping`,
@@ -443,14 +404,12 @@ export async function reassembleWithPreset(
       }
 
       if (node.identifier === "charDescription") {
-        // If description was expanded via {{description}} macro in a custom node, skip to avoid duplication
         if (expandedContentMacros.has("description")) {
           if (KNOWLEDGE_FLUSH_ANCHORS.has(node.identifier)) {
             flushKnowledgeBlocks();
           }
           continue;
         }
-        // Pull remaining SYSTEM_HUMANIZER_RULES items (persona prompt, etc.)
         if (markerTags) {
           for (const tag of markerTags) {
             contextItems.push(...pullBucket(buckets, tag));
@@ -463,9 +422,7 @@ export async function reassembleWithPreset(
       }
 
       if (node.identifier === "charPersonality") {
-        // If personality was expanded via {{personality}} macro in a custom node, skip the native block
         if (expandedContentMacros.has("personality")) {
-          // Still flush knowledge blocks at this anchor
           if (KNOWLEDGE_FLUSH_ANCHORS.has(node.identifier)) {
             flushKnowledgeBlocks();
           }
@@ -473,25 +430,20 @@ export async function reassembleWithPreset(
         }
       }
 
-      // Flush dialogue-adjacent blocks BEFORE dialogue markers
       if (DIALOGUE_FLUSH_ANCHORS.has(node.identifier)) {
         flushDialogueBlocks();
       }
 
-      // Pull items from the marker's bucket(s)
       if (markerTags) {
         for (const tag of markerTags) {
           contextItems.push(...pullBucket(buckets, tag));
         }
       }
 
-      // Flush knowledge blocks AFTER knowledge anchor markers
       if (KNOWLEDGE_FLUSH_ANCHORS.has(node.identifier)) {
         flushKnowledgeBlocks();
       }
     } else if (node.content.length > 0) {
-      // ── Custom node: create a new StructuredContextItem ──
-      // Resolve identity macros ({{user}}, {{char}}) via convertMentions
       const toolMacroExpandedContent = await (mentionParams.toolPromptMacroResolver?.expand(node.content) ??
         Promise.resolve(node.content));
       const resolvedContent = await convertMentions(
@@ -506,7 +458,6 @@ export async function reassembleWithPreset(
       contextItems.push({
         role: node.role,
         parts: [{ type: "text", text: resolvedContent }],
-        // No metadataTag — these are preset-custom items
       });
     }
   }
@@ -517,7 +468,6 @@ export async function reassembleWithPreset(
   flushKnowledgeBlocks();
   flushDialogueBlocks();
 
-  // Append any remaining unconsumed native items (edge case safety)
   for (const [_tag, items] of buckets) {
     if (items.length > 0) {
       contextItems.push(...items);
@@ -537,7 +487,6 @@ export async function reassembleWithPreset(
   for (const depthNode of depthNodes) {
     if (depthNode.content.length === 0) continue;
 
-    // Resolve identity macros in depth-injected content
     const toolMacroExpandedContent = await (mentionParams.toolPromptMacroResolver?.expand(depthNode.content) ??
       Promise.resolve(depthNode.content));
     const resolvedContent = await convertMentions(
@@ -567,8 +516,6 @@ export async function reassembleWithPreset(
       `(${systemNodes.length} system nodes, ${depthNodes.length} depth injections)`,
   );
 
-  // ── Step 7: Return in the same format ──
-  // Tail directives and uncensor directive pass through unchanged
   return {
     contextItems,
     tailDirectives: nativeOutput.tailDirectives,

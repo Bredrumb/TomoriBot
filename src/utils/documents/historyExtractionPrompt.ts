@@ -88,8 +88,6 @@ export function substituteInCharacterFraming(template: string, personaNickname: 
  * in a fixed order regardless of framing edits so the LLM always receives the
  * persona's context.
  *
- * @param params.framingTemplate - The (possibly edited) framing text from the modal
- * @param params.personaNickname - Persona display name
  * @param params.personaPrompt - The persona's stored character prompt (may be null)
  * @param params.attributes - Persona attribute list (may be empty)
  * @param params.existingMemoryLines - Pre-formatted server memory bullet lines (channel-filtered)
@@ -107,7 +105,6 @@ export function composeInCharacterSystemPrompt(params: {
 
   const sections: string[] = [framingTemplate.trim()];
 
-  // Identity block — persona prompt and attributes are who the bot IS.
   const identityLines: string[] = [`\n---\n## Who you are: ${personaNickname}`];
   if (personaPrompt?.trim()) {
     identityLines.push("", personaPrompt.trim());
@@ -133,7 +130,6 @@ export function composeInCharacterSystemPrompt(params: {
     sections.push(memoryBlock);
   }
 
-  // Retrieved document chunks — relevant excerpts from prior knowledge.
   const chunksFormatted = formatRetrievedChunksForPrompt(retrievedChunks);
   if (chunksFormatted) {
     const chunkBlock = [
@@ -154,13 +150,10 @@ export function composeInCharacterSystemPrompt(params: {
  * Includes optional context from previous windows to avoid duplication.
  *
  * @param formattedMessages - The formatted message text for this window
- * @param previousRestatements - Last few restatements from the previous window (for deduplication context)
- * @returns The user prompt string
  */
 export function buildExtractionUserPrompt(formattedMessages: string, previousRestatements: string[] = []): string {
   let prompt = "";
 
-  // Add deduplication context from previous window
   if (previousRestatements.length > 0) {
     prompt += `The following facts were already extracted from the previous section. Do NOT extract duplicates of these:\n`;
     for (const restatement of previousRestatements) {
@@ -169,11 +162,9 @@ export function buildExtractionUserPrompt(formattedMessages: string, previousRes
     prompt += "\n";
   }
 
-  // Add the conversation to extract from
   prompt += `Extract information from this conversation log. Output a JSON object with a "memories" array.\n\n`;
   prompt += `--- CONVERSATION LOG ---\n${formattedMessages}\n--- END LOG ---\n\n`;
 
-  // Add extraction requirements
   prompt += `Requirements:
 - Skip trivial chat: ignore simple greetings, acknowledgments, or filler
 - Self-contained: each item must make sense completely on its own`;

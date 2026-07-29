@@ -96,7 +96,6 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
   let chosen = native;
   let downscaledTo: number | null = null;
 
-  // Still over budget — downscale long edge, starting at the cap, stepping down to fit.
   if (native.length > limit) {
     const meta = await sharp(input).metadata();
     const nativeLongEdge = Math.max(meta.width ?? 0, meta.height ?? 0);
@@ -214,7 +213,6 @@ async function main(): Promise<void> {
     );
   }
 
-  // Report.
   let totalBefore = 0;
   let totalAfter = 0;
   const stillOver: Outcome[] = [];

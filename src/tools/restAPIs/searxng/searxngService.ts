@@ -22,10 +22,6 @@ import type {
   SearxngSearchParams,
 } from "./types";
 
-// =============================================
-// Constants
-// =============================================
-
 const SERVICE_NAME = "searxng";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -45,10 +41,6 @@ interface HealthcheckCache {
 }
 
 let healthcheckCache: HealthcheckCache | null = null;
-
-// =============================================
-// Helpers
-// =============================================
 
 /**
  * Resolve the configured SearXNG base URL, trimming trailing slashes.
@@ -108,10 +100,6 @@ export function resetSearxngHealthCache(): void {
   healthcheckCache = null;
 }
 
-// =============================================
-// Core request
-// =============================================
-
 async function makeSearxngRequest(
   params: SearxngSearchParams,
   config: SearxngRequestConfig = {},
@@ -131,7 +119,6 @@ async function makeSearxngRequest(
     url.searchParams.append(key, String(value));
   }
 
-  // Wire up internal + external abort signals.
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   if (config.signal) {
@@ -182,10 +169,6 @@ async function makeSearxngRequest(
     clearTimeout(timeoutId);
   }
 }
-
-// =============================================
-// Public per-category helpers
-// =============================================
 
 /**
  * Generic search — pass any category supported by your SearXNG config.

@@ -184,7 +184,6 @@ export async function execute(
     const selectedProvider = providerSelection.provider;
     const responseInteraction = providerSelection.interaction;
 
-    // Helper: update the picker message or issue a fresh reply depending on whether a picker was shown
     const replyWithResult = async (options: Parameters<typeof replyInfoEmbed>[2]) => {
       if (providerSelection.pickerInteraction) {
         // A button was clicked — update the picker message in-place (this also acknowledges the button)
@@ -209,7 +208,6 @@ export async function execute(
       return;
     }
 
-    // Build the updated config by overlaying only the options the user explicitly passed
     const nextConfig = {
       ...savedConfig,
       llm_temperature: interaction.options.getNumber("temperature") ?? savedConfig.llm_temperature,
@@ -222,7 +220,6 @@ export async function execute(
       thinking_level: (nextThinkingLevel as ThinkingLevelValue | null) ?? savedConfig.thinking_level,
     };
 
-    // Collect display labels for the success message
     const changedSettings: Array<{ label: string; value: string }> = [];
     if (interaction.options.getNumber("temperature") !== null) {
       changedSettings.push({
@@ -264,7 +261,6 @@ export async function execute(
       });
     }
 
-    // Persist the updated personal sampler config
     const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, nextConfig);
     if (!writeOk) {
       await replyWithResult({

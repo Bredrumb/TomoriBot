@@ -11,7 +11,6 @@ const MIN_LIMIT = 0;
 const MAX_LIMIT = 10;
 const DEFAULT_LIMIT = 3;
 
-// Configure the subcommand (Rule #21)
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("trigger-cascade-limit")
@@ -29,10 +28,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Configures how many additional persona triggers are allowed after the first one.
  * 0 allows only the first trigger (no additional triggers or chains).
  * 1-10 allow that many additional triggers after the first.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -40,7 +35,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -54,7 +48,6 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // Get the limit value from options
     const limit = interaction.options.getInteger("limit", true);
 
     // Validate range (redundant but safe)
@@ -71,7 +64,6 @@ export async function execute(
       return;
     }
 
-    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -82,7 +74,6 @@ export async function execute(
       return;
     }
 
-    // Check if this is the same as the current limit
     const currentLimit = tomoriState.config.cascade_limit ?? DEFAULT_LIMIT;
     if (limit === currentLimit) {
       await replyInfoEmbed(interaction, locale, {
@@ -96,7 +87,6 @@ export async function execute(
       return;
     }
 
-    // Update the limit in the database
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, { cascade_limit: limit });
 
     if (!updated) {
@@ -124,7 +114,6 @@ export async function execute(
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // Success message - indicate disabled state if limit is 0
     const isEnabled = limit > 0;
     await replyInfoEmbed(interaction, locale, {
       titleKey: isEnabled

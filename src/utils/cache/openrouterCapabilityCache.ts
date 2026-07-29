@@ -120,7 +120,6 @@ let cacheReady = false;
 function detectToolSupport(model: OpenRouterModel): boolean {
   // Check if supported_parameters exists and is an array
   if (model.supported_parameters && Array.isArray(model.supported_parameters)) {
-    // `tools` is the primary capability gate for function calling.
     if (model.supported_parameters.includes("tools")) {
       return true;
     }
@@ -181,7 +180,6 @@ function detectVideoSupport(model: OpenRouterModel): boolean {
   // Check supported_parameters for explicit video parameter
   const hasVideoParam = model.supported_parameters?.includes("video") || false;
 
-  // Model supports video if either indicator is present
   return hasVideoModality || hasVideoParam;
 }
 
@@ -231,7 +229,6 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
   try {
     log.info("Initializing OpenRouter capability cache...");
 
-    // Clear existing caches
     capabilityCache.clear();
     supportedParametersCache.clear();
     tokenizerCache.clear();
@@ -247,15 +244,12 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
       },
     });
 
-    // Check response status
     if (!response.ok) {
       throw new Error(`OpenRouter API returned ${response.status}: ${response.statusText}`);
     }
 
-    // Parse JSON response
     const data = await response.json();
 
-    // Validate response structure
     if (!data.data || !Array.isArray(data.data)) {
       throw new Error("Unexpected API response format - missing data array");
     }
@@ -263,9 +257,7 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
     const models: OpenRouterModel[] = data.data;
     log.info(`Fetched ${models.length} models from OpenRouter API`);
 
-    // Cache capabilities and token limits for each model
     for (const model of models) {
-      // Extract capabilities using detection functions
       const capabilities: ModelCapabilities = {
         hasTools: detectToolSupport(model),
         seesImages: detectImageSupport(model),
@@ -273,7 +265,6 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
         supportsStructuredOutput: detectStructuredOutputSupport(model),
       };
 
-      // Extract token limits from API response fields
       const tokenLimits: ModelTokenLimits = {
         contextLength: model.context_length ?? 0,
         maxCompletionTokens: model.top_provider?.max_completion_tokens,
@@ -281,7 +272,6 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
       const promptPricePerMillion = parseUsdPerMillion(model.pricing?.prompt);
       const completionPricePerMillion = parseUsdPerMillion(model.pricing?.completion);
 
-      // Store in caches with model ID as key
       capabilityCache.set(model.id, capabilities);
       supportedParametersCache.set(model.id, new Set(model.supported_parameters ?? []));
       if (typeof model.architecture?.tokenizer === "string") {
@@ -299,10 +289,8 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
       }
     }
 
-    // Mark cache as ready
     cacheReady = true;
 
-    // Log statistics
     const toolModels = Array.from(capabilityCache.values()).filter((c) => c.hasTools).length;
     const visionModels = Array.from(capabilityCache.values()).filter((c) => c.seesImages).length;
     const videoModels = Array.from(capabilityCache.values()).filter((c) => c.seesVideos).length;
@@ -313,7 +301,6 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
         `(${toolModels} with tools, ${visionModels} with vision, ${videoModels} with video, ${pricedModels} with pricing)`,
     );
   } catch (error) {
-    // Non-critical error - bot continues with database flags as fallback
     log.warn(
       "Failed to initialize OpenRouter capability cache (non-critical) - " + "will fall back to database flags",
       error as Error,
@@ -342,12 +329,10 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
  * }
  */
 export function getOpenRouterCapabilities(modelCodename: string): ModelCapabilities | undefined {
-  // Return undefined if cache is not ready
   if (!cacheReady) {
     return undefined;
   }
 
-  // Look up capabilities in cache
   return capabilityCache.get(modelCodename);
 }
 
@@ -394,7 +379,6 @@ export function isOpenRouterCapabilityCacheReady(): boolean {
 /**
  * Gets the number of models cached
  *
- * @returns Number of cached model capabilities
  *
  * Useful for monitoring and debugging cache state.
  */
@@ -486,7 +470,6 @@ export async function testAccountSettingModel(apiKey: string): Promise<
       };
     }
 
-    // For streaming, read the first chunk to get model info
     const reader = testResponse.body?.getReader();
     if (!reader) {
       return {
@@ -513,9 +496,7 @@ export async function testAccountSettingModel(apiKey: string): Promise<
               actualModel = parsed.model;
               break;
             }
-          } catch {
-            // Continue to next line
-          }
+          } catch {}
         }
       }
     } finally {
@@ -530,7 +511,6 @@ export async function testAccountSettingModel(apiKey: string): Promise<
 
     log.info(`Detected account-setting resolves to: ${actualModel}`);
 
-    // Now fetch capabilities for the actual model
     const capabilities = await getOrFetchOpenRouterCapabilities(actualModel);
 
     if (!capabilities) {
@@ -571,19 +551,16 @@ export async function testAccountSettingModel(apiKey: string): Promise<
  * }
  */
 export async function getOrFetchOpenRouterCapabilities(modelCodename: string): Promise<ModelCapabilities | undefined> {
-  // Cache not ready - cannot even fetch on-demand
   if (!cacheReady) {
     log.warn(`Cannot fetch capabilities for ${modelCodename}: cache not ready`);
     return undefined;
   }
 
-  // Check startup cache first (populated at bot startup)
   const cachedCapabilities = capabilityCache.get(modelCodename);
   if (cachedCapabilities) {
     return cachedCapabilities;
   }
 
-  // Check on-demand cache (previously fetched models)
   const onDemandCached = onDemandCapabilityCache.get(modelCodename);
   if (onDemandCached) {
     return onDemandCached;
@@ -601,16 +578,13 @@ export async function getOrFetchOpenRouterCapabilities(modelCodename: string): P
       },
     });
 
-    // Check response status
     if (!response.ok) {
       log.warn(`Failed to fetch capabilities for ${modelCodename}: ${response.status} ${response.statusText}`);
       return undefined;
     }
 
-    // Parse response and extract model data
     const data = await response.json();
 
-    // OpenRouter returns the model in a 'data' property
     const model: OpenRouterModel | undefined = data.data;
 
     if (!model) {
@@ -618,7 +592,6 @@ export async function getOrFetchOpenRouterCapabilities(modelCodename: string): P
       return undefined;
     }
 
-    // Extract capabilities using the same detection functions
     const capabilities: ModelCapabilities = {
       hasTools: detectToolSupport(model),
       seesImages: detectImageSupport(model),
@@ -626,7 +599,6 @@ export async function getOrFetchOpenRouterCapabilities(modelCodename: string): P
       supportsStructuredOutput: detectStructuredOutputSupport(model),
     };
 
-    // Cache the result for future requests
     onDemandCapabilityCache.set(modelCodename, capabilities);
 
     log.info(

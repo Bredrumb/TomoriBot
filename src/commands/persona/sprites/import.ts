@@ -63,9 +63,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the `/persona sprites import` command.
  * @param _client - Discord client (unused; storage handles image persistence)
- * @param interaction - The chat input command interaction
  * @param userData - Invoking user's row (for locale fallback)
- * @param locale - Resolved locale
  */
 export async function execute(
   _client: Client,
@@ -206,7 +204,6 @@ export async function execute(
       return;
     }
 
-    // Download the archive.
     const download = await safeDownload(archiveAttachment.url, {
       maxSizeMB: IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB,
       timeoutMs: DOWNLOAD_TIMEOUT_MS,
@@ -355,7 +352,6 @@ export async function execute(
       }
     }
 
-    // Report the outcome (warn-colored if anything failed).
     await replyInfoEmbed(responseInteraction, locale, {
       titleKey:
         failedCount > 0
@@ -406,7 +402,6 @@ export async function execute(
 /**
  * Maps a failed archive-parse result to its localized error embed.
  * @param result - The failed `readSpriteArchive` result
- * @param locale - Resolved locale
  */
 function buildArchiveErrorEmbed(result: Extract<SpriteArchiveReadResult, { ok: false }>, locale: string): EmbedBuilder {
   const embed = new EmbedBuilder().setColor(ColorCode.ERROR);
@@ -444,8 +439,6 @@ function buildArchiveErrorEmbed(result: Extract<SpriteArchiveReadResult, { ok: f
 
 /**
  * Builds persona select options for the import modal.
- * @param personas - All personas for the server
- * @param locale - Resolved locale for option descriptions
  */
 function buildPersonaSelectOptions(personas: TomoriState[], locale: string): SelectOption[] {
   return personas

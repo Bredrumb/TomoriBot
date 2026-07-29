@@ -29,8 +29,6 @@ export type ChannelLlmOverrideCacheOptions = LlmOverrideCacheOptions & {
 };
 
 export class LlmOverrideRepository {
-  // ── channel override reads ──────────────────────────────────────────────────
-
   /**
    * Returns the LLM assigned as a channel-level override, or null if none is set.
    * Resolves the llm_id via the LLM cache before falling back to a direct DB query.
@@ -125,8 +123,6 @@ export class LlmOverrideRepository {
     }
   }
 
-  // ── channel override writes ─────────────────────────────────────────────────
-
   /**
    * Upserts a channel-level LLM override and invalidates the channel LLM cache.
    *
@@ -193,7 +189,6 @@ export class LlmOverrideRepository {
    * Used when removing custom/scoped model registrations so unrelated overrides survive.
    *
    * @param serverId - Internal server DB ID
-   * @param llmId    - LLM ID being removed
    * @param options  - Optional cache invalidation scope
    */
   async deleteChannelLlmOverridesForModel(
@@ -208,8 +203,6 @@ export class LlmOverrideRepository {
     }
     return ok;
   }
-
-  // ── persona override writes ─────────────────────────────────────────────────
 
   /**
    * Upserts a persona-level LLM override in persona_configs.
@@ -250,7 +243,6 @@ export class LlmOverrideRepository {
    * Used when removing custom/scoped model registrations so unrelated overrides survive.
    *
    * @param serverId - Internal server DB ID
-   * @param llmId    - LLM ID being removed
    * @param options  - Optional cache invalidation scope
    */
   async clearPersonaLlmOverridesForModel(
@@ -262,8 +254,6 @@ export class LlmOverrideRepository {
     if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
     return ok;
   }
-
-  // ── fallback config writes ──────────────────────────────────────────────────
 
   /**
    * Sets the ordered fallback LLM model chain for a server.
@@ -331,8 +321,6 @@ export class LlmOverrideRepository {
       return false;
     }
   }
-
-  // ── snapshot restore & cleanup ──────────────────────────────────────────────
 
   /**
    * Restores channel and persona LLM overrides from a saved provider config snapshot.
@@ -463,8 +451,6 @@ export class LlmOverrideRepository {
       return 0;
     }
   }
-
-  // ── private SQL helpers (no cache side-effects) ─────────────────────────────
 
   /**
    * Raw SQL upsert for a channel LLM override row. No cache invalidation.

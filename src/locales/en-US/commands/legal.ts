@@ -1,5 +1,3 @@
-// locales/en-US/commands/legal.ts
-
 export default {
   legal: {
     privacy: {

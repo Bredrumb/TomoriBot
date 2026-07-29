@@ -47,7 +47,6 @@ function matchesLocalizedTitleTemplate(template: string, actualTitle: string): b
  * reward, punish). Scans across ALL supported locales so cross-locale servers
  * still detect bot-produced embeds correctly.
  *
- * @param embedTitle - The embed title to check
  * @returns An object with isTarget and the matched type
  */
 export function checkTargetEmbedTitle(embedTitle: string | null | undefined): TargetEmbedCheck {

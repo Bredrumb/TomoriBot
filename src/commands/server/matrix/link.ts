@@ -55,10 +55,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Execute the /server matrix link command.
  * Links the chosen Discord channel to the given Matrix room ID.
  *
- * @param _client     - Discord.js client (unused here)
- * @param interaction - The slash command interaction
- * @param user        - Resolved user row for error context
- * @param locale      - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -73,7 +69,6 @@ export async function execute(
   };
 
   try {
-    // Validate guild context
     if (!interaction.guild || !interaction.guildId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -83,7 +78,6 @@ export async function execute(
       return;
     }
 
-    // Validate ManageGuild permission
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -96,7 +90,6 @@ export async function execute(
     // Defer before async work (Pattern 2)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Check Matrix bridge is configured
     if (!isMatrixConfigured()) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -106,7 +99,6 @@ export async function execute(
       return;
     }
 
-    // Load Tomori state (bot must be set up)
     const tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -120,7 +112,6 @@ export async function execute(
     errorContext.serverId = tomoriState.server_id;
     errorContext.personaId = tomoriState.persona_id;
 
-    // Get command options
     const channel = interaction.options.getChannel("channel", true);
     const roomId = interaction.options.getString("room", true).trim();
 
@@ -152,7 +143,6 @@ export async function execute(
     // Fetch previous room ID for this channel (to invalidate old cache entry)
     const oldRoomId = await serverRepository.getExistingMatrixLink(channel.id);
 
-    // Upsert: insert or replace existing link for this channel
     await serverRepository.linkMatrix(tomoriState.server_id, channel.id, roomId);
 
     // Invalidate cache entries for both old and new room IDs
@@ -168,7 +158,6 @@ export async function execute(
       joinFailed = true;
     }
 
-    // Reply success (with note if join failed)
     const botUserId = process.env.MATRIX_BOT_USER_ID ?? "the Matrix bot account";
     const helpMatrixMention = commandRegistry.getCommandMention("help", "matrix");
 

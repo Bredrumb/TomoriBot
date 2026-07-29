@@ -38,7 +38,6 @@ export interface ResolvedForwardChain {
  * embeds, stickers, or components can only be a forward wrapper whose own snapshot layer
  * was flattened away. That makes emptiness a reliable nested-forward signal.
  *
- * @param snapshot - Forwarded message snapshot to inspect
  * @returns True when the snapshot carries no recoverable payload
  */
 export function isEmptyForwardSnapshot(snapshot: MessageSnapshot): boolean {

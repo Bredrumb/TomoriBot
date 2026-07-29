@@ -80,7 +80,6 @@ export async function execute(
       }
     }
 
-    // Confirmation gate — abort if user did not pick "yes"
     const confirmation = interaction.options.getString("confirmation", true);
     if (confirmation !== "yes") {
       await replyInfoEmbed(interaction, locale, {
@@ -144,7 +143,6 @@ export async function execute(
     // Invalidate cache AFTER successful write
     invalidateTomoriStateCache(guildDiscId);
 
-    // Success reply — different copy depending on whether personas were kept
     await replyInfoEmbed(interaction, locale, {
       titleKey: preservePersonas
         ? "commands.server.nuke.success_preserved_title"

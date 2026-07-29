@@ -262,7 +262,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
   const allowedRepoFilenames = /^(index|IRepository|.*Repository)\.ts$/;
   for (const file of files) {
     if (!file.repoPath.startsWith(repoDir)) continue;
-    // Only check files directly in repositories/ (not deeper subfolders)
     const remainder = file.repoPath.slice(repoDir.length);
     if (remainder.includes("/")) continue;
     if (!allowedRepoFilenames.test(basename(file.absPath))) {

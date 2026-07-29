@@ -21,10 +21,8 @@ export async function initializeLLMCache(): Promise<void> {
   try {
     log.info("Initializing LLM configuration cache...");
 
-    // Clear existing cache
     llmCache.clear();
 
-    // Load all LLM configurations from database via repository
     const llms = await llmModelRepo.loadAvailableLlms(true);
 
     if (!llms || llms.length === 0) {
@@ -32,14 +30,12 @@ export async function initializeLLMCache(): Promise<void> {
       return;
     }
 
-    // Cache each LLM configuration
     for (const llm of llms) {
       if (llm.llm_id !== undefined) {
         llmCache.set(llm.llm_id, llm as LlmRow);
       }
     }
 
-    // Log statistics
     const providerCounts = new Map<string, number>();
     for (const llm of llms) {
       const count = providerCounts.get(llm.llm_provider) || 0;
@@ -53,7 +49,6 @@ export async function initializeLLMCache(): Promise<void> {
     log.success(`LLM cache initialized with ${llmCache.size} models (${providerStats})`);
   } catch (error) {
     log.error("Failed to initialize LLM configuration cache:", error as Error);
-    // Don't throw - bot should still work with database queries as fallback
   }
 }
 
@@ -69,7 +64,6 @@ export function getCachedLLM(llmId: number): LlmRow | undefined {
 
 /**
  * Gets all cached LLM configurations
- * @returns Array of all LLM configurations
  */
 export function getAllCachedLLMs(): LlmRow[] {
   return Array.from(llmCache.values());
@@ -78,10 +72,8 @@ export function getAllCachedLLMs(): LlmRow[] {
 /**
  * Gets all cached LLM configurations for a specific provider
  * @param provider - Provider name (e.g., "google", "openai", "anthropic")
- * @returns Array of LLM configurations for the provider
  */
 export function getCachedLLMsByProvider(provider: string): LlmRow[] {
-  // Normalize provider name to lowercase for case-insensitive matching
   const normalizedProvider = provider.toLowerCase();
   return Array.from(llmCache.values()).filter((llm) => llm.llm_provider.toLowerCase() === normalizedProvider);
 }
@@ -92,7 +84,6 @@ export function getCachedLLMsByProvider(provider: string): LlmRow[] {
  * @returns Default LLM configuration or undefined
  */
 export function getCachedDefaultLLM(provider: string): LlmRow | undefined {
-  // Normalize provider name to lowercase for case-insensitive matching
   const normalizedProvider = provider.toLowerCase();
   return Array.from(llmCache.values()).find(
     (llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_default,
@@ -105,7 +96,6 @@ export function getCachedDefaultLLM(provider: string): LlmRow | undefined {
  * @returns Smartest LLM configuration or undefined
  */
 export function getCachedSmartestLLM(provider: string): LlmRow | undefined {
-  // Normalize provider name to lowercase for case-insensitive matching
   const normalizedProvider = provider.toLowerCase();
   return Array.from(llmCache.values()).find(
     (llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_smartest,
@@ -115,10 +105,8 @@ export function getCachedSmartestLLM(provider: string): LlmRow | undefined {
 /**
  * Gets all reasoning-capable LLM configurations for a provider
  * @param provider - Provider name (e.g., "google", "openai", "anthropic")
- * @returns Array of reasoning LLM configurations
  */
 export function getCachedReasoningLLMs(provider: string): LlmRow[] {
-  // Normalize provider name to lowercase for case-insensitive matching
   const normalizedProvider = provider.toLowerCase();
   return Array.from(llmCache.values()).filter(
     (llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_reasoning,
@@ -135,7 +123,6 @@ export function isLLMCacheReady(): boolean {
 
 /**
  * Gets the size of the LLM cache
- * @returns Number of cached LLM configurations
  */
 export function getLLMCacheSize(): number {
   return llmCache.size;

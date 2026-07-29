@@ -138,15 +138,11 @@ interface AnalysisResult {
 
 /**
  * Recursively extracts all keys from a nested locale object
- * @param obj - The locale object or nested object
- * @param prefix - Current key path prefix
- * @returns Set of all flattened key paths
  */
 function extractKeysFromLocaleObject(obj: unknown, prefix = ""): Set<string> {
   const keys = new Set<string>();
 
   if (typeof obj === "string") {
-    // This is a leaf node, add the key
     if (prefix) {
       keys.add(prefix);
     }
@@ -176,10 +172,7 @@ function extractKeysFromLocaleObject(obj: unknown, prefix = ""): Set<string> {
 
 /**
  * Recursively extracts all string values and their lengths from a nested locale object
- * @param obj - The locale object or nested object
- * @param prefix - Current key path prefix
  * @param maxLength - Maximum allowed string length (default: 99 for Discord modal limit)
- * @returns Map of key paths to string length violations
  */
 function _extractStringLengthViolations(
   obj: unknown,
@@ -189,7 +182,6 @@ function _extractStringLengthViolations(
   const violations = new Map<string, { value: string; length: number }>();
 
   if (typeof obj === "string") {
-    // This is a leaf node with a string value
     if (prefix && obj.length >= maxLength) {
       violations.set(prefix, { value: obj, length: obj.length });
     }
@@ -211,7 +203,6 @@ function _extractStringLengthViolations(
 
 /**
  * Loads all locale files and extracts available keys
- * @returns Object containing available keys and per-locale key sets
  */
 async function loadAvailableKeys(): Promise<{
   availableKeys: Set<string>;
@@ -261,8 +252,6 @@ async function loadAvailableKeys(): Promise<{
 
 /**
  * Escapes a string for use in a regular expression
- * @param str - The string to escape
- * @returns The escaped string
  */
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -270,15 +259,11 @@ function escapeRegExp(str: string): string {
 
 /**
  * Validates if a string is likely a valid localization key
- * @param key - The string to validate
- * @returns True if the string looks like a valid localization key
  */
 function isValidLocalizationKey(key: string): boolean {
-  // Must have at least 2 dot-separated segments
   const segments = key.split(".");
   if (segments.length < 2) return false;
 
-  // Filter out template/placeholder strings (generic documentation examples)
   const templatePatterns = [
     /^category\./i, // "category.group.subcommand"
     /^example\./i, // "example.key.path"
@@ -291,18 +276,12 @@ function isValidLocalizationKey(key: string): boolean {
     if (pattern.test(key)) return false;
   }
 
-  // Filter out common false positives
   const falsePositives = [
-    // URLs and domains
     /^https?:\/\//i,
     /^(?:[a-z0-9-]+\.)+(?:com|org|net|io|dev)(?:\/|$)/i,
-    // File extensions
     /\.(js|ts|json|css|html|md|txt|yml|yaml)$/i,
-    // Version numbers
     /^\d+\.\d+/,
-    // Import paths
     /^node:|^@\w+/,
-    // Error codes
     /^\d{3}_/,
     // Database/SQL patterns - require whole SQL keywords so locale keys like
     // "commands.data.delete.success_personal_settings_title" are not rejected.
@@ -337,14 +316,11 @@ function isValidLocalizationKey(key: string): boolean {
   const firstSegment = segments[0];
   if (validPrefixes.includes(firstSegment)) return true;
 
-  // If it has 3+ segments and looks like a locale key structure, allow it
   return segments.length >= 3 && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(firstSegment);
 }
 
 /**
  * Checks if a localization key is used for a modal title
- * @param key - The localization key to check
- * @returns True if the key is used for a modal title
  */
 function isModalTitleKey(key: string): boolean {
   return key.endsWith(".modal_title") || key.endsWith(".modal.title");
@@ -352,8 +328,6 @@ function isModalTitleKey(key: string): boolean {
 
 /**
  * Checks if a localization key is used for a modal description
- * @param key - The localization key to check
- * @returns True if the key is used for a modal description
  */
 function isModalDescriptionKey(key: string): boolean {
   // Pattern 1: *.modal_description (bare leaf)
@@ -364,8 +338,6 @@ function isModalDescriptionKey(key: string): boolean {
 
 /**
  * Checks if a localization key is used for a command description
- * @param key - The localization key to check
- * @returns True if the key is used for a command description
  */
 function isCommandDescriptionKey(key: string): boolean {
   // Pattern: commands.*.*.command_description or commands.*.*.*.command_description
@@ -459,15 +431,11 @@ function resolveLocalizationKey(key: string, availableKeys: Set<string>): string
 
 /**
  * Recursively extracts string values from a nested locale object
- * @param obj - The locale object or nested object
- * @param prefix - Current key path prefix
- * @returns Map of key paths to their string values
  */
 function extractStringValues(obj: unknown, prefix = ""): Map<string, string> {
   const values = new Map<string, string>();
 
   if (typeof obj === "string") {
-    // This is a leaf node with a string value
     if (prefix) {
       values.set(prefix, obj);
     }
@@ -507,8 +475,6 @@ async function loadMergedLocale(localeName: string): Promise<Record<string, unkn
 
 /**
  * Checks modal title lengths across all locales
- * @param localeKeys - Map of locale names to their key sets
- * @returns Array of modal title length violations
  */
 async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Promise<ModalTitleViolation[]> {
   const violations: ModalTitleViolation[] = [];
@@ -518,7 +484,6 @@ async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Pro
   const MAX_LENGTH = 45;
 
   for (const [localeName, keys] of localeKeys) {
-    // Filter to only modal title keys
     const modalTitleKeys = Array.from(keys).filter(isModalTitleKey);
 
     if (modalTitleKeys.length === 0) continue;
@@ -527,14 +492,12 @@ async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Pro
       const localeObject = await loadMergedLocale(localeName);
       const stringValues = extractStringValues(localeObject);
 
-      // Check each modal title key
       for (const key of modalTitleKeys) {
         const value = stringValues.get(key);
         if (!value) continue;
 
         const length = value.length;
 
-        // Check if length violates Discord constraints
         if (length < MIN_LENGTH || length > MAX_LENGTH) {
           violations.push({
             key,
@@ -554,8 +517,6 @@ async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Pro
 
 /**
  * Checks modal description lengths across all locales
- * @param localeKeys - Map of locale names to their key sets
- * @returns Array of modal description length violations
  */
 async function checkModalDescriptionLengths(
   localeKeys: Map<string, Set<string>>,
@@ -568,7 +529,6 @@ async function checkModalDescriptionLengths(
   const MAX_LENGTH = 100;
 
   for (const [localeName, keys] of localeKeys) {
-    // Filter to only modal description keys
     const modalDescriptionKeys = Array.from(keys).filter(isModalDescriptionKey);
 
     if (modalDescriptionKeys.length === 0) continue;
@@ -577,7 +537,6 @@ async function checkModalDescriptionLengths(
       const localeObject = await loadMergedLocale(localeName);
       const stringValues = extractStringValues(localeObject);
 
-      // Check each modal description key
       for (const key of modalDescriptionKeys) {
         const value = stringValues.get(key);
         if (!value) continue;
@@ -797,8 +756,6 @@ async function checkModalComponentUsageLengths(
 
 /**
  * Checks command description lengths across all locales
- * @param localeKeys - Map of locale names to their key sets
- * @returns Array of command description length violations
  */
 async function checkCommandDescriptionLengths(
   localeKeys: Map<string, Set<string>>,
@@ -810,7 +767,6 @@ async function checkCommandDescriptionLengths(
   const MAX_LENGTH = 100;
 
   for (const [localeName, keys] of localeKeys) {
-    // Filter to only command description keys
     const commandDescriptionKeys = Array.from(keys).filter(isCommandDescriptionKey);
 
     if (commandDescriptionKeys.length === 0) continue;
@@ -819,14 +775,12 @@ async function checkCommandDescriptionLengths(
       const localeObject = await loadMergedLocale(localeName);
       const stringValues = extractStringValues(localeObject);
 
-      // Check each command description key
       for (const key of commandDescriptionKeys) {
         const value = stringValues.get(key);
         if (!value) continue;
 
         const length = value.length;
 
-        // Check if length violates Discord constraints
         if (length < MIN_LENGTH || length > MAX_LENGTH) {
           violations.push({
             key,
@@ -846,17 +800,11 @@ async function checkCommandDescriptionLengths(
 
 /**
  * Checks if a string appears in a Set declaration context
- * @param content - The file content
- * @param matchIndex - The index where the string was matched
- * @returns True if the string is in a Set declaration
  */
 function isInSetDeclaration(content: string, matchIndex: number): boolean {
-  // Look backwards from the match to find if it's in a Set declaration
   const lookbackDistance = 300;
   const beforeMatch = content.substring(Math.max(0, matchIndex - lookbackDistance), matchIndex);
 
-  // Check for Set initialization patterns
-  // These patterns look for: new Set([... or Set([... with optional type parameters
   const setPatterns = [
     /new\s+Set\s*<[^>]*>\s*\(\s*\[[\s\S]*$/, // new Set<T>([...
     /new\s+Set\s*\(\s*\[[\s\S]*$/, // new Set([...
@@ -873,7 +821,6 @@ function isInSetDeclaration(content: string, matchIndex: number): boolean {
       const openBrackets = (afterSetDecl.match(/\[/g) || []).length;
       const closeBrackets = (afterSetDecl.match(/\]/g) || []).length;
 
-      // If we have more open brackets than close brackets, we're still inside the Set
       if (openBrackets > closeBrackets) {
         return true;
       }
@@ -885,14 +832,10 @@ function isInSetDeclaration(content: string, matchIndex: number): boolean {
 
 /**
  * Extracts dynamic template literal keys from file content
- * @param content - The file content to analyze
- * @param availableKeys - Set of all available locale keys to match against
- * @returns Array of matched keys
  */
 function extractDynamicTemplateKeys(content: string, availableKeys: Set<string>): string[] {
   const matchedKeys: string[] = [];
 
-  // Pattern to find template literals with locale key prefixes
   // Matches patterns like: `commands.server.avatar.${errorKey}`
   const templatePattern =
     /(?:titleKey|descriptionKey|nameKey|labelKey|modalTitleKey|itemLabelKey):\s*`([a-zA-Z][a-zA-Z0-9._-]*)\$\{([^}]+)\}([a-zA-Z0-9._-]*)`/g;
@@ -1018,7 +961,6 @@ function extractLocalizerTemplateKeys(content: string, availableKeys: Set<string
     const variable = match[2]; // e.g., "messageKey"
     const suffix = match[3]; // e.g., "" (usually empty)
 
-    // Extract the variable name (strip any property access)
     const variableName = variable.split(/[.[]/)[0];
     const safeVar = escapeRegExp(variableName);
 
@@ -1038,7 +980,6 @@ function extractLocalizerTemplateKeys(content: string, availableKeys: Set<string
 
     let valueMatch = valuePattern.exec(content);
     while (valueMatch !== null) {
-      // Group 1: var = "value" or var === "value"; Group 2: "value" === var
       const resolvedValue = valueMatch[1] ?? valueMatch[2];
       if (resolvedValue) {
         const fullKey = `${prefix ?? ""}${resolvedValue}${suffix}`;
@@ -1059,9 +1000,6 @@ function extractLocalizerTemplateKeys(content: string, availableKeys: Set<string
 /**
  * Extracts error code pattern keys from file content
  * Handles patterns like: messageKey = `${errorCode}_default_message`
- * @param content - The file content to analyze
- * @param availableKeys - Set of all available locale keys to match against
- * @returns Array of matched keys
  */
 function extractErrorCodeKeys(content: string, availableKeys: Set<string>): string[] {
   const matchedKeys: string[] = [];
@@ -1075,14 +1013,12 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
     const variable = match[1]; // e.g., "errorCode"
     const suffix = match[2]; // e.g., "_default_message"
 
-    // Extract the variable name (strip any property access)
     const variableName = variable.split(/[.[]/)[0];
 
     // Look for all available keys that match this pattern
     // Common error codes and status codes
     const commonCodes = ["400", "401", "403", "404", "429", "500", "503", "504", "unknown"];
 
-    // Also search for numeric assignments in the file
     const safeVar = escapeRegExp(variableName);
     const numericAssignPattern = new RegExp(`${safeVar}\\s*===?\\s*(\\d+|["']\\d+["'])`, "g");
     let numMatch = numericAssignPattern.exec(content);
@@ -1092,7 +1028,6 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
       numMatch = numericAssignPattern.exec(content);
     }
 
-    // Check if any constructed key exists in available keys
     for (const code of commonCodes) {
       const fullKey = `${code}${suffix}`;
       if (availableKeys.has(fullKey)) {
@@ -1103,7 +1038,6 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
     match = templateWithSuffixPattern.exec(content);
   }
 
-  // Pattern 2: Template literals with prefix + variable
   // Matches: `genai.google.${errorCode}_default_message`
   const templateWithPrefixPattern = /`([a-zA-Z][a-zA-Z0-9._-]*)\$\{([^}]+)\}([a-zA-Z0-9._-]*)`/g;
 
@@ -1119,7 +1053,6 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
 
     const commonCodes = ["400", "401", "403", "404", "429", "500", "503", "504", "unknown"];
 
-    // Also search for numeric assignments in the file
     const safeVar = escapeRegExp(variableName);
     const numericAssignPattern = new RegExp(`${safeVar}\\s*===?\\s*(\\d+|["']\\d+["'])`, "g");
     let numMatch = numericAssignPattern.exec(content);
@@ -1129,7 +1062,6 @@ function extractErrorCodeKeys(content: string, availableKeys: Set<string>): stri
       numMatch = numericAssignPattern.exec(content);
     }
 
-    // Check if any constructed key exists in available keys
     for (const code of commonCodes) {
       const fullKey = `${prefix}${code}${suffix}`;
       if (availableKeys.has(fullKey)) {
@@ -1184,8 +1116,6 @@ const KNOWN_DYNAMIC_LOCALE_KEYS = new Set([
  * Detects getLocaleSubKeys(locale, "prefix") calls and marks all available keys
  * under that prefix as referenced. This function enumerates locale sub-keys at
  * runtime so all child keys under the prefix are implicitly used.
- * @param availableKeys - Set of all available locale keys
- * @returns Array of matched keys under referenced prefixes
  */
 async function extractGetLocaleSubKeysUsage(availableKeys: Set<string>): Promise<string[]> {
   const matchedKeys: string[] = [];
@@ -1210,7 +1140,6 @@ async function extractGetLocaleSubKeysUsage(availableKeys: Set<string>): Promise
         match = getSubKeysPattern.exec(content);
       }
     } catch {
-      // skip unreadable files
     }
   }
 
@@ -1313,23 +1242,18 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
 
 /**
  * Extracts localization keys referenced in TypeScript source files
- * @param availableKeys - Set of all available locale keys for dynamic key matching
- * @returns Map of referenced keys to files that reference them
  */
 async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<string, Set<string>>> {
   const referencedKeys = new Map<string, Set<string>>();
   const srcPath = join(process.cwd(), "src");
 
-  // Regex patterns for finding localization keys
   const patterns = [
-    // titleKey, descriptionKey, nameKey, labelKey, etc.
     /(?:titleKey|descriptionKey|nameKey|labelKey|modalTitleKey|itemLabelKey):\s*["']([a-zA-Z0-9._-]+)["']/g,
     // localizer() calls — first arg can be a string literal ("en-US") OR a variable (locale)
     /localizer\s*\(\s*(?:"[^"]*"|'[^']*'|\w+)\s*,\s*["']([a-zA-Z0-9._-]+)["']/g,
     // Quoted strings that look like localization keys (dot-separated paths).
     // Allow 2-segment keys like "general.cancel" in addition to deeper paths.
     /["']([a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z][a-zA-Z0-9_-]*){1,})["']/g,
-    // Direct key references in ternary operators and assignments
     /[?:]\s*["']([a-zA-Z0-9._-]+)["']/g,
   ];
 
@@ -1345,7 +1269,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
       try {
         const content = await readFile(filePath, "utf-8");
 
-        // Apply all patterns to find keys
         for (const [patternIndex, pattern] of patterns.entries()) {
           let match: RegExpExecArray | null;
           pattern.lastIndex = 0; // Reset regex state
@@ -1354,7 +1277,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
             const key = match[1];
             const matchIndex = match.index;
 
-            // Skip if in a Set declaration
             if (isInSetDeclaration(content, matchIndex)) {
               match = pattern.exec(content);
               continue;
@@ -1369,7 +1291,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
               continue;
             }
 
-            // Filter out false positives
             if (isValidLocalizationKey(key)) {
               if (!referencedKeys.has(key)) {
                 referencedKeys.set(key, new Set());
@@ -1380,7 +1301,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
           }
         }
 
-        // Extract dynamic template literal keys
         const dynamicKeys = extractDynamicTemplateKeys(content, availableKeys);
         for (const key of dynamicKeys) {
           if (!referencedKeys.has(key)) {
@@ -1398,7 +1318,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
           referencedKeys.get(key)?.add(file);
         }
 
-        // Extract error code pattern keys
         const errorCodeKeys = extractErrorCodeKeys(content, availableKeys);
         for (const key of errorCodeKeys) {
           if (!referencedKeys.has(key)) {
@@ -1407,7 +1326,6 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
           referencedKeys.get(key)?.add(file);
         }
 
-        // Extract pipe-encoded locale keys
         const pipeEncodedKeys = extractPipeEncodedLocaleKeys(content, availableKeys);
         for (const key of pipeEncodedKeys) {
           if (!referencedKeys.has(key)) {
@@ -1429,14 +1347,11 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
 
 /**
  * Checks for key parity issues across all locales
- * @param localeKeys - Map of locale names to their key sets
- * @returns Array of parity issues found
  */
 function checkLocaleParity(localeKeys: Map<string, Set<string>>): LocaleParityIssue[] {
   const parityIssues: LocaleParityIssue[] = [];
   const allLocales = Array.from(localeKeys.keys());
 
-  // Get all unique keys across all locales
   const allKeys = new Set<string>();
   for (const keys of localeKeys.values()) {
     for (const key of keys) {
@@ -1444,7 +1359,6 @@ function checkLocaleParity(localeKeys: Map<string, Set<string>>): LocaleParityIs
     }
   }
 
-  // Check each key to see if it exists in all locales
   for (const key of allKeys) {
     const missingIn: string[] = [];
     const presentIn: string[] = [];
@@ -1458,7 +1372,6 @@ function checkLocaleParity(localeKeys: Map<string, Set<string>>): LocaleParityIs
       }
     }
 
-    // If the key is not in all locales, it's a parity issue
     if (missingIn.length > 0) {
       parityIssues.push({ key, missingIn, presentIn });
     }
@@ -1503,7 +1416,6 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   // Add keys that are provably used but cannot be detected statically
   for (const key of KNOWN_DYNAMIC_LOCALE_KEYS) referencedKeys.add(key);
 
-  // Find missing keys (referenced but not available)
   const missingKeys: KeyUsage[] = [];
   for (const [key, files] of referencedKeysMap) {
     if (!resolveLocalizationKey(key, availableKeys)) {
@@ -1511,7 +1423,6 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
     }
   }
 
-  // Find unused keys (available but not referenced)
   const unusedKeys: KeyUsage[] = [];
   for (const key of availableKeys) {
     if (!referencedKeys.has(key)) {
@@ -1545,7 +1456,6 @@ function displayResults(results: AnalysisResult): void {
     results.modalUsageViolations.length > 0 ||
     results.missingKeys.length > 0;
 
-  // Clean run — single summary line
   if (!hasErrors) {
     const localeNames = Array.from(results.localeKeys.keys());
     console.log(
@@ -1554,7 +1464,6 @@ function displayResults(results: AnalysisResult): void {
     return;
   }
 
-  // Error run — full report
   console.log(`\n${"=".repeat(80)}`);
   console.log("🔍 LOCALIZATION KEY ANALYSIS RESULTS");
   console.log("=".repeat(80));
@@ -1744,7 +1653,6 @@ async function main(): Promise<void> {
 
     displayResults(results);
 
-    // Exit with error code for critical issues (missing keys, parity issues, or length violations)
     if (
       results.missingKeys.length > 0 ||
       results.parityIssues.length > 0 ||
@@ -1761,7 +1669,6 @@ async function main(): Promise<void> {
   }
 }
 
-// Run the script if executed directly
 if (import.meta.main) {
   await main();
 }

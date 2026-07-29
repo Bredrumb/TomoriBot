@@ -57,7 +57,6 @@ function resolveOpaqueIds(args: Record<string, unknown>, messageIdMap?: MessageI
   return resolvedArgs ?? args;
 }
 
-// Re-export ToolContext for external use
 export type { ToolContext } from "../types/tool/interfaces";
 export type { ToolStateForContext } from "@/tools/availability";
 
@@ -74,7 +73,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
   /**
    * Register a new tool in the registry
-   * @param tool - The tool to register
    * @throws Error if tool with same name already exists
    */
   registerTool(tool: Tool): void {
@@ -82,7 +80,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       throw new Error(`Tool with name '${tool.name}' is already registered`);
     }
 
-    // Validate tool structure
     this.validateTool(tool);
 
     this.tools.set(tool.name, tool);
@@ -103,7 +100,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
    * Get all tools available for a specific provider and context
    * @param provider - Provider name (e.g., "google", "openai")
    * @param context - Tool context for checking feature flags and permissions
-   * @returns Array of available tools
    */
   getAvailableTools(provider: string, context: ToolContext): Tool[] {
     return getAvailableToolsForProvider(this.tools.values(), provider, context);
@@ -113,8 +109,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
    * Get tools available for context building (only checks feature flags, no Discord permissions)
    * Used when building context instructions where we don't have full Discord context
    * @param provider - Provider name (e.g., "google", "openai")
-   * @param stateForContext - Minimal state with server_id and config for feature flag checking
-   * @returns Array of tools available for this provider and configuration
    */
   getAvailableToolsForContext(provider: string, stateForContext: ToolStateForContext): Tool[] {
     return getAvailableToolsForContextFromRegistry(this.tools.values(), provider, stateForContext);
@@ -124,8 +118,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
    * Get all available tools (built-in + MCP) with feature flag filtering
    * This is the new centralized method that replaces provider-specific filtering
    * @param provider - Provider name (e.g., "google", "openai")
-   * @param stateForContext - Minimal state with server_id and config for feature flag checking
-   * @returns Object containing filtered built-in tools and MCP function names
    */
   async getAvailableToolsWithMCP(
     provider: string,
@@ -136,7 +128,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
   /**
    * Get all registered tools
-   * @returns Array of all tools in the registry
    */
   getAllTools(): Tool[] {
     return Array.from(this.tools.values());
@@ -154,8 +145,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
   /**
    * Check if a function name is an MCP function for the given provider
-   * @param functionName - Name of the function to check
-   * @param provider - Provider name
    * @returns Promise<boolean> - True if this is an MCP function
    */
   async isMCPFunction(functionName: string, provider: string): Promise<boolean> {
@@ -176,7 +165,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
    * Check if a tool requires a follow-up generation after execution
    * Built-in tools check the `requiresFollowUp` property; MCP tools (global + guild) always return true
    * (all MCP tools are search/fetch and need the model to present results)
-   * @param functionName - Name of the function to check
    * @param provider - Provider name for MCP adapter lookup
    * @param serverId - Optional internal server_id for guild MCP check
    * @returns Promise<boolean> - True if the tool needs a follow-up generation
@@ -195,12 +183,9 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       try {
         const isGuildMcp = await getGuildMcpManager().isGuildMCPFunction(serverId, resolvedFunctionName);
         if (isGuildMcp) return true;
-      } catch {
-        // fall through
-      }
+      } catch {}
     }
 
-    // Check built-in tool property
     const tool = this.getTool(resolvedFunctionName);
     return tool?.requiresFollowUp ?? false;
   }
@@ -208,10 +193,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   /**
    * Execute a tool by name with given arguments and context
    * Now supports built-in tools, global MCP, and guild MCP functions seamlessly
-   * @param toolName - Name of the tool/function to execute
-   * @param args - Arguments to pass to the tool
-   * @param context - Execution context
-   * @returns Promise resolving to tool execution result
    */
   async executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startTime = Date.now();
@@ -240,7 +221,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
           );
           const executionTime = Date.now() - startTime;
 
-          // Record execution event
           this.recordExecution({
             toolName: resolvedToolName,
             provider: context.provider,
@@ -267,17 +247,12 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       }
     }
 
-    // Execute as built-in tool
     return this.executeBuiltInTool(resolvedToolName, resolvedArgs, context, startTime);
   }
 
   /**
    * Execute an MCP function
-   * @param functionName - Name of the MCP function
-   * @param args - Function arguments
-   * @param context - Execution context
    * @param startTime - Execution start time for metrics
-   * @returns Promise<ToolResult>
    */
   private async executeMCPFunction(
     functionName: string,
@@ -305,7 +280,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       const result = await adapter.executeMCPFunction(functionName, args, context);
       const executionTime = Date.now() - startTime;
 
-      // Record execution event
       const executionEvent: ToolExecutionEvent = {
         toolName: functionName,
         provider: context.provider,
@@ -357,11 +331,8 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
   /**
    * Execute a built-in tool
-   * @param toolName - Name of the tool
    * @param args - Tool arguments
-   * @param context - Execution context
    * @param startTime - Execution start time for metrics
-   * @returns Promise<ToolResult>
    */
   private async executeBuiltInTool(
     toolName: string,
@@ -405,11 +376,9 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     try {
       log.info(`Executing built-in tool: ${toolName} (${tool.category}) for provider ${context.provider}`);
 
-      // Execute the tool
       const result = await tool.execute(args, context);
       const executionTime = Date.now() - startTime;
 
-      // Record execution event
       const executionEvent: ToolExecutionEvent = {
         toolName,
         provider: context.provider,
@@ -461,8 +430,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
   /**
    * Get execution history for debugging and monitoring
-   * @param limit - Maximum number of entries to return
-   * @returns Array of recent tool execution events
    */
   getExecutionHistory(limit = 100): ToolExecutionEvent[] {
     return this.executionHistory.slice(-limit).reverse(); // Most recent first
@@ -479,7 +446,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
   /**
    * Get registry statistics
-   * @returns Statistics about registered tools and executions
    */
   getStats(): {
     totalTools: number;
@@ -504,8 +470,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       totalExecutions: this.executionHistory.length,
     };
   }
-
-  // Private helper methods
 
   /**
    * Validate tool structure and required properties
@@ -545,17 +509,14 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   private recordExecution(event: ToolExecutionEvent): void {
     this.executionHistory.push(event);
 
-    // Keep history size manageable
     if (this.executionHistory.length > this.maxHistorySize) {
       this.executionHistory = this.executionHistory.slice(-this.maxHistorySize + 100);
     }
   }
 }
 
-// Export singleton instance
 export const ToolRegistry = new ToolRegistryImpl();
 
-// Export convenience functions
 export function registerTool(tool: Tool): void {
   ToolRegistry.registerTool(tool);
 }

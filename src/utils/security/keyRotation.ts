@@ -84,7 +84,6 @@ function isKeyInCooldown(
  *    c. Select first key not in excludeKeyIds
  *    d. Decrypt and return
  *
- * @param tomoriState - The Tomori state containing server_id and config
  * @param excludeKeyIds - Array of rotation_key_ids to exclude (already tried and failed)
  * @returns Selected key result, or null if rotation not active or all keys exhausted
  */
@@ -117,9 +116,7 @@ export async function selectApiKey(
       return null;
     }
 
-    // Filter and find the best available key
     for (const row of rotationKeys) {
-      // Validate the row
       const parsed = apiKeyRotationSchema.safeParse(row);
       if (!parsed.success) {
         const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
@@ -133,12 +130,10 @@ export async function selectApiKey(
         continue;
       }
 
-      // Skip excluded keys (already tried this request)
       if (key.rotation_key_id && excludeKeyIds.includes(key.rotation_key_id)) {
         continue;
       }
 
-      // Skip keys in cooldown
       if (isKeyInCooldown(key.last_error_at, key.last_error_type)) {
         log.info(`Skipping rotation key ${key.rotation_key_id} (in cooldown: ${key.last_error_type})`);
         continue;
@@ -180,7 +175,6 @@ export async function selectApiKey(
       };
     }
 
-    // All keys exhausted or in cooldown
     log.warn(`All rotation keys exhausted or in cooldown for server ${serverId}`);
     return null;
   } catch (error) {
@@ -193,7 +187,6 @@ export async function selectApiKey(
  * Checks if there is at least one available rotation key (excluding provided IDs).
  * This avoids decrypting keys and skips user-facing logging for peek checks.
  *
- * @param tomoriState - The Tomori state containing server_id and config
  * @param excludeKeyIds - Array of rotation_key_ids to exclude (already tried and failed)
  * @returns True if another usable rotation key exists
  */
@@ -333,7 +326,6 @@ export async function recordKeyError(
  * Also creates the main key pointer if this is the first rotation key.
  * Each api_key_rotation insert is followed by a runtime state row insert.
  *
- * @param serverId - The internal server ID
  * @param provider - The LLM provider name (must match current provider)
  * @param apiKey - The raw API key to encrypt and store
  * @returns True if the key was added successfully
@@ -342,14 +334,12 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
   const normalizedProvider = provider.toLowerCase();
 
   try {
-    // Check if main key pointer already exists
     const existingPointer = await sql`
       SELECT rotation_key_id FROM api_key_rotation
       WHERE server_id = ${serverId} AND is_main_key_pointer = true
       LIMIT 1
     `;
 
-    // If no pointer exists, create one first (enables rotation), then seed runtime state
     if (!existingPointer || existingPointer.length === 0) {
       log.info(`Creating main key pointer for server ${serverId} to enable rotation`);
       const pointerResult = await sql`
@@ -397,8 +387,6 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
  * This includes the main key pointer and all additional rotation keys.
  * Runtime state rows cascade-delete automatically via FK ON DELETE CASCADE.
  *
- * @param serverId - The internal server ID
- * @returns The number of keys deleted
  */
 export async function purgeRotationKeys(serverId: number): Promise<number> {
   try {
@@ -421,9 +409,7 @@ export async function purgeRotationKeys(serverId: number): Promise<number> {
  * Used when removing a saved provider config to ensure a clean break.
  * Runtime state rows cascade-delete automatically via FK ON DELETE CASCADE.
  *
- * @param serverId - The internal server ID
  * @param provider - The provider name (lowercase) to purge keys for
- * @returns The number of keys deleted
  */
 export async function purgeRotationKeysForProvider(serverId: number, provider: string): Promise<number> {
   try {
@@ -447,7 +433,6 @@ export async function purgeRotationKeysForProvider(serverId: number, provider: s
 /**
  * Gets the count of rotation keys for a server (excluding main key pointer).
  *
- * @param serverId - The internal server ID
  * @returns The count of additional rotation keys (not including main key pointer)
  */
 export async function getRotationKeyCount(serverId: number): Promise<number> {
@@ -468,7 +453,6 @@ export async function getRotationKeyCount(serverId: number): Promise<number> {
  * Gets all rotation keys for a server (for loading into TomoriState).
  * JOINs runtime state so the returned rows include usage/error telemetry.
  *
- * @param serverId - The internal server ID
  * @returns Array of validated ApiKeyRotationRow objects
  */
 export async function loadRotationKeys(serverId: number): Promise<ApiKeyRotationRow[]> {
@@ -490,7 +474,6 @@ export async function loadRotationKeys(serverId: number): Promise<ApiKeyRotation
       return [];
     }
 
-    // Validate each row
     const validatedKeys: ApiKeyRotationRow[] = [];
     for (const row of rows) {
       const parsed = apiKeyRotationSchema.safeParse(row);
@@ -513,7 +496,6 @@ export async function loadRotationKeys(serverId: number): Promise<ApiKeyRotation
  * Checks if API key rotation is active for a server.
  * Rotation is active when there are 2+ keys in the pool (main pointer + at least 1 rotation key).
  *
- * @param serverId - The internal server ID
  * @returns True if rotation is active
  */
 export async function isRotationActive(serverId: number): Promise<boolean> {

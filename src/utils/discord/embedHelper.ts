@@ -41,8 +41,6 @@ export const SUPPORT_SERVER_TIP_KEY = "genai.tips.support_server";
 /**
  * Truncates text so it fits within Discord's embed description limit, optionally reserving
  * space for other content that shares the same description (e.g. a headline above the detail).
- * @param value - The text to fit into the description.
- * @param reservedChars - Characters already consumed by other description content.
  * @returns The value, truncated with a trailing ellipsis when it would otherwise overflow.
  */
 export function truncateForEmbedDescription(value: string, reservedChars = 0): string {
@@ -74,7 +72,6 @@ function canUseWebhookForChannel(
 /**
  * Truncates a field value to Discord's maximum allowed length.
  * Adds ellipsis if truncation occurs.
- * @param value - The field value to truncate
  * @returns Truncated value that fits within Discord's limits
  */
 function truncateFieldValue(value: string): string {
@@ -89,8 +86,6 @@ function truncateFieldValue(value: string): string {
  * Creates a standard info embed for non-interaction contexts.
  * This is a low-level utility - prefer using sendStandardEmbed for consistency.
  * @param locale - The locale to use for strings
- * @param options - Configuration for the embed
- * @returns EmbedBuilder instance
  */
 export function createStandardEmbed(locale: string, options: StandardEmbedOptions): EmbedBuilder {
   const {
@@ -252,10 +247,7 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
 /**
  * Shows a standard embed in a text channel. This follows the pattern of interactionHelpers
  * by handling the sending of the embed directly.
- * @param channel - The channel to send the embed to
  * @param locale - The locale to use for strings
- * @param options - Configuration for the embed
- * @returns Promise<void>
  */
 export async function sendStandardEmbed(
   channel: TextChannel | NewsChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel,
@@ -302,9 +294,6 @@ const TRANSLATION_TIMEOUT = 90000;
 /**
  * Creates an embed with translation buttons that cycle between different translations.
  * Returns a promise that resolves when the buttons are disabled (timeout or all providers shown).
- * @param message - The message to reply to
- * @param options - Configuration for the translation embed
- * @returns Promise<void>
  */
 export async function sendTranslationEmbed(message: Message, options: TranslationEmbedOptions): Promise<void> {
   const { translations, initialProvider = TranslationProvider.GOOGLE, timeout = TRANSLATION_TIMEOUT } = options;

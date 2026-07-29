@@ -11,8 +11,6 @@ import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 // module mocks (which are process-wide in Bun and leak into later test files).
 const CLIENT = {} as Client;
 
-// ─── convertMentions — identityMacroMode ─────────────────────────────────────
-
 describe("convertMentions — identityMacroMode", () => {
   it("resolves identity macros by default", async () => {
     const result = await convertMentions("{bot} greets {user}", CLIENT, "guild-1", "Alice", "Tomori");
@@ -67,8 +65,6 @@ describe("convertMentions — identityMacroMode", () => {
     expect(result).toContain("{bot}");
   });
 });
-
-// ─── appendDialogueHistoryContext — prefix vs body ───────────────────────────
 
 function makeConfig(): AssembledServerConfig {
   return {
@@ -159,8 +155,6 @@ describe("appendDialogueHistoryContext — identity macros in message bodies", (
     expect(text.startsWith("Alice: ")).toBe(true);
   });
 });
-
-// ─── buildSampleDialogueContextItems — macros must STILL resolve ─────────────
 
 // Sample dialogues are authored content stored once and rendered per turn, so they keep the
 // default "resolve" mode. They sit next to dialogue history in the assembled prompt but take a

@@ -60,12 +60,10 @@ export async function loadEmojiStickerCache(
   emojis: ServerEmojiRow[] | null;
   stickers: ServerStickerRow[] | null;
 }> {
-  // Check if features are disabled
   if (!emojiUsageEnabled && !stickerUsageEnabled) {
     return { emojis: null, stickers: null };
   }
 
-  // Check in-memory cache
   const now = Date.now();
   const cachedEntry = cache.get(serverId);
 
@@ -73,7 +71,6 @@ export async function loadEmojiStickerCache(
     // Check if cache is still fresh (< 5 minutes old)
     const cacheAge = now - cachedEntry.cachedAt;
     if (cacheAge < MEMORY_CACHE_DURATION_MS) {
-      // Cache hit - return immediately
       cacheHits++;
       return {
         emojis: emojiUsageEnabled ? cachedEntry.emojis : null,
@@ -96,7 +93,6 @@ export async function loadEmojiStickerCache(
       await lazySyncGuildStickers(guild, serverId);
     }
 
-    // Load fresh data from database
     let emojis: ServerEmojiRow[] | null = null;
     let stickers: ServerStickerRow[] | null = null;
 
@@ -105,11 +101,9 @@ export async function loadEmojiStickerCache(
     }
 
     if (stickerUsageEnabled) {
-      // Load stickers from database via repository
       stickers = await serverRepository.loadStickersByInternalId(serverId);
     }
 
-    // Cache the loaded data
     cache.set(serverId, {
       emojis: emojis || [],
       stickers: stickers || [],
@@ -129,7 +123,6 @@ export async function loadEmojiStickerCache(
       };
     }
 
-    // No cache available, return null
     return { emojis: null, stickers: null };
   }
 }

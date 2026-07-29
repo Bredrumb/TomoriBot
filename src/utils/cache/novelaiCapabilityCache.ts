@@ -41,7 +41,6 @@ const NAI_KAYRA_CHARS_PER_TOKEN = Number.parseFloat(process.env.NAI_KAYRA_CHARS_
  *   = floor(8042 * 0.875 / 0.9) + 150 ≈ 7_969
  *
  * @param realContextLimit - The actual tier context limit (resolved from tier number)
- * @returns Virtual contextLength for contextTruncator
  */
 export function getKayraVirtualContextLength(realContextLimit: number): number {
   return (
@@ -89,7 +88,6 @@ export function getNovelAITokenLimits(
   subscriptionContextTokens?: number,
 ): ModelTokenLimits | undefined {
   if (modelCodename === "kayra-v1") {
-    // Prefer live subscription data; fall back to env var
     const realLimit = subscriptionContextTokens ?? NAI_KAYRA_CONTEXT_LIMIT_FALLBACK;
     return {
       contextLength: getKayraVirtualContextLength(realLimit),

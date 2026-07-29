@@ -37,10 +37,8 @@ import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExport, PresetExportData } from "../../types/preset/presetExport";
 import type { ModalComponent } from "../../types/discord/modal";
 
-// Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Modal constants
 const MODAL_CUSTOM_ID = "preset_create_modal";
 const CHARACTER_NAME_ID = "character_name";
 const CHARACTER_DESC_ID = "character_desc";
@@ -62,10 +60,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Executes the 'create' command
  * Manual personality creation with simple form input
  *
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param _userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   client: Client,
@@ -88,7 +82,6 @@ export async function execute(
       return;
     }
 
-    // Show modal with creation fields
     const modalComponents: ModalComponent[] = [
       {
         customId: CHARACTER_NAME_ID,
@@ -145,7 +138,6 @@ export async function execute(
       true, // Auto-defer with public reply
     );
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Create modal ${modalResult.outcome}`);
       return;
@@ -158,7 +150,6 @@ export async function execute(
     const exampleUser = modalResult.values?.[EXAMPLE_USER_ID];
     const exampleBot = modalResult.values?.[EXAMPLE_BOT_ID];
 
-    // Safety checks (only character name and description are required)
     if (!modalSubmitInteraction || !characterNameInput || !characterDesc) {
       log.error("Modal result unexpectedly missing required values");
       return;
@@ -195,7 +186,6 @@ export async function execute(
       return;
     }
 
-    // Validate optional example user dialogue
     if (exampleUser) {
       const userDialogueValidation = validateSampleDialogue(exampleUser);
       if (!userDialogueValidation.isValid) {
@@ -216,7 +206,6 @@ export async function execute(
       }
     }
 
-    // Validate optional example bot dialogue
     if (exampleBot) {
       const botDialogueValidation = validateSampleDialogue(exampleBot);
       if (!botDialogueValidation.isValid) {
@@ -257,12 +246,10 @@ export async function execute(
       return;
     }
 
-    // Get optional image attachment from modal
     const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
     let imageBuffer: Buffer | undefined;
 
     if (imageAttachment) {
-      // Early memory guard check
       const memCheck = memoryGuard.checkMemory();
       if (memCheck.status === "critical") {
         // Preserve modal inputs for user convenience
@@ -271,7 +258,6 @@ export async function execute(
           .setDescription(localizer(locale, "rate_limit.error_memory_critical_description"))
           .setColor(ColorCode.ERROR);
 
-        // Add modal inputs as fields (excluding image)
         const memoryErrorFields = [
           {
             name: localizer(locale, "commands.persona.create.field_character_name"),
@@ -285,7 +271,6 @@ export async function execute(
           },
         ];
 
-        // Only add sample dialogue fields if they were provided
         if (exampleUser) {
           memoryErrorFields.push({
             name: localizer(locale, "commands.persona.create.field_example_user"),
@@ -309,7 +294,6 @@ export async function execute(
         return;
       }
 
-      // Validate image type
       if (!imageAttachment.content_type?.startsWith("image/")) {
         await modalSubmitInteraction.editReply({
           embeds: [
@@ -322,7 +306,6 @@ export async function execute(
         return;
       }
 
-      // Download image with safeDownload
       const downloadResult = await safeDownload(imageAttachment.url, {
         maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
         timeoutMs: 10000,
@@ -330,7 +313,6 @@ export async function execute(
       });
 
       if (!downloadResult.success) {
-        // Handle different error types with localized messages
         let errorKey: string;
         if (downloadResult.error === "size_exceeded") {
           errorKey = "commands.persona.create.error_file_too_large";
@@ -358,8 +340,6 @@ export async function execute(
       log.info("Image attachment downloaded successfully");
     }
 
-    // Create minimal preset data structure
-    // Only include sample dialogues if BOTH fields have content
     const hasSampleDialogue = exampleUser?.trim() && exampleBot?.trim();
 
     const presetData: PresetExportData = {
@@ -373,15 +353,12 @@ export async function execute(
       trigger_words: parsedNames,
     };
 
-    // Validate preset data against schema
     const validationResult = presetExportDataSchema.safeParse(presetData);
     if (!validationResult.success) {
-      // Log detailed validation errors
       log.error("Created preset failed validation:");
       log.error("Validation errors:", JSON.stringify(validationResult.error.format(), null, 2));
       log.error("Preset data:", JSON.stringify(presetData, null, 2));
 
-      // Extract specific error messages for user
       const errorDetails = validationResult.error.issues
         .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("\n");
@@ -408,7 +385,6 @@ export async function execute(
     let pngBuffer: Buffer;
 
     if (imageBuffer) {
-      // Use uploaded image
       try {
         pngBuffer = await centerCropToSquare(imageBuffer);
         log.info("Uploaded image cropped to 1:1 square");
@@ -444,7 +420,6 @@ export async function execute(
       }
     }
 
-    // Create preset export structure with metadata
     const presetExport: PresetExport = {
       version: PRESET_EXPORT_VERSION,
       type: "preset",
@@ -452,7 +427,6 @@ export async function execute(
       data: presetData,
     };
 
-    // Embed metadata in PNG
     let finalPngBuffer: Buffer;
     try {
       finalPngBuffer = await embedMetadataInPNG(pngBuffer, presetExport);
@@ -470,7 +444,6 @@ export async function execute(
       return;
     }
 
-    // Create attachment
     const sanitizedNickname = sanitizeAttachmentFilenamePart(characterName, {
       fallback: "persona",
       maxLength: 50,
@@ -485,13 +458,10 @@ export async function execute(
     //     assemble the Components V2 result container.
     const isDM = !interaction.guild;
 
-    // Truncate description for the container body.
     const descriptionPreview = characterDesc.length > 200 ? `${characterDesc.substring(0, 200)}...` : characterDesc;
 
-    // Build content sections: sample dialogue (when provided) followed by next steps.
     const sections: NonNullable<PersonaResultContainerOptions["sections"]> = [];
     if (hasSampleDialogue && exampleUser && exampleBot) {
-      // Truncate dialogue examples if too long.
       const userPreview = exampleUser.length > 100 ? `${exampleUser.substring(0, 100)}...` : exampleUser;
       const botPreview = exampleBot.length > 100 ? `${exampleBot.substring(0, 100)}...` : exampleBot;
       sections.push({
@@ -522,7 +492,6 @@ export async function execute(
       layout: "thumbnail-section",
       sections,
       buttonAlignment: "right",
-      // Closing note sits on its own row below the button.
       trailingNoteKey: "commands.persona.create.success_next_steps_footer",
       ...(isDM ? { footerKey: "commands.persona.create.avatar_update_skipped_dm" } : {}),
     };
@@ -547,7 +516,6 @@ export async function execute(
       });
       replyUsesComponentsV2 = true;
 
-      // Wire the Import Now collector to the just-sent public message.
       const sentMessage = await modalSubmitInteraction.fetchReply();
       attachImportNowCollector({
         message: sentMessage,
@@ -568,7 +536,6 @@ export async function execute(
     log.error("Error in preset create command:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
-    // Try to send an error response if possible.
     try {
       const errorEmbed = new EmbedBuilder()
         .setTitle(localizer(locale, "general.errors.unexpected_title"))
@@ -597,7 +564,6 @@ export async function execute(
         });
       }
     } catch {
-      // If we can't send the error embed, just log it
       log.error("Failed to send error embed");
     }
   }

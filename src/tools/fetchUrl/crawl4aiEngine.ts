@@ -111,7 +111,6 @@ export class Crawl4aiEngine implements FetchEngine {
         };
       }
 
-      // Initial fetch with no content: let the dispatcher fall through to the next engine.
       return {
         success: false,
         error: "Crawl4AI returned no readable content",

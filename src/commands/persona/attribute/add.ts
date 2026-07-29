@@ -12,27 +12,20 @@ import { getMemoryLimits, validateAttribute } from "@/utils/misc/memoryLimits";
 
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
-// Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Constants (Modal IDs, Input IDs)
 const MODAL_CUSTOM_ID = "teach_attribute_add_modal";
 const PERSONA_SELECT_ID = "persona_select";
 const ATTRIBUTE_INPUT_ID = "attribute_input";
 const ATTRIBUTE_FILE_UPLOAD_ID = "attribute_file_upload";
 const ATTRIBUTE_PUBLIC_ID = "attribute_public";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.persona.attribute.add.description"));
 
 /**
  * JSDoc comment for exported function
  * Adds a personality attribute to Tomori's memory for the server.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -51,7 +44,6 @@ export async function execute(
     return;
   }
 
-  // Define state and modal result outside try for catch block
   let tomoriState: TomoriState | null = null;
   let selectedPersona: TomoriState | null = null;
   let modalResult: ModalResult | null = null;
@@ -75,10 +67,8 @@ export async function execute(
       }
     }
 
-    // Load server's Tomori state
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
 
-    // Check if Tomori is set up
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -89,7 +79,6 @@ export async function execute(
       return;
     }
 
-    // Resolve target persona options
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.persona_id !== undefined)
@@ -163,18 +152,14 @@ export async function execute(
       ],
     });
 
-    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Attribute add modal ${modalResult.outcome} for user ${userData.user_id}`);
-      // promptWithRawModal handles cancel/timeout replies
       return;
     }
 
-    // Capture the ModalSubmitInteraction
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' guarantees interaction
     const modalSubmitInteraction = modalResult.interaction!;
 
-    // Resolve selected persona + attribute input
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' + required persona select guarantees value
     const selectedPersonaId = modalResult.values![PERSONA_SELECT_ID];
     selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
@@ -234,7 +219,6 @@ export async function execute(
 
     const dedupedAttributes = dedupeCaseInsensitive(pendingAttributes);
 
-    // Validate each attribute length
     for (const attribute of dedupedAttributes) {
       const attributeValidation = validateAttribute(attribute);
       if (!attributeValidation.isValid) {
@@ -251,12 +235,10 @@ export async function execute(
       }
     }
 
-    // Prepare updated array from selected persona
     const currentAttributes = selectedPersona.attribute_list || [];
     const existingAttributes = new Set(currentAttributes.map((attribute) => attribute.trim().toLowerCase()));
     const attributesToAdd = dedupedAttributes.filter((attribute) => !existingAttributes.has(attribute.toLowerCase()));
 
-    // Check for duplicates before adding
     if (attributesToAdd.length === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.teach.attribute.duplicate_title",
@@ -267,7 +249,6 @@ export async function execute(
       return;
     }
 
-    // Check limit against final import size
     const attributeLimitCheck = await personaRepository.checkAttributeLimit(selectedPersona.persona_id);
     const currentCount = attributeLimitCheck.currentCount ?? currentAttributes.length;
     const maxAllowed = attributeLimitCheck.maxAllowed ?? memoryLimits.maxAttributes;
@@ -298,7 +279,6 @@ export async function execute(
       return;
     }
 
-    // Update target persona row in the database
     const ok = await personaRepository.addAttributes(selectedPersona.persona_id, attributesToAdd, isPublicAttribute);
 
     if (!ok) {
@@ -313,7 +293,6 @@ export async function execute(
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // Success! Confirm addition
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey:
         attributesToAdd.length > 1 || uploadedTextFile
@@ -346,7 +325,6 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id, // Use optional chaining as tomoriState might be null if error happened early
@@ -360,8 +338,6 @@ export async function execute(
     };
     await log.error("Error in /teach attribute command", error, context);
 
-    // Reply with unknown error embed
-    // Determine which interaction to use
     const errorReplyInteraction =
       modalResult?.interaction ?? // Prefer modal interaction
       (interaction.replied || interaction.deferred ? interaction : null); // Fallback
@@ -371,7 +347,6 @@ export async function execute(
         titleKey: "general.errors.unknown_error_title",
         descriptionKey: "general.errors.unknown_error_description",
         color: ColorCode.ERROR,
-        // No flags needed
       });
     } else {
       log.warn(

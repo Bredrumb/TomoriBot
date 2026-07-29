@@ -121,9 +121,7 @@ interface OpenrouterStreamChunk {
       // biome-ignore lint/suspicious/noExplicitAny: reasoningDetails has complex nested structure that varies by provider
       reasoningDetails?: any[];
     };
-    // OpenRouter SDK uses camelCase finishReason, not snake_case finish_reason!
     finishReason?: string | null;
-    // OpenAI-style snake_case finish reason (raw OpenRouter API)
     finish_reason?: string | null;
     logprobs?: unknown | null;
   }>;
@@ -179,10 +177,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
     ContextItemTag.KNOWLEDGE_SERVER_STICKERS, // Text-based with semantic metadata (deterministic ordering)
     ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-    // REMOVED: KNOWLEDGE_USER_MEMORIES, KNOWLEDGE_CURRENT_CONTEXT (now in KNOWLEDGE_USERS_IN_CONVERSATION)
   ];
 
-  // Accumulator for tool calls across streaming chunks (per-stream instance)
   private toolCallAccumulator: Map<number, AccumulatedToolCall> = new Map();
 
   // Accumulator for reasoning_details across streaming chunks (required for Gemini models)
@@ -406,7 +402,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info("OpenrouterStreamAdapter: Initializing OpenRouter streaming");
 
-    // Reset accumulators for this stream
     this.toolCallAccumulator.clear();
     this.reasoningDetailsAccumulator = [];
     this.speakerGuardPendingTail = "";
@@ -429,7 +424,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     // Cast config to OpenrouterStreamConfig to access provider-specific fields
     const openrouterConfig = config as OpenrouterStreamConfig;
 
-    // Assemble context for OpenAI message format
     const messages = await this.assembleOpenrouterContext(
       context.contextItems,
       context.currentTurnModelParts,
@@ -447,7 +441,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
     log.info(`Generating content with model ${config.model}`);
 
-    // Log tools FIRST (before conversation history for better readability)
     if (config.tools && Array.isArray(config.tools) && config.tools.length > 0) {
       log.info(`Tools:\n${JSON.stringify(config.tools, null, 2)}`);
     }
@@ -475,7 +468,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       });
       let stopParamSupported = false;
 
-      // Build request body (OpenAI-compatible)
       const requestBody: Record<string, unknown> = {
         model: config.model,
         messages,
@@ -527,19 +519,15 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           // Rough input token estimate from textual message content
           const estimatedInputTokens = this.estimateInputTokensForSafetyCap(messages);
           const remainingContextTokens = tokenLimits.contextLength - estimatedInputTokens;
-          // Budget = safety-factor of remaining context after input
           const rawSafeOutputBudget = Math.floor(remainingContextTokens * outputSafetyFactor);
           let safeOutputBudget = Math.max(1, rawSafeOutputBudget);
           let minOutputFloorApplied = false;
 
-          // If margin makes output too small, lift to min floor when the
-          // remaining context can still fit it.
           if (safeOutputBudget < minOutputTokensFloor && remainingContextTokens >= minOutputTokensFloor) {
             safeOutputBudget = minOutputTokensFloor;
             minOutputFloorApplied = true;
           }
 
-          // Cap max output to whichever is smaller: model limit or safe budget
           if (safeOutputBudget < effectiveMaxOutputTokens) {
             log.warn(
               `Context-window safety cap applied for ${config.model}: ` +
@@ -660,7 +648,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         `Sampling params - temp: ${effectiveTemperatureLabel}, top_p: ${openrouterConfig.topP ?? "default"}, top_k: ${openrouterConfig.topK ?? "default"}, freq_penalty: ${openrouterConfig.frequencyPenalty ?? "default"}, pres_penalty: ${openrouterConfig.presencePenalty ?? "default"}, rep_penalty: ${openrouterConfig.repetitionPenalty ?? "default"}, min_p: ${openrouterConfig.minP ?? "default"}, logit_bias: ${Object.keys(openrouterConfig.logitBias ?? {}).length}`,
       );
 
-      // Build headers
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
@@ -1078,8 +1065,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
    * ThoughtLogEntry rather than visible prose.
    *
    * Includes the same two safeguards as the OpenAI-compatible adapter:
-   *   1. Stray `</think>` with no opener routes preceding text to thoughts (not content).
-   *   2. Persona speaker label (e.g. "Nerine:") at a line boundary acts as an implicit
+   *   - Stray `</think>` with no opener routes preceding text to thoughts (not content).
+   *   - Persona speaker label (e.g. "Nerine:") at a line boundary acts as an implicit
    *      `</think>` when the model fails to close cleanly.
    */
   private stripThinkBlocksFromChunkContent(chunk: OpenrouterStreamChunk): OpenrouterStreamChunk {
@@ -1399,7 +1386,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
     const rawObj = raw as Record<string, unknown>;
 
-    // Some wrappers may include a `data` field that contains the real payload
     if ("data" in rawObj) {
       const dataValue = rawObj.data;
       if (typeof dataValue === "string") {
@@ -1414,7 +1400,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Handle error-only payloads
     if (rawObj.error && typeof rawObj.error === "object") {
       const errorObj = rawObj.error as Record<string, unknown>;
 
@@ -1440,7 +1425,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Handle flat error payloads (non-standard)
     if (typeof rawObj.message === "string" && ("code" in rawObj || "type" in rawObj)) {
       const codeValue = rawObj.code as string | number | undefined;
       return {
@@ -1578,7 +1562,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       this.servingProvider ??= openrouterChunk.provider.trim();
     }
 
-    // Handle errors first (both pre-stream and mid-stream errors)
     if ("error" in openrouterChunk && openrouterChunk.error) {
       const providerErrorCandidate = openrouterChunk.error as ProviderError;
       if (typeof providerErrorCandidate.type === "string" && typeof providerErrorCandidate.retryable === "boolean") {
@@ -1602,7 +1585,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           errorMessage.includes("expected string") ||
           errorMessage.includes("invalid_type"));
 
-      // Check if we have accumulated tool call data (indicates this was a tool call attempt)
       const hasPartialToolCall = this.toolCallAccumulator.size > 0;
 
       if (isMalformedToolCallError && hasPartialToolCall) {
@@ -1615,7 +1597,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             `Error: ${errorMessage}`,
         );
 
-        // Clear the invalid tool call accumulator
         this.toolCallAccumulator.clear();
         this.reasoningDetailsAccumulator = [];
 
@@ -1649,7 +1630,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
     const choice = openrouterChunk.choices?.[0];
     if (!choice) {
-      // Empty chunk, likely keepalive
       return {
         type: "text",
         content: "",
@@ -1677,7 +1657,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         `Choice - finishReason: ${finishReason}, has delta: ${!!choice.delta}, delta.content: ${!!choice.delta?.content}, delta.toolCalls: ${!!deltaToolCalls}`,
       );
 
-    // Check for finishReason "error" (mid-stream error in unified format)
     if (finishReason === "error") {
       return {
         type: "error",
@@ -1690,7 +1669,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Check for usage stats (final chunk)
     const metadata: Record<string, unknown> = {};
     if (openrouterChunk.usage) {
       const usage = openrouterChunk.usage;
@@ -1717,7 +1695,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         for (const deltaToolCall of deltaToolCalls) {
           const index = deltaToolCall.index ?? 0;
 
-          // Get or create accumulator for this tool call index
           let accumulated = this.toolCallAccumulator.get(index);
           if (!accumulated) {
             accumulated = {
@@ -1730,7 +1707,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           // Log raw deltaToolCall for debugging
           log.info(`OpenRouter: Raw deltaToolCall [${index}]: ${JSON.stringify(deltaToolCall)}`);
 
-          // Accumulate id, type, and thought_signature (usually only in first chunk)
           if (deltaToolCall.id) {
             accumulated.id = deltaToolCall.id;
             log.info(`OpenRouter: Captured tool call id: ${deltaToolCall.id}`);
@@ -1746,7 +1722,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             log.info(`OpenRouter: ✗ No thought_signature in deltaToolCall [${index}]`);
           }
 
-          // Accumulate function name and arguments
           if (deltaToolCall.function) {
             if (deltaToolCall.function.name) {
               accumulated.functionName += deltaToolCall.function.name;
@@ -1774,12 +1749,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
       log.info("OpenRouter: finish_reason is 'tool_calls' - parsing accumulated tool calls");
 
-      // Get the first accumulated tool call (we only support one at a time currently)
       const accumulated = this.toolCallAccumulator.get(0);
 
       if (!accumulated?.functionName) {
         log.warn("OpenRouter: finish_reason is 'tool_calls' but no tool call was accumulated!");
-        // Return done to avoid infinite retry
         return {
           type: "done",
           thoughts: thoughts.length > 0 ? thoughts : undefined,
@@ -1792,7 +1765,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         `OpenRouter: Accumulated state - id: ${accumulated.id}, type: ${accumulated.type}, thought_signature: ${accumulated.thought_signature || "NONE"}, name: ${accumulated.functionName}`,
       );
 
-      // Parse the accumulated arguments JSON
       let parsedArgs: Record<string, unknown> = {};
       if (accumulated.functionArguments) {
         try {
@@ -1803,7 +1775,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             `OpenRouter: Failed to parse accumulated arguments as JSON: "${accumulated.functionArguments}"`,
             parseError,
           );
-          // Continue with empty args rather than failing
         }
       }
 
@@ -1833,7 +1804,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         `OpenRouter: Returning function_call - name: "${functionCall.name}", args: ${JSON.stringify(functionCall.args)}`,
       );
 
-      // Clear accumulators for next stream
       this.toolCallAccumulator.clear();
       this.reasoningDetailsAccumulator = [];
 
@@ -1845,7 +1815,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Handle finishReason "stop" (normal completion)
     if (finishReason === "stop") {
       // Google models via OpenRouter commonly bundle the last text fragment with
       // the stop signal in a single chunk. Flush that content as a text chunk first;
@@ -1914,7 +1883,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       for (const deltaToolCall of deltaToolCalls) {
         const index = deltaToolCall.index ?? 0;
 
-        // Get or create accumulator for this tool call index
         let accumulated = this.toolCallAccumulator.get(index);
         if (!accumulated) {
           accumulated = {
@@ -1927,7 +1895,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         // Log raw deltaToolCall for debugging (intermediate chunks)
         log.info(`OpenRouter: [INTERMEDIATE] Raw deltaToolCall [${index}]: ${JSON.stringify(deltaToolCall)}`);
 
-        // Accumulate id, type, and thought_signature (usually only in first chunk)
         if (deltaToolCall.id) {
           accumulated.id = deltaToolCall.id;
           log.info(`OpenRouter: [INTERMEDIATE] Captured id: ${deltaToolCall.id}`);
@@ -1943,7 +1910,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           log.info(`OpenRouter: [INTERMEDIATE] ✗ No thought_signature in this chunk`);
         }
 
-        // Accumulate function name and arguments
         if (deltaToolCall.function) {
           if (deltaToolCall.function.name) {
             accumulated.functionName += deltaToolCall.function.name;
@@ -1973,7 +1939,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     const reasoningDetails = choice.delta?.reasoning_details ?? choice.delta?.reasoningDetails;
     if (reasoningDetails && reasoningDetails.length > 0) {
       this.reasoningDetailsAccumulator.push(...reasoningDetails);
-      // Return empty text to continue processing
       return {
         type: "text",
         content: "",
@@ -1982,7 +1947,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Check for text content
     if (choice.delta?.content) {
       return {
         type: "text",
@@ -1993,7 +1957,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Default: empty chunk (keepalive or incomplete data)
     return {
       type: "text",
       content: "",
@@ -2097,7 +2060,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         errorCode = String(errorObj.statusCode);
       }
 
-      // Check for error.code or data$.error.code
       if (!errorCode && errorObj.error && typeof errorObj.error === "object") {
         const errorField = errorObj.error as Record<string, unknown>;
         if (errorField.code) {
@@ -2118,7 +2080,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         }
       }
 
-      // Try to parse body field
       if (errorObj.body && typeof errorObj.body === "string") {
         try {
           const bodyParsed = JSON.parse(errorObj.body) as {
@@ -2141,13 +2102,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           if (!extractedMessage && bodyParsed.message) {
             extractedMessage = bodyParsed.message;
           }
-        } catch {
-          // Ignore body parsing errors
-        }
+        } catch {}
       }
     }
 
-    // Extract HTTP status code from error message if present
     if (!errorCode) {
       const httpMatch = errorMessage.match(/HTTP\s+(\d{3})/i);
       if (httpMatch) {
@@ -2170,9 +2128,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             }
           }
         }
-      } catch {
-        // Ignore parsing errors
-      }
+      } catch {}
     }
 
     const finalMessage = String(extractedMessage || errorMessage || "Unknown error");
@@ -2219,7 +2175,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       return localizer(locale, "genai.openrouter.404_privacy_policy_error");
     }
 
-    // Special case: Free model rate limit error
     if (
       error.message?.includes("free-models-per-day") ||
       error.message?.includes("unlock 1000 free model requests per day")
@@ -2247,11 +2202,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           messageKey = "408_default_message";
           break;
         case "provider_overloaded":
-          // Could be 502 or 503
           messageKey = errorCode === "502" ? "502_default_message" : "503_default_message";
           break;
         case "api_error":
-          // Use the specific error code if available
           messageKey = `${errorCode}_default_message`;
           break;
         default:
@@ -2259,7 +2212,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           break;
       }
 
-      // Try to get the specific error message
       const localeKey = `genai.openrouter.${messageKey}`;
       openrouterMessage = localizer(locale, localeKey);
 
@@ -2310,9 +2262,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     const relocatedContextItems = relocateAssistantMediaContextItems(contextItems);
     const systemInstructionParts: string[] = [];
 
-    // Process context items following StructuredContextItem format
     for (const item of relocatedContextItems) {
-      // Extract text from parts array
       let itemTextContent = "";
       if (item.parts.some((p) => p.type === "text")) {
         itemTextContent = item.parts
@@ -2321,7 +2271,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           .join("\n");
       }
 
-      // Check if this should be system instruction
       if (
         item.role === "system" ||
         (item.role === "user" &&
@@ -2340,7 +2289,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         const pendingBotImageParts: Array<Record<string, unknown>> = [];
         const contentParts: Array<Record<string, unknown>> = [];
 
-        // Process parts array
         for (const part of item.parts) {
           if (part.type === "text") {
             contentParts.push({
@@ -2363,7 +2311,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               continue;
             }
 
-            // Priority 1: Check for inlineData (e.g., from peekProfilePicture tool)
             if ("inlineData" in part && part.inlineData) {
               try {
                 const inlineData = part.inlineData as {
@@ -2371,14 +2318,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   data: string;
                 };
 
-                // Validate inlineData structure
                 if (typeof inlineData === "object" && inlineData.mimeType && inlineData.data) {
-                  // Check if this is a GIF - handle based on environment
                   if (inlineData.mimeType === "image/gif") {
                     const isProduction = process.env.RUN_ENV === "production";
 
                     if (isProduction) {
-                      // Production: Replace with text placeholder (memory protection)
                       contentParts.push({
                         type: "text",
                         text: "[System: This context contains inline GIF data. GIF processing disabled in production.]",
@@ -2403,8 +2347,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                       );
                     }
                   } else {
-                    // Regular image processing (non-GIF)
-                    // Convert inlineData to OpenAI format
                     imageTargetParts.push({
                       type: "image_url",
                       image_url: {
@@ -2425,15 +2367,12 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               continue; // Skip to next part after handling inlineData
             }
 
-            // Priority 2 & 3: Handle URI-based images (data URI or fetch)
             if (part.uri && part.mimeType) {
               try {
                 let base64ImageData: string;
                 let finalMimeType = part.mimeType;
 
-                // Check if URI is already a data URI
                 if (part.uri.startsWith("data:")) {
-                  // Parse data URI format: data:image/jpeg;base64,xyz
                   const dataUriMatch = part.uri.match(/^data:([^;]+);base64,(.+)$/);
                   if (dataUriMatch) {
                     finalMimeType = dataUriMatch[1];
@@ -2445,8 +2384,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                     continue;
                   }
                 } else {
-                  // Fetch from HTTP(S) URI
-                  // Check if this is a GIF - handle based on environment
                   if (part.mimeType === "image/gif") {
                     const isProduction = process.env.RUN_ENV === "production";
 
@@ -2454,7 +2391,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                       // Production: Replace with text placeholder
                       // Check if this is a Tenor link (has descriptive slug)
                       if (part.uri.includes("tenor.com")) {
-                        // Keep Tenor link intact for context (descriptive slug)
                         contentParts.push({
                           type: "text",
                           text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production.]`,
@@ -2488,7 +2424,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                     continue; // Skip adding the GIF as an image
                   }
 
-                  // Regular image processing (non-GIF) — optimize oversized images
                   const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
                   base64ImageData = optimized.data;
                   finalMimeType = optimized.mimeType;
@@ -2496,7 +2431,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   log.success(`Successfully fetched image: ${part.uri}`);
                 }
 
-                // Add image as OpenAI format
                 imageTargetParts.push({
                   type: "image_url",
                   image_url: {
@@ -2571,7 +2505,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           }
         }
 
-        // Add message
         if (contentParts.length > 0 || pendingBotImageParts.length > 0) {
           // OpenRouter only accepts plain-text content on assistant turns. Extract text
           // parts; images were already staged in pendingBotImageParts above.
@@ -2626,18 +2559,15 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Build system message from system instruction parts
     if (systemInstructionParts.length > 0) {
       const systemContent = systemInstructionParts.join("\n\n");
       messages.unshift({
-        // Add at beginning
         role: "system",
         content: systemContent,
       });
       log.info(`Assembled system message. Length: ${systemContent.length} characters`);
     }
 
-    // Add function interaction history if present
     if (functionInteractionHistory && functionInteractionHistory.length > 0) {
       for (const interaction of functionInteractionHistory) {
         // Generate a tool call ID since our generic FunctionCall doesn't have one
@@ -2710,7 +2640,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           );
         }
 
-        // Add assistant message to messages array
         messages.push(assistantMessage);
 
         // Add tool response
@@ -2737,7 +2666,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             }
             const sourceUrl = img.originalUrl || img.url;
 
-            // Prefer direct URL; fall back to data URL if already provided
             responseParts.push({
               type: "image_url",
               image_url: {
@@ -2757,7 +2685,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         }
 
         if (responseParts.length > 0) {
-          // Add a follow-up user message carrying images for model visibility.
           messages.push({
             role: "user",
             content: responseParts,
@@ -2766,7 +2693,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Append current turn model parts as final assistant message (prefill)
     if (currentTurnModelParts.length > 0) {
       const prefillText = currentTurnModelParts
         .map((part) => (part as { text?: string }).text)

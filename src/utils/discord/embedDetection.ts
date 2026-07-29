@@ -16,7 +16,6 @@ import { localizer, getSupportedLocales } from "@/utils/text/localizer";
  * - `commands.tool.compact.summary_title_refreshed` (compact summary refresh)
  * - `commands.tool.compact.roleplay_scene_title_refreshed` (compact scene refresh)
  *
- * @param embed - A Discord embed to check
  * @returns True if the embed is a refresh/reset marker
  */
 export function isRefreshMarkerEmbed(embed: Embed): boolean {
@@ -47,7 +46,6 @@ export function isRefreshMarkerEmbed(embed: Embed): boolean {
 /**
  * Checks whether any embed in an array is a refresh marker.
  *
- * @param embeds - Array of Discord embeds from a message
  * @returns True if at least one embed is a refresh/reset marker
  */
 export function messageContainsRefreshMarker(embeds: Embed[]): boolean {
@@ -60,7 +58,6 @@ export function messageContainsRefreshMarker(embeds: Embed[]): boolean {
  * history: plain resets drop the marker itself, compact-refreshes keep it
  * (since the compact summary IS the new conversation opener).
  *
- * @param embed - A Discord embed to classify
  * @returns "compact_refresh" if the embed is a compact-summary refresh marker,
  *          "reset" if it's a plain `/refresh` marker, null otherwise
  */

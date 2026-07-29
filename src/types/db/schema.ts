@@ -613,8 +613,6 @@ export const autochatPersonaOverrideSchema = z.object({
 });
 export type AutochatPersonaOverride = z.infer<typeof autochatPersonaOverrideSchema>;
 
-// ── Split Config Tables (Phase 6 / Stage A & B) ──────────────────────────
-
 export const userPersonalizationConfigsSchema = z.object({
   user_id: z.number().int(),
   shortterm_cache_crossserver_opt_in: z.boolean().default(false),
@@ -883,7 +881,6 @@ export const assembledServerConfigSchema = serverModelConfigSchema
         .nullable()
         .optional(),
     ),
-    // Welcome fields live in server_welcome_configs (not part of the 13-schema merge).
     welcome_channel_disc_id: z.string().nullable().optional(),
     welcome_prompt: z.string().nullable().optional(),
     welcome_persona_id: z.number().int().nullable().optional(),
@@ -1222,16 +1219,13 @@ export type PersonalSpotlightPersonaRow = z.infer<typeof personalSpotlightPerson
 
 export const errorLogSchema = z.object({
   error_log_id: z.number().optional(), // Primary key, optional as it's generated
-  // Context IDs - Optional because errors can occur outside specific contexts
   persona_id: z.number().nullable().optional(),
   user_id: z.number().nullable().optional(),
   server_id: z.number().nullable().optional(),
-  // Error Details
   error_type: z.string().default("GenericError"), // Categorize the error, default if not specified
   error_message: z.string(), // The main error message, required
   stack_trace: z.string().nullable().optional(), // Dedicated field for stack trace, optional
   error_metadata: z.record(z.string(), z.unknown()).nullable().optional().default({}), // Flexible JSON for extra context, optional
-  // Timestamps
   created_at: z.date().optional(), // Handled by DB default
   updated_at: z.date().optional(), // Handled by DB default/trigger
 });

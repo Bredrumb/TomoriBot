@@ -27,7 +27,6 @@ const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
  * @param channelDiscId - Discord channel ID (snowflake)
  * @param memberRoleDiscIds - Optional member role IDs used for role-whitelist checks
  * @param parentChannelDiscId - Optional parent channel ID for threads
- * @returns Cache key string
  */
 function getCacheKey(
   serverDiscId: string,
@@ -51,7 +50,6 @@ function getCacheKey(
  * @param channelDiscId - Discord channel ID (snowflake)
  * @param memberRoleDiscIds - Optional member role IDs used for role-whitelist checks
  * @param parentChannelDiscId - Optional parent channel ID for threads; threads inherit whitelist from parent
- * @returns WhitelistCheckResult with channel/role gating, persona allowlist metadata,
  * and any channel-specific cooldown settings
  */
 export async function getCachedWhitelistStatus(
@@ -63,14 +61,12 @@ export async function getCachedWhitelistStatus(
   const cacheKey = getCacheKey(serverDiscId, channelDiscId, memberRoleDiscIds, parentChannelDiscId);
   const now = Date.now();
 
-  // Check cache first
   const cached = whitelistCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
     cacheHits++;
     return cached.result;
   }
 
-  // Cache miss - fetch from database
   cacheMisses++;
 
   const result = await whitelistRepository.checkChannelWhitelist(
@@ -80,7 +76,6 @@ export async function getCachedWhitelistStatus(
     parentChannelDiscId,
   );
 
-  // Store in cache
   whitelistCache.set(cacheKey, {
     result,
     expiresAt: now + CACHE_TTL_MS,
@@ -107,7 +102,6 @@ export function invalidateWhitelistCache(serverDiscId: string, channelDiscId?: s
 
 /**
  * Get cache statistics for monitoring
- * @returns Object with cache stats (hits, misses, hit rate, size)
  */
 export function getWhitelistCacheStats(): {
   hits: number;

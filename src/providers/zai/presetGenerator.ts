@@ -57,8 +57,6 @@ function buildZaiPresetSystemPrompt(): string {
 /**
  * Generate preset data from user prompts using the Z.ai API.
  *
- * @param apiKey - Decrypted Z.ai API key
- * @param params - Generation parameters (character info, instructions, image)
  * @param _locale - User's locale (reserved for future error localisation)
  * @param options - Z.ai-specific options (model, tools, temperature, endpointUrl, toolAdapter)
  * @returns Generated preset or a typed error result
@@ -73,7 +71,6 @@ export async function generatePresetFromPromptZai(
     return { error: "Invalid Z.ai API key", errorType: "API_KEY" };
   }
 
-  // Strip the zai/ prefix so the API receives the raw model name
   const apiModel = toZaiApiModelName(options.model);
   const toolAdapter = options.toolAdapter ?? getZaiToolAdapter();
   const endpointUrl = options.endpointUrl ?? ZAI_GENERAL_CHAT_COMPLETIONS_URL;
@@ -81,7 +78,6 @@ export async function generatePresetFromPromptZai(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // Build messages: schema-steered system prompt + user character prompt
   const messages: PresetMessage[] = [
     { role: "system", content: buildZaiPresetSystemPrompt() },
     { role: "user", content: buildPresetPrompt(params) },
@@ -91,7 +87,6 @@ export async function generatePresetFromPromptZai(
   let toolRounds = 0;
 
   while (true) {
-    // Build the request body
     const body: Record<string, unknown> = {
       model: apiModel,
       messages,
@@ -110,7 +105,6 @@ export async function generatePresetFromPromptZai(
       body.tool_choice = "auto";
     }
 
-    // Send the request
     const response = await fetch(endpointUrl, {
       method: "POST",
       headers: {
@@ -222,7 +216,6 @@ export async function generatePresetFromPromptZai(
       continue;
     }
 
-    // Extract and parse the final JSON response
     const responseText = typeof message.content === "string" ? message.content.trim() : "";
     if (!responseText) {
       return {

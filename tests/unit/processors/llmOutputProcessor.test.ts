@@ -9,8 +9,6 @@ import {
 import { isAllowedRenderModifierSpeakerLabel } from "@/utils/discord/renderModifierParser";
 import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
 
-// ─── cleanLLMOutput ─────────────────────────────────────────────────────────
-
 const PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV = "EMOJI_PRESERVE_UNRESOLVED_SHORTCODES";
 
 function withPreserveUnresolvedShortcodes(value: string | undefined, assertion: () => void): void {
@@ -114,8 +112,6 @@ describe("cleanLLMOutput", () => {
     expect(cleaned).toBe("I should ask @lilya.");
   });
 });
-
-// ─── stripLeakedOwnNameLabels ────────────────────────────────────────────────
 
 describe("stripLeakedOwnNameLabels", () => {
   // Branch A: the model opened its turn with its own label — real speech. The starter is dropped
@@ -340,8 +336,6 @@ describe("stripLeakedOwnNameLabels", () => {
   });
 });
 
-// ─── findMarkdownCodeRanges ──────────────────────────────────────────────────
-
 describe("findMarkdownCodeRanges", () => {
   it("returns empty array when no backticks present", () => {
     expect(findMarkdownCodeRanges("hello world")).toEqual([]);
@@ -400,8 +394,6 @@ describe("findMarkdownCodeRanges", () => {
   });
 });
 
-// ─── isGenericSpeakerStopLabel ───────────────────────────────────────────────
-
 describe("isGenericSpeakerStopLabel", () => {
   describe("valid speaker labels", () => {
     it("accepts 'User'", () => {
@@ -442,8 +434,6 @@ describe("isGenericSpeakerStopLabel", () => {
     });
   });
 });
-
-// ─── truncateBeforeGenericSpeakerLine ────────────────────────────────────────
 
 describe("truncateBeforeGenericSpeakerLine", () => {
   describe("no speaker present — pass through unchanged", () => {

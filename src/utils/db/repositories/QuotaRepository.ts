@@ -39,8 +39,6 @@ import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-// ── TEXT QUOTA ──────────────────────────────────────────────────────────────
-
 /**
  * Fetch or create the text quota config for a server.
  * Creates a default (disabled, unlimited) row if none exists.
@@ -296,8 +294,6 @@ export async function resetServerwideTextQuotaPool(serverId: number): Promise<vo
   `;
 }
 
-// ── IMAGE QUOTA ─────────────────────────────────────────────────────────────
-
 /**
  * Fetch or create the image quota config for a server.
  * Creates a default (disabled, unlimited) row if none exists.
@@ -537,8 +533,6 @@ export async function resetServerwideImageQuotaPool(serverId: number): Promise<v
   `;
 }
 
-// ── VIDEO QUOTA ─────────────────────────────────────────────────────────────
-
 /**
  * Fetch or create the video quota config for a server.
  * Creates a default (disabled, unlimited) row if none exists.
@@ -763,8 +757,6 @@ export async function resetServerwideVideoQuotaPool(serverId: number): Promise<v
       quota_period_end   = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
   `;
 }
-
-// ── IRepository stub ────────────────────────────────────────────────────────
 
 /**
  * QuotaRepository class — wraps the module-level functions and satisfies IRepository.

@@ -29,25 +29,20 @@ export interface PollOptions<T> {
  *   3. maxAttempts is exceeded → rejects with timeout error
  *
  * @param options - Polling configuration
- * @returns The final result from the completed operation
  * @throws Error if the operation fails or times out
  */
 export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> {
   const { pollFn, intervalMs, maxAttempts, onPoll, logLabel } = options;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // Wait before polling (skip wait on first attempt)
     if (attempt > 1) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
 
-    // Invoke optional callback
     onPoll?.(attempt);
 
-    // Poll for status
     const pollResult = await pollFn();
 
-    // Check if done
     if (pollResult.done) {
       if (pollResult.error) {
         throw new Error(pollResult.error);
@@ -64,7 +59,6 @@ export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> 
     }
   }
 
-  // Timeout — max attempts exceeded
   const totalWaitSec = Math.round((maxAttempts * intervalMs) / 1000);
   throw new Error(`${logLabel ?? "Poll"}: operation timed out after ${maxAttempts} attempts (~${totalWaitSec}s)`);
 }

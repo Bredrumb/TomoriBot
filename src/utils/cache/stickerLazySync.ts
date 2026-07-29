@@ -20,10 +20,8 @@ import { serverRepository } from "@/utils/db/repositories/ServerRepository";
  */
 export async function lazySyncGuildStickers(guild: Guild, serverId: number, forceFetch = false): Promise<boolean> {
   try {
-    // Check when stickers were last synced for this server (via repository).
     const lastSync = await serverRepository.getStickerSyncStatus(serverId);
 
-    // Determine if we need to fetch
     const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
     const now = new Date();
     const cachedStickerCount = lastSync.count;
@@ -35,7 +33,6 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
     let guildStickerCount = guild.stickers.cache.size;
 
     if (discordCachePopulated) {
-      // Discord cache is populated - use it for comparison
       hasCountMismatch = Math.abs(guildStickerCount - cachedStickerCount) > 2;
     } else if (cachedStickerCount > 0) {
       // Discord cache is EMPTY but DB has stickers - suspicious!
@@ -48,7 +45,6 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
       hasCountMismatch = Math.abs(guildStickerCount - cachedStickerCount) > 2;
     }
 
-    // Check if sync is needed
     const needsFetch =
       forceFetch ||
       lastSync.count === 0 ||
@@ -60,7 +56,6 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
       return false;
     }
 
-    // Determine refresh reason for logging
     const refreshReason = forceFetch
       ? "forced"
       : hasCountMismatch
@@ -80,7 +75,6 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
 
     log.info(`Fetched ${currentStickers.length} sticker(s) from Discord for guild ${guild.name}`);
 
-    // Sync to database using shared helper
     await sql.transaction(async (tx) => {
       await serverRepository.syncStickers(tx, serverId, currentStickers);
     });
@@ -94,7 +88,6 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
       errorType: "StickerLazySyncError",
       metadata: { guildId: guild.id },
     });
-    // Don't throw - allow the bot to continue with possibly stale data
     return false;
   }
 }

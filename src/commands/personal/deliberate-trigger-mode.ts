@@ -51,10 +51,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * - `on`     — DTM is always enabled for this user, even if the server has it disabled.
  *              Only direct invocations work: `@{trigger}` prefix, Discord @mention, replies,
  *              or `/bot respond`.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -65,11 +61,9 @@ export async function execute(
   // Defer the reply before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Read the selected mode from the interaction options
   const selectedMode = interaction.options.getString("mode", true) as DtmMode;
 
   try {
-    // Update the database with the chosen mode
     // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
     const ok = await userRepository.setDeliberateTriggerMode(userData.user_id!, selectedMode);
 
@@ -85,14 +79,12 @@ export async function execute(
     // Invalidate user cache after successful write
     invalidateUserCache(userData.user_disc_id);
 
-    // Map each mode to its result color for visual clarity
     const colorByMode: Record<DtmMode, ColorCode> = {
       off: ColorCode.WARN,
       follow: ColorCode.INFO,
       on: ColorCode.SUCCESS,
     };
 
-    // Reply with the localized result for the chosen mode
     await replyInfoEmbed(interaction, locale, {
       titleKey: `commands.personal.deliberatetriggermode.${selectedMode}_title`,
       descriptionKey: `commands.personal.deliberatetriggermode.${selectedMode}_description`,

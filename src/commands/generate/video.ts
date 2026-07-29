@@ -36,7 +36,6 @@ import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "generate_video_modal";
 const PROMPT_INPUT_ID = "prompt_input";
 const ASPECT_RATIO_SELECT_ID = "aspect_ratio_select";
@@ -49,7 +48,6 @@ const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
 /**
  * Parse a positive integer from an environment variable, falling back to a default.
- * @param name - Environment variable name
  * @param fallback - Value to use when unset or invalid
  * @returns A finite positive integer
  */
@@ -79,12 +77,10 @@ function parseModalInteger(raw: string | undefined, min: number, max: number): {
     return { value: undefined };
   }
 
-  // Reject anything that isn't a clean integer (no decimals, units, or letters).
   if (!/^\d+$/.test(trimmed)) {
     return { error: true };
   }
 
-  // Range check against the configured bounds.
   const parsed = Number.parseInt(trimmed, 10);
   if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
     return { error: true };
@@ -157,7 +153,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -168,7 +163,6 @@ export async function execute(
     return;
   }
 
-  // Load TomoriState
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const baseTomoriState = await personaRepository.loadState(serverId);
 
@@ -184,7 +178,6 @@ export async function execute(
 
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
-  // Check if video generation is enabled
   if (!tomoriState.config.videogen_enabled) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.video.disabled_title",
@@ -195,7 +188,6 @@ export async function execute(
     return;
   }
 
-  // Resolve active video capability credentials and model selection
   let videoCreds: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
   try {
     videoCreds = await resolveCapabilityCredentials(tomoriState.server_id, "video", {
@@ -301,7 +293,6 @@ export async function execute(
   let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
 
   try {
-    // Build modal components
     const modalComponents = [
       {
         customId: PROMPT_INPUT_ID,
@@ -420,7 +411,6 @@ export async function execute(
     }
     const fps = fpsResult.value;
 
-    // Process reference image (if provided)
     let referenceImages: Array<{ mimeType: string; data: string }> | undefined;
 
     if (imageAttachment) {
@@ -442,7 +432,6 @@ export async function execute(
       }
     }
 
-    // Get model codename
     const modelCodename = await getVideoModelCodename(videoModelId);
     const displayModelName = videoCreds.customEndpoint
       ? formatCustomEndpointModelDisplay(videoCreds.customEndpoint)
@@ -452,7 +441,6 @@ export async function execute(
       `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, duration: ${durationSeconds}s, fps: ${fps ?? "default"}, reference: ${referenceImages ? "yes" : "no"})`,
     );
 
-    // Show "generating" embed while we poll for completion
     await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
@@ -464,7 +452,6 @@ export async function execute(
 
     const startTime = performance.now();
 
-    // Route to provider and generate video
     let videoData: Buffer | null = null;
     let videoFilename = `generated_${Date.now()}.mp4`;
     const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
@@ -536,7 +523,6 @@ export async function execute(
       return;
     }
 
-    // Validate result
     if (!videoData) {
       await modalSubmitInteraction.editReply({
         embeds: [
@@ -565,7 +551,6 @@ export async function execute(
       return;
     }
 
-    // Send video
     const elapsedMs = performance.now() - startTime;
     const elapsedSec = (elapsedMs / 1000).toFixed(1);
 

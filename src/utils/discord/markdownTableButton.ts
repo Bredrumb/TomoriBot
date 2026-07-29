@@ -107,7 +107,6 @@ async function replyWithMarkdownSource(
  * Webhook-authored messages cannot be edited with the bot token, so the send path's webhook
  * is reused when the table was delivered under a persona identity.
  *
- * @param message - The message carrying the button
  * @param locale - Viewer locale for the (disabled) button label
  * @param webhook - Webhook that authored the message, when there was one
  * @param threadId - Thread the message lives in, when applicable

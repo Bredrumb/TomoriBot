@@ -37,8 +37,6 @@ export class McpRepository implements IRepository<null> {
     }
   }
 
-  // ── IRepository stub ───────────────────────────────────────────────────────
-
   async toExportShape(_ownerId: string | number): Promise<null> {
     return null;
   }

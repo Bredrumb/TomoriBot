@@ -39,8 +39,6 @@ export function buildErrorLogPayload(msg: string, err: unknown, context?: ErrorC
   };
 }
 
-// ── private error normalisation helpers ──────────────────────────────────────
-
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
 function toErrorMessage(err: unknown): string {
@@ -61,8 +59,6 @@ function toErrorStack(err: unknown): string | null {
   if (isRecord(err) && typeof err.stack === "string") return err.stack;
   return null;
 }
-
-// ── repository ────────────────────────────────────────────────────────────────
 
 /**
  * Thin repository for the `error_logs` table.

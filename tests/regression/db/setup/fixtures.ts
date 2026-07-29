@@ -46,11 +46,8 @@ const SERVER_CONFIG_TABLES = [
  * Inserts the minimal fixture set needed across all regression test files.
  * Idempotent — uses ON CONFLICT DO NOTHING wherever possible.
  *
- * @param db - The test SQL client from testDb.ts
- * @returns Internal DB IDs for test assertions that need them
  */
 export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
-  // Server
   const [serverRow] = await db`
     INSERT INTO servers (server_disc_id)
     VALUES (${FIXTURE_IDS.serverDiscId})
@@ -59,7 +56,6 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   `;
   const serverId: number = serverRow.server_id;
 
-  // Persona (llm_id left NULL → BYOK/unconfigured mode; avoids needing a real LLM row)
   const [personaRow] = await db`
     INSERT INTO personas (server_id, persona_nickname, is_alter)
     VALUES (${serverId}, '_rt_persona', false)
@@ -74,7 +70,6 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
     personaId = personaRow.persona_id;
     personaLineageId = Number(personaRow.persona_lineage_id);
   } else {
-    // Row already existed — re-query to get the IDs
     const [existing] = await db`
       SELECT persona_id, persona_lineage_id
       FROM personas
@@ -117,7 +112,6 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   await db`DELETE FROM persona_imagegen_configs WHERE persona_id = ${personaId}`;
   await db`DELETE FROM persona_textgen_configs WHERE persona_id = ${personaId}`;
 
-  // Test user
   const [userRow] = await db`
     INSERT INTO users (user_disc_id, user_nickname)
     VALUES (${FIXTURE_IDS.userDiscId}, '_rt_user')
@@ -163,7 +157,6 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
  * Cascade deletes handle child rows (personas, split config tables, persona_configs,
  * server_memories) when the servers row is deleted.
  *
- * @param db - The test SQL client from testDb.ts
  */
 export async function cleanupFixtures(db: SQL): Promise<void> {
   // Cascade via FK: deletes personas, split config rows, persona_configs, server_memories

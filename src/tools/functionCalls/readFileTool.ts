@@ -73,7 +73,6 @@ export class ReadFileTool extends BaseTool {
    * @returns Promise resolving to tool result with extracted text
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Validate required parameters
     const messageId = args.media_id as string;
     const filenameFilter = args.filename as string | undefined;
 
@@ -97,7 +96,6 @@ export class ReadFileTool extends BaseTool {
         limit: 100,
       });
 
-      // Find the target message by ID
       const targetMessage = recentMessages.get(messageId);
       if (!targetMessage) {
         log.warn(`ReadFileTool: Message ${messageId} not found in recent 100 messages`);
@@ -126,7 +124,6 @@ export class ReadFileTool extends BaseTool {
           continue;
         }
 
-        // If a filename filter is provided, match against it
         if (filenameFilter && !attachName.toLowerCase().includes(filenameFilter.toLowerCase())) {
           continue;
         }
@@ -168,7 +165,6 @@ export class ReadFileTool extends BaseTool {
         "ReadFileTool",
       );
 
-      // Download and extract text
       const result = await extractTextFromUrl(docAttachment.url, docAttachment.name, docAttachment.contentType, {
         maxSizeBytes: CHAT_DOCUMENT_MAX_SIZE_BYTES,
         maxTextLength: CHAT_DOCUMENT_MAX_TEXT_LENGTH,
@@ -176,7 +172,6 @@ export class ReadFileTool extends BaseTool {
         timeoutMs: 15000,
       });
 
-      // Handle extraction result
       if (!result.success) {
         const errorMessages: Record<string, string> = {
           memory_pressure:
@@ -216,7 +211,6 @@ export class ReadFileTool extends BaseTool {
         : "";
       const authorName = targetMessage.author?.displayName || targetMessage.author?.username || "unknown user";
 
-      // Notify the user visually if the file was too large and had to be cut
       if (result.truncated) {
         await sendToolProgressNotice(
           context,

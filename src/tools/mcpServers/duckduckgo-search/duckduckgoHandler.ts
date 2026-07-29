@@ -40,7 +40,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 
   /**
    * Check if this handler supports a specific function
-   * @param functionName - Function name to check
    * @returns True if this handler supports the function
    */
   public supportsFunction(functionName: string): boolean {
@@ -49,11 +48,8 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 
   /**
    * Process MCP function result before returning to LLM
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
    * @param context - Execution context with Discord channel access
-   * @param args - Function arguments used
-   * @returns Processed tool result
    */
   public async processResult(
     functionName: string,
@@ -67,12 +63,10 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
         return await this.processWebSearch(mcpResult, args, context);
       }
 
-      // Handle URL metadata extraction
       if (functionName === "url-metadata") {
         return await this.processUrlMetadata(mcpResult, args);
       }
 
-      // Handle Felo AI fallback/search results
       if (functionName === "felo-search") {
         return this.processFeloSearch(mcpResult, args, context);
       }
@@ -106,7 +100,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
    * results when DDG itself is rate-limited.
    *
    * @param query - User search query.
-   * @param context - Full ToolContext (we synthesize the MCPExecutionContext).
    * @returns Processed ToolResult, or null if the DDG MCP server is not
    *          reachable / `web-search` isn't registered.
    */
@@ -175,7 +168,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
    * Enhanced HTML scraping provides comprehensive search results
    * @param mcpResult - The raw MCP result from DuckDuckGo web search
    * @param args - The modified arguments used for the search (contains query)
-   * @returns Promise<TypedMCPToolResult> - Enhanced result with fetch capability reminder
    */
   private async processWebSearch(
     mcpResult: MCPServerResponse,
@@ -253,15 +245,12 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 
       const originalText = this.extractResultText(mcpResult);
 
-      // Extract URLs from the search results for logging
       const urlPattern = /https?:\/\/[^\s)]+/g;
       const foundUrls = originalText.match(urlPattern) || [];
       const urlCount = foundUrls.length;
 
-      // Add a note that this is from DuckDuckGo search
       const prefixMessage = `[DuckDuckGo Web Search Results]\n\n${originalText}`;
 
-      // Log the search response
       log.info(`DuckDuckGo search response: ${prefixMessage.substring(0, 200)}...`);
       log.info(`DuckDuckGo search - Found ${urlCount} URLs`);
 
@@ -276,13 +265,11 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
           executionTime: 0, // Will be set by caller
           urlsFound: urlCount,
           status: "completed",
-          // DuckDuckGo specific metadata
           searchProvider: "DuckDuckGo (Enhanced HTML Scraping)",
         },
       };
     } catch (error) {
       log.error("Error processing DuckDuckGo web search result:", error as Error);
-      // Fall back to original behavior
       return {
         success: true,
         message: this.extractResultText(mcpResult) || "DuckDuckGo web search completed successfully",
@@ -304,7 +291,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
    * Provides structured metadata including title, description, and images
    * @param mcpResult - The raw MCP result from URL metadata extraction
    * @param args - The modified arguments used (contains url)
-   * @returns Promise<TypedMCPToolResult> - Structured metadata result
    */
   private async processUrlMetadata(
     mcpResult: MCPServerResponse,
@@ -315,10 +301,8 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 
       const url = (args.url as string) || "unknown URL";
 
-      // Format the result message
       const prefixMessage = `[URL Metadata for: ${url}]\n\n${metadataContent}`;
 
-      // Log the metadata result
       log.info(`URL metadata for ${url}: ${metadataContent.substring(0, 150)}...`);
 
       return {
@@ -479,11 +463,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 
   /**
    * Process standard DuckDuckGo Search results for other functions
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
-   * @param context - Execution context
-   * @param args - Function arguments used
-   * @returns TypedMCPToolResult - Standard processed result
    */
   private processStandardDuckDuckGoResult(
     functionName: string,
@@ -494,7 +474,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
     try {
       const resultText = this.extractResultText(mcpResult);
 
-      // Check if this is an error result
       if (mcpResult.isError) {
         return {
           success: false,
@@ -511,7 +490,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
         };
       }
 
-      // Successful execution - add DuckDuckGo & Felo AI branding
       const enhancedMessage = `[DuckDuckGo & Felo AI Search Results]\n\n${resultText}`;
 
       return {

@@ -55,33 +55,26 @@ const TERMINAL_PUNCTUATION_REGEX = /[.!?。！？]$/;
  *
  * Two carve-outs return true (= inline); everything else falls back to the default
  * isolation behavior in Pass 4:
- *   1. List item — the emoji's line starts with a list marker (e.g. "1. ", "- "),
+ *   - List item — the emoji's line starts with a list marker (e.g. "1. ", "- "),
  *      so list numbering stays attached to the emoji it labels.
- *   2. Mid-sentence — non-emoji text exists on both sides of the emoji on the same
+ *   - Mid-sentence — non-emoji text exists on both sides of the emoji on the same
  *      line, AND the text immediately before does not end in sentence-terminating
  *      punctuation. Prevents splitting natural prose like
  *      "I really like :Soup:, don't you?" into 3 messages.
  *
- * @param sourceText - Full original input text (used to find line boundaries)
- * @param emojiStart - Absolute index of the emoji tag's opening "<" in sourceText
- * @param emojiLength - Byte length of the emoji tag (including "<" and ">")
  * @returns true if the emoji should be merged into adjacent text, false to isolate
  */
 function shouldEmojiStayInline(sourceText: string, emojiStart: number, emojiLength: number): boolean {
-  // Locate the \n-delimited line that contains this emoji
   const lineStart = sourceText.lastIndexOf("\n", emojiStart - 1) + 1;
   const nextNewline = sourceText.indexOf("\n", emojiStart);
   const lineEnd = nextNewline === -1 ? sourceText.length : nextNewline;
   const line = sourceText.substring(lineStart, lineEnd);
 
-  // List-item carve-out — entire line is treated as one unit
   if (LIST_MARKER_REGEX.test(line)) return true;
 
-  // Mid-sentence carve-out — require prose on BOTH sides, sans other emojis
   const beforeOnLine = sourceText.substring(lineStart, emojiStart);
   const afterOnLine = sourceText.substring(emojiStart + emojiLength, lineEnd);
 
-  // Strip sibling emoji tags so adjacent emojis don't count as "surrounding text"
   const beforeStripped = beforeOnLine.replace(EMOJI_TAG_GLOBAL_REGEX, "").trimEnd();
   const afterStripped = afterOnLine.replace(EMOJI_TAG_GLOBAL_REGEX, "").trim();
 
@@ -479,7 +472,6 @@ function addTextSegment(text: string, currentChunk: string, chunks: string[], ch
  * Creates a regex pattern for splitting sentences while preserving common abbreviations.
  * Splits on periods and Japanese periods (。) but avoids splitting on common abbreviations,
  * numbered lists, and other period-containing patterns.
- * @returns A RegExp that can be used to split text into sentences
  */
 export function createSentenceSplitRegex(): RegExp {
   const titles = ["mr", "mrs", "ms", "dr", "prof", "rev", "fr", "sr", "jr"];
@@ -517,16 +509,13 @@ export function createSentenceSplitRegex(): RegExp {
 /**
  * Splits a long message into smaller chunks for Discord's limits, preserving code blocks
  * and natural breakpoints.
- * @param inputText - Text to split into chunks
  * @param humanizerDegree - Controls how aggressive text chunking should be (0-3)
  * @param chunkLength - Optional max length for each chunk (defaults to 1900)
- * @returns Array of message chunks under Discord's limit
  */
 export function chunkMessage(inputText: string, humanizerDegree: number, chunkLength = 1900): string[] {
   const chunkedMessages: string[] = [];
   if (!inputText || inputText.length === 0) return chunkedMessages;
 
-  // Block type for tracking text regions
   type BlockType =
     | "text"
     | "code"
@@ -544,7 +533,6 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
 
   const blocks: Array<{ content: string; type: BlockType; start: number; end: number }> = [];
 
-  // Pass 1: find code blocks
   const codeBlockRegex = /```(?:(\w+)\n)?([\s\S]*?)```/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -566,7 +554,6 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     blocks.push({ content: inputText.substring(lastIndex), type: "text", start: lastIndex, end: inputText.length });
   }
 
-  // Pass 2a: find URLs in text blocks
   const urlProcessedBlocks: typeof blocks = [];
   for (const block of blocks) {
     if (block.type !== "text") {
@@ -608,7 +595,6 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     }
   }
 
-  // Pass 2b: find quoted/parenthesized/markdown regions in text blocks
   const quotedBlocks: typeof blocks = [];
   for (const block of urlProcessedBlocks) {
     if (block.type !== "text") {
@@ -678,7 +664,6 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     }
   }
 
-  // Pass 2c: find Discord custom emojis in text blocks
   const emojiPattern = /<(a?):([^:]+):([^>]+)>/g;
   const processedBlocks: typeof blocks = [];
   for (const block of quotedBlocks) {
@@ -701,7 +686,6 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
           end: block.start + emojiMatch.index,
         });
       }
-      // Compute absolute index of this emoji within the original inputText
       const emojiAbsStart = block.start + emojiMatch.index;
       // Classify: "emoji_inline" gets folded into adjacent text in Pass 3;
       //    plain "emoji" keeps the existing isolate-into-emoji-run behavior in Pass 4.
@@ -724,7 +708,6 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     }
   }
 
-  // Pass 3: merge semantic blocks with adjacent text for natural flow
   const mergedBlocks: typeof processedBlocks = [];
   let i = 0;
   while (i < processedBlocks.length) {
@@ -765,7 +748,6 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     i++;
   }
 
-  // Pass 4: process all merged blocks into Discord chunks
   let currentChunk = "";
   let emojiRun = "";
   let lastEmojiInRun: string | null = null;

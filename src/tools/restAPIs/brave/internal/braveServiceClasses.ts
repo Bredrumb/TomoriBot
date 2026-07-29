@@ -19,10 +19,6 @@ import { sendToolNotice } from "../../../../utils/discord/toolProgressNotice";
 import { brave_web_search, brave_image_search, brave_video_search, brave_news_search } from "../toolImplementations";
 import { getSearchNoticeTitleVars } from "@/tools/webSearch/categoryMetadata";
 
-// =============================================
-// Base Internal Brave Search Tool Class
-// =============================================
-
 /**
  * Abstract base for internal Brave search adapters.
  * Provides common availability/serverId/result-conversion helpers.
@@ -58,10 +54,6 @@ abstract class BaseInternalBraveSearchTool extends BaseTool {
   }
 }
 
-// =============================================
-// Internal Brave Web Search
-// =============================================
-
 export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
   name = "brave_web_search";
   description = "Internal Brave Web Search: consumed by BraveEngine via the unified web_search tool.";
@@ -96,7 +88,6 @@ export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
 
       log.info(`Executing ${this.name} with query: ${args.query}`);
 
-      // Notify the channel that a web search is in progress.
       await sendToolNotice(
         context,
         "web_search",
@@ -108,7 +99,6 @@ export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
         "InternalBraveWebSearchTool",
       );
 
-      // Forward to the underlying function implementation.
       const enhancedContext = { ...context, serverId: this.getServerId(context) };
       const result = await brave_web_search(args, enhancedContext);
       return this.convertToToolResult(result);
@@ -121,10 +111,6 @@ export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
     }
   }
 }
-
-// =============================================
-// Internal Brave Image Search
-// =============================================
 
 export class InternalBraveImageSearchTool extends BaseInternalBraveSearchTool {
   name = "brave_image_search";
@@ -181,10 +167,6 @@ export class InternalBraveImageSearchTool extends BaseInternalBraveSearchTool {
     }
   }
 }
-
-// =============================================
-// Internal Brave Video Search
-// =============================================
 
 export class InternalBraveVideoSearchTool extends BaseInternalBraveSearchTool {
   name = "brave_video_search";
@@ -243,10 +225,6 @@ export class InternalBraveVideoSearchTool extends BaseInternalBraveSearchTool {
     }
   }
 }
-
-// =============================================
-// Internal Brave News Search
-// =============================================
 
 export class InternalBraveNewsSearchTool extends BaseInternalBraveSearchTool {
   name = "brave_news_search";

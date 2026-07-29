@@ -25,7 +25,6 @@ import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderC
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "config_model_vision_modal";
 const MODEL_SELECT_ID = "vision_model_select";
 
@@ -35,9 +34,6 @@ const CLEAR_VISION_VALUE = "__clear__";
 /**
  * Helper function to get localized LLM description based on user's locale.
  * Only shows vision-relevant capability flags.
- * @param model - LLM model row from database
- * @param locale - User's preferred locale (e.g., "ja", "en-US")
- * @returns Localized description with flags prepended
  */
 function getLocalizedDescription(model: LlmRow, locale: string): string {
   if (model.is_scoped_registration) {
@@ -58,7 +54,6 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
   return `${flagPrefix}${baseDescription}`;
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("vision").setDescription(localizer("en-US", "commands.model.vision.description"));
 
@@ -66,10 +61,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Sets a dedicated vision model for image analysis.
  * When set, non-vision chat models gain the `analyze_image` tool to delegate
  * image analysis to this vision model.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -77,7 +68,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -87,7 +77,6 @@ export async function execute(
     return;
   }
 
-  // Load the Tomori state for this server
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -383,9 +372,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

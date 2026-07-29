@@ -15,8 +15,6 @@
 import type { StPresetNodeRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 
-// ─── Types ──────────────────────────────────────────────────────────────
-
 /**
  * Runtime context data provided to the macro engine for content macro expansion.
  * These values are sourced from the current TomoriBot state at context build time.
@@ -56,8 +54,6 @@ export interface ResolvedNode {
   /** True if the resolved content contains HTML tags (Discord incompatible) */
   hasHtmlWarning: boolean;
 }
-
-// ─── Regex Patterns ─────────────────────────────────────────────────────
 
 /** Matches {{// comment }} blocks */
 const COMMENT_REGEX = /\{\{\/\/[^}]*\}\}/g;
@@ -113,9 +109,7 @@ const HTML_TAG_REGEX =
  * Applied after all standard macro processing so it doesn't interfere
  * with HTML detection (these are uppercase XML tags, not real HTML elements).
  *
- * @param text - Node content after standard macro resolution
  * @param userName - Triggerer's display name
- * @param charName - Bot/persona display name
  * @returns Text with additional placeholders resolved
  */
 function applyCompatibilityPatches(text: string, userName: string, charName: string): string {
@@ -126,8 +120,6 @@ function applyCompatibilityPatches(text: string, userName: string, charName: str
 
   return result;
 }
-
-// ─── Macro Processors (Pure Functions) ──────────────────────────────────
 
 /**
  * Remove all {{// comment }} blocks from the text.
@@ -145,9 +137,7 @@ function stripComments(text: string): string {
  * `setvar` replaces the current value for the key.
  * `addvar` appends to the current value for the key, preserving raw whitespace.
  *
- * @param text - Node content potentially containing variable declaration macros
  * @param targetVars - Optional existing variable map to mutate in-place
- * @returns Cleaned text + updated variable map
  */
 function processVarDeclarations(
   text: string,
@@ -232,8 +222,6 @@ export function findUnsupportedPresetMacros(text: string): string[] {
  * Replace all {{getvar::key}} references with values from the variable map.
  * Unknown keys resolve to an empty string.
  *
- * @param text - Node content with getvar references
- * @param vars - Variable map built from setvar declarations
  * @returns Text with all getvar references resolved
  */
 function processGetVars(text: string, vars: Map<string, string>): string {
@@ -247,7 +235,6 @@ function processGetVars(text: string, vars: Map<string, string>): string {
  * Tracks which macros were actually expanded (non-empty replacement)
  * so the context builder can skip duplicate marker blocks.
  *
- * @param text - Node content with content macros
  * @param ctx - Macro context with runtime data
  * @param expanded - Set to track which content macros were resolved with real data
  * @returns Text with content macros replaced
@@ -290,10 +277,8 @@ function processContentMacros(text: string, ctx: MacroContext, expanded: Set<str
   let result = text;
   for (const { pattern, value, trackingKey } of macroMap) {
     if (pattern.test(result)) {
-      // Reset lastIndex after test() for global regexes
       pattern.lastIndex = 0;
       result = result.replace(pattern, value);
-      // Track that this macro was expanded with actual content
       if (value.length > 0) {
         expanded.add(trackingKey);
       }
@@ -307,7 +292,6 @@ function processContentMacros(text: string, ctx: MacroContext, expanded: Set<str
  * Evaluate {{random: A, B, C}} and legacy {{random::A::B::C}} macros by picking
  * a random item from the provided list.
  *
- * @param text - Node content with random selection macros
  * @returns Text with each random macro replaced by a randomly chosen item
  */
 function processRandom(text: string): string {
@@ -340,7 +324,6 @@ function processRandom(text: string): string {
  * Evaluate {{roll: XdY}} dice roll macros.
  * Rolls X dice with Y sides each and returns the sum.
  *
- * @param text - Node content with dice roll macros
  * @returns Text with each roll macro replaced by the computed sum
  */
 function processRoll(text: string): string {
@@ -370,7 +353,6 @@ function processTrim(text: string): { result: string; isEmpty: boolean } {
     return { result: text, isEmpty: false };
   }
 
-  // Reset lastIndex after test()
   TRIM_REGEX.lastIndex = 0;
   const cleaned = text.replace(TRIM_REGEX, "").trim();
   return { result: cleaned, isEmpty: cleaned.length === 0 };
@@ -387,14 +369,10 @@ export function detectHtmlContent(text: string): boolean {
   return HTML_TAG_REGEX.test(text);
 }
 
-// ─── Role Mapping ───────────────────────────────────────────────────────
-
 /**
  * Map SillyTavern role names to TomoriBot StructuredContextItem roles.
  * ST uses "assistant" where TomoriBot uses "model".
  *
- * @param stRole - Role string from the ST preset node
- * @returns Mapped role for TomoriBot's context system
  */
 function mapStRole(stRole: string): "system" | "user" | "model" {
   switch (stRole.toLowerCase()) {
@@ -406,8 +384,6 @@ function mapStRole(stRole: string): "system" | "user" | "model" {
       return "system";
   }
 }
-
-// ─── Main Export ─────────────────────────────────────────────────────────
 
 /**
  * Resolve all ST macros in a set of preset nodes using two-pass variable resolution.
@@ -428,7 +404,6 @@ function mapStRole(stRole: string): "system" | "user" | "model" {
  * Identity macros ({{user}}, {{char}}, {{bot}}) are left intact for downstream
  * resolution by convertMentions() / replaceTemplateVariables().
  *
- * @param nodes - All preset nodes from DB (loadAllNodes result)
  * @param macroContext - Runtime context data for content macro expansion
  * @returns Resolved nodes and set of content macros that were expanded with real data
  */
@@ -445,7 +420,6 @@ export function resolvePresetMacros(
   for (const node of nodes) {
     if (!node.is_enabled || node.is_marker || node.is_comment) continue;
 
-    // Strip comments first so they don't interfere
     const commentStripped = stripComments(node.content);
 
     // Extract variable declarations into the shared global map
@@ -456,14 +430,12 @@ export function resolvePresetMacros(
     log.info(`[ST Preset Engine] Collected ${globalVars.size} variable(s) from enabled nodes`);
   }
 
-  // ── Pass 2: Resolve all macros for each node ──
   const resolved: ResolvedNode[] = [];
   let htmlWarningCount = 0;
 
   for (const node of nodes) {
     let content = node.content;
 
-    // Markers pass through with no content processing
     if (node.is_marker) {
       resolved.push({
         identifier: node.identifier,
@@ -501,35 +473,25 @@ export function resolvePresetMacros(
       continue;
     }
 
-    // ── Processing pipeline (order matters) ──
-
-    // Strip comments
     content = stripComments(content);
 
-    // Remove setvar/addvar declarations (already collected in Pass 1)
     const { cleaned } = processVarDeclarations(content);
     content = cleaned;
 
-    // Resolve getvar references
     content = processGetVars(content, globalVars);
 
-    // Expand content macros (personality, description, scenario, etc.)
     content = processContentMacros(content, macroContext, expandedContentMacros);
 
-    // Evaluate random selections
     content = processRandom(content);
 
-    // Evaluate dice rolls
     content = processRoll(content);
 
-    // Apply compatibility patches (additional placeholders like <USER>, <BOT>)
     content = applyCompatibilityPatches(content, macroContext.userName, macroContext.charName);
 
     // Process trim (must be last text transform)
     const { result: trimmedContent, isEmpty } = processTrim(content);
     content = trimmedContent;
 
-    // Detect HTML content
     const hasHtml = content.length > 0 && detectHtmlContent(content);
     if (hasHtml) htmlWarningCount++;
 
@@ -539,7 +501,6 @@ export function resolvePresetMacros(
       role: mapStRole(node.role),
       content,
       is_marker: false,
-      // If trim resolved to empty, effectively disable the node
       is_enabled: !isEmpty,
       is_comment: false,
       node_order: node.node_order,

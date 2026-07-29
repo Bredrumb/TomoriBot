@@ -15,8 +15,6 @@ process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS = "10";
 process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS = "5";
 process.env.NAI_TOOL_FAILURE_RETRY_THRESHOLD = "3";
 
-// --- per-test mutable state -----------------------------------------------
-
 let toolExecuteCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 let toolExecuteQueue: ToolResult[] = [];
 let requiresFollowUp = false;
@@ -140,7 +138,6 @@ mock.module("@/utils/chat/contextAnnotations", () => ({
     content?.replace(/\s+/g, " ").trim() || "[System: No text content was included]",
 }));
 
-// The ToolRegistry singleton — executeTool drains toolExecuteQueue.
 mock.module("@/tools/toolRegistry", () => ({
   ToolRegistry: {
     executeTool: async (name: string, args: Record<string, unknown>) => {
@@ -154,10 +151,6 @@ mock.module("@/tools/toolRegistry", () => ({
     },
   },
 }));
-
-// --------------------------------------------------------------------------
-// Test helpers
-// --------------------------------------------------------------------------
 
 function makeTomoriState(): TomoriState {
   return {
@@ -331,10 +324,6 @@ function makeParams(context: ChatTurnContext, provider: LLMProvider): ToolLoopPa
   return { context, provider, providerConfig: makeProviderConfig(), tomoriState: context.tomoriState };
 }
 
-// --------------------------------------------------------------------------
-// Tests
-// --------------------------------------------------------------------------
-
 describe("runToolLoop — contract tests", () => {
   beforeEach(() => {
     toolExecuteCalls = [];
@@ -346,10 +335,6 @@ describe("runToolLoop — contract tests", () => {
     clearStopRequestCalls = 0;
     standardEmbedCalls = [];
   });
-
-  // -------------------------------------------------------------------------
-  // Successful tool call
-  // -------------------------------------------------------------------------
 
   it("executes tool with correct args and delivers result to next provider call", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
@@ -363,23 +348,18 @@ describe("runToolLoop — contract tests", () => {
     const context = makeContext();
     const result = await runToolLoop(makeParams(context, provider));
 
-    // Final result carries the completed text.
     expect(result.status).toBe("completed");
     expect(result.personaResponses).toHaveLength(1);
     expect(result.personaResponses[0]?.text).toBe("I echoed: hello");
 
-    // Tool received the correct name and arguments.
     expect(toolExecuteCalls).toHaveLength(1);
     expect(toolExecuteCalls[0]?.name).toBe("echo_tool");
     expect(toolExecuteCalls[0]?.args).toEqual({ text: "hello" });
 
-    // Provider called twice: once for the tool call, once for the final answer.
     expect(capturedHistories).toHaveLength(2);
 
-    // First call had no history (initial turn).
     expect(capturedHistories[0]).toHaveLength(0);
 
-    // Second call had one history entry with the paired call/response.
     const secondHistory = capturedHistories[1] as Array<{
       functionCall: { name: string };
       functionResponse: { functionResponse: { name: string; response: { result: unknown } } };
@@ -388,19 +368,13 @@ describe("runToolLoop — contract tests", () => {
     expect(secondHistory[0]?.functionCall?.name).toBe("echo_tool");
     expect(secondHistory[0]?.functionResponse?.functionResponse?.name).toBe("echo_tool");
 
-    // Tool result data is embedded in the function response.
     const resultData = secondHistory[0]?.functionResponse?.functionResponse?.response?.result as {
       echoed: string;
     };
     expect(resultData?.echoed).toBe("hello");
 
-    // streamResults accumulates both iterations.
     expect(result.streamResults).toHaveLength(2);
   });
-
-  // -------------------------------------------------------------------------
-  // Tool failure — loop continues, error represented in history
-  // -------------------------------------------------------------------------
 
   it("tool failure: error is represented in the history entry and the loop continues", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
@@ -415,11 +389,9 @@ describe("runToolLoop — contract tests", () => {
     const context = makeContext();
     const result = await runToolLoop(makeParams(context, provider));
 
-    // Loop survived the single failure and completed.
     expect(result.status).toBe("completed");
     expect(result.personaResponses[0]?.text).toBe("sorry about that");
 
-    // Tool was invoked once.
     expect(toolExecuteCalls).toHaveLength(1);
 
     // History entry for the failed call uses the standardized failure shape.
@@ -436,14 +408,9 @@ describe("runToolLoop — contract tests", () => {
     expect(result.personaResponses[0]?.text).not.toContain("something broke");
   });
 
-  // -------------------------------------------------------------------------
-  // Consecutive error cap
-  // -------------------------------------------------------------------------
-
   it("consecutive tool errors: loop exits with 'error' after MAX_CONSECUTIVE_TOOL_ERRORS failures", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
-    // Provide more function_call results than the cap so iteration count isn't the limiter.
     const { provider } = makeProvider(Array.from({ length: 20 }, () => makeFunctionCallResult("fail_tool", {})));
     for (let i = 0; i < 20; i++) {
       toolExecuteQueue.push({ success: false, error: "always broken" });
@@ -456,13 +423,8 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("error");
     expect(toolExecuteCalls).toHaveLength(5);
 
-    // No user-visible text (shouldSurfaceUserErrors is false in makeContext).
     expect(result.personaResponses).toHaveLength(0);
   });
-
-  // -------------------------------------------------------------------------
-  // Deliberate tool exposure guard
-  // -------------------------------------------------------------------------
 
   it("deliberate tool mode: blocked tool is NOT dispatched and gets synthetic failure in history", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
@@ -504,19 +466,13 @@ describe("runToolLoop — contract tests", () => {
     expect(syntheticResult?.reason).toContain("not exposed");
   });
 
-  // -------------------------------------------------------------------------
-  // Loop iteration bound
-  // -------------------------------------------------------------------------
-
   it("loop bound: exits with 'timeout' after MAX_FUNCTION_CALL_ITERATIONS with no final answer", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
-    // Provider never produces a terminal result — always requests another tool.
     const limit = 10; // matches BOT_MAX_FUNCTION_CALL_ITERATIONS set above
     const { provider } = makeProvider(
       Array.from({ length: limit + 5 }, () => makeFunctionCallResult("infinite_tool", {})),
     );
-    // Tool always succeeds so consecutive-error cap is never triggered.
     for (let i = 0; i < limit + 5; i++) {
       toolExecuteQueue.push({ success: true, data: { ok: true } });
     }
@@ -527,13 +483,8 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("timeout");
     // Exactly limit iterations ran (one tool call per iteration).
     expect(toolExecuteCalls).toHaveLength(limit);
-    // All iterations' stream results are collected.
     expect(result.streamResults).toHaveLength(limit);
   });
-
-  // -------------------------------------------------------------------------
-  // Empty function-call payload aborts immediately
-  // -------------------------------------------------------------------------
 
   it("malformed function-call (missing name) aborts with 'error' without dispatching any tool", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
@@ -548,17 +499,11 @@ describe("runToolLoop — contract tests", () => {
     expect(toolExecuteCalls).toHaveLength(0);
   });
 
-  // -------------------------------------------------------------------------
-  // Context-restart signal: injected into contextItems, not into history
-  // -------------------------------------------------------------------------
-
   it("context-restart response: enriched item injected into contextItems, no history entry for that tool call", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
     const { provider, capturedHistories } = makeProvider([
-      // 1st call: provider requests the context-restart tool
       makeFunctionCallResult("reveal_tool", {}),
-      // 2nd call: provider now sees the enriched context and answers
       { status: "completed", accumulatedText: "here you go" },
     ]);
 
@@ -598,7 +543,6 @@ describe("runToolLoop — contract tests", () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
     const { provider, capturedHistories } = makeProvider([
-      // Model streams visible text, THEN calls a tool that continues after its result.
       makeFunctionCallResult("create_long_term_memory", { content: "likes cats" }, "Yeah, let me remember that."),
       { status: "completed", accumulatedText: "Saved! Anything else?" },
     ]);
@@ -645,7 +589,6 @@ describe("runToolLoop — contract tests", () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
     const { provider, capturedHistories } = makeProvider([
-      // Whitespace-only accumulated text must not produce text parts.
       makeFunctionCallResult("echo_tool", {}, "   "),
       { status: "completed", accumulatedText: "done" },
     ]);
@@ -690,16 +633,11 @@ describe("runToolLoop — contract tests", () => {
     expect(thirdHistory[1]?.preToolCallTextParts).toEqual([{ type: "text", text: "Now one more thing." }]);
   });
 
-  // -------------------------------------------------------------------------
-  // Pre-tool text early-exit policy is unchanged
-  // -------------------------------------------------------------------------
-
   it("update_short_term_memory with pre-tool text still ends the turn without a follow-up call", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
     const { provider, capturedHistories } = makeProvider([
       makeFunctionCallResult("update_short_term_memory", { content: "note" }, "Got it, noting that down."),
-      // No second result queued — a follow-up call would throw in the fake provider.
     ]);
     toolExecuteQueue.push({ success: true, data: { saved: true } });
 
@@ -712,10 +650,6 @@ describe("runToolLoop — contract tests", () => {
     expect(result.personaResponses[0]?.text).toBe("Got it, noting that down.");
     expect(requiresFollowUpCalls).toHaveLength(0);
   });
-
-  // -------------------------------------------------------------------------
-  // Sticker selection is carried only through completed turns
-  // -------------------------------------------------------------------------
 
   it("successful sticker selection is carried on the completed result", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
@@ -782,10 +716,6 @@ describe("runToolLoop — contract tests", () => {
     expect(result.selectedSticker).toBeUndefined();
   });
 
-  // -------------------------------------------------------------------------
-  // NovelAI follow-up policy
-  // -------------------------------------------------------------------------
-
   it("NovelAI continues after pre-tool text when the successful tool requires follow-up", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     requiresFollowUp = true;
@@ -824,10 +754,6 @@ describe("runToolLoop — contract tests", () => {
     expect(result.personaResponses[0]?.text).toBe("That is done.");
     expect(requiresFollowUpCalls).toEqual([{ name: "non_follow_up_tool", provider: "novelai", serverId: 1 }]);
   });
-
-  // -------------------------------------------------------------------------
-  // NovelAI tool-failure retry
-  // -------------------------------------------------------------------------
 
   it("NovelAI suppresses repeated text and retries a tool failure after pre-tool text", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
@@ -871,10 +797,6 @@ describe("runToolLoop — contract tests", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // STM single-update guard
-  // -------------------------------------------------------------------------
-
   it("successful STM update without pre-tool text disables further STM calls and continues", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     const { provider, capturedHistories } = makeProvider([
@@ -890,10 +812,6 @@ describe("runToolLoop — contract tests", () => {
     expect(capturedHistories).toHaveLength(2);
     expect(context.streamingContext.disableShortTermMemoryUpdate).toBe(true);
   });
-
-  // -------------------------------------------------------------------------
-  // Follow-up interrupts do not kill an active tool chain
-  // -------------------------------------------------------------------------
 
   it("clears a stale follow-up interrupt and lets the tool chain continue", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");

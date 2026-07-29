@@ -53,7 +53,6 @@ async function buildNvidiaCompactUserContent(
     }
   }
 
-  // If no images were added successfully, fall back to plain text
   return parts.length === 1 ? userPrompt : parts;
 }
 
@@ -71,7 +70,6 @@ export async function generateConversationSummaryNvidia(
       return { error: "Invalid NVIDIA API key" };
     }
 
-    // Build the user content (text + optional images)
     const userContent = await buildNvidiaCompactUserContent(request.userPrompt, request.images);
 
     const messages: NvidiaMessage[] = [];
@@ -80,7 +78,6 @@ export async function generateConversationSummaryNvidia(
     }
     messages.push({ role: "user", content: userContent });
 
-    // Build the request body
     const body: Record<string, unknown> = {
       model: request.model,
       messages,
@@ -114,7 +111,6 @@ export async function generateConversationSummaryNvidia(
       };
     }
 
-    // Extract the response text
     const result = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };

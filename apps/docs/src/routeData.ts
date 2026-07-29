@@ -59,21 +59,17 @@ function deriveDescription(body: string, maxLength: number): string | undefined 
   for (const rawLine of lines) {
     const line = rawLine.trim();
 
-    // Track fenced code blocks so their contents are never sampled.
     if (line.startsWith("```") || line.startsWith("~~~")) {
       insideFence = !insideFence;
       continue;
     }
     if (insideFence) continue;
 
-    // A blank line ends the paragraph — stop once we have collected prose.
     if (line === "") {
       if (paragraph.length > 0) break;
       continue;
     }
 
-    // Skip structural / non-prose lines. If we were mid-paragraph and hit
-    //    one of these, the paragraph is done.
     const isNonProse =
       line.startsWith("#") || // headings
       line.startsWith("import ") || // MDX imports
@@ -95,7 +91,6 @@ function deriveDescription(body: string, maxLength: number): string | undefined 
 
   if (paragraph.length === 0) return undefined;
 
-  // Strip inline Markdown so the meta tag contains plain text only.
   const text = paragraph
     .join(" ")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1") // images → alt text
@@ -120,14 +115,14 @@ function deriveDescription(body: string, maxLength: number): string | undefined 
 /**
  * Starlight route middleware for SEO head tags.
  *
- * 1. Auto-derives a per-page meta description from the page's first prose
+ * - Auto-derives a per-page meta description from the page's first prose
  *    paragraph whenever the frontmatter has no explicit `description`. A
  *    hand-written `description:` in frontmatter always wins (Starlight emits
  *    it before this middleware runs, so we simply do nothing in that case).
- * 2. Marks internal `wiki/` pages as `noindex` — they are hidden from the
+ * - Marks internal `wiki/` pages as `noindex` — they are hidden from the
  *    sidebar and are maintainer-facing, so they should not appear in search
  *    results or compete with the user-facing pages.
- * 3. Emits hreflang alternate links for pages that exist in both English and
+ * - Emits hreflang alternate links for pages that exist in both English and
  *    Japanese, so Google serves each locale's page to the right audience
  *    instead of treating the pair as competing (or duplicate) content.
  */

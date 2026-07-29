@@ -100,7 +100,6 @@ function canUseWebhookForChannel(channel: SupportedChannel, webhook: Webhook): b
  * button edits so a CV2 notice never falls back to a partial component update.
  *
  * @param locale - Locale used for title, body, footer, and button label strings.
- * @param embedOptions - Existing standard embed inputs supplied by memory/task callers.
  * @param config - Notice-specific button labels and custom ID.
  * @param includeExpandButton - Whether the visible card needs an Expand action.
  * @param expandButtonDisabled - Whether the Expand button should render disabled.
@@ -144,7 +143,6 @@ function buildNoticeComponents(
  *
  * @param channel - Destination channel (supports the same channel types as `sendStandardEmbed`).
  * @param locale - Locale used for the button label, expand-popup title, and embed strings.
- * @param embedOptions - Pre-built `StandardEmbedOptions` for the visible embed.
  *   The caller is responsible for placing the already-truncated content into `descriptionVars` —
  *   this helper does not modify the embed body.
  * @param fullContent - The full, already-processed content (e.g. post-{user}/{bot} substitution).
@@ -283,9 +281,7 @@ export async function sendEmbedWithExpand(
  * "Show Full Memory" button when the processed memory content exceeds the
  * truncation threshold.
  *
- * @param channel - Destination channel.
  * @param locale - Locale for button label, expand title, and embed strings.
- * @param embedOptions - Pre-built embed options with the already-truncated content.
  * @param fullMemoryContent - Full, processed (post-{user}/{bot}) memory content.
  * @param webhookContext - Optional persona webhook identity.
  */
@@ -316,9 +312,7 @@ export async function sendMemoryEmbedWithExpand(
  * "Show Full Task" button when the task/reminder purpose exceeds the
  * truncation threshold (created, updated, and deleted task notices).
  *
- * @param channel - Destination channel.
  * @param locale - Locale for button label, expand title, and embed strings.
- * @param embedOptions - Pre-built embed options with the already-truncated purpose.
  * @param fullReminderPurpose - Full, un-truncated reminder/task purpose.
  * @param webhookContext - Optional persona webhook identity.
  */

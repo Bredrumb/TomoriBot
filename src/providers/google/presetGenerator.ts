@@ -43,8 +43,6 @@ export interface CharacterSearchResult {
 
 /**
  * Helper function to safely extract error message from unknown error types
- * @param error - The error to extract a message from
- * @returns Error message string
  */
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -59,11 +57,9 @@ function getErrorMessage(error: unknown): string {
 /**
  * Create localized error message based on error type and Google error code
  * Similar to GoogleStreamAdapter.createErrorDescription
- * @param errorType - The type of error
  * @param errorCode - The Google API error code (e.g., "400", "429")
  * @param rawMessage - Raw error message from Google API
  * @param locale - User's locale for localization
- * @returns Formatted error message with code
  */
 function createGoogleErrorMessage(
   errorType: string,
@@ -96,15 +92,12 @@ function createGoogleErrorMessage(
         }
       }
     }
-  } catch {
-    // Ignore parsing errors
-  }
+  } catch {}
 
   // If we couldn't extract a Google message, use locale-based defaults
   if (!googleMessage) {
     let messageKey: string;
 
-    // Map error types to locale keys
     switch (errorType) {
       case "CONTENT_BLOCKED":
         messageKey = "content_blocked_default_message";
@@ -127,11 +120,9 @@ function createGoogleErrorMessage(
       case "EMPTY_RESPONSE":
       case "INVALID_JSON":
       case "VALIDATION_ERROR":
-        // These are client-side validation errors, use unknown
         messageKey = "unknown_default_message";
         break;
       default:
-        // Check if we have a specific error code
         if (errorCode === 400 || errorCode === "400") {
           if (rawMessage.includes("billing")) {
             messageKey = "400_billing_default_message";
@@ -154,7 +145,6 @@ function createGoogleErrorMessage(
     }
   }
 
-  // Format as "Error Code {code}: {Google message}"
   const displayCode = errorCode || "unknown";
   return `Error Code ${displayCode}: ${googleMessage}`;
 }
@@ -163,8 +153,6 @@ function createGoogleErrorMessage(
  * Sanitize sample dialogue by removing speaker prefixes
  * Removes patterns like "User:", "Character:", "{{char}}:", etc.
  *
- * @param dialogue - The dialogue text to sanitize
- * @returns Sanitized dialogue text
  */
 export function sanitizeSampleDialogueText(dialogue: string): string {
   if (!dialogue) return "";
@@ -185,12 +173,8 @@ export function sanitizeSampleDialogueText(dialogue: string): string {
  * Search for character information using Google Search
  * Uses configured Gemini model with Google Search tool enabled
  *
- * @param apiKey - Decrypted Google API key
- * @param characterName - Name of the character to search for
  * @param locale - User's locale for error messages
- * @param modelName - Model to use for search
  * @param context - Optional additional context for search
- * @returns Promise<CharacterSearchResult> - Search results or error
  */
 export async function searchCharacterInfo(
   apiKey: string,
@@ -200,7 +184,6 @@ export async function searchCharacterInfo(
   context?: CharacterSearchContext,
   client?: GoogleGenAI,
 ): Promise<CharacterSearchResult> {
-  // Validate API key (skip when using pre-built client)
   if (!client && (!apiKey || apiKey.trim().length < 10)) {
     return {
       error: createGoogleErrorMessage("API_KEY", 403, "Invalid API key", locale),
@@ -209,10 +192,8 @@ export async function searchCharacterInfo(
   }
 
   try {
-    // Initialize Gemini client (use pre-built if provided)
     const genAI = client ?? new GoogleGenAI({ apiKey });
 
-    // Use configured model for search
     const MODEL_NAME = modelName;
 
     // Configure generation with Google Search tool
@@ -223,7 +204,6 @@ export async function searchCharacterInfo(
       tools: [{ googleSearch: {} }], // Enable Google Search
     };
 
-    // Build search prompt with all available context
     let prompt = `You are a character information researcher. Search for detailed information about the character "${characterName}".
 
 Search Instructions:
@@ -235,7 +215,6 @@ Search Instructions:
 
 Character Name: ${characterName}`;
 
-    // Add user-provided context to help with search
     if (context?.description?.trim()) {
       prompt += `\n\nUser's Description: ${context.description.trim()}`;
     }
@@ -256,7 +235,6 @@ Focus on gathering authentic information that would help create an accurate char
 
 IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the conversation partner's name (not for the pronoun "you"), and "{bot}" ONLY where you would write the character's own name (not for "I"/"me"). Keep ordinary pronouns like "you", "I", and "me" exactly as-is.`;
 
-    // Prepare user prompt content
     const userPromptContent: Content = {
       role: "user",
       parts: [{ text: prompt }],
@@ -270,7 +248,6 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
         setTimeout(() => reject(new Error("Character search timed out after 60 seconds")), 60000);
       });
 
-      // Make API call with timeout
       const result = await Promise.race([
         genAI.models.generateContent({
           model: MODEL_NAME,
@@ -282,7 +259,6 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
 
       log.info(`Character search completed with model: ${MODEL_NAME}`);
 
-      // Check for blocked content
       if (result.promptFeedback?.blockReason) {
         return {
           error: createGoogleErrorMessage(
@@ -297,7 +273,6 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
 
       const responseText = result.text;
 
-      // Check if response is empty
       if (!responseText || responseText.trim() === "") {
         return {
           error: createGoogleErrorMessage(
@@ -325,11 +300,8 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
             errorCode = parsedError.error?.code || parsedError.code;
           }
         }
-      } catch {
-        // Ignore parsing errors
-      }
+      } catch {}
 
-      // Handle specific API errors
       if (errorMessage.includes("timed out")) {
         return {
           error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
@@ -365,14 +337,12 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
         };
       }
 
-      // Re-throw for outer catch
       throw apiError;
     }
   } catch (error) {
     log.error("Character search error:", error);
     const errorMessage = getErrorMessage(error);
 
-    // Check for network errors
     if (error instanceof TypeError && errorMessage.includes("network")) {
       return {
         error: createGoogleErrorMessage("CONNECTION", 503, errorMessage, locale),
@@ -392,8 +362,6 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
  * Uses single-agent approach for Gemini 3 models (with web search tools)
  * Uses dual-agent approach for other models (separate search + generation)
  *
- * @param apiKey - Decrypted Google API key
- * @param params - Generation parameters
  * @param locale - User's locale for error messages
  * @returns Promise<PresetGenerationResult> - Generated preset or error
  */
@@ -403,7 +371,6 @@ export async function generatePresetFromPrompt(
   locale: string,
   client?: GoogleGenAI,
 ): Promise<PresetGenerationResult> {
-  // Validate API key (skip when using pre-built client)
   if (!client && (!apiKey || apiKey.trim().length < 10)) {
     return {
       error: createGoogleErrorMessage("API_KEY", 403, "Invalid API key", locale),
@@ -412,10 +379,8 @@ export async function generatePresetFromPrompt(
   }
 
   try {
-    // Initialize Gemini client (use pre-built if provided)
     const genAI = client ?? new GoogleGenAI({ apiKey });
 
-    // Resolve generation model
     const configuredModel = params.modelName || "gemini-2.5-flash";
 
     // Run search sub-agent when web search is requested.
@@ -427,7 +392,6 @@ export async function generatePresetFromPrompt(
     if (params.useWebSearch) {
       log.info(`Running search sub-agent (${SEARCH_AGENT_MODEL}) for "${params.characterName}"`);
 
-      // Call search agent
       const searchResult = await searchCharacterInfo(
         apiKey,
         params.characterName,
@@ -449,7 +413,6 @@ export async function generatePresetFromPrompt(
         };
       }
 
-      // Store results for injection into the generation prompt
       searchInfo = searchResult.characterInfo;
       log.info("Search sub-agent completed, proceeding to generation");
     }
@@ -459,7 +422,6 @@ export async function generatePresetFromPrompt(
     let MODEL_NAME = configuredModel;
     const FALLBACK_MODEL = undefined;
 
-    // Define JSON schema for structured output with length constraints
     const maxPresetStringLength = PRESET_MAX_STRING_LENGTH;
     const responseJsonSchema = {
       type: "object" as const,
@@ -498,7 +460,6 @@ export async function generatePresetFromPrompt(
       required: ["attribute_list", "sample_dialogues_in", "sample_dialogues_out"],
     };
 
-    // Configure generation with structured output
     const generationConfig: GenerateContentConfig = {
       temperature: 1.5, // Creative but controlled
       topP: 0.9,
@@ -507,7 +468,6 @@ export async function generatePresetFromPrompt(
       responseJsonSchema: responseJsonSchema,
     };
 
-    // Build generation prompt
     let prompt = `You are an expert character creator for a Discord chatbot. Create a detailed character profile based on the following information.
 
 Character Name: ${params.characterName}
@@ -566,7 +526,6 @@ The sample_dialogues_in and sample_dialogues_out MUST follow this structure (exa
    - Avoid repeating patterns from previous dialogues
    - Could be humor, vulnerability, expertise, philosophical musings, or anything that adds dimension`;
 
-    // Inject search results from the search sub-agent (if web search was requested)
     if (searchInfo) {
       if (!searchInfo.includes("None found")) {
         prompt += `\n\nWeb Search Results (use this information to create an authentic character profile):
@@ -578,7 +537,6 @@ Use the web search information to accurately represent the character's personali
       }
     }
 
-    // Add additional instructions if provided
     if (params.existingPresetContext?.trim()) {
       prompt += `\n\nExisting Character Data (from uploaded card/preset):
 Use this as reference material to transform, refine, or expand upon according to the user's description and instructions. Preserve the core character identity while incorporating requested changes.
@@ -586,7 +544,6 @@ Use this as reference material to transform, refine, or expand upon according to
 ${params.existingPresetContext.trim()}`;
     }
 
-    // Add additional instructions if provided
     if (params.additionalInstructions?.trim()) {
       prompt += `\n\nAdditional Instructions: ${params.additionalInstructions.trim()}`;
     }
@@ -603,13 +560,11 @@ ${params.existingPresetContext.trim()}`;
 - NEVER replace pronouns — write "you", "I", "me", "I'm" literally (e.g. write "I'm {bot}", never "{bot}'m {bot}")
 - All string lengths must not exceed ${maxPresetStringLength} characters per item`;
 
-    // Prepare prompt parts (text + optional image)
     const promptParts: Array<{
       text?: string;
       inlineData?: { data: string; mimeType: string };
     }> = [{ text: prompt }];
 
-    // Add image if provided
     if (params.imageBase64 && params.imageMimeType) {
       promptParts.push({
         inlineData: {
@@ -620,7 +575,6 @@ ${params.existingPresetContext.trim()}`;
       log.info("Image included in generation");
     }
 
-    // Prepare user prompt content
     const userPromptContent: Content = {
       role: "user",
       parts: promptParts,
@@ -642,7 +596,6 @@ ${params.existingPresetContext.trim()}`;
           setTimeout(() => reject(new Error("Request timed out after 60 seconds")), 90000);
         });
 
-        // Make API call with timeout
         const result = await Promise.race([
           genAI.models.generateContent({
             model: MODEL_NAME,
@@ -654,7 +607,6 @@ ${params.existingPresetContext.trim()}`;
 
         log.info(`Preset generation completed with model: ${MODEL_NAME}`);
 
-        // Check for blocked content
         if (result.promptFeedback?.blockReason) {
           lastError = {
             error: createGoogleErrorMessage(
@@ -670,7 +622,6 @@ ${params.existingPresetContext.trim()}`;
 
         const responseText = result.text;
 
-        // Check if response is empty
         if (!responseText || responseText.trim() === "") {
           lastError = {
             error: createGoogleErrorMessage(
@@ -684,7 +635,6 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // Parse JSON response
         let parsedResponse: {
           attribute_list?: string[];
           sample_dialogues_in?: string[];
@@ -703,7 +653,6 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // Validate response structure
         if (
           !parsedResponse.attribute_list ||
           !parsedResponse.sample_dialogues_in ||
@@ -721,7 +670,6 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // Validate arrays have correct lengths
         if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
           lastError = {
             error: createGoogleErrorMessage(
@@ -761,11 +709,9 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // Sanitize sample dialogues (remove any speaker prefixes)
         const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
         const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
 
-        // Build final PresetExportData with hardcoded nickname and trigger words
         const preset: PresetExportData = {
           tomori_nickname: params.characterName,
           trigger_words: [params.characterName],
@@ -789,11 +735,8 @@ ${params.existingPresetContext.trim()}`;
               errorCode = parsedError.error?.code || parsedError.code;
             }
           }
-        } catch {
-          // Ignore parsing errors
-        }
+        } catch {}
 
-        // Handle specific API errors
         if (errorMessage.includes("timed out")) {
           lastError = {
             error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
@@ -837,12 +780,10 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // Re-throw for outer catch
         throw apiError;
       }
     }
 
-    // If all models failed, return the last error
     if (lastError) {
       return lastError;
     }
@@ -856,7 +797,6 @@ ${params.existingPresetContext.trim()}`;
     log.error("Preset generation error:", error);
     const errorMessage = getErrorMessage(error);
 
-    // Check for network errors
     if (error instanceof TypeError && errorMessage.includes("network")) {
       return {
         error: createGoogleErrorMessage("CONNECTION", 503, errorMessage, locale),

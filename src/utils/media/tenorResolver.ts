@@ -83,19 +83,16 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
  */
 function extractFromGifJson(html: string): string | null {
   try {
-    // Look for <script id="gif-json"> tag
     const gifJsonMatch = html.match(/<script[^>]*id=["']gif-json["'][^>]*>(.*?)<\/script>/s);
 
     if (!gifJsonMatch) {
       return null;
     }
 
-    // Parse the JSON content
     const jsonContent = gifJsonMatch[1].trim();
 
     const gifData = JSON.parse(jsonContent);
 
-    // Navigate to gif URL: media_formats.gif.url
     const gifUrl = gifData?.media_formats?.gif?.url;
 
     if (typeof gifUrl === "string" && gifUrl.endsWith(".gif")) {
@@ -114,7 +111,6 @@ function extractFromGifJson(html: string): string | null {
 /**
  * Extract media URL using regex pattern (Method 2 - Fallback)
  * Searches for media.tenor.com URLs matching the slug
- * @param html - The HTML content to search
  * @param urlSlug - The slug from the view URL to match against (e.g., "tsukimura-dark-souls-death")
  */
 function extractViaRegex(html: string, urlSlug: string): string | null {
@@ -126,12 +122,9 @@ function extractViaRegex(html: string, urlSlug: string): string | null {
       return null;
     }
 
-    // Decode the URL slug for matching (handles URL-encoded characters)
     const decodedSlug = decodeURIComponent(urlSlug);
 
-    // Filter URLs that match the slug from the view URL
     const matchingUrls = allMediaTenorMatches.filter((url) => {
-      // Extract the filename part (without extension)
       const filename = url.split("/").pop() || "";
       const filenameWithoutExt = filename.replace(/\.(gif|mp4|webm|png)$/i, "");
 
@@ -145,13 +138,11 @@ function extractViaRegex(html: string, urlSlug: string): string | null {
     }
 
     if (matchingUrls.length > 0) {
-      // Prioritize GIF format if available
       const gifUrl = matchingUrls.find((url) => url.endsWith(".gif"));
       if (gifUrl) {
         return gifUrl;
       }
 
-      // If no GIF, return the first matching URL (likely MP4/WebM)
       return matchingUrls[0];
     }
 

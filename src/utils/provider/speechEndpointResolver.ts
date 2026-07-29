@@ -14,7 +14,6 @@ export interface SpeechEndpointResult {
  * Resolves the active speech or transcription endpoint for a server by querying
  * `custom_endpoints` directly (capability-first lookup, bypassing the LLM/model chain).
  *
- * @param serverId - Database server_id
  * @param capability - "speech" or "transcription"
  * @returns Endpoint row + decrypted API key, or null if none is registered
  */

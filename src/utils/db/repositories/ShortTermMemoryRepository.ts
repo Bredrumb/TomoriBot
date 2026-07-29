@@ -30,12 +30,9 @@ import type { IRepository } from "./IRepository";
 export type ShortTermMemoryExportShape = Record<string, never>;
 
 export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
   /**
    * Returns all active short-term memory entries for a user across channels.
    *
-   * @param userId - Discord user snowflake
    */
   getForUser(userId: string): ShortTermMemoryEntry[] {
     return getShortTermMemoriesForUser(userId);
@@ -44,7 +41,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   /**
    * Returns all active short-term memory entries for a server across channels.
    *
-   * @param serverId - Discord server snowflake
    */
   getForServer(serverId: string): ShortTermMemoryEntry[] {
     return getShortTermMemoriesForServer(serverId);
@@ -53,8 +49,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   /**
    * Returns the STM entry for a specific user in a specific channel.
    *
-   * @param userId    - Discord user snowflake
-   * @param channelId - Discord channel snowflake
    */
   getForUserChannel(userId: string, channelId: string): ShortTermMemoryEntry | undefined {
     return getShortTermMemoryForUserChannel(userId, channelId);
@@ -63,8 +57,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   /**
    * Returns the server-scoped STM entry for a specific channel.
    *
-   * @param serverId  - Discord server snowflake
-   * @param channelId - Discord channel snowflake
    */
   getForServerChannel(serverId: string, channelId: string): ShortTermMemoryEntry | undefined {
     return getShortTermMemoryForServerChannel(serverId, channelId);
@@ -74,7 +66,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
    * Returns the best available STM entry for a channel (user-scoped preferred,
    * falls back to server-scoped).
    *
-   * @param args - Forwarded to getShortTermMemoryForChannel
    */
   getForChannel(
     ...args: Parameters<typeof getShortTermMemoryForChannel>
@@ -82,12 +73,9 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     return getShortTermMemoryForChannel(...args);
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Stores a new short-term memory entry.
    *
-   * @param args - Forwarded to storeShortTermMemory
    */
   store(...args: Parameters<typeof storeShortTermMemory>): ReturnType<typeof storeShortTermMemory> {
     return storeShortTermMemory(...args);
@@ -97,7 +85,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
    * Updates the summary text of an existing STM entry identified by
    * userCacheKey + serverCacheKey + channelId.
    *
-   * @param args - Forwarded to updateShortTermMemorySummary
    */
   updateSummary(
     ...args: Parameters<typeof updateShortTermMemorySummary>
@@ -105,12 +92,9 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     return updateShortTermMemorySummary(...args);
   }
 
-  // ── invalidation ───────────────────────────────────────────────────────────
-
   /**
    * Invalidates (expires) a short-term memory entry by its cache key.
    *
-   * @param args - Forwarded to invalidateShortTermMemory
    */
   invalidate(...args: Parameters<typeof invalidateShortTermMemory>): void {
     invalidateShortTermMemory(...args);
@@ -119,7 +103,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   /**
    * Clears all STM entries for a channel.
    *
-   * @param channelId - Discord channel snowflake
    */
   clearForChannel(channelId: string): void {
     clearShortTermMemoryForChannel(channelId);
@@ -128,7 +111,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   /**
    * Clears STM entries scoped to a server + channel pair.
    *
-   * @param args - Forwarded to clearShortTermMemoryForServerChannel
    */
   clearForServerChannel(...args: Parameters<typeof clearShortTermMemoryForServerChannel>): void {
     clearShortTermMemoryForServerChannel(...args);
@@ -137,13 +119,10 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   /**
    * Clears all STM entries for a user across all channels.
    *
-   * @param userId - Discord user snowflake
    */
   clearForUser(userId: string): void {
     clearShortTermMemoryForUser(userId);
   }
-
-  // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
    * Short-term memory is ephemeral — nothing to export.

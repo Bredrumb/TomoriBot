@@ -24,9 +24,6 @@ function resolveBackupsRoot(): string {
 //   per-server subdirectories.
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface ServerRow {
   server_id: number;
@@ -69,9 +66,6 @@ interface BundleManifest {
   servers: ServerManifest[];
 }
 
-// ---------------------------------------------------------------------------
-// Database helpers
-// ---------------------------------------------------------------------------
 
 /** Retrieve all registered servers. */
 async function getAllServers(): Promise<ServerRow[]> {
@@ -112,21 +106,16 @@ async function getMemoriesForPersona(serverId: number, lineageId: number): Promi
   return rows.map((r) => r.content);
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 async function runBackup(): Promise<void> {
   log.section("PERSONA BACKUP");
   log.info("Exporting all personas from the database...");
 
-  // Verify database credentials
   if (!process.env.POSTGRES_PASSWORD && !process.env.DATABASE_URL) {
     log.error("POSTGRES_PASSWORD or DATABASE_URL must be set in .env");
     process.exit(1);
   }
 
-  // Create timestamped output directory
   const backupsRoot = resolveBackupsRoot();
   if (!existsSync(backupsRoot)) mkdirSync(backupsRoot, { recursive: true });
 
@@ -135,10 +124,8 @@ async function runBackup(): Promise<void> {
   mkdirSync(bundleDir, { recursive: true });
   log.info(`Output directory: ${bundleDir}`);
 
-  // Load bot version
   const { version } = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf-8")) as { version: string };
 
-  // Fetch all servers
   const servers = await getAllServers();
   if (servers.length === 0) {
     log.warn("No servers found in the database. Nothing to export.");
@@ -157,7 +144,6 @@ async function runBackup(): Promise<void> {
   let totalExported = 0;
   let totalFailed = 0;
 
-  // Iterate each server
   for (const server of servers) {
     const personas = await getPersonasForServer(server.server_id);
     if (personas.length === 0) {
@@ -177,7 +163,6 @@ async function runBackup(): Promise<void> {
       personas: [],
     };
 
-    // Export each persona
     for (const persona of personas) {
       const { persona_nickname: nickname, is_alter } = persona;
       const typeTag = is_alter ? "alter" : "main";
@@ -191,7 +176,6 @@ async function runBackup(): Promise<void> {
           continue;
         }
 
-        // Load server memories for this persona lineage
         const lineageId =
           typeof persona.persona_lineage_id === "bigint"
             ? Number(persona.persona_lineage_id)
@@ -276,12 +260,10 @@ async function runBackup(): Promise<void> {
     }
   }
 
-  // Write manifest
   manifest.total_servers = manifest.servers.length;
   manifest.total_personas = totalExported;
   writeFileSync(join(bundleDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
-  // Summary
   log.section("BACKUP COMPLETE");
   log.info(`Location:       ${bundleDir}`);
   log.info(`Servers:        ${manifest.total_servers}`);

@@ -51,11 +51,7 @@ function buildDeepseekPresetSystemPrompt(): string {
 /**
  * Generate preset data from user prompts using the DeepSeek API.
  *
- * @param apiKey - Decrypted DeepSeek API key
- * @param params - Generation parameters (character info, instructions, image)
  * @param _locale - User's locale (reserved for future error localisation)
- * @param options - DeepSeek-specific options (model, tools, temperature)
- * @returns Generated preset or a typed error result
  */
 export async function generatePresetFromPromptDeepseek(
   apiKey: string,
@@ -82,7 +78,6 @@ export async function generatePresetFromPromptDeepseek(
   let toolRounds = 0;
 
   while (true) {
-    // Build the request body
     const body: Record<string, unknown> = {
       model: options.model,
       messages,
@@ -91,7 +86,6 @@ export async function generatePresetFromPromptDeepseek(
       stream: false,
     };
 
-    // Omit temperature for deepseek-reasoner (not supported by that model)
     if (options.model !== "deepseek-reasoner") {
       body.temperature = options.temperature ?? 1.0;
     }
@@ -101,7 +95,6 @@ export async function generatePresetFromPromptDeepseek(
       body.tool_choice = "auto";
     }
 
-    // Send the request
     const response = await fetch(DEEPSEEK_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -144,7 +137,6 @@ export async function generatePresetFromPromptDeepseek(
       };
     }
 
-    // Handle tool calls
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length > 0) {
       if (!toolsEnabled || !toolContext) {
@@ -215,7 +207,6 @@ export async function generatePresetFromPromptDeepseek(
       continue;
     }
 
-    // Extract and parse the final JSON response
     const responseText = typeof message.content === "string" ? message.content.trim() : "";
     if (!responseText) {
       return {

@@ -1,5 +1,3 @@
-// locales/en-US/commands/memory.ts
-
 export default {
   memory: {
     description: `Manage stored memories and documents.`,

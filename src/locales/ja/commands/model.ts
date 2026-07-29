@@ -1,5 +1,3 @@
-// locales/ja/commands/model.ts
-
 export default {
   model: {
     providerPicker: {

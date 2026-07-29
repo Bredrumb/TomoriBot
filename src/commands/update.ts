@@ -50,8 +50,6 @@ function extractImageUrl(text: string): string | null {
  * 3. Trims leading and trailing whitespace
  * 4. Truncates to Discord's embed description limit with ellipsis
  * @param body - Raw release notes markdown from the GitHub API
- * @param locale - Locale of the interaction
- * @param htmlUrl - GitHub URL for the release
  * @returns Cleaned text ready for an embed description
  */
 function cleanReleaseNotes(body: string, locale: string, htmlUrl: string): string {
@@ -74,10 +72,6 @@ function cleanReleaseNotes(body: string, locale: string, htmlUrl: string): strin
  * Fetches the latest release from GitHub's public API and posts it as a
  * public embed in the current channel — mirroring the Discord webhook
  * notification sent by the CI/CD pipeline on deploy.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -112,7 +106,6 @@ export async function execute(
     //    Release images are referenced inline as ![alt](url) by the release workflow.
     const imageUrl = release.body ? extractImageUrl(release.body) : null;
 
-    // Clean the release notes for embed display
     const description = release.body
       ? cleanReleaseNotes(release.body, locale, release.html_url)
       : localizer(locale, "commands.update.no_notes");
@@ -126,18 +119,15 @@ export async function execute(
         text: localizer(locale, "commands.update.footer"),
       });
 
-    // Attach the release image if one was found in the notes
     if (imageUrl) {
       embed.setImage(imageUrl);
     }
 
-    // Build the trailing "already applied" embed
     const appliedEmbed = new EmbedBuilder()
       .setTitle(localizer(locale, "commands.update.applied_title"))
       .setDescription(localizer(locale, "commands.update.applied_description"))
       .setColor(ColorCode.INFO);
 
-    // Post both embeds publicly to the channel
     await interaction.editReply({ embeds: [embed, appliedEmbed] });
   } catch (error) {
     const context: ErrorContext = {

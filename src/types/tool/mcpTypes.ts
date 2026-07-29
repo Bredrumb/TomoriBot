@@ -39,13 +39,11 @@ export interface MCPServerResponse {
 export interface MCPContentItem {
   type: "text" | "image" | "audio" | "video";
   text?: string;
-  // Image-specific properties
   image_url?: string;
   url?: string;
   source_url?: string;
   original_url?: string;
   src?: string;
-  // Metadata
   metadata?: Record<string, unknown>;
 }
 
@@ -251,13 +249,11 @@ export interface DuckDuckGoSearchResponse extends DuckDuckGoWebSearchResponse {}
  * Extended context specifically for MCP function execution
  */
 export interface MCPExecutionContext extends ToolContext {
-  // MCP-specific properties
   serverName?: string;
   functionName: string;
   originalArgs: Record<string, unknown>;
   modifiedArgs: Record<string, unknown>;
 
-  // Execution metadata
   executionStartTime: number;
   overridesApplied?: string[];
 }
@@ -274,11 +270,8 @@ export interface MCPServerBehaviorHandler {
 
   /**
    * Process MCP function result before returning to LLM
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
    * @param context - Execution context with Discord channel access
-   * @param args - Function arguments used
-   * @returns Processed tool result
    */
   processResult(
     functionName: string,
@@ -328,10 +321,8 @@ export interface EnhancedMCPServerConfig {
   transport: "stdio" | "http" | "websocket";
   timeout?: number;
 
-  // Handler configuration
   behaviorHandler?: string; // Class name of the behavior handler
 
-  // Capabilities
   supportedFunctions?: string[];
   requiresAuth?: boolean;
   rateLimited?: boolean;
@@ -350,22 +341,18 @@ export interface TypedMCPToolResult extends ToolResult {
     executionTime: number;
     overridesApplied?: string[];
 
-    // Function-specific data
     imagesSent?: number;
     urlsFound?: number;
     fetchCapabilityReminder?: boolean;
     agentInstructions?: string;
 
-    // Status information
     status: "completed" | "completed_and_sent" | "failed" | "partial";
     completionMessage?: string;
 
-    // Handler-specific extensions
     error?: string; // For error scenarios
     searchProvider?: string; // For search-specific information
     contentLength?: number; // For fetch-specific information
 
-    // Allow additional properties for future extensibility
     [key: string]: unknown;
   };
 }
@@ -420,9 +407,7 @@ export const MCPTypeGuards = {
             if (imageData.image_url && typeof imageData.image_url === "string") {
               imageUrls.push(imageData.image_url);
             }
-          } catch {
-            // Skip malformed JSON
-          }
+          } catch {}
         } else if (item?.type === "image") {
           const possibleUrls = [item.image_url, item.url, item.source_url, item.original_url, item.src].filter(
             (url): url is string => typeof url === "string",

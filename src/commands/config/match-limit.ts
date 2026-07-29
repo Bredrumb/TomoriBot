@@ -11,7 +11,6 @@ const MIN_LIMIT = 1;
 const MAX_LIMIT = 10;
 const DEFAULT_LIMIT = 3;
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("trigger-match-limit")
@@ -27,10 +26,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Configures the maximum number of personas that can match a single message's triggers.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -38,7 +33,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -52,7 +46,6 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // Get the limit value from options
     const limit = interaction.options.getInteger("limit", true);
 
     // Validate range (redundant but safe)
@@ -69,7 +62,6 @@ export async function execute(
       return;
     }
 
-    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -80,7 +72,6 @@ export async function execute(
       return;
     }
 
-    // Check if this is the same as the current limit
     const currentLimit = tomoriState.config.match_limit ?? DEFAULT_LIMIT;
     if (limit === currentLimit) {
       await replyInfoEmbed(interaction, locale, {
@@ -94,7 +85,6 @@ export async function execute(
       return;
     }
 
-    // Update the limit in the database
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, { match_limit: limit });
 
     if (!updated) {
@@ -122,7 +112,6 @@ export async function execute(
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // Success message
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.config.trigger-match-limit.limit.success_title",
       descriptionKey: "commands.config.trigger-match-limit.limit.success_description",

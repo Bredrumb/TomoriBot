@@ -42,7 +42,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
    * Disabled for NovelAI — GLM 4.6's limited token budget (~2800 tokens) makes
    * short-term memory updates impractical; the tool definition and STM prompts
    * consume tokens better spent on core conversation context.
-   * @param provider - LLM provider name
    * @returns True if provider supports short-term memory updates
    */
   isAvailableFor(provider: string): boolean {
@@ -54,8 +53,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
    * Enhanced availability check that also considers per-turn disable flags.
    * Once STM has been updated once in a turn, the flag is set to prevent
    * the LLM from calling this tool again in the same turn.
-   * @param provider - LLM provider name
-   * @param context - Tool context that may contain streaming flags
    * @returns True if tool should be offered to the LLM
    */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
@@ -98,7 +95,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     log.info(`[updateShortTermMemoryTool] Tool called - userId=${context.userId}, channelId=${context.channel?.id}`);
 
     try {
-      // Validate parameters
       const summary = args.summary;
 
       if (typeof summary !== "string") {
@@ -117,7 +113,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         };
       }
 
-      // Extract userId and channelId from context
       const triggeringUserId = context.userId;
       const channelId = context.channel.id;
 
@@ -147,7 +142,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         // Truncate will happen in the cache function
       }
 
-      // Extract server and channel info for new entries
       const serverId = context.guildId || "DM";
       const serverName = "guild" in context.channel ? context.channel.guild?.name : undefined;
       const channelName = "name" in context.channel ? context.channel.name : undefined;
@@ -159,7 +153,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
           ? (context.channel.parentId ?? null)
           : null;
 
-      // Update both the user-scoped STM and, in guilds, the shared server STM
       const personaId = context.tomoriState?.persona_id ?? null;
       const personaLineageId = context.tomoriState?.persona_lineage_id ?? null;
       const userCacheKey = personaId
@@ -191,7 +184,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         `[updateShortTermMemoryTool] [TOOL_EXECUTE] Updated short-term memory - userCacheKey=${userCacheKey}, serverCacheKey=${serverCacheKey}, summaryLength=${Math.min(trimmedSummary.length, MAX_SUMMARY_LENGTH)}`,
       );
 
-      // Return success with no user-facing message (silent operation)
       return {
         success: true,
         message: "Short-term memory updated successfully (no user notification)",

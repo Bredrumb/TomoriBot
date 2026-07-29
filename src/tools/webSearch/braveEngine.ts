@@ -19,7 +19,6 @@ import { BASE_SEARCH_CATEGORIES, type SearchCategory, type WebSearchEngine } fro
 export class BraveEngine implements WebSearchEngine {
   readonly name = "brave" as const;
 
-  // Instantiate the per-category internal tools once and reuse them across calls.
   private readonly webTool = new InternalBraveWebSearchTool();
   private readonly imageTool = new InternalBraveImageSearchTool();
   private readonly videoTool = new InternalBraveVideoSearchTool();
@@ -35,7 +34,6 @@ export class BraveEngine implements WebSearchEngine {
   }
 
   async search(query: string, category: SearchCategory, context: ToolContext, count?: number): Promise<ToolResult> {
-    // Pass query and optional count as args expected by the internal tool params.
     const args: Record<string, unknown> = { query, ...(count !== undefined && { count }) };
 
     switch (category) {

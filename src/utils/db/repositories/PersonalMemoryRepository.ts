@@ -21,8 +21,6 @@ export type PersonalMemoryExportShape = {
 };
 
 export class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
   /**
    * Loads personal memories for a user scoped to a persona lineage.
    * When includeGlobalMemories is true (default), lineage-0 memories are also included.
@@ -102,8 +100,6 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
       return new Set();
     }
   }
-
-  // ── writes ─────────────────────────────────────────────────────────────────
 
   async edit(personalMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {
     try {
@@ -334,8 +330,6 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     }
   }
 
-  // ── limit checks ───────────────────────────────────────────────────────────
-
   /**
    * Check if a user has reached their personal memory limit.
    *
@@ -387,8 +381,6 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
       return { isValid: false, error: "PERSONAL_MEMORY_LIMIT_EXCEEDED" };
     }
   }
-
-  // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
    * Personal memory export is handled by ImportExportRepository.

@@ -17,7 +17,6 @@ import { log } from "@/utils/misc/logger";
  * loadCommandData() is single-flight cached, so re-calling it here (after
  * 01_registercommands already loaded it) is effectively free. Non-critical: a
  * failure only leaves the catalog stale for a boot; command handling is unaffected.
- * @param _client - The Discord client instance (unused; present for handler signature).
  */
 export default async (_client: Client): Promise<void> => {
   try {

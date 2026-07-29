@@ -124,7 +124,6 @@ async function loadLocaleSlices(): Promise<LocaleSlice[]> {
     const module = await import(filePath);
     const obj = structuredClone(module.default) as Record<string, unknown>;
 
-    // relPath: "en-US/commands/bot.ts" or "en-US/general.ts"
     const relPath = relative(localesPath, filePath).replace(/\\/g, "/");
     const segments = relPath.split("/"); // ["en-US", "commands", "bot.ts"] or ["en-US", "general.ts"]
 
@@ -193,7 +192,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Load all leaf slice files
   const slices = await loadLocaleSlices();
   log.info(`Loaded ${slices.length} leaf slice files`);
 

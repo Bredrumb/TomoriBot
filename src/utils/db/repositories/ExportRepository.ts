@@ -30,12 +30,9 @@ import {
  * invalidation is performed here.
  */
 export class ExportRepository {
-  // ── private helpers ─────────────────────────────────────────────────────────
-
   /**
    * Sanitizes a string for safe JSON serialization.
    * Removes control characters (except newlines and tabs) that could break JSON.
-   * @param content - The content to sanitize
    * @returns Object with sanitized content and flag indicating if sanitization occurred
    */
   private sanitizeForJson(content: string): { sanitized: string; wasSanitized: boolean } {
@@ -53,8 +50,6 @@ export class ExportRepository {
     });
   }
 
-  // ── export operations ───────────────────────────────────────────────────────
-
   /**
    * Exports personal user data (nickname, language preference, impersonation prompt, memories).
    * @param userDiscId - Discord user ID to export data for
@@ -68,7 +63,6 @@ export class ExportRepository {
     includeGlobalMemories = true,
   ): Promise<ExportResult> {
     try {
-      // Query user data from database (personalization fields live in the split table)
       const rows = await sql`
         SELECT
           u.user_id,
@@ -89,7 +83,6 @@ export class ExportRepository {
 
       const userData = rows[0];
 
-      // Load personal memories from lineage-scoped table
       const memoryRows =
         includeGlobalMemories && personaLineageId !== 0
           ? await sql`
@@ -118,7 +111,6 @@ export class ExportRepository {
       // Sanitize memories for safe JSON export
       const sanitizedMemories = this.sanitizeMemoryItems(rawPersonalMemories, "personal memories");
 
-      // Build export object
       const exportData: PersonalExport = {
         version: EXPORT_VERSION,
         type: "personal",
@@ -131,7 +123,6 @@ export class ExportRepository {
         },
       };
 
-      // Validate export data structure
       const validated = getPersonalExportSchema().safeParse(exportData);
       if (!validated.success) {
         log.error(`Personal export validation failed for user ${userDiscId}:`, validated.error);
@@ -153,7 +144,6 @@ export class ExportRepository {
    */
   async exportServerData(serverDiscId: string, personaId?: number): Promise<ExportResult> {
     try {
-      // Get internal server ID
       const serverRows = await sql`
         SELECT server_id
         FROM servers
@@ -265,7 +255,6 @@ export class ExportRepository {
 
       const configData = configRows[0];
 
-      // Resolve target persona/lineage for server memory export
       let targetPersonaId = personaId;
       let targetPersonaLineageId: number | null = null;
       if (!targetPersonaId) {
@@ -314,7 +303,6 @@ export class ExportRepository {
         targetPersonaLineageId = null;
       }
 
-      // Get lineage-scoped server memories for the selected persona target
       const memoryRows =
         targetPersonaLineageId !== null
           ? await sql`
@@ -339,7 +327,6 @@ export class ExportRepository {
       // Sanitize memories for safe JSON export
       const sanitizedServerMemories = this.sanitizeMemoryItems(rawServerMemories, "server memories");
 
-      // Build export object
       const exportData: ServerExport = {
         version: EXPORT_VERSION,
         type: "server",
@@ -420,7 +407,6 @@ export class ExportRepository {
         },
       };
 
-      // Validate export data structure
       const validated = getServerExportSchema().safeParse(exportData);
       if (!validated.success) {
         log.error(`Server export validation failed for server ${serverDiscId}:`, validated.error);
@@ -493,7 +479,6 @@ export class ExportRepository {
    */
   async exportPersonalSettings(userDiscId: string): Promise<ExportResult> {
     try {
-      // Query user settings including image appearance fields and behavioral preferences
       const rows = await sql`
         SELECT
           u.user_nickname,
@@ -518,7 +503,6 @@ export class ExportRepository {
 
       const userData = rows[0];
 
-      // Build export object with NAI character fields and behavioral preferences
       const exportData: PersonalSettingsExport = {
         version: EXPORT_VERSION,
         type: "personal_settings",
@@ -537,7 +521,6 @@ export class ExportRepository {
         },
       };
 
-      // Validate export data structure
       const validated = personalSettingsExportSchema.safeParse(exportData);
       if (!validated.success) {
         log.error(`Personal settings export validation failed for user ${userDiscId}:`, validated.error);
@@ -612,7 +595,6 @@ export class ExportRepository {
    */
   async exportPersonalityData(serverDiscId: string, personaId?: number): Promise<PersonalityExportResult> {
     try {
-      // Get persona data (selected persona or default main persona)
       const rows =
         typeof personaId === "number"
           ? await sql`
@@ -646,7 +628,6 @@ export class ExportRepository {
 
       const personalityData = rows[0];
 
-      // Format personality data as human-readable text
       let textOutput = "";
 
       textOutput += `========================================\n`;
@@ -700,8 +681,6 @@ export class ExportRepository {
       return { success: false, error: "commands.data.export.error_export_failed" };
     }
   }
-
-  // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
    * Exports a user's full personal data bundle (IRepository contract).

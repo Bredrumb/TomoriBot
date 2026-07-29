@@ -239,7 +239,6 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
   let exitCode = 0;
 
   for (const [index, batch] of lane.batches.entries()) {
-    // When JUnit output is requested, give each batch its own temp outfile.
     const reporterArgs: string[] = [];
     if (requestedOutfile) {
       const batchOutfile = join(tmpdir(), `tomori-junit-${runId}-${lane.id}-${index}.xml`);
@@ -273,7 +272,6 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
  * (the `vl` checklist sets it), each batch writes its own JUnit file which are
  * then merged into that requested path.
  *
- * @returns The first non-zero lane exit code, or 0 when everything passes.
  */
 async function runTestFiles(files: string[], extraEnv: Record<string, string> = {}): Promise<number> {
   const requestedOutfile = process.env.BUN_TEST_JUNIT_OUTFILE;
@@ -288,7 +286,6 @@ async function runTestFiles(files: string[], extraEnv: Record<string, string> = 
     process.stdout.write(result.output);
   }
 
-  // Merge every batch's JUnit output into the single file the caller asked for.
   const allOutfiles = results.flatMap((result) => result.junitOutfiles);
   if (requestedOutfile && allOutfiles.length > 0) {
     await mergeJUnitFiles(allOutfiles, requestedOutfile);
@@ -302,7 +299,6 @@ async function main(): Promise<void> {
     throw new Error("[test-runner] Refusing to run with RUN_ENV=production.");
   }
 
-  // Discover every test file once; planLanes groups them into concurrent lanes.
   const testFiles = await discoverTestFiles();
   if (testFiles.length === 0) {
     console.error("[test-runner] No test files found under tests/.");
@@ -311,7 +307,6 @@ async function main(): Promise<void> {
 
   const params = getConnectionParams();
 
-  // No credentials found — run tests in skip mode.
   if (!params) {
     console.log("[test-runner] No Postgres credentials found. DB regression tests will be skipped.");
     process.exit(await runTestFiles(testFiles));
@@ -359,7 +354,6 @@ async function main(): Promise<void> {
     process.exit(143);
   });
 
-  // Probe the Postgres connection before creating anything.
   try {
     adminSql = createSqlClient(adminUrl);
     await adminSql`SELECT 1`;
@@ -373,7 +367,6 @@ async function main(): Promise<void> {
   let exitCode = 1;
 
   try {
-    // Create the disposable test database.
     console.log(`[test-runner] Provisioning test database: ${tempDbName}`);
     await adminSql`DROP DATABASE IF EXISTS ${adminSql(tempDbName)} WITH (FORCE)`;
     await adminSql`CREATE DATABASE ${adminSql(tempDbName)}`;
@@ -394,7 +387,6 @@ async function main(): Promise<void> {
     // signal-driven cleanup can terminate them all and still drop the DB.
     exitCode = await runTestFiles(testFiles, testEnv);
   } finally {
-    // Always drop the disposable database, even if tests failed.
     console.log(`[test-runner] Dropping test database: ${tempDbName}`);
     await cleanup();
   }

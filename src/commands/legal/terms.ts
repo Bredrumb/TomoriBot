@@ -13,10 +13,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'terms' command
  * Shows a link to the Terms of Service on GitHub with dynamic locale support
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -29,7 +25,6 @@ export async function execute(
   // we can directly use it without availability checks
   const githubUrl = `https://github.com/Bredrumb/TomoriBot/blob/main/legal/${locale}/terms-of-service.md`;
 
-  // Create embed with title, description, and link
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.legal.terms.title"))
     .setDescription(localizer(locale, "commands.legal.terms.description_text"))
@@ -40,7 +35,6 @@ export async function execute(
     .setColor(ColorCode.INFO)
     .setTimestamp();
 
-  // Send ephemeral reply
   await interaction.reply({
     embeds: [embed],
     flags: MessageFlags.Ephemeral,

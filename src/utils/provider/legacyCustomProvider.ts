@@ -21,7 +21,6 @@ export const CUSTOM_ENDPOINT_PLACEHOLDER_KEY = "custom-endpoint-configured";
  * Delete custom LLM entry for a server
  * Called when a server switches away from the custom provider
  *
- * @param serverId - Server ID to find and delete the custom model for
  */
 export async function deleteCustomLLMEntry(serverId: string | number): Promise<void> {
   const codename = `custom/${serverId}`;

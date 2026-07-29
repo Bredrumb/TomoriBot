@@ -62,7 +62,6 @@ export async function execute(
   }
 
   try {
-    // Load all server voice samples.
     const sampleRows = await loadVoiceSamples(serverId);
 
     if (!sampleRows.length) {
@@ -119,11 +118,9 @@ export async function execute(
       return;
     }
 
-    // Count how many personas currently reference this sample.
     // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, sample_id is always present on VoiceSampleRow
     const refCount = await countPersonaVoiceSampleRefs(serverId, sampleRow.sample_id!);
 
-    // Show confirm / cancel buttons.
     const confirmEmbed = createStandardEmbed(locale, {
       titleKey: "commands.speech.voice_remove.confirm_title",
       descriptionKey: "commands.speech.voice_remove.confirm_description",
@@ -163,11 +160,9 @@ export async function execute(
       return;
     }
 
-    // Deletion confirmed: clear persona assignments, remove DB row, delete file.
     // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, sample_id is always present
     await clearPersonaVoiceSampleRefs(serverId, sampleRow.sample_id!);
 
-    // Delete the voice sample itself
     // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, sample_id is always present
     await deleteVoiceSample(sampleRow.sample_id!);
     // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, file_path is always present

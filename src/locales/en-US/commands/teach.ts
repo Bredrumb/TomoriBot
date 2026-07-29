@@ -1,5 +1,3 @@
-// locales/en-US/commands/teach.ts
-
 export default {
   teach: {
     sampledialogue: {

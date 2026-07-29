@@ -53,8 +53,6 @@ export type ChannelLlmCacheOptions = LlmProviderCacheOptions & {
  * openrouter_image_model_registrations, openrouter_video_model_registrations.
  */
 export class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
-  // ── private scoped OpenRouter row loaders ──────────────────────────────────
-
   private async scopedLlmRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
     if (scope.kind === "server") {
       return includeDeprecated
@@ -399,13 +397,9 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
         `;
   }
 
-  // ── private write helper ───────────────────────────────────────────────────
-
   private toPostgresTextArrayLiteral(values: readonly string[] | null | undefined): string {
     return `{${(values ?? []).map((v) => `"${v.replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
   }
-
-  // ── saved provider config reads ────────────────────────────────────────────
 
   /**
    * Returns all saved provider configs for a server.
@@ -444,7 +438,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
    * Returns the saved provider config for a server + provider pair, or null.
    *
    * @param serverId - Internal server DB ID
-   * @param provider - Provider name
    */
   async loadSavedProviderConfig(serverId: number, provider: string): Promise<SavedProviderConfigRow | null> {
     try {
@@ -506,7 +499,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
    * Returns the saved personal provider config for a user + provider pair, or null.
    *
    * @param userId   - Internal user DB ID
-   * @param provider - Provider name
    */
   async loadUserSavedProviderConfig(userId: number, provider: string): Promise<UserSavedProviderConfigRow | null> {
     try {
@@ -532,8 +524,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       return null;
     }
   }
-
-  // ── custom endpoint reads ──────────────────────────────────────────────────
 
   /**
    * Returns custom endpoints configured for a server.
@@ -740,8 +730,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     }
   }
 
-  // ── OpenRouter model registration reads ───────────────────────────────────
-
   /** Returns LLM registrations for a server. @param serverId - Internal server DB ID */
   async loadOpenRouterModelRegistrationsForServer(serverId: number): Promise<OpenRouterModelRegistrationRow[]> {
     try {
@@ -886,8 +874,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     }
   }
 
-  // ── scoped OpenRouter model reads ──────────────────────────────────────────
-
   /**
    * Returns LLMs visible for a given scope (server or personal), filtered by registration.
    *
@@ -993,8 +979,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     }
   }
 
-  // ── saved provider config writes ───────────────────────────────────────────
-
   /**
    * Upserts a saved provider config snapshot for a server.
    *
@@ -1082,7 +1066,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
    * Deletes a saved provider config for a server + provider pair.
    *
    * @param serverId - Internal server DB ID
-   * @param provider - Provider name
    * @param options  - Optional cache invalidation options
    */
   async deleteSavedProviderConfig(
@@ -1192,7 +1175,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
    * Deletes a personal saved provider config for a user + provider pair.
    *
    * @param userId   - Internal user DB ID
-   * @param provider - Provider name
    */
   async deleteUserSavedProviderConfig(userId: number, provider: string): Promise<boolean> {
     try {
@@ -1212,8 +1194,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       return false;
     }
   }
-
-  // ── custom endpoint writes ─────────────────────────────────────────────────
 
   /**
    * Upserts a custom endpoint for a server or user.
@@ -1610,8 +1590,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     });
   }
 
-  // ── OpenRouter model registration writes ───────────────────────────────────
-
   /**
    * Upserts an OpenRouter LLM model registration.
    *
@@ -1939,8 +1917,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
       return false;
     }
   }
-
-  // ── IRepository contract ───────────────────────────────────────────────────
 
   /**
    * Exports server-scoped provider configuration.
