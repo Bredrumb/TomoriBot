@@ -332,7 +332,7 @@ export async function execute(
       return;
     }
 
-    // 13.5 Check personal memory limit after final scope resolution
+    // Check personal memory limit after final scope resolution
     const personalLimitCheck = await personalMemoryRepository.checkPersonalMemoryLimit(
       targetUserId,
       targetLineageId,

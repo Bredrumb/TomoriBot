@@ -298,7 +298,7 @@ export async function execute(
       return;
     }
 
-    // 13.5 Check server memory limit after final persona resolution
+    // Check server memory limit after final persona resolution
     const serverLimitCheck = await serverMemoryRepository.checkServerMemoryLimit(
       targetServerId,
       targetPersonaLineageId,

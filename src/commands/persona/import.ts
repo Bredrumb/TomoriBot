@@ -314,7 +314,7 @@ export async function execute(
     // Defer reply while we process (ephemeral so all errors are private)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 6.25. Reserve import operation quota (atomic check+increment for DDoS protection)
+    // Reserve import operation quota (atomic check+increment for DDoS protection)
     const quotaReserve = reserveImportQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
@@ -334,7 +334,7 @@ export async function execute(
       return;
     }
 
-    // 6.5. Memory guard check (defense-in-depth)
+    // Memory guard check (defense-in-depth)
     const memCheck = memoryGuard.checkMemory();
     if (memCheck.status === "critical") {
       await interaction.editReply({

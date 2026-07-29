@@ -267,7 +267,7 @@ export async function execute(
       return;
     }
 
-    // 13.5 Check limit against final import size
+    // Check limit against final import size
     const attributeLimitCheck = await personaRepository.checkAttributeLimit(selectedPersona.persona_id);
     const currentCount = attributeLimitCheck.currentCount ?? currentAttributes.length;
     const maxAllowed = attributeLimitCheck.maxAllowed ?? memoryLimits.maxAttributes;

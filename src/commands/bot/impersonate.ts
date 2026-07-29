@@ -348,7 +348,7 @@ async function handlePersonaImpersonation(
       );
     }
 
-    // 7.5. If the sent message contains a trigger word, let the normal cascade fire.
+    // If the sent message contains a trigger word, let the normal cascade fire.
     // tomoriChat runs with isManuallyTriggered=false so trigger rules apply as usual.
     // The self-message detection skips the sending persona; other personas may respond.
     if (sentMessage) {

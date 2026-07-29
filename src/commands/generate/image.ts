@@ -672,7 +672,7 @@ export async function execute(
     const filename = `generated_${Date.now()}.${extension}`;
     const attachment = new AttachmentBuilder(imageBuffer, { name: filename });
 
-    // 19.5. Increment quota after successful generation (server providers only)
+    // Increment quota after successful generation (server providers only)
     if (imageCreds.source === "server") {
       await incrementImageQuota(tomoriState.server_id, interaction.user.id);
     }

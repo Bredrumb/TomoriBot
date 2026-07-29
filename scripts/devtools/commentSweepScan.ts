@@ -4,8 +4,14 @@ import { isAbsolute, relative, resolve } from "node:path";
 import * as ts from "typescript";
 
 const DEFAULT_PATHS = ["src", "scripts", "tests", "apps"];
-const NUMBERED_LINE_PATTERN = /^(\/\/\s*)\d+[a-z]?\.(?:\s+|$)/i;
-const NUMBERED_JSDOC_PATTERN = /^(\s*\*\s*)\d+[a-z]?\.(?:\s+|$)/i;
+// Two shapes, both anchored to the comment head. The dotted form (`5.`, `1.5.`) requires a
+// trailing dot so version strings like `1.2.3 changed this` never match. The bare form
+// (`5.1 Check`) has no trailing dot, so it needs an inner dot plus a capitalized next word
+// to stay clear of `12 minutes out` and `2.5 hours out`.
+// Case-sensitive deliberately: an `i` flag would let the capital lookahead match lowercase.
+const NUMBERED_INDEX = String.raw`(?:\d+(?:\.\d+)*[a-zA-Z]?\.(?:\s+|$)|\d+\.\d+[a-zA-Z]?\s+(?=[A-Z]))`;
+const NUMBERED_LINE_PATTERN = new RegExp(String.raw`^(\/\/\s*)${NUMBERED_INDEX}`);
+const NUMBERED_JSDOC_PATTERN = new RegExp(String.raw`^(\s*\*\s*)${NUMBERED_INDEX}`);
 
 // Both rule patterns are case-sensitive and shape-anchored. A loose /rule \d+/i also
 // matches prose citing an instruction file, which is rationale rather than scaffolding.

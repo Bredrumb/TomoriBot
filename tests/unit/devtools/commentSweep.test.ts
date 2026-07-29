@@ -141,6 +141,32 @@ describe("comment sweep scanner", () => {
     expect(findOperation(candidates, "strip-numbering")).toHaveLength(1);
   });
 
+  it("strips sub-indexed step numbering without touching version strings", async () => {
+    const root = await createTemporaryRoot();
+    await Bun.write(
+      join(root, "fixture.ts"),
+      [
+        "// 1.5. Defer the interaction before async work to prevent timeout",
+        "await defer();",
+        "// 1.2.3 changed this",
+        "const version = 1;",
+        "// see step 3. below",
+        "const note = 2;",
+        "",
+      ].join("\n"),
+    );
+
+    const candidates = await scanCommentSweepCandidates({
+      paths: ["fixture.ts"],
+      repoRoot: root,
+      tiers: ["1"],
+    });
+
+    const numbering = findOperation(candidates, "strip-numbering");
+    expect(numbering).toHaveLength(1);
+    expect(numbering[0].text).toBe("// 1.5. Defer the interaction before async work to prevent timeout");
+  });
+
   it("permits numbering strips on locale-example comments but nothing else", async () => {
     const root = await createTemporaryRoot();
     const path = join(root, "scripts", "checks", "checkLocalizationKeys.ts");

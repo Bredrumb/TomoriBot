@@ -957,7 +957,7 @@ export async function replyInfoEmbed(
     finalOptions.footerKey = "general.errors.tomori_not_setup_dm_footer";
   }
 
-  // 2.5. Components V2 collision guard. If this interaction's reply already carries
+  // Components V2 collision guard. If this interaction's reply already carries
   //      IsComponentsV2 (e.g. a range selector rendered onto it), a legacy
   //      `editReply({ embeds })` would be rejected by Discord. Render the same
   //      title/description/footer as a V2 notice container instead. Tip embeds are
@@ -3550,7 +3550,7 @@ export async function replyPaginatedStatusPages(
     return;
   }
 
-  // 2.5. Components V2 collision guard. Legacy nav buttons + embeds cannot render onto a
+  // Components V2 collision guard. Legacy nav buttons + embeds cannot render onto a
   //      V2 message. This co-occurrence (multi-page status after a V2 selector) is not
   //      expected in practice, so degrade to the first page rendered as a V2 notice via
   //      the guarded replySummaryEmbed rather than throw.

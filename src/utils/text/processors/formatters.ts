@@ -214,11 +214,11 @@ export function humanizeString(text: string): string {
   // Apply lowercase transformation to text outside code blocks,
   //    now including hyphenated words like "E-ew" or "D-don't" as single words
   processedText = processedText.replace(/\b([A-Za-z][A-Za-z'-]*)\b/g, (word) => {
-    // 5.1 Check for all-uppercase acronyms (allow hyphens in acronyms if needed)
+    // Check for all-uppercase acronyms (allow hyphens in acronyms if needed)
     const isAcronym = /^[A-Z](?:[A-Z'-]*[A-Z])?$/.test(word);
-    // 5.2 Check for known internet expressions (lowercased set)
+    // Check for known internet expressions (lowercased set)
     const isInternet = INTERNET_EXPRESSIONS.has(word.toLowerCase());
-    // 5.3 Preserve standalone single letters (e.g., "I", "B", "F" except "A" eg. "A book")
+    // Preserve standalone single letters (e.g., "I", "B", "F" except "A" eg. "A book")
     const isSingleLetter = word.length === 1 && word !== "A";
     // If it's an acronym, internet expression, or single letter, leave it;
     // otherwise lowercase the whole hyphenated or single word.

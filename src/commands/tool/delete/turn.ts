@@ -153,7 +153,7 @@ export async function execute(
     return;
   }
 
-  // 3.5. Check bot's MANAGE_MESSAGES permission — determines whether direct
+  // Check bot's MANAGE_MESSAGES permission — determines whether direct
   //      deletion methods (bulkDelete, msg.delete) will work. The command
   //      proceeds regardless, but uses webhook-based deletion as fallback.
   const botMember = interaction.guild.members.me;

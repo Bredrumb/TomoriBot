@@ -69,7 +69,7 @@ export async function execute(
       return;
     }
 
-    // 1.5. Defer the interaction before async work to prevent timeout
+    // Defer the interaction before async work to prevent timeout
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // Get Tomori state for server

@@ -44,7 +44,7 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 0.5. Defer the interaction before async work to prevent timeout
+  // Defer the interaction before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {

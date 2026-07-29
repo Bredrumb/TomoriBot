@@ -137,7 +137,7 @@ export async function execute(
   const extraOptions = interaction.options.getBoolean("extra_options") ?? false;
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
 
-  // 3.5. Check cooldown (shares cooldown pool with message triggers)
+  // Check cooldown (shares cooldown pool with message triggers)
   const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
   const cooldownLength = tomoriState.config.cooldown_length ?? 5;
 

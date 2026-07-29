@@ -1,4 +1,4 @@
-﻿import {
+import {
   MessageFlags,
   type ChatInputCommandInteraction,
   type Client,
@@ -96,7 +96,7 @@ Positive values use a shared fixed or random range.
     return;
   }
 
-  // 1.5. Defer the interaction before async work to prevent timeout
+  // Defer the interaction before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
