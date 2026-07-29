@@ -320,7 +320,7 @@ export class GenerateVideoTool extends BaseTool {
         url: image.proxyUrl || image.url,
         ...(image.proxyUrl && image.proxyUrl !== image.url ? { fallbackUrl: image.url } : {}),
         mimeType: image.mimeType,
-        data: "", // Empty — providers that need base64 must fetch the url themselves
+        data: "", // Empty: providers that need base64 must fetch the url themselves
       };
     } catch (error) {
       log.error(`Failed to extract reference image from message ${messageId}`, error as Error);

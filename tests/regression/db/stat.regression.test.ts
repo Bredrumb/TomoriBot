@@ -364,7 +364,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
       userId: refs.userId,
       lineageId: lineageA,
       metric: "sprite_shown",
-      metricKey: "yuki", // identity sprite — present in the leaderboard, absent from emotions
+      metricKey: "yuki", // identity sprite: present in the leaderboard, absent from emotions
     });
     statRepository.recordStat({
       serverId: refs.serverId,

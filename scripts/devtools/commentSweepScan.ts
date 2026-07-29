@@ -354,7 +354,9 @@ function collectCommentTokens(source: string): CommentToken[] {
   const visit = (node: ts.Node): void => {
     addRanges(ts.getLeadingCommentRanges(source, node.getFullStart()));
     addRanges(ts.getTrailingCommentRanges(source, node.getEnd()));
-    node.forEachChild(visit);
+    for (const child of node.getChildren(sourceFile)) {
+      visit(child);
+    }
   };
 
   visit(sourceFile);
@@ -631,7 +633,12 @@ function createTierOneCandidates(
     ];
   }
 
-  if (comment.kind === "block" && !comment.jsdoc && !comment.text.includes("\n")) {
+  if (
+    comment.kind === "block" &&
+    comment.standalone &&
+    !comment.jsdoc &&
+    !comment.text.includes("\n")
+  ) {
     if (isRuleArtifact(file, comment.text)) {
       return [
         {

@@ -430,7 +430,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       context.functionInteractionHistory,
       openrouterConfig.seesImages ?? true, // Default to true for backward compatibility
       context.tomoriState.persona_nickname ?? "Assistant",
-      openrouterConfig.seesVideos ?? false, // Default false — videos are strictly opt-in per model
+      openrouterConfig.seesVideos ?? false, // Default false: videos are strictly opt-in per model
       context.messageIdMap,
     );
 

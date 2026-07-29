@@ -186,7 +186,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       personaName: isBotMessage ? tomoriState.persona_nickname : null,
       content: msg.cleanContent || msg.content || null,
       createdAt: msg.createdTimestamp,
-      imageAttachments: [], // Skip — see comment above
+      imageAttachments: [], // Skip (see comment above)
       videoAttachments: [], // Skip video processing for the hidden agent
     });
 
@@ -297,7 +297,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     disableProfilePictureProcessing: true,
     disableGifProcessing: true,
     disableShortTermMemoryUpdate: true, // Do not pollute STM from a hidden agent turn
-    suppressTextOutput: true, // No visible text — only the image
+    suppressTextOutput: true, // No visible text: only the image
     isManuallyTriggered: true,
     // End the turn as soon as either image tool succeeds, so both are listed so the
     // loop terminates cleanly even if the model calls the non-preferred backend.
@@ -380,7 +380,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
         tomoriState,
         providerConfig,
         contextItems,
-        [], // currentTurnModelParts — empty for first iteration, accumulate on retries
+        [], // currentTurnModelParts: empty for first iteration, accumulate on retries
         undefined, // emojiStrings
         functionInteractionHistory.length > 0 ? functionInteractionHistory : undefined,
         undefined, // initialInteraction

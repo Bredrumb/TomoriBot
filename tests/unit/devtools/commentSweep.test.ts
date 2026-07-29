@@ -49,6 +49,7 @@ describe("comment sweep scanner", () => {
       "// Rule 20: Keep constants at the top",
       "// const oldValue = 0;",
       "/* single line */",
+      "try { valueOf(); } catch { /* already exited */ }",
       "/**",
       " * 2. Format the value",
       " * @param input - Input value",
@@ -70,6 +71,7 @@ describe("comment sweep scanner", () => {
     expect(findOperation(candidates, "strip-rule")).toHaveLength(1);
     expect(findOperation(candidates, "delete-commented-code")).toHaveLength(1);
     expect(findOperation(candidates, "normalize-block")).toHaveLength(1);
+    expect(candidates.some((row) => row.text === "/* already exited */")).toBeFalse();
     expect(candidates.some((row) => row.tier === "2")).toBeTrue();
     expect(candidates.some((row) => row.tier === "2b")).toBeTrue();
     expect(candidates.some((row) => row.tier === "2c")).toBeTrue();
@@ -86,6 +88,12 @@ describe("comment sweep scanner", () => {
         "interface Source {",
         "  url?: string; // Prefer the URL — remote APIs reject large bodies",
         "}",
+        "const options = {",
+        "  maxLength: 4096, // Request full budget — the API may cap lower",
+        "};",
+        "const identities = [",
+        '  ["one", "two"], // Two IDs — ambiguous',
+        "];",
         "// Keep rationale — callers depend on it",
         "",
       ].join("\n"),
@@ -99,6 +107,8 @@ describe("comment sweep scanner", () => {
 
     expect(candidates.map((row) => row.text)).toEqual([
       "// Prefer the URL — remote APIs reject large bodies",
+      "// Request full budget — the API may cap lower",
+      "// Two IDs — ambiguous",
       "// Keep rationale — callers depend on it",
     ]);
   });
