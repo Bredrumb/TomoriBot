@@ -49,7 +49,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
+  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -63,10 +63,10 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 2. Get the timezone offset value from options
+    // Get the timezone offset value from options
     const timezoneValue = interaction.options.getNumber("value", true);
 
-    // 3. Additional validation (Discord already handles min/max, but just in case)
+    // Additional validation (Discord already handles min/max, but just in case)
     if (timezoneValue < TIMEZONE_MIN || timezoneValue > TIMEZONE_MAX) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.timezone.invalid_value_title",
@@ -80,7 +80,7 @@ export async function execute(
       return;
     }
 
-    // 4. Load the Tomori state for this server
+    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -91,7 +91,7 @@ export async function execute(
       return;
     }
 
-    // 5. Check if this is the same as the current timezone offset
+    // Check if this is the same as the current timezone offset
     const currentTimezone = tomoriState.config.timezone_offset ?? TIMEZONE_DEFAULT;
     if (timezoneValue === currentTimezone) {
       await replyInfoEmbed(interaction, locale, {
@@ -105,7 +105,7 @@ export async function execute(
       return;
     }
 
-    // 6. Update the config in the database
+    // Update the config in the database
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, { timezone_offset: timezoneValue });
 
     if (!updated) {
@@ -130,10 +130,10 @@ export async function execute(
       return;
     }
 
-    // 7. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // 8. Success message with formatted timezone display
+    // Success message with formatted timezone display
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.server.timezone.success_title",
       descriptionKey: "commands.server.timezone.success_description",
@@ -144,7 +144,7 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // 9. Log error with context
+    // Log error with context
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
@@ -167,7 +167,7 @@ export async function execute(
     };
     await log.error(`Error executing /server timezone for user ${userData.user_disc_id}`, error as Error, context);
 
-    // 10. Inform user of unknown error
+    // Inform user of unknown error
     if (interaction.deferred && !interaction.replied) {
       await interaction.followUp({
         content: localizer(locale, "general.errors.unknown_error_description"),

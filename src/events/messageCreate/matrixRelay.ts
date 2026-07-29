@@ -221,7 +221,7 @@ function resolveDiscordTextForMatrix(
   let lastIndex = 0;
 
   for (const match of text.matchAll(pattern)) {
-    // 1. Append the literal text between the previous match and this one
+    // Append the literal text between the previous match and this one
     const literal = text.slice(lastIndex, match.index);
     bodyParts.push(literal);
     htmlParts.push(escapeHtml(literal));
@@ -263,7 +263,7 @@ function resolveDiscordTextForMatrix(
     }
   }
 
-  // 2. Append any trailing literal text after the last match
+  // Append any trailing literal text after the last match
   const tail = text.slice(lastIndex);
   bodyParts.push(tail);
   htmlParts.push(escapeHtml(tail));
@@ -299,22 +299,22 @@ function embedToMatrixTextChunks(embed: Embed): string[] {
  * @param message - The incoming Discord message
  */
 const handler = async (client: Client, message: Message): Promise<void> => {
-  // 1. Fast exit: skip if Matrix bridge is not configured (common case)
+  // Fast exit: skip if Matrix bridge is not configured (common case)
   if (!isMatrixConfigured()) return;
 
-  // 2. Only process guild messages (Matrix bridge is server-scoped)
+  // Only process guild messages (Matrix bridge is server-scoped)
   if (!message.guild) return;
 
-  // 3. Only relay messages that originate from TomoriBot itself
+  // Only relay messages that originate from TomoriBot itself
   //    (main persona bot account OR alter persona webhook messages)
   const allPersonas: TomoriState[] = await getCachedAllPersonas(message.guild.id);
   if (!isSelfTriggerMessage(message, allPersonas)) return;
 
-  // 4. Check if this channel has a linked Matrix room (cached DB lookup)
+  // Check if this channel has a linked Matrix room (cached DB lookup)
   const roomId = await getLinkedMatrixRoom(message.channelId);
   if (!roomId) return;
 
-  // 5. Identify which persona sent this message and retrieve its avatar URL.
+  // Identify which persona sent this message and retrieve its avatar URL.
   //    The persona's virtual Matrix user will be provisioned with this identity.
   let persona: TomoriState | undefined;
   let avatarUrl: string | null;
@@ -355,7 +355,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
   // Fall back to username if no matching persona is found
   const personaName = persona?.persona_nickname ?? message.author.username;
 
-  // 6. Relay the text content (skip if empty after trim)
+  // Relay the text content (skip if empty after trim)
   //    Identity is conveyed by the virtual Matrix user — no bold prefix needed.
   //    @{name} placeholders are transformed to proper Matrix mention links so
   //    Matrix clients highlight and notify the mentioned user (MSC3952).
@@ -376,12 +376,12 @@ const handler = async (client: Client, message: Message): Promise<void> => {
     }
   }
 
-  // 7. Relay each file attachment as a Matrix media event
+  // Relay each file attachment as a Matrix media event
   //    Uses proxyURL for stability (Discord CDN proxy avoids expiry issues)
   const mediaTimeoutMs = Number.parseInt(process.env.MATRIX_MEDIA_TIMEOUT_MS || "15000", 10);
 
   for (const attachment of message.attachments.values()) {
-    // 7a. Skip attachments that exceed the configured size limit (shared constant
+    // Skip attachments that exceed the configured size limit (shared constant
     //    with matrixManager.ts so both sides enforce the same threshold)
     if (attachment.size > MATRIX_MAX_ATTACHMENT_BYTES) {
       log.warn(
@@ -392,7 +392,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
     }
 
     try {
-      // 7b. Fetch the file from Discord's proxy CDN (timeout prevents stalls)
+      // Fetch the file from Discord's proxy CDN (timeout prevents stalls)
       const response = await fetch(attachment.proxyURL, {
         signal: AbortSignal.timeout(mediaTimeoutMs),
       });
@@ -405,7 +405,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
       const mimeType = attachment.contentType ?? "application/octet-stream";
       const filename = attachment.name ?? "attachment";
 
-      // 7c. Upload to Matrix and send as a media event under the persona's virtual user
+      // Upload to Matrix and send as a media event under the persona's virtual user
       await sendAttachmentToMatrixRoom(
         roomId,
         arrayBuffer,
@@ -420,7 +420,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
     }
   }
 
-  // 8. Relay all embeds by serializing visible content (title/description/fields/urls)
+  // Relay all embeds by serializing visible content (title/description/fields/urls)
   //    into plain text Matrix messages. This avoids per-embed whitelists and prevents
   //    silent drops when new embed shapes are introduced.
   for (const embed of message.embeds) {

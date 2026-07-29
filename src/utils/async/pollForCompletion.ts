@@ -36,18 +36,18 @@ export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> 
   const { pollFn, intervalMs, maxAttempts, onPoll, logLabel } = options;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // 1. Wait before polling (skip wait on first attempt)
+    // Wait before polling (skip wait on first attempt)
     if (attempt > 1) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
 
-    // 2. Invoke optional callback
+    // Invoke optional callback
     onPoll?.(attempt);
 
-    // 3. Poll for status
+    // Poll for status
     const pollResult = await pollFn();
 
-    // 4. Check if done
+    // Check if done
     if (pollResult.done) {
       if (pollResult.error) {
         throw new Error(pollResult.error);
@@ -58,13 +58,13 @@ export async function pollForCompletion<T>(options: PollOptions<T>): Promise<T> 
       return pollResult.result;
     }
 
-    // 5. Log progress periodically (every 5th attempt)
+    // Log progress periodically (every 5th attempt)
     if (attempt % 5 === 0) {
       log.info(`${logLabel ?? "Poll"}: still waiting (attempt ${attempt}/${maxAttempts})`);
     }
   }
 
-  // 6. Timeout — max attempts exceeded
+  // Timeout — max attempts exceeded
   const totalWaitSec = Math.round((maxAttempts * intervalMs) / 1000);
   throw new Error(`${logLabel ?? "Poll"}: operation timed out after ${maxAttempts} attempts (~${totalWaitSec}s)`);
 }

@@ -59,20 +59,20 @@ function deriveDescription(body: string, maxLength: number): string | undefined 
   for (const rawLine of lines) {
     const line = rawLine.trim();
 
-    // 1. Track fenced code blocks so their contents are never sampled.
+    // Track fenced code blocks so their contents are never sampled.
     if (line.startsWith("```") || line.startsWith("~~~")) {
       insideFence = !insideFence;
       continue;
     }
     if (insideFence) continue;
 
-    // 2. A blank line ends the paragraph — stop once we have collected prose.
+    // A blank line ends the paragraph — stop once we have collected prose.
     if (line === "") {
       if (paragraph.length > 0) break;
       continue;
     }
 
-    // 3. Skip structural / non-prose lines. If we were mid-paragraph and hit
+    // Skip structural / non-prose lines. If we were mid-paragraph and hit
     //    one of these, the paragraph is done.
     const isNonProse =
       line.startsWith("#") || // headings
@@ -95,7 +95,7 @@ function deriveDescription(body: string, maxLength: number): string | undefined 
 
   if (paragraph.length === 0) return undefined;
 
-  // 4. Strip inline Markdown so the meta tag contains plain text only.
+  // Strip inline Markdown so the meta tag contains plain text only.
   const text = paragraph
     .join(" ")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1") // images → alt text
@@ -110,7 +110,7 @@ function deriveDescription(body: string, maxLength: number): string | undefined 
   if (text.length === 0) return undefined;
   if (text.length <= maxLength) return text;
 
-  // 5. Truncate at the last word boundary that fits, then add an ellipsis.
+  // Truncate at the last word boundary that fits, then add an ellipsis.
   //    (Japanese prose has no spaces, so the hard cut is the boundary there.)
   const clipped = text.slice(0, maxLength);
   const lastSpace = clipped.lastIndexOf(" ");

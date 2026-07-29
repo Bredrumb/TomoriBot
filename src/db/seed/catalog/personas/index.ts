@@ -9,7 +9,6 @@ import { persona as shyEn } from "./shy/en-US";
 import { persona as shyJa } from "./shy/ja";
 import { persona as nerineEn } from "./loyal/en-US";
 import { persona as nerineJa } from "./loyal/ja";
-// import { persona as zayaEn } from "./zaya/en-US";
 
 export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Tomori-kun", rows: [defaultEn] },

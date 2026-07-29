@@ -70,13 +70,13 @@ export async function generateGoogleNativeVideo(
     requiresEightSecondOutput ? 8 : undefined,
   );
 
-  // 1. Build generation parameters
+  // Build generation parameters
   const generateParams: GenerateVideosParameters = {
     model: request.model,
     prompt: request.prompt,
   };
 
-  // 2. Add config (aspect ratio — only pass values Veo supports; unsupported values like "1:1" cause a 400)
+  // Add config (aspect ratio — only pass values Veo supports; unsupported values like "1:1" cause a 400)
   const config: NonNullable<GenerateVideosParameters["config"]> = {};
   if (request.aspectRatio && GOOGLE_SUPPORTED_ASPECT_RATIOS.has(request.aspectRatio)) {
     config.aspectRatio = request.aspectRatio;
@@ -87,7 +87,7 @@ export async function generateGoogleNativeVideo(
     generateParams.config = config;
   }
 
-  // 3. Add reference image for image-to-video (first image becomes starting frame)
+  // Add reference image for image-to-video (first image becomes starting frame)
   if (request.referenceImages && request.referenceImages.length > 0) {
     const ref = request.referenceImages[0];
     generateParams.image = {
@@ -100,10 +100,10 @@ export async function generateGoogleNativeVideo(
     `Google video generation: submitting request (model: ${request.model}, aspectRatio: ${request.aspectRatio ?? "16:9"}, durationSeconds: ${normalizedDurationSeconds}, resolution: ${normalizedResolution}, hasReferenceImage: ${!!(request.referenceImages && request.referenceImages.length > 0)})`,
   );
 
-  // 4. Submit the generation request
+  // Submit the generation request
   let operation: GenerateVideosOperation = await ai.models.generateVideos(generateParams);
 
-  // 5. Poll for completion
+  // Poll for completion
   const completedOp = await pollForCompletion<typeof operation>({
     pollFn: async () => {
       if (operation.done) {
@@ -121,7 +121,7 @@ export async function generateGoogleNativeVideo(
     logLabel: "GoogleVideoGeneration",
   });
 
-  // 6. Extract video from the completed operation
+  // Extract video from the completed operation
   const generatedVideos = completedOp?.response?.generatedVideos;
   if (!generatedVideos || generatedVideos.length === 0) {
     log.warn(`Google video generation completed but returned no videos (model: ${request.model})`);
@@ -130,7 +130,7 @@ export async function generateGoogleNativeVideo(
 
   const video = generatedVideos[0].video;
 
-  // 7. Download the video file
+  // Download the video file
   //    The SDK provides video.uri for download, or video bytes may be inline
   if (video?.videoBytes) {
     // Video bytes available directly

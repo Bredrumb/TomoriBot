@@ -15,19 +15,19 @@ import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Rule 20: Constants (Modal IDs, Input IDs)
+// Constants (Modal IDs, Input IDs)
 const MODAL_CUSTOM_ID = "teach_attribute_add_modal";
 const PERSONA_SELECT_ID = "persona_select";
 const ATTRIBUTE_INPUT_ID = "attribute_input";
 const ATTRIBUTE_FILE_UPLOAD_ID = "attribute_file_upload";
 const ATTRIBUTE_PUBLIC_ID = "attribute_public";
 
-// Rule 21: Configure the subcommand
+// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.persona.attribute.add.description"));
 
 /**
- * Rule 1: JSDoc comment for exported function
+ * JSDoc comment for exported function
  * Adds a personality attribute to Tomori's memory for the server.
  * @param _client - Discord client instance
  * @param interaction - Command interaction
@@ -40,7 +40,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a valid channel context (Rule 17)
+  // Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -57,10 +57,10 @@ export async function execute(
   let modalResult: ModalResult | null = null;
 
   try {
-    // 2. Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
+    // Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
-    // 3. Check blacklisting only for guild contexts
+    // Check blacklisting only for guild contexts
     // Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
     if (interaction.guild) {
       const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
@@ -75,10 +75,10 @@ export async function execute(
       }
     }
 
-    // 4. Load server's Tomori state (Rule 17)
+    // Load server's Tomori state
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
 
-    // 5. Check if Tomori is set up
+    // Check if Tomori is set up
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -89,7 +89,7 @@ export async function execute(
       return;
     }
 
-    // 6. Resolve target persona options
+    // Resolve target persona options
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.persona_id !== undefined)
@@ -111,7 +111,7 @@ export async function execute(
       return;
     }
 
-    // 7. Check if attribute teaching is enabled and if user has bypass permissions
+    // Check if attribute teaching is enabled and if user has bypass permissions
     if (!tomoriState.config.attribute_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.attribute.teaching_disabled_title", // New locale key needed
@@ -122,7 +122,7 @@ export async function execute(
       return;
     }
 
-    // 8. Prompt user with persona selector + attribute input
+    // Prompt user with persona selector + attribute input
     // NOTE: Ensure locale keys resolve to strings <= 45 chars for labels!
     modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
@@ -163,7 +163,7 @@ export async function execute(
       ],
     });
 
-    // 9. Handle modal outcome
+    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Attribute add modal ${modalResult.outcome} for user ${userData.user_id}`);
       // promptWithRawModal handles cancel/timeout replies
@@ -174,7 +174,7 @@ export async function execute(
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' guarantees interaction
     const modalSubmitInteraction = modalResult.interaction!;
 
-    // 10. Resolve selected persona + attribute input
+    // Resolve selected persona + attribute input
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' + required persona select guarantees value
     const selectedPersonaId = modalResult.values![PERSONA_SELECT_ID];
     selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
@@ -234,7 +234,7 @@ export async function execute(
 
     const dedupedAttributes = dedupeCaseInsensitive(pendingAttributes);
 
-    // 11. Validate each attribute length
+    // Validate each attribute length
     for (const attribute of dedupedAttributes) {
       const attributeValidation = validateAttribute(attribute);
       if (!attributeValidation.isValid) {
@@ -251,12 +251,12 @@ export async function execute(
       }
     }
 
-    // 12. Prepare updated array from selected persona
+    // Prepare updated array from selected persona
     const currentAttributes = selectedPersona.attribute_list || [];
     const existingAttributes = new Set(currentAttributes.map((attribute) => attribute.trim().toLowerCase()));
     const attributesToAdd = dedupedAttributes.filter((attribute) => !existingAttributes.has(attribute.toLowerCase()));
 
-    // 13. Check for duplicates before adding
+    // Check for duplicates before adding
     if (attributesToAdd.length === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.teach.attribute.duplicate_title",
@@ -298,7 +298,7 @@ export async function execute(
       return;
     }
 
-    // 14. Update target persona row in the database
+    // Update target persona row in the database
     const ok = await personaRepository.addAttributes(selectedPersona.persona_id, attributesToAdd, isPublicAttribute);
 
     if (!ok) {
@@ -310,10 +310,10 @@ export async function execute(
       return;
     }
 
-    // 16. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // 17. Success! Confirm addition (Rule 12, 19)
+    // Success! Confirm addition
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey:
         attributesToAdd.length > 1 || uploadedTextFile
@@ -346,7 +346,7 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // Rule 22: Log error with context
+    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id, // Use optional chaining as tomoriState might be null if error happened early
@@ -360,7 +360,7 @@ export async function execute(
     };
     await log.error("Error in /teach attribute command", error, context);
 
-    // Rule 12, 19: Reply with unknown error embed
+    // Reply with unknown error embed
     // Determine which interaction to use
     const errorReplyInteraction =
       modalResult?.interaction ?? // Prefer modal interaction

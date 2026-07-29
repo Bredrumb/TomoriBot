@@ -164,7 +164,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
                   )
                 : await context.channel.send({
                     files: attachments,
-                    // content: `Found ${imageCount} image${imageCount !== 1 ? "s" : ""}:`,
                   });
             sentMessageId = sentMessage.id;
             sentAttachments = Array.from(sentMessage.attachments.values());
@@ -474,7 +473,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
       log.warn("Failed to clean image search result:", error as Error);
       // Return minimal result if cleaning fails
       return {
-        // summary: "Image search completed - images have been sent to Discord channel",
         imageDataRemoved: true,
       };
     }

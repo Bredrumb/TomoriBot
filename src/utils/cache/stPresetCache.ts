@@ -62,7 +62,7 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
   const now = Date.now();
   const entry = cache.get(serverId);
 
-  // 1. Check cache freshness
+  // Check cache freshness
   if (entry) {
     const cacheAge = now - entry.cachedAt;
     if (cacheAge < CACHE_DURATION_MS) {
@@ -72,7 +72,7 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
     // Stale — fall through to refresh
   }
 
-  // 2. Cache miss or stale — load from DB
+  // Cache miss or stale — load from DB
   cacheMisses++;
   try {
     const preset = await presetRepository.loadActivePreset(serverId);
@@ -83,14 +83,14 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
       return null;
     }
 
-    // 3. Validate preset_id exists (should always be present on loaded DB rows)
+    // Validate preset_id exists (should always be present on loaded DB rows)
     if (preset.preset_id == null) {
       log.error(`[ST Preset Cache] Active preset for server_id ${serverId} has no preset_id — skipping`);
       cache.set(serverId, { data: null, cachedAt: now });
       return null;
     }
 
-    // 4. Load all nodes for the active preset
+    // Load all nodes for the active preset
     const nodes = await presetRepository.loadAllNodes(preset.preset_id);
 
     const data: CachedPresetData = { preset, nodes };

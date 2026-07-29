@@ -96,7 +96,7 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
   const { maxSizeMB, timeoutMs = 10000, knownSize, requestInit, externalSignal } = options;
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
-  // 1. Pre-check known size if provided (early rejection, no network call)
+  // Pre-check known size if provided (early rejection, no network call)
   if (knownSize !== undefined && knownSize > maxSizeBytes) {
     log.warn(`File size ${(knownSize / (1024 * 1024)).toFixed(2)} MB exceeds limit of ${maxSizeMB} MB`, {
       metadata: {
@@ -170,7 +170,7 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
     }
   }
 
-  // 2. Setup timeout controller; chain optional external signal into it
+  // Setup timeout controller; chain optional external signal into it
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   if (externalSignal) {
@@ -182,10 +182,10 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
   }
 
   try {
-    // 3. Fetch with timeout and abort signal
+    // Fetch with timeout and abort signal
     const response = await fetchUserRemoteUrl(url, { ...(requestInit ?? {}), signal: controller.signal });
 
-    // 4. Validate response status
+    // Validate response status
     if (!response.ok) {
       log.warn(`Download failed with HTTP ${response.status}`, {
         metadata: {
@@ -202,7 +202,7 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
       };
     }
 
-    // 5. Check content-length header as backup size validation
+    // Check content-length header as backup size validation
     const contentLength = response.headers.get("content-length");
     if (contentLength) {
       const sizeBytes = Number.parseInt(contentLength, 10);
@@ -223,11 +223,11 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
       }
     }
 
-    // 6. Download as ArrayBuffer and convert to Buffer
+    // Download as ArrayBuffer and convert to Buffer
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 7. Final size check on actual downloaded data
+    // Final size check on actual downloaded data
     if (buffer.length > maxSizeBytes) {
       log.warn(`Downloaded file ${(buffer.length / (1024 * 1024)).toFixed(2)} MB exceeds limit of ${maxSizeMB} MB`, {
         metadata: {
@@ -244,7 +244,7 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
       };
     }
 
-    // 8. Success!
+    // Success!
     log.info(`Successfully downloaded ${(buffer.length / (1024 * 1024)).toFixed(2)} MB`);
 
     return {

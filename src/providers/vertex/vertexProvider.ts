@@ -174,7 +174,7 @@ export class VertexProvider
   // ─── ApiKeyValidation ────────────────────────────────────────────────
 
   async validateApiKey(compositeKey: string): Promise<ApiKeyValidationResult> {
-    // 1. Parse and validate composite-key format
+    // Parse and validate composite-key format
     let genAI: GoogleGenAI;
     try {
       genAI = this.buildClient(compositeKey);
@@ -187,7 +187,7 @@ export class VertexProvider
       return { valid: false, error: providerError };
     }
 
-    // 2. Exercise ADC, project/location configuration, and Vertex endpoint access
+    // Exercise ADC, project/location configuration, and Vertex endpoint access
     // without coupling setup to the current default model.
     try {
       log.info("Validating Vertex AI configuration...");

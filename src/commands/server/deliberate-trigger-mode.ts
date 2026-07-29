@@ -39,11 +39,11 @@ export async function execute(
   // Guild is guaranteed by command loader's server category gate
   const guildId = interaction.guild?.id ?? "";
 
-  // 1. Defer the reply before async work to prevent timeout
+  // Defer the reply before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 2. Load the Tomori state for this server
+    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -54,10 +54,10 @@ export async function execute(
       return;
     }
 
-    // 3. Toggle the current value
+    // Toggle the current value
     const newValue = !tomoriState.config.deliberate_trigger_mode;
 
-    // 4. Update the database
+    // Update the database
     const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       deliberate_trigger_mode: newValue,
     });
@@ -88,10 +88,10 @@ export async function execute(
       return;
     }
 
-    // 5. Invalidate cache after successful write
+    // Invalidate cache after successful write
     invalidateTomoriStateCache(guildId);
 
-    // 7. Send success message
+    // Send success message
     await replyInfoEmbed(interaction, locale, {
       titleKey: newValue
         ? "commands.server.deliberatetriggermode.enabled_title"

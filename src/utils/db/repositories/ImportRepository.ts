@@ -180,12 +180,12 @@ export class ImportRepository {
     importData: PersonalSettingsExportData,
   ): Promise<ImportResult> {
     try {
-      // 1. Normalize split-table personalization values.
+      // Normalize split-table personalization values.
       const physicalAppearanceTags = importData.physical_appearance_tags ?? [];
       const naiCharRefUrl = importData.nai_char_ref_url ?? null;
       const impersonationPrompt = importData.impersonation_prompt ?? null;
 
-      // 2. Upsert identity fields to users, then the 5 personalization fields to the split table.
+      // Upsert identity fields to users, then the 5 personalization fields to the split table.
       const updateResult = await sql.begin(async (tx) => {
         const userRows = await tx<Array<{ user_id: number }>>`
           INSERT INTO users (
@@ -250,7 +250,7 @@ export class ImportRepository {
         return { success: false, error: "commands.data.import.error_update_failed" };
       }
 
-      // 3. Count imported fields (base 2 + optional impersonation/image/behavioral fields)
+      // Count imported fields (base 2 + optional impersonation/image/behavioral fields)
       let fieldsCount = 2;
       if (impersonationPrompt) fieldsCount++;
       if (physicalAppearanceTags.length > 0) fieldsCount++;
@@ -286,7 +286,7 @@ export class ImportRepository {
       // llm_max_output_tokens uses conditional inclusion: only overwrite when explicitly present in the export.
       const hasMaxOutputTokens = Object.hasOwn(config, "llm_max_output_tokens");
 
-      // 1. Partition imported fields into typed patch objects by split-table ownership.
+      // Partition imported fields into typed patch objects by split-table ownership.
 
       // server_model_configs: temperature, thinking level, disabled params
       const modelPatch = {
@@ -363,7 +363,7 @@ export class ImportRepository {
           config.tool_notice_hidden_keys as ServerNoticeEmbedsConfigRow["tool_notice_hidden_keys"],
       };
 
-      // 2. Dispatch the five always-present table writes in parallel.
+      // Dispatch the five always-present table writes in parallel.
       const requiredWriteResults = await Promise.all([
         configRepository.updateModelConfig(serverId, modelPatch),
         configRepository.updateChatConfig(serverId, chatPatch),
@@ -372,12 +372,12 @@ export class ImportRepository {
         configRepository.updateNoticeEmbedsConfig(serverId, noticeEmbedsPatch),
       ]);
 
-      // 3. Failure on any required config write means at least one split-table row failed to restore.
+      // Failure on any required config write means at least one split-table row failed to restore.
       if (requiredWriteResults.some((ok) => !ok)) {
         return { success: false, error: "commands.data.import.error_update_failed" };
       }
 
-      // 4. Dispatch optional-field table writes in parallel; these are absent in older exports.
+      // Dispatch optional-field table writes in parallel; these are absent in older exports.
       const optionalWriteResults = await Promise.all([
         config.uncensor_injection_enabled !== undefined ||
         config.uncensor_unicode_space_enabled !== undefined ||

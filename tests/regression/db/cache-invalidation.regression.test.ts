@@ -111,8 +111,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
 
   // ── regression probe — do not remove ─────────────────────────────────────
   // To verify the harness catches a cache invalidation regression:
-  // 1. Remove the `invalidateUserCache(userDiscId)` call from `UserRepository.register`
-  // 2. Run this test — it should fail because getCachedUserRow returns stale data
+  // Remove the `invalidateUserCache(userDiscId)` call from `UserRepository.register`
+  // Run this test — it should fail because getCachedUserRow returns stale data
   it.skip("[REGRESSION PROBE] harness detects missing cache invalidation", async () => {
     await userRepository.register("_rt_probe_user", "_rt_probe", "en");
     // If invalidation were missing, a cached null entry would persist and loadUserRow would still return null

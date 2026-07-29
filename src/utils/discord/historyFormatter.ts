@@ -58,7 +58,7 @@ const SKIPPED_MESSAGE_TYPES = new Set([
 function resolveMentions(content: string, msg: Message): string {
   let resolved = content;
 
-  // 1. Resolve user mentions: <@123456> or <@!123456> → @Username
+  // Resolve user mentions: <@123456> or <@!123456> → @Username
   resolved = resolved.replace(/<@!?(\d+)>/g, (_match, userId: string) => {
     const member = msg.guild?.members.cache.get(userId);
     if (member) return `@${member.displayName}`;
@@ -67,14 +67,14 @@ function resolveMentions(content: string, msg: Message): string {
     return `@UnknownUser`;
   });
 
-  // 2. Resolve channel mentions: <#123456> → #channel-name
+  // Resolve channel mentions: <#123456> → #channel-name
   resolved = resolved.replace(/<#(\d+)>/g, (_match, channelId: string) => {
     const channel = msg.guild?.channels.cache.get(channelId);
     if (channel) return `#${channel.name}`;
     return `#unknown-channel`;
   });
 
-  // 3. Resolve role mentions: <@&123456> → @RoleName
+  // Resolve role mentions: <@&123456> → @RoleName
   resolved = resolved.replace(/<@&(\d+)>/g, (_match, roleId: string) => {
     const role = msg.guild?.roles.cache.get(roleId);
     if (role) return `@${role.name}`;
@@ -129,17 +129,17 @@ export function formatMessagesForExtraction(
   const mainPersonaId = serverPersonas.find((persona) => !persona.is_alter)?.persona_id;
 
   for (const msg of messages) {
-    // 1. Skip system messages
+    // Skip system messages
     if (SKIPPED_MESSAGE_TYPES.has(msg.type)) continue;
 
-    // 2. Build message content
+    // Build message content
     let content = msg.content ? resolveMentions(msg.content, msg) : "";
     const cachedRenderedTable = getCachedRenderedMarkdownTable(msg.id);
     if (cachedRenderedTable) {
       content += ` [Rendered markdown table]\n${cachedRenderedTable}`;
     }
 
-    // 3. Append attachment indicators (or cached voice transcript for audio)
+    // Append attachment indicators (or cached voice transcript for audio)
     let audioTranscriptAppended = false;
     for (const attachment of msg.attachments.values()) {
       if (cachedRenderedTable) continue;
@@ -164,7 +164,7 @@ export function formatMessagesForExtraction(
       content += ` [Attachment: ${attachment.name ?? "file"}]`;
     }
 
-    // 4. Append non-system embed indicators
+    // Append non-system embed indicators
     for (const embed of msg.embeds) {
       // Skip refresh/system embeds
       if (isRefreshMarkerEmbed(embed)) continue;
@@ -173,23 +173,23 @@ export function formatMessagesForExtraction(
       }
     }
 
-    // 5. Skip empty messages (no content, no attachments, no meaningful embeds)
+    // Skip empty messages (no content, no attachments, no meaningful embeds)
     content = content.trim();
     if (!content) continue;
 
-    // 6. Format timestamp
+    // Format timestamp
     const timestamp = msg.createdAt.toISOString();
 
-    // 7. Determine author name
+    // Determine author name
     //    Strip "[Matrix|@user:host] " prefix from Matrix bridge webhook messages
     //    so TomoriBot sees just the display name (e.g., "Neko Neechan") in context
     const rawAuthorName = msg.member?.displayName ?? msg.author?.username ?? "Unknown";
     const authorName = stripBridgePrefix(rawAuthorName);
 
-    // 8. Build formatted line
+    // Build formatted line
     lines.push(`[${timestamp}] ${authorName}: ${content}`);
 
-    // 9. Persona detection: match webhook-authored messages by name.
+    // Persona detection: match webhook-authored messages by name.
     //    Decorated names carry the persona in either part: flipped copied
     //    identities ("impersonated (SourcePersona)") put it inside the parens,
     //    legacy decorations ("SourcePersona (modifier)") put it first.
@@ -212,7 +212,7 @@ export function formatMessagesForExtraction(
       continue;
     }
 
-    // 10. Non-webhook turns the bot posted under its own account belong to the main persona.
+    // Non-webhook turns the bot posted under its own account belong to the main persona.
     if (mainPersonaId !== undefined && clientUserId && msg.author?.id === clientUserId) {
       detectedTomoriIds.add(mainPersonaId);
     }

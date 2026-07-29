@@ -39,7 +39,7 @@ interface TableSpec<T extends RowLike> {
   sections: ModelSection<T>[];
 }
 
-// 2. Per-table specs (column order MUST match the column list)
+// Per-table specs (column order MUST match the column list)
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
@@ -186,7 +186,7 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
   sections: embeddingSections,
 };
 
-// 3. Validation
+// Validation
 function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
   return spec.sections.flatMap((s) => s.rows);
 }
@@ -195,7 +195,7 @@ function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
 function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): void {
   const all = rowsOf(spec);
 
-  // 3a. Unique (provider, codename)
+  // Unique (provider, codename)
   const seen = new Set<string>();
   for (const r of all) {
     const key = `${r.provider}/${r.codename}`;
@@ -203,7 +203,7 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
     seen.add(key);
   }
 
-  // 3b. Per-provider default/smartest invariants
+  // Per-provider default/smartest invariants
   const byProvider = new Map<string, T[]>();
   for (const r of all) {
     const list = byProvider.get(r.provider) ?? [];
@@ -298,13 +298,13 @@ const PRICING_PENDING_CODENAMES = new Set<string>(["gemini-3.5-pro"]);
 export function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
-    // 1. Only first-party metered providers are gated
+    // Only first-party metered providers are gated
     if (!METERED_FIRST_PARTY_PROVIDERS.has(row.provider)) continue;
-    // 2. Skip rows that are intentionally unpriced
+    // Skip rows that are intentionally unpriced
     if (row.isDeprecated || row.isFree) continue;
     if (row.codename.includes("gemma")) continue;
     if (PRICING_PENDING_CODENAMES.has(row.codename)) continue;
-    // 3. The remaining active, billable rows MUST carry both prices
+    // The remaining active, billable rows MUST carry both prices
     const hasInput = typeof row.inputPricePerMillion === "number";
     const hasOutput = typeof row.outputPricePerMillion === "number";
     if (!hasInput || !hasOutput) {
@@ -333,7 +333,7 @@ export function validateModels(): string[] {
 
 export const validateCatalog = validateModels;
 
-// 4. Rendering
+// Rendering
 function renderStatement<T extends RowLike>(spec: TableSpec<T>): string {
   const values = rowsOf(spec)
     .map((m) => `  (${spec.tuple(m)})`)
@@ -354,7 +354,7 @@ export function buildModelSeedStatements(): string[] {
   ];
 }
 
-// 5. Runtime entry point
+// Runtime entry point
 /**
  * Seed all model tables from the typed catalog. Validates invariants first and
  * throws before touching the database if the catalog is malformed, then runs the

@@ -567,7 +567,7 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
   try {
     const channelId = channel.id;
 
-    // 1. Check in-memory cache
+    // Check in-memory cache
     const cachedWebhook = webhookCache.get(channelId);
     if (cachedWebhook) {
       // Verify cached webhook still has a valid token (not deleted)
@@ -599,19 +599,19 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
       }
     }
 
-    // 2. Try restoring from encrypted DB storage (survives process restarts)
+    // Try restoring from encrypted DB storage (survives process restarts)
     const restoredWebhook = await restoreStoredSharedWebhook(channel);
     if (restoredWebhook) {
       log.info(`[Webhook Manager] Restored shared webhook for channel ${channelId} from stored credentials`);
       return { webhook: restoredWebhook };
     }
 
-    // 3. Fetch existing webhook by name
+    // Fetch existing webhook by name
     log.info(`[Webhook Manager] Cache MISS for channel ${channelId}, fetching webhooks`);
     const webhooks = await channel.fetchWebhooks();
     let webhook = webhooks.find((wh) => wh.name === WEBHOOK_NAME);
 
-    // 4. Check if webhook has a token (webhooks from fetchWebhooks don't have tokens)
+    // Check if webhook has a token (webhooks from fetchWebhooks don't have tokens)
     if (webhook && !webhook.token) {
       log.warn(
         `[Webhook Manager] Found webhook for channel ${channelId} but it has no token (fetched webhook). Deleting and recreating.`,
@@ -620,7 +620,7 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
       webhook = undefined;
     }
 
-    // 5. Create new webhook if none exists or token missing
+    // Create new webhook if none exists or token missing
     if (!webhook) {
       log.info(`[Webhook Manager] No webhook found for channel ${channelId}, creating new one`);
       webhook = await channel.createWebhook({
@@ -630,7 +630,7 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
       log.success(`[Webhook Manager] Created webhook for channel ${channelId} (${channel.name})`);
     }
 
-    // 6. Cache + persist the webhook
+    // Cache + persist the webhook
     webhookCache.set(channelId, webhook);
     await persistSharedChannelWebhook(channel, webhook);
     return { webhook };
@@ -1099,7 +1099,7 @@ export async function sendUserTranscriptViaWebhook(
   avatarUrl: string,
   transcript: string,
 ): Promise<Message | null> {
-  // 1. Threads cannot own webhooks — use the parent channel for creation/lookup
+  // Threads cannot own webhooks — use the parent channel for creation/lookup
   const isThread = channel.isThread();
   const webhookTargetChannel = isThread ? (channel.parent as BaseGuildTextChannel | null) : channel;
 
@@ -1112,7 +1112,7 @@ export async function sendUserTranscriptViaWebhook(
     return null;
   }
 
-  // 2. Reuse the shared TomoriBot Multi-Persona webhook for this channel
+  // Reuse the shared TomoriBot Multi-Persona webhook for this channel
   const webhookResult = await getOrCreateWebhook(webhookTargetChannel);
   if (!webhookResult.webhook) {
     log.warn(
@@ -1121,7 +1121,7 @@ export async function sendUserTranscriptViaWebhook(
     return null;
   }
 
-  // 3. Escape newlines so multi-line transcripts stay in the blockquote block
+  // Escape newlines so multi-line transcripts stay in the blockquote block
   const quotedTranscript = `> ${transcript.replace(/\n/g, "\n> ")}`;
 
   const payload: WebhookSendPayload = {
@@ -1132,7 +1132,7 @@ export async function sendUserTranscriptViaWebhook(
     ...(isThread ? { threadId: channel.id } : {}),
   };
 
-  // 4. Impersonate the original sender so the message clearly belongs to them
+  // Impersonate the original sender so the message clearly belongs to them
   const identity: ResolvedWebhookIdentity = {
     username: displayName,
     avatarUrl,
@@ -1169,7 +1169,7 @@ export function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild): str
     return sanitizeAvatarUrl(resolvedUrl);
   };
 
-  // 1. Alter personas: Use webhook_avatar_url from database
+  // Alter personas: Use webhook_avatar_url from database
   if (persona.is_alter && persona.webhook_avatar_url) {
     const validatedURL = validateAvatarURL(persona.webhook_avatar_url);
     if (validatedURL) {
@@ -1177,7 +1177,7 @@ export function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild): str
     }
   }
 
-  // 2. Main persona: Try the bot's guild-specific avatar first
+  // Main persona: Try the bot's guild-specific avatar first
   if (!persona.is_alter) {
     const memberAvatar = guild.members.me?.displayAvatarURL({
       extension: "png",
@@ -1197,7 +1197,7 @@ export function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild): str
     }
   }
 
-  // 3. Fallback: undefined = use webhook's default avatar (bot's global avatar)
+  // Fallback: undefined = use webhook's default avatar (bot's global avatar)
   return undefined;
 }
 

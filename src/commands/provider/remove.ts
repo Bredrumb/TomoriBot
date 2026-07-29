@@ -60,7 +60,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel context
+  // Ensure command is run in a channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -71,7 +71,7 @@ export async function execute(
     return;
   }
 
-  // 2. Load the Tomori state for this server/user
+  // Load the Tomori state for this server/user
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -88,7 +88,7 @@ export async function execute(
   let resultTarget: ChatInputCommandInteraction | import("discord.js").ButtonInteraction = interaction;
 
   try {
-    // 3. Load all saved provider configs
+    // Load all saved provider configs
     const rawSavedConfigs = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
     // Custom providers with live endpoints are managed via /provider custom-endpoint remove.
     // Orphaned custom provider rows (no matching custom_endpoints) are kept here as a
@@ -108,7 +108,7 @@ export async function execute(
       ? visibleSavedConfigs
       : visibleSavedConfigs.filter((c) => c.provider.toLowerCase() !== currentProvider);
 
-    // 4. If no removable configs exist, show error
+    // If no removable configs exist, show error
     if (removableConfigs.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.provider.remove.no_saved_title",
@@ -119,7 +119,7 @@ export async function execute(
       return;
     }
 
-    // 5. Show provider picker — active provider shown as disabled button with explanation
+    // Show provider picker — active provider shown as disabled button with explanation
     const pickerResult = await promptForSavedProvider(interaction, locale, visibleSavedConfigs, {
       alwaysShowPicker: true,
       disabledProviders: tomoriState.config.user_byok_mode ? [] : [currentProvider],
@@ -144,7 +144,7 @@ export async function execute(
     const selectedProvider = pickerResult.provider;
     resultTarget = pickerResult.pickerInteraction ?? pickerResult.interaction;
 
-    // 6. Delete the saved config and reassign dependent model selections
+    // Delete the saved config and reassign dependent model selections
     const activeProvider = tomoriState.llm.llm_provider.toLowerCase();
     const deletingActiveProvider = selectedProvider.toLowerCase() === activeProvider;
     const activeDefaults =
@@ -269,14 +269,14 @@ export async function execute(
       return;
     }
 
-    // 8. Purge rotation keys for that provider (clean break)
+    // Purge rotation keys for that provider (clean break)
     const { purgeRotationKeysForProvider } = await import("@/utils/security/keyRotation");
     const purgedCount = await purgeRotationKeysForProvider(tomoriState.server_id, selectedProvider);
     if (purgedCount > 0) {
       log.info(`Purged ${purgedCount} rotation key(s) for removed provider ${selectedProvider}`);
     }
 
-    // 9. If removing custom provider's saved config, clean up the custom LLM entry
+    // If removing custom provider's saved config, clean up the custom LLM entry
     if (selectedProvider.toLowerCase() === "custom") {
       log.info("Removing saved legacy custom provider config - cleaning up legacy custom LLM entry");
       await deleteCustomLLMEntry(serverId);
@@ -287,7 +287,7 @@ export async function execute(
       await cleanupCustomProviderArtifacts(selectedProvider);
     }
 
-    // 10. Success message — update the picker embed or reply to the interaction
+    // Success message — update the picker embed or reply to the interaction
     await replyInfoEmbed(resultTarget, locale, {
       titleKey: "commands.provider.remove.success_title",
       descriptionKey:

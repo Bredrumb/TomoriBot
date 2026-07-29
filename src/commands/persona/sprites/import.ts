@@ -73,7 +73,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Sprites are guild-scoped and importing mutates them, so require a guild
+  // Sprites are guild-scoped and importing mutates them, so require a guild
   //    and Manage Server (mirrors add/remove).
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
@@ -110,7 +110,7 @@ export async function execute(
       return;
     }
 
-    // 2. Single modal: target persona + archive upload (handles the 3s ack).
+    // Single modal: target persona + archive upload (handles the 3s ack).
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.persona.sprites.import.modal_title",
@@ -155,7 +155,7 @@ export async function execute(
     }
     const personaId = selectedPersona.persona_id;
 
-    // 3. Validate the uploaded archive (extension + size) before any heavy work.
+    // Validate the uploaded archive (extension + size) before any heavy work.
     const archiveAttachment = modalResult.attachments?.[ARCHIVE_UPLOAD_ID];
     if (!archiveAttachment?.filename.toLowerCase().endsWith(".zip")) {
       await replyInfoEmbed(responseInteraction, locale, {
@@ -175,7 +175,7 @@ export async function execute(
       return;
     }
 
-    // 4. Reserve one import-operation quota slot for the whole batch (NOT one
+    // Reserve one import-operation quota slot for the whole batch (NOT one
     //    avatar-quota slot per sprite — a batch import is a single operation).
     const quotaReserve = reserveImportQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
@@ -206,7 +206,7 @@ export async function execute(
       return;
     }
 
-    // 5. Download the archive.
+    // Download the archive.
     const download = await safeDownload(archiveAttachment.url, {
       maxSizeMB: IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB,
       timeoutMs: DOWNLOAD_TIMEOUT_MS,
@@ -221,7 +221,7 @@ export async function execute(
       return;
     }
 
-    // 6. Parse + validate the archive (ZIP-bomb guards live in readSpriteArchive).
+    // Parse + validate the archive (ZIP-bomb guards live in readSpriteArchive).
     const archive = await readSpriteArchive(download.buffer, {
       maxEntries: PERSONA_SPRITE_LIMITS.MAX_PER_PERSONA,
       maxFileBytes: MAX_IMAGE_BYTES,
@@ -233,7 +233,7 @@ export async function execute(
       return;
     }
 
-    // 7. Validate names and convert every image BEFORE touching storage/DB so a
+    // Validate names and convert every image BEFORE touching storage/DB so a
     //    bad entry aborts the whole import cleanly. Incoming keys are deduped
     //    (last wins) because two entries could normalize to the same key.
     const preparedByKey = new Map<string, PreparedSprite>();
@@ -273,7 +273,7 @@ export async function execute(
     }
     const prepared = [...preparedByKey.values()];
 
-    // 8. Cap check (all-or-nothing). Only NEW keys count toward the cap; keys
+    // Cap check (all-or-nothing). Only NEW keys count toward the cap; keys
     //    that already exist are overwrites and do not grow the set.
     const existingSprites = await personaSpriteRepository.listForPersona(personaId);
     const existingKeys = new Set(existingSprites.map((sprite) => sprite.sprite_key));
@@ -294,7 +294,7 @@ export async function execute(
       return;
     }
 
-    // 9. Materialize a pointer persona so sprites (keyed by persona_id) attach
+    // Materialize a pointer persona so sprites (keyed by persona_id) attach
     //    to a concrete row (mirrors add/remove).
     const wasPointer = selectedPersona.is_pointer === true;
     const pointerForked = await forkPointerForAvatarChange(selectedPersona);
@@ -310,7 +310,7 @@ export async function execute(
       invalidateTomoriStateCache(interaction.guild.id);
     }
 
-    // 10. Upload + upsert each sprite. The cap was guaranteed above, so a
+    // Upload + upsert each sprite. The cap was guaranteed above, so a
     //     failure here is a transient storage/DB error: record it and continue
     //     so one bad image doesn't lose the rest of a large batch.
     let createdCount = 0;
@@ -355,7 +355,7 @@ export async function execute(
       }
     }
 
-    // 11. Report the outcome (warn-colored if anything failed).
+    // Report the outcome (warn-colored if anything failed).
     await replyInfoEmbed(responseInteraction, locale, {
       titleKey:
         failedCount > 0

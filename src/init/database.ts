@@ -60,7 +60,7 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       return;
     }
 
-    // 1. Check if the pg_cron extension is available
+    // Check if the pg_cron extension is available
     const [extensionCheck] = await sql`
       SELECT EXISTS (
         SELECT 1 FROM pg_available_extensions
@@ -73,16 +73,16 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       return;
     }
 
-    // 2. Enable pg_cron extension
+    // Enable pg_cron extension
     await sql`CREATE EXTENSION IF NOT EXISTS pg_cron;`;
 
-    // 3. Delete any existing job with the same name (idempotent across pg_cron versions)
+    // Delete any existing job with the same name (idempotent across pg_cron versions)
     await sql`
       DELETE FROM cron.job
       WHERE jobname = 'tomoribot_cooldown_cleanup'
     `;
 
-    // 4. Insert the new/updated job
+    // Insert the new/updated job
     await sql`
       INSERT INTO cron.job (jobname, schedule, command, nodename, nodeport, database, username)
       VALUES (

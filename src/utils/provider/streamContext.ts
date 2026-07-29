@@ -7,8 +7,6 @@
  * had to be copy-pasted into every provider, and a single missed backend would silently drop
  * the new behavior. This helper owns all the common copy-through fields so provider files only
  * pass the values they already have in scope plus their provider name.
- *
- * @see plans/12-stream-context-construction-refactor.md
  */
 
 import type { Client, CommandInteraction, Message, Webhook } from "discord.js";
@@ -28,27 +26,27 @@ export interface BuildStreamContextParams {
   /** Canonical provider identifier (e.g. "google", "novelai") copied verbatim into the context. */
   provider: string;
 
-  // 1. Discord context
+  // Discord context
   channel: StreamContext["channel"];
   client: Client;
   initialInteraction?: CommandInteraction;
   replyToMessage?: Message;
 
-  // 2. Application context
+  // Application context
   tomoriState: TomoriState;
   contextItems: StructuredContextItem[];
   currentTurnModelParts: Array<Record<string, unknown>>;
   emojiStrings?: string[];
   functionInteractionHistory?: StreamContext["functionInteractionHistory"];
 
-  // 3. Locale — the helper applies the shared `en-US` fallback.
+  // Locale — the helper applies the shared `en-US` fallback.
   userLocale?: string;
 
-  // 4. Turn/tool metadata that carries the shared copy-through fields (suppress flags, prefill,
+  // Turn/tool metadata that carries the shared copy-through fields (suppress flags, prefill,
   //    forced mentions, abort signal, message ID map, NAI continuation, etc.).
   streamingContext?: StreamingContext;
 
-  // 5. Multi-persona webhook identity
+  // Multi-persona webhook identity
   webhook?: Webhook;
   personaAvatarUrl?: string;
   personaUsername?: string;
@@ -69,20 +67,20 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
   const { streamingContext } = params;
 
   return {
-    // 1. Discord context
+    // Discord context
     channel: params.channel,
     client: params.client,
     initialInteraction: params.initialInteraction,
     replyToMessage: params.replyToMessage,
 
-    // 2. Application context
+    // Application context
     tomoriState: params.tomoriState,
     contextItems: params.contextItems,
     currentTurnModelParts: params.currentTurnModelParts,
     emojiStrings: params.emojiStrings,
     functionInteractionHistory: params.functionInteractionHistory,
 
-    // 3. Provider context
+    // Provider context
     provider: params.provider,
     locale: params.userLocale ?? "en-US", // Use user's preferred locale, fallback to en-US
     suppressUserErrors: streamingContext?.suppressUserErrors,
@@ -92,29 +90,29 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     outputPrefillState: streamingContext?.outputPrefillState,
     replyNoticeState: streamingContext?.replyNoticeState,
 
-    // 4. Multi-persona webhook support
+    // Multi-persona webhook support
     webhook: params.webhook,
     personaAvatarUrl: params.personaAvatarUrl,
     personaUsername: params.personaUsername,
     prefixStrippingName: params.prefixStrippingName,
 
-    // 5. Forced mentions (e.g., reminder recipients)
+    // Forced mentions (e.g., reminder recipients)
     forcedMentions: streamingContext?.forcedMentions,
 
-    // 6. NAI GLM-4.6 prompt continuation — trailing fragment from a previous truncated stream.
+    // NAI GLM-4.6 prompt continuation — trailing fragment from a previous truncated stream.
     //    Only ever populated for NovelAI streams; a no-op copy-through for other providers.
     naiContinuationPrefill: streamingContext?.naiContinuationPrefill,
 
-    // 7. External abort signal for SDK call timeout cancellation
+    // External abort signal for SDK call timeout cancellation
     abortSignal: streamingContext?.abortSignal,
 
-    // 7b. Empty-response retry count for the opening-label leak guard's budget decision
+    // Empty-response retry count for the opening-label leak guard's budget decision
     emptyResponseRetryCount: streamingContext?.emptyResponseRetryCount,
 
-    // 8. Opaque message ID map for snowflake ID abstraction in LLM-visible text
+    // Opaque message ID map for snowflake ID abstraction in LLM-visible text
     messageIdMap: streamingContext?.messageIdMap,
 
-    // 9. Superseded-delivery sink — copy the ARRAY REFERENCE (not a clone) so the orchestrator's
+    // Superseded-delivery sink — copy the ARRAY REFERENCE (not a clone) so the orchestrator's
     //    successful-send appends are visible to runGenerationTurn even after the SDK-call-timeout
     //    race abandons this StreamContext's owning promise.
     deliveredMessageRefs: streamingContext?.deliveredMessageRefs,

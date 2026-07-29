@@ -65,14 +65,43 @@ describe("comment sweep scanner", () => {
       repoRoot: root,
     });
 
-    expect(findOperation(candidates, "strip-numbering")).toHaveLength(2);
+    expect(findOperation(candidates, "strip-numbering")).toHaveLength(1);
     expect(findOperation(candidates, "strip-rule")).toHaveLength(1);
     expect(findOperation(candidates, "delete-commented-code")).toHaveLength(1);
     expect(findOperation(candidates, "normalize-block")).toHaveLength(1);
     expect(candidates.some((row) => row.tier === "2")).toBeTrue();
     expect(candidates.some((row) => row.tier === "2b")).toBeTrue();
     expect(candidates.some((row) => row.tier === "2c")).toBeTrue();
-    expect(candidates.some((row) => row.manual_review === "jsdoc-numbering-in-tagged-block")).toBeTrue();
+  });
+
+  it("defers numbered JSDoc lines to judgment instead of stripping them", async () => {
+    const root = await createTemporaryRoot();
+    await Bun.write(
+      join(root, "fixture.ts"),
+      [
+        "/**",
+        " * Resolves the model.",
+        " *",
+        " * 1. Cached default from the database",
+        " * 2. Database query when the cache is cold",
+        " * @param input - Input value",
+        " */",
+        "export function resolve(input: number): string {",
+        "  return String(input);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const candidates = await scanCommentSweepCandidates({
+      paths: ["fixture.ts"],
+      repoRoot: root,
+    });
+    const ordered = candidates.filter((row) => row.manual_review === "jsdoc-ordered-list");
+
+    expect(findOperation(candidates, "strip-numbering")).toHaveLength(0);
+    expect(ordered).toHaveLength(2);
+    expect(ordered.every((row) => row.tier === "2" && row.operation === undefined)).toBeTrue();
   });
 
   it("protects suppressions and their adjacent explanation", async () => {

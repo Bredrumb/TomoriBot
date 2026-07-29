@@ -98,12 +98,12 @@ function validateAttachment(attachment: Attachment): {
 } {
   const filename = attachment.name?.toLowerCase() ?? "";
 
-  // 1. Check file extension
+  // Check file extension
   if (!filename.endsWith(".json")) {
     return { isValid: false, errorKey: "invalid_format" };
   }
 
-  // 2. Check content type if provided (Discord may not always set this)
+  // Check content type if provided (Discord may not always set this)
   if (attachment.contentType && !attachment.contentType.includes("json")) {
     return { isValid: false, errorKey: "invalid_format" };
   }
@@ -477,7 +477,7 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     return null;
   }
 
-  // 1. Build lookup from prompts array: identifier → node definition
+  // Build lookup from prompts array: identifier → node definition
   const promptMap = new Map<string, RawSTPromptNode>();
   for (const prompt of prompts) {
     if (prompt.identifier) {
@@ -485,7 +485,7 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     }
   }
 
-  // 2. Find the user-prompt order (character_id 100001)
+  // Find the user-prompt order (character_id 100001)
   //    Falls back to character_id 100000 (system prompt order) if 100001 is missing
   const promptOrders = normalizedPreset.preset.prompt_order;
   let orderEntries: RawSTPromptOrderEntry[] | null = null;
@@ -505,7 +505,7 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     }
   }
 
-  // 3. If no prompt_order found, fall back to prompts array order
+  // If no prompt_order found, fall back to prompts array order
   if (!orderEntries) {
     orderEntries = prompts.map((p) => ({
       identifier: p.identifier,
@@ -513,7 +513,7 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     }));
   }
 
-  // 4. Walk the order and build nodes, tracking filtering stats
+  // Walk the order and build nodes, tracking filtering stats
   const nodes: Omit<StPresetNodeRow, "node_id" | "preset_id">[] = [];
   let nodeOrder = 0;
   let commentOnlyCount = 0;
@@ -608,7 +608,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Verify server setup
+  // Verify server setup
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -621,7 +621,7 @@ export async function execute(
     return;
   }
 
-  // 2. Get and validate the attachment
+  // Get and validate the attachment
   const attachment = interaction.options.getAttachment("file", true);
   const validation = validateAttachment(attachment);
   if (!validation.isValid) {
@@ -634,7 +634,7 @@ export async function execute(
     return;
   }
 
-  // 3. Check file size before downloading
+  // Check file size before downloading
   const maxSizeBytes = MAX_PRESET_FILE_SIZE_MB * 1024 * 1024;
   if (attachment.size && attachment.size > maxSizeBytes) {
     await replyInfoEmbed(interaction, locale, {
@@ -647,11 +647,11 @@ export async function execute(
     return;
   }
 
-  // 4. Defer reply (download + parsing may take a moment)
+  // Defer reply (download + parsing may take a moment)
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 5. Download the file safely
+    // Download the file safely
     const downloadResult = await safeDownload(attachment.url, {
       maxSizeMB: MAX_PRESET_FILE_SIZE_MB,
       timeoutMs: 15000,
@@ -665,7 +665,7 @@ export async function execute(
       return;
     }
 
-    // 6. Parse the JSON
+    // Parse the JSON
     let rawPreset: RawSTPreset;
     try {
       rawPreset = JSON.parse(downloadResult.buffer.toString("utf-8"));
@@ -676,7 +676,7 @@ export async function execute(
       return;
     }
 
-    // 7. Normalize supported ST preset formats (modern Prompt Manager or legacy text-completions)
+    // Normalize supported ST preset formats (modern Prompt Manager or legacy text-completions)
     const normalizedPreset = normalizePresetShape(rawPreset);
     if (!normalizedPreset) {
       await replyInfoEmbed(interaction, locale, {
@@ -688,7 +688,7 @@ export async function execute(
       return;
     }
 
-    // 8. Parse nodes from the preset
+    // Parse nodes from the preset
     const parseResult = parsePresetNodes(normalizedPreset);
     if (!parseResult) {
       await interaction.editReply({
@@ -699,10 +699,10 @@ export async function execute(
 
     const { nodes, commentOnlyCount, disabledByPreset, legacyNodeCount, sourceKind } = parseResult;
 
-    // 9. Derive preset name from filename
+    // Derive preset name from filename
     const presetName = derivePresetName(attachment.name ?? "Unnamed Preset");
 
-    // 10. Insert into database
+    // Insert into database
     const preset = await presetRepository.insertPresetWithNodes(tomoriState.server_id, presetName, rawPreset, nodes);
 
     if (!preset) {
@@ -712,12 +712,12 @@ export async function execute(
       return;
     }
 
-    // 11. Activate the newly imported preset (deactivates any previously active preset)
+    // Activate the newly imported preset (deactivates any previously active preset)
     if (preset.preset_id) {
       await presetRepository.setActivePreset(tomoriState.server_id, preset.preset_id);
     }
 
-    // 12. Count node types for the summary
+    // Count node types for the summary
     const markerCount = nodes.filter((n) => n.is_marker).length;
     const toggleableCount = nodes.filter((n) => !n.is_marker).length;
     // Excludes comment-only nodes — they never inject regardless of enabled state
@@ -725,7 +725,7 @@ export async function execute(
 
     const unsupportedEnabledMacros = collectUnsupportedEnabledMacros(nodes);
 
-    // 13. Build filtering notes for the success embed
+    // Build filtering notes for the success embed
     const filterNotes: string[] = [];
     if (commentOnlyCount > 0) {
       filterNotes.push(
@@ -769,7 +769,7 @@ export async function execute(
     const stPresetRemoveMention = commandRegistry.getCommandMention("st-preset", "remove");
     const helpStPresetMention = commandRegistry.getCommandMention("help", "st-preset");
 
-    // 14. Success response
+    // Success response
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.st-preset.import.success_title",
       descriptionKey: "commands.st-preset.import.success_description",

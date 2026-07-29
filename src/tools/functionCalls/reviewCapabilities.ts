@@ -56,7 +56,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
    * @returns Promise resolving to tool result with capability information
    */
   async execute(args: Record<string, unknown>, _context: ToolContext): Promise<ToolResult> {
-    // 1. Validate parameters
+    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -73,13 +73,13 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
     try {
       if (capabilityType === "chat") {
-        // 2. Dynamically generate chat capabilities based on model flags
+        // Dynamically generate chat capabilities based on model flags
         return await this.getChatCapabilities(_context);
       } else if (capabilityType === "commands") {
-        // 3. Dynamically scan and return slash command information
+        // Dynamically scan and return slash command information
         return await this.getSlashCommands();
       } else if (capabilityType === "settings") {
-        // 4. Dynamically generate settings and configuration report
+        // Dynamically generate settings and configuration report
         return await this.getSettingsCapabilities(_context);
       }
 
@@ -113,7 +113,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
    */
   private async getChatCapabilities(context: ToolContext): Promise<ToolResult> {
     try {
-      // 1. Extract capability flags from tomoriState
+      // Extract capability flags from tomoriState
       const llm = context.tomoriState.llm;
       const config = context.tomoriState.config;
       const provider = llm.llm_provider.toLowerCase();
@@ -165,7 +165,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const imageToolCapabilities =
         config.imagegen_enabled && hasStandardImageSlot ? await resolveImageToolCapabilities(toolAssemblyState) : null;
 
-      // 2. Build dynamic capabilities markdown with model information
+      // Build dynamic capabilities markdown with model information
       let capabilitiesContent = "# Your Chat Capabilities\n\n";
       capabilitiesContent += `The current model powering you is **${displayModelName}** (${llm.llm_provider})`;
       if (llm.llm_description && provider !== "custom") {
@@ -174,7 +174,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += ".\n\n";
       capabilitiesContent += "This model supports the following features:\n\n";
 
-      // 3. Vision & Media section (dynamic based on model capabilities)
+      // Vision & Media section (dynamic based on model capabilities)
       capabilitiesContent += "## Vision & Media\n\n";
 
       if (seesImages || seesVideos || seesYouTube) {
@@ -210,7 +210,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "Text descriptions of media are provided when available.\n\n";
       }
 
-      // 4. Search & Information section (only if tools are available)
+      // Search & Information section (only if tools are available)
       if (hasTools) {
         capabilitiesContent += "## Search & Information\n\n";
         if (webSearchCapabilities) {
@@ -225,14 +225,14 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "- **URL fetching** (fetch for retrieving webpage content)\n\n";
       }
 
-      // 5. Expression & Reactions section (always available for Discord features)
+      // Expression & Reactions section (always available for Discord features)
       capabilitiesContent += "## Expression & Reactions\n\n";
       capabilitiesContent += "You CAN express yourself:\n";
       capabilitiesContent += "- **Server emojis** (use `:name:` from the server emoji list; case-insensitive)\n";
       capabilitiesContent += "- **Stickers** (via select_sticker_for_response function)\n";
       capabilitiesContent += "- **Standard emojis** (Unicode emojis in text)\n\n";
 
-      // 5b. Alter Personas section (multi-character webhook support)
+      // Alter Personas section (multi-character webhook support)
       capabilitiesContent += "## Alter Personas\n\n";
       capabilitiesContent += "This server may have multiple personas (alter personas) active:\n";
       capabilitiesContent += "- Each alter persona has its own personality, trigger words, and webhook avatar\n";
@@ -242,7 +242,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += "- Replying to a webhook message continues the conversation as that persona\n";
       capabilitiesContent += "- Self-triggers are prevented (a persona will not trigger itself)\n\n";
 
-      // 5c. Image Generation section (conditional on provider and configuration)
+      // Image Generation section (conditional on provider and configuration)
       capabilitiesContent += "## Image Generation\n\n";
       if (config.imagegen_enabled && hasStandardImageSlot && imageToolCapabilities) {
         const imageModes = [
@@ -288,7 +288,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "Video generation is **disabled** by server configuration.\n\n";
       }
 
-      // 5d. Voice System section (conditional on speech voice assignment + server permission)
+      // Voice System section (conditional on speech voice assignment + server permission)
       const hasVoiceAssignment = Boolean(
         context.tomoriState.speech_voice_sample_id ||
           context.tomoriState.speech_voice_design_prompt?.trim() ||
@@ -324,7 +324,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           "Voice messages are not configured for this persona. An admin can assign a voice with `/config speech voice-assign`.\n\n";
       }
 
-      // 5e. SillyTavern Preset section (conditional on active ST preset)
+      // SillyTavern Preset section (conditional on active ST preset)
       const serverId = context.tomoriState.server_id;
       if (serverId) {
         const presetData = await getCachedActivePreset(serverId);
@@ -345,7 +345,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         }
       }
 
-      // 6. Memory & Personalization section (always available)
+      // Memory & Personalization section (always available)
       capabilitiesContent += "## Memory & Personalization\n\n";
       capabilitiesContent += "You HAVE access to:\n";
       capabilitiesContent += "- **Server memories** (facts learned about the server)\n";
@@ -358,7 +358,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent +=
         "- Cross-server short-term memory sharing is available when the user opts in via `/personal stm`\n\n";
 
-      // 6b. Document Knowledge Base section (conditional on embedding model)
+      // Document Knowledge Base section (conditional on embedding model)
       capabilitiesContent += "## Document Knowledge Base\n\n";
       if (config.embedding_model_id) {
         capabilitiesContent += "You have access to a document knowledge base (RAG):\n";
@@ -371,7 +371,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "- Configure with `/model embedding` to enable document uploads\n\n";
       }
 
-      // 7. Personality & Configuration section (always available)
+      // Personality & Configuration section (always available)
       capabilitiesContent += "## Personality & Configuration\n\n";
       capabilitiesContent += "You CAN:\n";
       capabilitiesContent += "- Switch personalities (configured via server settings)\n";
@@ -379,7 +379,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += "- Use different languages (configured per server)\n";
       capabilitiesContent += "- Respond to triggers and mentions\n\n";
 
-      // 8. Function Calling section (only if tools are available)
+      // Function Calling section (only if tools are available)
       if (hasTools) {
         capabilitiesContent += "## Function Calling\n\n";
         capabilitiesContent += "You CAN call functions/tools to perform actions:\n";
@@ -437,7 +437,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += `- **generate_voice_message** (${voiceNote})\n\n`;
       }
 
-      // 9. Model-specific characteristics section
+      // Model-specific characteristics section
       const hasUncensorConfig =
         config.uncensor_unicode_space_enabled || config.uncensor_injection_enabled || config.uncensor_sanitize_enabled;
       if (isReasoning || isUncensored || hasUncensorConfig) {
@@ -464,7 +464,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "\n";
       }
 
-      // 10. Restrictions section (always show what you CANNOT do)
+      // Restrictions section (always show what you CANNOT do)
       capabilitiesContent += "## What You CANNOT Do\n\n";
       capabilitiesContent += "You CANNOT:\n";
       capabilitiesContent += "- Modify server settings (only admins can do this)\n";
@@ -475,7 +475,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += "- Send messages to channels you don't have access to\n";
       capabilitiesContent += "- Execute arbitrary code on the server (security restriction)\n\n";
 
-      // 11. Add "Why Features May Be Unavailable" section
+      // Add "Why Features May Be Unavailable" section
       capabilitiesContent += "---\n\n";
       capabilitiesContent += "## Why Some Features May Be Unavailable\n\n";
 
@@ -571,7 +571,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "✅ All features are available and properly configured!\n\n";
       }
 
-      // 12. Add model switching information
+      // Add model switching information
       capabilitiesContent += "**Need different capabilities?** Tell the user they can switch models using:\n";
       capabilitiesContent += "- `/model` - Switch to a different model with the current provider\n";
       capabilitiesContent += "- `/config api-key` - Switch to a different LLM provider entirely\n\n";
@@ -579,7 +579,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       log.info(`Successfully generated dynamic chat capabilities for model: ${displayModelName}`);
 
-      // 12. Return the dynamically generated content
+      // Return the dynamically generated content
       return {
         success: true,
         message: capabilitiesContent,
@@ -616,20 +616,20 @@ export class ReviewCapabilitiesTool extends BaseTool {
    */
   private async getSettingsCapabilities(context: ToolContext): Promise<ToolResult> {
     try {
-      // 1. Extract configuration and capabilities
+      // Extract configuration and capabilities
       const llm = context.tomoriState.llm;
       const config = context.tomoriState.config;
       const serverId = context.tomoriState.server_id;
       const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
 
-      // 2. Check API key status
+      // Check API key status
       const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(serverId);
       const mainApiKeySet = !!config.api_key;
 
-      // 3. Build settings report
+      // Build settings report
       let settingsContent = "# Current Configuration & Feature Availability\n\n";
 
-      // 4. Model Information Section
+      // Model Information Section
       settingsContent += "## Active Model\n\n";
       settingsContent += `**Model**: ${displayModelName}\n`;
       settingsContent += `**Provider**: ${llm.llm_provider}\n`;
@@ -640,7 +640,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       settingsContent += `**Humanizer Level**: ${config.humanizer_degree}\n`;
       settingsContent += `**Timezone**: UTC${config.timezone_offset >= 0 ? "+" : ""}${config.timezone_offset}:00\n\n`;
 
-      // 5. Model Capabilities Section
+      // Model Capabilities Section
       settingsContent += "## Model Capabilities\n\n";
       const capabilities = [
         {
@@ -677,7 +677,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       }
       settingsContent += "\n";
 
-      // 6. Server Feature Flags Section
+      // Server Feature Flags Section
       settingsContent += "## Server Configuration\n\n";
       const featureFlags = [
         {
@@ -722,7 +722,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       }
       settingsContent += "\n";
 
-      // 6b. Image Generation Configuration
+      // Image Generation Configuration
       settingsContent += "## Image Generation\n\n";
       if (config.imagegen_enabled && config.diffusion_model_id) {
         settingsContent += "Image generation is **enabled** and configured.\n";
@@ -790,7 +790,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         }
       }
 
-      // 6c. System Prompt Configuration
+      // System Prompt Configuration
       settingsContent += "## System Prompt\n\n";
       if (config.system_prompt) {
         settingsContent += `A custom system prompt is active (${config.system_prompt.length} characters).\n`;
@@ -803,7 +803,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "- Or choose a preset with `/config system-prompt preset`\n\n";
       }
 
-      // 7. API Keys Section
+      // API Keys Section
       settingsContent += "## API Keys\n\n";
       settingsContent += `- **LLM API Key**: ${mainApiKeySet ? "✅ Configured" : "❌ Not Set"}\n`;
       settingsContent += `- **Brave Search API Key**: ${braveApiKeySet ? "✅ Configured" : "❌ Not Set"}\n\n`;
@@ -813,7 +813,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           "*Note: Without Brave API key, DuckDuckGo MCP search is used as fallback (if available)*\n\n";
       }
 
-      // 7b. API Key Rotation Section
+      // API Key Rotation Section
       settingsContent += "## API Key Rotation\n\n";
       const rotationKeys = context.tomoriState.rotation_keys;
       if (rotationKeys && rotationKeys.length > 0) {
@@ -826,7 +826,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           "No rotation keys configured. Use `/config api-key rotation` to add backup keys for automatic failover.\n\n";
       }
 
-      // 8. Available Tools Section (Dynamic Query)
+      // Available Tools Section (Dynamic Query)
       settingsContent += "## Available Tools\n\n";
 
       try {
@@ -953,7 +953,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "*Unable to query available tools (registry error)*\n\n";
       }
 
-      // 9. Disabled Features Section
+      // Disabled Features Section
       settingsContent += "## Why Features May Be Disabled\n\n";
 
       const disabledReasons: string[] = [];
@@ -1004,7 +1004,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         settingsContent += "✅ All features are enabled and configured!\n\n";
       }
 
-      // 10. How to Enable Features Section
+      // How to Enable Features Section
       settingsContent += "## How to Enable Disabled Features\n\n";
       settingsContent += "- **Model Limitations**: Switch models using `/model` or `/config api-key`\n";
       settingsContent += "- **Server Configuration**: Server admin can enable features via `/config [feature]`\n";
@@ -1013,7 +1013,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       log.info(`Successfully generated settings capabilities for server ${serverId}`);
 
-      // 11. Return the dynamically generated settings report
+      // Return the dynamically generated settings report
       return {
         success: true,
         message: settingsContent,
@@ -1095,51 +1095,51 @@ export class ReviewCapabilitiesTool extends BaseTool {
    */
   private async getSlashCommands(): Promise<ToolResult> {
     try {
-      // 1. Build path to commands directory
+      // Build path to commands directory
       const commandsPath = path.join(process.cwd(), "src", "commands");
 
-      // 2. Get all category directories
+      // Get all category directories
       const categoryDirs = await getAllFiles(commandsPath, true);
 
-      // 3. Build markdown documentation
+      // Build markdown documentation
       let commandsMarkdown = "# Your Slash Commands\n\n";
       commandsMarkdown +=
         "Here are all available slash commands organized by category. Commands may use the format `/{category} {subcommand}` or `/{category} {group} {subcommand}`.\n\n";
 
       let totalCommands = 0;
 
-      // 4. Process each category directory
+      // Process each category directory
       for (const categoryDir of categoryDirs) {
         const categoryName = path.basename(categoryDir);
 
-        // 5. Get category description from localizations
+        // Get category description from localizations
         const categoryDescription =
           localizer("en-US", `commands.${categoryName}.description`) || `${categoryName} commands`;
 
         commandsMarkdown += `## /${categoryName}\n`;
         commandsMarkdown += `${categoryDescription}\n\n`;
 
-        // 6. Get direct command files (immediate children - direct subcommands)
+        // Get direct command files (immediate children - direct subcommands)
         const directCommandFiles = (await getAllFiles(categoryDir)).filter((file) => file.endsWith(".ts"));
 
-        // 7. Process direct subcommands (no subcommand group)
+        // Process direct subcommands (no subcommand group)
         for (const commandFile of directCommandFiles) {
           try {
-            // 8. Import the command module
+            // Import the command module
             const commandModule = await import(commandFile);
 
-            // 9. Validate exports
+            // Validate exports
             if (!commandModule.configureSubcommand) {
               continue;
             }
 
-            // 10. Create a mock subcommand builder to extract command details
+            // Create a mock subcommand builder to extract command details
             const mockBuilder = this.createMockBuilder();
 
-            // 11. Call configureSubcommand to populate the mock builder
+            // Call configureSubcommand to populate the mock builder
             commandModule.configureSubcommand(mockBuilder as unknown as SlashCommandSubcommandBuilder);
 
-            // 12. Extract command information
+            // Extract command information
             const subcommandName = mockBuilder.name;
             const subcommandDescription = mockBuilder.description;
 
@@ -1153,39 +1153,39 @@ export class ReviewCapabilitiesTool extends BaseTool {
           }
         }
 
-        // 13. Get subdirectories (potential subcommand groups)
+        // Get subdirectories (potential subcommand groups)
         const subcommandGroups = await getAllFiles(categoryDir, true);
 
-        // 14. Process subcommand groups
+        // Process subcommand groups
         for (const groupDir of subcommandGroups) {
           const groupName = path.basename(groupDir);
 
-          // 15. Get command files in this subcommand group
+          // Get command files in this subcommand group
           const groupCommandFiles = (await getAllFiles(groupDir)).filter((file) => file.endsWith(".ts"));
 
-          // 16. Process each command file in the group
+          // Process each command file in the group
           for (const commandFile of groupCommandFiles) {
             try {
-              // 17. Import the command module
+              // Import the command module
               const commandModule = await import(commandFile);
 
-              // 18. Validate exports
+              // Validate exports
               if (!commandModule.configureSubcommand) {
                 continue;
               }
 
-              // 19. Create a mock subcommand builder to extract command details
+              // Create a mock subcommand builder to extract command details
               const mockBuilder = this.createMockBuilder();
 
-              // 20. Call configureSubcommand to populate the mock builder
+              // Call configureSubcommand to populate the mock builder
               commandModule.configureSubcommand(mockBuilder as unknown as SlashCommandSubcommandBuilder);
 
-              // 21. Extract command information
+              // Extract command information
               const subcommandName = mockBuilder.name;
               const subcommandDescription = mockBuilder.description;
 
               if (subcommandName && subcommandDescription) {
-                // 22. Format with subcommand group: /{category} {group} {subcommand}
+                // Format with subcommand group: /{category} {group} {subcommand}
                 commandsMarkdown += `- **/${categoryName} ${groupName} ${subcommandName}** - ${subcommandDescription}\n`;
                 totalCommands++;
               }
@@ -1199,12 +1199,12 @@ export class ReviewCapabilitiesTool extends BaseTool {
         commandsMarkdown += "\n";
       }
 
-      // 23. Add footer with command count
+      // Add footer with command count
       commandsMarkdown += `---\n\n**Total Commands**: ${totalCommands} slash commands across ${categoryDirs.length} categories\n`;
 
       log.success(`Successfully generated slash command documentation: ${totalCommands} commands`);
 
-      // 24. Return the generated markdown
+      // Return the generated markdown
       // Note: Put content in both message and data.summary for maximum compatibility
       // GoogleToolAdapter looks for data.summary/data.message when converting results
       return {

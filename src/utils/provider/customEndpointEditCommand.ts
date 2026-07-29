@@ -97,7 +97,7 @@ function buildEndpointSelectOptions(
   locale: string,
   keys: ExecuteCustomEndpointEditOptions["keys"],
 ): SelectOption[] {
-  // 1. First pass: count how many times each base label appears.
+  // First pass: count how many times each base label appears.
   //    Two workflows under the same label with identical names would otherwise
   //    produce duplicate option labels — Discord silently drops the second one.
   const labelCounts = new Map<string, number>();
@@ -107,7 +107,7 @@ function buildEndpointSelectOptions(
     labelCounts.set(base, (labelCounts.get(base) ?? 0) + 1);
   }
 
-  // 2. Second pass: build options, appending a counter to colliding base labels.
+  // Second pass: build options, appending a counter to colliding base labels.
   const labelIndex = new Map<string, number>();
   return endpoints.map((endpoint) => {
     const primaryName = endpoint.model_name?.trim() || endpoint.display_name;

@@ -89,7 +89,7 @@ export function getNovelAITokenLimits(
   subscriptionContextTokens?: number,
 ): ModelTokenLimits | undefined {
   if (modelCodename === "kayra-v1") {
-    // 1. Prefer live subscription data; fall back to env var
+    // Prefer live subscription data; fall back to env var
     const realLimit = subscriptionContextTokens ?? NAI_KAYRA_CONTEXT_LIMIT_FALLBACK;
     return {
       contextLength: getKayraVirtualContextLength(realLimit),

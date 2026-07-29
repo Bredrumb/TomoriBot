@@ -79,7 +79,7 @@ export async function resolveReunionNotes(args: {
   const lineageId = effectivePersona.persona_lineage_id;
   const serverId = effectivePersona.server_id;
 
-  // 1. Preconditions. Stat tracking is one of them: with the write side off every
+  // Preconditions. Stat tracking is one of them: with the write side off every
   //    read returns "no history", which would greet everyone as a stranger forever.
   if (
     effectivePersona.config.time_awareness_enabled === false ||
@@ -94,7 +94,7 @@ export async function resolveReunionNotes(args: {
     return { notes: [], presence: null };
   }
 
-  // 2. Candidate set, insertion-ordered: the triggerer first, then the distinct
+  // Candidate set, insertion-ordered: the triggerer first, then the distinct
   //    human authors of the trailing presence window, most recent first.
   const candidates = new Map<number, ReunionCandidate>();
   const triggererUserId = turn.userRow.user_id;
@@ -115,7 +115,7 @@ export async function resolveReunionNotes(args: {
     if (visitedAuthorDiscIds.has(msg.authorId)) continue;
     visitedAuthorDiscIds.add(msg.authorId);
 
-    // 2a. Bridged/synthetic authors have no users row; skip them rather than
+    // Bridged/synthetic authors have no users row; skip them rather than
     //     registering an account as a side effect of building context.
     const userRow = await getCachedUserRow(msg.authorId).catch(() => null);
     const userId = userRow?.user_id;
@@ -130,16 +130,16 @@ export async function resolveReunionNotes(args: {
   }
   if (candidates.size === 0) return { notes: [], presence: null };
 
-  // 3. One grouped read for the whole candidate set. A failed read yields null,
+  // One grouped read for the whole candidate set. A failed read yields null,
   //    which must mean "say nothing" — never "nobody here has any history".
   const reunionInfoByUserId = await statRepository.getUsersPersonaReunionInfo(Array.from(candidates.keys()), lineageId);
   if (!reunionInfoByUserId) return { notes: [], presence: null };
 
-  // 4. Presence scope for the post-turn commit (see the module header for why it
+  // Presence scope for the post-turn commit (see the module header for why it
   //    is not written here).
   const presence: ReunionPresenceScope = { serverId, lineageId, userIds: Array.from(candidates.keys()) };
 
-  // 5. Notes in candidate order (triggerer first), capped so a channel waking up
+  // Notes in candidate order (triggerer first), capped so a channel waking up
   //    doesn't bury the conversation under greetings.
   const notes: string[] = [];
   for (const [userId, candidate] of candidates) {

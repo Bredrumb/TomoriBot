@@ -66,7 +66,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
+  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -76,7 +76,7 @@ export async function execute(
     return;
   }
 
-  // 2. Check permissions (Manage Server required)
+  // Check permissions (Manage Server required)
   if (!interaction.memberPermissions?.has("ManageGuild")) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.permission_denied_title",
@@ -86,10 +86,10 @@ export async function execute(
     return;
   }
 
-  // 3. Defer before async work
+  // Defer before async work
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // 4. Get server ID from database
+  // Get server ID from database
   const serverId = await serverRepository.loadServerIdByDiscId(interaction.guild.id);
 
   if (!serverId) {
@@ -101,12 +101,12 @@ export async function execute(
     return;
   }
 
-  // 5. Get which options were provided
+  // Get which options were provided
   const dailyUserQuota = interaction.options.getInteger("daily_user_quota");
   const serverwideQuota = interaction.options.getInteger("serverwide_quota");
   const resetDays = interaction.options.getInteger("serverwide_quota_resets_in");
 
-  // 6. Check if at least one option was provided
+  // Check if at least one option was provided
   if (dailyUserQuota === null && serverwideQuota === null && resetDays === null) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.generic_error_title",
@@ -116,7 +116,7 @@ export async function execute(
     return;
   }
 
-  // 7. Process all provided options and collect results
+  // Process all provided options and collect results
   const updates: string[] = [];
 
   try {
@@ -146,7 +146,7 @@ export async function execute(
 
     log.info("Updated image generation quota settings");
 
-    // 8. Send combined success message
+    // Send combined success message
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "commands.server.quota.imagegen.daily_user_quota_success_title",
       description: updates.join("\n"),
@@ -171,13 +171,13 @@ export async function execute(
  * @returns Success message string
  */
 async function updateDailyUserQuota(serverId: number, limit: number, locale: string): Promise<string> {
-  // 1. Ensure quota config exists (creates default if not exists)
+  // Ensure quota config exists (creates default if not exists)
   await getQuotaConfig(serverId);
 
-  // 2. Update config
+  // Update config
   await updateImageDailyUserQuota(serverId, limit);
 
-  // 3. Format and return success message
+  // Format and return success message
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.imagegen.unlimited") : `${limit}`;
 
   return localizer(locale, "commands.server.quota.imagegen.daily_user_quota_success_description", { limit: limitText });
@@ -191,10 +191,10 @@ async function updateDailyUserQuota(serverId: number, limit: number, locale: str
  * @returns Success message string
  */
 async function updateServerwideQuota(serverId: number, limit: number, locale: string): Promise<string> {
-  // 1. Get current quota config (creates default if not exists)
+  // Get current quota config (creates default if not exists)
   const currentConfig = await getQuotaConfig(serverId);
 
-  // 2. Update config
+  // Update config
   await updateImageServerwideQuota(
     serverId,
     limit,
@@ -202,7 +202,7 @@ async function updateServerwideQuota(serverId: number, limit: number, locale: st
     currentConfig.serverwide_quota,
   );
 
-  // 4. Format and return success message
+  // Format and return success message
   const limitText = limit === 0 ? localizer(locale, "commands.server.quota.imagegen.unlimited") : `${limit}`;
 
   return localizer(locale, "commands.server.quota.imagegen.serverwide_quota_success_description", { limit: limitText });
@@ -216,13 +216,13 @@ async function updateServerwideQuota(serverId: number, limit: number, locale: st
  * @returns Success message string
  */
 async function updateResetDays(serverId: number, days: number, locale: string): Promise<string> {
-  // 1. Get current quota config (creates default if not exists)
+  // Get current quota config (creates default if not exists)
   const currentConfig = await getQuotaConfig(serverId);
 
-  // 2. Update config
+  // Update config
   await updateImageServerwideResetDays(serverId, days, currentConfig.serverwide_quota > 0);
 
-  // 4. Format and return success message
+  // Format and return success message
   return localizer(locale, "commands.server.quota.imagegen.serverwide_quota_resets_in_success_description", {
     days: `${days}`,
   });

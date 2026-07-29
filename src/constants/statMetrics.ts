@@ -3,8 +3,7 @@
  *
  * Each value is one `metric` in the `stat_counters` table. Adding a new metric
  * is a new entry here — never an `ALTER TABLE` (the long/narrow counter table
- * carries the metric and its sub-key as data, not columns). See
- * plans/stat-tracking.md §5 for the full catalog and grain notes.
+ * carries the metric and its sub-key as data, not columns).
  *
  * `metric_key` semantics per metric:
  *   - presence_seen → "" (one per turn per human author present in the context

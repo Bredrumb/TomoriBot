@@ -74,7 +74,7 @@ import { buildStreamContext } from "@/utils/provider/streamContext";
 async function getDefaultGoogleModel(): Promise<string> {
   const providerName = "google";
 
-  // 1. Try to get default from cache (fastest, no DB query)
+  // Try to get default from cache (fastest, no DB query)
   if (isLLMCacheReady()) {
     const cachedDefault = getCachedDefaultLLM(providerName);
     if (cachedDefault) {
@@ -83,7 +83,7 @@ async function getDefaultGoogleModel(): Promise<string> {
     }
   }
 
-  // 2. Cache not ready or no default found - query database for is_default model
+  // Cache not ready or no default found - query database for is_default model
   try {
     const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
@@ -96,7 +96,7 @@ async function getDefaultGoogleModel(): Promise<string> {
     });
   }
 
-  // 3. Fallback to first non-deprecated model from database
+  // Fallback to first non-deprecated model from database
   try {
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
@@ -108,7 +108,7 @@ async function getDefaultGoogleModel(): Promise<string> {
     log.error(`Failed to load available models for ${providerName}`, error as Error);
   }
 
-  // 4. No models found - throw error
+  // No models found - throw error
   throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 

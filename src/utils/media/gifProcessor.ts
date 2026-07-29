@@ -100,7 +100,7 @@ export async function extractGifKeyframes(
   gifSource: string | Buffer,
   config: GifProcessorConfig = {},
 ): Promise<ProcessedGifFrame[]> {
-  // 1. Merge with default configuration
+  // Merge with default configuration
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
 
   const startTime = Date.now();
@@ -110,14 +110,14 @@ export async function extractGifKeyframes(
   );
 
   try {
-    // 2. Create timeout promise
+    // Create timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
         reject(new Error(`GIF processing timeout after ${finalConfig.timeoutMs}ms`));
       }, finalConfig.timeoutMs);
     });
 
-    // 3. Extract frames with timeout
+    // Extract frames with timeout
     const extractionPromise = extractFramesInternal(gifSource, finalConfig);
     const frames = await Promise.race([extractionPromise, timeoutPromise]);
 
@@ -140,7 +140,7 @@ async function extractFramesInternal(
   gifSource: string | Buffer,
   config: Required<GifProcessorConfig>,
 ): Promise<ProcessedGifFrame[]> {
-  // 1. Fetch GIF data if source is a URL
+  // Fetch GIF data if source is a URL
   let gifBuffer: Buffer;
   if (typeof gifSource === "string") {
     log.info(`GIF Processor: Fetching GIF from URL: ${gifSource}`);
@@ -157,7 +157,7 @@ async function extractFramesInternal(
     gifBuffer = gifSource;
   }
 
-  // 2. Parse and decompress the GIF
+  // Parse and decompress the GIF
   // parseGIF expects ArrayBuffer, convert Buffer to ArrayBuffer
   const uint8Array = new Uint8Array(gifBuffer);
   const gif = parseGIF(uint8Array.buffer);
@@ -166,19 +166,19 @@ async function extractFramesInternal(
   const totalFrames = allFramesData.length;
   log.info(`GIF Processor: Total frames in GIF: ${totalFrames}`);
 
-  // 3. Handle single-frame GIF (static image)
+  // Handle single-frame GIF (static image)
   if (totalFrames === 1) {
     log.info("GIF Processor: Single-frame GIF detected, processing as static image");
     const processedFrame = await processFrame(allFramesData[0], 0, 1, 0, totalFrames, config);
     return [processedFrame];
   }
 
-  // 4. Calculate which frames to extract
+  // Calculate which frames to extract
   const frameIndices = calculateKeyframeIndices(totalFrames, config.frameInterval, config.maxKeyframes);
 
   log.info(`GIF Processor: Selected ${frameIndices.length} keyframes: [${frameIndices.join(", ")}]`);
 
-  // 5. Process selected frames
+  // Process selected frames
   const processedFrames: ProcessedGifFrame[] = [];
   for (let i = 0; i < frameIndices.length; i++) {
     const frameIndex = frameIndices[i];
@@ -256,12 +256,12 @@ async function processFrame(
   totalSourceFrames: number,
   config: Required<GifProcessorConfig>,
 ): Promise<ProcessedGifFrame> {
-  // 1. Convert RGBA pixel data to raw buffer
+  // Convert RGBA pixel data to raw buffer
   // gifuct-js provides patch as Uint8ClampedArray with RGBA pixel data
   const { patch, dims } = frameData;
   const frameBuffer = Buffer.from(patch.buffer);
 
-  // 2. Process with sharp: resize and convert to JPEG
+  // Process with sharp: resize and convert to JPEG
   // Create Sharp instance from raw RGBA pixel data
   const processedBuffer = await sharp(frameBuffer, {
     raw: {
@@ -280,10 +280,10 @@ async function processFrame(
     })
     .toBuffer();
 
-  // 3. Convert to base64
+  // Convert to base64
   const base64Data = processedBuffer.toString("base64");
 
-  // 4. Log compression stats
+  // Log compression stats
   const originalSize = frameBuffer.length;
   const compressedSize = processedBuffer.length;
   const compressionRatio = ((1 - compressedSize / originalSize) * 100).toFixed(1);

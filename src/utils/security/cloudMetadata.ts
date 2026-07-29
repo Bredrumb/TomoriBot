@@ -22,14 +22,14 @@ export function isCloudMetadataAddress(address: string): boolean {
   const normalized = address.trim().toLowerCase();
   const family = isIP(normalized);
 
-  // 1. IPv4 link-local (169.254.0.0/16) — includes the 169.254.169.254 IMDS
+  // IPv4 link-local (169.254.0.0/16) — includes the 169.254.169.254 IMDS
   //    address used by AWS, Azure, and GCP (metadata.google.internal resolves
   //    here). The whole /16 is non-routable and has no fetch use case.
   if (family === 4) {
     return normalized.startsWith("169.254.");
   }
 
-  // 2. IPv6 link-local (fe80::/10) and the AWS IPv6 IMDS address (fd00:ec2::254).
+  // IPv6 link-local (fe80::/10) and the AWS IPv6 IMDS address (fd00:ec2::254).
   if (family === 6) {
     return /^fe[89ab]/.test(normalized) || normalized === "fd00:ec2::254";
   }

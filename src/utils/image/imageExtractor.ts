@@ -124,7 +124,7 @@ function collectImageUrlsFromSource(
   addImageUrl: (info: ImageUrlInfo) => void,
   labelPrefix = "",
 ): void {
-  // 1. Direct attachments
+  // Direct attachments
   const imageAttachments = source.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
 
   for (const attachment of imageAttachments.values()) {
@@ -136,7 +136,7 @@ function collectImageUrlsFromSource(
     });
   }
 
-  // 2. Embed images and thumbnails
+  // Embed images and thumbnails
   for (const embed of source.embeds) {
     if (embed.image?.url) {
       addImageUrl({
@@ -155,7 +155,7 @@ function collectImageUrlsFromSource(
     }
   }
 
-  // 3. Discord stickers
+  // Discord stickers
   if (source.stickers.size > 0) {
     for (const sticker of source.stickers.values()) {
       addImageUrl({
@@ -166,14 +166,14 @@ function collectImageUrlsFromSource(
     }
   }
 
-  // 4. Custom emojis from message text
+  // Custom emojis from message text
   if (source.content) {
     for (const emoji of extractCustomEmojis(source.content)) {
       addImageUrl({ ...emoji, source: `${labelPrefix}${emoji.source}` });
     }
   }
 
-  // 5. Components V2 media (Media Gallery / Thumbnail / File). Reuses the same
+  // Components V2 media (Media Gallery / Thumbnail / File). Reuses the same
   //    component-walking + attachment-resolution logic the context pipeline uses
   //    so bot-generated images (referenced only inside a component) are found.
   const componentImages: SimplifiedMessageForContext["imageAttachments"] = [];
@@ -318,7 +318,7 @@ export async function resolveMessageImageUrls(
  * @throws Error if the message is not found or no images could be processed
  */
 export async function extractImagesFromMessage(messageId: string, context: ToolContext): Promise<ExtractedImage[]> {
-  // 1. Resolve every image URL from the requested message or its direct reply target.
+  // Resolve every image URL from the requested message or its direct reply target.
   const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
   log.info(
     `Found ${imageUrls.length} image(s) in message ${sourceMessageId}${
@@ -326,7 +326,7 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
     }`,
   );
 
-  // 2. Convert each URL to base64
+  // Convert each URL to base64
   const results: ExtractedImage[] = [];
 
   for (const imageInfo of imageUrls) {

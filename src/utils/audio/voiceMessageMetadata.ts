@@ -44,7 +44,7 @@ export async function generateVoiceMessageMetadata(
   mimeType: string,
 ): Promise<VoiceMessageMetadata | null> {
   try {
-    // 1. Parse audio header for duration — pure JS, no subprocess needed
+    // Parse audio header for duration — pure JS, no subprocess needed
     const metadata = await parseBuffer(audioBuffer, { mimeType });
     const durationSecs = metadata.format.duration;
     if (!durationSecs || durationSecs <= 0) {
@@ -52,7 +52,7 @@ export async function generateVoiceMessageMetadata(
       return null;
     }
 
-    // 2. Decode to raw mono PCM via the ffmpeg-static bundled binary
+    // Decode to raw mono PCM via the ffmpeg-static bundled binary
     if (!ffmpegPath) {
       log.warn("[VoiceWaveform] ffmpeg-static binary not available");
       return null;
@@ -81,7 +81,7 @@ export async function generateVoiceMessageMetadata(
       },
     );
 
-    // 3. Race subprocess exit against a timeout to avoid hanging
+    // Race subprocess exit against a timeout to avoid hanging
     const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), FFMPEG_TIMEOUT_MS));
     const exitPromise = proc.exited.then(() => new Response(proc.stdout).arrayBuffer());
 
@@ -98,7 +98,7 @@ export async function generateVoiceMessageMetadata(
       return null;
     }
 
-    // 4. Compute 100 amplitude samples by splitting PCM into equal chunks
+    // Compute 100 amplitude samples by splitting PCM into equal chunks
     //    and taking the peak absolute value in each chunk, normalized 0–255.
     const sampleCount = Math.floor(pcmBuffer.length / 2); // 16-bit = 2 bytes
     const chunkSize = Math.max(1, Math.floor(sampleCount / WAVEFORM_SAMPLES));

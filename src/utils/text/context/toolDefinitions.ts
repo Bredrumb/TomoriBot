@@ -27,7 +27,7 @@ const VERBATIM_TOOL_DEFINITIONS_HEADER =
  * @returns Provider-native tool JSON array, or an empty array when none apply.
  */
 async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promise<Array<Record<string, unknown>>> {
-  // 1. Build the minimal availability state (mirrors every <Provider>.getTools block).
+  // Build the minimal availability state (mirrors every <Provider>.getTools block).
   const provider = tomoriState.llm.llm_provider;
   const toolStateForContext: ToolStateForContext = {
     server_id: tomoriState.server_id.toString(),
@@ -62,10 +62,10 @@ async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promi
     },
   };
 
-  // 2. Feature-flag-gated built-in tools + allowed MCP function names.
+  // Feature-flag-gated built-in tools + allowed MCP function names.
   const { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(provider, toolStateForContext);
 
-  // 3. Serialize to full native schemas (built-in + global/guild MCP) via the
+  // Serialize to full native schemas (built-in + global/guild MCP) via the
   //    OpenAI-compatible adapter — the same shape that lands in `config.tools`.
   const adapter = new OpenAICompatibleToolAdapter(provider);
   return adapter.getAllToolsInProviderFormat(builtInTools, tomoriState.server_id, mcpFunctionNames);

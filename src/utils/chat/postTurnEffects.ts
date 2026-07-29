@@ -125,13 +125,13 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
  * @param result  - The turn result; personaResponses carry the responding lineages.
  */
 async function recordUsageStats(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  // 1. Only count turns that produced a real persona response, and not DMs.
+  // Only count turns that produced a real persona response, and not DMs.
   if (result.personaResponses.length === 0 || context.isDMChannel) return;
   const serverId = context.tomoriState.server_id;
   if (!serverId) return;
 
   try {
-    // 2. Triggerer's internal users FK — resolved once at turn planning and
+    // Triggerer's internal users FK — resolved once at turn planning and
     //    carried on the context, so stat recording needs no per-turn DB lookup.
     const userId = context.triggererUserId;
     if (!userId) return;
@@ -140,7 +140,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     const modelCodename = context.tomoriState.llm.llm_codename;
     const primaryLineage = context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0;
 
-    // 3. Once per turn: the model used and the active hour-of-day, keyed to the
+    // Once per turn: the model used and the active hour-of-day, keyed to the
     //    answering persona. (active_hour is summed across lineages at read time,
     //    so recording it once per turn keeps the hour histogram un-inflated.)
     statRepository.recordStat({
@@ -152,7 +152,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     });
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "active_hour", metricKey: hour });
 
-    // 4. Per responding persona: one message exchanged (drives favorite-persona
+    // Per responding persona: one message exchanged (drives favorite-persona
     //    affinity), plus that persona's emoji usage and output-token volume — all
     //    persona-scoped, so keyed to the response's own lineage.
     const lineages = new Set<number>();
@@ -161,11 +161,11 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       const lineageId = response.personaLineageId ?? primaryLineage;
       lineages.add(lineageId);
 
-      // 4a. Output token volume (character-estimated) for this response — used
+      // Output token volume (character-estimated) for this response — used
       //     only as the fallback when the provider reported no real usage (5).
       if (response.text) estimatedOutputTokens += charsToTokensText(response.text.length);
 
-      // 4b. Successful custom-emoji uses in the final text, one increment per
+      // Successful custom-emoji uses in the final text, one increment per
       //     occurrence. Pre-aggregated per name so repeats collapse to one UPSERT.
       const emojiCounts = new Map<string, number>();
       for (const match of response.text.matchAll(RESOLVED_CUSTOM_EMOJI_RE)) {
@@ -186,10 +186,10 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     for (const lineageId of lineages) {
       statRepository.recordStat({ serverId, userId, lineageId, metric: "message_sent" });
     }
-    // 4c. One text_generated increment per completed turn (persona-scoped to the answering persona).
+    // One text_generated increment per completed turn (persona-scoped to the answering persona).
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "text_generated" });
 
-    // 4d. Preserve the target identity for successful user-impersonation turns.
+    // Preserve the target identity for successful user-impersonation turns.
     // user_id remains the triggering actor; metric_key is the stable Discord id of
     // the impersonated user. Keeping the answering lineage makes this queryable by
     // actor, target, server, persona, and daily bucket without changing card reads.
@@ -203,7 +203,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       });
     }
 
-    // 5. Token volume keyed by model id, attributed to the answering persona.
+    // Token volume keyed by model id, attributed to the answering persona.
     //    Prefer REAL provider usage summed across the turn's stream segments
     //    (billing-accurate); fall back to the character estimate (input from the
     //    built context, output from response text) when no segment reported usage.
@@ -236,7 +236,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       });
     }
 
-    // 6. Sprite deliveries surfaced from the stream (one entry per delivered sprite
+    // Sprite deliveries surfaced from the stream (one entry per delivered sprite
     //    message). Sprites are the answering persona's own, so key on primaryLineage.
     //    Two counts are pre-aggregated per sprite name:
     //      - sprite_shown:   every delivered sprite (identity or not) — the leaderboard.

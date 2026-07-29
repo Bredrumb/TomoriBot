@@ -25,7 +25,7 @@ class CommandRegistry {
     }
 
     try {
-      // 1. Fetch application commands (global commands)
+      // Fetch application commands (global commands)
       const commands = await client.application?.commands.fetch();
 
       if (!commands) {
@@ -33,12 +33,12 @@ class CommandRegistry {
         return;
       }
 
-      // 2. Cache command IDs with their names
+      // Cache command IDs with their names
       for (const [id, command] of commands) {
         // Store base command
         this.commandIds.set(command.name, id);
 
-        // 3. If command has subcommands, store them with format "command:subcommand"
+        // If command has subcommands, store them with format "command:subcommand"
         if (command.options && command.options.length > 0) {
           for (const option of command.options) {
             if (option.type === 1) {

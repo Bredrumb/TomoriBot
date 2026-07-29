@@ -60,12 +60,12 @@ export async function loadEmojiStickerCache(
   emojis: ServerEmojiRow[] | null;
   stickers: ServerStickerRow[] | null;
 }> {
-  // 1. Check if features are disabled
+  // Check if features are disabled
   if (!emojiUsageEnabled && !stickerUsageEnabled) {
     return { emojis: null, stickers: null };
   }
 
-  // 2. Check in-memory cache
+  // Check in-memory cache
   const now = Date.now();
   const cachedEntry = cache.get(serverId);
 
@@ -84,11 +84,11 @@ export async function loadEmojiStickerCache(
     // Cache stale - fall through to refresh
   }
 
-  // 3. Cache miss or stale - refresh from DB
+  // Cache miss or stale - refresh from DB
   cacheMisses++;
 
   try {
-    // 4. Lazy sync from Discord if needed (24hr check)
+    // Lazy sync from Discord if needed (24hr check)
     if (emojiUsageEnabled) {
       await lazySyncGuildEmojis(guild, serverId);
     }
@@ -96,7 +96,7 @@ export async function loadEmojiStickerCache(
       await lazySyncGuildStickers(guild, serverId);
     }
 
-    // 5. Load fresh data from database
+    // Load fresh data from database
     let emojis: ServerEmojiRow[] | null = null;
     let stickers: ServerStickerRow[] | null = null;
 
@@ -109,7 +109,7 @@ export async function loadEmojiStickerCache(
       stickers = await serverRepository.loadStickersByInternalId(serverId);
     }
 
-    // 6. Cache the loaded data
+    // Cache the loaded data
     cache.set(serverId, {
       emojis: emojis || [],
       stickers: stickers || [],

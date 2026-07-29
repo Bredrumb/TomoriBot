@@ -39,7 +39,7 @@ async function nukeDatabase(): Promise<void> {
   log.info("This will DELETE ALL TABLES and DATA in the connected PostgreSQL database.");
   log.info("Run `bun run backup` first if you want to preserve your data.");
 
-  // 1. Discover all tables in the public schema at runtime
+  // Discover all tables in the public schema at runtime
   const tableRows = await sql<{ tablename: string }[]>`
 		SELECT tablename
 		FROM pg_tables
@@ -58,7 +58,7 @@ async function nukeDatabase(): Promise<void> {
   if (!skipPrompt) {
     log.info("Type 'NUKE DATABASE' (all caps) to confirm deletion:");
 
-    // 2. Require explicit confirmation before proceeding
+    // Require explicit confirmation before proceeding
     const response = await new Promise<string>((resolve) => {
       process.stdin.resume();
       process.stdin.once("data", (data) => {
@@ -78,10 +78,10 @@ async function nukeDatabase(): Promise<void> {
   log.info("Confirmation received. Starting database nuke process...");
 
   try {
-    // 3. Disable FK checks so tables can be dropped in any order
+    // Disable FK checks so tables can be dropped in any order
     await sql`SET session_replication_role = 'replica';`;
 
-    // 4. Drop each discovered table
+    // Drop each discovered table
     for (const table of tableNames) {
       try {
         await sql`DROP TABLE IF EXISTS ${sql(table)} CASCADE;`;
@@ -91,7 +91,7 @@ async function nukeDatabase(): Promise<void> {
       }
     }
 
-    // 5. Re-enable FK checks
+    // Re-enable FK checks
     await sql`SET session_replication_role = 'origin';`;
 
     log.section("Database successfully nuked! 💣");

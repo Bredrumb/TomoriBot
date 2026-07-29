@@ -397,10 +397,10 @@ export class StreamUiUpdater {
     webhookAllowedMentions: NonNullable<StreamSendPayload["allowedMentions"]>,
     identityOverride?: ResolvedWebhookIdentity,
   ): Promise<Message | null> {
-    // 1. Recover whenever a webhook-backed persona identity was in play — mirror
+    // Recover whenever a webhook-backed persona identity was in play — mirror
     //    the send/fallback gate (context.webhook && personaUsername) rather than
     //    limiting to alters, since non-alter sprite personas send via webhook too.
-    // 2. Retry on invalid-webhook errors (stale webhook -> recreate) AND transient
+    // Retry on invalid-webhook errors (stale webhook -> recreate) AND transient
     //    aborts (webhook still valid -> recreate + resend preserves persona avatar).
     const shouldRecoverWebhook =
       context.webhook &&

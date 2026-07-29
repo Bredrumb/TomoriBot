@@ -167,7 +167,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
    * Initialize and start the streaming process with Anthropic's Messages API
    */
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
-    // 1. Reset instance accumulators for this stream
+    // Reset instance accumulators for this stream
     this.toolCallAccumulator.clear();
     this.thinkingAccumulator = "";
     this.currentContentBlockIndex = -1;
@@ -177,7 +177,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     const anthropicConfig = config as AnthropicStreamConfig;
 
-    // 2. Assemble context into Anthropic message format.
+    // Assemble context into Anthropic message format.
     //    Strict role alternation is resolved from the active llms column (D4 column-is-truth);
     //    providerRequiresAlternation("anthropic") is the request-time safety net that keeps it
     //    ON even if a row were mis-seeded.
@@ -195,7 +195,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       `AnthropicStreamAdapter: Assembled ${messages.length} messages, system prompt: ${systemPrompt?.length ?? 0} chars`,
     );
 
-    // 3. Build request body
+    // Build request body
     const requestBody: Record<string, unknown> = {
       model: config.model,
       max_tokens: config.maxOutputTokens || DEFAULT_MAX_OUTPUT_TOKENS,
@@ -203,12 +203,12 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       messages,
     };
 
-    // 4. Add system prompt as top-level parameter (not in messages)
+    // Add system prompt as top-level parameter (not in messages)
     if (systemPrompt) {
       requestBody.system = systemPrompt;
     }
 
-    // 5. Add tools if present in config
+    // Add tools if present in config
     if (config.tools && Array.isArray(config.tools) && config.tools.length > 0) {
       requestBody.tools = config.tools;
     }
@@ -225,7 +225,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       requestBody.output_config = thinkingRequest.output_config;
     }
 
-    // 6. Add sampling parameters when thinking mode does not suppress them
+    // Add sampling parameters when thinking mode does not suppress them
     if (!thinkingRequest.omitSampling) {
       const samplingSelection = selectAnthropicSamplingParams({
         temperature: config.temperature,
@@ -252,7 +252,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 8. Add stop sequences for speaker guard
+    // Add stop sequences for speaker guard
     const stopSequences = buildProviderStopStrings({
       providerName: "anthropic",
       model: config.model,
@@ -265,7 +265,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       log.info(`AnthropicStreamAdapter: Added stop sequences`);
     }
 
-    // 9. Handle output prefill (assistant prefix)
+    // Handle output prefill (assistant prefix)
     if (context.outputPrefill?.trim()) {
       // Anthropic supports assistant prefill natively by adding an assistant message
       const prefill = context.outputPrefill.trim();
@@ -278,10 +278,10 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     log.info(`AnthropicStreamAdapter: Starting stream for model ${config.model}, max_tokens ${requestBody.max_tokens}`);
 
-    // 10. Log sanitized request for debugging (mirrors Google provider pattern)
+    // Log sanitized request for debugging (mirrors Google provider pattern)
     this.logSanitizedRequest(requestBody);
 
-    // 11. Make the HTTP request
+    // Make the HTTP request
     const headers: Record<string, string> = {
       "content-type": "application/json",
       "x-api-key": config.apiKey,
@@ -295,7 +295,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       signal: context.abortSignal,
     });
 
-    // 12. Handle non-streaming errors (HTTP level)
+    // Handle non-streaming errors (HTTP level)
     if (!response.ok) {
       const errorText = await response.text();
       let errorData: unknown;
@@ -313,7 +313,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       return;
     }
 
-    // 13. Parse SSE stream
+    // Parse SSE stream
     if (!response.body) {
       throw new Error("Anthropic response body is null");
     }
@@ -778,7 +778,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     const relocatedContextItems = relocateAssistantMediaContextItems(contextItems);
     const systemParts: string[] = [];
 
-    // 1. Process context items
+    // Process context items
     for (const item of relocatedContextItems) {
       // Extract text from parts array
       let itemTextContent = "";
@@ -921,7 +921,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 2. Add function interaction history in Anthropic format
+    // Add function interaction history in Anthropic format
     if (functionInteractionHistory && functionInteractionHistory.length > 0) {
       for (const interaction of functionInteractionHistory) {
         const toolUseId = `toolu_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -992,7 +992,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 3. Append current turn model parts as assistant prefill
+    // Append current turn model parts as assistant prefill
     if (currentTurnModelParts.length > 0) {
       const prefillText = currentTurnModelParts
         .map((part) => (part as { text?: string }).text)
@@ -1005,7 +1005,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 4. Enforce strict user/assistant alternation by merging consecutive same-role messages and
+    // Enforce strict user/assistant alternation by merging consecutive same-role messages and
     //    prepending a leading user turn when needed. Delegated to the shared strict-chat helpers
     //    so behavior is identical to the previous private implementation. Gated by the resolved
     //    flag (always ON for anthropic via the safety net, so this is byte-identical).
@@ -1025,10 +1025,10 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
    * shared {@link mergeConsecutiveSameRole} / {@link ensureLeadingUserTurn} helpers.
    */
   private enforceStrictAlternation(messages: AnthropicMessage[]): AnthropicMessage[] {
-    // 1. Merge same-role runs (shared helper operates on the neutral message shape).
+    // Merge same-role runs (shared helper operates on the neutral message shape).
     const merged = mergeConsecutiveSameRole(messages as unknown as NormalizableMessage[]);
 
-    // 2. Prepend a synthetic user turn when the conversation would otherwise start with assistant.
+    // Prepend a synthetic user turn when the conversation would otherwise start with assistant.
     const withLeading = ensureLeadingUserTurn(merged, () => ({
       role: "user",
       content: CONVERSATION_START_USER_TEXT,

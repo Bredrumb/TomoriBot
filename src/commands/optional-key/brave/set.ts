@@ -41,7 +41,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
+  // Ensure command is run in a guild
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -59,10 +59,10 @@ export async function execute(
   let tomoriState: TomoriState | null = null; // For error context
 
   try {
-    // 2. Get the API key from options
+    // Get the API key from options
     apiKey = interaction.options.getString("key", true);
 
-    // 3. Basic validation (no specific Brave API validation available)
+    // Basic validation (no specific Brave API validation available)
     if (!apiKey || apiKey.length < 10) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.optional-key.brave.set.invalid_key_title",
@@ -72,7 +72,7 @@ export async function execute(
       return;
     }
 
-    // 5. Load the Tomori state for this server
+    // Load the Tomori state for this server
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -83,7 +83,7 @@ export async function execute(
       return;
     }
 
-    // 7. Validate the API key by performing a test search with consistent timing
+    // Validate the API key by performing a test search with consistent timing
     try {
       const validationResult = await Promise.race([
         braveWebSearch({ q: "test" }, { apiKey: apiKey, timeout: 5000 }),
@@ -111,7 +111,7 @@ export async function execute(
       return;
     }
 
-    // 9. Store the validated API key
+    // Store the validated API key
     const isStored = await storeOptApiKey(tomoriState.server_id, "brave-search", apiKey);
 
     if (!isStored) {
@@ -140,10 +140,10 @@ export async function execute(
       return;
     }
 
-    // 10. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // 11. Success message
+    // Success message
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.optional-key.brave.set.success_title",
       descriptionKey: "commands.optional-key.brave.set.success_description",
@@ -151,7 +151,7 @@ export async function execute(
       flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
-    // 11. Log error with context
+    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
@@ -171,7 +171,7 @@ export async function execute(
       context,
     );
 
-    // 12. Inform user of unknown error
+    // Inform user of unknown error
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

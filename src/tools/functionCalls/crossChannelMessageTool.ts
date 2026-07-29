@@ -230,7 +230,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 1. Extract and validate parameters
+    // Extract and validate parameters
     const targetChannelArg = args.target_channel as string | undefined;
     const legacyChannelIdArg = args.channel_id as string | undefined;
     const legacyChannelNameArg = args.channel_name as string | undefined;
@@ -267,7 +267,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 2. DM guard — cross-channel only works within a guild
+    // DM guard — cross-channel only works within a guild
     if (!context.guildId) {
       return {
         success: false,
@@ -279,7 +279,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 3. Resolve the target channel
+    // Resolve the target channel
     const guild = await context.client.guilds.fetch(context.guildId).catch(() => null);
     if (!guild) {
       return {
@@ -323,7 +323,7 @@ export class CrossChannelMessageTool extends BaseTool {
 
     const targetChannel: GuildTextBasedChannel = channelResolution.channel;
 
-    // 4. Same-channel guard
+    // Same-channel guard
     if (targetChannel.id === context.channel.id) {
       return {
         success: false,
@@ -361,7 +361,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 5. Permission check — ViewChannel always required; send permissions only for dispatch mode
+    // Permission check — ViewChannel always required; send permissions only for dispatch mode
     const botMember =
       guild.members.me ??
       (context.client.user ? await guild.members.fetch(context.client.user.id).catch(() => null) : null);
@@ -436,7 +436,7 @@ export class CrossChannelMessageTool extends BaseTool {
       }
     }
 
-    // 6. Peek-only path — fetch recent messages and return as context without dispatching
+    // Peek-only path — fetch recent messages and return as context without dispatching
     if (isPeekOnly) {
       const fetchLimit = normalizeMessageFetchLimit(context.tomoriState.config.message_fetch_limit);
       let recentMessages: Awaited<ReturnType<typeof targetChannel.messages.fetch>> | null = null;
@@ -509,7 +509,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 7. Fetch last message from target channel (context for tomoriChat)
+    // Fetch last message from target channel (context for tomoriChat)
     let lastMessage: Message | undefined;
     try {
       const messages = await targetChannel.messages.fetch({ limit: 1 });
@@ -541,7 +541,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 8. Build injected context with the task instruction
+    // Build injected context with the task instruction
     const taskInjection: StructuredContextItem = {
       role: "user",
       parts: [
@@ -554,11 +554,11 @@ export class CrossChannelMessageTool extends BaseTool {
       metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
     };
 
-    // 9. Suppress self-reply to avoid loop
+    // Suppress self-reply to avoid loop
     const { suppressNextSelfReply } = await import("../../events/messageCreate/tomoriChat");
     suppressNextSelfReply(targetChannel.id);
 
-    // 10. Call tomoriChat in the target channel
+    // Call tomoriChat in the target channel
     const { tomoriChat } = await import("../../events/messageCreate/tomoriChat");
 
     const sourcePersonaId = context.activePersonaId ?? context.tomoriState.persona_id ?? undefined;
@@ -595,7 +595,7 @@ export class CrossChannelMessageTool extends BaseTool {
         `Cross-channel tool: Successfully dispatched to #${targetChannel.name} (task: "${(taskArg as string).trim().substring(0, 80)}...")`,
       );
 
-      // 11. Handle boomerang — store data for follow-up generation in source channel
+      // Handle boomerang — store data for follow-up generation in source channel
       if (boomerangArg) {
         // Fetch last 10 messages from target channel (including the one the bot just sent),
         // but respect refresh embed boundaries — only include messages after the most recent one

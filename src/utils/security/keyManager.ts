@@ -71,7 +71,7 @@ class CryptoKeyManager {
    */
   private loadKeysFromEnv(): void {
     log.section(`Loading Keys from Environment`);
-    // 1. Load all CRYPTO_SECRET_V* variables
+    // Load all CRYPTO_SECRET_V* variables
     for (const [key, value] of Object.entries(process.env)) {
       const match = key.match(/^CRYPTO_SECRET_V(\d+)$/);
       if (match && value) {
@@ -81,13 +81,13 @@ class CryptoKeyManager {
       }
     }
 
-    // 2. Backward compatibility: CRYPTO_SECRET maps to V1
+    // Backward compatibility: CRYPTO_SECRET maps to V1
     if (!this.keys.has(1) && process.env.CRYPTO_SECRET) {
       this.keys.set(1, process.env.CRYPTO_SECRET);
       log.info("Using CRYPTO_SECRET as version 1 (backward compatibility mode)");
     }
 
-    // 3. Validation: At least one key must be available
+    // Validation: At least one key must be available
     if (this.keys.size === 0) {
       throw new Error(
         "No encryption keys found in environment! " +

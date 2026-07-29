@@ -51,13 +51,13 @@ describe("StreamSegmentProcessor sprite group-break naming", () => {
   it("alternates clean/decorated so adjacent different sprites never share a username", () => {
     const resolve = makeResolver();
 
-    // 1. First sprite stays clean.
+    // First sprite stays clean.
     expect(resolve(cleanIdentity, decoratedFor("imagining"), "imagining", CHANNEL).username).toBe(CLEAN);
-    // 2. Sprite change collides with the previous clean name → decorated fallback.
+    // Sprite change collides with the previous clean name → decorated fallback.
     expect(resolve(cleanIdentity, decoratedFor("mad"), "mad", CHANNEL).username).toBe(decoratedFor("mad"));
-    // 3. Another change flips back to clean (still distinct from the prior decorated name).
+    // Another change flips back to clean (still distinct from the prior decorated name).
     expect(resolve(cleanIdentity, decoratedFor("imagining"), "imagining", CHANNEL).username).toBe(CLEAN);
-    // 4. And back to decorated.
+    // And back to decorated.
     expect(resolve(cleanIdentity, decoratedFor("mad"), "mad", CHANNEL).username).toBe(decoratedFor("mad"));
   });
 

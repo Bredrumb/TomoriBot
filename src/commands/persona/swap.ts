@@ -110,7 +110,7 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // 1. Check if command is run in a guild (not DMs)
+    // Check if command is run in a guild (not DMs)
     if (!interaction.guild) {
       await replyInfoEmbed(
         interaction,
@@ -125,7 +125,7 @@ export async function execute(
       return;
     }
 
-    // 2. Check permissions (ManageGuild required)
+    // Check permissions (ManageGuild required)
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (!hasPermission) {
@@ -142,14 +142,14 @@ export async function execute(
       return;
     }
 
-    // 3. Load all personas for this server
+    // Load all personas for this server
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
 
-    // 4. Get main and alter personas
+    // Get main and alter personas
     const mainPersona = allPersonas.find((p) => !p.is_alter);
     const alterPersonas = allPersonas.filter((p) => p.is_alter);
 
-    // 5. Error if no alters exist
+    // Error if no alters exist
     if (alterPersonas.length === 0) {
       await replyInfoEmbed(
         interaction,
@@ -179,13 +179,13 @@ export async function execute(
       return;
     }
 
-    // 6. Build select options for modal
+    // Build select options for modal
     const alterSelectOptions: SelectOption[] = alterPersonas.map((persona, index) => ({
       label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(), // Use index to avoid truncation issues
     }));
 
-    // 7. Show modal with alter selection
+    // Show modal with alter selection
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.persona.swap.modal_title",
@@ -221,7 +221,7 @@ export async function execute(
     const previousSelectedAlterAvatarUrl = selectedAlter.webhook_avatar_url;
     const previousMainAvatarUrl = mainPersona.webhook_avatar_url;
 
-    // 8. Capture current bot avatar BEFORE swapping (represents former main persona)
+    // Capture current bot avatar BEFORE swapping (represents former main persona)
     const liveFormerMainAvatarUrl = await resolveCurrentBotAvatarUrl(_client, interaction);
     const formerMainAvatarReference = liveFormerMainAvatarUrl ?? previousMainAvatarUrl;
     const formerMainAvatarDisplayUrl =
@@ -237,7 +237,7 @@ export async function execute(
       }
     }
 
-    // 9. Swap is_alter flags in database.
+    // Swap is_alter flags in database.
     // Trigger words are persona-scoped in persona_configs and do not need migration.
     // biome-ignore lint/style/noNonNullAssertion: guaranteed by prior checks
     const swapSucceeded = await personaRepository.swapPersona(mainPersona.persona_id!, selectedAlter.persona_id!);
@@ -245,7 +245,7 @@ export async function execute(
       throw new Error("Persona swap database update failed.");
     }
 
-    // 10. Try to update nickname and avatar separately (non-fatal if fails)
+    // Try to update nickname and avatar separately (non-fatal if fails)
     let avatarSwapSuccess = false;
     let avatarSwapRateLimited = false;
     let avatarSwapFailed = false;
@@ -337,10 +337,10 @@ export async function execute(
       }
     }
 
-    // 12. Invalidate cache
+    // Invalidate cache
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // 13. Show success embed with former main's avatar as image
+    // Show success embed with former main's avatar as image
     const descriptionLines = [
       localizer(locale, "commands.persona.swap.success_description", {
         new_main: selectedAlter.persona_nickname,
@@ -403,7 +403,7 @@ export async function execute(
       flags: MessageFlags.SuppressNotifications,
     });
 
-    // 14. Extract former main's avatar URL from success embed and store it
+    // Extract former main's avatar URL from success embed and store it
     if (formerMainAvatarReference) {
       try {
         const sentEmbed = reply.embeds[0];
@@ -436,7 +436,7 @@ export async function execute(
       }
     }
 
-    // 14b. Ensure selected alter has a stable avatar URL stored (optional)
+    // Ensure selected alter has a stable avatar URL stored (optional)
     if (selectedAlterAvatarBuffer && selectedAlter.persona_id) {
       const selectedAlterS3Url = await uploadPersonaAvatarToStorage({
         personaId: selectedAlter.persona_id,

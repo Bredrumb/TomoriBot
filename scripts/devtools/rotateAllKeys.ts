@@ -79,7 +79,7 @@ async function rotateAllKeys() {
       .join(", ")}\n`,
   );
 
-  // 1. Find all keys not on current version
+  // Find all keys not on current version
   const oldKeys: OldKeyRow[] = [];
 
   // Check opt_api_keys table
@@ -104,7 +104,7 @@ async function rotateAllKeys() {
     console.error("❌ Failed to query opt_api_keys:", error);
   }
 
-  // 2. Check if there's anything to rotate
+  // Check if there's anything to rotate
   if (oldKeys.length === 0) {
     console.log(`✅ All keys are already on the current version (V${currentVersion})`);
     console.log("   No rotation needed!\n");
@@ -141,7 +141,7 @@ async function rotateAllKeys() {
     return;
   }
 
-  // 3. Perform rotation
+  // Perform rotation
   console.log("🔄 Starting rotation...\n");
 
   let successCount = 0;
@@ -178,7 +178,7 @@ async function rotateAllKeys() {
     }
   }
 
-  // 4. Summary
+  // Summary
   console.log("\n=== Rotation Summary ===\n");
   console.log(`   ✅ Succeeded: ${successCount}`);
   console.log(`   ❌ Failed: ${failCount}`);

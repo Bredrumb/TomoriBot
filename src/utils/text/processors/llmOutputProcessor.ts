@@ -197,7 +197,7 @@ export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNam
   const nameAlternation = buildNameLabelAlternation([botName, ...aliasNames]) ?? labelAlternation;
   const leadingAlternation = `(?:${nameAlternation}|${IDENTITY_MACRO_LABEL_ALTERNATION})`;
 
-  // 1. Consume a leading chain of self/alias labels. Each iteration peels one label, so a multi-name
+  // Consume a leading chain of self/alias labels. Each iteration peels one label, so a multi-name
   //    leak ("Tomori: Lilya: hi") collapses fully. If at least one peels, the model opened its turn
   //    with a (self/alias) label — a real turn (branch A); otherwise fall through to branch B.
   const leadingChainPattern = new RegExp(`^\\s*${leadingAlternation}[ \\t]*`, "i");
@@ -209,10 +209,10 @@ export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNam
   }
 
   const deleaked = openedWithLabel
-    ? working // 2a. Real turn — leading self/alias chain dropped.
-    : stripLeakedPreamble(text, labelAlternation); // 2b. Leaked preamble — drop everything before the turn.
+    ? working // Real turn — leading self/alias chain dropped.
+    : stripLeakedPreamble(text, labelAlternation); // Leaked preamble — drop everything before the turn.
 
-  // 3. Clean any self-labels that re-introduce the persona at a later turn boundary.
+  // Clean any self-labels that re-introduce the persona at a later turn boundary.
   return stripBoundaryOwnNameLabels(deleaked, labelAlternation);
 }
 
@@ -241,7 +241,7 @@ const CUSTOM_EMOJI_TAG_SOURCE = "<a?:[^\\s:>]+:\\d+>";
  */
 function stripLeakedPreamble(text: string, labelAlternation: string): string {
   const codeRanges = findMarkdownCodeRanges(text);
-  // 1. A "leak-shaped" re-introduction label is glued directly onto the preamble (preceded by a
+  // A "leak-shaped" re-introduction label is glued directly onto the preamble (preceded by a
   //    non-whitespace char with no space — "30Tomori:"), follows a custom emoji tag (with the
   //    conversion-inserted space — "<:Emoji:id> Tomori:"), or sits at a turn boundary (newline, or
   //    sentence punctuation that is not a numbered-list marker). List items ("- Tomori:",
@@ -257,9 +257,9 @@ function stripLeakedPreamble(text: string, labelAlternation: string): string {
   let match: RegExpExecArray | null = null;
   // biome-ignore lint/suspicious/noAssignInExpressions: standard exec loop
   while ((match = leakLabelPattern.exec(text)) !== null) {
-    // 2. Ignore a label that lives inside a code span/block.
+    // Ignore a label that lives inside a code span/block.
     if (isIndexInsideRanges(match.index, codeRanges)) continue;
-    // 3. Cut the preamble + this label only when a real response follows; a trailing-only label
+    // Cut the preamble + this label only when a real response follows; a trailing-only label
     //    keeps its preceding text (it is the response) and is dropped downstream instead.
     const rest = text.slice(match.index + match[0].length);
     return rest.trim() ? rest : text;
@@ -286,7 +286,7 @@ function stripLeakedPreamble(text: string, labelAlternation: string): string {
  */
 function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): string {
   const codeRanges = findMarkdownCodeRanges(text);
-  // 1. A leaked self-label is detected in three shapes (each keeps its preceding char/tag and drops
+  // A leaked self-label is detected in three shapes (each keeps its preceding char/tag and drops
   //    only the label, inserting a newline so the next clause splits onto its own line):
   //      - Boundary (group 1) + optional spaces (group 2): start, newline, or sentence punctuation
   //        that is not a numbered-list marker ("...girl. Tomori:", "scored 100.Tomori:"). The
@@ -308,20 +308,20 @@ function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): str
   let match: RegExpExecArray | null = null;
   // biome-ignore lint/suspicious/noAssignInExpressions: standard exec loop
   while ((match = labelPattern.exec(text)) !== null) {
-    // 2. The char/tag kept before the inserted newline is whichever shape matched (start → "").
+    // The char/tag kept before the inserted newline is whichever shape matched (start → "").
     const kept = match[1] ?? match[3] ?? match[4] ?? "";
-    // 3. Leave labels inside code spans/blocks untouched (do NOT advance lastIndex). match.index
+    // Leave labels inside code spans/blocks untouched (do NOT advance lastIndex). match.index
     //    is the start of the kept prefix, within a couple chars of the label — close enough.
     if (isIndexInsideRanges(match.index, codeRanges)) continue;
 
-    // 4. Emit text up to the match, keep the boundary/emoji/glued prefix, drop the label. A newline
+    // Emit text up to the match, keep the boundary/emoji/glued prefix, drop the label. A newline
     //    (or start) needs no extra separator; any other kept prefix gains a trailing newline.
     result += text.slice(lastIndex, match.index);
     result += kept === "" || kept === "\n" ? "\n" : `${kept}\n`;
     lastIndex = labelPattern.lastIndex;
   }
 
-  // 5. No (strippable) matches — return the input untouched.
+  // No (strippable) matches — return the input untouched.
   if (lastIndex === 0) return text;
   result += text.slice(lastIndex);
   return result;

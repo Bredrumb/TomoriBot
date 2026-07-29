@@ -692,7 +692,7 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
       continue;
     }
 
-    // 1. modalTitleKey is unambiguous — no enclosing-scope check needed.
+    // modalTitleKey is unambiguous — no enclosing-scope check needed.
     const titlePattern = /\bmodalTitleKey\s*:\s*["']([a-zA-Z0-9._-]+)["']/g;
     let titleMatch: RegExpExecArray | null = titlePattern.exec(content);
     while (titleMatch !== null) {
@@ -700,7 +700,7 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
       titleMatch = titlePattern.exec(content);
     }
 
-    // 2. Modal field components: discriminator is an object literal with both `customId:` and `labelKey:`.
+    // Modal field components: discriminator is an object literal with both `customId:` and `labelKey:`.
     // Iterate each customId occurrence, scope-confine to its enclosing object, then inspect siblings.
     const customIdPattern = /\bcustomId\s*:/g;
     let customIdMatch: RegExpExecArray | null = customIdPattern.exec(content);
@@ -725,7 +725,7 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
       customIdMatch = customIdPattern.exec(content);
     }
 
-    // 3. String-select option fields: anchor on `label: localizer(…, "key")`, then confirm the
+    // String-select option fields: anchor on `label: localizer(…, "key")`, then confirm the
     // enclosing literal is an option (has a `value:` sibling) rather than a button. Both the
     // option label and its `description: localizer(…)` cap at 100 chars in Discord's picker.
     const optionLabelPattern = /\blabel\s*:\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']/g;
@@ -1236,14 +1236,14 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
       if (!cat.isDirectory()) continue;
       const catName = cat.name;
 
-      // 1. Top-level command description: commands.{category}.description
+      // Top-level command description: commands.{category}.description
       expectedKeys.push({
         key: `commands.${catName}.description`,
         file: `src/commands/${catName}`,
         strict: false,
       });
 
-      // 2. Subcommand group descriptions: commands.{category}.{group}.description
+      // Subcommand group descriptions: commands.{category}.{group}.description
       const catPath = join(commandsPath, catName);
       const subEntries = await readdir(catPath, { withFileTypes: true });
       for (const sub of subEntries) {
@@ -1481,11 +1481,11 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   const referencedKeysMap = await extractReferencedKeys(availableKeys);
   const referencedKeys = new Set(referencedKeysMap.keys());
 
-  // 1. Add keys discovered via getLocaleSubKeys() runtime enumeration
+  // Add keys discovered via getLocaleSubKeys() runtime enumeration
   const subKeyMatches = await extractGetLocaleSubKeysUsage(availableKeys);
   for (const key of subKeyMatches) referencedKeys.add(key);
 
-  // 2. Add keys derived from filesystem-based commandLoader patterns
+  // Add keys derived from filesystem-based commandLoader patterns
   const expectedMetadataKeys = await extractExpectedCommandMetadataKeys();
   for (const { key, file, strict } of expectedMetadataKeys) {
     const resolvedKey = resolveLocalizationKey(key, availableKeys);
@@ -1500,7 +1500,7 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
     }
   }
 
-  // 3. Add keys that are provably used but cannot be detected statically
+  // Add keys that are provably used but cannot be detected statically
   for (const key of KNOWN_DYNAMIC_LOCALE_KEYS) referencedKeys.add(key);
 
   // Find missing keys (referenced but not available)

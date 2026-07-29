@@ -26,7 +26,7 @@ export async function getChannelActivity(channel: TextChannel): Promise<number> 
  */
 export async function findBestChannel(guild: Guild, client: Client): Promise<TextChannel | null> {
   try {
-    // 1. Get all text channels we can send messages in
+    // Get all text channels we can send messages in
     const textChannels = guild.channels.cache
       .filter(
         (ch): ch is TextChannel =>
@@ -38,14 +38,14 @@ export async function findBestChannel(guild: Guild, client: Client): Promise<Tex
 
     if (textChannels.size === 0) return null;
 
-    // 2. Analyze activity for each channel
+    // Analyze activity for each channel
     const channelActivity = new Map<TextChannel, number>();
     for (const channel of textChannels.values()) {
       const activity = await getChannelActivity(channel);
       channelActivity.set(channel, activity);
     }
 
-    // 3. Find channel with most activity
+    // Find channel with most activity
     return (
       [...channelActivity.entries()].sort(([ch1, act1], [ch2, act2]) => {
         // First by activity

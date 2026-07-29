@@ -63,10 +63,10 @@ export function resolveMaxOutputTokens(params: {
 }): number {
   const { configured, envRaw, fallback, providerReportedMax } = params;
 
-  // 1. Highest-priority intent: server override → provider env cap → caller fallback.
+  // Highest-priority intent: server override → provider env cap → caller fallback.
   const desired = (configured ?? parsePositiveIntEnv(envRaw) ?? fallback) || fallback;
 
-  // 2. Never reserve/request more than the model can actually emit.
+  // Never reserve/request more than the model can actually emit.
   if (typeof providerReportedMax === "number" && providerReportedMax > 0) {
     return Math.max(1, Math.min(providerReportedMax, desired));
   }

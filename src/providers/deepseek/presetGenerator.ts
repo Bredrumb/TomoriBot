@@ -72,7 +72,7 @@ export async function generatePresetFromPromptDeepseek(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // 1. Build messages: schema-steered system prompt + user character prompt
+  // Build messages: schema-steered system prompt + user character prompt
   const messages: PresetMessage[] = [
     { role: "system", content: buildDeepseekPresetSystemPrompt() },
     { role: "user", content: buildPresetPrompt(params) },
@@ -82,7 +82,7 @@ export async function generatePresetFromPromptDeepseek(
   let toolRounds = 0;
 
   while (true) {
-    // 2. Build the request body
+    // Build the request body
     const body: Record<string, unknown> = {
       model: options.model,
       messages,
@@ -91,7 +91,7 @@ export async function generatePresetFromPromptDeepseek(
       stream: false,
     };
 
-    // 3. Omit temperature for deepseek-reasoner (not supported by that model)
+    // Omit temperature for deepseek-reasoner (not supported by that model)
     if (options.model !== "deepseek-reasoner") {
       body.temperature = options.temperature ?? 1.0;
     }
@@ -101,7 +101,7 @@ export async function generatePresetFromPromptDeepseek(
       body.tool_choice = "auto";
     }
 
-    // 4. Send the request
+    // Send the request
     const response = await fetch(DEEPSEEK_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -144,7 +144,7 @@ export async function generatePresetFromPromptDeepseek(
       };
     }
 
-    // 5. Handle tool calls
+    // Handle tool calls
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length > 0) {
       if (!toolsEnabled || !toolContext) {
@@ -215,7 +215,7 @@ export async function generatePresetFromPromptDeepseek(
       continue;
     }
 
-    // 6. Extract and parse the final JSON response
+    // Extract and parse the final JSON response
     const responseText = typeof message.content === "string" ? message.content.trim() : "";
     if (!responseText) {
       return {

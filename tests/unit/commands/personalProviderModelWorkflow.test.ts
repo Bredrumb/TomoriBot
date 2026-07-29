@@ -388,7 +388,7 @@ describe("personal provider model-* anchor workflow", () => {
 
       await runSubcommand(subcommand.module);
 
-      // 1. The write targets the selected provider, this capability, and only its column.
+      // The write targets the selected provider, this capability, and only its column.
       expect(assignCalls).toHaveLength(1);
       expect(assignCalls[0]).toMatchObject({
         userId: 4,
@@ -397,7 +397,7 @@ describe("personal provider model-* anchor workflow", () => {
       });
       expect(assignCalls[0]?.result).toMatchObject(subcommand.expectedWrite);
 
-      // 2. The terminal lands on the one anchor message, never as a fresh reply.
+      // The terminal lands on the one anchor message, never as a fresh reply.
       expect(infoReplies).toHaveLength(0);
       expect(replacements).toContainEqual(
         expect.objectContaining({
@@ -406,7 +406,7 @@ describe("personal provider model-* anchor workflow", () => {
           descriptionVars: { provider: "provider-a", model: subcommand.expectedModelName },
         }),
       );
-      // 3. The success notice is rendered only after the write returns.
+      // The success notice is rendered only after the write returns.
       expect(chronology.indexOf("repo.assign")).toBeLessThan(chronology.lastIndexOf("message.replace"));
     });
 

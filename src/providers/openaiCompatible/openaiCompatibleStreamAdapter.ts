@@ -98,7 +98,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.accumulatedReasoningContent = "";
     this.pendingThinkBlockThoughtText = "";
     this.reasoningContentSpillGuard.reset();
-    // 1. Build a persona-label matcher used as a fallback `</think>` closer.
+    // Build a persona-label matcher used as a fallback `</think>` closer.
     //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
     //    (half/full-width colon). Required at a line boundary to keep false positives low —
     //    mid-sentence mentions like "as Nerine would" won't trigger.

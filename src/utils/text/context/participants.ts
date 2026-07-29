@@ -485,7 +485,7 @@ async function applyPublicPersonaProfiles(
       targetEntry = userEntries.find((entry) => entry.displayName === publicPersona.personaName);
     }
 
-    // 1. Build the header and the attribute lines separately so we can avoid
+    // Build the header and the attribute lines separately so we can avoid
     //    re-pushing the header when appending to an entry that already has one.
     const attributeHeader = `- Known Information about ${publicPersona.personaName}:`;
     const attributeLines = convertedAttributes.map((attr) => `  - ${attr}`);

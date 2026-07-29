@@ -24,10 +24,10 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Build GitHub URL to LICENSE file (always in root, no locale variation)
+  // Build GitHub URL to LICENSE file (always in root, no locale variation)
   const githubUrl = "https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE";
 
-  // 2. Create embed with title, description, and link
+  // Create embed with title, description, and link
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.legal.license.title"))
     .setDescription(localizer(locale, "commands.legal.license.description_text"))
@@ -38,7 +38,7 @@ export async function execute(
     .setColor(ColorCode.INFO)
     .setTimestamp();
 
-  // 3. Send ephemeral reply
+  // Send ephemeral reply
   await interaction.reply({
     embeds: [embed],
     flags: MessageFlags.Ephemeral,

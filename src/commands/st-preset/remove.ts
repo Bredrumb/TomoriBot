@@ -90,7 +90,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Verify server setup
+  // Verify server setup
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -104,7 +104,7 @@ export async function execute(
   }
 
   try {
-    // 2. Load all presets for this server (filter rows where preset_id is defined)
+    // Load all presets for this server (filter rows where preset_id is defined)
     const allPresets = (await presetRepository.loadPresetsForServer(tomoriState.server_id)).filter(
       (p): p is StPresetRow & { preset_id: number } => p.preset_id !== undefined,
     );
@@ -119,11 +119,11 @@ export async function execute(
       return;
     }
 
-    // 3. Build the checkbox groups (one group per 10 presets, all pre-checked)
+    // Build the checkbox groups (one group per 10 presets, all pre-checked)
     const checkboxGroups = buildPresetCheckboxGroups(allPresets);
     const groupCount = checkboxGroups.length;
 
-    // 4. Show the modal — no defer needed before modal display
+    // Show the modal — no defer needed before modal display
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.st-preset.remove.modal_title",
@@ -135,7 +135,7 @@ export async function execute(
       return;
     }
 
-    // 5. Collect all preset_ids that were still checked (= kept)
+    // Collect all preset_ids that were still checked (= kept)
     // biome-ignore lint/style/noNonNullAssertion: Modal "submit" outcome guarantees interaction exists
     const modalSubmitInteraction = modalResult.interaction!;
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -148,7 +148,7 @@ export async function execute(
       }
     }
 
-    // 6. Determine which presets were unchecked (= to be removed)
+    // Determine which presets were unchecked (= to be removed)
     const presetsToRemove = allPresets.filter((p) => !keptPresetIds.has(p.preset_id));
 
     if (presetsToRemove.length === 0) {
@@ -160,10 +160,10 @@ export async function execute(
       return;
     }
 
-    // 7. Record whether the active preset is among those being removed
+    // Record whether the active preset is among those being removed
     const removingActivePreset = presetsToRemove.some((p) => p.is_active);
 
-    // 8. Delete each unchecked preset; track any failures
+    // Delete each unchecked preset; track any failures
     let successCount = 0;
     const failedNames: string[] = [];
     for (const preset of presetsToRemove) {
@@ -179,7 +179,7 @@ export async function execute(
       }
     }
 
-    // 9. Report full failure early
+    // Report full failure early
     if (failedNames.length > 0 && successCount === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.st-preset.remove.failed_title",
@@ -189,7 +189,7 @@ export async function execute(
       return;
     }
 
-    // 10. Auto-promote the most recently imported remaining preset when
+    // Auto-promote the most recently imported remaining preset when
     //     the active one was deleted and at least one other survives
     let promotedPreset: (StPresetRow & { preset_id: number }) | null = null;
     if (removingActivePreset) {
@@ -207,7 +207,7 @@ export async function execute(
       }
     }
 
-    // 11. Build success reply with optional auto-promotion note
+    // Build success reply with optional auto-promotion note
     const removedNames = presetsToRemove
       .filter((p) => !failedNames.includes(p.preset_name))
       .map((p) => `**${p.preset_name}**`)

@@ -66,7 +66,7 @@ export async function execute(
   const guildDiscId = interaction.guild?.id ?? interaction.user.id;
 
   try {
-    // 1. Permission check — ManageGuild required for destructive server ops
+    // Permission check — ManageGuild required for destructive server ops
     if (interaction.guild) {
       const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
       if (!hasPermission) {
@@ -80,7 +80,7 @@ export async function execute(
       }
     }
 
-    // 2. Confirmation gate — abort if user did not pick "yes"
+    // Confirmation gate — abort if user did not pick "yes"
     const confirmation = interaction.options.getString("confirmation", true);
     if (confirmation !== "yes") {
       await replyInfoEmbed(interaction, locale, {
@@ -94,7 +94,7 @@ export async function execute(
 
     const preservePersonas = interaction.options.getBoolean("preserve_personas") ?? false;
 
-    // 3. Resolve internal server ID; missing row means "nothing to nuke"
+    // Resolve internal server ID; missing row means "nothing to nuke"
     const serverId = await serverRepository.loadServerIdByDiscId(guildDiscId);
     if (!serverId) {
       await replyInfoEmbed(interaction, locale, {
@@ -106,10 +106,10 @@ export async function execute(
       return;
     }
 
-    // 4. Defer once we commit to the destructive path — work may take a few seconds
+    // Defer once we commit to the destructive path — work may take a few seconds
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 5. Best-effort Discord-side webhook cleanup BEFORE wiping DB rows.
+    // Best-effort Discord-side webhook cleanup BEFORE wiping DB rows.
     //    We pull decrypted tokens first because the rows are about to be deleted.
     let webhooksDeleted = 0;
     let webhooksFailed = 0;
@@ -120,13 +120,13 @@ export async function execute(
         await webhook.delete("TomoriBot /server nuke");
         webhooksDeleted++;
       } catch (error) {
-        // 5a. Don't fail nuke if Discord cleanup fails — log and move on
+        // Don't fail nuke if Discord cleanup fails — log and move on
         webhooksFailed++;
         log.warn(`[Nuke] Failed to delete Discord webhook ${webhookDiscId} for guild ${guildDiscId}`, error);
       }
     }
 
-    // 6. DB wipe — atomic on the preserve-mode branch, single cascade on full nuke
+    // DB wipe — atomic on the preserve-mode branch, single cascade on full nuke
     const nuked = await serverRepository.nukeServer(serverId, guildDiscId, {
       preservePersonas,
     });
@@ -141,10 +141,10 @@ export async function execute(
       return;
     }
 
-    // 7. Invalidate cache AFTER successful write (mandatory per CLAUDE.md rule 5)
+    // Invalidate cache AFTER successful write
     invalidateTomoriStateCache(guildDiscId);
 
-    // 8. Success reply — different copy depending on whether personas were kept
+    // Success reply — different copy depending on whether personas were kept
     await replyInfoEmbed(interaction, locale, {
       titleKey: preservePersonas
         ? "commands.server.nuke.success_preserved_title"
@@ -171,7 +171,7 @@ export async function execute(
     };
     await log.error("Error in /server nuke command", error as Error, context);
 
-    // 9. Error reply — use editReply if we already deferred, else replyInfoEmbed
+    // Error reply — use editReply if we already deferred, else replyInfoEmbed
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({
         content: localizer(locale, "general.errors.unknown_error_description"),

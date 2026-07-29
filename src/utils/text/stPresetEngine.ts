@@ -445,10 +445,10 @@ export function resolvePresetMacros(
   for (const node of nodes) {
     if (!node.is_enabled || node.is_marker || node.is_comment) continue;
 
-    // 1. Strip comments first so they don't interfere
+    // Strip comments first so they don't interfere
     const commentStripped = stripComments(node.content);
 
-    // 2. Extract variable declarations into the shared global map
+    // Extract variable declarations into the shared global map
     processVarDeclarations(commentStripped, globalVars);
   }
 
@@ -503,33 +503,33 @@ export function resolvePresetMacros(
 
     // ── Processing pipeline (order matters) ──
 
-    // 1. Strip comments
+    // Strip comments
     content = stripComments(content);
 
-    // 2. Remove setvar/addvar declarations (already collected in Pass 1)
+    // Remove setvar/addvar declarations (already collected in Pass 1)
     const { cleaned } = processVarDeclarations(content);
     content = cleaned;
 
-    // 3. Resolve getvar references
+    // Resolve getvar references
     content = processGetVars(content, globalVars);
 
-    // 4. Expand content macros (personality, description, scenario, etc.)
+    // Expand content macros (personality, description, scenario, etc.)
     content = processContentMacros(content, macroContext, expandedContentMacros);
 
-    // 5. Evaluate random selections
+    // Evaluate random selections
     content = processRandom(content);
 
-    // 6. Evaluate dice rolls
+    // Evaluate dice rolls
     content = processRoll(content);
 
-    // 7. Apply compatibility patches (additional placeholders like <USER>, <BOT>)
+    // Apply compatibility patches (additional placeholders like <USER>, <BOT>)
     content = applyCompatibilityPatches(content, macroContext.userName, macroContext.charName);
 
-    // 8. Process trim (must be last text transform)
+    // Process trim (must be last text transform)
     const { result: trimmedContent, isEmpty } = processTrim(content);
     content = trimmedContent;
 
-    // 9. Detect HTML content
+    // Detect HTML content
     const hasHtml = content.length > 0 && detectHtmlContent(content);
     if (hasHtml) htmlWarningCount++;
 

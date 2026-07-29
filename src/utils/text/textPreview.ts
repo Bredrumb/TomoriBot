@@ -99,13 +99,13 @@ export function buildTextPreview(
   text: string | null | undefined,
   budget: number = CV2_TEXT_PREVIEW_BUDGET,
 ): TextPreview {
-  // 1. Normalize away the empty cases so callers can branch on totalChars.
+  // Normalize away the empty cases so callers can branch on totalChars.
   const source = text?.trim() ?? "";
   if (source.length === 0) {
     return { text: "", truncated: false, shownChars: 0, totalChars: 0 };
   }
 
-  // 2. Guard the fence first so the guard's expansion counts against the
+  // Guard the fence first so the guard's expansion counts against the
   //    budget instead of being appended past it. A guarded run never contains
   //    two adjacent backticks, so slicing it can at worst leave a single
   //    trailing backtick, which cannot re-open a fence.
@@ -114,7 +114,7 @@ export function buildTextPreview(
   const truncated = guardedFull.length > budget;
   const guarded = truncated ? guardedFull.slice(0, budget) : guardedFull;
 
-  // 3. Report shownChars in original terms by dropping the zero-width guards,
+  // Report shownChars in original terms by dropping the zero-width guards,
   //    so "Showing the first X of Y" stays honest even after fence expansion.
   return {
     text: guarded,

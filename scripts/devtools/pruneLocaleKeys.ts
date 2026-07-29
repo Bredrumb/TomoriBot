@@ -176,7 +176,7 @@ async function main(): Promise<void> {
     log.info("DRY RUN — no files will be written");
   }
 
-  // 1. Identify unused keys via the same analysis used by check-locales
+  // Identify unused keys via the same analysis used by check-locales
   log.info("Running locale analysis to identify unused keys…");
   const results = await analyzeLocalizationKeys();
   const allowlist = await loadAllowlist();
@@ -193,11 +193,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 2. Load all leaf slice files
+  // Load all leaf slice files
   const slices = await loadLocaleSlices();
   log.info(`Loaded ${slices.length} leaf slice files`);
 
-  // 3. For each unused key, find the matching slice(s) and delete the sub-path.
+  // For each unused key, find the matching slice(s) and delete the sub-path.
   //    A key like "commands.bot.generate.description" maps to sub-path "bot.generate.description"
   //    in the slice whose keyPrefix is "commands".
   //    A key like "general.defaults.bot_name" maps to sub-path "general.defaults.bot_name"
@@ -229,12 +229,12 @@ async function main(): Promise<void> {
     }
   }
 
-  // 4. Remove empty parent objects left behind by deletions
+  // Remove empty parent objects left behind by deletions
   for (const i of modifiedSlices) {
     pruneEmptyObjects(slices[i].obj);
   }
 
-  // 5. Write back only the modified files
+  // Write back only the modified files
   for (const i of modifiedSlices) {
     const slice = slices[i];
     const serialized = `// locales/${slice.relPath}\n\nexport default ${serializeToTypeScript(slice.obj)};\n`;

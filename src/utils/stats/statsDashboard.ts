@@ -3,7 +3,7 @@
  * Lives under utils/ (not commands/) because it is a helper module, not a loadable
  * command file — the command loader only scans commands/ for configureSubcommand/execute.
  *
- * - Timeframe → window resolution (daily-bucket floor; see plans/stat-tracking.md §4).
+ * - Timeframe → window resolution (daily-bucket floor).
  * - Per-view tab builders (personal / persona / server) that turn StatRepository
  *   reads into localized dashboard "tabs".
  * - A public, invoker-controlled tabbed dashboard renderer built on Components V2:
@@ -298,7 +298,7 @@ function buildTabContainer(
 ): TopLevelComponentData[] {
   const components: ComponentInContainerData[] = [];
 
-  // 1. Title (H3) + subtitle line. When an icon URL is supplied, both lines live inside
+  // Title (H3) + subtitle line. When an icon URL is supplied, both lines live inside
   //    a Section whose Thumbnail accessory pins the icon to the card's top-right corner;
   //    otherwise they render as plain stacked text displays.
   const titleText = `### ${localizer(locale, tabPage.titleKey)}`;
@@ -317,7 +317,7 @@ function buildTabContainer(
   }
   components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
 
-  // 2. Fields. Merge consecutive inline scalars into a single text block (one line
+  // Fields. Merge consecutive inline scalars into a single text block (one line
   //    each, "**Name:** value"); flush it when a non-inline list field appears.
   let scalarBuffer: string[] = [];
   const flushScalars = () => {
@@ -344,13 +344,13 @@ function buildTabContainer(
   }
   flushScalars();
 
-  // 3. Muted footer, set off by a divider.
+  // Muted footer, set off by a divider.
   if (tabPage.footerKey) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     components.push({ type: ComponentType.TextDisplay, content: `-# ${localizer(locale, tabPage.footerKey)}` });
   }
 
-  // 4. Tab buttons live inside the card (omitted on the final, post-timeout paint).
+  // Tab buttons live inside the card (omitted on the final, post-timeout paint).
   if (withButtons) {
     for (const row of buttonRows) components.push(row);
   }
@@ -455,7 +455,7 @@ export async function renderStatsDashboardWithReply(
     buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
   );
 
-  // 1. Persistent collector — no listening gap between clicks, so fast switches queue
+  // Persistent collector — no listening gap between clicks, so fast switches queue
   //    instead of being dropped into a dead window.
   const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
@@ -468,7 +468,7 @@ export async function renderStatsDashboardWithReply(
     const nextIndex = tabs.findIndex((t) => t.id === tabId);
     if (nextIndex >= 0) activeIndex = nextIndex;
     try {
-      // 2. Acknowledge + repaint. Wrapped so a stale token (e.g. a duplicate click whose
+      // Acknowledge + repaint. Wrapped so a stale token (e.g. a duplicate click whose
       //    interaction Discord no longer recognizes) never escapes to the command handler.
       await button.update(
         buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
@@ -478,7 +478,7 @@ export async function renderStatsDashboardWithReply(
     }
   });
 
-  // 3. Wait for the collector to end (timeout), then disable (but keep) the buttons so
+  // Wait for the collector to end (timeout), then disable (but keep) the buttons so
   //    the last viewed tab stays put with greyed-out, unpressable tabs.
   await new Promise<void>((resolve) => collector.once("end", () => resolve()));
 
@@ -519,7 +519,7 @@ export async function buildPersonalTabs(args: {
   const names = await resolvePersonaNames(args.guildId);
   const scope = { userId, serverId: scopeServerId, from };
 
-  // 1. Always-available reads (all bucketed / windowable).
+  // Always-available reads (all bucketed / windowable).
   const [
     messages,
     commands,
@@ -552,13 +552,13 @@ export async function buildPersonalTabs(args: {
     statRepository.getEmotionBreakdown({ userId, serverId: scopeServerId, from, limit: 5 }),
   ]);
 
-  // 2. Span metrics — meaningless for a single day, so skipped entirely on "today".
+  // Span metrics — meaningless for a single day, so skipped entirely on "today".
   const streak = isToday ? null : await statRepository.getStreak({ userId, serverId: scopeServerId });
   const histogram = isToday
     ? null
     : await statRepository.getActivityHistogram({ userId, serverId: scopeServerId, from });
 
-  // 3. All-time-only reads (memories + conditioning are not daily-bucketed).
+  // All-time-only reads (memories + conditioning are not daily-bucketed).
   let memoriesSaved = 0;
   let memoryByPersona: PersonaAffinityEntry[] = [];
   let conditioningByPersona: ConditioningPersonaEntry[] = [];
@@ -790,7 +790,7 @@ export async function buildPersonaTabs(args: {
   const isAllTime = timeframe === "all_time";
   const scope = { serverId, lineageId, from };
 
-  // 1. Always-available reads (windowable).
+  // Always-available reads (windowable).
   const [messages, topUsers, modelCost, tokens, cost, emoji, stickers, sprites, emotions] = await Promise.all([
     statRepository.getMetricTotal({ metric: "message_sent", ...scope }),
     statRepository.getTopUsers({ serverId, lineageId, from, limit: 5 }),
@@ -803,7 +803,7 @@ export async function buildPersonaTabs(args: {
     statRepository.getEmotionBreakdown({ serverId, lineageId, from, limit: 5 }),
   ]);
 
-  // 2. All-time-only reads (conditioning + memories are not daily-bucketed).
+  // All-time-only reads (conditioning + memories are not daily-bucketed).
   let conditioning = { rewards: 0, punishments: 0 };
   let personalMemoryCount = 0;
   let serverMemoryCount = 0;
@@ -966,7 +966,7 @@ export async function buildServerTabs(args: {
   const names = await resolvePersonaNames(args.guildId);
   const scope = { serverId, from };
 
-  // 1. Always-available reads (windowable).
+  // Always-available reads (windowable).
   const [
     messages,
     commands,
@@ -999,7 +999,7 @@ export async function buildServerTabs(args: {
     statRepository.getGenerationTotals({ serverId, from }),
   ]);
 
-  // 2. All-time-only reads (conditioning + memories are not daily-bucketed).
+  // All-time-only reads (conditioning + memories are not daily-bucketed).
   let conditioning = { rewards: 0, punishments: 0 };
   let memorableMembers: TopUserEntry[] = [];
   let serverMemoryCount = 0;

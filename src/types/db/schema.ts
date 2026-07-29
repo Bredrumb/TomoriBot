@@ -205,7 +205,7 @@ const bigintToNumber = (value: unknown): unknown => {
  * Schema for the stat_counters telemetry table (migration 035). One row per
  * (server, user, persona lineage, metric, metric_key, day). `count` is a generic
  * accumulator and `persona_lineage_id` is the cross-server persona anchor (both
- * BIGINT in Postgres). See plans/stat-tracking.md and src/constants/statMetrics.ts.
+ * BIGINT in Postgres). See src/constants/statMetrics.ts.
  */
 export const statCounterSchema = z.object({
   server_id: z.number().int(),
@@ -1035,7 +1035,6 @@ export const serverStickerSchema = z.object({
   sticker_desc: z.string().default(""),
   emotion_key: z.string(),
   is_global: z.boolean().default(false),
-  //is_animated: z.boolean().default(false),
   sticker_format: z.nativeEnum(StickerFormatType).default(StickerFormatType.PNG),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),

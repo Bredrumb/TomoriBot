@@ -94,7 +94,7 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Channel guard
+  // Channel guard
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -112,7 +112,7 @@ export async function execute(
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
 
-  // 2. Resolve server identity and fetch cached state
+  // Resolve server identity and fetch cached state
   const serverId = interaction.guildId ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
 
@@ -256,13 +256,13 @@ export async function execute(
     return;
   }
 
-  // 4. Declare interaction handles outside try-catch for fallback error replies
+  // Declare interaction handles outside try-catch for fallback error replies
   const modalHost = interaction;
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   let selectedChannelDiscId: string | null = null;
 
   try {
-    // 5b. Channel scope: read the native channel option from the slash command
+    // Channel scope: read the native channel option from the slash command
     if (scope === "channel") {
       const channelOption = interaction.options.getChannel("channel");
       if (!channelOption) {
@@ -277,7 +277,7 @@ export async function execute(
       selectedChannelDiscId = channelOption.id;
     }
 
-    // 6. Load existing values for pre-fill
+    // Load existing values for pre-fill
     let existingNote: string | null | undefined;
     let existingDepth: number;
 
@@ -290,7 +290,7 @@ export async function execute(
       existingDepth = tomoriState.config.context_note_depth ?? 0;
     }
 
-    // 7. Show modal with note text + depth fields, pre-filled with existing values
+    // Show modal with note text + depth fields, pre-filled with existing values
     const modalResult = await promptWithRawModal(
       modalHost,
       locale,
@@ -326,7 +326,7 @@ export async function execute(
       return;
     }
 
-    // 8. Assign (not declare) after successful submit
+    // Assign (not declare) after successful submit
     modalSubmitInteraction = modalResult.interaction;
 
     if (!modalSubmitInteraction) {
@@ -334,7 +334,7 @@ export async function execute(
       return;
     }
 
-    // 9. Parse and validate the submitted values
+    // Parse and validate the submitted values
     const rawNote = (modalResult.values?.context_note_text ?? "").trim();
     const rawDepth = (modalResult.values?.context_note_depth ?? "0").trim();
     const parsedDepth = Number.parseInt(rawDepth, 10);
@@ -349,12 +349,12 @@ export async function execute(
       return;
     }
 
-    // 10. Blank text = remove the note (NULL + reset depth to 0)
+    // Blank text = remove the note (NULL + reset depth to 0)
     const noteToStore = rawNote || null;
     const depthToStore = rawNote ? parsedDepth : 0;
     const isRemoving = !rawNote;
 
-    // 11. Persist to the appropriate table
+    // Persist to the appropriate table
     let persisted: boolean;
 
     if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
@@ -379,12 +379,12 @@ export async function execute(
       throw new Error("Failed to persist context note");
     }
 
-    // 12. Invalidate tomori state cache AFTER the successful write (persona/global scopes)
+    // Invalidate tomori state cache AFTER the successful write (persona/global scopes)
     if (scope === "global") {
       invalidateTomoriStateCache(serverId);
     }
 
-    // 13. Reply with scoped success message
+    // Reply with scoped success message
     const scopeLabel =
       scope === "channel" && selectedChannelDiscId
         ? `<#${selectedChannelDiscId}>`
@@ -417,7 +417,7 @@ export async function execute(
   } catch (error) {
     log.error("Failed to set context note:", error as Error);
 
-    // 14. Use the most specific available interaction for the error reply
+    // Use the most specific available interaction for the error reply
     const replyTarget = modalSubmitInteraction ?? modalHost;
 
     await replyInfoEmbed(replyTarget, locale, {

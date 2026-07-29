@@ -565,9 +565,9 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
    * lets the terminal edit order itself after it.
    */
   public collapseAtOpen(payload: PersonaWorkflowComponentsV2Payload): void {
-    // 1. One collapse per open; a repeated call keeps the first in-flight edit.
+    // One collapse per open; a repeated call keeps the first in-flight edit.
     if (this.#pendingCollapse) return;
-    // 2. Swallow at storage: a rejected collapse must never surface as a submit error.
+    // Swallow at storage: a rejected collapse must never surface as a submit error.
     this.#pendingCollapse = this.#editRootInner(payload, false).catch(() => undefined);
   }
 
@@ -1269,7 +1269,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
   const ledger = new AcknowledgementLedger();
   const { eligibility } = options;
 
-  // 0. Resolve eligibility once. `filterPersonas` is the single filtering point;
+  // Resolve eligibility once. `filterPersonas` is the single filtering point;
   //    both the initial entry and every persona-supplying retry pass through it,
   //    so the picker can never render a persona the command cannot act on.
   const filterPersonas = (list: readonly TPersona[]): { filtered: readonly TPersona[]; excluded: number } => {
@@ -1282,7 +1282,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
   let currentPersonas = initialFilter.filtered;
   let currentExcluded = initialFilter.excluded;
 
-  // 0a. Pre-picker empty case. The caller owns rendering its own notice on its
+  // Pre-picker empty case. The caller owns rendering its own notice on its
   //     deferred reply (it computes the same eligible set for its own guard), so
   //     the workflow returns `empty` here without ever rendering a picker.
   if (eligibility && currentPersonas.length === 0) {

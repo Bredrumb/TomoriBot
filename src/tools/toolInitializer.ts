@@ -29,12 +29,12 @@ export async function initializeTools(): Promise<void> {
   try {
     log.info("Initializing tool registry with auto-discovery...");
 
-    // 1. Clear any existing tools (useful for testing/reloading)
+    // Clear any existing tools (useful for testing/reloading)
     ToolRegistry.clearRegistry();
 
     let totalDiscovered = 0;
 
-    // 2. Auto-discover built-in function call tools
+    // Auto-discover built-in function call tools
     const functionCallsPath = path.join(process.cwd(), "src", "tools", "functionCalls");
     const functionCallFiles = (await getAllFiles(functionCallsPath)).filter((file) => !file.endsWith("index.ts"));
 
@@ -45,7 +45,7 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // 3. Auto-discover unified webSearch tool(s).
+    // Auto-discover unified webSearch tool(s).
     //    The webSearch/ folder contains a single LLM-visible class (WebSearchTool)
     //    plus engine-internal modules. We scan only `webSearchTool.ts` to keep
     //    the engine modules (which export instances, not BaseTool subclasses)
@@ -60,7 +60,7 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // 4. Auto-discover unified fetchUrl tool(s). As with webSearch, scan only
+    // Auto-discover unified fetchUrl tool(s). As with webSearch, scan only
     //    the public BaseTool file and keep engine modules internal.
     const fetchUrlPath = path.join(process.cwd(), "src", "tools", "fetchUrl");
     const fetchUrlFiles = (await getAllFiles(fetchUrlPath)).filter((file) => file.endsWith("fetchUrlTool.ts"));
@@ -72,7 +72,7 @@ export async function initializeTools(): Promise<void> {
       totalDiscovered += discovered;
     }
 
-    // 5. Log final statistics
+    // Log final statistics
     const stats = ToolRegistry.getStats();
     log.success(
       `Auto-discovery complete: Found and registered ${totalDiscovered} tools (${stats.totalTools} total in registry)`,
@@ -98,18 +98,18 @@ async function discoverAndRegisterTools(filePath: string, source: string): Promi
   let discoveredCount = 0;
 
   try {
-    // 1. Import the tool module
+    // Import the tool module
     const toolModule = await import(filePath);
 
-    // 2. Find all exported classes that extend BaseTool
+    // Find all exported classes that extend BaseTool
     for (const [exportName, exportedItem] of Object.entries(toolModule)) {
       try {
         // Check if this export is a class constructor that extends BaseTool
         if (typeof exportedItem === "function" && exportedItem.prototype instanceof BaseTool) {
-          // 3. Instantiate the tool class
+          // Instantiate the tool class
           const toolInstance = new (exportedItem as new () => BaseTool)();
 
-          // 4. Register with the tool registry
+          // Register with the tool registry
           ToolRegistry.registerTool(toolInstance);
 
           log.info(`Auto-registered [${source}]: ${toolInstance.name} (${toolInstance.category}) from ${exportName}`);

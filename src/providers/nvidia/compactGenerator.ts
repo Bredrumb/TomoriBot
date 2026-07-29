@@ -71,7 +71,7 @@ export async function generateConversationSummaryNvidia(
       return { error: "Invalid NVIDIA API key" };
     }
 
-    // 1. Build the user content (text + optional images)
+    // Build the user content (text + optional images)
     const userContent = await buildNvidiaCompactUserContent(request.userPrompt, request.images);
 
     const messages: NvidiaMessage[] = [];
@@ -80,7 +80,7 @@ export async function generateConversationSummaryNvidia(
     }
     messages.push({ role: "user", content: userContent });
 
-    // 2. Build the request body
+    // Build the request body
     const body: Record<string, unknown> = {
       model: request.model,
       messages,
@@ -89,7 +89,7 @@ export async function generateConversationSummaryNvidia(
       stream: false,
     };
 
-    // 3. Send the request
+    // Send the request
     const response = await fetch(NVIDIA_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -114,7 +114,7 @@ export async function generateConversationSummaryNvidia(
       };
     }
 
-    // 4. Extract the response text
+    // Extract the response text
     const result = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };

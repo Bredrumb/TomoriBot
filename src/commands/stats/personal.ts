@@ -59,7 +59,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Acknowledge publicly before DB reads (dashboard is a public message).
+  // Acknowledge publicly before DB reads (dashboard is a public message).
   await interaction.deferReply();
 
   const guild = interaction.guild;
@@ -73,7 +73,7 @@ export async function execute(
   }
 
   try {
-    // 2. Resolve the internal server id; stat reads key on it, not the snowflake.
+    // Resolve the internal server id; stat reads key on it, not the snowflake.
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
     const userId = userData.user_id;
@@ -86,7 +86,7 @@ export async function execute(
       return;
     }
 
-    // 3. Resolve options: timeframe → window floor, scope → optional server filter.
+    // Resolve options: timeframe → window floor, scope → optional server filter.
     const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const scope = interaction.options.getString("scope", true) as StatsScope;
     const from = resolveWindowFrom(timeframe);
@@ -98,7 +98,7 @@ export async function execute(
     );
     const subtitle = `${interaction.user.displayName} • **${timeframeLabel}** (${scopeLabel})`;
 
-    // 4. Build the tabs and render the invoker-controlled tabbed dashboard.
+    // Build the tabs and render the invoker-controlled tabbed dashboard.
     const tabs = await buildPersonalTabs({
       locale,
       userId,

@@ -126,7 +126,7 @@ export async function getAvailableToolsWithMCP(
 
       let filteredByFeatureFlags = filterToolsByFeatureFlags(allMCPFunctionNames, featureFlags);
 
-      // 1. Unconditionally hide internal MCP function names from the LLM.
+      // Unconditionally hide internal MCP function names from the LLM.
       //    They are now consumed only via the unified `web_search` tool through
       //    `webSearch/duckduckgoEngine.ts` / `feloEngine.ts`; bundled `fetch`
       //    is consumed only via `fetch_url` -> `McpFetchEngine`.
@@ -189,7 +189,7 @@ export async function getAvailableToolsWithMCP(
         const guildServerTypes = new Set(enabledConfigs.map((c) => c.server_type).filter(Boolean));
 
         if (guildServerTypes.has("web_search")) {
-          // 1. After the unified `web_search` tool migration the only LLM-visible
+          // After the unified `web_search` tool migration the only LLM-visible
           //    search name is `web_search` itself. The previous brave_*/DDG MCP
           //    names are no longer LLM-visible, so we just need to dedup against
           //    the unified tool name when a guild brings its own web_search MCP.
@@ -238,7 +238,7 @@ export async function getAvailableToolsWithMCP(
       const activeSpeechEndpoint = await resolveActiveSpeechEndpoint(serverIdNumber);
       const hasElevenLabsOptKey = await hasOptApiKey(serverIdNumber, ELEVENLABS_SERVICE_NAME);
       const hasSpeechProvider = Boolean(activeSpeechEndpoint) || hasElevenLabsOptKey;
-      // 1. Read split-table model slots: diffusion_model_id/video_model_id live in
+      // Read split-table model slots: diffusion_model_id/video_model_id live in
       //    server_model_configs; nai_diffusion_model_id lives in server_novelai_imagegen_configs.
       const [toolConfigRow] = await sql<
         [{ diffusion_model_id: number | null; nai_diffusion_model_id: number | null; video_model_id: number | null }]

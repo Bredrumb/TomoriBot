@@ -32,12 +32,12 @@ export async function deleteSupersededStreamMessages(
   }
 
   const { channel, webhook } = options;
-  // 1. Webhook deletion inside a thread needs the thread ID; a whole turn streams into one
+  // Webhook deletion inside a thread needs the thread ID; a whole turn streams into one
   //    channel, so resolve it once from the shared channel rather than per message.
   const threadId = "isThread" in channel && channel.isThread() ? channel.id : undefined;
 
   for (const ref of refs) {
-    // 2. Prefer the webhook for webhook-delivered messages: it can delete its own messages without
+    // Prefer the webhook for webhook-delivered messages: it can delete its own messages without
     //    the Manage Messages permission a channel-level delete requires. This can still fail if the
     //    webhook was recreated mid-stream (its id/token no longer matches the message), so treat it
     //    as a first attempt only, not the sole path.
@@ -45,7 +45,7 @@ export async function deleteSupersededStreamMessages(
       continue;
     }
 
-    // 3. Fallback: a channel-level delete. Covers bot-native messages and webhook messages whose
+    // Fallback: a channel-level delete. Covers bot-native messages and webhook messages whose
     //    originating webhook is no longer the one we hold (needs Manage Messages; best-effort).
     if ("messages" in channel) {
       try {

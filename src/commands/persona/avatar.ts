@@ -59,7 +59,7 @@ function validateImage(attachment: AvatarAttachment): {
   const contentType = "contentType" in attachment ? attachment.contentType : attachment.content_type;
   const filename = "name" in attachment ? attachment.name : attachment.filename;
 
-  // 1. Check file size against the shared persona/avatar upload limit.
+  // Check file size against the shared persona/avatar upload limit.
   const maxSize = PERSONA_LIMITS.MAX_AVATAR_SIZE_MB * 1024 * 1024;
   if (attachment.size > maxSize) {
     return {
@@ -68,7 +68,7 @@ function validateImage(attachment: AvatarAttachment): {
     };
   }
 
-  // 2. Check content type
+  // Check content type
   const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif"];
   if (!contentType || !allowedTypes.includes(contentType)) {
     return {
@@ -77,7 +77,7 @@ function validateImage(attachment: AvatarAttachment): {
     };
   }
 
-  // 3. Check file extension as backup validation
+  // Check file extension as backup validation
   const allowedExtensions = [".png", ".jpg", ".jpeg", ".gif"];
   const fileExtension = filename?.toLowerCase().split(".").pop();
   if (!fileExtension || !allowedExtensions.includes(`.${fileExtension}`)) {
@@ -101,14 +101,14 @@ async function downloadAttachmentBuffer(attachment: AvatarAttachment): Promise<{
   error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
   details?: string;
 }> {
-  // 1. Use safeDownload with the shared persona/avatar upload limit.
+  // Use safeDownload with the shared persona/avatar upload limit.
   const downloadResult = await safeDownload(attachment.url, {
     maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
     timeoutMs: 15000, // 15 seconds
     knownSize: attachment.size,
   });
 
-  // 2. If download failed, return error
+  // If download failed, return error
   if (!downloadResult.success) {
     return {
       success: false,
@@ -137,20 +137,20 @@ async function updateGuildAvatar(
   error?: "timeout" | "api_error";
   details?: string;
 }> {
-  // 1. Setup timeout controller (15s)
+  // Setup timeout controller (15s)
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    // 2. Prepare the API endpoint
+    // Prepare the API endpoint
     const endpoint = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
 
-    // 3. Prepare the payload
+    // Prepare the payload
     const payload = {
       avatar: avatarDataUri,
     };
 
-    // 4. Make the API call with timeout
+    // Make the API call with timeout
     const response = await fetch(endpoint, {
       method: "PATCH",
       headers: {
@@ -219,7 +219,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
+  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -229,7 +229,7 @@ export async function execute(
     return;
   }
 
-  // 2. Require Manage Server permission (persona category is not manager-only at the loader level)
+  // Require Manage Server permission (persona category is not manager-only at the loader level)
   if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.persona.avatar.no_permission_title",
@@ -244,7 +244,7 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
 
   try {
-    // 3. Load personas and prompt user to choose target persona
+    // Load personas and prompt user to choose target persona
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.persona_id !== undefined)
@@ -312,10 +312,10 @@ export async function execute(
     }
     const selectedPersonaDbId = selectedPersona.persona_id;
 
-    // 4. Defer the reply to prevent timeout during image processing
+    // Defer the reply to prevent timeout during image processing
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 5. Memory guard check (defense-in-depth)
+    // Memory guard check (defense-in-depth)
     const memCheck = memoryGuard.checkMemory();
     if (memCheck.status === "critical") {
       await responseInteraction.editReply({
@@ -342,7 +342,7 @@ export async function execute(
       selectedPersona = { ...selectedPersona, is_pointer: false };
     }
 
-    // 6. Reserve avatar quota (atomic check+increment for per-server DDoS protection)
+    // Reserve avatar quota (atomic check+increment for per-server DDoS protection)
     const quotaReserve = reserveAvatarQuota(interaction.guild.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
@@ -362,11 +362,11 @@ export async function execute(
       return;
     }
 
-    // 7. Resolve the optional modal upload
+    // Resolve the optional modal upload
     const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
     const isMainPersona = !selectedPersona.is_alter;
 
-    // 8. Handle avatar removal (no attachment provided)
+    // Handle avatar removal (no attachment provided)
     if (!imageAttachment) {
       if (isMainPersona) {
         const result = await updateGuildAvatar(interaction.guild.id, null);
@@ -412,7 +412,7 @@ export async function execute(
       return;
     }
 
-    // 9. Validate the image attachment
+    // Validate the image attachment
     const validation = validateImage(imageAttachment);
     if (!validation.isValid) {
       let errorKey = "invalid_image_description";
@@ -435,7 +435,7 @@ export async function execute(
       return;
     }
 
-    // 10. Download the image into a buffer with timeout protection
+    // Download the image into a buffer with timeout protection
     const downloadResult = await downloadAttachmentBuffer(imageAttachment);
     if (!downloadResult.success) {
       let errorKey: string;
@@ -460,7 +460,7 @@ export async function execute(
       // biome-ignore lint/style/noNonNullAssertion: Download result is checked in success condition
       const downloadedBuffer = downloadResult.buffer!;
 
-      // 11. Re-encode to PNG before uploading. Discord returns 200 OK for
+      // Re-encode to PNG before uploading. Discord returns 200 OK for
       // structurally corrupt files (e.g. exported preset PNGs with a bad tEXt
       // chunk length) but stores an unservable asset — the CDN 415s and clients
       // silently keep the old avatar. Re-encoding guarantees a clean PNG, same
@@ -479,7 +479,7 @@ export async function execute(
       }
       const avatarDataUri = `data:image/png;base64,${pngBuffer.toString("base64")}`;
 
-      // 12. Update guild avatar for main persona via Discord API with timeout protection
+      // Update guild avatar for main persona via Discord API with timeout protection
       const updateResult = await updateGuildAvatar(interaction.guild.id, avatarDataUri);
 
       if (updateResult.success) {
@@ -505,7 +505,7 @@ export async function execute(
         });
       }
     } else {
-      // 11. Alter persona path:
+      // Alter persona path:
       // - production: upload avatar to S3 and store URL
       // - non-production: update/create persona webhooks and store permanent webhook avatar URL
       let persistedAvatarUrl: string | null = null;

@@ -132,7 +132,7 @@ export async function execute(
             return completePersonaWorkflow();
           }
 
-          // 1. Capture the prompt before the write, so the success notice can
+          // Capture the prompt before the write, so the success notice can
           //    echo it back — this is the user's last chance to copy it.
           const removedPreview = buildTextPreview(selectedPersona.persona_prompt);
 
@@ -150,7 +150,7 @@ export async function execute(
           }
 
           invalidateTomoriStateCache(serverDiscId);
-          // 2. Show the removed prompt when there was one; fall back to the
+          // Show the removed prompt when there was one; fall back to the
           //    plain notice for personas that had nothing set.
           const hadPrompt = removedPreview.totalChars > 0;
           await message.replace(

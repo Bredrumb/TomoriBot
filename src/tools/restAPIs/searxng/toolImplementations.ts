@@ -98,7 +98,7 @@ async function searxngTextLikeSearch(
 
   const formatted = formatSearxngResults(result.data, category, count);
 
-  // 1. Encourage agentic follow-up fetches when URLs are present (same hook
+  // Encourage agentic follow-up fetches when URLs are present (same hook
   //    used by Brave web/news/video results).
   const enhanced = addFetchCapabilityReminder(formatted);
 
@@ -256,7 +256,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       return createToolResult(false, "SearXNG image search failed", result.error);
     }
 
-    // 1. Filter out AVIF (Discord display issues) then cap to the resolved pool
+    // Filter out AVIF (Discord display issues) then cap to the resolved pool
     //    before validation. Pool is larger than the send count to absorb
     //    expected hotlink-protection failures from aggregated engines.
     const allUrls = extractSearxngImageUrls(result.data);
@@ -277,7 +277,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       });
     }
 
-    // 2. Validate URLs in parallel with overall 3s ceiling.
+    // Validate URLs in parallel with overall 3s ceiling.
     type ValidationResult = { url: string; valid: boolean; reason?: string; compressedBuffer?: Buffer };
     const partial = new Map<string, ValidationResult>();
     const wrapped: Promise<ValidationResult>[] = imageUrls.map(async (url) => {
@@ -339,7 +339,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       );
     }
 
-    // 3. Build Discord attachments — cap to sendCount after validation
+    // Build Discord attachments — cap to sendCount after validation
     //    so pool failures don't cause us to send more than intended.
     const toSend = validated.slice(0, sendCount);
     const attachments: AttachmentBuilder[] = [];
@@ -351,7 +351,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       compressionFlags.push(Boolean(buf));
     }
 
-    // 4. Send attachments through the webhook persona if available.
+    // Send attachments through the webhook persona if available.
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id

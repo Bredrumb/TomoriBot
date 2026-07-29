@@ -115,7 +115,7 @@ export class WebSearchTool extends BaseTool {
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     try {
-      // 1. Feature flag gate — mirrors the previous BraveSearchTool behavior.
+      // Feature flag gate — mirrors the previous BraveSearchTool behavior.
       if (!this.isEnabled(context)) {
         return {
           success: false,
@@ -124,7 +124,7 @@ export class WebSearchTool extends BaseTool {
         };
       }
 
-      // 2. Validate query.
+      // Validate query.
       if (typeof args.query !== "string" || args.query.trim().length === 0) {
         return {
           success: false,
@@ -133,20 +133,20 @@ export class WebSearchTool extends BaseTool {
         };
       }
 
-      // 3. Normalize category (default to text).
+      // Normalize category (default to text).
       const rawCategory = typeof args.category === "string" ? args.category : "text";
       const category: SearchCategory = SEARCH_CATEGORIES.includes(rawCategory as SearchCategory)
         ? (rawCategory as SearchCategory)
         : "text";
 
-      // 4. Normalize count — must be a positive integer, otherwise omit.
+      // Normalize count — must be a positive integer, otherwise omit.
       const rawCount = typeof args.count === "number" && args.count > 0 ? Math.floor(args.count) : undefined;
 
       log.info(
         `web_search invoked: category=${category} query="${args.query}"${rawCount !== undefined ? ` count=${rawCount}` : ""}`,
       );
 
-      // 5. Hand off to the dispatcher. The dispatcher itself emits the
+      // Hand off to the dispatcher. The dispatcher itself emits the
       //    per-engine Discord notice via the engine's underlying tool wrapper
       //    (BraveEngine reuses the Internal*Tool classes that already call
       //    sendToolNotice; DDG/Felo do it inside processWebSearch).

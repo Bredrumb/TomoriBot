@@ -15,7 +15,9 @@
     "genai.google",
     "genai.novelai"
   ],
-  "preservedKeys": [],
+  "preservedKeys": [
+    "commands.config.cooldown.type.choice_strict_server_wide"
+  ],
   "_notes": {
     "commands.personal.deliberatetriggermode": "Dynamic ${selectedMode}_title|description via getString('mode'); selectedMode flows through getString return value the scanner can't follow.",
     "commands.personal.deliberatetoolmode": "Same pattern as deliberatetriggermode.",
@@ -29,6 +31,7 @@
     "commands.personal.provider": "capability_${capability} built in personal/provider/toggle-models.ts via function parameter.",
     "commands.server.deliberate-tool-trigger": "action_${action} built via ACTIONS const + setStringOption value: ${action}; safety net since the pattern is fragile.",
     "genai.google": "${messageKey} for streaming error messages; key flows through provider adapter chains the scanner can't trace.",
-    "genai.novelai": "Same as genai.google."
+    "genai.novelai": "Same as genai.google.",
+    "commands.config.cooldown.type.choice_strict_server_wide": "choice_${getCooldownTypeKey(type)} in whitelist/remove.ts:481. The option can no longer be selected, but whitelist rows already stored as cooldown type 4 still render through that path. Its only static reference was a commented-out choice block removed by the 2026-07-29 comment sweep."
   }
 }

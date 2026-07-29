@@ -119,12 +119,12 @@ export class StreamErrorUi {
     tipKeys: string[];
     color: ColorResolvable;
   } {
-    // 1. Detect OpenRouter and whether a fallback chain already exists — both gate conditional tips.
+    // Detect OpenRouter and whether a fallback chain already exists — both gate conditional tips.
     const isOpenRouter = provider.getProviderInfo().name === "openrouter";
     const hasFallbackModels = (context.tomoriState.fallback_llms?.length ?? 0) > 0;
     const modelFallbackTip = hasFallbackModels ? [] : ["genai.tips.model_fallback"];
 
-    // 2. Specialized Error Conditions
+    // Specialized Error Conditions
     const isPrivacyError = providerError.message.includes("Privacy Policy Error");
     if (isPrivacyError) {
       return {
@@ -149,7 +149,7 @@ export class StreamErrorUi {
       };
     }
 
-    // 3. Model errors (unsupported/unknown/deprecated model IDs) — steer toward a supported model.
+    // Model errors (unsupported/unknown/deprecated model IDs) — steer toward a supported model.
     if (isProviderModelError(providerError)) {
       return {
         titleKey: "genai.stream.model_error_title",
@@ -158,7 +158,7 @@ export class StreamErrorUi {
       };
     }
 
-    // 4. Credit-affordability ceiling (e.g. OpenRouter 402): the account cannot pay for the
+    // Credit-affordability ceiling (e.g. OpenRouter 402): the account cannot pay for the
     //    requested max_tokens. Adding history back does not help — steer toward lowering the
     //    output-token cap or topping up credits. Checked before the context-length branch
     //    because the 402 copy is the more specific signal.
@@ -174,7 +174,7 @@ export class StreamErrorUi {
       };
     }
 
-    // 5. Hard context-window overflow (e.g. OpenRouter 400 "maximum context length"): trimming the
+    // Hard context-window overflow (e.g. OpenRouter 400 "maximum context length"): trimming the
     //    request genuinely helps. Lead with the output-token cap (the reserve the truncator honors),
     //    then context refresh / shorter message, then a model-fallback nudge when none is configured.
     if (isContextLengthError(providerError)) {
@@ -261,7 +261,7 @@ export class StreamErrorUi {
     locale: string,
     isModelError: boolean,
   ): string | null {
-    // 1. Headline: the provider's friendly, localized message. Model errors fall back to a generic
+    // Headline: the provider's friendly, localized message. Model errors fall back to a generic
     //    headline when the provider does not supply one.
     const providerHeadline = provider.createErrorDescription(providerError, locale);
     const headline =
@@ -270,14 +270,14 @@ export class StreamErrorUi {
       return null;
     }
 
-    // 2. Raw provider detail. Skip when absent or already embedded in the headline (a provider may
+    // Raw provider detail. Skip when absent or already embedded in the headline (a provider may
     //    have appended it itself) so we never duplicate the "Details" section.
     const detail = getProviderErrorDetail(providerError);
     if (!detail || headline.includes(detail)) {
       return headline;
     }
 
-    // 3. Append the detail, truncated so the combined description stays within Discord's embed limit.
+    // Append the detail, truncated so the combined description stays within Discord's embed limit.
     const detailsLabel = "\n\n**Details:**\n";
     const truncatedDetail = truncateForEmbedDescription(detail, headline.length + detailsLabel.length);
     if (!truncatedDetail) {

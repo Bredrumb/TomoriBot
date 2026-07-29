@@ -347,7 +347,7 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
     return appendUnbalancedMarkerClosers(buffer);
   }
 
-  // 1. Count markers across prose only. A table's cells routinely hold characters that are
+  // Count markers across prose only. A table's cells routinely hold characters that are
   //    not unclosed inline markdown at all — `user_id`, a `Best*` footnote, `(approx` — and
   //    a table at the end of a response ALWAYS reaches this repair, because EOF never
   //    terminates a table block (more rows could still stream in).
@@ -358,7 +358,7 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
   const closers = appendUnbalancedMarkerClosers(proseOnly).slice(proseOnly.length);
   if (!closers) return buffer;
 
-  // 2. Land the closers on the last prose segment rather than the buffer's end. Appending
+  // Land the closers on the last prose segment rather than the buffer's end. Appending
   //    after the final row changes that row's cell count, so the renderer stops recognizing
   //    it as a body row and drops it from the image — the dropped row then leaks out as raw
   //    pipe-delimited text underneath the rendered table.
@@ -378,7 +378,7 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
     return buffer;
   }
 
-  // 3. Insert ahead of the segment's trailing whitespace. That whitespace is the newline
+  // Insert ahead of the segment's trailing whitespace. That whitespace is the newline
   //    separating prose from the table below it — appending after it would push the closers
   //    onto the table's first line.
   const proseSegment = segments[lastProseIndex].content;

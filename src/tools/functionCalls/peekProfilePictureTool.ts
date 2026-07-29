@@ -391,7 +391,7 @@ export class PeekProfilePictureTool extends BaseTool {
 
     const apiKey = creds.apiKey;
 
-    // 2. Resolve API model name and provider from the vision LLM row
+    // Resolve API model name and provider from the vision LLM row
     const provider = visionLlm.llm_provider.toLowerCase();
     const apiModelName =
       provider === "zai" || provider === "zaicoding"
@@ -405,7 +405,7 @@ export class PeekProfilePictureTool extends BaseTool {
       `PeekProfilePictureTool: Redirecting avatar analysis to vision model ${provider}/${apiModelName} (primary model is non-vision)`,
     );
 
-    // 3. Route to the appropriate API based on provider family
+    // Route to the appropriate API based on provider family
     let analysisResult: string;
 
     if (provider === "google") {

@@ -50,23 +50,23 @@ const DESCRIPTION_MAX_LENGTH = 100;
  */
 function buildNodeDescription(content: string): string | undefined {
   let cleaned = content
-    // 1. Strip comment blocks: {{// ... }}
+    // Strip comment blocks: {{// ... }}
     .replace(/\{\{\/\/[^}]*\}\}/g, "")
-    // 2. Strip {{trim}} macros
+    // Strip {{trim}} macros
     .replace(/\{\{trim\}\}/g, "")
-    // 3. Extract value from setvar/addvar: {{setvar::key::value}} → value
+    // Extract value from setvar/addvar: {{setvar::key::value}} → value
     .replace(/\{\{(?:setvar|addvar)::[^:}]+::([^}]*)\}\}/g, "$1")
-    // 4. Resolve getvar to placeholder: {{getvar::key}} → [key]
+    // Resolve getvar to placeholder: {{getvar::key}} → [key]
     .replace(/\{\{getvar::([^}]*)\}\}/g, "[$1]")
-    // 5. Simplify remaining template vars: {{user}} → user, {{char}} → char
+    // Simplify remaining template vars: {{user}} → user, {{char}} → char
     .replace(/\{\{(\w+)\}\}/g, "$1")
-    // 6. Collapse whitespace
+    // Collapse whitespace
     .replace(/\s+/g, " ")
     .trim();
 
   if (cleaned.length === 0) return undefined;
 
-  // 7. Truncate to Discord's limit
+  // Truncate to Discord's limit
   if (cleaned.length > DESCRIPTION_MAX_LENGTH) {
     cleaned = `${cleaned.slice(0, DESCRIPTION_MAX_LENGTH - 3)}...`;
   }
@@ -212,7 +212,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Verify server setup
+  // Verify server setup
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -226,7 +226,7 @@ export async function execute(
   }
 
   try {
-    // 2. Find the active preset, or fall back to the first available preset
+    // Find the active preset, or fall back to the first available preset
     let preset = await presetRepository.loadActivePreset(tomoriState.server_id);
     if (!preset) {
       const allPresets = await presetRepository.loadPresetsForServer(tomoriState.server_id);
@@ -243,7 +243,7 @@ export async function execute(
       return;
     }
 
-    // 3. Load toggleable nodes from DB (non-marker, ordered by node_order)
+    // Load toggleable nodes from DB (non-marker, ordered by node_order)
     const dbNodes = await presetRepository.loadToggleableNodes(preset.preset_id);
     if (dbNodes.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -255,18 +255,18 @@ export async function execute(
       return;
     }
 
-    // 4. Determine if pagination is needed
+    // Determine if pagination is needed
     const totalPages = Math.ceil(dbNodes.length / NODES_PER_PAGE);
 
     // preset_id is guaranteed non-null by the guard above
     const presetId = preset.preset_id as number;
 
     if (totalPages > 1) {
-      // 4a. Multi-page: page-selection loop
+      // Multi-page: page-selection loop
       //     Users can pick pages, toggle nodes, and return to pick another page.
       await executeMultiPageToggle(interaction, locale, preset, presetId, dbNodes, totalPages);
     } else {
-      // 4b. Single page: show modal directly
+      // Single page: show modal directly
       await executeSinglePageToggle(interaction, locale, preset, presetId, dbNodes);
     }
   } catch (error) {
@@ -418,7 +418,7 @@ async function executeMultiPageToggle(
   dbNodes: StPresetNodeRow[],
   totalPages: number,
 ): Promise<void> {
-  // 1. Build and send the page-selection embed with buttons
+  // Build and send the page-selection embed with buttons
   const pageSelectEmbed = createStandardEmbed(locale, {
     titleKey: "commands.st-preset.node.toggle.select_page_title",
     descriptionKey: "commands.st-preset.node.toggle.select_page_description",
@@ -438,7 +438,7 @@ async function executeMultiPageToggle(
     flags: MessageFlags.Ephemeral,
   });
 
-  // 2. Loop: await page button → show modal → process → repeat
+  // Loop: await page button → show modal → process → repeat
   let currentNodes = dbNodes;
 
   while (true) {
@@ -538,7 +538,7 @@ async function executeMultiPageToggle(
     }
   }
 
-  // 3. Clean up — remove buttons from the page selection message
+  // Clean up — remove buttons from the page selection message
   try {
     await interaction.editReply({
       embeds: [pageSelectEmbed],

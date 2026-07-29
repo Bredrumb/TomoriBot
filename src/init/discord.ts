@@ -33,7 +33,7 @@ export async function resolvePresenceIntentEnabled(environment: AppEnvironment):
     return legacyDefault;
   }
 
-  // 1. Ask Discord which privileged gateway intents this application is approved for.
+  // Ask Discord which privileged gateway intents this application is approved for.
   try {
     const rest = new REST().setToken(token);
     const application = (await rest.get(Routes.currentApplication())) as { flags?: number };
@@ -46,7 +46,7 @@ export async function resolvePresenceIntentEnabled(environment: AppEnvironment):
     );
     return presenceApproved;
   } catch (error) {
-    // 2. Probe failed — degrade to the legacy default rather than risk a 4014.
+    // Probe failed — degrade to the legacy default rather than risk a 4014.
     log.warn("Failed to probe Presence Intent approval; using default", error);
     return legacyDefault;
   }

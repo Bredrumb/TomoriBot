@@ -140,7 +140,7 @@ export async function generateZaiNativeVideo(
     request.resolution,
   );
 
-  // 1. Build request body
+  // Build request body
   const body: Record<string, unknown> = {
     model: request.model,
     prompt: request.prompt,
@@ -151,13 +151,13 @@ export async function generateZaiNativeVideo(
     duration: normalizedOptions.duration,
   };
 
-  // 2. Add reference image for image-to-video if provided
+  // Add reference image for image-to-video if provided
   if (request.referenceImages && request.referenceImages.length > 0) {
     const ref = request.referenceImages[0];
     body.image_url = [`data:${ref.mimeType};base64,${ref.data}`];
   }
 
-  // 3. Submit generation request
+  // Submit generation request
   log.info(
     `Z.ai video generation: submitting request (model: ${request.model}, size: ${normalizedOptions.size}, durationSeconds: ${normalizedOptions.duration}, resolution: ${normalizedOptions.resolution}, hasReferenceImage: ${!!(request.referenceImages && request.referenceImages.length > 0)})`,
   );
@@ -190,7 +190,7 @@ export async function generateZaiNativeVideo(
 
   log.info(`Z.ai video generation: task submitted, polling for completion (taskId: ${taskId})`);
 
-  // 4. Poll for completion
+  // Poll for completion
   const completedResult = await pollForCompletion<ZaiVideoResponse>({
     pollFn: async () => {
       const pollResponse = await fetch(`${ZAI_ASYNC_RESULT_URL}/${taskId}`, {
@@ -222,14 +222,14 @@ export async function generateZaiNativeVideo(
     logLabel: "ZaiVideoGeneration",
   });
 
-  // 5. Extract video URL from result
+  // Extract video URL from result
   const videoUrl = completedResult.video_result?.[0]?.url;
   if (!videoUrl) {
     log.warn(`Z.ai video generation completed but returned no video URL (taskId: ${taskId})`);
     return { videoData: null, mimeType: null };
   }
 
-  // 6. Download the video
+  // Download the video
   log.info(`Z.ai video generation: downloading video (taskId: ${taskId}, url: ${videoUrl.slice(0, 80)})`);
   const videoResponse = await safeDownload(videoUrl, {
     maxSizeMB: PROVIDER_VIDEO_DOWNLOAD_MAX_MB,

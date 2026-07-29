@@ -239,7 +239,7 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
   let exitCode = 0;
 
   for (const [index, batch] of lane.batches.entries()) {
-    // 1. When JUnit output is requested, give each batch its own temp outfile.
+    // When JUnit output is requested, give each batch its own temp outfile.
     const reporterArgs: string[] = [];
     if (requestedOutfile) {
       const batchOutfile = join(tmpdir(), `tomori-junit-${runId}-${lane.id}-${index}.xml`);
@@ -247,7 +247,7 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
       junitOutfiles.push(batchOutfile);
     }
 
-    // 2. Spawn the batch and track it so signal-driven cleanup can terminate it.
+    // Spawn the batch and track it so signal-driven cleanup can terminate it.
     const proc = Bun.spawn(["bun", "test", ...batch.files, ...reporterArgs], {
       env: { ...process.env, ...extraEnv },
       stdout: "pipe",
@@ -261,7 +261,7 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
 
     chunks.push(stdout + stderr);
 
-    // 3. Remember the first failure but keep going so every batch reports.
+    // Remember the first failure but keep going so every batch reports.
     if (code !== 0 && exitCode === 0) exitCode = code;
   }
 
@@ -281,14 +281,14 @@ async function runTestFiles(files: string[], extraEnv: Record<string, string> = 
 
   const results = await Promise.all(lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile)));
 
-  // 1. Replay buffered output in fixed lane order so concurrent runs stay readable.
+  // Replay buffered output in fixed lane order so concurrent runs stay readable.
   for (const result of results) {
     const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
     process.stdout.write(`\n──── lane: ${result.lane.id} (${fileCount} files) ────\n`);
     process.stdout.write(result.output);
   }
 
-  // 2. Merge every batch's JUnit output into the single file the caller asked for.
+  // Merge every batch's JUnit output into the single file the caller asked for.
   const allOutfiles = results.flatMap((result) => result.junitOutfiles);
   if (requestedOutfile && allOutfiles.length > 0) {
     await mergeJUnitFiles(allOutfiles, requestedOutfile);
@@ -311,13 +311,13 @@ async function main(): Promise<void> {
 
   const params = getConnectionParams();
 
-  // 1. No credentials found — run tests in skip mode.
+  // No credentials found — run tests in skip mode.
   if (!params) {
     console.log("[test-runner] No Postgres credentials found. DB regression tests will be skipped.");
     process.exit(await runTestFiles(testFiles));
   }
 
-  // 2. Non-local host detected — fall back to skip mode to avoid touching remote DBs.
+  // Non-local host detected — fall back to skip mode to avoid touching remote DBs.
   if (!isLocalHost(params)) {
     console.warn(
       `[test-runner] Postgres host "${params.host}" is not local. Skipping DB provisioning.\n` +
@@ -359,7 +359,7 @@ async function main(): Promise<void> {
     process.exit(143);
   });
 
-  // 3. Probe the Postgres connection before creating anything.
+  // Probe the Postgres connection before creating anything.
   try {
     adminSql = createSqlClient(adminUrl);
     await adminSql`SELECT 1`;
@@ -373,12 +373,12 @@ async function main(): Promise<void> {
   let exitCode = 1;
 
   try {
-    // 4. Create the disposable test database.
+    // Create the disposable test database.
     console.log(`[test-runner] Provisioning test database: ${tempDbName}`);
     await adminSql`DROP DATABASE IF EXISTS ${adminSql(tempDbName)} WITH (FORCE)`;
     await adminSql`CREATE DATABASE ${adminSql(tempDbName)}`;
 
-    // 5. Inject the test DB coordinates into the child environment.
+    // Inject the test DB coordinates into the child environment.
     //    TEST_DB_READY=1 tells testDb.ts to enable the DB regression suites.
     const testEnv: Record<string, string> = {
       POSTGRES_HOST: params.host,
@@ -394,7 +394,7 @@ async function main(): Promise<void> {
     // signal-driven cleanup can terminate them all and still drop the DB.
     exitCode = await runTestFiles(testFiles, testEnv);
   } finally {
-    // 6. Always drop the disposable database, even if tests failed.
+    // Always drop the disposable database, even if tests failed.
     console.log(`[test-runner] Dropping test database: ${tempDbName}`);
     await cleanup();
   }

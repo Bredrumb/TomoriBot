@@ -154,7 +154,7 @@ export async function execute(
   let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
-    // 1. Load all personal text providers and open the anchor message with the right
+    // Load all personal text providers and open the anchor message with the right
     //    initial control for the provider count.
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "text");
     const currentSelections =
@@ -187,11 +187,11 @@ export async function execute(
     // one and hands back the range button in its place.
     let modalButton: ButtonInteraction = opener.button;
 
-    // 2. Find the selected provider's config row to read existing fallback_model_refs
+    // Find the selected provider's config row to read existing fallback_model_refs
     const selectedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
     const existingRefs = selectedConfig?.fallback_model_refs ?? [];
 
-    // 3. Resolve existing refs into a typed fallback chain for placeholder display
+    // Resolve existing refs into a typed fallback chain for placeholder display
     const llmRefIds = existingRefs.filter((r) => r.type === "llm").map((r) => r.id);
     const epRefIds = existingRefs.filter((r) => r.type === "custom_endpoint").map((r) => r.id);
     const [refLlms, refEndpoints] = await Promise.all([
@@ -211,7 +211,7 @@ export async function execute(
       })
       .filter((e): e is FallbackEntry => e !== null);
 
-    // 4. Load model options for the selected provider
+    // Load model options for the selected provider
     let availableModels: LlmRow[] = [];
     let availableEndpoints: CustomEndpointRow[] = [];
     let allModelOptions: SelectOption[];
@@ -270,7 +270,7 @@ export async function execute(
       }));
     }
 
-    // 5. Build per-slot placeholders
+    // Build per-slot placeholders
     const currentFallbackPlaceholders = SLOT_IDS.map((_, index) =>
       buildSlotPlaceholder(locale, existingChain[index] ?? null, existingRefs[index] ?? null, selectedProvider),
     );
@@ -281,7 +281,7 @@ export async function execute(
       description: safeSelectOptionText(localizer(locale, "commands.model.fallback.clear_option_description")),
     };
 
-    // 6. Past 24 models the user picks a range on the anchor message first. This modal
+    // Past 24 models the user picks a range on the anchor message first. This modal
     //    can't use the engine's own >25 bridge: it has five selects over one shared list
     //    (the bridge slices only the first) and reserves a slot for the clear option.
     let optionsForModal: SelectOption[];
@@ -314,11 +314,11 @@ export async function execute(
     });
     if (!modalPhase) return;
 
-    // 6a. Acknowledge the modal submit within 3s; every terminal below edits in place.
+    // Acknowledge the modal submit within 3s; every terminal below edits in place.
     const work = await modalPhase.beginInPlaceWork();
     const values = modalPhase.values;
 
-    // 7. Build lookup maps
+    // Build lookup maps
     const resolvedModelMap = new Map<number, LlmRow>();
     for (const m of availableModels) {
       if (m.llm_id !== undefined) resolvedModelMap.set(m.llm_id, m);
@@ -338,7 +338,7 @@ export async function execute(
       }
     }
 
-    // 8. Per-slot merge: blank = keep existing, __none__ = clear, value = update
+    // Per-slot merge: blank = keep existing, __none__ = clear, value = update
     const mergedRefs: FallbackModelRef[] = [];
     for (let i = 0; i < 5; i++) {
       const raw = (values[SLOT_IDS[i]] ?? "").trim();
@@ -360,7 +360,7 @@ export async function execute(
       }
     }
 
-    // 9. Deduplicate by type+id
+    // Deduplicate by type+id
     const seen = new Set<string>();
     const finalRefs: FallbackModelRef[] = [];
     for (const ref of mergedRefs) {
@@ -371,7 +371,7 @@ export async function execute(
       }
     }
 
-    // 10. Validate: no fallback can duplicate the primary model of the selected provider config
+    // Validate: no fallback can duplicate the primary model of the selected provider config
     const primaryLlmId = selectedConfig?.llm_id ?? null;
     if (primaryLlmId && finalRefs.some((r) => r.type === "llm" && r.id === primaryLlmId)) {
       const primaryModel = resolvedModelMap.get(primaryLlmId);
@@ -399,7 +399,7 @@ export async function execute(
       return;
     }
 
-    // 11. Write — update only fallback refs on the selected provider config
+    // Write — update only fallback refs on the selected provider config
     const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, {
       ...selectedConfig,
       fallback_model_refs: finalRefs,
@@ -416,7 +416,7 @@ export async function execute(
       return;
     }
 
-    // 12. Render the terminal on the anchor message
+    // Render the terminal on the anchor message
     if (finalRefs.length === 0) {
       await work.message.replace(
         buildPersonaWorkflowNotice({

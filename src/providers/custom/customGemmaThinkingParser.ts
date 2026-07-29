@@ -128,7 +128,7 @@ export class GemmaThinkingParser {
       return { visibleText: prependVisible, thoughts: [] };
     }
 
-    // 1. Extract and normalise the thinking content.
+    // Extract and normalise the thinking content.
     let content = this.thinkBuffer.slice(0, endIdx);
     const remaining = this.thinkBuffer.slice(endIdx + END_TOKEN.length);
     this.reset();
@@ -138,10 +138,10 @@ export class GemmaThinkingParser {
       content = content.slice(1);
     }
 
-    // 2. Build thought entry; drop empty suppressors (26B/31B thinking OFF).
+    // Build thought entry; drop empty suppressors (26B/31B thinking OFF).
     const thoughts: ThoughtLogEntry[] = content.trim().length > 0 ? [{ kind: "raw", content }] : [];
 
-    // 3. Scan remaining text for any subsequent thinking blocks (e.g. multi-turn).
+    // Scan remaining text for any subsequent thinking blocks (e.g. multi-turn).
     const rest = this.scanForStart(remaining);
 
     return {

@@ -41,17 +41,17 @@ export interface PostgresPoolOptions {
  * and `connectionTimeout` turns a dead-path hang into a fast, retryable failure.
  * Defaults are safe for all managed providers; overridable via env for incident-time
  * tuning without a rebuild. (Azure Flexible Server's public endpoint, whose gateway
- * reaps at ~4 minutes, is one such path — see plans/azure-free-tier-cost-plan.md.)
+ * reaps at ~4 minutes, is one such path.)
  *
  * @returns Pool options resolved from env with production-safe defaults
  */
 function resolveProductionPoolOptions(): PostgresPoolOptions {
   return {
-    // 1. Close idle pooled connections after 30s — before any gateway/proxy can reap them.
+    // Close idle pooled connections after 30s — before any gateway/proxy can reap them.
     idleTimeout: parseIntegerEnvFlag(process.env.POSTGRES_IDLE_TIMEOUT_SECONDS, 30, 5),
-    // 2. Hard age cap so no connection lingers indefinitely even under steady load.
+    // Hard age cap so no connection lingers indefinitely even under steady load.
     maxLifetime: parseIntegerEnvFlag(process.env.POSTGRES_MAX_LIFETIME_SECONDS, 600, 30),
-    // 3. Fail fast on a dead path instead of hanging into a downstream turn timeout.
+    // Fail fast on a dead path instead of hanging into a downstream turn timeout.
     connectionTimeout: parseIntegerEnvFlag(process.env.POSTGRES_CONNECTION_TIMEOUT_SECONDS, 10, 1),
   };
 }

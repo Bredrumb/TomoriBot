@@ -76,7 +76,7 @@ export async function execute(
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 1. Resolve the internal server id and the server's persona roster.
+    // Resolve the internal server id and the server's persona roster.
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
     if (!serverId) {

@@ -20,7 +20,7 @@ export class DuckDuckGoEngine implements WebSearchEngine {
   private readonly handler = getDuckDuckGoHandler();
 
   async available(_context: ToolContext): Promise<boolean> {
-    // 1. DDG availability == MCP manager is ready and the web-search function exists.
+    // DDG availability == MCP manager is ready and the web-search function exists.
     const mgr = getMCPManager();
     if (!mgr.isReady()) return false;
     try {

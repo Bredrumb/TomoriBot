@@ -184,23 +184,23 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   async requiresFollowUp(functionName: string, provider: string, serverId?: number): Promise<boolean> {
     const resolvedFunctionName = resolveBuiltInToolAlias(functionName);
 
-    // 1. Check if it's a global MCP function — all MCP tools require follow-up
+    // Check if it's a global MCP function — all MCP tools require follow-up
     const isMcp = await this.isMCPFunction(resolvedFunctionName, provider);
     if (isMcp) {
       return true;
     }
 
-    // 2. Check if it's a guild MCP function — also requires follow-up
+    // Check if it's a guild MCP function — also requires follow-up
     if (serverId) {
       try {
         const isGuildMcp = await getGuildMcpManager().isGuildMCPFunction(serverId, resolvedFunctionName);
         if (isGuildMcp) return true;
       } catch {
-        /* fall through */
+        // fall through
       }
     }
 
-    // 3. Check built-in tool property
+    // Check built-in tool property
     const tool = this.getTool(resolvedFunctionName);
     return tool?.requiresFollowUp ?? false;
   }
@@ -218,13 +218,13 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     const resolvedToolName = resolveBuiltInToolAlias(toolName);
     const resolvedArgs = resolveOpaqueIds(args, context.messageIdMap);
 
-    // 1. Check global MCP first
+    // Check global MCP first
     const isMcp = await this.isMCPFunction(resolvedToolName, context.provider);
     if (isMcp) {
       return this.executeMCPFunction(resolvedToolName, resolvedArgs, context, startTime);
     }
 
-    // 2. Check guild MCP
+    // Check guild MCP
     const serverId = context.tomoriState?.server_id;
     if (serverId) {
       try {
@@ -267,7 +267,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       }
     }
 
-    // 3. Execute as built-in tool
+    // Execute as built-in tool
     return this.executeBuiltInTool(resolvedToolName, resolvedArgs, context, startTime);
   }
 

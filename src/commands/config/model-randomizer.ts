@@ -48,7 +48,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Guard against DM/threadless contexts before deferring.
+  // Guard against DM/threadless contexts before deferring.
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -65,7 +65,7 @@ export async function execute(
     const setAction = interaction.options.getString("set", true);
     const isEnabled = setAction === "enable";
 
-    // 2. Require an existing setup before toggling.
+    // Require an existing setup before toggling.
     const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -76,7 +76,7 @@ export async function execute(
       return;
     }
 
-    // 3. Block-until-fallbacks: enabling needs >=1 fallback so the pool has >=2 members.
+    // Block-until-fallbacks: enabling needs >=1 fallback so the pool has >=2 members.
     const hasFallbacks = (tomoriState.config.fallback_model_refs ?? []).length > 0;
     if (isEnabled && !hasFallbacks) {
       await replyInfoEmbed(interaction, locale, {
@@ -87,7 +87,7 @@ export async function execute(
       return;
     }
 
-    // 4. Idempotency guard: no DB write when already in the requested state.
+    // Idempotency guard: no DB write when already in the requested state.
     const currentSetting = tomoriState.config.model_randomizer_enabled ?? false;
     if (currentSetting === isEnabled) {
       await replyInfoEmbed(interaction, locale, {
@@ -100,7 +100,7 @@ export async function execute(
       return;
     }
 
-    // 5. Persist the new flag through the generic chat-config writer.
+    // Persist the new flag through the generic chat-config writer.
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
       model_randomizer_enabled: isEnabled,
     });
@@ -126,7 +126,7 @@ export async function execute(
       return;
     }
 
-    // 6. Invalidate the cached state BEFORE replying so the next turn reads the fresh flag.
+    // Invalidate the cached state BEFORE replying so the next turn reads the fresh flag.
     invalidateTomoriStateCache(serverDiscId);
 
     await replyInfoEmbed(interaction, locale, {

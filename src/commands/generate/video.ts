@@ -74,17 +74,17 @@ const MAX_VIDEO_FPS = parsePositiveIntEnv("VIDEO_GEN_MAX_FPS", 60);
  */
 function parseModalInteger(raw: string | undefined, min: number, max: number): { value?: number; error?: true } {
   const trimmed = raw?.trim();
-  // 1. Blank input is treated as "not provided" — callers decide if that's allowed.
+  // Blank input is treated as "not provided" — callers decide if that's allowed.
   if (!trimmed) {
     return { value: undefined };
   }
 
-  // 2. Reject anything that isn't a clean integer (no decimals, units, or letters).
+  // Reject anything that isn't a clean integer (no decimals, units, or letters).
   if (!/^\d+$/.test(trimmed)) {
     return { error: true };
   }
 
-  // 3. Range check against the configured bounds.
+  // Range check against the configured bounds.
   const parsed = Number.parseInt(trimmed, 10);
   if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
     return { error: true };
@@ -157,7 +157,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel context
+  // Ensure command is run in a channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -168,7 +168,7 @@ export async function execute(
     return;
   }
 
-  // 2. Load TomoriState
+  // Load TomoriState
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const baseTomoriState = await personaRepository.loadState(serverId);
 
@@ -184,7 +184,7 @@ export async function execute(
 
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
-  // 3. Check if video generation is enabled
+  // Check if video generation is enabled
   if (!tomoriState.config.videogen_enabled) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.video.disabled_title",
@@ -195,7 +195,7 @@ export async function execute(
     return;
   }
 
-  // 4. Resolve active video capability credentials and model selection
+  // Resolve active video capability credentials and model selection
   let videoCreds: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
   try {
     videoCreds = await resolveCapabilityCredentials(tomoriState.server_id, "video", {
@@ -259,7 +259,7 @@ export async function execute(
   const apiKey = videoCreds.apiKey;
   const executionProvider = videoCreds.provider;
 
-  // 7. Check video quota before showing modal (personal-provider users bypass quota)
+  // Check video quota before showing modal (personal-provider users bypass quota)
   if (videoCreds.source === "server") {
     const quotaCheck = await checkVideoQuota(tomoriState.server_id, interaction.user.id);
     if (!quotaCheck.allowed) {
@@ -301,7 +301,7 @@ export async function execute(
   let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
 
   try {
-    // 8. Build modal components
+    // Build modal components
     const modalComponents = [
       {
         customId: PROMPT_INPUT_ID,
@@ -354,7 +354,7 @@ export async function execute(
       },
     ];
 
-    // 9. Show modal and wait for submission (auto-defer with public reply)
+    // Show modal and wait for submission (auto-defer with public reply)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -381,7 +381,7 @@ export async function execute(
       return;
     }
 
-    // 9a. Parse and validate duration (required) and FPS (optional).
+    // Parse and validate duration (required) and FPS (optional).
     //     Providers normalize these to their own supported ranges, so we only guard
     //     against clearly invalid entries here (non-numeric or out of configured bounds).
     const durationResult = parseModalInteger(modalResult.values?.[DURATION_INPUT_ID], 1, MAX_VIDEO_DURATION_SECONDS);
@@ -420,7 +420,7 @@ export async function execute(
     }
     const fps = fpsResult.value;
 
-    // 10. Process reference image (if provided)
+    // Process reference image (if provided)
     let referenceImages: Array<{ mimeType: string; data: string }> | undefined;
 
     if (imageAttachment) {
@@ -442,7 +442,7 @@ export async function execute(
       }
     }
 
-    // 11. Get model codename
+    // Get model codename
     const modelCodename = await getVideoModelCodename(videoModelId);
     const displayModelName = videoCreds.customEndpoint
       ? formatCustomEndpointModelDisplay(videoCreds.customEndpoint)
@@ -452,7 +452,7 @@ export async function execute(
       `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, duration: ${durationSeconds}s, fps: ${fps ?? "default"}, reference: ${referenceImages ? "yes" : "no"})`,
     );
 
-    // 12. Show "generating" embed while we poll for completion
+    // Show "generating" embed while we poll for completion
     await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
@@ -464,7 +464,7 @@ export async function execute(
 
     const startTime = performance.now();
 
-    // 13. Route to provider and generate video
+    // Route to provider and generate video
     let videoData: Buffer | null = null;
     let videoFilename = `generated_${Date.now()}.mp4`;
     const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
@@ -536,7 +536,7 @@ export async function execute(
       return;
     }
 
-    // 14. Validate result
+    // Validate result
     if (!videoData) {
       await modalSubmitInteraction.editReply({
         embeds: [
@@ -549,7 +549,7 @@ export async function execute(
       return;
     }
 
-    // 15. Check Discord file size limit
+    // Check Discord file size limit
     if (videoData.length > DISCORD_FILE_SIZE_LIMIT) {
       const sizeMB = (videoData.length / (1024 * 1024)).toFixed(1);
       await modalSubmitInteraction.editReply({
@@ -565,7 +565,7 @@ export async function execute(
       return;
     }
 
-    // 16. Send video
+    // Send video
     const elapsedMs = performance.now() - startTime;
     const elapsedSec = (elapsedMs / 1000).toFixed(1);
 
@@ -596,7 +596,7 @@ export async function execute(
       files: [attachment],
     });
 
-    // 17. Increment quota (server providers only)
+    // Increment quota (server providers only)
     if (videoCreds.source === "server") {
       await incrementVideoQuota(tomoriState.server_id, interaction.user.id);
     }

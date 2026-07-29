@@ -62,17 +62,17 @@ export class WhitelistRepository {
     };
 
     try {
-      // 1. Resolve server DB ID
+      // Resolve server DB ID
       const [serverRow] = await sql`SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId}`;
       if (!serverRow) return fallbackResult;
 
       const serverId = serverRow.server_id as number;
 
-      // 2. Check if any channel whitelist entries exist for this server
+      // Check if any channel whitelist entries exist for this server
       const [countRow] = await sql`SELECT COUNT(*) as count FROM channel_whitelist WHERE server_id = ${serverId}`;
       const hasActiveChannelWhitelist = Number.parseInt(countRow?.count as string, 10) > 0;
 
-      // 3. Check if the specific channel is whitelisted (thread falls back to parent)
+      // Check if the specific channel is whitelisted (thread falls back to parent)
       const [channelRow] = hasActiveChannelWhitelist
         ? await sql<Array<{ cooldown_type: CooldownType | null; cooldown_length: number | null }>>`
             SELECT cooldown_type, cooldown_length
@@ -113,7 +113,7 @@ export class WhitelistRepository {
         });
       }
 
-      // 4. Load role whitelist and persona restriction metadata in parallel
+      // Load role whitelist and persona restriction metadata in parallel
       const [roleRows, restrictedPersonaRows] = await Promise.all([
         sql<Array<{ role_disc_id: string }>>`
           SELECT role_disc_id FROM role_whitelist WHERE server_id = ${serverId}
@@ -127,7 +127,7 @@ export class WhitelistRepository {
       ]);
       const hasActiveRoleWhitelist = roleRows.length > 0;
 
-      // 5. Role whitelist check (fail-open when role data is unavailable)
+      // Role whitelist check (fail-open when role data is unavailable)
       let isRoleWhitelisted = false;
       if (hasActiveRoleWhitelist) {
         if (memberRoleDiscIds === undefined) {
@@ -138,7 +138,7 @@ export class WhitelistRepository {
         }
       }
 
-      // 6. Persona-channel whitelist (threads inherit from parent)
+      // Persona-channel whitelist (threads inherit from parent)
       const restrictedPersonaIds = this.normalizeTomoriIds(restrictedPersonaRows);
       const hasActivePersonaWhitelist = restrictedPersonaIds.length > 0;
 

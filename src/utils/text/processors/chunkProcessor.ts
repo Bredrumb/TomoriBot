@@ -68,16 +68,16 @@ const TERMINAL_PUNCTUATION_REGEX = /[.!?。！？]$/;
  * @returns true if the emoji should be merged into adjacent text, false to isolate
  */
 function shouldEmojiStayInline(sourceText: string, emojiStart: number, emojiLength: number): boolean {
-  // 1. Locate the \n-delimited line that contains this emoji
+  // Locate the \n-delimited line that contains this emoji
   const lineStart = sourceText.lastIndexOf("\n", emojiStart - 1) + 1;
   const nextNewline = sourceText.indexOf("\n", emojiStart);
   const lineEnd = nextNewline === -1 ? sourceText.length : nextNewline;
   const line = sourceText.substring(lineStart, lineEnd);
 
-  // 2. List-item carve-out — entire line is treated as one unit
+  // List-item carve-out — entire line is treated as one unit
   if (LIST_MARKER_REGEX.test(line)) return true;
 
-  // 3. Mid-sentence carve-out — require prose on BOTH sides, sans other emojis
+  // Mid-sentence carve-out — require prose on BOTH sides, sans other emojis
   const beforeOnLine = sourceText.substring(lineStart, emojiStart);
   const afterOnLine = sourceText.substring(emojiStart + emojiLength, lineEnd);
 
@@ -85,9 +85,9 @@ function shouldEmojiStayInline(sourceText: string, emojiStart: number, emojiLeng
   const beforeStripped = beforeOnLine.replace(EMOJI_TAG_GLOBAL_REGEX, "").trimEnd();
   const afterStripped = afterOnLine.replace(EMOJI_TAG_GLOBAL_REGEX, "").trim();
 
-  // 3a. Both sides must contain non-whitespace, non-emoji content
+  // Both sides must contain non-whitespace, non-emoji content
   if (beforeStripped.length === 0 || afterStripped.length === 0) return false;
-  // 3b. The preceding fragment must not be a completed sentence ("Wow! :Smile:")
+  // The preceding fragment must not be a completed sentence ("Wow! :Smile:")
   if (TERMINAL_PUNCTUATION_REGEX.test(beforeStripped)) return false;
 
   return true;
@@ -701,9 +701,9 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
           end: block.start + emojiMatch.index,
         });
       }
-      // 1. Compute absolute index of this emoji within the original inputText
+      // Compute absolute index of this emoji within the original inputText
       const emojiAbsStart = block.start + emojiMatch.index;
-      // 2. Classify: "emoji_inline" gets folded into adjacent text in Pass 3;
+      // Classify: "emoji_inline" gets folded into adjacent text in Pass 3;
       //    plain "emoji" keeps the existing isolate-into-emoji-run behavior in Pass 4.
       const isInline = shouldEmojiStayInline(inputText, emojiAbsStart, emojiMatch[0].length);
       processedBlocks.push({

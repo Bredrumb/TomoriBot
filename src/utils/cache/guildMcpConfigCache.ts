@@ -43,7 +43,7 @@ export async function getCachedGuildMcpConfigs(serverId: number): Promise<GuildM
   const now = Date.now();
   const entry = cache.get(serverId);
 
-  // 1. Cache hit check
+  // Cache hit check
   if (entry) {
     const age = now - entry.cachedAt;
     if (age < CACHE_TTL_MS) {
@@ -53,13 +53,13 @@ export async function getCachedGuildMcpConfigs(serverId: number): Promise<GuildM
     // Stale — fall through to refresh
   }
 
-  // 2. Cache miss or stale — load from DB via repository
+  // Cache miss or stale — load from DB via repository
   cacheMisses++;
 
   try {
     const configs = await mcpRepository.loadGuildMcpConfigs(serverId);
 
-    // 3. Cache the result (even if empty — avoids repeated DB queries for guilds with no MCP servers)
+    // Cache the result (even if empty — avoids repeated DB queries for guilds with no MCP servers)
     cache.set(serverId, {
       configs,
       cachedAt: now,

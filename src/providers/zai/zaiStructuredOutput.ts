@@ -114,7 +114,7 @@ export async function callZaiStructuredJSON<T>(
   }
 
   try {
-    // 1. Build the request body
+    // Build the request body
     const body: Record<string, unknown> = {
       model: apiModel,
       messages: [
@@ -145,12 +145,12 @@ export async function callZaiStructuredJSON<T>(
       stream: false,
     };
 
-    // 2. Skip temperature for reasoning models
+    // Skip temperature for reasoning models
     if (!ZAI_REASONING_MODELS.includes(apiModel)) {
       body.temperature = request.temperature ?? 1.0;
     }
 
-    // 3. Send the request
+    // Send the request
     const response = await fetch(request.endpointUrl || ZAI_GENERAL_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -175,7 +175,7 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // 4. Parse the response
+    // Parse the response
     const result = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };
@@ -209,7 +209,7 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // 5. Parse JSON
+    // Parse JSON
     let parsed: unknown;
     try {
       parsed = JSON.parse(responseText);
@@ -228,7 +228,7 @@ export async function callZaiStructuredJSON<T>(
       };
     }
 
-    // 6. Validate with Zod
+    // Validate with Zod
     const validationResult = zodSchema.safeParse(parsed);
     if (!validationResult.success) {
       log.error("Z.ai structured JSON validation failed", validationResult.error);

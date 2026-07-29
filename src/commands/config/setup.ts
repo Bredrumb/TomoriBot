@@ -70,7 +70,7 @@ export async function execute(
   }
 
   try {
-    // 2. Check if a main persona (is_alter=false) exists for this server.
+    // Check if a main persona (is_alter=false) exists for this server.
     //    Previous check used personaRepository.loadState() which returns ANY persona (main or alter),
     //    causing a deadlock when the main persona was missing but alters remained:
     //    - Other commands require a main persona → "Initial Setup Required"
@@ -79,13 +79,13 @@ export async function execute(
     const existingInternalServerId = await serverRepository.loadServerIdByDiscId(serverId);
 
     if (existingInternalServerId) {
-      // 2a. Check if a main persona exists for this server
+      // Check if a main persona exists for this server
       const hasMain = await personaRepository.hasMainPersona(existingInternalServerId);
 
       if (hasMain) {
         const existingTomoriState = await personaRepository.loadState(serverId);
 
-        // 3. Main persona row exists AND state is fully valid — server is healthy, block re-setup.
+        // Main persona row exists AND state is fully valid — server is healthy, block re-setup.
         //    If personaRepository.loadState returns null despite the row existing, the server is in a broken
         //    state (missing split config rows or deleted LLM). Fall through to cleanup so the
         //    user isn't permanently locked out by a setup guard that uses a weaker health check
@@ -142,7 +142,7 @@ export async function execute(
           return;
         }
 
-        // 3a. Main persona row exists but personaRepository.loadState returned null — broken state
+        // Main persona row exists but personaRepository.loadState returned null — broken state
         //     (e.g. config row deleted, or llm_id points to a removed model).
         //     Do NOT nuke personas here: alters may be perfectly healthy and only the config
         //     row or model reference is missing. Guide the user to targeted repair commands.
@@ -164,7 +164,7 @@ export async function execute(
         return;
       }
 
-      // 3b. No main persona row — orphaned alters or empty server entry.
+      // No main persona row — orphaned alters or empty server entry.
       //     Wipe every config-table row to clear orphaned data; alter rows in `personas`
       //     are preserved since serverRepository.setup only inserts a new main persona (is_alter=false).
       log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
@@ -353,7 +353,7 @@ export async function execute(
 
       // Validate and transform inputs
 
-      // 1. Validate API Provider (case-insensitive)
+      // Validate API Provider (case-insensitive)
       const isCustomEndpointSetup = apiProvider === SETUP_CUSTOM_ENDPOINT_PROVIDER;
       const isUserByokSetup = !isDMChannel && apiProvider === SETUP_USER_BYOK_PROVIDER;
       const normalizedProvider =
@@ -370,7 +370,7 @@ export async function execute(
         return;
       }
 
-      // 2. Handle bootstrap modes vs regular provider setup
+      // Handle bootstrap modes vs regular provider setup
       let encryptedKey: Buffer | null = null;
       let keyVersion = 1;
 
@@ -440,7 +440,7 @@ export async function execute(
         keyVersion = encryptionResult.version;
       }
 
-      // 4. Validate preset name against available presets
+      // Validate preset name against available presets
       const selectedPresetOption = presetOptions.find((p) => p.name.toLowerCase() === presetName.trim().toLowerCase());
 
       if (!selectedPresetOption) {
@@ -470,7 +470,7 @@ export async function execute(
       const selectedPresetId = presetRow.persona_preset_id;
       log.info(`Selected preset ID: ${selectedPresetId} (${selectedPresetOption.name})`);
 
-      // 5. Validate humanizer degree (required, must be 0-3)
+      // Validate humanizer degree (required, must be 0-3)
       const parsedHumanizer = Number.parseInt(humanizerDegreeStr, 10);
 
       // Check if it's a valid number
@@ -496,7 +496,7 @@ export async function execute(
       const humanizerDegree = parsedHumanizer as HumanizerDegree;
       log.info(`Selected humanizer degree: ${humanizerDegree}`);
 
-      // 6. Validate timezone offset (optional, defaults to 0 if not provided or invalid)
+      // Validate timezone offset (optional, defaults to 0 if not provided or invalid)
       let timezoneOffset = 0; // Default to UTC
       if (timezoneOffsetStr?.trim()) {
         const parsedOffset = Number.parseFloat(timezoneOffsetStr.trim());
@@ -627,16 +627,16 @@ export async function execute(
       // Only attempt avatar update in guilds (not available in DMs)
       if (!isDMChannel && interaction.guild) {
         try {
-          // 1. Try to get cached preset avatar
+          // Try to get cached preset avatar
           const cachedAvatar = getCachedPresetAvatar(selectedPresetId);
           const presetAvatarBuffer = cachedAvatar ? null : await getPresetAvatarBuffer(presetRow);
 
-          // 2. Prepare avatar value (base64 data URI or null)
+          // Prepare avatar value (base64 data URI or null)
           const avatarValue =
             cachedAvatar ??
             (presetAvatarBuffer ? `data:image/png;base64,${presetAvatarBuffer.toString("base64")}` : null);
 
-          // 3. Update guild avatar via Discord API
+          // Update guild avatar via Discord API
           const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
           const response = await fetch(endpoint, {
             method: "PATCH",
@@ -667,12 +667,12 @@ export async function execute(
       }
 
       // Prepare the success message.
-      // 1. Resolve the provider display name and chosen persona for the inline confirmation line
+      // Resolve the provider display name and chosen persona for the inline confirmation line
       //    (persona/name/humanizer are now named in the confirmation, not shown as separate fields).
       const providerDisplayName = normalizedProvider ? getProviderDisplayName(normalizedProvider) : "";
       const personaName = selectedPresetOption.name;
 
-      // 2. Look up this provider's default model for the "{model_name}" confirmation variants.
+      // Look up this provider's default model for the "{model_name}" confirmation variants.
       let configuredModelName: string | null = null;
       if (normalizedProvider) {
         const defaultModel = await llmModelRepo.loadDefaultModel(normalizedProvider);
@@ -681,7 +681,7 @@ export async function execute(
         }
       }
 
-      // 3. Green embed fields: an optional DM explanation, then the shared Next Steps + Learn More.
+      // Green embed fields: an optional DM explanation, then the shared Next Steps + Learn More.
       const helpFeaturesMention = commandRegistry.getCommandMention("help", "features");
       const successFields: Array<{ nameKey: string; value: string }> = [];
 
@@ -708,7 +708,7 @@ export async function execute(
         }),
       });
 
-      // 4. Provider/mode-specific notes go into a conditional yellow "A Few Things to Note" embed,
+      // Provider/mode-specific notes go into a conditional yellow "A Few Things to Note" embed,
       //    rendered only when at least one applies. Each note is a bold top-level bullet (label) with
       //    an indented detail sub-bullet — nothing shows for a plain paid-provider setup.
       const headsUpNotes: Array<{ label: string; detail: string }> = [];
@@ -766,7 +766,7 @@ export async function execute(
               .setDescription(headsUpNotes.map((note) => `- **${note.label}**\n  - ${note.detail}`).join("\n"))
           : null;
 
-      // 5. Pick the confirmation variant for the chosen mode.
+      // Pick the confirmation variant for the chosen mode.
       const successDescriptionKey = isUserByokSetup
         ? isDMChannel
           ? "commands.config.setup.success_desc_dm"

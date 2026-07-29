@@ -56,7 +56,7 @@ import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 async function getDefaultNovelAIModel(): Promise<string> {
   const providerName = "novelai";
 
-  // 1. Try to get default from cache (fastest, no DB query)
+  // Try to get default from cache (fastest, no DB query)
   if (isLLMCacheReady()) {
     const cachedDefault = getCachedDefaultLLM(providerName);
     if (cachedDefault) {
@@ -65,7 +65,7 @@ async function getDefaultNovelAIModel(): Promise<string> {
     }
   }
 
-  // 2. Cache not ready or no default found - query database for is_default model
+  // Cache not ready or no default found - query database for is_default model
   try {
     const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
@@ -78,7 +78,7 @@ async function getDefaultNovelAIModel(): Promise<string> {
     });
   }
 
-  // 3. Fallback to first non-deprecated model from database
+  // Fallback to first non-deprecated model from database
   try {
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
@@ -90,7 +90,7 @@ async function getDefaultNovelAIModel(): Promise<string> {
     log.error(`Failed to load available models for ${providerName}`, error as Error);
   }
 
-  // 4. No models found - throw error
+  // No models found - throw error
   throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 

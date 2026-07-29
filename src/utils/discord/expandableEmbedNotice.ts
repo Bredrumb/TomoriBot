@@ -163,19 +163,19 @@ export async function sendEmbedWithExpand(
   const truncationThreshold = config.truncationThreshold ?? DEFAULT_TRUNCATION_THRESHOLD;
   const shouldAttachExpandButton = fullContent.length > truncationThreshold;
 
-  // 1. Build the complete CV2 tree up front. Teardown reuses the same renderer
+  // Build the complete CV2 tree up front. Teardown reuses the same renderer
   //    with only the button disabled, keeping the message in one mode.
   const activeComponents = buildNoticeComponents(locale, embedOptions, config, shouldAttachExpandButton);
   const disabledComponents = shouldAttachExpandButton
     ? buildNoticeComponents(locale, embedOptions, config, true, true)
     : activeComponents;
 
-  // 2. Resolve thread ID — persona webhooks live on the parent channel and need
+  // Resolve thread ID — persona webhooks live on the parent channel and need
   //    `threadId` to post into a thread.
   const threadId =
     "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
 
-  // 3. Try webhook-persona delivery first so the notice appears under the same
+  // Try webhook-persona delivery first so the notice appears under the same
   //    identity as the AI response, then fall back to a plain bot message.
   const webhook = webhookContext?.webhook;
   const useWebhook = Boolean(webhook && webhookContext?.personaUsername && canUseWebhookForChannel(channel, webhook));
@@ -219,12 +219,12 @@ export async function sendEmbedWithExpand(
     }
   }
 
-  // 4. Short content was not truncated, so there is no collector to wire.
+  // Short content was not truncated, so there is no collector to wire.
   if (!shouldAttachExpandButton) {
     return;
   }
 
-  // 5. Build the ephemeral "full content" embed once — reused for every click.
+  // Build the ephemeral "full content" embed once — reused for every click.
   //    Wrap the content in a fenced code block so newlines and any markdown
   //    inside the content are preserved without being interpreted.
   const fullEmbed = createStandardEmbed(locale, {
@@ -233,7 +233,7 @@ export async function sendEmbedWithExpand(
     description: `\`\`\`\n${fullContent}\n\`\`\``,
   });
 
-  // 6. Wire the button collector. Any non-bot user may click — the full content
+  // Wire the button collector. Any non-bot user may click — the full content
   //    is already shown to everyone in the channel (truncated), so ephemeral
   //    expansion is not a privacy escalation.
   const collector = noticeMessage.createMessageComponentCollector({

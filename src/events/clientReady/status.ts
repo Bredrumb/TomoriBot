@@ -3,7 +3,6 @@ import { type ActivityOptions, ActivityType, type Client } from "discord.js";
 import _pkg from "../../../package.json";
 import { log } from "../../utils/misc/logger";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
-// import { sql } from "@/utils/db/client";
 
 // Cycle delay in milliseconds (1 minute)
 const CYCLE_DELAY = 60000;
@@ -58,18 +57,18 @@ async function getServerCount(client: Client): Promise<number> {
  * @returns {Promise<void>}
  */
 async function postTopggStats(client: Client): Promise<void> {
-  // 1. Only run in production with a configured token
+  // Only run in production with a configured token
   const isProduction = process.env.NODE_ENV === "production";
   const topggToken = process.env.TOPGG_TOKEN;
 
   if (!isProduction || !topggToken || !client.user) return;
 
-  // 2. Use the actual Discord guild count (guilds the bot has joined)
+  // Use the actual Discord guild count (guilds the bot has joined)
   const serverCount = client.guilds.cache.size;
   const botId = client.user.id;
 
   try {
-    // 3. POST server count to Top.gg REST API
+    // POST server count to Top.gg REST API
     const response = await fetch(`https://top.gg/api/bots/${botId}/stats`, {
       method: "POST",
       headers: {
@@ -145,22 +144,21 @@ const handler = async (client: Client): Promise<void> => {
   async function updateStatus(): Promise<void> {
     if (!client.user) return;
 
-    // 1. Skip status updates in non-production environments
+    // Skip status updates in non-production environments
     const isProduction = process.env.NODE_ENV === "production";
     if (!isProduction) {
       return;
     }
 
-    // 2. Check if today is Tomori's birthday
+    // Check if today is Tomori's birthday
     if (isTomoriBirthday()) {
-      // 3. Set birthday status
+      // Set birthday status
       client.user.setActivity(birthdayStatus);
     } else {
-      // 4. Use the same server count as Top.gg (actual Discord guild count)
+      // Use the same server count as Top.gg (actual Discord guild count)
       const serverCount = client.guilds.cache.size;
-      // const serverCount = await getServerCount(client);
 
-      // 5. Build normal status options with current server count
+      // Build normal status options with current server count
       const normalStatus: ActivityOptions[] = [
         {
           name: `Sprites Update! /update`,
@@ -172,7 +170,7 @@ const handler = async (client: Client): Promise<void> => {
         },
       ];
 
-      // 6. Normal status rotation
+      // Normal status rotation
       if (normalStatus.length > 0) {
         const random = Math.floor(Math.random() * normalStatus.length);
         client.user.setActivity(normalStatus[random]);

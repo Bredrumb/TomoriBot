@@ -30,10 +30,10 @@ const SERVICE_NAME = "searxng";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
-// 1. Per-request timeout. Matches the 5s engine-budget from the migration plan.
+// Per-request timeout. Matches the 5s engine-budget from the migration plan.
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.WEB_SEARCH_TIMEOUT_MS ?? "5000", 10) || 5000);
 
-// 2. Cache duration for the "SearXNG reachable" probe — avoids re-probing on every
+// Cache duration for the "SearXNG reachable" probe — avoids re-probing on every
 //    LLM tool turn while still allowing recovery within a minute when the sidecar
 //    comes back online.
 const HEALTHCHECK_CACHE_MS =
@@ -70,13 +70,13 @@ export async function isSearxngAvailable(force = false): Promise<boolean> {
   const baseUrl = getSearxngBaseUrl();
   if (!baseUrl) return false;
 
-  // 1. Return cached probe result if still fresh.
+  // Return cached probe result if still fresh.
   const now = Date.now();
   if (!force && healthcheckCache && healthcheckCache.expiresAt > now) {
     return healthcheckCache.available;
   }
 
-  // 2. Probe the lightweight `/healthz` endpoint exposed by SearXNG.
+  // Probe the lightweight `/healthz` endpoint exposed by SearXNG.
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3000);
 
@@ -123,7 +123,7 @@ async function makeSearxngRequest(
 
   const timeoutMs = config.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
-  // 1. Build query-string. SearXNG returns HTML by default — explicitly request JSON.
+  // Build query-string. SearXNG returns HTML by default — explicitly request JSON.
   const url = new URL(`${baseUrl}/search`);
   url.searchParams.append("format", "json");
   for (const [key, value] of Object.entries(params)) {
@@ -131,7 +131,7 @@ async function makeSearxngRequest(
     url.searchParams.append(key, String(value));
   }
 
-  // 2. Wire up internal + external abort signals.
+  // Wire up internal + external abort signals.
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   if (config.signal) {
@@ -233,7 +233,7 @@ export function formatSearxngResults(response: SearxngResponse, category: Searxn
     formatted += "\n";
   }
 
-  // 1. Surface SearXNG's first answer snippet (Wikipedia / calculator / etc.) when present.
+  // Surface SearXNG's first answer snippet (Wikipedia / calculator / etc.) when present.
   const firstAnswer = response.answers?.[0];
   if (firstAnswer) {
     const answerText = typeof firstAnswer === "string" ? firstAnswer : firstAnswer.answer;

@@ -308,7 +308,7 @@ function resolveConversationUserMatch(
     return null;
   }
 
-  // 1. Identify targets the input matched on their PRIMARY/display name (e.g. the
+  // Identify targets the input matched on their PRIMARY/display name (e.g. the
   //    rendered "Misuzu"/"Bredrumb" label) rather than only on a secondary alias
   //    (server nickname, global name, username). The conversation stage flattens
   //    all alias types into one set, so without this distinction a user's
@@ -328,7 +328,7 @@ function resolveConversationUserMatch(
     })),
   );
 
-  // 2. Precedence tie-break: when exactly one candidate matched on its primary
+  // Precedence tie-break: when exactly one candidate matched on its primary
   //    name, prefer it over candidates that only matched a secondary alias.
   //    Otherwise (zero or several primary matches) fall back to the full set so a
   //    genuine same-name collision still surfaces as ambiguous.

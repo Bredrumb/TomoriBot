@@ -153,9 +153,9 @@ export class ReminderTool extends BaseTool {
     // Normalize common variants before parseTimeWithOffset rejects them.
     if (reminderTimeArg && typeof reminderTimeArg === "string") {
       let normalized = reminderTimeArg.trim();
-      // 1. Replace slash date separators with dashes (2025/09/05 → 2025-09-05)
+      // Replace slash date separators with dashes (2025/09/05 → 2025-09-05)
       normalized = normalized.replace(/^(\d{4})\/(\d{2})\/(\d{2})/, "$1-$2-$3");
-      // 2. Replace space or T between date and time with underscore
+      // Replace space or T between date and time with underscore
       normalized = normalized.replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/, "$1_$2");
       if (normalized !== reminderTimeArg) {
         log.info(`Reminder tool: Normalized time format "${reminderTimeArg}" → "${normalized}"`);

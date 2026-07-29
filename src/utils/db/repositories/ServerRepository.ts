@@ -638,7 +638,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           dedupedPresetTriggers.length > 0 ? dedupedPresetTriggers : getBaseTriggerWords(validConfig.locale);
         const presetPersonaPrompt = presetRows[0]?.persona_preset_desc?.trim() || null;
 
-        // 1. Create or update server record with DM support
+        // Create or update server record with DM support
         const [server] = await tx`
           INSERT INTO servers (server_disc_id, is_dm_channel, registration_locale)
           VALUES (${validConfig.serverId}, ${isDMChannel}, ${validConfig.registrationLocale})
@@ -647,7 +647,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           RETURNING *
         `;
 
-        // 2. Create Tomori instance with the selected official preset.
+        // Create Tomori instance with the selected official preset.
         const [tomori] = await tx`
           INSERT INTO personas (
             server_id,
@@ -769,7 +769,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           `;
         }
 
-        // 4. Register guild emojis in bulk insert (only for guild contexts)
+        // Register guild emojis in bulk insert (only for guild contexts)
         const emojis = [];
         if (!isDMChannel && guild) {
           const emojiValues = Array.from(guild.emojis.cache.values()).map((e) => ({
@@ -803,7 +803,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           log.info("Skipping emoji registration for DM context");
         }
 
-        // 5. Register guild stickers (only for guild contexts)
+        // Register guild stickers (only for guild contexts)
         const stickers = [];
         if (!isDMChannel && guild) {
           log.info(`Registering stickers for server ${server.server_id}`);
@@ -901,7 +901,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
   private async sqlLoadServerStickers(serverDiscId: string): Promise<ServerStickerRow[] | null> {
     try {
-      // 1. Get the internal server_id from server_disc_id
+      // Get the internal server_id from server_disc_id
       const [server] = await sql`
         SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
       `;
@@ -913,7 +913,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       // biome-ignore lint/style/noNonNullAssertion: server check guarantees server_id (Rule 8)
       const serverId = server.server_id!;
 
-      // 2. Fetch all stickers for that server_id
+      // Fetch all stickers for that server_id
       const stickersData = await sql`
         SELECT sticker_id, server_id, sticker_disc_id, sticker_name, sticker_desc, emotion_key, format_type, is_global, created_at, updated_at
         FROM server_stickers
@@ -929,7 +929,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         return [];
       }
 
-      // 3. Validate each sticker row
+      // Validate each sticker row
       const validatedStickers: ServerStickerRow[] = [];
       for (const sticker of stickersData) {
         const parsed = serverStickerSchema.safeParse(sticker);
@@ -953,7 +953,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
   private async sqlGetBlacklistedMemberIds(serverId: number): Promise<string[]> {
     try {
-      // 1. Query personalization_blacklist table for blacklisted members
+      // Query personalization_blacklist table for blacklisted members
       const result = await sql`
         SELECT user_disc_id FROM personalization_blacklist
         WHERE server_id = ${serverId}
@@ -964,7 +964,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         return [];
       }
 
-      // 2. Map to array of Discord IDs
+      // Map to array of Discord IDs
       const memberIds = result.map((row: unknown) => (row as { user_disc_id: string }).user_disc_id);
       log.info(`Found ${memberIds.length} blacklisted members for server ${serverId}`);
       return memberIds;
@@ -1697,7 +1697,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
     await sql.transaction(async (tx) => {
       for (const result of results) {
-        // 1. Try emoji first (only update if still uninitialized)
+        // Try emoji first (only update if still uninitialized)
         const emojiRows = await tx`
           UPDATE server_emojis
           SET
@@ -1720,7 +1720,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           continue;
         }
 
-        // 2. Fall through to sticker if no emoji matched
+        // Fall through to sticker if no emoji matched
         const stickerRows = await tx`
           UPDATE server_stickers
           SET
@@ -1938,26 +1938,26 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   async nukeServer(serverId: number, serverDiscId: string, options: { preservePersonas: boolean }): Promise<boolean> {
     try {
       if (!options.preservePersonas) {
-        // 1. Full nuke — cascade-delete via the servers row
+        // Full nuke — cascade-delete via the servers row
         const result = await sql`DELETE FROM servers WHERE server_id = ${serverId}`;
         return result.count > 0;
       }
 
-      // 2. Preserve mode — atomic selective wipe inside a transaction
+      // Preserve mode — atomic selective wipe inside a transaction
       let totalDeleted = 0;
       await sql.transaction(async (tx) => {
-        // 2a. Wipe every server-scoped table in the maintained list
+        // Wipe every server-scoped table in the maintained list
         for (const table of ServerRepository.PRESERVE_MODE_WIPE_TABLES) {
           // table name is a constant from a private allowlist, not user input — safe to interpolate
           const result = await tx.unsafe(`DELETE FROM ${table} WHERE server_id = $1`, [serverId]);
           totalDeleted += result.count ?? 0;
         }
-        // 2b. discord_managed_webhooks is keyed by guild_disc_id, not server_id
+        // discord_managed_webhooks is keyed by guild_disc_id, not server_id
         const whResult = await tx`
           DELETE FROM discord_managed_webhooks WHERE guild_disc_id = ${serverDiscId}
         `;
         totalDeleted += whResult.count ?? 0;
-        // 2c. Documents: only wipe serverwide rows; persona-scoped docs stay
+        // Documents: only wipe serverwide rows; persona-scoped docs stay
         const docResult = await tx`
           DELETE FROM documents WHERE server_id = ${serverId} AND persona_id IS NULL
         `;

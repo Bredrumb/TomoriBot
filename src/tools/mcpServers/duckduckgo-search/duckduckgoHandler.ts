@@ -150,7 +150,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
           return null;
         }
 
-        // 1. Synthesize the MCPExecutionContext expected by processResult.
+        // Synthesize the MCPExecutionContext expected by processResult.
         const mcpContext: MCPExecutionContext = {
           ...context,
           serverName: this.serverName,

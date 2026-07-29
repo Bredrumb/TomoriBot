@@ -21,10 +21,10 @@ export async function initializeLLMCache(): Promise<void> {
   try {
     log.info("Initializing LLM configuration cache...");
 
-    // 1. Clear existing cache
+    // Clear existing cache
     llmCache.clear();
 
-    // 2. Load all LLM configurations from database via repository
+    // Load all LLM configurations from database via repository
     const llms = await llmModelRepo.loadAvailableLlms(true);
 
     if (!llms || llms.length === 0) {
@@ -32,14 +32,14 @@ export async function initializeLLMCache(): Promise<void> {
       return;
     }
 
-    // 3. Cache each LLM configuration
+    // Cache each LLM configuration
     for (const llm of llms) {
       if (llm.llm_id !== undefined) {
         llmCache.set(llm.llm_id, llm as LlmRow);
       }
     }
 
-    // 4. Log statistics
+    // Log statistics
     const providerCounts = new Map<string, number>();
     for (const llm of llms) {
       const count = providerCounts.get(llm.llm_provider) || 0;

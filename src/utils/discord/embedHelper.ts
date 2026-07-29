@@ -153,7 +153,7 @@ export function createTipEmbed(
   tipKeys: string[],
   tipVars: Record<string, string | number | boolean> = {},
 ): EmbedBuilder | null {
-  // 1. Localize every tip item and drop any that resolve to empty text (e.g. an unset optional key).
+  // Localize every tip item and drop any that resolve to empty text (e.g. an unset optional key).
   const items = tipKeys
     .filter((key) => key !== SUPPORT_SERVER_TIP_KEY)
     .map((key) => localizer(locale, key, tipVars).trim())
@@ -162,16 +162,16 @@ export function createTipEmbed(
     return null;
   }
 
-  // 2. Always close with the Official Support Server link so every tip embed offers a way to get help.
+  // Always close with the Official Support Server link so every tip embed offers a way to get help.
   const supportItem = localizer(locale, SUPPORT_SERVER_TIP_KEY, tipVars).trim();
   if (supportItem.length > 0) {
     items.push(supportItem);
   }
 
-  // 3. Render as a dashed bullet list, truncated to stay within Discord's embed description limit.
+  // Render as a dashed bullet list, truncated to stay within Discord's embed description limit.
   const description = truncateForEmbedDescription(items.map((item) => `- ${item}`).join("\n"));
 
-  // 4. Green (SUCCESS) reads as "helpful", visibly distinct from the red/yellow error embed above it.
+  // Green (SUCCESS) reads as "helpful", visibly distinct from the red/yellow error embed above it.
   return new EmbedBuilder()
     .setColor(ColorCode.SUCCESS)
     .setTitle(localizer(locale, "genai.tips.title"))
@@ -205,24 +205,24 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
     .setTitle(localizer(locale, titleKey, titleVars))
     .setDescription(descriptionText)
     .addFields(
-      // 1. Map over the fields provided in options
+      // Map over the fields provided in options
       fields.map(
-        // 2. Define the transformation for each field
+        // Define the transformation for each field
         (field): APIEmbedField => {
-          // 3. Determine the field name: Use localized nameKey if present, otherwise use direct name, fallback to empty string
+          // Determine the field name: Use localized nameKey if present, otherwise use direct name, fallback to empty string
           const name = field.nameKey
             ? localizer(locale, field.nameKey, field.nameVars) // Use nameVars for name
             : (field.name ?? "");
 
-          // 4. Determine the field value: Use localized valueKey if present, otherwise use direct value
+          // Determine the field value: Use localized valueKey if present, otherwise use direct value
           const rawValue = field.valueKey
             ? localizer(locale, field.valueKey, field.valueVars) // Localize valueKey using valueVars
             : (field.value ?? ""); // Otherwise, use the value directly
 
-          // 5. Truncate value to Discord's maximum field value length (1024 chars)
+          // Truncate value to Discord's maximum field value length (1024 chars)
           const value = truncateFieldValue(rawValue);
 
-          // 6. Return the structured APIEmbedField object
+          // Return the structured APIEmbedField object
           return {
             name,
             value,

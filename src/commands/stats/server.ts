@@ -47,7 +47,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Acknowledge publicly before DB reads (dashboard is a public message).
+  // Acknowledge publicly before DB reads (dashboard is a public message).
   await interaction.deferReply();
 
   const guild = interaction.guild;
@@ -61,7 +61,7 @@ export async function execute(
   }
 
   try {
-    // 2. Resolve the internal server id; stat reads key on it, not the snowflake.
+    // Resolve the internal server id; stat reads key on it, not the snowflake.
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
     if (!serverId) {
@@ -73,7 +73,7 @@ export async function execute(
       return;
     }
 
-    // 3. Resolve timeframe → window floor and build the dashboard.
+    // Resolve timeframe → window floor and build the dashboard.
     const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const from = resolveWindowFrom(timeframe);
     const subtitle = buildSubtitle(locale, timeframe);

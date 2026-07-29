@@ -132,7 +132,7 @@ export async function execute(
   }
 
   try {
-    // 1. Validate thinking_level before showing the picker, to surface errors immediately
+    // Validate thinking_level before showing the picker, to surface errors immediately
     const nextThinkingLevel = interaction.options.getString("thinking_level");
     if (nextThinkingLevel && !isThinkingLevelValue(nextThinkingLevel)) {
       await replyInfoEmbed(interaction, locale, {
@@ -144,7 +144,7 @@ export async function execute(
       return;
     }
 
-    // 2. Require at least one sampler value before showing the picker
+    // Require at least one sampler value before showing the picker
     const nextMaxOutputTokens = interaction.options.getInteger("max_output_tokens");
     const hasAnyChange =
       interaction.options.getNumber("temperature") !== null ||
@@ -166,7 +166,7 @@ export async function execute(
       return;
     }
 
-    // 3. Load all saved personal text providers and present the picker.
+    // Load all saved personal text providers and present the picker.
     //    UserSavedProviderConfigRow shares the `provider` field that promptForSavedProvider reads,
     //    so the cast is safe — the picker only uses that field to build button labels.
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "text");
@@ -198,7 +198,7 @@ export async function execute(
       }
     };
 
-    // 4. Retrieve the saved config from the already-loaded list (avoids a second DB round-trip)
+    // Retrieve the saved config from the already-loaded list (avoids a second DB round-trip)
     const savedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
     if (!savedConfig) {
       await replyWithResult({
@@ -209,7 +209,7 @@ export async function execute(
       return;
     }
 
-    // 5. Build the updated config by overlaying only the options the user explicitly passed
+    // Build the updated config by overlaying only the options the user explicitly passed
     const nextConfig = {
       ...savedConfig,
       llm_temperature: interaction.options.getNumber("temperature") ?? savedConfig.llm_temperature,
@@ -222,7 +222,7 @@ export async function execute(
       thinking_level: (nextThinkingLevel as ThinkingLevelValue | null) ?? savedConfig.thinking_level,
     };
 
-    // 6. Collect display labels for the success message
+    // Collect display labels for the success message
     const changedSettings: Array<{ label: string; value: string }> = [];
     if (interaction.options.getNumber("temperature") !== null) {
       changedSettings.push({
@@ -264,7 +264,7 @@ export async function execute(
       });
     }
 
-    // 7. Persist the updated personal sampler config
+    // Persist the updated personal sampler config
     const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, nextConfig);
     if (!writeOk) {
       await replyWithResult({

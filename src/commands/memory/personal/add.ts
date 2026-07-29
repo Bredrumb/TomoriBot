@@ -18,7 +18,7 @@ import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimit
 import type { ModalComponent } from "@/types/discord/modal";
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
-// Rule 20: Constants for modal and input IDs
+// Constants for modal and input IDs
 const MODAL_CUSTOM_ID = "teach_personalmemory_add_modal";
 const MEMORY_INPUT_ID = "personal_memory_input";
 const MEMORY_FILE_UPLOAD_ID = "personal_memory_file_upload";
@@ -33,7 +33,7 @@ const MAX_TAG_LENGTH = 32;
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Rule 21: Configure the subcommand
+// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("add")
@@ -56,7 +56,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     );
 
 /**
- * Rule 1: JSDoc comment for exported function
+ * JSDoc comment for exported function
  * Adds a personal memory to the user's record in the users table.
  * @param _client - Discord client instance
  * @param interaction - Command interaction
@@ -69,7 +69,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel context (Rule 17)
+  // Ensure command is run in a channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -87,7 +87,7 @@ export async function execute(
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // 2. Load server's Tomori state to check personalization setting (Rule 17)
+    // Load server's Tomori state to check personalization setting
     // We need this even though we're updating the users table
     // Use user ID for DM context, guild ID for server context
     const serverId = interaction.guild?.id ?? interaction.user.id;
@@ -96,7 +96,7 @@ export async function execute(
       PERSONAL_SCOPE_VALUE;
     tomoriState = await personaRepository.loadState(serverId);
 
-    // 3. Check if Tomori is set up on the server (needed for config check)
+    // Check if Tomori is set up on the server (needed for config check)
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -107,7 +107,7 @@ export async function execute(
       return;
     }
 
-    // 4. Resolve target scope and lineage
+    // Resolve target scope and lineage
     let targetLineageId = GLOBAL_PERSONAL_MEMORY_LINEAGE_ID;
     let allPersonas: TomoriState[] = [];
     const modalComponents: ModalComponent[] = [];
@@ -172,24 +172,24 @@ export async function execute(
       maxLength: MAX_TAGS * (MAX_TAG_LENGTH + 2),
     });
 
-    // 6. Prompt user with a modal with Component Type 18 support (Rule 10, 12, 19, 25)
+    // Prompt user with a modal with Component Type 18 support
     modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.teach.memory.personal.modal_title",
       components: modalComponents,
     });
 
-    // 7. Handle modal outcome
+    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Personal memory add modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
     }
 
-    // 8. Capture and immediately defer the modal submission interaction (Rule 25)
+    // Capture and immediately defer the modal submission interaction
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' guarantees interaction
     modalSubmitInteraction = modalResult.interaction!;
 
-    // 9. Get input from modal
+    // Get input from modal
     const typedMemory = modalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
     const uploadedTextFile = modalResult.attachments?.[MEMORY_FILE_UPLOAD_ID];
     const rawTagsInput = modalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
@@ -277,7 +277,7 @@ export async function execute(
 
     const dedupedMemories = dedupeCaseInsensitive(pendingMemories);
 
-    // 10. Validate memory content lengths
+    // Validate memory content lengths
     for (const memory of dedupedMemories) {
       const contentValidation = validateMemoryContent(memory);
       if (!contentValidation.isValid) {
@@ -291,7 +291,7 @@ export async function execute(
       }
     }
 
-    // 11. Check if user has opted out of personalization (privacy setting)
+    // Check if user has opted out of personalization (privacy setting)
     const { PrivacyLevel } = await import("../../../types/db/schema");
     const userPrivacyLevel = await userRepository.getPrivacyLevel(interaction.user.id);
 
@@ -309,7 +309,7 @@ export async function execute(
       return;
     }
 
-    // 12. Load existing memories for duplicate detection
+    // Load existing memories for duplicate detection
     const currentMemories = userData.user_id
       ? await personalMemoryRepository.loadForUserLineage(
           userData.user_id,
@@ -321,7 +321,7 @@ export async function execute(
     const existingMemories = new Set(currentMemories.map((row) => row.content.trim().toLowerCase()));
     const memoriesToAdd = dedupedMemories.filter((memory) => !existingMemories.has(memory.toLowerCase()));
 
-    // 13. Check for duplicates within the user's memories
+    // Check for duplicates within the user's memories
     if (memoriesToAdd.length === 0) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.teach.memory.personal.duplicate_title",
@@ -366,7 +366,7 @@ export async function execute(
       return;
     }
 
-    // 14. Insert lineage-scoped memory rows
+    // Insert lineage-scoped memory rows
     let insertSuccess = true;
     if (memoriesToAdd.length === 1) {
       const insertedMemory = await personalMemoryRepository.add(
@@ -422,7 +422,7 @@ export async function execute(
       return;
     }
 
-    // 15. Check personalization settings and user blacklisting status to prepare appropriate message
+    // Check personalization settings and user blacklisting status to prepare appropriate message
     const isBatchAdd = memoriesToAdd.length > 1 || Boolean(uploadedTextFile);
     let descriptionKey = isBatchAdd
       ? "commands.teach.memory.personal.batch_success_description"
@@ -448,10 +448,10 @@ export async function execute(
       embedColor = ColorCode.WARN;
     }
 
-    // 15. Invalidate user cache so next message gets fresh data
+    // Invalidate user cache so next message gets fresh data
     invalidateUserCache(interaction.user.id);
 
-    // 16. Success! Confirm addition (with potential warning) (Rule 12, 19)
+    // Success! Confirm addition (with potential warning)
     const firstMemory = memoriesToAdd[0] ?? "";
     const memoryPreview = firstMemory.length > 96 ? `${firstMemory.slice(0, 96)}...` : firstMemory;
 
@@ -470,7 +470,7 @@ export async function execute(
       color: embedColor, // Use the determined color
     });
   } catch (error) {
-    // Rule 22: Log error with context
+    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
@@ -484,7 +484,7 @@ export async function execute(
     };
     await log.error("Error in /teach personalmemory command", error, context);
 
-    // Rule 12, 19: Reply with unknown error embed
+    // Reply with unknown error embed
     const errorReplyInteraction =
       modalSubmitInteraction && (modalSubmitInteraction.replied || modalSubmitInteraction.deferred)
         ? modalSubmitInteraction

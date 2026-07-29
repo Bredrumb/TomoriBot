@@ -35,7 +35,7 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
     const slugMatch = tenorViewUrl.match(/\/view\/([a-zA-Z0-9%-]+)-gif-\d+/);
     const urlSlug = slugMatch?.[1] || "";
 
-    // 1. Fetch the Tenor page HTML with a bounded timeout.
+    // Fetch the Tenor page HTML with a bounded timeout.
     // Why: undici's default headersTimeout is 300_000 ms (5 min). If Tenor stalls on a
     // malformed/unknown GIF id (e.g. 20-digit overflow IDs) or serves a hanging Cloudflare
     // interstitial, an unguarded fetch blocks the entire chat turn for 5 minutes before
@@ -49,14 +49,14 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
 
     const html = await response.text();
 
-    // 2. Method 1 (Primary): Try to extract from <script id="gif-json"> tag
+    // Method 1 (Primary): Try to extract from <script id="gif-json"> tag
     const gifUrl = extractFromGifJson(html);
     if (gifUrl) {
       log.success(`Tenor Resolver: Resolved via JSON method: ${gifUrl}`);
       return gifUrl;
     }
 
-    // 3. Method 2 (Fallback): Use regex to find media URLs matching the slug
+    // Method 2 (Fallback): Use regex to find media URLs matching the slug
     const regexMediaUrl = extractViaRegex(html, urlSlug);
     if (regexMediaUrl) {
       log.success(`Tenor Resolver: Resolved via regex method: ${regexMediaUrl}`);

@@ -126,7 +126,7 @@ export class ProcessGifTool extends BaseTool {
    * @returns Promise resolving to tool result with restart signal
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // 1. Extract and validate parameters
+    // Extract and validate parameters
     const messageId = args.media_id as string;
     const reason = (args.reason as string | undefined) || "No reason provided";
 
@@ -142,13 +142,13 @@ export class ProcessGifTool extends BaseTool {
     log.info(`ProcessGifTool: Starting GIF processing for message ${messageId} - Reason: ${reason}`);
 
     try {
-      // 2. Fetch recent messages from the channel (last 100)
+      // Fetch recent messages from the channel (last 100)
       log.info(`ProcessGifTool: Fetching recent messages from channel ${context.channel.id}`);
       const recentMessages = await context.channel.messages.fetch({
         limit: 100,
       });
 
-      // 3. Find the target message by ID
+      // Find the target message by ID
       const targetMessage = recentMessages.get(messageId);
       if (!targetMessage) {
         log.warn(`ProcessGifTool: Message ${messageId} not found in recent 100 messages`);
@@ -164,7 +164,7 @@ export class ProcessGifTool extends BaseTool {
         };
       }
 
-      // 4. Extract GIF attachment from message
+      // Extract GIF attachment from message
       log.info(
         `ProcessGifTool: Found message ${messageId}, checking for GIF attachments (${targetMessage.attachments.size} total attachments)`,
       );
@@ -203,7 +203,7 @@ export class ProcessGifTool extends BaseTool {
         };
       }
 
-      // 5. Validate GIF size (reject if > MAX_GIF_SIZE_MB)
+      // Validate GIF size (reject if > MAX_GIF_SIZE_MB)
       const maxSizeBytes = MEDIA_LIMITS.MAX_GIF_SIZE_MB * 1024 * 1024;
       if (gifAttachment.size > maxSizeBytes) {
         const sizeMB = (gifAttachment.size / (1024 * 1024)).toFixed(2);
@@ -221,7 +221,7 @@ export class ProcessGifTool extends BaseTool {
         };
       }
 
-      // 6. Process GIF using extractGifKeyframes() utility
+      // Process GIF using extractGifKeyframes() utility
       await sendToolProgressNotice(
         context,
         "gif_processing",
@@ -243,7 +243,7 @@ export class ProcessGifTool extends BaseTool {
 
       log.success(`ProcessGifTool: Extracted ${processedFrames.length} keyframes in ${processingTime}ms`);
 
-      // 7. Create StructuredContextItem with processed frames
+      // Create StructuredContextItem with processed frames
       // Include both standard ContextPart fields AND inlineData for Gemini provider
       type GifFramePart =
         | { type: "text"; text: string }
@@ -288,13 +288,13 @@ export class ProcessGifTool extends BaseTool {
         parts: frameParts,
       };
 
-      // 8. Store in static map for enhanced context restart
+      // Store in static map for enhanced context restart
       ProcessGifTool.pendingEnhancedContextItems.set(messageId, enhancedContextItem);
       log.info(
         `ProcessGifTool: Stored ${processedFrames.length} frames in pending context map for message ${messageId}`,
       );
 
-      // 9. Return success signal to trigger context restart
+      // Return success signal to trigger context restart
       return {
         success: true,
         message: `Successfully processed GIF with ${processedFrames.length} keyframes from message ${messageId}. Processing took ${processingTime}ms.`,

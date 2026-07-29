@@ -66,7 +66,7 @@ export function isEmptyForwardSnapshot(snapshot: MessageSnapshot): boolean {
 async function fetchForwardOrigin(message: Message, channelId: string, messageId: string): Promise<Message | null> {
   try {
     const channel = message.client.channels.cache.get(channelId) ?? (await message.client.channels.fetch(channelId));
-    // 1. PartialGroupDMChannel is text-based but exposes no message manager.
+    // PartialGroupDMChannel is text-based but exposes no message manager.
     if (!channel?.isTextBased() || !("messages" in channel)) {
       return null;
     }
@@ -90,7 +90,7 @@ async function fetchForwardOrigin(message: Message, channelId: string, messageId
  * @returns Resolved snapshots plus how far the walk had to go, and whether it gave up
  */
 export async function resolveForwardChain(message: Message): Promise<ResolvedForwardChain> {
-  // 1. Snapshots exist only on forwards, so anything without them has nothing to resolve.
+  // Snapshots exist only on forwards, so anything without them has nothing to resolve.
   if (message.messageSnapshots.size === 0) {
     return { snapshots: [], extraHops: 0, unresolved: false };
   }
@@ -99,7 +99,7 @@ export async function resolveForwardChain(message: Message): Promise<ResolvedFor
   let reference = message.reference;
   let extraHops = 0;
 
-  // 2. An empty snapshot means the thing forwarded was itself a forward. The wrapper's
+  // An empty snapshot means the thing forwarded was itself a forward. The wrapper's
   //    reference still points at that intermediate message, whose own snapshots hold
   //    the next level down, so chase it until content appears or the budget runs out.
   while (snapshots.every(isEmptyForwardSnapshot)) {

@@ -63,7 +63,7 @@ export class ChannelPromptRepository {
           channel_prompt_mode = EXCLUDED.channel_prompt_mode,
           updated_at = CURRENT_TIMESTAMP
       `;
-      // Invalidate only after a successful write (CLAUDE.md cache rule)
+      // Invalidate only after a successful write
       invalidateChannelPromptCache(serverId, channelDiscId);
       return true;
     } catch (error) {
@@ -85,7 +85,7 @@ export class ChannelPromptRepository {
         WHERE server_id = ${serverId}
           AND channel_disc_id = ${channelDiscId}
       `;
-      // Invalidate only after a successful write (CLAUDE.md cache rule)
+      // Invalidate only after a successful write
       invalidateChannelPromptCache(serverId, channelDiscId);
       return true;
     } catch (error) {

@@ -266,7 +266,7 @@ function batchMergeDepthInjections(
   contextItems: StructuredContextItem[],
   injections: Array<{ depth: number; content: string; name: string }>,
 ): void {
-  // 1. Find all DIALOGUE_HISTORY items and their indices
+  // Find all DIALOGUE_HISTORY items and their indices
   const historyIndices: number[] = [];
   for (let i = 0; i < contextItems.length; i++) {
     if (contextItems[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
@@ -279,7 +279,7 @@ function batchMergeDepthInjections(
     return;
   }
 
-  // 2. Group injections by their target context index (clamped depth → actual array index)
+  // Group injections by their target context index (clamped depth → actual array index)
   const groupedByTarget = new Map<number, string[]>();
 
   for (const injection of injections) {
@@ -295,7 +295,7 @@ function batchMergeDepthInjections(
     }
   }
 
-  // 3. Append one combined [System: ...] text part per target item
+  // Append one combined [System: ...] text part per target item
   for (const [actualIndex, contents] of groupedByTarget) {
     const combinedText = contents.join("\n");
     contextItems[actualIndex].parts.push({

@@ -62,7 +62,7 @@ export async function execute(
   }
 
   try {
-    // 1. Load all server voice samples.
+    // Load all server voice samples.
     const sampleRows = await loadVoiceSamples(serverId);
 
     if (!sampleRows.length) {
@@ -75,13 +75,13 @@ export async function execute(
       return;
     }
 
-    // 2. Build select options using index as value to avoid truncation issues.
+    // Build select options using index as value to avoid truncation issues.
     const sampleSelectOptions: SelectOption[] = sampleRows.map((s, index) => ({
       label: safeSelectOptionText(s.name),
       value: index.toString(),
     }));
 
-    // 3. Show modal with string select — must be called before any defer/reply.
+    // Show modal with string select — must be called before any defer/reply.
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.speech.voice_remove.modal_title",
@@ -119,11 +119,11 @@ export async function execute(
       return;
     }
 
-    // 4. Count how many personas currently reference this sample.
+    // Count how many personas currently reference this sample.
     // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, sample_id is always present on VoiceSampleRow
     const refCount = await countPersonaVoiceSampleRefs(serverId, sampleRow.sample_id!);
 
-    // 5. Show confirm / cancel buttons.
+    // Show confirm / cancel buttons.
     const confirmEmbed = createStandardEmbed(locale, {
       titleKey: "commands.speech.voice_remove.confirm_title",
       descriptionKey: "commands.speech.voice_remove.confirm_description",
@@ -163,7 +163,7 @@ export async function execute(
       return;
     }
 
-    // 6. Deletion confirmed: clear persona assignments, remove DB row, delete file.
+    // Deletion confirmed: clear persona assignments, remove DB row, delete file.
     // biome-ignore lint/style/noNonNullAssertion: sampleRow is validated above, sample_id is always present
     await clearPersonaVoiceSampleRefs(serverId, sampleRow.sample_id!);
 

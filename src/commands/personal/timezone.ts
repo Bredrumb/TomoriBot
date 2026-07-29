@@ -46,7 +46,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Defer ephemerally before async work to prevent timeout
+  // Defer ephemerally before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const userId = userData.user_id;
@@ -60,11 +60,11 @@ export async function execute(
   }
 
   try {
-    // 2. Read the optional value; null means "clear"
+    // Read the optional value; null means "clear"
     const newOffset = interaction.options.getNumber("value", false);
     const currentOffset = userData.timezone_offset ?? null;
 
-    // 3. Handle the clear path (value omitted)
+    // Handle the clear path (value omitted)
     if (newOffset === null) {
       if (currentOffset === null) {
         await replyInfoEmbed(interaction, locale, {
@@ -93,7 +93,7 @@ export async function execute(
       return;
     }
 
-    // 4. Guard against out-of-range values (Discord enforces this, but double-check)
+    // Guard against out-of-range values (Discord enforces this, but double-check)
     if (newOffset < TIMEZONE_MIN || newOffset > TIMEZONE_MAX) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.invalid_option_title",
@@ -103,7 +103,7 @@ export async function execute(
       return;
     }
 
-    // 5. Check for no-op: already set to the same value
+    // Check for no-op: already set to the same value
     if (currentOffset === newOffset) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.timezone.already_set_title",
@@ -116,7 +116,7 @@ export async function execute(
       return;
     }
 
-    // 6. Write to database (UserRepository.update invalidates cache internally)
+    // Write to database (UserRepository.update invalidates cache internally)
     const updated = await userRepository.setTimezoneOffset(userId, newOffset);
     if (!updated) {
       const context: ErrorContext = {
@@ -138,7 +138,7 @@ export async function execute(
       return;
     }
 
-    // 7. Success — distinguish first-time set from update
+    // Success — distinguish first-time set from update
     if (currentOffset === null) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.timezone.success_new_title",

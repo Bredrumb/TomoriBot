@@ -887,7 +887,7 @@ export class GenerateImageNaiTool extends BaseTool {
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startedAtMs = Date.now();
 
-    // 1. Validate parameters
+    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -994,7 +994,7 @@ export class GenerateImageNaiTool extends BaseTool {
           getResolvedCapabilityModelId(creds, "image-nai") ?? context.tomoriState.config.nai_diffusion_model_id,
       };
 
-      // 3. Resolve the dedicated NovelAI diffusion model slot.
+      // Resolve the dedicated NovelAI diffusion model slot.
       const resolvedModel = await resolveNaiDiffusionModel(resolvedConfig);
       if (!resolvedModel) {
         return {
@@ -1058,7 +1058,7 @@ export class GenerateImageNaiTool extends BaseTool {
         );
       }
 
-      // 4. Build base scene tag list — server style tags are trusted and should
+      // Build base scene tag list — server style tags are trusted and should
       //    bypass suggest-tags normalization. Character tags are handled separately
       //    through v4_prompt.caption.char_captions when characters[] is provided.
       const effectiveImageParams = resolveNaiImageParams(context.tomoriState.config);
@@ -1078,7 +1078,7 @@ export class GenerateImageNaiTool extends BaseTool {
         .filter((t) => t.length > 0);
       const trustedTags = [...styleTags];
 
-      // 5. Resolve only the model-provided tags via suggest-tags API when enabled
+      // Resolve only the model-provided tags via suggest-tags API when enabled
       const resolvedModelTags = NAI_IMAGE_ENABLE_TAG_RESOLUTION
         ? await this.normalizeTags(modelTags, baseModelCodename, apiKey)
         : modelTags;
@@ -1174,7 +1174,7 @@ export class GenerateImageNaiTool extends BaseTool {
 
       if (isInpaintMode) {
         // ── Inpainting flow ──────────────────────────────────────────
-        // 6a. Extract source image from referenced Discord message
+        // Extract source image from referenced Discord message
         log.info(`[NAI] Inpaint mode: extracting image from message ${messageId}, target="${editTarget}"`);
 
         const extractedImages = await extractImagesFromMessage(messageId, context);
@@ -1182,7 +1182,7 @@ export class GenerateImageNaiTool extends BaseTool {
         // Use the first image found as the inpainting source
         const sourceImage = extractedImages[0];
 
-        // 6b. Resolve Google API key for Gemini segmentation
+        // Resolve Google API key for Gemini segmentation
         const googleApiKey = await this.resolveGoogleApiKey(context);
         if (!googleApiKey) {
           return {
@@ -1191,7 +1191,7 @@ export class GenerateImageNaiTool extends BaseTool {
           };
         }
 
-        // 6c. Call Gemini segmentation to generate the inpainting mask
+        // Call Gemini segmentation to generate the inpainting mask
         log.info(`[NAI] Calling Gemini segmentation for target: "${editTarget}"`);
 
         const segResult = await segmentImage(
@@ -1206,14 +1206,14 @@ export class GenerateImageNaiTool extends BaseTool {
           `[NAI] Segmentation complete: ${segResult.segmentCount} segment(s) found [${segResult.labels.join(", ")}]`,
         );
 
-        // 6d. If debug mode is enabled, DM the invoking user the mask and bbox overlay
+        // If debug mode is enabled, DM the invoking user the mask and bbox overlay
         if ((segResult.debugMaskBuffer || segResult.debugOverlayBuffer) && context.userId) {
           try {
             const debugUser = await context.client.users.fetch(context.userId);
             const debugFiles: AttachmentBuilder[] = [];
             const ts = Date.now();
 
-            // 1. Bounding box overlay on original image (most useful for verifying detection)
+            // Bounding box overlay on original image (most useful for verifying detection)
             if (segResult.debugOverlayBuffer) {
               debugFiles.push(
                 new AttachmentBuilder(segResult.debugOverlayBuffer, {
@@ -1222,7 +1222,7 @@ export class GenerateImageNaiTool extends BaseTool {
               );
             }
 
-            // 2. Raw binary mask (white = redraw region)
+            // Raw binary mask (white = redraw region)
             if (segResult.debugMaskBuffer) {
               debugFiles.push(
                 new AttachmentBuilder(segResult.debugMaskBuffer, {
@@ -1241,7 +1241,7 @@ export class GenerateImageNaiTool extends BaseTool {
           }
         }
 
-        // 6e. Generate inpainted image via NovelAI infill endpoint
+        // Generate inpainted image via NovelAI infill endpoint
         const inpaintModel = this.getInpaintingModelCodename(baseModelCodename);
 
         imageBuffer = await this.generateInpaintImage(
@@ -1259,7 +1259,7 @@ export class GenerateImageNaiTool extends BaseTool {
         log.success(`[NAI] Inpainting complete with model "${inpaintModel}"`);
       } else {
         // ── Standard generation flow ─────────────────────────────────
-        // 6. Generate image normally
+        // Generate image normally
         imageBuffer = await generateNovelAiImage({
           apiKey,
           model: baseModelCodename,
@@ -1272,7 +1272,7 @@ export class GenerateImageNaiTool extends BaseTool {
         });
       }
 
-      // 7. Send image to Discord
+      // Send image to Discord
       const filePrefix = isInpaintMode ? "nai_inpainted" : "nai_generated";
       const attachmentFilename = `${filePrefix}_${Date.now()}.png`;
       const attachment = new AttachmentBuilder(imageBuffer, {
@@ -1288,7 +1288,7 @@ export class GenerateImageNaiTool extends BaseTool {
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);
 
-      // 8. Increment quota after successful generation (server providers only)
+      // Increment quota after successful generation (server providers only)
       if (creds.source === "server") {
         await incrementImageQuota(context.tomoriState.server_id, userDiscId);
       }

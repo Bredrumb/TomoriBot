@@ -140,7 +140,7 @@ export async function execute(
             return completePersonaWorkflow();
           }
 
-          // 1. Capture the design prompt before the write, so the success
+          // Capture the design prompt before the write, so the success
           //    notice can echo it back — voice prompts are tuned by ear and
           //    effectively unrecoverable once nulled.
           const removedPreview = buildTextPreview(selectedPersona.speech_voice_design_prompt);
@@ -173,7 +173,7 @@ export async function execute(
           }
 
           invalidateTomoriStateCache(serverDiscId);
-          // 2. Show the removed prompt when there was one; fall back to the
+          // Show the removed prompt when there was one; fall back to the
           //    plain notice for personas that had nothing set.
           const hadPrompt = removedPreview.totalChars > 0;
           await message.replace(

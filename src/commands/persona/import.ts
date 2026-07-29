@@ -232,7 +232,7 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // 1. Get import type (main or alter)
+    // Get import type (main or alter)
     const importType = interaction.options.getString("type", true);
     const additionalTriggersInput = interaction.options.getString("triggers");
     const identityMode =
@@ -256,7 +256,7 @@ export async function execute(
       return;
     }
 
-    // 2. Check permissions (ManageGuild required for import in guilds only)
+    // Check permissions (ManageGuild required for import in guilds only)
     if (interaction.guild) {
       const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
@@ -275,10 +275,10 @@ export async function execute(
       }
     }
 
-    // 3. Get uploaded file attachment
+    // Get uploaded file attachment
     const attachment = interaction.options.getAttachment("file", true);
 
-    // 5. Validate file type and size
+    // Validate file type and size
     const normalizedAttachmentName = attachment.name.toLowerCase();
     const isPngImport = normalizedAttachmentName.endsWith(".png");
     const isJsonImport = normalizedAttachmentName.endsWith(".json");
@@ -311,7 +311,7 @@ export async function execute(
       return;
     }
 
-    // 6. Defer reply while we process (ephemeral so all errors are private)
+    // Defer reply while we process (ephemeral so all errors are private)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // 6.25. Reserve import operation quota (atomic check+increment for DDoS protection)
@@ -348,7 +348,7 @@ export async function execute(
       return;
     }
 
-    // 7. Download the import file with timeout
+    // Download the import file with timeout
     let importFileBuffer: Buffer;
 
     try {
@@ -390,7 +390,7 @@ export async function execute(
       return;
     }
 
-    // 8. Parse supported import file
+    // Parse supported import file
     let resolvedImport: ResolvedImportFile | null = null;
 
     if (isPngImport) {
@@ -612,7 +612,7 @@ export async function execute(
     }
     const presetData = mergedPresetValidation.data;
 
-    // 11. Branch logic based on import type
+    // Branch logic based on import type
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const isDM = !interaction.guild;
 
@@ -639,7 +639,7 @@ export async function execute(
       // Invalidate cache so next message gets fresh persona/config
       invalidateTomoriStateCache(serverDiscId);
 
-      // 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
+      // Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
       let avatarUpdateSucceeded = false;
       let avatarUpdateRateLimited = false;
       let avatarUpdateFailed = false;
@@ -727,7 +727,7 @@ export async function execute(
         }
       }
 
-      // 13. Send success message with import summary
+      // Send success message with import summary
       const itemsImported = importResult.itemsImported;
 
       if (!itemsImported) {
@@ -865,7 +865,7 @@ export async function execute(
         avatarImageBuffer,
       });
 
-      // 11a. Map any failure reason to its localized error embed.
+      // Map any failure reason to its localized error embed.
       if (!alterResult.ok) {
         const errorEmbed = new EmbedBuilder().setColor(ColorCode.ERROR);
         switch (alterResult.reason) {
@@ -904,7 +904,7 @@ export async function execute(
         return;
       }
 
-      // 11b. Build the public success embed (warn-colored when triggers are
+      // Build the public success embed (warn-colored when triggers are
       //      missing or the main persona avatar had to be inherited).
       const alterEmbedColor =
         alterResult.hasNoTriggers || alterResult.usedMainAvatarFallback ? ColorCode.WARN : ColorCode.SUCCESS;
@@ -934,7 +934,7 @@ export async function execute(
         alterSuccessEmbed.setThumbnail(alterResult.fallbackAvatarDisplayUrl);
       }
 
-      // 11c. Post the public confirmation in-channel, attaching the avatar image
+      // Post the public confirmation in-channel, attaching the avatar image
       //      when one was supplied. The persona already exists, so a missing
       //      channel only skips the public notice (the invoker still gets one).
       if (interaction.channel && "send" in interaction.channel) {
@@ -958,7 +958,7 @@ export async function execute(
         }
       }
 
-      // 11d. Send the ephemeral confirmation to the invoking user.
+      // Send the ephemeral confirmation to the invoking user.
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()

@@ -49,7 +49,7 @@ export async function execute(
       return;
     }
 
-    // 1. No-op short circuit if the value is already set explicitly
+    // No-op short circuit if the value is already set explicitly
     const currentTurns = resolveDeliberateToolContextTurns(tomoriState.config.deliberate_tool_context_turns);
     if (turns === currentTurns && tomoriState.config.deliberate_tool_context_turns !== null) {
       await replyInfoEmbed(interaction, locale, {
@@ -61,7 +61,7 @@ export async function execute(
       return;
     }
 
-    // 2. Update via per-domain repository (server_trigger_behavior_configs)
+    // Update via per-domain repository (server_trigger_behavior_configs)
     const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       deliberate_tool_context_turns: turns,
     });

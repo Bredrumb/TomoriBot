@@ -291,7 +291,7 @@ export class CooldownRepository {
     member: GuildMember | null = null,
     bypassWhitelistGate = false,
   ): Promise<CooldownCheckResult> {
-    // 1. Resolve whitelist status (includes channel-level cooldown overrides)
+    // Resolve whitelist status (includes channel-level cooldown overrides)
     const memberRoleDiscIds = member ? member.roles.cache.map((role) => role.id) : undefined;
     const channel = member?.guild.channels.cache.get(channelId);
     const isThread = channel && "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
@@ -299,7 +299,7 @@ export class CooldownRepository {
 
     const whitelistStatus = await getCachedWhitelistStatus(serverId, channelId, memberRoleDiscIds, parentChannelId);
 
-    // 2. Block if whitelist policy disallows (unless bypassed for autochat channels)
+    // Block if whitelist policy disallows (unless bypassed for autochat channels)
     if (!whitelistStatus.isTriggerAllowed && !bypassWhitelistGate) {
       return {
         isOnCooldown: true,
@@ -310,7 +310,7 @@ export class CooldownRepository {
       };
     }
 
-    // 3. Determine effective cooldown type from channel override or global config
+    // Determine effective cooldown type from channel override or global config
     const effectiveCooldownType = whitelistStatus.hasChannelCooldownOverride
       ? (whitelistStatus.channelCooldownType ?? globalCooldownType)
       : globalCooldownType;
@@ -331,7 +331,7 @@ export class CooldownRepository {
       );
     }
 
-    // 4. Run the DB check
+    // Run the DB check
     return this.checkCooldownDb(serverId, userId, channelId, effectiveCooldownType, member);
   }
 
@@ -354,7 +354,7 @@ export class CooldownRepository {
     globalCooldownLength: number,
     member: GuildMember | null = null,
   ): Promise<void> {
-    // 1. Resolve whitelist status to pick effective cooldown settings
+    // Resolve whitelist status to pick effective cooldown settings
     const memberRoleDiscIds = member ? member.roles.cache.map((role) => role.id) : undefined;
     const channel = member?.guild.channels.cache.get(channelId);
     const isThread = channel && "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
@@ -362,7 +362,7 @@ export class CooldownRepository {
 
     const whitelistStatus = await getCachedWhitelistStatus(serverId, channelId, memberRoleDiscIds, parentChannelId);
 
-    // 2. Determine effective settings
+    // Determine effective settings
     const effectiveCooldownType = whitelistStatus.hasChannelCooldownOverride
       ? (whitelistStatus.channelCooldownType ?? globalCooldownType)
       : globalCooldownType;
@@ -383,7 +383,7 @@ export class CooldownRepository {
       }
     }
 
-    // 3. Write the cooldown
+    // Write the cooldown
     await this.setCooldownDb(serverId, userId, channelId, effectiveCooldownType, effectiveCooldownLength);
   }
 

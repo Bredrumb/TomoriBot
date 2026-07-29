@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Command: /config system-prompt remove
  * Clears the custom system prompt, reverting to default DEFAULT_SYSTEM_PROMPT
  */
@@ -48,7 +48,7 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 1. Determine server context (guild or DM)
+    // Determine server context (guild or DM)
     const serverId = interaction.guildId ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverId);
 
@@ -62,7 +62,7 @@ export async function execute(
       return;
     }
 
-    // 2. Check if there's a custom prompt set
+    // Check if there's a custom prompt set
     if (!tomoriState.config.system_prompt) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.prompt.clear.no_custom_prompt_title",
@@ -74,20 +74,20 @@ export async function execute(
       return;
     }
 
-    // 3. Capture the custom prompt before the write, so the success embed can
+    // Capture the custom prompt before the write, so the success embed can
     //    echo it back. The default prompt is a constant that is always readable
     //    from source; the custom one is gone the moment this write lands.
     const removedPreview = buildTextPreview(tomoriState.config.system_prompt, EMBED_TEXT_PREVIEW_BUDGET);
 
-    // 4. Clear the system prompt (set to NULL)
+    // Clear the system prompt (set to NULL)
     await configRepository.updateChatConfig(tomoriState.server_id, {
       system_prompt: null,
     });
 
-    // 5. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverId);
 
-    // 6. Success response, echoing the removed prompt when there was one
+    // Success response, echoing the removed prompt when there was one
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.config.prompt.clear.success_title",
       descriptionKey:

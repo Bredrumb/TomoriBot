@@ -134,7 +134,7 @@ const MARKDOWN_MARKER_NAME_RE = /^(?:[-*+>#]\s|\d{1,9}[.)]\s)/;
 export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpeakerLabelMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
-  // 1. Decorated shape first ("Name (modifier):"), since the plain pattern cannot cross a "(".
+  // Decorated shape first ("Name (modifier):"), since the plain pattern cannot cross a "(".
   const decorated = new RegExp(
     `^\\s*([^\\n\\r():：]{1,${WEBHOOK_USERNAME_LIMIT}}?)\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`,
     "u",
@@ -148,7 +148,7 @@ export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpe
     return null;
   }
 
-  // 2. Plain shape ("Name:").
+  // Plain shape ("Name:").
   const plain = new RegExp(`^\\s*([^\\n\\r():：]{1,${WEBHOOK_USERNAME_LIMIT}}?)\\s*[:：][ \\t]*`, "u").exec(text);
   const plainName = plain?.[1]?.trim();
   if (plain && plainName && isPlausibleSpeakerLabelName(plainName)) {

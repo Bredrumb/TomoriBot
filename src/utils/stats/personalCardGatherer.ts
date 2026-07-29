@@ -1,6 +1,6 @@
 /**
  * personalCardGatherer.ts — data-gathering layer for the Personal "Wrapped"
- * infographic card (plans/stat-tracking.md §10, Phase 3).
+ * infographic card.
  *
  * This is the ONLY file in the infographic stack that touches the DB.
  * `gatherPersonalCardData` calls the StatsRepository read methods and returns a

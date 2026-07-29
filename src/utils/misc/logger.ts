@@ -102,10 +102,10 @@ export const buildLogStreams = (
   createFileStream: (dest: string) => pino.DestinationStream = (dest) =>
     pino.destination({ dest, append: true, mkdir: true, sync: true }),
 ): pino.StreamEntry[] | undefined => {
-  // 1. Without a file path, keep pino's default single-stream stdout construction
+  // Without a file path, keep pino's default single-stream stdout construction
   if (!filePath) return undefined;
 
-  // 2. "trace" lets every record through each sink — level filtering stays on the
+  // "trace" lets every record through each sink — level filtering stays on the
   //    logger itself so both outputs always carry identical lines
   return [
     { stream: stdoutStream, level: "trace" },
@@ -285,9 +285,9 @@ export const log = {
    * @param fields - Flat key/value map of numeric fields to attach to the log.
    */
   metric: (name: string, fields: Record<string, number | string>) => {
-    // 1. Merge the metric name into the payload so it's queryable via `filter metric = "..."`
+    // Merge the metric name into the payload so it's queryable via `filter metric = "..."`
     const payload = { metric: name, ...fields };
-    // 2. Pino adds custom level methods at runtime; TS doesn't know about them
+    // Pino adds custom level methods at runtime; TS doesn't know about them
     // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
     (pinoLogger as any).metric(payload, `metric:${name}`);
   },

@@ -72,7 +72,7 @@ export async function execute(
   try {
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "embedding");
 
-    // 1. Open the anchor message with the right initial control for the provider count.
+    // Open the anchor message with the right initial control for the provider count.
     //    The active-selection lookup only matters when a picker is actually rendered.
     const currentSelections =
       savedProviders.length > 1 ? await resolveActivePersonalProviderModelSelections(savedProviders, "embedding") : [];
@@ -92,7 +92,7 @@ export async function execute(
     anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
-    // 2. Resolve the provider and the unacknowledged button the modal opens from.
+    // Resolve the provider and the unacknowledged button the modal opens from.
     const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, ID_ROOT);
     if (!opener) return;
     const selectedProvider = opener.provider;
@@ -123,7 +123,7 @@ export async function execute(
         description: safeSelectOptionText(getLocalizedDescription(model, userData.language_pref)),
       }));
 
-    // 3. >25 models route through the anchor range selector automatically.
+    // >25 models route through the anchor range selector automatically.
     const modalPhase = await openAnchorModal(phase, opener.button, locale, {
       modalCustomId: "personal_provider_model_embedding_modal",
       modalTitleKey: "commands.model.embedding.modal_title",
@@ -140,7 +140,7 @@ export async function execute(
     });
     if (!modalPhase) return;
 
-    // 4. Acknowledge the modal submit within 3s, then render the terminal in place.
+    // Acknowledge the modal submit within 3s, then render the terminal in place.
     const work = await modalPhase.beginInPlaceWork();
     const selectedModelId = Number.parseInt(modalPhase.values[MODEL_SELECT_ID] ?? "", 10);
     const selectedModel = availableModels.find((model) => model.embedding_model_id === selectedModelId) ?? null;

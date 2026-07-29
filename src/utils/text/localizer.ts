@@ -4,7 +4,7 @@ import { Glob } from "bun";
 import type { LocaleObject, Locales, LocaleValue, LocalizerVariables } from "../../types/discord/global";
 import { log } from "../misc/logger";
 
-// 1. Initialize locales object
+// Initialize locales object
 const locales: Locales = {};
 let isInitialized = false; // Track initialization state
 
@@ -106,12 +106,12 @@ export async function initializeLocalizer(): Promise<void> {
  * @returns A new object with all strings dedented
  */
 function processLocaleStrings(obj: unknown): LocaleValue {
-  // 1. If it's a string, dedent it
+  // If it's a string, dedent it
   if (typeof obj === "string") {
     return dedent(obj);
   }
 
-  // 2. If it's an object, process each value recursively
+  // If it's an object, process each value recursively
   if (typeof obj === "object" && obj !== null) {
     // Use LocaleObject type to match our type definition
     const result: LocaleObject = {};
@@ -123,7 +123,7 @@ function processLocaleStrings(obj: unknown): LocaleValue {
     return result;
   }
 
-  // 3. For any other type (unlikely in locale files), convert to string
+  // For any other type (unlikely in locale files), convert to string
   return String(obj);
 }
 
@@ -153,12 +153,12 @@ export const localizer = (locale: string, key: string, variables: LocalizerVaria
     return key;
   }
 
-  // 1. Split the key into parts
+  // Split the key into parts
   const keys: string[] = key.split(".");
-  // 2. Start with the top-level object for the used locale
+  // Start with the top-level object for the used locale
   let translation: unknown = locales[usedLocale];
 
-  // 3. Traverse the locale object using the key parts
+  // Traverse the locale object using the key parts
   for (const k of keys) {
     if (typeof translation !== "object" || translation === null || !Object.hasOwn(translation, k)) {
       // If path is invalid, return the key
@@ -167,18 +167,18 @@ export const localizer = (locale: string, key: string, variables: LocalizerVaria
     translation = (translation as Record<string, unknown>)[k];
   }
 
-  // 4. Check if the final value is a string
+  // Check if the final value is a string
   if (typeof translation !== "string") {
     return key;
   }
 
-  // 5. Replace placeholders
+  // Replace placeholders
   let result: string = translation as string;
   for (const [placeholder, value] of Object.entries(variables)) {
     result = result.replace(new RegExp(`{${placeholder}}`, "g"), String(value));
   }
 
-  // 6. Return the final string
+  // Return the final string
   return result;
 };
 
@@ -233,15 +233,15 @@ export function getLocaleSubKeys(locale: string, path: string): string[] {
  * @returns The default bot name for the specified locale
  */
 export function getDefaultBotName(locale: string): string {
-  // 1. Try to get the bot name from the locale files first
+  // Try to get the bot name from the locale files first
   const localizedName = localizer(locale, "general.defaults.bot_name");
 
-  // 2. If we got a valid localized name (not the key itself), return it
+  // If we got a valid localized name (not the key itself), return it
   if (localizedName !== "general.defaults.bot_name") {
     return localizedName;
   }
 
-  // 3. Fallback to environment variables with hardcoded defaults
+  // Fallback to environment variables with hardcoded defaults
   // This ensures backward compatibility with existing environment variable configuration
   if (locale === "ja") {
     return process.env.DEFAULT_BOTNAME_JP || "ともり";
@@ -258,7 +258,7 @@ export function getDefaultBotName(locale: string): string {
  * @returns Array of base trigger words for the specified locale
  */
 export function getBaseTriggerWords(locale: string): string[] {
-  // 1. Check if localization system is initialized
+  // Check if localization system is initialized
   if (!isInitialized) {
     log.warn("Localization system not initialized when requesting base trigger words");
     // Fallback to environment variable or hardcoded defaults
@@ -267,11 +267,11 @@ export function getBaseTriggerWords(locale: string): string[] {
     );
   }
 
-  // 2. Determine the locale to use, falling back to 'en-US'
+  // Determine the locale to use, falling back to 'en-US'
   const fallbackLocale = "en-US";
   const usedLocale = locales[locale] ? locale : fallbackLocale;
 
-  // 3. Navigate to the base_trigger_words in the locale object
+  // Navigate to the base_trigger_words in the locale object
   const localeData = locales[usedLocale];
   if (
     localeData &&
@@ -286,13 +286,13 @@ export function getBaseTriggerWords(locale: string): string[] {
   ) {
     const triggerWords = (localeData.general.defaults as Record<string, unknown>).base_trigger_words;
 
-    // 4. Validate it's an array of strings
+    // Validate it's an array of strings
     if (Array.isArray(triggerWords) && triggerWords.every((word) => typeof word === "string")) {
       return triggerWords as string[];
     }
   }
 
-  // 5. Fallback to environment variables with hardcoded defaults
+  // Fallback to environment variables with hardcoded defaults
   // This ensures backward compatibility with existing environment variable configuration
   return (
     process.env.BASE_TRIGGER_WORDS?.split(",").map((word) => word.trim()) || ["tomori", "tomo", "トモリ", "ともり"]

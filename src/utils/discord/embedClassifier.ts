@@ -54,7 +54,7 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
   if (!embedTitle) return { isTarget: false, type: null };
 
   for (const supportedLocale of getSupportedLocales()) {
-    // 1. Memory learning titles (server + personal, all CRUD variants)
+    // Memory learning titles (server + personal, all CRUD variants)
     const memoryLearningTitles = [
       localizer(supportedLocale, "genai.self_teach.server_memory_learned_title"),
       localizer(supportedLocale, "genai.self_teach.server_memory_updated_title"),
@@ -74,7 +74,7 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
       return { isTarget: true, type: "memory_learning" };
     }
 
-    // 2. Reset and system-injection titles
+    // Reset and system-injection titles
     if (embedTitle === localizer(supportedLocale, "commands.tool.refresh.title")) {
       return { isTarget: true, type: "reset" };
     }
@@ -82,13 +82,13 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
       return { isTarget: true, type: "system_injection" };
     }
 
-    // 2b. Scene-generation status embed — surfaced to the LLM so it knows a scripted
+    // Scene-generation status embed — surfaced to the LLM so it knows a scripted
     //     scene is underway and can read the speaking order / instructions as context.
     if (embedTitle === localizer(supportedLocale, "commands.bot.generate.scene.success_title")) {
       return { isTarget: true, type: "scene_directive" };
     }
 
-    // 3. Reward/punish titles — dynamically discovered from locale sub-keys
+    // Reward/punish titles — dynamically discovered from locale sub-keys
     //    so new reward/punish commands are automatically recognized
     const rewardNames = getLocaleSubKeys(supportedLocale, "commands.reward");
     const rewardTitles = rewardNames
@@ -106,7 +106,7 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
       return { isTarget: true, type: "punish" };
     }
 
-    // 4. Compact summary (conversation + scene + manual) and compact refresh variants
+    // Compact summary (conversation + scene + manual) and compact refresh variants
     const compactSummaryTitle = localizer(supportedLocale, "commands.tool.compact.summary_title");
     const compactSummaryRefreshed = localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed");
     const compactSceneTitle = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title");
@@ -129,7 +129,7 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
       return { isTarget: true, type: "compact_summary" };
     }
 
-    // 5. Reminder/task set confirmations
+    // Reminder/task set confirmations
     if (reminderSetTitles.some((t) => matchesLocalizedTitleTemplate(t, embedTitle))) {
       return { isTarget: true, type: "reminder_set" };
     }
@@ -162,19 +162,19 @@ export type LinkPreviewResult = {
  * snapshot output matches live-chat conversion.
  */
 export function processLinkEmbed(embed: Embed): LinkPreviewResult {
-  // 1. Skip entirely empty embeds
+  // Skip entirely empty embeds
   const hasContent = embed.url || embed.title || embed.description || embed.author?.name || embed.fields.length > 0;
   if (!hasContent) {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 
-  // 2. Skip bot-produced system embeds — those are handled separately
+  // Skip bot-produced system embeds — those are handled separately
   const embedCheck = checkTargetEmbedTitle(embed.title);
   if (embedCheck.isTarget) {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 
-  // 3. Assemble text content from available fields
+  // Assemble text content from available fields
   const contentParts: string[] = [];
   if (embed.author?.name) contentParts.push(embed.author.name);
   if (embed.title) contentParts.push(embed.title);
@@ -197,7 +197,7 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
   const textContent =
     contentParts.length > 0 ? `[System: Link preview embed content: ${contentParts.join(" - ")}]` : "";
 
-  // 4. Derive image info from embed.image (preferred) or embed.thumbnail (fallback)
+  // Derive image info from embed.image (preferred) or embed.thumbnail (fallback)
   const imageInfo = embed.image?.url ? deriveEmbedImageInfo(embed.image.url, embed.image.proxyURL ?? null) : null;
   const thumbnailInfo =
     !imageInfo && embed.thumbnail?.url

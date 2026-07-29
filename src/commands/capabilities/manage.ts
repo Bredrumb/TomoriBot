@@ -1,4 +1,4 @@
-﻿import {
+import {
   EmbedBuilder,
   MessageFlags,
   type ChatInputCommandInteraction,
@@ -29,7 +29,7 @@ const PERMISSIONS_MAX_OPTIONS_PER_GROUP = 10;
 // awaitModalSubmit listeners from a previous run resolving on the same submission.
 const PERMISSIONS_CHECKBOX_ID = "config_permissions_checkbox";
 
-// Rule 21: Configure the subcommand — no options needed, UI is a checkbox modal
+// Configure the subcommand — no options needed, UI is a checkbox modal
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("manage").setDescription(localizer("en-US", "commands.capabilities.manage.description"));
 
@@ -47,11 +47,11 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 0. Scope modal custom ID to this invocation — prevents stale awaitModalSubmit
+  // Scope modal custom ID to this invocation — prevents stale awaitModalSubmit
   //    listeners from a prior (un-submitted) run resolving on this submission.
   const MODAL_CUSTOM_ID = `config_permissions_modal_${interaction.id}`;
 
-  // 1. Ensure command is run in a channel
+  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -69,7 +69,7 @@ export async function execute(
   let modalInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // 2. Load the Tomori state for this server
+    // Load the Tomori state for this server
     const guildKey = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(guildKey);
     if (!tomoriState) {
@@ -82,14 +82,14 @@ export async function execute(
       return;
     }
 
-    // 3. Determine which permissions to show (voicemessage requires ElevenLabs key)
+    // Determine which permissions to show (voicemessage requires ElevenLabs key)
     let includeElevenLabs = true;
     if (tomoriState.server_id) {
       includeElevenLabs = await hasOptApiKey(tomoriState.server_id, ELEVENLABS_SERVICE_NAME);
     }
     const activeDefinitions = getCapabilitiesManagePermissionDefinitions({ includeElevenLabs });
 
-    // 4. Build checkbox options, pre-checking currently-enabled permissions
+    // Build checkbox options, pre-checking currently-enabled permissions
     const checkboxOptions: CheckboxGroupOption[] = activeDefinitions.map((def) => ({
       label: localizer(locale, def.labelKey),
       value: def.value,
@@ -117,7 +117,7 @@ export async function execute(
       });
     }
 
-    // 5. Show the checkbox modal — first interaction acknowledgment
+    // Show the checkbox modal — first interaction acknowledgment
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -137,7 +137,7 @@ export async function execute(
     }
     modalInteraction = modalResult.interaction;
 
-    // 6. Determine which permissions changed
+    // Determine which permissions changed
     const newlyEnabled = new Set<string>();
     for (let groupIndex = 0; groupIndex < checkboxGroups.length; groupIndex++) {
       const selectedValues = modalResult.multiValues?.[`${PERMISSIONS_CHECKBOX_ID}_${groupIndex}`] ?? [];
@@ -151,7 +151,7 @@ export async function execute(
       label: localizer(locale, change.labelKey),
     }));
 
-    // 7. If nothing changed, say so and exit
+    // If nothing changed, say so and exit
     if (changes.length === 0) {
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "commands.capabilities.manage.no_changes_title",
@@ -161,7 +161,7 @@ export async function execute(
       return;
     }
 
-    // 8. Apply changed permissions to the owning split config tables.
+    // Apply changed permissions to the owning split config tables.
     const updateTargets: Array<{
       tableName: "server_member_permissions_configs" | "server_capabilities_configs";
       columns: string[];
@@ -213,10 +213,10 @@ export async function execute(
       return;
     }
 
-    // 9. Invalidate cache so next message picks up the fresh config
+    // Invalidate cache so next message picks up the fresh config
     invalidateTomoriStateCache(guildKey);
 
-    // 10. Build the success result embed listing what was enabled/disabled
+    // Build the success result embed listing what was enabled/disabled
     const enabledLabels = changes.filter((c) => c.isEnabled).map((c) => `\`${c.label}\``);
     const disabledLabels = changes.filter((c) => !c.isEnabled).map((c) => `\`${c.label}\``);
 
@@ -239,7 +239,7 @@ export async function execute(
       ],
     });
   } catch (error) {
-    // 11. Log the error with context
+    // Log the error with context
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
@@ -261,7 +261,7 @@ export async function execute(
     };
     await log.error(`Error executing /capabilities manage for user ${userData.user_disc_id}`, error as Error, context);
 
-    // 12. Inform user of unknown error
+    // Inform user of unknown error
     // Use modalInteraction (auto-deferred) if available since the original
     // interaction is consumed by promptWithRawModal's raw REST acknowledgment.
     const activeInteraction = modalInteraction ?? interaction;

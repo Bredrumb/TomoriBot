@@ -101,7 +101,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
+  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -111,7 +111,7 @@ export async function execute(
     return;
   }
 
-  // 2. Load the Tomori state for this server
+  // Load the Tomori state for this server
   const tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -132,7 +132,7 @@ export async function execute(
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "video");
     const idRoot = "model_video";
 
-    // 1. Open the anchor message with the right initial control for the provider count.
+    // Open the anchor message with the right initial control for the provider count.
     const currentVideoModel = tomoriState.config.video_model_id
       ? await llmModelRepo.loadVideoGenerationModelById(tomoriState.config.video_model_id)
       : null;
@@ -155,13 +155,13 @@ export async function execute(
     anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
-    // 2. Resolve the provider and the unacknowledged button the modal opens from.
+    // Resolve the provider and the unacknowledged button the modal opens from.
     const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
     if (!opener) return;
     const selectedProvider = opener.provider;
     const isCustom = isCustomProvider(selectedProvider);
 
-    // 3. Load this provider's video-generation models (custom + regular share the list).
+    // Load this provider's video-generation models (custom + regular share the list).
     const availableModels = (
       (await llmModelRepo.loadAvailableVideoGenerationModels(selectedProvider, false, {
         kind: "server",
@@ -186,7 +186,7 @@ export async function execute(
       return;
     }
 
-    // 4. Acquire the selected model. A custom provider with a single registered model
+    // Acquire the selected model. A custom provider with a single registered model
     //    activates directly (no modal); otherwise a string-select modal is shown in place.
     let work: PersonaWorkflowInPlacePhase;
     let chosenModel: VideoModelChoice | null;

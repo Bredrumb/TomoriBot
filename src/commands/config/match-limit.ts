@@ -38,7 +38,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
+  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -52,10 +52,10 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 2. Get the limit value from options
+    // Get the limit value from options
     const limit = interaction.options.getInteger("limit", true);
 
-    // 3. Validate range (redundant but safe)
+    // Validate range (redundant but safe)
     if (limit < MIN_LIMIT || limit > MAX_LIMIT) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.trigger-match-limit.limit.invalid_range_title",
@@ -69,7 +69,7 @@ export async function execute(
       return;
     }
 
-    // 4. Load the Tomori state for this server
+    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -80,7 +80,7 @@ export async function execute(
       return;
     }
 
-    // 5. Check if this is the same as the current limit
+    // Check if this is the same as the current limit
     const currentLimit = tomoriState.config.match_limit ?? DEFAULT_LIMIT;
     if (limit === currentLimit) {
       await replyInfoEmbed(interaction, locale, {
@@ -94,7 +94,7 @@ export async function execute(
       return;
     }
 
-    // 6. Update the limit in the database
+    // Update the limit in the database
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, { match_limit: limit });
 
     if (!updated) {
@@ -119,10 +119,10 @@ export async function execute(
       return;
     }
 
-    // 7. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // 9. Success message
+    // Success message
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.config.trigger-match-limit.limit.success_title",
       descriptionKey: "commands.config.trigger-match-limit.limit.success_description",

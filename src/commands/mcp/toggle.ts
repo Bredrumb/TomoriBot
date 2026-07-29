@@ -72,7 +72,7 @@ export async function execute(
   }
 
   try {
-    // 1. Load registered MCP servers for this guild
+    // Load registered MCP servers for this guild
     const configs = await getCachedGuildMcpConfigs(tomoriState.server_id);
     if (configs.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -84,7 +84,7 @@ export async function execute(
       return;
     }
 
-    // 2. Build select options from registered servers (show current status in description)
+    // Build select options from registered servers (show current status in description)
     const serverOptions: SelectOption[] = configs.map((config) => ({
       label: safeSelectOptionText(config.name),
       value: config.name,
@@ -93,7 +93,7 @@ export async function execute(
       ),
     }));
 
-    // 4. Show modal with server select + enable checkbox group (modal is the acknowledgment — no pre-defer)
+    // Show modal with server select + enable checkbox group (modal is the acknowledgment — no pre-defer)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -157,7 +157,7 @@ export async function execute(
     // Checkbox Group: "enable" in multiValues = enabled, absent = disabled
     const enabled = (modalResult.multiValues?.[STATE_SELECT_ID] ?? []).includes("enable");
 
-    // 5. Update DB
+    // Update DB
     const updated = await toolRepository.updateMcpServerEnabled(tomoriState.server_id, name, enabled, serverId);
     if (!updated) {
       await replyInfoEmbed(replyInteraction, locale, {
@@ -169,12 +169,12 @@ export async function execute(
       return;
     }
 
-    // 6. If disabling, disconnect from pool (cache invalidated by repository)
+    // If disabling, disconnect from pool (cache invalidated by repository)
     if (!enabled) {
       await getGuildMcpManager().disconnectGuildServer(tomoriState.server_id, name);
     }
 
-    // 8. Success
+    // Success
     const titleKey = enabled
       ? "commands.mcp.toggle.enabled_success_title"
       : "commands.mcp.toggle.disabled_success_title";

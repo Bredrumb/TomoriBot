@@ -312,10 +312,10 @@ export class StickerTool extends BaseTool {
         }
       };
 
-      // 1. First attempt: lookup in current cache
+      // First attempt: lookup in current cache
       let selectedSticker = lookupSticker();
 
-      // 2. If not found, fetch fresh from Discord API and retry (handles race conditions)
+      // If not found, fetch fresh from Discord API and retry (handles race conditions)
       if (!selectedSticker) {
         log.info(`Sticker '${normalizedStickerName || stickerId}' not in cache. Fetching fresh from Discord API...`);
 
@@ -338,7 +338,7 @@ export class StickerTool extends BaseTool {
         log.success(`Sticker '${selectedSticker.name}' (${selectedSticker.id}) found in local cache`);
       }
 
-      // 3. Success case - sticker found
+      // Success case - sticker found
       if (selectedSticker) {
         return {
           success: true,
@@ -355,7 +355,7 @@ export class StickerTool extends BaseTool {
         };
       }
 
-      // 4. Sticker not found even after refresh - inform LLM
+      // Sticker not found even after refresh - inform LLM
       log.warn(
         `Sticker '${normalizedStickerName || stickerId}' not found even after cache refresh. Sticker does not exist.`,
       );

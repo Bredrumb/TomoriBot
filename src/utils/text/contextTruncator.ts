@@ -49,11 +49,11 @@ export function truncateDialogueHistory(
   contextLength: number,
   maxCompletionTokens: number,
 ): TruncationResult {
-  // 1. Calculate the safe input budget: reserve maxCompletionTokens for output,
+  // Calculate the safe input budget: reserve maxCompletionTokens for output,
   //    then apply a 10% margin to absorb tokenizer estimation error
   const safeInputBudget = Math.floor((contextLength - maxCompletionTokens) * 0.9);
 
-  // 2. Work on a mutable copy to avoid modifying the caller's array
+  // Work on a mutable copy to avoid modifying the caller's array
   const items = [...contextItems];
   let historyPairsDropped = 0;
   const sampleItemsDropped = 0;
@@ -107,7 +107,7 @@ export function truncateDialogueHistory(
     return true;
   };
 
-  // 3. Iteratively drop context until within budget (or no droppable content remains)
+  // Iteratively drop context until within budget (or no droppable content remains)
   while (estimateInputTokens(items) > safeInputBudget) {
     if (dropOldestDroppableHistoryExchange()) {
       continue;

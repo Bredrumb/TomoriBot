@@ -391,7 +391,7 @@ export async function execute(
     additionalInstructions,
   };
 
-  // 1. Summarize the modal input so the executor can confirm what they queued at a
+  // Summarize the modal input so the executor can confirm what they queued at a
   //    glance: the per-round speaking order, the round/turn count, and any one-off
   //    instructions they supplied.
   const speakingOrder = speakers.map((speaker) => speaker.personaName).join(" → ");
@@ -410,13 +410,13 @@ export async function execute(
     );
   }
 
-  // 2. Footer shows who triggered the scene, mirroring the executor identity pattern
+  // Footer shows who triggered the scene, mirroring the executor identity pattern
   //    in /bot impersonate (guild member avatar, falling back to the global user avatar).
   const executorAvatarUrl = invokingMember
     ? invokingMember.displayAvatarURL({ size: 64, extension: "png", forceStatic: true })
     : interaction.user.displayAvatarURL({ size: 64, extension: "png", forceStatic: true });
 
-  // 3. Send the "Scene generating..." status embed as the command-execution confirmation.
+  // Send the "Scene generating..." status embed as the command-execution confirmation.
   await modalInteraction.reply({
     embeds: [
       new EmbedBuilder()

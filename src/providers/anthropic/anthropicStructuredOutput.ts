@@ -147,23 +147,23 @@ export async function callAnthropicStructuredJSON<T>(
   schemaName: string = "structured_output",
 ): Promise<StructuredOutputResult<T>> {
   try {
-    // 1. Build tool definition from schema
+    // Build tool definition from schema
     const toolDefinition = {
       name: schemaName,
       description: `Generate structured output matching the ${schemaName} schema`,
       input_schema: responseSchema,
     };
 
-    // 2. Force the model to call this specific tool
+    // Force the model to call this specific tool
     const toolChoice = {
       type: "tool" as const,
       name: schemaName,
     };
 
-    // 3. Build messages
+    // Build messages
     const { system, messages } = buildAnthropicMessages(request.systemPrompt, request.userPrompt, request.images);
 
-    // 4. Make the API call
+    // Make the API call
     const response = await callAnthropicApi(
       request.apiKey,
       request.model,
@@ -174,7 +174,7 @@ export async function callAnthropicStructuredJSON<T>(
       request.maxOutputTokens,
     );
 
-    // 5. Extract tool use content from response
+    // Extract tool use content from response
     const toolInput = extractToolUseFromResponse(response, schemaName);
     if (!toolInput) {
       log.warn("Anthropic structured JSON: No tool_use block found in response", {
@@ -187,7 +187,7 @@ export async function callAnthropicStructuredJSON<T>(
       };
     }
 
-    // 6. Validate with Zod
+    // Validate with Zod
     const validationResult = zodSchema.safeParse(toolInput);
     if (!validationResult.success) {
       log.error("Anthropic structured JSON validation failed", validationResult.error);

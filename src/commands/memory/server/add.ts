@@ -17,7 +17,7 @@ import { validateMemoryContent, getMemoryLimits } from "@/utils/misc/memoryLimit
 
 import { dedupeCaseInsensitive, getNonEmptyNumberedLines, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
-// Rule 20: Constants for modal and input IDs
+// Constants for modal and input IDs
 const MODAL_CUSTOM_ID = "teach_servermemory_add_modal";
 const MEMORY_INPUT_ID = "memory_input";
 const MEMORY_FILE_UPLOAD_ID = "server_memory_file_upload";
@@ -29,12 +29,12 @@ const MAX_TAG_LENGTH = 32;
 // Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Rule 21: Configure the subcommand
+// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.memory.server.add.description"));
 
 /**
- * Rule 1: JSDoc comment for exported function
+ * JSDoc comment for exported function
  * Adds a server memory to Tomori's knowledge for the server by inserting into the server_memories table.
  * @param _client - Discord client instance
  * @param interaction - Command interaction
@@ -47,7 +47,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a valid channel context (Rule 17)
+  // Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -66,10 +66,10 @@ export async function execute(
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // 2. Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
+    // Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
-    // 3. Check blacklisting only for guild contexts
+    // Check blacklisting only for guild contexts
     // Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
     if (interaction.guild) {
       const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
@@ -84,10 +84,10 @@ export async function execute(
       }
     }
 
-    // 4. Load server's Tomori state (Rule 17) - Still needed for server_id and config checks
+    // Load server's Tomori state - Still needed for server_id and config checks
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
 
-    // 5. Check if Tomori is set up
+    // Check if Tomori is set up
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -98,7 +98,7 @@ export async function execute(
       return;
     }
 
-    // 6. Resolve target persona (default: current main persona)
+    // Resolve target persona (default: current main persona)
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -121,7 +121,7 @@ export async function execute(
       }))
       .filter((option) => option.value !== "");
 
-    // 7. Check if server memory teaching is enabled
+    // Check if server memory teaching is enabled
     if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.memory.server.teaching_disabled_title",
@@ -132,7 +132,7 @@ export async function execute(
       return;
     }
 
-    // 8. Prompt user with persona selector + memory input in one modal
+    // Prompt user with persona selector + memory input in one modal
     modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.teach.memory.server.modal_title",
@@ -175,17 +175,17 @@ export async function execute(
       ],
     });
 
-    // 10. Handle modal outcome
+    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Server memory add modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
     }
 
-    // 11. Capture the modal submission interaction - let helper functions manage interaction state
+    // Capture the modal submission interaction - let helper functions manage interaction state
     // biome-ignore lint/style/noNonNullAssertion: Outcome 'submit' guarantees interaction
     modalSubmitInteraction = modalResult.interaction!;
 
-    // 12. Get input from modal
+    // Get input from modal
     const typedMemory = modalResult.values?.[MEMORY_INPUT_ID]?.trim() ?? "";
     const uploadedTextFile = modalResult.attachments?.[MEMORY_FILE_UPLOAD_ID];
     const rawTagsInput = modalResult.values?.[MEMORY_TAGS_INPUT_ID]?.trim() ?? "";
@@ -265,7 +265,7 @@ export async function execute(
 
     const dedupedMemories = dedupeCaseInsensitive(pendingMemories);
 
-    // 13. Validate memory content lengths
+    // Validate memory content lengths
     for (const memory of dedupedMemories) {
       const contentValidation = validateMemoryContent(memory);
       if (!contentValidation.isValid) {
@@ -331,7 +331,7 @@ export async function execute(
       return;
     }
 
-    // 14. Insert into persona-scoped server memories table
+    // Insert into persona-scoped server memories table
     let insertSuccess = true;
     if (memoriesToAdd.length === 1) {
       const insertedMemory = await serverMemoryRepository.add(
@@ -369,7 +369,7 @@ export async function execute(
     }
 
     if (!insertSuccess) {
-      // Rule 22: Log error with context
+      // Log error with context
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: targetServerId,
@@ -394,10 +394,10 @@ export async function execute(
       return;
     }
 
-    // 15. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // 16. Success! Confirm addition (Rule 12, 19)
+    // Success! Confirm addition
     const firstMemory = memoriesToAdd[0] ?? "";
     const memoryPreview = firstMemory.length > 96 ? `${firstMemory.slice(0, 96)}...` : firstMemory;
 
@@ -421,7 +421,7 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // Rule 22: Log error with context
+    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
@@ -435,8 +435,8 @@ export async function execute(
     };
     await log.error("Error in /teach servermemory command", error, context);
 
-    // Rule 12, 19: Reply with unknown error embed
-    // Determine which interaction to use (Rule 25)
+    // Reply with unknown error embed
+    // Determine which interaction to use
     const errorReplyInteraction =
       modalSubmitInteraction && (modalSubmitInteraction.replied || modalSubmitInteraction.deferred)
         ? modalSubmitInteraction

@@ -40,7 +40,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand
     .setName("generate")
     .setDescription(localizer("en-US", "commands.stats.generate.description"))
-    // 1. type (required) — determines which card is rendered.
+    // type (required) — determines which card is rendered.
     .addStringOption((option) =>
       option
         .setName("type")
@@ -52,7 +52,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           { name: localizer("en-US", "commands.stats.generate.server_option"), value: "server" },
         ),
     )
-    // 2. timeframe (optional) — defaults to all_time.
+    // timeframe (optional) — defaults to all_time.
     .addStringOption((option) =>
       option
         .setName("timeframe")
@@ -62,7 +62,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           ...TIMEFRAME_VALUES.map((value) => ({ name: localizer("en-US", `commands.choices.${value}`), value })),
         ),
     )
-    // 3. scope (optional) — only meaningful for personal cards.
+    // scope (optional) — only meaningful for personal cards.
     .addStringOption((option) =>
       option
         .setName("scope")
@@ -114,7 +114,7 @@ export async function execute(
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    // 1. Resolve the internal server id from cache.
+    // Resolve the internal server id from cache.
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
     if (!serverId) {
@@ -173,7 +173,7 @@ async function executePersonalCard(
     return;
   }
 
-  // 1. Privacy gate: fully-private users cannot generate personal cards.
+  // Privacy gate: fully-private users cannot generate personal cards.
   const privacyLevel = await getCachedPrivacyLevel(interaction.user.id);
   if (privacyLevel === PrivacyLevel.FULL) {
     // replyInfoEmbed defaults to ephemeral — no extra flag needed.
@@ -185,10 +185,10 @@ async function executePersonalCard(
     return;
   }
 
-  // 2. Acknowledge the interaction before the DB reads start.
+  // Acknowledge the interaction before the DB reads start.
   await interaction.deferReply();
 
-  // 3. Gather data. Omit serverId for global scope.
+  // Gather data. Omit serverId for global scope.
   const scopedServerId = scope === "this_server" ? serverId : undefined;
   const data = await gatherPersonalCardData({
     userId,
@@ -200,7 +200,7 @@ async function executePersonalCard(
     timeframe,
   });
 
-  // 4. Render the VNode to a PNG buffer and send as an attachment.
+  // Render the VNode to a PNG buffer and send as an attachment.
   const node = renderPersonalCard(data);
   const png = await renderCardToPng(node, CARD_W, getPersonalCardHeight(data));
   const attachment = new AttachmentBuilder(png, { name: `stats_personal_${Date.now()}.png` });
@@ -238,7 +238,7 @@ async function executePersonaCard(
     return;
   }
 
-  // 1. Guard: this server must have at least one persona to pick.
+  // Guard: this server must have at least one persona to pick.
   const personas = await getCachedAllPersonas(guild.id);
   if (personas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
@@ -317,10 +317,10 @@ async function executeServerCard(
   serverName: string,
   timeframe: Timeframe,
 ): Promise<void> {
-  // 1. Acknowledge immediately — DB reads can take a moment.
+  // Acknowledge immediately — DB reads can take a moment.
   await interaction.deferReply();
 
-  // 2. Gather + render + send.
+  // Gather + render + send.
   const guild = interaction.guild;
   if (!guild) return;
 

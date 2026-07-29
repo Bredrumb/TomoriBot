@@ -96,7 +96,7 @@ export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
 
       log.info(`Executing ${this.name} with query: ${args.query}`);
 
-      // 1. Notify the channel that a web search is in progress.
+      // Notify the channel that a web search is in progress.
       await sendToolNotice(
         context,
         "web_search",
@@ -108,7 +108,7 @@ export class InternalBraveWebSearchTool extends BaseInternalBraveSearchTool {
         "InternalBraveWebSearchTool",
       );
 
-      // 2. Forward to the underlying function implementation.
+      // Forward to the underlying function implementation.
       const enhancedContext = { ...context, serverId: this.getServerId(context) };
       const result = await brave_web_search(args, enhancedContext);
       return this.convertToToolResult(result);

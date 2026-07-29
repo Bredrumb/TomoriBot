@@ -256,7 +256,7 @@ export function hasExplicitCrossPersonaTrigger(
 
   const clientUserId = message.client.user?.id;
 
-  // 1. Bot mention or reply-to-bot triggers the main persona
+  // Bot mention or reply-to-bot triggers the main persona
   const isBotMentioned = clientUserId ? message.mentions.users.has(clientUserId) : false;
   const refMessage = message.reference?.messageId
     ? message.channel.messages.cache.get(message.reference.messageId)
@@ -266,7 +266,7 @@ export function hasExplicitCrossPersonaTrigger(
     return true;
   }
 
-  // 2. Reply to a webhook persona message triggers that persona
+  // Reply to a webhook persona message triggers that persona
   if (refMessage?.webhookId) {
     const webhookPersona =
       resolveRenderModifierSourcePersona(refMessage.author.username, personaByNickname)?.persona ??
@@ -276,7 +276,7 @@ export function hasExplicitCrossPersonaTrigger(
     }
   }
 
-  // 3. Trigger words for any persona other than the active one
+  // Trigger words for any persona other than the active one
   for (const persona of allPersonas) {
     if (persona.persona_id === activePersonaId) continue;
     const triggers = persona.trigger_words ?? [];

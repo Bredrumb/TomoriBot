@@ -52,7 +52,7 @@ async function checkMigrationPairing(): Promise<void> {
 
   let ok = true;
 
-  // 1. Every up-migration must have a paired .down.sql
+  // Every up-migration must have a paired .down.sql
   for (const stem of [...upMigrations].sort()) {
     if (!downMigrations.has(stem)) {
       console.error(`[ERROR] Missing rollback file: ${stem}.down.sql`);
@@ -60,14 +60,14 @@ async function checkMigrationPairing(): Promise<void> {
     }
   }
 
-  // 2. Warn about orphaned .down.sql files (down without an up)
+  // Warn about orphaned .down.sql files (down without an up)
   for (const stem of [...downMigrations].sort()) {
     if (!upMigrations.has(stem)) {
       console.warn(`[WARN]  Orphaned rollback file has no matching up-migration: ${stem}.down.sql`);
     }
   }
 
-  // 3. Uniqueness: no two up-migrations may share an NNN prefix.
+  // Uniqueness: no two up-migrations may share an NNN prefix.
   //    A duplicate number means the runner has to tie-break two migrations
   //    that were each authored as "the next one" — an ordering hazard and a
   //    review-clarity hazard. Group stems by their 3-digit prefix and fail on
@@ -87,7 +87,7 @@ async function checkMigrationPairing(): Promise<void> {
     }
   }
 
-  // 4. Warn about files that don't match the naming convention
+  // Warn about files that don't match the naming convention
   for (const file of unrecognised) {
     console.warn(`[WARN]  File does not match NNN_description.sql convention: ${file}`);
   }

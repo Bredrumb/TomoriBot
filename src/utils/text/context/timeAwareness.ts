@@ -68,21 +68,21 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
 
   const offsetHours = resolvePersonalTimezoneOffset(args.personalOffset, args.serverOffset);
 
-  // 1. No recorded history at all. Only the person actually addressing Tomori
+  // No recorded history at all. Only the person actually addressing Tomori
   //    gets welcomed; a silent bystander with no history is just a stranger.
   if (args.lastPreviousDayAt === null) {
     if (!isTriggerer) return null;
     return `${args.displayName} is talking to you for the very first time! If you haven't already, welcome them naturally and ask something friendly to get to know them.`;
   }
 
-  // 2. Calendar-day gap in the person's own timezone, not elapsed 24h periods.
+  // Calendar-day gap in the person's own timezone, not elapsed 24h periods.
   const nowMs = args.nowMs ?? Date.now();
   const dayGap =
     getCalendarDayWithOffset(nowMs, offsetHours) -
     getCalendarDayWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
   if (dayGap < reunionDays) return null;
 
-  // 3. Returning-user note, phrased for whether they addressed Tomori or simply
+  // Returning-user note, phrased for whether they addressed Tomori or simply
   //    reappeared in the room.
   const lastDate = formatDateWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
   return isTriggerer

@@ -62,14 +62,14 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Defer the reply before async work to prevent timeout
+  // Defer the reply before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // 2. Read the selected mode from the interaction options
+  // Read the selected mode from the interaction options
   const selectedMode = interaction.options.getString("mode", true) as DtmMode;
 
   try {
-    // 3. Update the database with the chosen mode
+    // Update the database with the chosen mode
     // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
     const ok = await userRepository.setDeliberateTriggerMode(userData.user_id!, selectedMode);
 
@@ -82,17 +82,17 @@ export async function execute(
       return;
     }
 
-    // 4. Invalidate user cache after successful write
+    // Invalidate user cache after successful write
     invalidateUserCache(userData.user_disc_id);
 
-    // 5. Map each mode to its result color for visual clarity
+    // Map each mode to its result color for visual clarity
     const colorByMode: Record<DtmMode, ColorCode> = {
       off: ColorCode.WARN,
       follow: ColorCode.INFO,
       on: ColorCode.SUCCESS,
     };
 
-    // 6. Reply with the localized result for the chosen mode
+    // Reply with the localized result for the chosen mode
     await replyInfoEmbed(interaction, locale, {
       titleKey: `commands.personal.deliberatetriggermode.${selectedMode}_title`,
       descriptionKey: `commands.personal.deliberatetriggermode.${selectedMode}_description`,

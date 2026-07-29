@@ -28,7 +28,7 @@ describe("embedWithBatchFallback", () => {
     const result = await embedWithBatchFallback(["a", "bb", "ccc"], "fake:batching-model", embed);
 
     expect(result).toEqual([[1], [2], [3]]);
-    // 1. A cooperative model must not pay for extra requests.
+    // A cooperative model must not pay for extra requests.
     expect(calls).toHaveLength(1);
   });
 
@@ -40,9 +40,9 @@ describe("embedWithBatchFallback", () => {
       singleInputEmbedder(calls),
     );
 
-    // 2. Every input still gets its own embedding, in order.
+    // Every input still gets its own embedding, in order.
     expect(result).toEqual([[1], [2], [3]]);
-    // 3. One doomed batch attempt, then one call per input.
+    // One doomed batch attempt, then one call per input.
     expect(calls[0]).toEqual(["a", "bb", "ccc"]);
     expect(calls.slice(1)).toEqual([["a"], ["bb"], ["ccc"]]);
   });
@@ -53,7 +53,7 @@ describe("embedWithBatchFallback", () => {
     await embedWithBatchFallback(["a", "bb"], modelKey, singleInputEmbedder(firstCalls));
     expect(firstCalls[0]).toEqual(["a", "bb"]);
 
-    // 4. The second run must go straight to per-input calls, with no batch attempt.
+    // The second run must go straight to per-input calls, with no batch attempt.
     const secondCalls: string[][] = [];
     const result = await embedWithBatchFallback(["x", "yy"], modelKey, singleInputEmbedder(secondCalls));
 

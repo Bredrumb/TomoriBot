@@ -71,7 +71,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
   const initialLocale = interaction.locale ?? interaction.guildLocale ?? "en-US";
 
   try {
-    // 1. Load command data on first run if cache is empty.
+    // Load command data on first run if cache is empty.
     //    loadCommandData() is single-flight: if startup registration is still
     //    loading, this awaits that same shared evaluation instead of racing a
     //    second concurrent load (which previously caused command modules to be
@@ -112,7 +112,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
       }
     }
 
-    // 2. Get command, group, and subcommand names
+    // Get command, group, and subcommand names
     const commandName = interaction.commandName; // The top-level command (category)
     const groupName = interaction.options.getSubcommandGroup(false); // The subcommand group (null for flat commands)
     const subcommandName = interaction.options.getSubcommand(false); // The specific subcommand (may be null)
@@ -120,7 +120,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
     // Guild-only subcommand restrictions are now handled at the Discord registration level
     // Commands in guild-only categories (like "server") are automatically restricted to guilds
 
-    // 3. Find the execute function
+    // Find the execute function
     const subcommandMap = executionMap.get(commandName);
     if (!subcommandMap) {
       // Top-level command not found
@@ -169,7 +169,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
 
     // --- Start of main logic execution with timeout ---
     const mainLogicPromise = async () => {
-      // 4. Check cooldowns based on the category (top-level command)
+      // Check cooldowns based on the category (top-level command)
       // Use DEFAULT_COOLDOWN if no specific cooldown is defined for this category
       const cooldownDuration =
         // biome-ignore lint/style/noNonNullAssertion: We've checked it's not null before entering this block
@@ -199,7 +199,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
       // Set new cooldown for this command category
       await setCooldown(interaction.user.id, commandName, cooldownDuration);
 
-      // 5. Get or create user data
+      // Get or create user data
       let userData: UserRow | undefined;
       const existingUser = await userRepository.loadByDiscordId(interaction.user.id);
 
@@ -235,11 +235,11 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
       // Get the final locale once user data is potentially available
       const finalLocale = userData?.language_pref ?? interaction.guildLocale ?? "en-US";
 
-      // 6. Execute command
+      // Execute command
       if (userData) {
         await executeFunction(client, interaction, userData, finalLocale);
 
-        // 6a. Record command usage (fire-and-forget so stat tracking never adds
+        // Record command usage (fire-and-forget so stat tracking never adds
         // latency to the command response). command_used is persona-agnostic, so
         // it buffers under the lineage-0 sentinel. DM commands have no guild and
         // are skipped (stat_counters.server_id is a NOT NULL FK). The single

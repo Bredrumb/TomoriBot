@@ -321,12 +321,12 @@ export async function brave_image_search(args: Record<string, unknown>, context?
 
           const imageBuffer = response.buffer;
 
-          // 3. Compress with sharp - target 7MB max to leave safety margin
+          // Compress with sharp - target 7MB max to leave safety margin
           const targetSize = BRAVE_IMAGE_COMPRESSION_TARGET_MB * 1024 * 1024;
           let quality = 80; // Start with 80% quality
           let compressedBuffer: Buffer;
 
-          // 4. Iterative compression until under target size
+          // Iterative compression until under target size
           do {
             compressedBuffer = await sharp(imageBuffer)
               .jpeg({ quality, mozjpeg: true }) // Use mozjpeg for better compression
@@ -340,7 +340,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
             quality -= 10;
           } while (quality > 20 && compressedBuffer.length > targetSize);
 
-          // 5. Check final result
+          // Check final result
           if (compressedBuffer.length > targetSize) {
             return { success: false, reason: "compression_insufficient" };
           }
@@ -372,14 +372,14 @@ export async function brave_image_search(args: Record<string, unknown>, context?
       }> => {
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
         try {
-          // 1. Quick pattern filtering for known problematic domains
+          // Quick pattern filtering for known problematic domains
           const badPatterns = [/xxx\./i, /\.onion\//i, /localhost/i, /127\.0\.0\.1/i, /192\.168\./i, /10\./i];
 
           if (badPatterns.some((pattern) => pattern.test(imageUrl))) {
             return { url: imageUrl, valid: false, reason: "blocked_domain" };
           }
 
-          // 2. Aggressive 2-second timeout for network validation
+          // Aggressive 2-second timeout for network validation
           const controller = new AbortController();
           timeoutId = setTimeout(() => controller.abort(), 2000);
 
@@ -393,7 +393,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
 
           // Check if URL is accessible and is actually an image
           if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
-            // 3. Check content size - reject tiny placeholders, compress if >8MB
+            // Check content size - reject tiny placeholders, compress if >8MB
             const contentLength = response.headers.get("content-length");
             const discordLimit = BRAVE_IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
 
@@ -444,7 +444,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
         }
       };
 
-      // 1. Validate all URLs in parallel with overall timeout guarantee
+      // Validate all URLs in parallel with overall timeout guarantee
       log.info(`Starting parallel validation of ${imageUrls.length} image URLs (2s total timeout)`);
 
       // Create a shared results array to collect partial results during timeout
@@ -541,7 +541,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
         }));
       }
 
-      // 2. Process validation results and store compressed buffers
+      // Process validation results and store compressed buffers
       const compressedImageMap = new Map<string, Buffer>();
       for (const result of validationResults) {
         if (result.valid) {
@@ -561,7 +561,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
 
       log.info(`Parallel validation complete: ${validatedUrls.length} valid, ${failedUrls.length} invalid`);
 
-      // 3. Create Discord attachments for validated URLs (using compressed buffers when available)
+      // Create Discord attachments for validated URLs (using compressed buffers when available)
       const attachmentCompressionFlags: boolean[] = [];
       for (let i = 0; i < validatedUrls.length; i++) {
         try {

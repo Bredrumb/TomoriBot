@@ -89,14 +89,14 @@ export async function execute(
   await interaction.deferReply();
 
   try {
-    // 1. Fetch the latest release from GitHub's public REST API (no auth required)
+    // Fetch the latest release from GitHub's public REST API (no auth required)
     const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
     const response = await fetch(apiUrl, {
       headers: { Accept: "application/vnd.github.v3+json" },
       signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
     });
 
-    // 2. Surface API errors (404 = no releases yet, 429 = rate limited, etc.)
+    // Surface API errors (404 = no releases yet, 429 = rate limited, etc.)
     if (!response.ok) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.update.fetch_error_title",
@@ -108,16 +108,16 @@ export async function execute(
 
     const release = (await response.json()) as GitHubRelease;
 
-    // 3. Extract image URL from the release notes before stripping image markdown.
+    // Extract image URL from the release notes before stripping image markdown.
     //    Release images are referenced inline as ![alt](url) by the release workflow.
     const imageUrl = release.body ? extractImageUrl(release.body) : null;
 
-    // 4. Clean the release notes for embed display
+    // Clean the release notes for embed display
     const description = release.body
       ? cleanReleaseNotes(release.body, locale, release.html_url)
       : localizer(locale, "commands.update.no_notes");
 
-    // 5. Build embed — matches the structure posted by the CI/CD webhook notification
+    // Build embed — matches the structure posted by the CI/CD webhook notification
     const embed = new EmbedBuilder()
       .setDescription(description)
       .setColor(ColorCode.SUCCESS)
@@ -126,18 +126,18 @@ export async function execute(
         text: localizer(locale, "commands.update.footer"),
       });
 
-    // 6. Attach the release image if one was found in the notes
+    // Attach the release image if one was found in the notes
     if (imageUrl) {
       embed.setImage(imageUrl);
     }
 
-    // 7. Build the trailing "already applied" embed
+    // Build the trailing "already applied" embed
     const appliedEmbed = new EmbedBuilder()
       .setTitle(localizer(locale, "commands.update.applied_title"))
       .setDescription(localizer(locale, "commands.update.applied_description"))
       .setColor(ColorCode.INFO);
 
-    // 8. Post both embeds publicly to the channel
+    // Post both embeds publicly to the channel
     await interaction.editReply({ embeds: [embed, appliedEmbed] });
   } catch (error) {
     const context: ErrorContext = {

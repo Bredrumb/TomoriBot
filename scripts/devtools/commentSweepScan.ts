@@ -60,7 +60,7 @@ export interface CommentSweepCandidate {
   file: string;
   kind: CommentSweepCandidateKind;
   line: number;
-  manual_review?: "jsdoc-numbering-in-tagged-block";
+  manual_review?: "jsdoc-ordered-list";
   mech_score: number;
   operation?: CommentSweepTierOneOperation;
   text: string;
@@ -567,32 +567,34 @@ function createTierOneCandidates(
   }
 
   if (comment.kind === "block" && comment.jsdoc) {
-    return [
-      ...createRuleBlockCandidates(comment, file, lines),
-      ...createNumberedJSDocCandidates(comment, file, lines),
-    ];
+    return createRuleBlockCandidates(comment, file, lines);
   }
 
   return [];
 }
 
+/**
+ * Yields the only transform a partially protected comment may receive.
+ *
+ * JSDoc numbering is excluded because it is no longer deterministic (Tier 2 judges it),
+ * and routing a protected comment into a judgment tier would reopen the locale-scanner
+ * hazard that the protection exists to close.
+ */
 function createNumberingOnlyCandidates(
   comment: CommentToken,
   file: string,
   lines: string[],
 ): CommentSweepCandidate[] {
-  if (comment.kind === "line") {
-    return NUMBERED_LINE_PATTERN.test(comment.text)
-      ? [
-          {
-            ...createCandidate(comment, "1", "line", file, lines),
-            operation: "strip-numbering",
-          },
-        ]
-      : [];
+  if (comment.kind !== "line" || !NUMBERED_LINE_PATTERN.test(comment.text)) {
+    return [];
   }
 
-  return createNumberedJSDocCandidates(comment, file, lines);
+  return [
+    {
+      ...createCandidate(comment, "1", "line", file, lines),
+      operation: "strip-numbering",
+    },
+  ];
 }
 
 function createRuleBlockCandidates(
@@ -632,26 +634,34 @@ function isRuleArtifact(file: string, text: string): boolean {
   );
 }
 
+/**
+ * Yields numbered JSDoc lines as Tier 2 judgment rows rather than Tier 1 transforms.
+ *
+ * Measured across the repository, every one of these is a block-level ordered list, not
+ * narration above the statement it describes. Several encode fallback precedence or
+ * attempt order, so dropping the ordinal changes meaning and collapses the rendered
+ * hover into one paragraph. Neither outcome satisfies Tier 1's lossless property.
+ */
 function createNumberedJSDocCandidates(
   comment: CommentToken,
   file: string,
   lines: string[],
 ): CommentSweepCandidate[] {
-  const blockLines = comment.text.split(/\r?\n/);
-  const taggedBlock = blockLines.some((line) => JSDOC_TAG_PATTERN.test(line));
-
-  return blockLines.flatMap((text, offset) => {
+  return comment.text.split(/\r?\n/).flatMap((text, offset) => {
     if (!NUMBERED_JSDOC_PATTERN.test(text)) {
       return [];
     }
-    const line = comment.line + offset;
     return [
       {
-        ...createCandidateFromLine(text.trimStart(), line, "1", "line", file, lines),
-        manual_review: taggedBlock
-          ? "jsdoc-numbering-in-tagged-block"
-          : undefined,
-        operation: "strip-numbering" as const,
+        ...createCandidateFromLine(
+          text.trimStart(),
+          comment.line + offset,
+          "2",
+          "line",
+          file,
+          lines,
+        ),
+        manual_review: "jsdoc-ordered-list" as const,
       },
     ];
   });
@@ -663,7 +673,9 @@ function createJSDocCandidates(
   lines: string[],
   tiers: Set<CommentSweepTier>,
 ): CommentSweepCandidate[] {
-  const candidates: CommentSweepCandidate[] = [];
+  const candidates: CommentSweepCandidate[] = tiers.has("2")
+    ? createNumberedJSDocCandidates(comment, file, lines)
+    : [];
 
   comment.text.split(/\r?\n/).forEach((text, offset) => {
     const trimmed = text.trimStart();

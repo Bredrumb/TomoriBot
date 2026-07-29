@@ -66,7 +66,7 @@ export async function embedWithBatchFallback(
     return embeddings;
   };
 
-  // 1. Skip the batch attempt entirely for a model already known not to honour batching.
+  // Skip the batch attempt entirely for a model already known not to honour batching.
   if (inputs.length > 1 && singleInputEmbeddingModels.has(modelKey)) {
     return await runSequentially();
   }
@@ -76,7 +76,7 @@ export async function embedWithBatchFallback(
     return embeddings;
   }
 
-  // 2. A short count on a multi-input request means the model ignored the batch rather than
+  // A short count on a multi-input request means the model ignored the batch rather than
   //    failing, so retry one input at a time instead of surfacing a mismatch the caller
   //    cannot act on. Remember the model so later batches skip straight to step 1.
   if (inputs.length > 1) {

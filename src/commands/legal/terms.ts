@@ -24,12 +24,12 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Build GitHub URL dynamically based on user's locale
+  // Build GitHub URL dynamically based on user's locale
   // Since language_pref only contains officially supported locales,
   // we can directly use it without availability checks
   const githubUrl = `https://github.com/Bredrumb/TomoriBot/blob/main/legal/${locale}/terms-of-service.md`;
 
-  // 2. Create embed with title, description, and link
+  // Create embed with title, description, and link
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.legal.terms.title"))
     .setDescription(localizer(locale, "commands.legal.terms.description_text"))
@@ -40,7 +40,7 @@ export async function execute(
     .setColor(ColorCode.INFO)
     .setTimestamp();
 
-  // 5. Send ephemeral reply
+  // Send ephemeral reply
   await interaction.reply({
     embeds: [embed],
     flags: MessageFlags.Ephemeral,

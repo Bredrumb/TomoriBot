@@ -40,7 +40,7 @@ export interface ContextItemSender {
   type: "user" | "persona";
 }
 
-// New: Define the possible metadata tags for context items (Rule 13)
+// New: Define the possible metadata tags for context items
 export enum ContextItemTag {
   // System-level instructions and configurations
   SYSTEM_INSTRUCTION_BLOCK = "system_instruction_block", // For the main consolidated system prompt

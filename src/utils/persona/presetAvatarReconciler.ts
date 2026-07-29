@@ -144,13 +144,13 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
       break;
     }
 
-    // 1. Only touch guilds the bot is actually in (and that are cached).
+    // Only touch guilds the bot is actually in (and that are cached).
     const guild = client.guilds.cache.get(target.server_disc_id);
     if (!guild) {
       continue;
     }
 
-    // 2. Resolve the shared avatar bytes to a PNG data URI (cached per URL).
+    // Resolve the shared avatar bytes to a PNG data URI (cached per URL).
     let avatarDataUri = dataUriByUrl.get(target.preset_avatar_shared_url);
     if (avatarDataUri === undefined) {
       const buffer = await loadStoredPersonaAvatarBuffer(target.preset_avatar_shared_url);
@@ -164,13 +164,13 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
       continue;
     }
 
-    // 3. Pace each PATCH to stay under the bot-wide global rate limit.
+    // Pace each PATCH to stay under the bot-wide global rate limit.
     if (processed > 0) {
       await sleep(DELAY_MS);
     }
     processed++;
 
-    // 4. Prevent race condition: check if the user customized the avatar (materializing the pointer)
+    // Prevent race condition: check if the user customized the avatar (materializing the pointer)
     // while this server was waiting in the reconciler queue.
     try {
       const isPointer = await personaRepository.isPersonaPointer(target.persona_id);
@@ -190,7 +190,7 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
 
     const result = await patchGuildAvatar(target.server_disc_id, avatarDataUri);
     if (result === "ok") {
-      // 4. Stamp the applied hash so this persona is skipped until the art changes again.
+      // Stamp the applied hash so this persona is skipped until the art changes again.
       try {
         await personaRepository.stampPointerAvatarHash(target.persona_id, target.preset_avatar_hash);
         applied++;

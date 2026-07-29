@@ -136,7 +136,7 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
 
-    // 1. Finish out a block comment that opened on a previous line.
+    // Finish out a block comment that opened on a previous line.
     if (inBlockComment) {
       const blockEnd = line.indexOf("*/");
       if (blockEnd === -1) {
@@ -146,13 +146,13 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
       line = line.slice(blockEnd + 2);
     }
 
-    // 2. Whole-line `//` comment — ignore it.
+    // Whole-line `//` comment — ignore it.
     const trimmedLine = line.trimStart();
     if (trimmedLine.startsWith("//")) {
       continue;
     }
 
-    // 3. Strip an inline/opening block comment from the remainder of the line.
+    // Strip an inline/opening block comment from the remainder of the line.
     const blockStart = line.indexOf("/*");
     if (blockStart !== -1) {
       const blockEnd = line.indexOf("*/", blockStart + 2);
@@ -165,7 +165,7 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
     }
 
     if (!inQuery) {
-      // 4. Detect the start of a `sql`/`tx` tagged template (optional `<T>` and
+      // Detect the start of a `sql`/`tx` tagged template (optional `<T>` and
       //    `await`). The leading `\b` requires a word boundary so identifiers that
       //    merely END in "sql"/"tx" (e.g. `mysql`, `someSql`) are not false-flagged.
       //    The generic group uses `[^`]` (not `[^>]`) so NESTED generics such as
@@ -178,22 +178,22 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
         const splitPoint = match.index! + match[0].length;
         const restOfLine = line.substring(splitPoint);
         if (restOfLine.includes("`")) {
-          // 4a. Single-line literal — closes on the same line.
+          // Single-line literal — closes on the same line.
           hits.push({ line: queryStartLine, query: restOfLine.split("`")[0].trim() });
         } else {
-          // 4b. Multi-line literal — start accumulating.
+          // Multi-line literal — start accumulating.
           inQuery = true;
           currentQuery = `${restOfLine}\n`;
         }
       }
     } else if (line.includes("`")) {
-      // 5. Closing backtick of a multi-line literal.
+      // Closing backtick of a multi-line literal.
       inQuery = false;
       currentQuery += line.split("`")[0];
       hits.push({ line: queryStartLine, query: currentQuery.trim() });
       currentQuery = "";
     } else {
-      // 6. Interior line of a multi-line literal.
+      // Interior line of a multi-line literal.
       currentQuery += `${line}\n`;
     }
   }
@@ -221,7 +221,7 @@ async function getFiles(dir: string): Promise<string[]> {
  * @returns Sorted, deterministic {@link SqlAuditResult}
  */
 export async function auditRawSqlBoundary(): Promise<SqlAuditResult> {
-  // 1. Collect candidate .ts files, dropping ignored paths up front.
+  // Collect candidate .ts files, dropping ignored paths up front.
   const candidateFiles: string[] = [];
   for (const dir of AUDIT_DIRS) {
     const absoluteDir = resolve(REPO_ROOT, dir);
@@ -237,7 +237,7 @@ export async function auditRawSqlBoundary(): Promise<SqlAuditResult> {
   const violations: QueryHit[] = [];
   const exemptions: ExemptQueryHit[] = [];
 
-  // 2. Scan each candidate; classify and route every hit.
+  // Scan each candidate; classify and route every hit.
   for (const absolute of candidateFiles) {
     const relativePath = toRepoRelative(absolute);
     const content = readFileSync(absolute, "utf8");
@@ -252,7 +252,7 @@ export async function auditRawSqlBoundary(): Promise<SqlAuditResult> {
     }
   }
 
-  // 3. Stable ordering so callers (and snapshots) get deterministic output.
+  // Stable ordering so callers (and snapshots) get deterministic output.
   const byLocation = (a: QueryHit, b: QueryHit) => a.file.localeCompare(b.file) || a.line - b.line;
   violations.sort(byLocation);
   exemptions.sort(byLocation);

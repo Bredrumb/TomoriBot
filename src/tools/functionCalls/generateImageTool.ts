@@ -112,15 +112,15 @@ function buildImageToolDescription(capabilities: ImageToolCapabilities): string 
  * @returns Comma/"or"-joined list, or empty string when no modes are supported
  */
 function formatModeList(modes: string[]): string {
-  // 1. Zero or one item needs no conjunction
+  // Zero or one item needs no conjunction
   if (modes.length <= 1) {
     return modes[0] ?? "";
   }
-  // 2. Two items join with a bare "or"
+  // Two items join with a bare "or"
   if (modes.length === 2) {
     return `${modes[0]} or ${modes[1]}`;
   }
-  // 3. Three or more use an Oxford-comma list
+  // Three or more use an Oxford-comma list
   return `${modes.slice(0, -1).join(", ")}, or ${modes[modes.length - 1]}`;
 }
 
@@ -134,11 +134,11 @@ function formatModeList(modes: string[]): string {
 function buildImagePromptDescription(capabilities: ImageToolCapabilities): string {
   let description =
     "Describe the desired image. Include relevant Physical Appearance context for known users/personas.";
-  // 1. Only mention inpaint guidance when the backend can inpaint
+  // Only mention inpaint guidance when the backend can inpaint
   if (capabilities.inpaint) {
     description += " For inpaint, describe only the local replacement.";
   }
-  // 2. Only mention outpaint guidance when the backend can outpaint
+  // Only mention outpaint guidance when the backend can outpaint
   if (capabilities.outpaint) {
     description += " For outpaint, describe what should continue into the new canvas.";
   }
@@ -630,7 +630,7 @@ export class GenerateImageTool extends BaseTool {
     const raw = args.target_identity ?? args.user_id;
     const collected: string[] = [];
 
-    // 1. Gather raw entries from either an array or a single string
+    // Gather raw entries from either an array or a single string
     if (Array.isArray(raw)) {
       for (const entry of raw) {
         if (typeof entry === "string") {
@@ -641,7 +641,7 @@ export class GenerateImageTool extends BaseTool {
       collected.push(raw);
     }
 
-    // 2. Trim, drop empties, and de-duplicate while preserving first-seen order
+    // Trim, drop empties, and de-duplicate while preserving first-seen order
     const seen = new Set<string>();
     const identities: string[] = [];
     for (const candidate of collected) {
@@ -1210,7 +1210,7 @@ export class GenerateImageTool extends BaseTool {
       if (allowAvatarReference) {
         const failedIdentities: string[] = [];
 
-        // 1. Resolve each requested identity to an avatar, normalizing gif → png at
+        // Resolve each requested identity to an avatar, normalizing gif → png at
         //    the URL level via forceStatic (same behavior as peek_profile_picture).
         for (const identity of targetIdentities) {
           try {
@@ -1237,7 +1237,7 @@ export class GenerateImageTool extends BaseTool {
           }
         }
 
-        // 2. Only fail outright when every reference source came up empty; otherwise
+        // Only fail outright when every reference source came up empty; otherwise
         //    continue with whatever references (message images / other avatars) resolved.
         if (failedIdentities.length > 0) {
           if (referenceImages.length === 0) {

@@ -197,7 +197,7 @@ export async function execute(
   // Unique modal ID per invocation prevents stale awaitModalSubmit collisions.
   const modalCustomId = `custom_endpoint_add_modal_${interaction.id}`;
 
-  // 1a. Capabilities with a detail modal: show it as the primary interaction response.
+  // Capabilities with a detail modal: show it as the primary interaction response.
   if (capabilityNeedsAddModal(capability)) {
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId,
@@ -327,7 +327,7 @@ export async function execute(
     return;
   }
 
-  // 1b. Image / video: show a raw modal with model_name, display_name, and workflow_json file upload.
+  // Image / video: show a raw modal with model_name, display_name, and workflow_json file upload.
   const imageVideoModalCustomId = `custom_endpoint_add_image_modal_${interaction.id}`;
   const modalResult = await promptWithRawModal(interaction, locale, {
     modalCustomId: imageVideoModalCustomId,

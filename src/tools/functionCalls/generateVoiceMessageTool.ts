@@ -430,8 +430,8 @@ export class GenerateVoiceMessageTool extends BaseTool {
     const voiceSampleId = context.tomoriState.speech_voice_sample_id ?? null;
     const voiceId = context.tomoriState.speech_voice_id?.trim() ?? "";
 
-    // 1. Try the new custom-endpoint credential path (Phase 4.1+).
-    // 2. Fall back to the legacy opt_api_keys entry for backward compatibility
+    // Try the new custom-endpoint credential path (Phase 4.1+).
+    // Fall back to the legacy opt_api_keys entry for backward compatibility
     //    during the transition window before seed backfill migration has run.
     const speechEndpoint = await resolveActiveSpeechEndpoint(context.tomoriState.server_id);
     const activeEndpointIsVoiceDesign = isVoiceDesignEndpoint(speechEndpoint?.endpoint);

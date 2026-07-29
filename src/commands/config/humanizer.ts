@@ -129,7 +129,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
+  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -139,7 +139,7 @@ export async function execute(
     return;
   }
 
-  // 2. Declare interaction handles outside try-catch for fallback error replies
+  // Declare interaction handles outside try-catch for fallback error replies
   const modalHost = interaction;
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
@@ -150,7 +150,7 @@ export async function execute(
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    // 3. Load the Tomori state for this server (Rule #17)
+    // Load the Tomori state for this server (Rule #17)
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
@@ -163,7 +163,7 @@ export async function execute(
       return;
     }
 
-    // 5a. Persona scope is fully owned by the anchor picker workflow.
+    // Persona scope is fully owned by the anchor picker workflow.
     if (scope === "persona") {
       const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
 
@@ -316,7 +316,7 @@ export async function execute(
       return;
     }
 
-    // 5b. Resolve the current value for pre-selection and "already set" comparison.
+    // Resolve the current value for pre-selection and "already set" comparison.
     // Global scope reads the raw server_chat_configs row instead of cached state:
     // the cached main persona's config.humanizer_degree may already carry a persona
     // overlay, which would mask the true server-wide value.
@@ -327,7 +327,7 @@ export async function execute(
     }
     const preselectedValue = String(currentGlobal);
 
-    // 6. Show the global-scope modal with humanizer degree selection.
+    // Show the global-scope modal with humanizer degree selection.
     const modalResult = await promptWithRawModal(modalHost, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.config.humanizer.modal_title",
@@ -343,7 +343,7 @@ export async function execute(
       ],
     });
 
-    // 7. Handle modal outcome
+    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Humanizer degree selection modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -352,15 +352,15 @@ export async function execute(
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     modalSubmitInteraction = modalResult.interaction!;
 
-    // 8a. Defer the modal submit interaction — DB write below exceeds the 3-second window
+    // Defer the modal submit interaction — DB write below exceeds the 3-second window
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedValue = modalResult.values![HUMANIZER_SELECT_ID];
 
-    // 8b. Global scope always submits a numeric degree.
+    // Global scope always submits a numeric degree.
     const humanizerValue = Number.parseInt(selectedValue, 10);
 
-    // 8c. Validate the parsed value (additional safety check)
+    // Validate the parsed value (additional safety check)
     if (Number.isNaN(humanizerValue) || humanizerValue < HUMANIZER_MIN || humanizerValue > HUMANIZER_MAX) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.operation_failed_title",
@@ -374,7 +374,7 @@ export async function execute(
       return;
     }
 
-    // 9. Check if this matches the current stored value for the chosen scope
+    // Check if this matches the current stored value for the chosen scope
     if (humanizerValue === currentGlobal) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.humanizer.already_set_title",
@@ -387,12 +387,12 @@ export async function execute(
       return;
     }
 
-    // 10. Persist to the appropriate table (Rule #4, #15)
+    // Persist to the appropriate table (Rule #4, #15)
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
       humanizer_degree: humanizerValue,
     });
 
-    // 11. Check if update succeeded
+    // Check if update succeeded
     if (!updated) {
       const context: ErrorContext = {
         personaId: tomoriState.persona_id,
@@ -420,10 +420,10 @@ export async function execute(
       return;
     }
 
-    // 12. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverDiscId);
 
-    // 13. Success message with previous → new global value.
+    // Success message with previous → new global value.
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.config.humanizer.success_title",
       descriptionKey: "commands.config.humanizer.success_description",
@@ -434,7 +434,7 @@ export async function execute(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // 14. Log error with context (Rule #22)
+    // Log error with context (Rule #22)
     // Attempt to get server/tomori IDs only once if needed
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
@@ -469,7 +469,7 @@ export async function execute(
       return;
     }
 
-    // 15. Inform user of unknown error on the most specific available interaction
+    // Inform user of unknown error on the most specific available interaction
     const replyTarget = modalSubmitInteraction ?? modalHost;
     if (!replyTarget.replied && !replyTarget.deferred) {
       await replyTarget.reply({

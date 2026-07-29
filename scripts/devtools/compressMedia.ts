@@ -87,7 +87,7 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
   const ext = extOf(file.path);
   const input = Buffer.from(await Bun.file(file.path).arrayBuffer());
 
-  // 1. Lossless at native resolution — preferred (full quality).
+  // Lossless at native resolution — preferred (full quality).
   const native = await encodeLossless(sharp(input), ext);
   if (!native) {
     return { path: file.path, newPath: file.path, oldSize: file.size, newSize: file.size, written: false, note: `no optimizer for .${ext}` };
@@ -96,7 +96,7 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
   let chosen = native;
   let downscaledTo: number | null = null;
 
-  // 2. Still over budget — downscale long edge, starting at the cap, stepping down to fit.
+  // Still over budget — downscale long edge, starting at the cap, stepping down to fit.
   if (native.length > limit) {
     const meta = await sharp(input).metadata();
     const nativeLongEdge = Math.max(meta.width ?? 0, meta.height ?? 0);
@@ -111,11 +111,11 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
         downscaledTo = cap;
       }
       if (resized && resized.length <= limit) break;
-      cap = Math.floor(cap * 0.85); // 3. shrink ~15% and retry
+      cap = Math.floor(cap * 0.85); // shrink ~15% and retry
     }
   }
 
-  // 4. Only adopt when it genuinely shrinks the file (keeps re-runs idempotent).
+  // Only adopt when it genuinely shrinks the file (keeps re-runs idempotent).
   const improved = chosen.length < file.size;
   if (improved && !dryRun) writeFileSync(file.path, chosen);
 
@@ -148,12 +148,12 @@ function rewriteSiblingReferences(filePath: string, oldName: string, newName: st
 async function runWebp(file: CompressTarget, quality: number, dryRun: boolean): Promise<Outcome> {
   const ext = extOf(file.path);
 
-  // 1. Already WebP — leave it alone (re-encoding lossy WebP each run degrades it).
+  // Already WebP — leave it alone (re-encoding lossy WebP each run degrades it).
   if (ext === "webp") {
     return { path: file.path, newPath: file.path, oldSize: file.size, newSize: file.size, written: false, note: "already webp" };
   }
 
-  // 2. Convert to WebP q90 at native resolution (showcase art is viewed full-size).
+  // Convert to WebP q90 at native resolution (showcase art is viewed full-size).
   const input = Buffer.from(await Bun.file(file.path).arrayBuffer());
   const webp = await sharp(input).webp({ quality, effort: 6 }).toBuffer();
   const newPath = file.path.replace(/\.[^.]+$/, ".webp");
@@ -162,14 +162,14 @@ async function runWebp(file: CompressTarget, quality: number, dryRun: boolean): 
 
   let refsUpdated: string[] = [];
   if (!dryRun) {
-    writeFileSync(newPath, webp); // 3. write the .webp ...
+    writeFileSync(newPath, webp); // write the .webp ...
     rmSync(file.path); //            ... and drop the old format
     refsUpdated = rewriteSiblingReferences(file.path, oldName, newName, false);
   } else {
     refsUpdated = rewriteSiblingReferences(file.path, oldName, newName, true);
   }
 
-  // 4. Derive the release tag so we can remind the user to fix the published body.
+  // Derive the release tag so we can remind the user to fix the published body.
   const tag = file.path.slice(RELEASE_PREFIX.length).split("/")[0];
 
   return {

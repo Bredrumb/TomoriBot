@@ -124,11 +124,11 @@ async function callGeminiSegmentation(
   );
 
   // Build the request following Google's spatial understanding reference:
-  // 1. Simple, direct segmentation prompt — no extra reasoning instructions
-  // 2. Text prompt BEFORE image (Gemini processes instructions better when text leads)
-  // 3. Temperature 0.5 (prevents model from looping on repeated tokens)
-  // 4. Safety settings disabled (prevents silent blocks on anime/artistic content)
-  // 5. Thinking disabled (adds latency without quality benefit for structured extraction)
+  // Simple, direct segmentation prompt — no extra reasoning instructions
+  // Text prompt BEFORE image (Gemini processes instructions better when text leads)
+  // Temperature 0.5 (prevents model from looping on repeated tokens)
+  // Safety settings disabled (prevents silent blocks on anime/artistic content)
+  // Thinking disabled (adds latency without quality benefit for structured extraction)
   const apiCallPromise = genAI.models.generateContent({
     model: NAI_SEGMENTATION_MODEL,
     contents: [
@@ -402,12 +402,12 @@ async function generateDebugOverlay(
     const bboxWidth = Math.max(x1 - x0, 1);
     const bboxHeight = Math.max(y1 - y0, 1);
 
-    // 1. Draw raw bounding box rectangle (dashed outline to distinguish from ellipse)
+    // Draw raw bounding box rectangle (dashed outline to distinguish from ellipse)
     svgElements.push(
       `<rect x="${x0}" y="${y0}" width="${bboxWidth}" height="${bboxHeight}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="6,4"/>`,
     );
 
-    // 2. Compute padded bounding box (same logic as buildBoundingBoxMask)
+    // Compute padded bounding box (same logic as buildBoundingBoxMask)
     const padX = Math.round(bboxWidth * NAI_INPAINT_PADDING);
     const padY = Math.round(bboxHeight * NAI_INPAINT_PADDING);
     const px0 = Math.max(0, x0 - padX);
@@ -417,7 +417,7 @@ async function generateDebugOverlay(
     const paddedW = px1 - px0;
     const paddedH = py1 - py0;
 
-    // 3. Draw the padded ellipse (semi-transparent fill to show coverage area)
+    // Draw the padded ellipse (semi-transparent fill to show coverage area)
     const cx = px0 + paddedW / 2;
     const cy = py0 + paddedH / 2;
     const rx = paddedW / 2;
@@ -426,7 +426,7 @@ async function generateDebugOverlay(
       `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="2"/>`,
     );
 
-    // 4. Draw label text above the bounding box
+    // Draw label text above the bounding box
     const label = segment.label || `Segment ${i + 1}`;
     // Escape XML special characters in label text
     const escapedLabel = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -467,7 +467,7 @@ export async function segmentImage(
   apiKey: string,
   isV4 = true,
 ): Promise<SegmentationResult> {
-  // 1. Get image dimensions from the source image
+  // Get image dimensions from the source image
   const imageBuffer = Buffer.from(imageBase64, "base64");
   const metadata = await sharp(imageBuffer).metadata();
 
@@ -477,15 +477,15 @@ export async function segmentImage(
 
   log.info(`Starting segmentation for "${editTarget}" on ${metadata.width}x${metadata.height} image`);
 
-  // 2. Call Gemini segmentation API
+  // Call Gemini segmentation API
   const segments = await callGeminiSegmentation(imageBase64, imageMimeType, editTarget, apiKey);
 
-  // 3. Build mask from bounding boxes (elliptical fill, quantized to latent grid)
+  // Build mask from bounding boxes (elliptical fill, quantized to latent grid)
   const maskBuffer = await buildBoundingBoxMask(segments, metadata.width, metadata.height, isV4);
 
   const maskBase64 = maskBuffer.toString("base64");
 
-  // 4. Generate debug artifacts when debug mode is enabled
+  // Generate debug artifacts when debug mode is enabled
   let debugMaskBuffer: Buffer | undefined;
   let debugOverlayBuffer: Buffer | undefined;
 

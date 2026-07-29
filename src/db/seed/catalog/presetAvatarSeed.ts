@@ -40,7 +40,7 @@ export async function seedPersonaAvatarsFromCatalog(client: SQL): Promise<void> 
  * URL + hash onto the preset row.
  */
 async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> {
-  // 1. Read + normalize the persona's avatar image to PNG. `avatarPath` is the
+  // Read + normalize the persona's avatar image to PNG. `avatarPath` is the
   //    persona's catalog directory; resolveAvatarPath picks the first image in it.
   let pngBuffer: Buffer;
   try {
@@ -51,7 +51,7 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> 
     return;
   }
 
-  // 2. Content-address the image. If the preset already references this exact
+  // Content-address the image. If the preset already references this exact
   //    content (same filename suffix), skip the (network) upload entirely.
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
   const expectedSuffix = buildPresetAvatarFilename(contentHash);
@@ -83,7 +83,7 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> 
     sharedUrl = uploadedUrl;
   }
 
-  // 3. Stamp the shared URL + version hash onto the preset row. The hash is the
+  // Stamp the shared URL + version hash onto the preset row. The hash is the
   //    fan-out gate: a changed avatar yields a new hash, so the reconciler
   //    re-PATCHes only the servers that have not yet received it.
   await client`

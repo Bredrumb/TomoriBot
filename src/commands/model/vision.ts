@@ -77,7 +77,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
+  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -87,7 +87,7 @@ export async function execute(
     return;
   }
 
-  // 2. Load the Tomori state for this server
+  // Load the Tomori state for this server
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -109,7 +109,7 @@ export async function execute(
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "vision");
     const idRoot = "model_vision";
 
-    // 1. Open the anchor message with the right initial control for the provider count.
+    // Open the anchor message with the right initial control for the provider count.
     const currentModel = tomoriState.vision_llm?.llm_codename ?? localizer(locale, "general.unknown");
     const currentProvider = tomoriState.vision_llm?.llm_provider ?? localizer(locale, "general.unknown");
     const initialPayload =
@@ -128,12 +128,12 @@ export async function execute(
     anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
-    // 2. Resolve the provider and the unacknowledged button the modal opens from.
+    // Resolve the provider and the unacknowledged button the modal opens from.
     const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
     if (!opener) return;
     const selectedProvider = opener.provider;
 
-    // 3a. Custom provider: no modal — activate the saved vision model directly.
+    // Custom provider: no modal — activate the saved vision model directly.
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
       const work = await phase.useButton(opener.button).beginInPlaceWork();
@@ -184,7 +184,7 @@ export async function execute(
       return;
     }
 
-    // 3b. Regular provider: vision-capable model picker with a "clear" option.
+    // Regular provider: vision-capable model picker with a "clear" option.
     const allModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,

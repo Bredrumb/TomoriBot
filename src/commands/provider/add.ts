@@ -74,7 +74,7 @@ export async function execute(
     return;
   }
 
-  // 1. Load already-saved providers for this server so we can mark them in the select menu
+  // Load already-saved providers for this server so we can mark them in the select menu
   const savedProviders = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
   const savedProviderNames = new Set(savedProviders.map((cfg) => cfg.provider.toLowerCase()));
 

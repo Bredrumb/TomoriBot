@@ -100,10 +100,10 @@ export class IncreaseMediaContextTool extends BaseTool {
    * @returns Promise resolving to tool result with restart signal
    */
   async execute(args: Record<string, unknown>, _context: ToolContext): Promise<ToolResult> {
-    // 1. Extract and validate parameters
+    // Extract and validate parameters
     const extendBy = (args.extend_by as number | undefined) ?? 10; // Default 10 if not provided
 
-    // 2. Calculate maximum allowed extend_by
+    // Calculate maximum allowed extend_by
     const configuredFetchLimit = normalizeMessageFetchLimit(_context.tomoriState?.config.message_fetch_limit);
     const currentMediaWindow = memoryGuard.getMediaWindow();
     const maxExtendBy = Math.max(0, configuredFetchLimit - currentMediaWindow);
@@ -132,7 +132,7 @@ export class IncreaseMediaContextTool extends BaseTool {
       };
     }
 
-    // 3. Check memory status
+    // Check memory status
     const memoryStatus = memoryGuard.checkMemory();
     if (memoryStatus.status === "critical") {
       log.warn("IncreaseMediaContextTool: Blocked due to critical memory pressure");
@@ -152,7 +152,7 @@ export class IncreaseMediaContextTool extends BaseTool {
       `IncreaseMediaContextTool: Validated request to expand media window by ${extendBy} messages. Signaling context restart.`,
     );
 
-    // 4. Return restart signal for tomoriChat.ts to handle
+    // Return restart signal for tomoriChat.ts to handle
     // tomoriChat.ts will call buildContext() again with mediaContextWindow parameter
     return {
       success: true,

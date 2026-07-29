@@ -58,10 +58,10 @@ export function reachesTestDatabase(source: string): boolean {
 export function findProcessWideMutations(source: string): string[] {
   const tokens = new Set<string>();
 
-  // 1. Bun's fake clock is process-global until reset with a bare setSystemTime().
+  // Bun's fake clock is process-global until reset with a bare setSystemTime().
   if (/\bsetSystemTime\s*\(/.test(source)) tokens.add("setSystemTime");
 
-  // 2. Assignments (not comparisons) onto globalThis or process.env.
+  // Assignments (not comparisons) onto globalThis or process.env.
   for (const match of source.matchAll(/\b(globalThis|process\.env)\.([A-Za-z_$][\w$]*)\s*=[^=]/g)) {
     tokens.add(`${match[1]}.${match[2]}`);
   }

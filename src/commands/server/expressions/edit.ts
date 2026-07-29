@@ -21,16 +21,16 @@ import { getManualEditEmotionKeys, isValidEmotionKey } from "@/types/misc/emotio
 import type { SelectOption } from "@/types/discord/modal";
 import type { ErrorContext, ServerEmojiRow, ServerStickerRow, TomoriState, UserRow } from "@/types/db/schema";
 
-// 1. Modal + component custom IDs (the helper appends a per-open nonce internally)
+// Modal + component custom IDs (the helper appends a per-open nonce internally)
 const EDIT_MODAL_CUSTOM_ID = "server_expressions_edit_modal";
 const EMOTION_INPUT_ID = "expression_emotion_input";
 const INSTRUCTIONS_INPUT_ID = "expression_instructions_input";
 
-// 2. The usage-description length is configurable so operators can tune how much
-//    guidance the model receives (CLAUDE.md rule 6 — no hardcoded operational limits).
+// The usage-description length is configurable so operators can tune how much
+//    guidance the model receives (no hardcoded operational limits).
 const INSTRUCTIONS_MAX_LENGTH = Number.parseInt(process.env.EXPRESSION_DESC_MAX_LENGTH || "500", 10);
 
-// 3. The emotion picker is a string select. Discord caps selects at 25 options, so we
+// The emotion picker is a string select. Discord caps selects at 25 options, so we
 //    offer the curated 25-key subset (getManualEditEmotionKeys) rather than all 28.
 //    Building it once at module load avoids recomputing per invocation.
 const EMOTION_SELECT_OPTIONS: SelectOption[] = getManualEditEmotionKeys().map((key) => ({
@@ -98,7 +98,7 @@ export async function execute(
   let tomoriState: TomoriState | null = null;
 
   try {
-    // 1. Guild-only command — expressions are a server resource.
+    // Guild-only command — expressions are a server resource.
     if (!interaction.guild) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.guild_only_title",
@@ -109,7 +109,7 @@ export async function execute(
       return;
     }
 
-    // 2. Editing server-wide expression data requires the Manage Server permission.
+    // Editing server-wide expression data requires the Manage Server permission.
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
@@ -121,7 +121,7 @@ export async function execute(
       return;
     }
 
-    // 3. Resolve the configured server state (also confirms Tomori is set up here).
+    // Resolve the configured server state (also confirms Tomori is set up here).
     tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -133,7 +133,7 @@ export async function execute(
       return;
     }
 
-    // 4. Normalize the raw input into the forms we may need to match against:
+    // Normalize the raw input into the forms we may need to match against:
     //    - `mention`: present when Discord auto-resolved a typed `:name:` into the
     //      rendered `<:name:id>` / `<a:name:id>` form (gives us an exact emoji ID).
     //    - `colonStripped`: bare emoji name with any surrounding colons removed.
@@ -142,7 +142,7 @@ export async function execute(
     const mention = parseEmojiMention(rawInput);
     const colonStripped = (mention?.name ?? rawInput).replace(/^:+|:+$/g, "");
 
-    // 5. Load synced emojis/stickers from the DB. These are kept current by the
+    // Load synced emojis/stickers from the DB. These are kept current by the
     //    guildEmojisUpdate / guildStickersUpdate event handlers, so a fast read is
     //    sufficient — important because we must open the modal within the 3s ack
     //    window and a deferred interaction cannot show a modal.
@@ -151,7 +151,7 @@ export async function execute(
       serverRepository.loadStickersByInternalId(tomoriState.server_id),
     ]);
 
-    // 6. Resolve the input to a single expression.
+    // Resolve the input to a single expression.
     //    - If Discord handed us an emoji mention, match by its exact Discord ID first
     //      (robust against renames), then fall back to the parsed name.
     //    - Otherwise match emojis by colon-stripped name, then stickers by raw name.
@@ -180,7 +180,7 @@ export async function execute(
       }
     }
 
-    // 7. No matching expression — guide the user and stop.
+    // No matching expression — guide the user and stop.
     if (!match) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.expressions.edit.not_found_title",
@@ -193,13 +193,13 @@ export async function execute(
       return;
     }
 
-    // 8. Derive a friendly display name and current values for the modal pre-fill.
+    // Derive a friendly display name and current values for the modal pre-fill.
     const displayName = match.type === "emoji" ? `:${match.row.emoji_name}:` : match.row.sticker_name;
     // Both row types expose emotion_key; only the description column name differs.
     const currentEmotion = match.row.emotion_key;
     const currentInstructions = match.type === "emoji" ? match.row.emoji_desc : match.row.sticker_desc;
 
-    // 9. Build the emotion picker's placeholder so it surfaces the current
+    // Build the emotion picker's placeholder so it surfaces the current
     //    classification (the select can't pre-highlight a value, and the current key
     //    may be one of the 3 omitted from the 25-option list). Pre-localizing here means
     //    the string is used verbatim by the modal builder.
@@ -207,7 +207,7 @@ export async function execute(
       current: isValidEmotionKey(currentEmotion) ? currentEmotion : "unset",
     });
 
-    // 10. Open the edit modal directly on the slash interaction (this is the ack).
+    // Open the edit modal directly on the slash interaction (this is the ack).
     //     The emotion select is OPTIONAL: leaving it untouched keeps the current key,
     //     which lets instructions-only edits preserve even the 3 omitted emotions.
     const modalResult = await promptWithRawModal(interaction, locale, {
@@ -235,7 +235,7 @@ export async function execute(
       ],
     });
 
-    // 11. User dismissed the modal or it timed out — nothing further to do.
+    // User dismissed the modal or it timed out — nothing further to do.
     if (modalResult.outcome !== "submit" || !modalResult.interaction) {
       log.info(`Server expression edit modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -247,7 +247,7 @@ export async function execute(
     // Keep the existing emotion when the picker is left untouched.
     const emotionKey = selectedEmotion || currentEmotion;
 
-    // 12. The select only offers valid keys, so emotionKey can only be invalid when the
+    // The select only offers valid keys, so emotionKey can only be invalid when the
     //     expression was never classified ("unset") AND the user left the picker blank.
     //     In that case require an explicit choice.
     if (!isValidEmotionKey(emotionKey)) {
@@ -259,7 +259,7 @@ export async function execute(
       return;
     }
 
-    // 13. Guard against whitespace-only instructions (Discord enforces "required" but
+    // Guard against whitespace-only instructions (Discord enforces "required" but
     //     allows whitespace, which we treat as empty).
     if (!instructions) {
       await replyInfoEmbed(submitted, locale, {
@@ -270,7 +270,7 @@ export async function execute(
       return;
     }
 
-    // 14. Write the new values to the correct table.
+    // Write the new values to the correct table.
     const updated =
       match.type === "emoji"
         ? await serverRepository.updateEmojiExpression(
@@ -295,15 +295,15 @@ export async function execute(
       return;
     }
 
-    // 15. Invalidate the emoji/sticker cache only AFTER a confirmed write
-    //     (CLAUDE.md rule 5 — never invalidate before the write succeeds).
+    // Invalidate the emoji/sticker cache only AFTER a confirmed write
+    //     (never invalidate before the write succeeds).
     invalidateEmojiStickerCache(tomoriState.server_id);
 
     log.success(
       `Updated ${match.type} expression "${displayName}" in server ${tomoriState.server_id} by ${userData.user_disc_id}: emotion=${emotionKey}`,
     );
 
-    // 16. Confirm success to the user.
+    // Confirm success to the user.
     await replyInfoEmbed(submitted, locale, {
       titleKey: "commands.server.expressions.edit.success_title",
       descriptionKey: "commands.server.expressions.edit.success_description",

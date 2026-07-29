@@ -178,7 +178,6 @@ export function getKayraParameters(): NovelAIParameters {
     bracket_ban: true,
     order: [2, 3, 0, 4, 1],
     stop_sequences: [],
-    // stop_sequences: [[85], [85, 23]], // \n and \n***
   };
 }
 
@@ -245,16 +244,16 @@ export function getParametersForModel(
   minP?: number,
   presetOverrides?: Partial<NovelAIParameters>,
 ): NovelAIParameters {
-  // 1. Start from model hardcoded defaults
+  // Start from model hardcoded defaults
   const params = model === "kayra-v1" || model === "llama-3-erato-v1" ? getKayraParameters() : getGlmParameters();
 
-  // 2. Merge NAI-specific preset fields (order, TFS, phrase_rep_pen, mirostat, etc.)
+  // Merge NAI-specific preset fields (order, TFS, phrase_rep_pen, mirostat, etc.)
   //    These override the hardcoded defaults but are themselves overridden by DB schema values.
   if (presetOverrides && Object.keys(presetOverrides).length > 0) {
     Object.assign(params, presetOverrides);
   }
 
-  // 3. Apply DB schema overrides (highest priority — always win if non-neutral)
+  // Apply DB schema overrides (highest priority — always win if non-neutral)
   // Override temperature if provided (convert from Gemini scale to NovelAI scale)
   if (temperature !== undefined) {
     params.temperature = convertTemperatureToNovelAI(temperature, model);

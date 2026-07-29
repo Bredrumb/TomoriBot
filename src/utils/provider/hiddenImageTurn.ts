@@ -142,7 +142,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     internalUserId,
   } = params;
 
-  // 1. Verify the active model supports function calling — required for tool-based generation.
+  // Verify the active model supports function calling — required for tool-based generation.
   if (!tomoriState.llm.has_tools) {
     return {
       success: false,
@@ -151,7 +151,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  // 2. Decrypt the API key.
+  // Decrypt the API key.
   const decryptedApiKey = await decryptApiKey(
     // biome-ignore lint/style/noNonNullAssertion: api_key presence was validated by the command before invoking this helper
     tomoriState.config.api_key!,
@@ -161,7 +161,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     return { success: false, error: "Failed to decrypt API key." };
   }
 
-  // 3. Fetch recent channel history and convert to SimplifiedMessageForContext[].
+  // Fetch recent channel history and convert to SimplifiedMessageForContext[].
   const rawMessages = await channel.messages.fetch({
     limit: BOT_GENERATE_IMAGE_HISTORY_LIMIT,
   });
@@ -199,7 +199,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       videoAttachments: [], // Skip video processing for the hidden agent
     });
 
-    // 2. Collect human user IDs for the users-in-conversation block.
+    // Collect human user IDs for the users-in-conversation block.
     if (!msg.author.bot && !msg.webhookId) {
       userListSet.add(authorId);
     }
@@ -220,7 +220,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   const interactingMember = guild.members.cache.get(interactingUserId);
   const triggererName = stripBridgePrefix(interactingMember?.displayName ?? interactingUserId);
 
-  // 4. Build full bot context using the standard context pipeline.
+  // Build full bot context using the standard context pipeline.
   let contextItems: StructuredContextItem[];
   let messageIdMap: ToolContext["messageIdMap"];
   try {
@@ -271,7 +271,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  // 5. Append the image agent directive as the final user message.
+  // Append the image agent directive as the final user message.
   //    This replaces the old structured-output planner — the model itself plans
   //    the image prompt using the full scene context it now sees above.
   // Build the tool call instruction dynamically based on the selected backend.
@@ -311,7 +311,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     llm: mediaResolutionLlm,
   });
 
-  // 6. Set up streaming context flags for the hidden turn.
+  // Set up streaming context flags for the hidden turn.
   const targetToolName = backend === "current_provider" ? "generate_image" : "generate_image_nai";
 
   const streamingContext: StreamingContext = {
@@ -327,7 +327,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     messageIdMap,
   };
 
-  // 7. Get provider and create config.
+  // Get provider and create config.
   let provider: Awaited<ReturnType<typeof getProviderForTomori>>;
   try {
     provider = await getProviderForTomori(tomoriState);
@@ -355,7 +355,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  // 8. Run the simplified tool loop.
+  // Run the simplified tool loop.
   //    We mimic the structure of tomoriChat's streaming loop but stripped down to
   //    only what a hidden image agent needs: stream → execute tool → check endTurn.
   const functionInteractionHistory: Array<{
@@ -391,7 +391,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   for (let i = 0; i < BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS; i++) {
     log.info(`[Hidden Image Agent] Iteration ${i + 1}/${BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS}`);
 
-    // 8a. Stream one LLM turn.
+    // Stream one LLM turn.
     // No per-stream timeout — normal chat (tomoriChat.ts) also has none.
     // Protection against infinite loops comes from BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS.
     let streamResult: Awaited<ReturnType<typeof provider.streamToDiscord>>;
@@ -419,7 +419,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       return { success: false, error: `Streaming error: ${msg}` };
     }
 
-    // 8b. Handle stream result.
+    // Handle stream result.
     if (streamResult.status === "function_call") {
       if (!streamResult.data) {
         log.error("[Hidden Image Agent] function_call status received without data.");
@@ -430,7 +430,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       const funcName = funcCall.name?.trim() ?? "";
       log.info(`[Hidden Image Agent] Model called tool: ${funcName}`);
 
-      // 8c. Execute the tool.
+      // Execute the tool.
       const toolResult = await ToolRegistry.executeTool(funcName, funcCall.args || {}, toolContext);
       log.info(
         `[Hidden Image Agent] Tool "${funcName}" ${toolResult.success ? "succeeded" : "failed"}: ${toolResult.message ?? toolResult.error ?? ""}`,
@@ -459,7 +459,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
         preToolCallTextParts: preToolCallText ? [{ type: "text", text: preToolCallText }] : undefined,
       });
 
-      // 8d. endTurn from the image tool means success — exit immediately.
+      // endTurn from the image tool means success — exit immediately.
       if (toolResult.endTurn) {
         if (toolResult.success) {
           log.info(`[Hidden Image Agent] Image tool "${funcName}" completed successfully — ending hidden turn.`);

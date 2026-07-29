@@ -222,7 +222,7 @@ class GuildMcpManager {
     const executionStartTime = Date.now();
 
     try {
-      // 1. Find the connection that owns this function
+      // Find the connection that owns this function
       const conn = await this.findConnectionForFunction(serverId, functionName);
       if (!conn) {
         return {
@@ -240,10 +240,10 @@ class GuildMcpManager {
         };
       }
 
-      // 2. Update last-used timestamp (keeps the connection alive)
+      // Update last-used timestamp (keeps the connection alive)
       conn.lastUsedAt = Date.now();
 
-      // 3. Send a user-facing embed to show the MCP tool is being invoked
+      // Send a user-facing embed to show the MCP tool is being invoked
       if (context?.channel && context.locale) {
         try {
           if (functionName === "fetch") {
@@ -273,7 +273,7 @@ class GuildMcpManager {
         }
       }
 
-      // 4. Execute the function via the CallableTool
+      // Execute the function via the CallableTool
       log.info(`[GuildMcpManager] Executing guild MCP function: ${functionName} (server: ${conn.name})`);
 
       const callableTool = conn.callableTool as CallableTool;
@@ -284,7 +284,7 @@ class GuildMcpManager {
         ),
       ]);
 
-      // 5. Process the result using default MCP processing
+      // Process the result using default MCP processing
       if (mcpResult && Array.isArray(mcpResult) && mcpResult.length > 0) {
         const firstResult = mcpResult[0] as MCPServerResponse;
         return this.processDefaultResult(functionName, firstResult, conn.name, executionStartTime, context);
@@ -393,7 +393,7 @@ class GuildMcpManager {
       try {
         await client?.close();
       } catch {
-        /* ignore */
+        // ignore
       }
 
       return {
@@ -523,10 +523,10 @@ class GuildMcpManager {
     this.connectingKeys.add(key);
 
     try {
-      // 1. Decrypt auth token if present
+      // Decrypt auth token if present
       const authToken = await toolRepository.decryptMcpAuthToken(config);
 
-      // 2. Connect with transport fallback (fresh client per attempt) + timeout
+      // Connect with transport fallback (fresh client per attempt) + timeout
       const client = await this.connectWithFallback(
         `tomoribot-guild-${config.server_id}-${config.name}`,
         config.url,
@@ -534,14 +534,14 @@ class GuildMcpManager {
         config.name,
       );
 
-      // 3. Create CallableTool via mcpToTool (same as global MCP servers)
+      // Create CallableTool via mcpToTool (same as global MCP servers)
       const callableTool = mcpToTool(client);
 
-      // 4. Discover function names
+      // Discover function names
       const toolResult = await client.listTools();
       const functionNames = toolResult.tools.map((t) => t.name);
 
-      // 5. Build connection entry
+      // Build connection entry
       const conn: GuildMCPConnection = {
         guildMcpId: config.guild_mcp_id ?? 0,
         serverId: config.server_id,
@@ -609,7 +609,7 @@ class GuildMcpManager {
     // a failed/timed-out connect, which previously broke the SSE fallback outright.
     const errors: string[] = [];
 
-    // 1. Try Smithery Connect for *.run.tools URLs
+    // Try Smithery Connect for *.run.tools URLs
     if (isSmitheryUrl(url) && authToken) {
       const client = this.newMcpClient(clientName);
       try {
@@ -642,7 +642,7 @@ class GuildMcpManager {
       redirect: "error" as const,
     };
 
-    // 2. Try StreamableHTTP (modern MCP transport)
+    // Try StreamableHTTP (modern MCP transport)
     {
       const client = this.newMcpClient(clientName);
       try {
@@ -661,7 +661,7 @@ class GuildMcpManager {
       }
     }
 
-    // 3. Fall back to SSE transport
+    // Fall back to SSE transport
     {
       const client = this.newMcpClient(clientName);
       try {
@@ -721,7 +721,7 @@ class GuildMcpManager {
     try {
       await client.close();
     } catch {
-      /* ignore — the client may have no active transport to close */
+      // ignore — the client may have no active transport to close
     }
   }
 
@@ -729,14 +729,14 @@ class GuildMcpManager {
    * Find the connection that owns a given function name for a specific server.
    */
   private async findConnectionForFunction(serverId: number, functionName: string): Promise<GuildMCPConnection | null> {
-    // 1. Check in-pool connections first (fast path)
+    // Check in-pool connections first (fast path)
     for (const conn of this.pool.values()) {
       if (conn.serverId === serverId && conn.functionNames.includes(functionName)) {
         return conn;
       }
     }
 
-    // 2. Not found in pool — try lazy-connecting missing servers
+    // Not found in pool — try lazy-connecting missing servers
     const configs = await getCachedEnabledGuildMcpConfigs(serverId);
     for (const config of configs) {
       const key = this.poolKey(serverId, config.name);

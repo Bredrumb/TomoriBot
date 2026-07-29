@@ -38,19 +38,19 @@ export async function checkUserDailyQuota(
   userDiscId: string,
   config: ImageQuotaConfigRow,
 ): Promise<QuotaCheckResult> {
-  // 1. If daily user quota is 0 (unlimited), allow
+  // If daily user quota is 0 (unlimited), allow
   if (config.daily_user_quota === 0) {
     return { allowed: true };
   }
 
   try {
-    // 2. Get current date in YYYY-MM-DD format (server's local date)
+    // Get current date in YYYY-MM-DD format (server's local date)
     const today = new Date().toISOString().split("T")[0];
 
-    // 3. Get or create user's quota record for today
+    // Get or create user's quota record for today
     const userQuota = await touchUserImageQuota(serverId, userDiscId, today);
 
-    // 4. Check if user has exceeded their daily quota
+    // Check if user has exceeded their daily quota
     const remaining = config.daily_user_quota - userQuota.usage_count;
 
     if (remaining <= 0) {
@@ -66,7 +66,7 @@ export async function checkUserDailyQuota(
       };
     }
 
-    // 5. User has remaining quota
+    // User has remaining quota
     return {
       allowed: true,
       userRemaining: remaining,
@@ -83,16 +83,16 @@ export async function checkUserDailyQuota(
  * Returns remaining quota and whether generation is allowed
  */
 export async function checkServerwideQuota(serverId: number, config: ImageQuotaConfigRow): Promise<QuotaCheckResult> {
-  // 1. If serverwide quota is 0 (unlimited), allow
+  // If serverwide quota is 0 (unlimited), allow
   if (config.serverwide_quota === 0) {
     return { allowed: true };
   }
 
   try {
-    // 2. Get or create server-wide quota record
+    // Get or create server-wide quota record
     const serverwideQuota = await touchServerwideImageQuota(serverId, config.serverwide_quota_resets_in);
 
-    // 3. Check if quota period has expired (needs reset)
+    // Check if quota period has expired (needs reset)
     const now = new Date();
     const periodEnd = new Date(serverwideQuota.quota_period_end);
 
@@ -107,7 +107,7 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
       };
     }
 
-    // 4. Check if server has exceeded its quota
+    // Check if server has exceeded its quota
     const remaining = config.serverwide_quota - serverwideQuota.usage_count;
 
     if (remaining <= 0) {
@@ -119,7 +119,7 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
       };
     }
 
-    // 5. Server has remaining quota
+    // Server has remaining quota
     return {
       allowed: true,
       serverwideRemaining: remaining,
@@ -138,23 +138,23 @@ export async function checkServerwideQuota(serverId: number, config: ImageQuotaC
  */
 export async function checkImageQuota(serverId: number, userDiscId: string): Promise<QuotaCheckResult> {
   try {
-    // 1. Get quota configuration
+    // Get quota configuration
     const config = await getQuotaConfig(serverId);
 
-    // 2. Check user daily quota first (most common limit)
+    // Check user daily quota first (most common limit)
     // Note: daily_user_quota === 0 means unlimited (handled inside checkUserDailyQuota)
     const userCheck = await checkUserDailyQuota(serverId, userDiscId, config);
     if (!userCheck.allowed) {
       return userCheck;
     }
 
-    // 4. Check server-wide quota
+    // Check server-wide quota
     const serverwideCheck = await checkServerwideQuota(serverId, config);
     if (!serverwideCheck.allowed) {
       return serverwideCheck;
     }
 
-    // 5. Both checks passed, combine remaining counts
+    // Both checks passed, combine remaining counts
     return {
       allowed: true,
       userRemaining: userCheck.userRemaining,

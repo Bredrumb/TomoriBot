@@ -36,11 +36,11 @@ export async function execute(
   // Guild guaranteed by command loader's server-category gate
   const guildId = interaction.guild?.id ?? "";
 
-  // 1. Defer reply before any async work
+  // Defer reply before any async work
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 2. Load tomori state
+    // Load tomori state
     const tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -51,10 +51,10 @@ export async function execute(
       return;
     }
 
-    // 3. Toggle current value
+    // Toggle current value
     const newValue = !tomoriState.config.deliberate_tool_mode;
 
-    // 4. Update via per-domain repository (writes to server_trigger_behavior_configs)
+    // Update via per-domain repository (writes to server_trigger_behavior_configs)
     const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       deliberate_tool_mode: newValue,
     });
@@ -85,10 +85,10 @@ export async function execute(
       return;
     }
 
-    // 5. Invalidate cache only after successful write
+    // Invalidate cache only after successful write
     invalidateTomoriStateCache(guildId);
 
-    // 6. Send confirmation
+    // Send confirmation
     await replyInfoEmbed(interaction, locale, {
       titleKey: newValue
         ? "commands.server.deliberatetoolmode.enabled_title"

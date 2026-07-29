@@ -132,7 +132,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // 1. The unified `web_search` tool is gated centrally in `availability.ts`
+      // The unified `web_search` tool is gated centrally in `availability.ts`
       //    via its `requiresFeatureFlag = "web_search"`. No per-adapter Brave-key
       //    filtering needed here anymore — the dispatcher inside the tool itself
       //    decides which engine (Brave/DDG/Felo) serves the request at call time.
@@ -141,7 +141,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
         log.info(`Anthropic adapter: Converted ${builtInTools.length} built-in tools`);
       }
 
-      // 4. Add global MCP tools
+      // Add global MCP tools
       const mcpManager = getMCPManager();
       if (mcpManager.isReady() && allowedMCPFunctions) {
         let addedMCPToolsCount = 0;
@@ -169,7 +169,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
               continue;
             }
 
-            // 5. Convert MCP declarations to Anthropic format
+            // Convert MCP declarations to Anthropic format
             for (const declaration of declarations) {
               const anthropicDeclaration: Record<string, unknown> = {
                 name: declaration.name,
@@ -198,7 +198,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
         log.info(`Anthropic adapter: Added ${addedMCPToolsCount} MCP tools using centralized filtering`);
       }
 
-      // 6. Add guild MCP tools (per-guild remote servers)
+      // Add guild MCP tools (per-guild remote servers)
       if (serverId && allowedMCPFunctions) {
         try {
           const guildMcpManager = getGuildMcpManager();

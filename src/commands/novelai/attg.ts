@@ -65,7 +65,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
+  // Ensure command is run in a guild
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -84,7 +84,7 @@ export async function execute(
   } = { message: null, selectedPersona: null };
 
   try {
-    // 2. Load all personas for the server
+    // Load all personas for the server
     const allPersonas = await personaRepository.loadAllForServer(guildId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {

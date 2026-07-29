@@ -184,34 +184,34 @@ const INTERNET_EXPRESSIONS = new Set([
  * @returns Humanized text with simplified punctuation and preserved code blocks
  */
 export function humanizeString(text: string): string {
-  // 1. First, protect all URLs from any transformations
+  // First, protect all URLs from any transformations
   const { protectedText: urlProtectedText, urls } = detectAndProtectURLs(text);
 
-  // 2. Store code blocks and replace with placeholders
+  // Store code blocks and replace with placeholders
   const codeBlocks: string[] = [];
   const inlineCode: string[] = [];
   const senderStrings: string[] = [];
 
-  // 3. Replace code blocks (```) with placeholders
+  // Replace code blocks (```) with placeholders
   let processedText = urlProtectedText.replace(/```[\s\S]*?```/g, (match) => {
     codeBlocks.push(match);
     return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
   });
 
-  // 3. Replace inline code (`) with placeholders
+  // Replace inline code (`) with placeholders
   // Look for inline code that contains alphanumeric characters or common code symbols
   processedText = processedText.replace(/`[\w\s()[\]{}.,:;=+\-*/<>!?#$%^&|~\\]+`/g, (match) => {
     inlineCode.push(match);
     return `__INLINE_CODE_${inlineCode.length - 1}__`;
   });
 
-  // 4. Replace sender strings with placeholders
+  // Replace sender strings with placeholders
   processedText = processedText.replace(/((?:\([\w\s]+\)|[\w\s]+):)/g, (match) => {
     senderStrings.push(match);
     return `__SENDER_${senderStrings.length - 1}__`;
   });
 
-  // 5. Apply lowercase transformation to text outside code blocks,
+  // Apply lowercase transformation to text outside code blocks,
   //    now including hyphenated words like "E-ew" or "D-don't" as single words
   processedText = processedText.replace(/\b([A-Za-z][A-Za-z'-]*)\b/g, (word) => {
     // 5.1 Check for all-uppercase acronyms (allow hyphens in acronyms if needed)
@@ -225,10 +225,10 @@ export function humanizeString(text: string): string {
     return isAcronym || isInternet || isSingleLetter ? word : word.toLowerCase();
   });
 
-  // 6. Remove commas and semicolons but keep question marks and exclamation points
+  // Remove commas and semicolons but keep question marks and exclamation points
   processedText = processedText.replace(/[;,]/g, "");
 
-  // 7. Restore placeholders in reverse order to avoid index issues
+  // Restore placeholders in reverse order to avoid index issues
   for (let i = senderStrings.length - 1; i >= 0; i--) {
     processedText = processedText.replace(`__SENDER_${i}__`, senderStrings[i]);
   }

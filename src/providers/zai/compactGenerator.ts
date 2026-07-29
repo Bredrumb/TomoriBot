@@ -38,14 +38,14 @@ export async function generateConversationSummaryZai(
     // Strip the zai/ prefix so the API receives the raw model name
     const apiModel = toZaiApiModelName(request.model);
 
-    // 1. Build the message array
+    // Build the message array
     const messages: Array<Record<string, unknown>> = [];
     if (request.systemPrompt) {
       messages.push({ role: "system", content: request.systemPrompt });
     }
     messages.push({ role: "user", content: request.userPrompt });
 
-    // 2. Build the request body
+    // Build the request body
     const body: Record<string, unknown> = {
       model: apiModel,
       messages,
@@ -53,12 +53,12 @@ export async function generateConversationSummaryZai(
       stream: false,
     };
 
-    // 3. Skip temperature for reasoning models (they don't support it)
+    // Skip temperature for reasoning models (they don't support it)
     if (!ZAI_REASONING_MODELS.includes(apiModel)) {
       body.temperature = request.temperature ?? 0.7;
     }
 
-    // 4. Send the request
+    // Send the request
     const response = await fetch(endpointUrl ?? ZAI_GENERAL_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -83,7 +83,7 @@ export async function generateConversationSummaryZai(
       };
     }
 
-    // 5. Extract the response text
+    // Extract the response text
     const result = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };

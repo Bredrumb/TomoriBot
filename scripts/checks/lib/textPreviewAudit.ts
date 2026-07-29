@@ -179,7 +179,7 @@ export function flattenLocale(node: unknown, path: string[], out: Map<string, st
 export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   const violations: TextPreviewViolation[] = [];
 
-  // 1. Flatten every audited locale so each string carries its dotted key.
+  // Flatten every audited locale so each string carries its dotted key.
   //    Locales load concurrently — this runs inside `bun run vl`'s shared unit
   //    lane, so avoidable serial I/O lands directly on the critical path.
   const loaded = await Promise.all(
@@ -192,12 +192,12 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
     perLocale.set(locale, flat);
   }
 
-  // 2. Rule 1 runs per locale — a translation must not reintroduce it alone.
+  // Rule 1 runs per locale — a translation must not reintroduce it alone.
   for (const [locale, flat] of perLocale) {
     for (const [key, value] of flat) violations.push(...scanBakedEllipsis(key, value, locale));
   }
 
-  // 3. Load non-locale sources once for rule 2's consumer lookup.
+  // Load non-locale sources once for rule 2's consumer lookup.
   const sourceFiles = (await Array.fromAsync(new Glob("src/**/*.ts").scan(TEXT_PREVIEW_REPO_ROOT))).filter(
     (file) => !file.replaceAll("\\", "/").includes("src/locales/"),
   );
@@ -210,7 +210,7 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
     ),
   );
 
-  // 4. Rule 2 is structural, so the reference locale alone drives it.
+  // Rule 2 is structural, so the reference locale alone drives it.
   const reference = perLocale.get(AUDITED_LOCALES[0]) ?? new Map<string, string>();
   for (const [key, value] of reference) violations.push(...scanFencedPlaceholderUsage(key, value, sources));
 

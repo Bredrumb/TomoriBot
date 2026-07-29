@@ -415,7 +415,7 @@ async function executeToolCall(
     abortSignal: turnAbortSignal,
   };
 
-  // 1. Deliberate-tool-mode allowlist enforcement. When mode is active and
+  // Deliberate-tool-mode allowlist enforcement. When mode is active and
   // the model attempts a tool that wasn't exposed for this turn, short-circuit
   // with a synthetic failure response (visible to the model) so it can adapt.
   const allowedNames = params.context.streamingContext.deliberateToolAllowedNames;
@@ -528,7 +528,7 @@ async function executeToolCall(
     await emitFailedToolCallThoughtLog(toolContext, functionName, functionCall.args ?? {}, toolResult);
   }
 
-  // 2. When deliberate-tool-mode admitted the tool via a specific trigger,
+  // When deliberate-tool-mode admitted the tool via a specific trigger,
   // post a hidden notice (thought-log only) explaining why it fired.
   const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
   if (params.context.deliberateToolModeActive && deliberateToolTriggerMatch && !isBlockedByDeliberateAllowlist) {

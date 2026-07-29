@@ -105,7 +105,7 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Validate guild + channel presence
+  // Validate guild + channel presence
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -125,7 +125,7 @@ export async function execute(
   // before those reads so the optional persona picker can safely edit this reply.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // 2. Load main persona state — needed for permission check and config values
+  // Load main persona state — needed for permission check and config values
   const tomoriState = await getCachedMainPersona(guildId);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -136,7 +136,7 @@ export async function execute(
     return;
   }
 
-  // 3. Permission check: requires ManageGuild OR use in a designated RP channel.
+  // Permission check: requires ManageGuild OR use in a designated RP channel.
   //    When the command is run inside a thread, channelId is the thread's own ID —
   //    not the parent channel's ID. Check both so threads inherit their parent's RP status.
   const hasManageGuild = interaction.memberPermissions?.has("ManageGuild") ?? false;
@@ -162,7 +162,7 @@ export async function execute(
     botHasManageMessages = Boolean(channel.permissionsFor(botMember)?.has("ManageMessages"));
   }
 
-  // 4. Race-condition lock check — prevents double-invocation for the same channel
+  // Race-condition lock check — prevents double-invocation for the same channel
   if (activeDeleteLocks.has(channelId)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.delete.turn.already_running_title",
@@ -172,13 +172,13 @@ export async function execute(
     return;
   }
 
-  // 5. Acquire lock before any async work
+  // Acquire lock before any async work
   activeDeleteLocks.add(channelId);
 
   let personaWorkflowStarted = false;
 
   try {
-    // 6. Load all personas for selection and persona-turn detection.
+    // Load all personas for selection and persona-turn detection.
     const allPersonas = await getCachedAllPersonas(guildId);
 
     const performDeletion = async (
@@ -188,7 +188,7 @@ export async function execute(
       // Target persona tracking — null means auto-detect from message history
       let resolvedPersona = initialPersona;
 
-      // 8. Fetch recent messages from the channel
+      // Fetch recent messages from the channel
       const fetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
       const fetched = await channel.messages.fetch({ limit: fetchLimit });
 
@@ -196,7 +196,7 @@ export async function execute(
       // so index 0 = oldest and the last index = newest
       const messages: Message[] = [...fetched.values()].reverse();
 
-      // 9. Walk newest-to-oldest to find the last contiguous persona block
+      // Walk newest-to-oldest to find the last contiguous persona block
       const detectedTurn = findLastPersonaTurnBlock({
         messages,
         allPersonas,
@@ -206,7 +206,7 @@ export async function execute(
       const blockMessages = detectedTurn.blockMessages;
       resolvedPersona = detectedTurn.resolvedPersona;
 
-      // 10. No persona block found in recent history
+      // No persona block found in recent history
       if (blockMessages.length === 0) {
         await updateStatus({
           titleKey: "commands.tool.delete.turn.no_persona_found_title",
@@ -219,7 +219,7 @@ export async function execute(
       const displayName = resolvedPersona?.persona_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
       const totalCount = blockMessages.length;
 
-      // 11. Inform user that deletion is in progress
+      // Inform user that deletion is in progress
       await updateStatus({
         titleKey: "commands.tool.delete.turn.deleting_title",
         descriptionKey: "commands.tool.delete.turn.deleting_description",
@@ -230,7 +230,7 @@ export async function execute(
         color: ColorCode.INFO,
       });
 
-      // 12. Partition messages into webhook vs direct, then apply deletion strategy
+      // Partition messages into webhook vs direct, then apply deletion strategy
       const now = Date.now();
       const webhookMessages: Message[] = [];
       const directBotMessages: Message[] = [];
@@ -246,7 +246,7 @@ export async function execute(
       let deletedCount = 0;
       let failedCount = 0;
 
-      // 12a. Delete webhook messages via webhook API (no MANAGE_MESSAGES needed)
+      // Delete webhook messages via webhook API (no MANAGE_MESSAGES needed)
       if (webhookMessages.length > 0) {
         const hostChannel = resolveWebhookHostChannel(channel);
         const threadId = resolveWebhookThreadId(channel);
@@ -302,7 +302,7 @@ export async function execute(
         }
       }
 
-      // 12b. Delete direct bot messages (requires MANAGE_MESSAGES)
+      // Delete direct bot messages (requires MANAGE_MESSAGES)
       if (directBotMessages.length > 0) {
         if (botHasManageMessages) {
           // Partition by age for bulk delete optimization
@@ -375,7 +375,7 @@ export async function execute(
         }
       }
 
-      // 13. Build reply embed — includes new zero-deletion error branch
+      // Build reply embed — includes new zero-deletion error branch
       const embedValues: Record<string, string> = {
         persona_name: displayName,
         count: String(deletedCount),
@@ -421,7 +421,7 @@ export async function execute(
         `[deleteTurn] Deleted ${deletedCount}/${totalCount} messages (${failedCount} failed) from persona="${displayName}" in channelId=${channelId}`,
       );
 
-      // 14. Regenerate (fire-and-forget) — re-trigger the persona after deletion
+      // Regenerate (fire-and-forget) — re-trigger the persona after deletion
       if (regenerate && resolvedPersona && deletedCount === totalCount) {
         try {
           // Fetch the most recent remaining message to use as the trigger context
@@ -560,7 +560,7 @@ export async function execute(
       // Interaction may have already expired — nothing we can do
     }
   } finally {
-    // 15. Always release the channel lock regardless of outcome
+    // Always release the channel lock regardless of outcome
     activeDeleteLocks.delete(channelId);
   }
 }

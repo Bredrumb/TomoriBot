@@ -92,8 +92,8 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
     }
   }
 
-  // 1. Primary key: ascending version number.
-  // 2. Tie-break: code-point comparison of the full stem, so same-numbered
+  // Primary key: ascending version number.
+  // Tie-break: code-point comparison of the full stem, so same-numbered
   //    migrations apply in a stable, filesystem-independent order. We compare
   //    by code point (not localeCompare) to stay deterministic across host
   //    locales; stems are restricted to [a-z0-9_] so this is well-defined.

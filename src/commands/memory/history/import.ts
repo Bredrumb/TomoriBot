@@ -275,7 +275,7 @@ async function showExtractionFailedEmbed(
     total_windows: failure.totalWindows.toString(),
   });
   const suffix = `\n\n${footer}`;
-  // 1. Provider errors can be long (schema-validation dumps in particular), so reserve room
+  // Provider errors can be long (schema-validation dumps in particular), so reserve room
   //    for the headline, the code fence, and the pagination footer before truncating.
   const fenceOverhead = "\n\n```\n\n```".length;
   const detail = truncateForEmbedDescription(failure.error, headline.length + suffix.length + fenceOverhead);
@@ -696,7 +696,7 @@ async function runIncrementalExtraction(params: {
   const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
   const allChunks: string[] = [];
   let previousRestatements: string[] = [];
-  // 1. Failure bookkeeping: the first provider error is the one shown to the user, since
+  // Failure bookkeeping: the first provider error is the one shown to the user, since
   //    a model that cannot emit structured output fails identically on every window.
   //    `discardedEntries` counts facts the model returned in an unusable shape, which is a
   //    softer failure than a window erroring outright but must not vanish silently.
@@ -733,7 +733,7 @@ async function runIncrementalExtraction(params: {
       endpointUrl,
     );
 
-    // 2. A failed window is recorded and skipped rather than treated as "found nothing",
+    // A failed window is recorded and skipped rather than treated as "found nothing",
     //    so the run can still report the real cause if no window ever succeeds.
     if (!windowOutcome.ok) {
       failedWindows++;
@@ -786,7 +786,7 @@ async function runIncrementalExtraction(params: {
     }
   }
 
-  // 3. Nothing persisted: report the provider failure when one occurred, and fall back to
+  // Nothing persisted: report the provider failure when one occurred, and fall back to
   //    the genuine "nothing worth extracting" terminal only when every window succeeded.
   if (allChunks.length === 0) {
     if (firstExtractionError !== null) {

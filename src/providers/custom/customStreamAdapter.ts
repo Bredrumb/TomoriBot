@@ -175,14 +175,14 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       return base;
     }
 
-    // 1. Strip any <|channel>thought...<channel|> block, routing its content to thoughts.
+    // Strip any <|channel>thought...<channel|> block, routing its content to thoughts.
     const thinkResult =
       GEMMA_TOOL_PARSER_ENABLED && GEMMA_THINKING_PARSER_ENABLED
         ? this.gemmaThinkingParser.feed(base.content)
         : { visibleText: base.content, thoughts: [] };
     const allThoughts = mergeThoughts(base.thoughts, thinkResult.thoughts);
 
-    // 2. Scan remaining visible text for <|tool_call>...<tool_call|> tokens.
+    // Scan remaining visible text for <|tool_call>...<tool_call|> tokens.
     const toolResult = GEMMA_TOOL_PARSER_ENABLED
       ? this.gemmaParser.feed(thinkResult.visibleText)
       : { visibleText: thinkResult.visibleText, functionCall: null };

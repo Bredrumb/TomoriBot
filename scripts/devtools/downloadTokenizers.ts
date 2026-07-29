@@ -109,10 +109,10 @@ async function downloadFile(
     return "error";
   }
 
-  // 1. Ensure the parent directory exists
+  // Ensure the parent directory exists
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
-  // 2. Stream response body to disk — Bun.write() accepts a Response directly
+  // Stream response body to disk — Bun.write() accepts a Response directly
   try {
     await Bun.write(destPath, response);
   } catch (err) {
@@ -120,7 +120,7 @@ async function downloadFile(
     return "error";
   }
 
-  // 3. Verify the written file is non-empty
+  // Verify the written file is non-empty
   const stat = fs.statSync(destPath);
   if (stat.size === 0) {
     console.error(`  ✗ Written file is empty: ${destPath}`);
@@ -164,7 +164,7 @@ async function downloadFamily(
   family: TokenizerFamily,
   hfToken: string | undefined,
 ): Promise<FamilyResult> {
-  // 1. Skip if all files are already present (unless --force)
+  // Skip if all files are already present (unless --force)
   if (!force && isFamilyComplete(familyName, family.files)) {
     console.log(`  ✓ ${familyName}: already complete, skipping`);
     return "skipped";
@@ -172,7 +172,7 @@ async function downloadFamily(
 
   console.log(`  ↓ ${familyName} (${family.repo})`);
 
-  // 2. Download each file in the family
+  // Download each file in the family
   for (const file of family.files) {
     const url = buildHfUrl(family.repo, file);
     const destPath = path.join(TOKENIZER_BASE_DIR, familyName, file);
@@ -187,7 +187,7 @@ async function downloadFamily(
     const result = await downloadFile(url, destPath, hfToken);
 
     if (result === "access-denied") {
-      // 3. On access denied: print guidance and abort this family
+      // On access denied: print guidance and abort this family
       printAccessDeniedGuide(familyName, family.repo, !!hfToken);
       return "access-denied";
     }
@@ -207,7 +207,7 @@ async function downloadFamily(
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // 1. Load manifest
+  // Load manifest
   const manifestRaw = fs.readFileSync(MANIFEST_PATH, "utf-8");
   const manifest: Manifest = JSON.parse(manifestRaw);
 
@@ -228,7 +228,7 @@ async function main(): Promise<void> {
 
   console.log("");
 
-  // 2. Determine which families to process
+  // Determine which families to process
   const familiesToProcess = targetFamily ? { [targetFamily]: manifest.families[targetFamily] } : manifest.families;
 
   if (targetFamily && !manifest.families[targetFamily]) {
@@ -237,14 +237,14 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // 3. Download each family, collecting results
+  // Download each family, collecting results
   const results: Record<string, FamilyResult> = {};
 
   for (const [familyName, family] of Object.entries(familiesToProcess)) {
     results[familyName] = await downloadFamily(familyName, family, hfToken);
   }
 
-  // 4. Print summary
+  // Print summary
   console.log("");
   console.log("=".repeat(50));
   console.log("Summary");

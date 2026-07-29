@@ -113,21 +113,21 @@ const BINARY_EXTENSIONS = new Set([
 export function isExtractableDocument(contentType: string | null, filename: string): boolean {
   const lowerName = filename.toLowerCase();
 
-  // 1. Always accept PDF regardless of MIME type (special binary parser)
+  // Always accept PDF regardless of MIME type (special binary parser)
   if (lowerName.endsWith(".pdf") || contentType === "application/pdf") return true;
 
-  // 2. Reject known-binary MIME prefixes (image/*, video/*, audio/*)
+  // Reject known-binary MIME prefixes (image/*, video/*, audio/*)
   if (contentType && BINARY_MIME_PREFIXES.some((prefix) => contentType.startsWith(prefix))) {
     return false;
   }
 
-  // 3. Reject known-binary extensions regardless of reported MIME type
+  // Reject known-binary extensions regardless of reported MIME type
   const dotIdx = lowerName.lastIndexOf(".");
   if (dotIdx !== -1 && BINARY_EXTENSIONS.has(lowerName.slice(dotIdx))) {
     return false;
   }
 
-  // 4. Accept everything else — any text-based MIME type (text/*) or unknown
+  // Accept everything else — any text-based MIME type (text/*) or unknown
   //    extension falls through here and will be decoded as UTF-8.
   return true;
 }
@@ -195,14 +195,14 @@ export async function extractTextFromUrl(
     timeoutMs?: number;
   },
 ): Promise<ExtractTextResult> {
-  // 1. Check memory guard — block under warning/critical pressure
+  // Check memory guard — block under warning/critical pressure
   const memCheck = memoryGuard.checkMemory();
   if (memCheck.status === "warning" || memCheck.status === "critical") {
     log.warn(`textExtractor: Blocked extraction due to memory pressure (${memCheck.status})`);
     return { success: false, truncated: false, error: "memory_pressure" };
   }
 
-  // 2. Download the file with size and timeout protections
+  // Download the file with size and timeout protections
   const maxSizeMB = options.maxSizeBytes / (1024 * 1024);
   const downloadResult = await safeDownload(url, {
     maxSizeMB,
@@ -221,7 +221,7 @@ export async function extractTextFromUrl(
     return { success: false, truncated: false, error: errorType };
   }
 
-  // 3. Extract text from the buffer
+  // Extract text from the buffer
   let rawText: string;
   try {
     rawText = await extractTextFromBuffer(downloadResult.buffer, filename, contentType);
@@ -230,14 +230,14 @@ export async function extractTextFromUrl(
     return { success: false, truncated: false, error: "extraction_failed" };
   }
 
-  // 4. Normalize text (remove null bytes, normalize whitespace)
+  // Normalize text (remove null bytes, normalize whitespace)
   const normalizedText = normalizeDocumentText(rawText);
 
   if (!normalizedText || normalizedText.trim().length === 0) {
     return { success: false, truncated: false, error: "empty_document" };
   }
 
-  // 5. Truncate if necessary
+  // Truncate if necessary
   const truncated = normalizedText.length > options.maxTextLength;
   const finalText = truncated ? normalizedText.slice(0, options.maxTextLength) : normalizedText;
 

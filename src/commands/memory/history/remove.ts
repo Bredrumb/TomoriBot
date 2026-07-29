@@ -145,7 +145,7 @@ export async function execute(
   const scope: HistoryScope = scopeInput === "serverwide" ? "serverwide" : "persona";
 
   try {
-    // 1. Check RAG is enabled
+    // Check RAG is enabled
     if (!isRagAvailable()) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.memory.history.remove.rag_disabled_title",
@@ -160,7 +160,7 @@ export async function execute(
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    // 2. Load Tomori state
+    // Load Tomori state
     tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -173,7 +173,7 @@ export async function execute(
     }
     const activeTomoriState = tomoriState;
 
-    // 3. Check teaching permission
+    // Check teaching permission
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
@@ -185,7 +185,7 @@ export async function execute(
       return;
     }
 
-    // 4. Dispatch the already-resolved scope.
+    // Dispatch the already-resolved scope.
     if (scope === "persona") {
       const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
       if (allPersonas.length === 0) {
@@ -372,7 +372,7 @@ export async function execute(
         return;
       }
 
-      // 7. Show paginated document selection modal
+      // Show paginated document selection modal
       const documentOptions: SelectOption[] = documents.map((doc) => ({
         label: safeSelectOptionText(doc.document_name),
         value: doc.document_id.toString(),
@@ -431,7 +431,7 @@ export async function execute(
         return;
       }
 
-      // 8. Perform deletion
+      // Perform deletion
       const removalSucceeded = await performHistoryDocumentRemoval(
         tomoriState,
         targetPersonaId,

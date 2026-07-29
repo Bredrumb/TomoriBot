@@ -244,7 +244,7 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
   const state = await getContainerState(containerName);
 
   if (state === null) {
-    // 1. Container doesn't exist — create and start it.
+    // Container doesn't exist — create and start it.
     console.log(`${label} Container not found. Running docker run...`);
     const run = Bun.spawn(["docker", "run", ...def.runArgs], {
       stdout: "inherit",
@@ -253,7 +253,7 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
     const code = await run.exited;
     if (code !== 0) throw new Error(`docker run for "${containerName}" failed (exit ${code}).`);
   } else if (state !== "running") {
-    // 2. Container exists but is stopped — start it.
+    // Container exists but is stopped — start it.
     console.log(`${label} Resuming existing container...`);
     const start = Bun.spawn(["docker", "start", containerName], {
       stdout: "inherit",
@@ -262,7 +262,7 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
     const code = await start.exited;
     if (code !== 0) throw new Error(`docker start for "${containerName}" failed (exit ${code}).`);
   } else {
-    // 3. Already running.
+    // Already running.
     console.log(`${label} Already running.`);
   }
 
@@ -323,7 +323,7 @@ async function main(): Promise<void> {
 
   const childProcesses: ReturnType<typeof Bun.spawn>[] = [];
 
-  // 1. Start all requested sidecars.
+  // Start all requested sidecars.
   for (const flag of requested) {
     const def = SIDECARS[flag];
     try {
@@ -340,7 +340,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // 2. Launch the bot in watch mode.
+  // Launch the bot in watch mode.
   console.log(`\n${pc.bold(pc.blue("[TomoriBot]"))} Starting bot in watch mode...\n`);
   const bot = Bun.spawn(["bun", "--watch", "src/index.ts"], {
     stdout: "inherit",
@@ -350,7 +350,7 @@ async function main(): Promise<void> {
   });
   childProcesses.push(bot);
 
-  // 3. Graceful shutdown — kill all managed processes on Ctrl+C.
+  // Graceful shutdown — kill all managed processes on Ctrl+C.
   let isShuttingDown = false;
   const shutdown = () => {
     if (isShuttingDown) return;
@@ -363,7 +363,7 @@ async function main(): Promise<void> {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
-  // 4. Wait for the bot to exit (its exit code becomes this process's exit code).
+  // Wait for the bot to exit (its exit code becomes this process's exit code).
   const exitCode = await bot.exited;
   for (const p of childProcesses) {
     if (p !== bot) {

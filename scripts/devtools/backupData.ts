@@ -100,14 +100,14 @@ async function runBackup(): Promise<void> {
 async function runRestore(bundlePath: string): Promise<void> {
   log.section("♻️ TRANSFER RESTORE");
 
-  // 1. Resolve and pin the target before restoring config from the source bundle.
+  // Resolve and pin the target before restoring config from the source bundle.
   // The bundled config may contain source-machine POSTGRES_* values, but both the
   // preflight query and psql must continue targeting the database selected when
   // this process started (including values injected by runWithSecrets.ts).
   const targetDatabaseUrl = resolveDatabaseUrl();
   process.env.DATABASE_URL = targetDatabaseUrl;
 
-  // 2. Validate bundle directory
+  // Validate bundle directory
   const bundleDir = resolve(bundlePath);
   if (!existsSync(bundleDir)) {
     log.error(`Bundle directory not found: ${bundleDir}`);
@@ -130,7 +130,7 @@ async function runRestore(bundlePath: string): Promise<void> {
     }
   }
 
-  // 2. Show bundle manifest
+  // Show bundle manifest
   const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
     createdAt: string;
     botVersion: string;
@@ -139,7 +139,7 @@ async function runRestore(bundlePath: string): Promise<void> {
   log.info(`Bot version:    ${manifest.botVersion}`);
   log.info(`Bundle path:    ${bundleDir}`);
 
-  // 3. Check whether the target database already has tables
+  // Check whether the target database already has tables
   const existingTables = await sql<{ tablename: string }[]>`
 		SELECT tablename FROM pg_tables WHERE schemaname = 'public'
 	`;
@@ -178,7 +178,7 @@ async function runRestore(bundlePath: string): Promise<void> {
     log.info("Proceeding with forced restore into non-empty database...");
   }
 
-  // 4. Warn about remaining side effects and ask for final confirmation
+  // Warn about remaining side effects and ask for final confirmation
   log.section("⚠️ WARNING — Read before continuing");
   log.info("Restoring will:");
   log.info("  1. Overwrite your local .env with the bundled config.env.");
@@ -206,7 +206,7 @@ async function runRestore(bundlePath: string): Promise<void> {
     process.exit(0);
   }
 
-  // 4. Restore .env
+  // Restore .env
   const localEnvPath = resolveEnvPath();
   const envAlreadyExists = existsSync(localEnvPath);
   if (envAlreadyExists) {
@@ -218,7 +218,7 @@ async function runRestore(bundlePath: string): Promise<void> {
   copyFileSync(envBackupPath, localEnvPath);
   log.success(".env restored from bundle.");
 
-  // 5. Restore database
+  // Restore database
   log.info("Restoring database from dump (running psql)...");
   try {
     const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";

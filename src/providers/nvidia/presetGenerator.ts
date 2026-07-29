@@ -95,7 +95,7 @@ export async function generatePresetFromPromptNvidia(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // 1. Build the initial user message content (text + optional image)
+  // Build the initial user message content (text + optional image)
   const contentParts: PresetContentPart[] = [{ type: "text", text: buildPresetPrompt(params) }];
 
   if (params.imageBase64 && params.imageMimeType) {
@@ -115,7 +115,7 @@ export async function generatePresetFromPromptNvidia(
   // on each request when in json_object fallback mode
   const messages: PresetMessage[] = [{ role: "user", content: userContent }];
 
-  // 2. Try json_schema first; fall back to json_object once if unsupported
+  // Try json_schema first; fall back to json_object once if unsupported
   type FormatMode = "json_schema" | "json_object";
   let formatMode: FormatMode = "json_schema";
   let formatFallbackDone = false;
@@ -124,7 +124,7 @@ export async function generatePresetFromPromptNvidia(
   let toolRounds = 0;
 
   while (true) {
-    // 3. Build the response format object based on current mode
+    // Build the response format object based on current mode
     const responseFormat =
       formatMode === "json_schema"
         ? {
@@ -137,7 +137,7 @@ export async function generatePresetFromPromptNvidia(
           }
         : { type: "json_object" };
 
-    // 4. Prepend schema-steered system prompt for json_object fallback mode
+    // Prepend schema-steered system prompt for json_object fallback mode
     const requestMessages: PresetMessage[] =
       formatMode === "json_object"
         ? [{ role: "system", content: buildNvidiaPresetSystemPrompt() }, ...messages]
@@ -157,7 +157,7 @@ export async function generatePresetFromPromptNvidia(
       body.tool_choice = "auto";
     }
 
-    // 5. Send the request
+    // Send the request
     const response = await fetch(NVIDIA_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -170,7 +170,7 @@ export async function generatePresetFromPromptNvidia(
     if (!response.ok) {
       const errorBody = await response.text();
 
-      // 5a. Fall back to json_object if json_schema is not supported by this model
+      // Fall back to json_object if json_schema is not supported by this model
       if (
         !formatFallbackDone &&
         formatMode === "json_schema" &&
@@ -216,7 +216,7 @@ export async function generatePresetFromPromptNvidia(
       };
     }
 
-    // 6. Handle tool calls
+    // Handle tool calls
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length > 0) {
       if (!toolsEnabled || !toolContext) {
@@ -287,7 +287,7 @@ export async function generatePresetFromPromptNvidia(
       continue;
     }
 
-    // 7. Extract and parse the final JSON response
+    // Extract and parse the final JSON response
     const responseText = extractResponseText(message.content);
     if (!responseText) {
       return {

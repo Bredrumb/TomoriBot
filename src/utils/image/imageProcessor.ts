@@ -4,7 +4,7 @@
  * as well as optimizing images before sending to LLM providers.
  */
 
-// 1. sharp v0.35 moved to ESM-style types, so `Metadata` is a named type export
+// sharp v0.35 moved to ESM-style types, so `Metadata` is a named type export
 //    rather than a member of a merged `sharp` namespace.
 import sharp, { type Metadata } from "sharp";
 import { log } from "../misc/logger";
@@ -53,7 +53,7 @@ export interface OptimizedImage {
  * @throws Error if the fetch itself fails
  */
 export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string): Promise<OptimizedImage> {
-  // 1. Fetch the raw image bytes
+  // Fetch the raw image bytes
   const downloadResult = await safeDownload(url, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
     timeoutMs: IMAGE_FETCH_TIMEOUT_MS,
@@ -66,12 +66,12 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
   const rawSize = buffer.byteLength;
   const finalMimeType = sourceMimeType || downloadResult.contentType || "image/jpeg";
 
-  // 2. Fast path — small images pass through unchanged
+  // Fast path — small images pass through unchanged
   if (rawSize <= IMAGE_CONTEXT_MAX_BYTES) {
     return { data: buffer.toString("base64"), mimeType: finalMimeType };
   }
 
-  // 3. Buffer exceeds byte threshold — read dimensions from the image header
+  // Buffer exceeds byte threshold — read dimensions from the image header
   try {
     const metadata = await sharp(buffer).metadata();
     const width = metadata.width ?? 0;
@@ -86,7 +86,7 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
       return { data: buffer.toString("base64"), mimeType: finalMimeType };
     }
 
-    // 4. Downscale to max dimension and re-encode as JPEG
+    // Downscale to max dimension and re-encode as JPEG
     const optimizedBuffer = await sharp(buffer)
       .resize({
         width: IMAGE_CONTEXT_MAX_DIMENSION,
@@ -127,12 +127,12 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
 export async function optimizeImageBuffer(buffer: Buffer, sourceMimeType: string): Promise<OptimizedImage> {
   const rawSize = buffer.byteLength;
 
-  // 1. Fast path — small images pass through unchanged
+  // Fast path — small images pass through unchanged
   if (rawSize <= IMAGE_CONTEXT_MAX_BYTES) {
     return { data: buffer.toString("base64"), mimeType: sourceMimeType };
   }
 
-  // 2. Check dimensions
+  // Check dimensions
   try {
     const metadata = await sharp(buffer).metadata();
     const width = metadata.width ?? 0;
@@ -143,7 +143,7 @@ export async function optimizeImageBuffer(buffer: Buffer, sourceMimeType: string
       return { data: buffer.toString("base64"), mimeType: sourceMimeType };
     }
 
-    // 3. Downscale
+    // Downscale
     const optimizedBuffer = await sharp(buffer)
       .resize({
         width: IMAGE_CONTEXT_MAX_DIMENSION,
@@ -200,7 +200,7 @@ function selectClosestNaiReferenceCanvas(width: number, height: number): { width
  */
 export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
   try {
-    // 1. Get image metadata to determine current dimensions
+    // Get image metadata to determine current dimensions
     const metadata = await sharp(buffer).metadata();
 
     if (!metadata.width || !metadata.height) {
@@ -209,17 +209,17 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
 
     log.info(`Processing image: ${metadata.width}x${metadata.height} (${metadata.format})`);
 
-    // 2. Determine the size of the square (use the smaller dimension)
+    // Determine the size of the square (use the smaller dimension)
     const squareSize = Math.min(metadata.width, metadata.height);
 
-    // 3. Calculate the extraction position to center the crop
+    // Calculate the extraction position to center the crop
     // For a 1920x1080 image, we want to extract a 1080x1080 square from the center
     const left = Math.floor((metadata.width - squareSize) / 2);
     const top = Math.floor((metadata.height - squareSize) / 2);
 
     log.info(`Cropping to ${squareSize}x${squareSize} square (offset: ${left}x${top})`);
 
-    // 4. Extract the square region and convert to PNG
+    // Extract the square region and convert to PNG
     const croppedBuffer = await sharp(buffer)
       .extract({
         left,

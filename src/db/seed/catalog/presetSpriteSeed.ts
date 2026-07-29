@@ -68,7 +68,7 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
   const usageInstructions = normalizePersonaSpriteInstructions(sprite.usageInstructions);
   const isIdentity = sprite.isIdentity === true;
 
-  // 1. Read + normalize the source image to PNG.
+  // Read + normalize the source image to PNG.
   const imagePath = path.join(process.cwd(), persona.avatarPath, sprite.file);
   let pngBuffer: Buffer;
   try {
@@ -79,7 +79,7 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
     return null;
   }
 
-  // 2. Content-address the image. If the existing row already references this
+  // Content-address the image. If the existing row already references this
   //    exact content, skip the (network) upload and only refresh metadata.
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
   const expectedSuffix = buildPresetSpriteFilename(spriteKey, contentHash);
@@ -113,7 +113,7 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
     avatarUrl = uploadedUrl;
   }
 
-  // 3. Upsert the row (shared URL + metadata).
+  // Upsert the row (shared URL + metadata).
   await client`
     INSERT INTO preset_sprites (
       preset_lineage_id, preset_language, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity

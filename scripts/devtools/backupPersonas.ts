@@ -120,13 +120,13 @@ async function runBackup(): Promise<void> {
   log.section("PERSONA BACKUP");
   log.info("Exporting all personas from the database...");
 
-  // 1. Verify database credentials
+  // Verify database credentials
   if (!process.env.POSTGRES_PASSWORD && !process.env.DATABASE_URL) {
     log.error("POSTGRES_PASSWORD or DATABASE_URL must be set in .env");
     process.exit(1);
   }
 
-  // 2. Create timestamped output directory
+  // Create timestamped output directory
   const backupsRoot = resolveBackupsRoot();
   if (!existsSync(backupsRoot)) mkdirSync(backupsRoot, { recursive: true });
 
@@ -135,10 +135,10 @@ async function runBackup(): Promise<void> {
   mkdirSync(bundleDir, { recursive: true });
   log.info(`Output directory: ${bundleDir}`);
 
-  // 3. Load bot version
+  // Load bot version
   const { version } = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf-8")) as { version: string };
 
-  // 4. Fetch all servers
+  // Fetch all servers
   const servers = await getAllServers();
   if (servers.length === 0) {
     log.warn("No servers found in the database. Nothing to export.");
@@ -157,7 +157,7 @@ async function runBackup(): Promise<void> {
   let totalExported = 0;
   let totalFailed = 0;
 
-  // 5. Iterate each server
+  // Iterate each server
   for (const server of servers) {
     const personas = await getPersonasForServer(server.server_id);
     if (personas.length === 0) {
@@ -177,13 +177,13 @@ async function runBackup(): Promise<void> {
       personas: [],
     };
 
-    // 6. Export each persona
+    // Export each persona
     for (const persona of personas) {
       const { persona_nickname: nickname, is_alter } = persona;
       const typeTag = is_alter ? "alter" : "main";
 
       try {
-        // 6a. Canonical export (identical to /persona export)
+        // Canonical export (identical to /persona export)
         const exportResult = await presetRepository.exportPresetData(server.server_disc_id, persona.persona_id);
         if (!exportResult.success) {
           log.error(`    FAILED: ${nickname} (${typeTag}) — ${exportResult.error}`);
@@ -191,7 +191,7 @@ async function runBackup(): Promise<void> {
           continue;
         }
 
-        // 6b. Load server memories for this persona lineage
+        // Load server memories for this persona lineage
         const lineageId =
           typeof persona.persona_lineage_id === "bigint"
             ? Number(persona.persona_lineage_id)
@@ -204,7 +204,7 @@ async function runBackup(): Promise<void> {
         });
         const base = `${sanitized}_${persona.persona_id}`;
 
-        // 6c. Prefer a PNG with embedded metadata — it round-trips through
+        // Prefer a PNG with embedded metadata — it round-trips through
         //     /persona import as the exact PresetExport shape AND restores
         //     the avatar. Only possible when a stored avatar exists.
         let pngWithMetadata: Buffer | null = null;
@@ -225,7 +225,7 @@ async function runBackup(): Promise<void> {
           }
         }
 
-        // 6d. Write the primary import-compatible file: PNG if we built one above,
+        // Write the primary import-compatible file: PNG if we built one above,
         //     otherwise the flat PresetExport as-is (no wrapper), so it passes
         //     presetExportSchema directly like /persona import expects.
         let filename: string;
@@ -240,7 +240,7 @@ async function runBackup(): Promise<void> {
           writeFileSync(join(serverDir, filename), `${JSON.stringify(exportResult.data, null, 2)}\n`);
         }
 
-        // 6e. Sidecar with extras /persona import doesn't consume (meta + memories)
+        // Sidecar with extras /persona import doesn't consume (meta + memories)
         const sidecarFilename = `${base}.meta.json`;
         const sidecar = {
           meta: {
@@ -276,12 +276,12 @@ async function runBackup(): Promise<void> {
     }
   }
 
-  // 7. Write manifest
+  // Write manifest
   manifest.total_servers = manifest.servers.length;
   manifest.total_personas = totalExported;
   writeFileSync(join(bundleDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
-  // 8. Summary
+  // Summary
   log.section("BACKUP COMPLETE");
   log.info(`Location:       ${bundleDir}`);
   log.info(`Servers:        ${manifest.total_servers}`);

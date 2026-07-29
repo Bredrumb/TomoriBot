@@ -44,11 +44,11 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 0. Scope modal custom ID to this invocation — prevents stale awaitModalSubmit
+  // Scope modal custom ID to this invocation — prevents stale awaitModalSubmit
   //    listeners from a prior (un-submitted) run resolving on this submission.
   const MODAL_CUSTOM_ID = `server_memberpermissions_modal_${interaction.id}`;
 
-  // 1. Ensure command is run in a guild
+  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -66,7 +66,7 @@ export async function execute(
   let modalInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // 2. Load the Tomori state for this server
+    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -78,7 +78,7 @@ export async function execute(
       return;
     }
 
-    // 3. Build checkbox options, pre-checking currently-allowed permissions
+    // Build checkbox options, pre-checking currently-allowed permissions
     const checkboxOptions: CheckboxGroupOption[] = SERVER_MEMBER_PERMISSION_DEFINITIONS.map((def) => ({
       label: localizer(locale, def.labelKey),
       value: def.value,
@@ -86,7 +86,7 @@ export async function execute(
       default: def.getState(tomoriState.config),
     }));
 
-    // 4. Show the checkbox modal — first interaction acknowledgment
+    // Show the checkbox modal — first interaction acknowledgment
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -116,7 +116,7 @@ export async function execute(
     }
     modalInteraction = modalResult.interaction;
 
-    // 5. Determine which permissions changed
+    // Determine which permissions changed
     const newlyEnabled = new Set(modalResult.multiValues?.[MEMBERPERMISSIONS_CHECKBOX_ID] ?? []);
     const writePlan = buildServerMemberPermissionsConfigWritePlan(tomoriState.config, newlyEnabled);
     const changes = writePlan.changes.map((change) => ({
@@ -124,7 +124,7 @@ export async function execute(
       label: localizer(locale, change.labelKey),
     }));
 
-    // 6. If nothing changed, say so and exit
+    // If nothing changed, say so and exit
     if (changes.length === 0) {
       await replyInfoEmbed(modalInteraction, locale, {
         titleKey: "commands.server.member-permissions.no_changes_title",
@@ -134,7 +134,7 @@ export async function execute(
       return;
     }
 
-    // 7. Apply all changed permissions to the database in a single update
+    // Apply all changed permissions to the database in a single update
     const updated = await configRepository[writePlan.method](tomoriState.server_id, writePlan.patch);
 
     if (!updated) {
@@ -159,10 +159,10 @@ export async function execute(
       return;
     }
 
-    // 8. Invalidate cache so next message picks up the fresh config
+    // Invalidate cache so next message picks up the fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // 9. Build the success result embed
+    // Build the success result embed
     const enabledLabels = changes.filter((c) => c.isEnabled).map((c) => `\`${c.label}\``);
     const disabledLabels = changes.filter((c) => !c.isEnabled).map((c) => `\`${c.label}\``);
 
@@ -185,7 +185,7 @@ export async function execute(
       ],
     });
   } catch (error) {
-    // 10. Log the error with context
+    // Log the error with context
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
@@ -211,7 +211,7 @@ export async function execute(
       context,
     );
 
-    // 11. Inform user of unknown error
+    // Inform user of unknown error
     // Use modalInteraction (auto-deferred) if available since the original
     // interaction is consumed by promptWithRawModal's raw REST acknowledgment.
     await replyInfoEmbed(modalInteraction ?? interaction, locale, {

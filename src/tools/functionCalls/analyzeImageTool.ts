@@ -120,7 +120,7 @@ export class AnalyzeImageTool extends BaseTool {
     const messageId = MessageIdMap.isOpaqueKey(rawMediaId) ? context.messageIdMap?.resolve(rawMediaId) : rawMediaId;
     const prompt = (args.prompt as string) || DEFAULT_VISION_PROMPT;
 
-    // 1. Validate media_id format
+    // Validate media_id format
     if (!rawMediaId || (!DISCORD_ID_PATTERN.test(rawMediaId) && !MessageIdMap.isOpaqueKey(rawMediaId))) {
       return {
         success: false,
@@ -172,19 +172,19 @@ export class AnalyzeImageTool extends BaseTool {
         "AnalyzeImageTool",
       );
 
-      // 4. Extract images from the Discord message
+      // Extract images from the Discord message
       const images = await this.extractImagesFromMessage(messageId, context, analysisSignal);
 
       const apiKey = creds.apiKey;
 
-      // 6. Resolve API model name and provider from the vision LLM row
+      // Resolve API model name and provider from the vision LLM row
       const provider = visionLlm.llm_provider.toLowerCase();
       const apiModelName =
         provider === "zai" || provider === "zaicoding"
           ? toZaiApiModelName(visionLlm.llm_codename)
           : visionLlm.llm_codename;
 
-      // 7. Route to the appropriate API based on provider family
+      // Route to the appropriate API based on provider family
       let analysisResult: string;
 
       if (provider === "google") {
@@ -376,13 +376,13 @@ export class AnalyzeImageTool extends BaseTool {
     context: ToolContext,
     signal: AbortSignal,
   ): Promise<Array<{ mimeType: string; data: string }>> {
-    // 1. Discover images on the message, or on its direct reply target when the
+    // Discover images on the message, or on its direct reply target when the
     //    reply itself is text-only.
     const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
 
     log.info(`Found ${imageUrls.length} image(s) in message ${sourceMessageId} for vision analysis`);
 
-    // 2. Convert each image URL to base64, respecting size limit
+    // Convert each image URL to base64, respecting size limit
     const inlineDataArray: Array<{ mimeType: string; data: string }> = [];
     let totalBytes = 0;
 

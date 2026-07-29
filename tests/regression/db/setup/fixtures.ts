@@ -50,7 +50,7 @@ const SERVER_CONFIG_TABLES = [
  * @returns Internal DB IDs for test assertions that need them
  */
 export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
-  // 1. Server
+  // Server
   const [serverRow] = await db`
     INSERT INTO servers (server_disc_id)
     VALUES (${FIXTURE_IDS.serverDiscId})
@@ -59,7 +59,7 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   `;
   const serverId: number = serverRow.server_id;
 
-  // 2. Persona (llm_id left NULL → BYOK/unconfigured mode; avoids needing a real LLM row)
+  // Persona (llm_id left NULL → BYOK/unconfigured mode; avoids needing a real LLM row)
   const [personaRow] = await db`
     INSERT INTO personas (server_id, persona_nickname, is_alter)
     VALUES (${serverId}, '_rt_persona', false)
@@ -101,12 +101,12 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   `;
   await db`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;
 
-  // 3. Server-scoped split config rows.
+  // Server-scoped split config rows.
   for (const table of SERVER_CONFIG_TABLES) {
     await db.unsafe(`INSERT INTO ${table} (server_id) VALUES ($1) ON CONFLICT (server_id) DO NOTHING`, [serverId]);
   }
 
-  // 4. Persona-scoped config
+  // Persona-scoped config
   await db`
     INSERT INTO persona_configs (persona_id, trigger_words)
     VALUES (${personaId}, ARRAY['_rt_trigger']::TEXT[])
@@ -117,7 +117,7 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   await db`DELETE FROM persona_imagegen_configs WHERE persona_id = ${personaId}`;
   await db`DELETE FROM persona_textgen_configs WHERE persona_id = ${personaId}`;
 
-  // 5. Test user
+  // Test user
   const [userRow] = await db`
     INSERT INTO users (user_disc_id, user_nickname)
     VALUES (${FIXTURE_IDS.userDiscId}, '_rt_user')

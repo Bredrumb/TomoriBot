@@ -225,10 +225,10 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   const fallbackEntries =
     primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 
-  // 1. Build a unified pool: the primary model leads at index 0, then the existing failover chain.
+  // Build a unified pool: the primary model leads at index 0, then the existing failover chain.
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
 
-  // 2. Model randomizer: when enabled, splice a random pool member to the front so a different model
+  // Model randomizer: when enabled, splice a random pool member to the front so a different model
   //    leads each turn. The remainder keeps its relative order as the failover tail. This is a pure
   //    reordering — every model (including the original primary) stays in the chain, so failover
   //    semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
@@ -237,7 +237,7 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
     pool.unshift(...pool.splice(leadIdx, 1));
   }
 
-  // 3. Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
+  // Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
   //    primary's own llm entry yields a state equivalent to primaryState (provider matches, no config
   //    swap), so index 0 stays semantically identical to the old dedicated "primary" attempt.
   const attempts: GenerationAttempt[] = [];
@@ -249,7 +249,7 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
         // so at least one valid attempt always remains in the chain.
         continue;
       }
-      // 4. Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
+      // Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
       //    The true model still surfaces via successModel for log verification.
       if (index === 0) {
         attempt.label = "primary";
@@ -417,7 +417,7 @@ async function createAttempt(
     ? await ProviderFactory.getProviderByName(forcedProviderName)
     : await getProviderForTomori(effectiveState);
 
-  // 1. Try the rotation pool first; fall back to the server's own encrypted key.
+  // Try the rotation pool first; fall back to the server's own encrypted key.
   const rotationSelection = await selectApiKey(effectiveState);
   const apiKey = rotationSelection ? rotationSelection.apiKey : await resolveApiKey(effectiveState);
   const rotationKeyId = rotationSelection?.rotationKeyId ?? null;
@@ -502,13 +502,13 @@ function extractErrorDetail(streamResult: StreamResult | undefined): string {
     return truncateFallbackDetail(data.message || "error");
   }
 
-  // 1. Prefer the normalized provider detail (userMessage/message/originalError) used by the error embed.
+  // Prefer the normalized provider detail (userMessage/message/originalError) used by the error embed.
   const providerDetail = getProviderErrorDetail(data as ProviderError);
   if (providerDetail) {
     return truncateFallbackDetail(providerDetail);
   }
 
-  // 2. Fall back to whatever identifying field is present on the raw result.
+  // Fall back to whatever identifying field is present on the raw result.
   const record = data as Record<string, unknown>;
   return truncateFallbackDetail(
     String(record.message ?? record.code ?? record.type ?? streamResult?.status ?? "unknown"),

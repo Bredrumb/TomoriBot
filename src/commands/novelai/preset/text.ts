@@ -44,7 +44,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Guild-only guard
+  // Guild-only guard
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -55,7 +55,7 @@ export async function execute(
     return;
   }
 
-  // 2. Load server state
+  // Load server state
   const tomoriState = await getCachedTomoriState(interaction.guild.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -67,7 +67,7 @@ export async function execute(
     return;
   }
 
-  // 3. Guard: must be using the NovelAI provider
+  // Guard: must be using the NovelAI provider
   if (tomoriState.llm.llm_provider.toLowerCase() !== "novelai") {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.novelai.preset.text.not_novelai_title",
@@ -78,7 +78,7 @@ export async function execute(
     return;
   }
 
-  // 4. Guard: must be on a preset-compatible model (Kayra or Erato)
+  // Guard: must be on a preset-compatible model (Kayra or Erato)
   const modelCodename = tomoriState.llm.llm_codename;
   if (!NAI_PRESET_MODELS.has(modelCodename)) {
     await replyInfoEmbed(interaction, locale, {
@@ -90,7 +90,7 @@ export async function execute(
     return;
   }
 
-  // 5. Determine model target category and load available presets
+  // Determine model target category and load available presets
   const modelTarget = MODEL_TARGET_MAP[modelCodename] ?? "kayra";
   const presets = await configRepository.loadNaiPresets(modelTarget);
   if (presets.length === 0) {
@@ -104,7 +104,7 @@ export async function execute(
     return;
   }
 
-  // 6. Build select options — one per preset with locale-appropriate description
+  // Build select options — one per preset with locale-appropriate description
   const isJapanese = userData.language_pref.toLowerCase().startsWith("ja");
   const presetOptions: SelectOption[] = presets.map((preset) => {
     const desc = isJapanese ? preset.ja_preset_desc : preset.preset_desc;
@@ -115,7 +115,7 @@ export async function execute(
     };
   });
 
-  // 7. Show the modal — handles >25 options with automatic page navigation
+  // Show the modal — handles >25 options with automatic page navigation
   const modalResult = await promptWithPaginatedModal(interaction, locale, {
     modalCustomId: PRESET_MODAL_CUSTOM_ID,
     modalTitleKey: "commands.novelai.preset.text.modal_title",
@@ -131,7 +131,7 @@ export async function execute(
     ],
   });
 
-  // 8. Silently return on cancel or timeout — no message needed
+  // Silently return on cancel or timeout — no message needed
   if (modalResult.outcome !== "submit") return;
 
   // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees these values exist
@@ -139,7 +139,7 @@ export async function execute(
   // biome-ignore lint/style/noNonNullAssertion: submit outcome guarantees these values exist
   const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
-  // 9. Find the chosen preset in the loaded list
+  // Find the chosen preset in the loaded list
   const chosenPreset = presets.find((p) => p.preset_name === selectedPresetName);
   if (!chosenPreset) {
     await replyInfoEmbed(modalInteraction, locale, {
@@ -150,7 +150,7 @@ export async function execute(
     return;
   }
 
-  // 10. Apply the preset — writes schema fields to split server config tables + nai_preset_name
+  // Apply the preset — writes schema fields to split server config tables + nai_preset_name
   const updated = await configRepository.applyNaiPreset(
     tomoriState.server_id,
     chosenPreset,
@@ -166,7 +166,7 @@ export async function execute(
     return;
   }
 
-  // 11. Confirm success (applyNaiPreset invalidated the cache after its writes)
+  // Confirm success (applyNaiPreset invalidated the cache after its writes)
   await replyInfoEmbed(modalInteraction, locale, {
     titleKey: "commands.novelai.preset.text.success_title",
     descriptionKey: "commands.novelai.preset.text.success_description",

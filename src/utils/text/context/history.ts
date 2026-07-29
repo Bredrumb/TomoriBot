@@ -257,7 +257,7 @@ export async function getUserPresenceDetails(
 
     if (member.presence.activities && member.presence.activities.length > 0) {
       const activityDetails = member.presence.activities.map((activity) => {
-        // 1. Diagnostic log so we can see exactly what the gateway delivered
+        // Diagnostic log so we can see exactly what the gateway delivered
         //    (useful for third-party RPC apps like Last.fm whose payload shape changes upstream)
         const largeText = activity.assets?.largeText?.trim() || null;
         const smallText = activity.assets?.smallText?.trim() || null;
@@ -265,7 +265,7 @@ export async function getUserPresenceDetails(
           `Activity found for ${member?.user.username}: type=${activity.type} name="${activity.name}" details="${activity.details ?? ""}" state="${activity.state ?? ""}" emoji="${activity.emoji?.name ?? ""}" largeText="${largeText ?? ""}" smallText="${smallText ?? ""}" appId="${activity.applicationId ?? ""}"`,
         );
 
-        // 2. Compose extra fields once so each case can surface asset text uniformly
+        // Compose extra fields once so each case can surface asset text uniformly
         const timeSpent = getTimeSpent(activity.timestamps?.start, activity.timestamps?.end);
         const appendAssetText = (base: string): string => {
           const extras: string[] = [];

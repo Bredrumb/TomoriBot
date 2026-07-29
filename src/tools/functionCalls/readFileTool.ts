@@ -73,7 +73,7 @@ export class ReadFileTool extends BaseTool {
    * @returns Promise resolving to tool result with extracted text
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // 1. Validate required parameters
+    // Validate required parameters
     const messageId = args.media_id as string;
     const filenameFilter = args.filename as string | undefined;
 
@@ -92,12 +92,12 @@ export class ReadFileTool extends BaseTool {
     );
 
     try {
-      // 2. Fetch recent messages from the channel (last 100)
+      // Fetch recent messages from the channel (last 100)
       const recentMessages = await context.channel.messages.fetch({
         limit: 100,
       });
 
-      // 3. Find the target message by ID
+      // Find the target message by ID
       const targetMessage = recentMessages.get(messageId);
       if (!targetMessage) {
         log.warn(`ReadFileTool: Message ${messageId} not found in recent 100 messages`);
@@ -110,7 +110,7 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // 4. Find document attachment by extension/MIME type
+      // Find document attachment by extension/MIME type
       let docAttachment: {
         url: string;
         name: string;
@@ -155,7 +155,7 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // 5. Send "Reading document..." embed indicator
+      // Send "Reading document..." embed indicator
       await sendToolProgressNotice(
         context,
         "document_reading",
@@ -168,7 +168,7 @@ export class ReadFileTool extends BaseTool {
         "ReadFileTool",
       );
 
-      // 6. Download and extract text
+      // Download and extract text
       const result = await extractTextFromUrl(docAttachment.url, docAttachment.name, docAttachment.contentType, {
         maxSizeBytes: CHAT_DOCUMENT_MAX_SIZE_BYTES,
         maxTextLength: CHAT_DOCUMENT_MAX_TEXT_LENGTH,
@@ -176,7 +176,7 @@ export class ReadFileTool extends BaseTool {
         timeoutMs: 15000,
       });
 
-      // 7. Handle extraction result
+      // Handle extraction result
       if (!result.success) {
         const errorMessages: Record<string, string> = {
           memory_pressure:

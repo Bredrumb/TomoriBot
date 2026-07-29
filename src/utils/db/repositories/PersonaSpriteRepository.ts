@@ -56,13 +56,13 @@ export class PersonaSpriteRepository {
    */
   async listForPersona(personaId: number): Promise<PersonaSpriteRow[]> {
     try {
-      // 1. Live preset pointers resolve the shared official sprite set.
+      // Live preset pointers resolve the shared official sprite set.
       const pointer = await this.resolvePointerPreset(personaId);
       if (pointer) {
         return await this.listPresetSpritesForPointer(personaId, pointer.lineageId, pointer.language);
       }
 
-      // 2. Otherwise read the persona's own sprite rows.
+      // Otherwise read the persona's own sprite rows.
       const rows = await sql<PersonaSpriteRow[]>`
         SELECT sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
         FROM persona_sprites

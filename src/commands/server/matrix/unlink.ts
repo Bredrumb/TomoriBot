@@ -59,7 +59,7 @@ export async function execute(
   };
 
   try {
-    // 1. Validate guild context
+    // Validate guild context
     if (!interaction.guild || !interaction.guildId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -69,7 +69,7 @@ export async function execute(
       return;
     }
 
-    // 2. Validate ManageGuild permission
+    // Validate ManageGuild permission
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -79,10 +79,10 @@ export async function execute(
       return;
     }
 
-    // 3. Defer before async work (Pattern 2)
+    // Defer before async work (Pattern 2)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 4. Load Tomori state (bot must be set up)
+    // Load Tomori state (bot must be set up)
     const tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -96,10 +96,10 @@ export async function execute(
     errorContext.serverId = tomoriState.server_id;
     errorContext.personaId = tomoriState.persona_id;
 
-    // 5. Get command options
+    // Get command options
     const channel = interaction.options.getChannel("channel", true);
 
-    // 6. Query existing link so we can invalidate the room-side cache too
+    // Query existing link so we can invalidate the room-side cache too
     const existingRoomId = await serverRepository.getExistingMatrixLink(channel.id);
 
     if (!existingRoomId) {
@@ -114,13 +114,13 @@ export async function execute(
 
     const roomId = existingRoomId;
 
-    // 7. Delete the link record
+    // Delete the link record
     await serverRepository.unlinkMatrix(channel.id);
 
-    // 8. Invalidate both cache directions
+    // Invalidate both cache directions
     invalidateMatrixLinkCache(channel.id, roomId);
 
-    // 9. Reply success
+    // Reply success
     await replyInfoEmbed(interaction, locale, {
       color: ColorCode.SUCCESS,
       titleKey: "commands.server.matrix.unlink.success_title",

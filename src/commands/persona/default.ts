@@ -167,7 +167,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
+  // Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -190,7 +190,7 @@ export async function execute(
     return;
   }
 
-  // 2. Check permissions (ManageGuild required in guilds)
+  // Check permissions (ManageGuild required in guilds)
   if (interaction.guild) {
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
@@ -206,7 +206,7 @@ export async function execute(
   }
 
   try {
-    // 3. Load the Tomori state for this server
+    // Load the Tomori state for this server
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
@@ -219,10 +219,10 @@ export async function execute(
       return;
     }
 
-    // 4. Fetch available presets for the user's locale using shared helper
+    // Fetch available presets for the user's locale using shared helper
     const presets = await configRepository.loadPresetRowsByLocale(locale);
 
-    // 5. Check if there are any presets available
+    // Check if there are any presets available
     if (!presets || presets.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.default.no_presets_title",
@@ -232,14 +232,14 @@ export async function execute(
       return;
     }
 
-    // 6. Create preset options for the select menu using full descriptions
+    // Create preset options for the select menu using full descriptions
     const presetSelectOptions: SelectOption[] = presets.map((preset: TomoriPresetRow) => ({
       label: safeSelectOptionText(preset.persona_preset_name),
       value: safeSelectOptionText(preset.persona_preset_name),
       description: safeSelectOptionText(preset.persona_preset_desc),
     }));
 
-    // 7. Show the modal with preset selection
+    // Show the modal with preset selection
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -260,7 +260,7 @@ export async function execute(
       MessageFlags.Ephemeral,
     );
 
-    // 8. Handle modal outcome
+    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Preset selection modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -272,7 +272,7 @@ export async function execute(
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
-    // 9. Find the selected preset - let helper functions manage interaction state
+    // Find the selected preset - let helper functions manage interaction state
     const selectedPreset = presets.find((preset: TomoriPresetRow) => preset.persona_preset_name === selectedPresetName);
 
     if (!selectedPreset) {
@@ -282,7 +282,7 @@ export async function execute(
       return;
     }
 
-    // 10. Build preset payloads for database update/insert
+    // Build preset payloads for database update/insert
     const presetPersonaPrompt = selectedPreset.persona_preset_desc || null;
 
     const presetTriggerWords = resolvePresetTriggerWords(selectedPreset, locale);
@@ -324,7 +324,7 @@ export async function execute(
         return;
       }
 
-      // 11a. Capture the persona's current sprite images BEFORE re-pointing, so we
+      // Capture the persona's current sprite images BEFORE re-pointing, so we
       //      can clean up server-owned ones afterward (resetting to the preset set).
       //      For a still-pointer persona these are shared preset URLs (the delete
       //      guard skips them); for a materialized persona they are its own rows.
@@ -335,7 +335,7 @@ export async function execute(
       //        deleted afterward; shared presets/ images are skipped by the delete guard.
       const previousMainAvatarUrl = mainPersona.webhook_avatar_url ?? null;
 
-      // 11b. Turn the main persona into a live preset pointer (this also drops the
+      // Turn the main persona into a live preset pointer (this also drops the
       //      persona's own sprite rows, so it resolves preset sprites live again).
       const updatedTomoriResult = await personaRepository.applyPresetPointerToPersona({
         personaId: targetPersonaId,
@@ -346,7 +346,7 @@ export async function execute(
         personaPrompt: presetPersonaPrompt,
       });
 
-      // 11b. Validate the result
+      // Validate the result
       if (!updatedTomoriResult) {
         const context: ErrorContext = {
           userId: userData.user_id,
@@ -376,7 +376,7 @@ export async function execute(
 
       invalidateTomoriStateCache(serverDiscId);
 
-      // 11c. Finish the sprite reset: delete server-owned sprite images now that
+      // Finish the sprite reset: delete server-owned sprite images now that
       //      the rows are gone (the guard skips shared preset images), and drop the
       //      stale sprite cache so the next read resolves the new preset's sprites.
       await Promise.all(spritesBeforeReset.map((sprite) => deletePersonaSpriteFromStorage(sprite.avatar_url)));
@@ -388,7 +388,7 @@ export async function execute(
         await deletePersonaAvatarFromStorage(previousMainAvatarUrl);
       }
 
-      // 11d. Update guild avatar/nickname only for main/default target
+      // Update guild avatar/nickname only for main/default target
       const isDM = !interaction.guild;
       let avatarUpdateFailed = false;
       let nicknameUpdateFailed = false;
@@ -533,7 +533,7 @@ export async function execute(
       return;
     }
 
-    // 12. Alter target flow: create a new alter persona from the selected preset
+    // Alter target flow: create a new alter persona from the selected preset
     const personaLimits = getMemoryLimits();
     if (allPersonas.length >= personaLimits.maxPersonasPerServer) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -711,7 +711,7 @@ export async function execute(
       return;
     }
 
-    // 13. Log error with context
+    // Log error with context
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
@@ -734,7 +734,7 @@ export async function execute(
     };
     await log.error(`Error executing /persona default for user ${userData.user_disc_id}`, error as Error, context);
 
-    // 14. Inform user of unknown error
+    // Inform user of unknown error
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content: localizer(locale, "general.errors.unknown_error_description"),

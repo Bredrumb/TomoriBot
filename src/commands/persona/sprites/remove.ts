@@ -380,7 +380,7 @@ function buildPageSelectorPayload(
   const pageSize = PERSONA_SPRITE_LIMITS.MAX_REMOVAL_ENTRIES_PER_PAGE;
   const totalPages = Math.ceil(totalSprites / pageSize);
 
-  // 1. Every sprite fits in one modal (<= 10 options x 5 checkbox groups), so a
+  // Every sprite fits in one modal (<= 10 options x 5 checkbox groups), so a
   //    range selector would offer a single meaningless choice. The persona button
   //    was already update-deferred before the sprite query, so the modal must be
   //    opened from a fresh launcher button rather than from that interaction.

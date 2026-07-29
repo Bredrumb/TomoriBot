@@ -48,16 +48,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           },
           // Disabled: Users found STRICT_SERVER_WIDE redundant (no manager exemption)
           // Servers already using type 4 will continue to work - just can't be newly selected
-          // {
-          // 	name: localizer(
-          // 		"en-US",
-          // 		"commands.server.cooldown.triggers.type.choice_strict_server_wide",
-          // 	),
-          // 	value: CooldownType.STRICT_SERVER_WIDE,
-          // 	name_localizations: {
-          // 		ja: localizer("ja", "commands.server.cooldown.triggers.type.choice_strict_server_wide"),
-          // 	},
-          // },
         ),
     )
     .addIntegerOption((option) =>
@@ -82,7 +72,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
+  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -96,11 +86,11 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 2. Get values from options
+    // Get values from options
     const cooldownTypeValue = interaction.options.getInteger("cooldown_type", true);
     const cooldownLength = interaction.options.getInteger("cooldown_length", true);
 
-    // 3. Validate cooldown type
+    // Validate cooldown type
     if (cooldownTypeValue < COOLDOWN_TYPE_MIN || cooldownTypeValue > COOLDOWN_TYPE_MAX) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.cooldown.triggers.invalid_type_title",
@@ -110,7 +100,7 @@ export async function execute(
       return;
     }
 
-    // 4. Validate cooldown length
+    // Validate cooldown length
     if (cooldownLength < MIN_LENGTH || cooldownLength > MAX_LENGTH) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.cooldown.triggers.invalid_length_title",
@@ -124,7 +114,7 @@ export async function execute(
       return;
     }
 
-    // 5. Load the Tomori state for this server
+    // Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -135,7 +125,7 @@ export async function execute(
       return;
     }
 
-    // 6. Check if values are unchanged
+    // Check if values are unchanged
     const currentCooldownType = tomoriState.config.cooldown_type ?? COOLDOWN_TYPE_DEFAULT;
     const currentCooldownLength = tomoriState.config.cooldown_length ?? DEFAULT_LENGTH;
     if (cooldownTypeValue === currentCooldownType && cooldownLength === currentCooldownLength) {
@@ -151,7 +141,7 @@ export async function execute(
       return;
     }
 
-    // 7. Update both cooldown values in the database
+    // Update both cooldown values in the database
     const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       cooldown_type: cooldownTypeValue,
       cooldown_length: cooldownLength,
@@ -180,10 +170,10 @@ export async function execute(
       return;
     }
 
-    // 9. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // 10. Success message
+    // Success message
     const isEnabled = cooldownTypeValue !== CooldownType.OFF;
     await replyInfoEmbed(interaction, locale, {
       titleKey: isEnabled

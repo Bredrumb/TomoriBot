@@ -77,7 +77,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
   const windowFrom = resolveWindowFrom(timeframe);
   const windowArg = windowFrom ? { from: windowFrom } : {};
 
-  // 1. One grouped query per ranked block — no per-row token/cost lookups.
+  // One grouped query per ranked block — no per-row token/cost lookups.
   const [rawTopMembers, personaTokenCosts, modelCosts, tokenTotals, totalTriggers, estimatedCost] = await Promise.all([
     statRepository.getTopUsers({ serverId, limit: 25, ...windowArg }),
     statRepository.getPersonaTokenCostBreakdown({ serverId, limit: 5, ...windowArg }),
@@ -87,7 +87,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     statRepository.getEstimatedCost({ serverId, ...windowArg }),
   ]);
 
-  // 2. Server icon → light-mode card palette (analogous to Personal's #1 avatar).
+  // Server icon → light-mode card palette (analogous to Personal's #1 avatar).
   let serverIconDataUri: string | null = null;
   const serverIconUrl = guild.iconURL({ extension: "png", forceStatic: true, size: 128 });
   if (serverIconUrl) {
@@ -100,7 +100,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
   const palette = await extractCardPalette(serverIconDataUri);
   const tomoriconDataUri = await loadTomoriconDataUri(palette.ink);
 
-  // 3. Top personas (horizontal bars) — names + avatars from cache, bar tint from avatar.
+  // Top personas (horizontal bars) — names + avatars from cache, bar tint from avatar.
   let topPersonas: ServerPersonaBar[] = [];
   let totalPersonas = 0;
   try {
@@ -128,7 +128,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     log.warn("serverCardGatherer: persona resolution failed", error as Error);
   }
 
-  // 4. Most active members (horizontal bars) — avatar + per-avatar bar tint.
+  // Most active members (horizontal bars) — avatar + per-avatar bar tint.
   const humanMembers = await resolveHumanMembers(guild, rawTopMembers, 3);
   const topMembers: ServerMemberBar[] = await Promise.all(
     humanMembers.map(async ({ entry, icon }, index) => ({
@@ -139,7 +139,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
     })),
   );
 
-  // 5. Top models (horizontal bars) — token-ranked, no avatar.
+  // Top models (horizontal bars) — token-ranked, no avatar.
   const topModels: ServerModelBar[] = modelCosts.map((entry) => ({
     name: prettifyModelCodename(entry.model),
     totalTokens: entry.inputTokens + entry.outputTokens,

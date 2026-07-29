@@ -200,7 +200,7 @@ export async function searchCharacterInfo(
   context?: CharacterSearchContext,
   client?: GoogleGenAI,
 ): Promise<CharacterSearchResult> {
-  // 1. Validate API key (skip when using pre-built client)
+  // Validate API key (skip when using pre-built client)
   if (!client && (!apiKey || apiKey.trim().length < 10)) {
     return {
       error: createGoogleErrorMessage("API_KEY", 403, "Invalid API key", locale),
@@ -209,13 +209,13 @@ export async function searchCharacterInfo(
   }
 
   try {
-    // 2. Initialize Gemini client (use pre-built if provided)
+    // Initialize Gemini client (use pre-built if provided)
     const genAI = client ?? new GoogleGenAI({ apiKey });
 
-    // 3. Use configured model for search
+    // Use configured model for search
     const MODEL_NAME = modelName;
 
-    // 4. Configure generation with Google Search tool
+    // Configure generation with Google Search tool
     const generationConfig: GenerateContentConfig = {
       temperature: 1.0,
       topP: 0.9,
@@ -223,7 +223,7 @@ export async function searchCharacterInfo(
       tools: [{ googleSearch: {} }], // Enable Google Search
     };
 
-    // 5. Build search prompt with all available context
+    // Build search prompt with all available context
     let prompt = `You are a character information researcher. Search for detailed information about the character "${characterName}".
 
 Search Instructions:
@@ -235,7 +235,7 @@ Search Instructions:
 
 Character Name: ${characterName}`;
 
-    // 6. Add user-provided context to help with search
+    // Add user-provided context to help with search
     if (context?.description?.trim()) {
       prompt += `\n\nUser's Description: ${context.description.trim()}`;
     }
@@ -256,7 +256,7 @@ Focus on gathering authentic information that would help create an accurate char
 
 IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the conversation partner's name (not for the pronoun "you"), and "{bot}" ONLY where you would write the character's own name (not for "I"/"me"). Keep ordinary pronouns like "you", "I", and "me" exactly as-is.`;
 
-    // 7. Prepare user prompt content
+    // Prepare user prompt content
     const userPromptContent: Content = {
       role: "user",
       parts: [{ text: prompt }],
@@ -265,12 +265,12 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
     log.info(`Searching for character: ${characterName} using model: ${MODEL_NAME}`);
 
     try {
-      // 8. Create timeout promise (60 seconds for search)
+      // Create timeout promise (60 seconds for search)
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("Character search timed out after 60 seconds")), 60000);
       });
 
-      // 9. Make API call with timeout
+      // Make API call with timeout
       const result = await Promise.race([
         genAI.models.generateContent({
           model: MODEL_NAME,
@@ -282,7 +282,7 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
 
       log.info(`Character search completed with model: ${MODEL_NAME}`);
 
-      // 10. Check for blocked content
+      // Check for blocked content
       if (result.promptFeedback?.blockReason) {
         return {
           error: createGoogleErrorMessage(
@@ -297,7 +297,7 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
 
       const responseText = result.text;
 
-      // 11. Check if response is empty
+      // Check if response is empty
       if (!responseText || responseText.trim() === "") {
         return {
           error: createGoogleErrorMessage(
@@ -329,7 +329,7 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
         // Ignore parsing errors
       }
 
-      // 12. Handle specific API errors
+      // Handle specific API errors
       if (errorMessage.includes("timed out")) {
         return {
           error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
@@ -372,7 +372,7 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
     log.error("Character search error:", error);
     const errorMessage = getErrorMessage(error);
 
-    // 13. Check for network errors
+    // Check for network errors
     if (error instanceof TypeError && errorMessage.includes("network")) {
       return {
         error: createGoogleErrorMessage("CONNECTION", 503, errorMessage, locale),
@@ -403,7 +403,7 @@ export async function generatePresetFromPrompt(
   locale: string,
   client?: GoogleGenAI,
 ): Promise<PresetGenerationResult> {
-  // 1. Validate API key (skip when using pre-built client)
+  // Validate API key (skip when using pre-built client)
   if (!client && (!apiKey || apiKey.trim().length < 10)) {
     return {
       error: createGoogleErrorMessage("API_KEY", 403, "Invalid API key", locale),
@@ -412,13 +412,13 @@ export async function generatePresetFromPrompt(
   }
 
   try {
-    // 2. Initialize Gemini client (use pre-built if provided)
+    // Initialize Gemini client (use pre-built if provided)
     const genAI = client ?? new GoogleGenAI({ apiKey });
 
-    // 3. Resolve generation model
+    // Resolve generation model
     const configuredModel = params.modelName || "gemini-2.5-flash";
 
-    // 4. Run search sub-agent when web search is requested.
+    // Run search sub-agent when web search is requested.
     //    gemini-2.5-flash is hardcoded for the search step across all models —
     //    it supports Google Search Grounding on the free AI Studio tier and is
     //    fast enough that it doesn't meaningfully delay generation.
@@ -427,7 +427,7 @@ export async function generatePresetFromPrompt(
     if (params.useWebSearch) {
       log.info(`Running search sub-agent (${SEARCH_AGENT_MODEL}) for "${params.characterName}"`);
 
-      // 4a. Call search agent
+      // Call search agent
       const searchResult = await searchCharacterInfo(
         apiKey,
         params.characterName,
@@ -441,7 +441,7 @@ export async function generatePresetFromPrompt(
         client,
       );
 
-      // 4b. Propagate hard errors (API key, rate limit, etc.)
+      // Propagate hard errors (API key, rate limit, etc.)
       if (searchResult.error) {
         return {
           error: searchResult.error,
@@ -449,17 +449,17 @@ export async function generatePresetFromPrompt(
         };
       }
 
-      // 4c. Store results for injection into the generation prompt
+      // Store results for injection into the generation prompt
       searchInfo = searchResult.characterInfo;
       log.info("Search sub-agent completed, proceeding to generation");
     }
 
-    // 5. Set up generation model; always uses the user's configured model so
+    // Set up generation model; always uses the user's configured model so
     //    free-tier users aren't silently upgraded to a paid model.
     let MODEL_NAME = configuredModel;
     const FALLBACK_MODEL = undefined;
 
-    // 7. Define JSON schema for structured output with length constraints
+    // Define JSON schema for structured output with length constraints
     const maxPresetStringLength = PRESET_MAX_STRING_LENGTH;
     const responseJsonSchema = {
       type: "object" as const,
@@ -498,7 +498,7 @@ export async function generatePresetFromPrompt(
       required: ["attribute_list", "sample_dialogues_in", "sample_dialogues_out"],
     };
 
-    // 8. Configure generation with structured output
+    // Configure generation with structured output
     const generationConfig: GenerateContentConfig = {
       temperature: 1.5, // Creative but controlled
       topP: 0.9,
@@ -507,7 +507,7 @@ export async function generatePresetFromPrompt(
       responseJsonSchema: responseJsonSchema,
     };
 
-    // 9. Build generation prompt
+    // Build generation prompt
     let prompt = `You are an expert character creator for a Discord chatbot. Create a detailed character profile based on the following information.
 
 Character Name: ${params.characterName}
@@ -566,7 +566,7 @@ The sample_dialogues_in and sample_dialogues_out MUST follow this structure (exa
    - Avoid repeating patterns from previous dialogues
    - Could be humor, vulnerability, expertise, philosophical musings, or anything that adds dimension`;
 
-    // 9. Inject search results from the search sub-agent (if web search was requested)
+    // Inject search results from the search sub-agent (if web search was requested)
     if (searchInfo) {
       if (!searchInfo.includes("None found")) {
         prompt += `\n\nWeb Search Results (use this information to create an authentic character profile):
@@ -578,7 +578,7 @@ Use the web search information to accurately represent the character's personali
       }
     }
 
-    // 10. Add additional instructions if provided
+    // Add additional instructions if provided
     if (params.existingPresetContext?.trim()) {
       prompt += `\n\nExisting Character Data (from uploaded card/preset):
 Use this as reference material to transform, refine, or expand upon according to the user's description and instructions. Preserve the core character identity while incorporating requested changes.
@@ -586,7 +586,7 @@ Use this as reference material to transform, refine, or expand upon according to
 ${params.existingPresetContext.trim()}`;
     }
 
-    // 11. Add additional instructions if provided
+    // Add additional instructions if provided
     if (params.additionalInstructions?.trim()) {
       prompt += `\n\nAdditional Instructions: ${params.additionalInstructions.trim()}`;
     }
@@ -603,13 +603,13 @@ ${params.existingPresetContext.trim()}`;
 - NEVER replace pronouns — write "you", "I", "me", "I'm" literally (e.g. write "I'm {bot}", never "{bot}'m {bot}")
 - All string lengths must not exceed ${maxPresetStringLength} characters per item`;
 
-    // 11. Prepare prompt parts (text + optional image)
+    // Prepare prompt parts (text + optional image)
     const promptParts: Array<{
       text?: string;
       inlineData?: { data: string; mimeType: string };
     }> = [{ text: prompt }];
 
-    // 12. Add image if provided
+    // Add image if provided
     if (params.imageBase64 && params.imageMimeType) {
       promptParts.push({
         inlineData: {
@@ -620,7 +620,7 @@ ${params.existingPresetContext.trim()}`;
       log.info("Image included in generation");
     }
 
-    // 13. Prepare user prompt content
+    // Prepare user prompt content
     const userPromptContent: Content = {
       role: "user",
       parts: promptParts,
@@ -628,7 +628,7 @@ ${params.existingPresetContext.trim()}`;
 
     log.info(`Generating preset for: ${params.characterName}`);
 
-    // 14. Retry logic with fallback model (only for Gemini 3)
+    // Retry logic with fallback model (only for Gemini 3)
     let lastError: PresetGenerationResult | null = null;
     const modelsToTry = FALLBACK_MODEL ? [MODEL_NAME, FALLBACK_MODEL] : [MODEL_NAME];
 
@@ -637,12 +637,12 @@ ${params.existingPresetContext.trim()}`;
       log.info(`Attempting preset generation with model: ${MODEL_NAME}`);
 
       try {
-        // 15. Create timeout promise (90 seconds for generation)
+        // Create timeout promise (90 seconds for generation)
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error("Request timed out after 60 seconds")), 90000);
         });
 
-        // 16. Make API call with timeout
+        // Make API call with timeout
         const result = await Promise.race([
           genAI.models.generateContent({
             model: MODEL_NAME,
@@ -654,7 +654,7 @@ ${params.existingPresetContext.trim()}`;
 
         log.info(`Preset generation completed with model: ${MODEL_NAME}`);
 
-        // 17. Check for blocked content
+        // Check for blocked content
         if (result.promptFeedback?.blockReason) {
           lastError = {
             error: createGoogleErrorMessage(
@@ -670,7 +670,7 @@ ${params.existingPresetContext.trim()}`;
 
         const responseText = result.text;
 
-        // 18. Check if response is empty
+        // Check if response is empty
         if (!responseText || responseText.trim() === "") {
           lastError = {
             error: createGoogleErrorMessage(
@@ -684,7 +684,7 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // 19. Parse JSON response
+        // Parse JSON response
         let parsedResponse: {
           attribute_list?: string[];
           sample_dialogues_in?: string[];
@@ -703,7 +703,7 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // 20. Validate response structure
+        // Validate response structure
         if (
           !parsedResponse.attribute_list ||
           !parsedResponse.sample_dialogues_in ||
@@ -721,7 +721,7 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // 21. Validate arrays have correct lengths
+        // Validate arrays have correct lengths
         if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
           lastError = {
             error: createGoogleErrorMessage(
@@ -761,11 +761,11 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        // 22. Sanitize sample dialogues (remove any speaker prefixes)
+        // Sanitize sample dialogues (remove any speaker prefixes)
         const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
         const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
 
-        // 23. Build final PresetExportData with hardcoded nickname and trigger words
+        // Build final PresetExportData with hardcoded nickname and trigger words
         const preset: PresetExportData = {
           tomori_nickname: params.characterName,
           trigger_words: [params.characterName],
@@ -793,7 +793,7 @@ ${params.existingPresetContext.trim()}`;
           // Ignore parsing errors
         }
 
-        // 24. Handle specific API errors
+        // Handle specific API errors
         if (errorMessage.includes("timed out")) {
           lastError = {
             error: createGoogleErrorMessage("TIMEOUT", 504, errorMessage, locale),
@@ -842,12 +842,12 @@ ${params.existingPresetContext.trim()}`;
       }
     }
 
-    // 25. If all models failed, return the last error
+    // If all models failed, return the last error
     if (lastError) {
       return lastError;
     }
 
-    // 26. Fallback error if no lastError was set (should never happen)
+    // Fallback error if no lastError was set (should never happen)
     return {
       error: createGoogleErrorMessage("UNKNOWN", undefined, "Preset generation failed with no error details", locale),
       errorType: "UNKNOWN",
@@ -856,7 +856,7 @@ ${params.existingPresetContext.trim()}`;
     log.error("Preset generation error:", error);
     const errorMessage = getErrorMessage(error);
 
-    // 27. Check for network errors
+    // Check for network errors
     if (error instanceof TypeError && errorMessage.includes("network")) {
       return {
         error: createGoogleErrorMessage("CONNECTION", 503, errorMessage, locale),

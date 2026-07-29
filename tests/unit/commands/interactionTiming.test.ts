@@ -403,13 +403,13 @@ describe("Contract 3: /tool comment acknowledgement ordering", () => {
 
     const methods = callMethods(calls);
 
-    // 1. Defer is first (before any async work like channel.send)
+    // Defer is first (before any async work like channel.send)
     expect(methods[0]).toBe("deferReply");
 
-    // 2. editReply appears as the final acknowledgement (via replyInfoEmbed after defer)
+    // editReply appears as the final acknowledgement (via replyInfoEmbed after defer)
     expect(methods).toContain("editReply");
 
-    // 3. reply() must not appear — using editReply after deferReply is the correct pattern
+    // reply() must not appear — using editReply after deferReply is the correct pattern
     expect(methods).not.toContain("reply");
   });
 

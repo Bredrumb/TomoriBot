@@ -52,7 +52,7 @@ function ensureFonts(): { regular: Buffer; bold: Buffer } {
 export async function renderCardToPng(node: VNode, width: number, height: number): Promise<Buffer> {
   const { regular, bold } = ensureFonts();
 
-  // 1. satori: JSX → SVG (uses font buffers for glyph measurement)
+  // satori: JSX → SVG (uses font buffers for glyph measurement)
   const svg = await satori(node, {
     width,
     height,
@@ -62,7 +62,7 @@ export async function renderCardToPng(node: VNode, width: number, height: number
     ],
   });
 
-  // 2. @resvg/resvg-js: SVG → PNG (uses the same font buffers for rasterization).
+  // @resvg/resvg-js: SVG → PNG (uses the same font buffers for rasterization).
   // fontBuffers is the runtime API for passing Buffer[] directly but is absent
   // from the v2.6.2 type declarations. Assigning to a variable first avoids
   // TypeScript's excess-property literal check while keeping runtime behavior.

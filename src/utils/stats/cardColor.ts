@@ -160,7 +160,7 @@ async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBu
     .toBuffer({ resolveWithObject: true });
   const buckets = new Map<string, { red: number; green: number; blue: number; count: number }>();
 
-  // 1. Quantize each opaque, sufficiently-saturated pixel into a coarse bucket.
+  // Quantize each opaque, sufficiently-saturated pixel into a coarse bucket.
   for (let index = 0; index < data.length; index += info.channels) {
     if (data[index + 3] < 200) continue;
     const red = Math.round(data[index] / 32) * 32;
@@ -175,7 +175,7 @@ async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBu
   }
 
   if (buckets.size === 0) return null;
-  // 2. Attach HSL to every surviving bucket for downstream selection.
+  // Attach HSL to every surviving bucket for downstream selection.
   return [...buckets.values()].map((bucket) => ({ ...bucket, ...rgbToHsl(bucket.red, bucket.green, bucket.blue) }));
 }
 

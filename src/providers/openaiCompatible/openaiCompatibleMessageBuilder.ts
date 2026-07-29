@@ -144,11 +144,11 @@ export async function buildOpenAICompatibleMessages(
   if (systemInstructionParts.length > 0) {
     const systemContent = systemInstructionParts.join("\n\n");
 
-    // 1. Some endpoints (e.g. Chatmock proxying Codex CLI) strip system-role
+    // Some endpoints (e.g. Chatmock proxying Codex CLI) strip system-role
     //    turns before forwarding to the underlying model.  When the adapter
     //    signals this via supportsSystemRole: false, inject the instructions
     //    as the first user turn so the model still receives them in-band.
-    // 2. The wrapper preamble mirrors the Gemma in-band injection pattern
+    // The wrapper preamble mirrors the Gemma in-band injection pattern
     //    used in googleStreamAdapter.ts.
     if (options.supportsSystemRole === false) {
       messages.unshift({

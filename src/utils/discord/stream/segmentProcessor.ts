@@ -181,7 +181,7 @@ export class StreamSegmentProcessor {
       if (leak) {
         const retryCount = context.emptyResponseRetryCount ?? 0;
         if (retryCount < MAX_EMPTY_RESPONSE_RETRIES) {
-          // 1. Budget remains: discard the whole attempt. The speaker_guard stop with nothing
+          // Budget remains: discard the whole attempt. The speaker_guard stop with nothing
           //    sent classifies the turn as empty_response, and maybeScheduleEmptyResponseRetry
           //    regenerates with the "reply only as {persona}" directive injected.
           log.warn(
@@ -190,7 +190,7 @@ export class StreamSegmentProcessor {
           this.deps.requestStop(context.channel.id, "speaker_guard");
           return;
         }
-        // 2. Budget exhausted: better a stripped reply than silence — drop the leaked label
+        // Budget exhausted: better a stripped reply than silence — drop the leaked label
         //    and deliver the body as the active persona.
         log.warn(
           `Stream opening-label leak guard: retry budget exhausted, stripping leaked label "${leak.matchedPrefix.trim()}" and delivering body`,
@@ -379,12 +379,12 @@ export class StreamSegmentProcessor {
     renderModifierSourceNames: readonly string[];
     renderModifierChainSourceNames: readonly string[];
   }): void {
-    // 1. Only interesting when the strict parser declined text that still looks like a label.
+    // Only interesting when the strict parser declined text that still looks like a label.
     if (args.renderModifierMatch) return;
     const labelHead = args.workingSegment.slice(0, RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS);
     if (!SUSPECTED_RENDER_MODIFIER_LABEL_RE.test(labelHead)) return;
 
-    // 2. Echo raw vs working separately so an orphan-punctuation splice is visible as a diff.
+    // Echo raw vs working separately so an orphan-punctuation splice is visible as a diff.
     log.warn(
       `Stream RenderModifier Diagnostic: leading label not parsed in channel ${args.context.channel.id}. ` +
         `canUseRenderModifier=${args.canUseRenderModifier} ` +
@@ -425,7 +425,7 @@ export class StreamSegmentProcessor {
     context: StreamContext,
   ): Promise<void> {
     const personaId = context.tomoriState.persona_id;
-    // 1. Read back the sprite roster actually visible to the lookup; a cache miss here is
+    // Read back the sprite roster actually visible to the lookup; a cache miss here is
     //    itself a finding, so failures degrade to an explicit marker rather than throwing.
     let availableSpriteKeys: string[] | "lookup_failed" = "lookup_failed";
     if (typeof personaId === "number") {
@@ -471,7 +471,7 @@ export class StreamSegmentProcessor {
     spriteKey: string,
     channelId: string,
   ): ResolvedWebhookIdentity {
-    // 1. The "false" half keeps the clean persona name; the "true" half uses the
+    // The "false" half keeps the clean persona name; the "true" half uses the
     //    decorated "Persona (sprite)" name so it reads as a distinct Discord author.
     if (!advanceChannelSpriteGroupParity(channelId, spriteKey)) {
       return identity;
@@ -504,7 +504,7 @@ export class StreamSegmentProcessor {
     context: StreamContext,
     allowedSourceNames: readonly string[],
   ): Promise<LeadingGenericSpeakerLabelMatch | null> {
-    // 1. Peel allowed plain self-labels ("Tomori:") so a leak hiding behind them is still seen.
+    // Peel allowed plain self-labels ("Tomori:") so a leak hiding behind them is still seen.
     let working = segment;
     let match = parseLeadingGenericSpeakerLabel(working);
     while (match && !match.modifier && matchesRenderModifierName(match.sourceName, allowedSourceNames)) {
@@ -513,14 +513,14 @@ export class StreamSegmentProcessor {
     }
     if (!match) return null;
 
-    // 2. A decorated label with an allowed source name is upstream's business (the render-modifier
+    // A decorated label with an allowed source name is upstream's business (the render-modifier
     //    parse consumes it, including failed sprite resolutions) — never treat it as a leak here.
     if (matchesRenderModifierName(match.sourceName, allowedSourceNames)) return null;
 
-    // 3. Decorated + disallowed name: unambiguous leak.
+    // Decorated + disallowed name: unambiguous leak.
     if (match.modifier) return match;
 
-    // 4. Plain label: only a leak when the name belongs to a known conversation participant.
+    // Plain label: only a leak when the name belongs to a known conversation participant.
     const knownNames = await collectKnownSpeakerNames(context);
     return matchesRenderModifierName(match.sourceName, knownNames) ? match : null;
   }

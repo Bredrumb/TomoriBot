@@ -53,7 +53,7 @@ export async function execute(
   let responseInteraction: ChatInputCommandInteraction | ModalSubmitInteraction = interaction;
 
   try {
-    // 1. Resolve target persona via selector
+    // Resolve target persona via selector
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = allPersonas
@@ -124,10 +124,10 @@ export async function execute(
       return;
     }
 
-    // 2. Defer reply while we process (not ephemeral for transparency)
+    // Defer reply while we process (not ephemeral for transparency)
     await responseInteraction.deferReply();
 
-    // 3. Export selected persona data from database
+    // Export selected persona data from database
     const exportResult = await presetRepository.exportPresetData(serverDiscId, selectedPersona.persona_id);
 
     if (!exportResult.success) {
@@ -197,7 +197,7 @@ export async function execute(
       return;
     }
 
-    // 4. Resolve avatar image (alter persona avatar when available, otherwise server avatar)
+    // Resolve avatar image (alter persona avatar when available, otherwise server avatar)
     let avatarBuffer: Buffer;
     try {
       let selectedAvatarBuffer: Buffer | null = null;
@@ -236,7 +236,7 @@ export async function execute(
       return;
     }
 
-    // 5. Embed metadata into PNG
+    // Embed metadata into PNG
     let pngWithMetadata: Buffer;
     try {
       pngWithMetadata = embedMetadataInPNG(avatarBuffer, presetData);
@@ -256,7 +256,7 @@ export async function execute(
       return;
     }
 
-    // 6. Create filename with nickname and timestamp
+    // Create filename with nickname and timestamp
     const nickname = presetData.data.tomori_nickname;
     const sanitizedNickname = sanitizeAttachmentFilenamePart(nickname, {
       fallback: "persona",
@@ -265,12 +265,12 @@ export async function execute(
     const timestamp = Date.now();
     const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
 
-    // 7. Create attachment
+    // Create attachment
     const attachment = new AttachmentBuilder(pngWithMetadata, {
       name: filename,
     });
 
-    // 8. Send to channel with embedded image (visible to everyone for transparency)
+    // Send to channel with embedded image (visible to everyone for transparency)
     await responseInteraction.editReply({
       embeds: [
         new EmbedBuilder()

@@ -77,18 +77,18 @@ export function applyAssistantPrefixCompletion(
   requestBody: Record<string, unknown>,
   outputPrefill: string | undefined,
 ): void {
-  // 1. Bail when there is no prefill to continue from.
+  // Bail when there is no prefill to continue from.
   if (!outputPrefill) {
     return;
   }
 
-  // 2. The body must carry a non-empty messages array.
+  // The body must carry a non-empty messages array.
   const messages = requestBody.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return;
   }
 
-  // 3. The trailing message must be the assistant prefill turn...
+  // The trailing message must be the assistant prefill turn...
   const lastMessage = messages.at(-1) as Record<string, unknown> | undefined;
   if (
     !lastMessage ||
@@ -99,7 +99,7 @@ export function applyAssistantPrefixCompletion(
     return;
   }
 
-  // 4. ...so flag it for continuation.
+  // ...so flag it for continuation.
   lastMessage.prefix = true;
 }
 
@@ -153,7 +153,7 @@ function hasToolMetadata(message: NormalizableMessage): boolean {
  * @returns A new array with consecutive same-role runs merged.
  */
 export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages: T[]): T[] {
-  // 1. Empty input → empty output.
+  // Empty input → empty output.
   if (messages.length === 0) {
     return [];
   }
@@ -161,7 +161,7 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
   const merged: T[] = [];
   let current = messages[0];
 
-  // 2. Walk the list, folding each same-role neighbor into the current run.
+  // Walk the list, folding each same-role neighbor into the current run.
   for (let i = 1; i < messages.length; i++) {
     const next = messages[i];
     // Merge only same-role neighbors, and never across a tool-bearing turn (which would drop its
@@ -180,7 +180,7 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
     }
   }
 
-  // 3. Flush the trailing run.
+  // Flush the trailing run.
   merged.push(current);
   return merged;
 }
@@ -196,15 +196,15 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
  * @returns A new array, with the synthetic turn inserted when required.
  */
 export function ensureLeadingUserTurn<T extends NormalizableMessage>(messages: T[], leadingTurnFactory: () => T): T[] {
-  // 1. Locate the first dialogue turn (skip leading system/tool turns).
+  // Locate the first dialogue turn (skip leading system/tool turns).
   const firstDialogueIndex = messages.findIndex((m) => m.role === "user" || m.role === "assistant");
 
-  // 2. Nothing to fix when there is no dialogue or it already starts with a user turn.
+  // Nothing to fix when there is no dialogue or it already starts with a user turn.
   if (firstDialogueIndex === -1 || messages[firstDialogueIndex].role !== "assistant") {
     return messages;
   }
 
-  // 3. Insert the synthetic user turn immediately before the leading assistant turn.
+  // Insert the synthetic user turn immediately before the leading assistant turn.
   const result = [...messages];
   result.splice(firstDialogueIndex, 0, leadingTurnFactory());
   return result;
@@ -245,7 +245,7 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
   const result: StructuredContextItem[] = [];
 
   for (const item of contextItems) {
-    // 1. Only model turns can carry assistant media that provider APIs reject.
+    // Only model turns can carry assistant media that provider APIs reject.
     if (item.role !== "model") {
       result.push(item);
       continue;
@@ -257,7 +257,7 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
       continue;
     }
 
-    // 2. Preserve any non-image model content as the original assistant/model turn.
+    // Preserve any non-image model content as the original assistant/model turn.
     const remainingParts = item.parts.filter((part) => part.type !== "image");
     if (remainingParts.length > 0) {
       result.push({
@@ -266,7 +266,7 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
       });
     }
 
-    // 3. Emit the relocated images as a user turn, attributing them to the original sender.
+    // Emit the relocated images as a user turn, attributing them to the original sender.
     result.push({
       role: "user",
       parts: [
@@ -305,7 +305,7 @@ export function relocateAssistantMediaToUserTurns(
   const result: Array<Record<string, unknown>> = [];
 
   for (const message of messages) {
-    // 1. Only assistant turns with array content can hold relocatable media.
+    // Only assistant turns with array content can hold relocatable media.
     if (message.role !== "assistant" || !Array.isArray(message.content)) {
       result.push(message);
       continue;
@@ -314,7 +314,7 @@ export function relocateAssistantMediaToUserTurns(
     const parts = message.content as Array<Record<string, unknown>>;
     const imageParts = parts.filter((part) => part.type === "image_url");
 
-    // 2. No media → flatten/forward without relocation (still collapse to string for consistency).
+    // No media → flatten/forward without relocation (still collapse to string for consistency).
     if (imageParts.length === 0) {
       const textOnly = flattenTextParts(parts);
       if (textOnly.length > 0) {
@@ -323,13 +323,13 @@ export function relocateAssistantMediaToUserTurns(
       continue;
     }
 
-    // 3. Emit the text-only assistant turn (when there is any text) ...
+    // Emit the text-only assistant turn (when there is any text) ...
     const assistantText = flattenTextParts(parts);
     if (assistantText.length > 0) {
       result.push({ role: "assistant", content: assistantText });
     }
 
-    // 4. ... then the synthetic user turn carrying the relocated images.
+    // ... then the synthetic user turn carrying the relocated images.
     const senderName =
       typeof message.assistantMediaSenderName === "string" ? message.assistantMediaSenderName : fallbackSenderName;
     result.push({

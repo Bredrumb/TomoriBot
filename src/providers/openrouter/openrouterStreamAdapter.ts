@@ -524,22 +524,22 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           const configuredMinOutputTokens =
             Number.isFinite(minOutputTokensRaw) && minOutputTokensRaw > 0 ? minOutputTokensRaw : 256;
           const minOutputTokensFloor = Math.min(configuredMinOutputTokens, effectiveMaxOutputTokens);
-          // 1. Rough input token estimate from textual message content
+          // Rough input token estimate from textual message content
           const estimatedInputTokens = this.estimateInputTokensForSafetyCap(messages);
           const remainingContextTokens = tokenLimits.contextLength - estimatedInputTokens;
-          // 2. Budget = safety-factor of remaining context after input
+          // Budget = safety-factor of remaining context after input
           const rawSafeOutputBudget = Math.floor(remainingContextTokens * outputSafetyFactor);
           let safeOutputBudget = Math.max(1, rawSafeOutputBudget);
           let minOutputFloorApplied = false;
 
-          // 3. If margin makes output too small, lift to min floor when the
+          // If margin makes output too small, lift to min floor when the
           // remaining context can still fit it.
           if (safeOutputBudget < minOutputTokensFloor && remainingContextTokens >= minOutputTokensFloor) {
             safeOutputBudget = minOutputTokensFloor;
             minOutputFloorApplied = true;
           }
 
-          // 3. Cap max output to whichever is smaller: model limit or safe budget
+          // Cap max output to whichever is smaller: model limit or safe budget
           if (safeOutputBudget < effectiveMaxOutputTokens) {
             log.warn(
               `Context-window safety cap applied for ${config.model}: ` +

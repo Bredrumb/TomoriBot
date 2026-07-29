@@ -43,7 +43,7 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // 1. Check if command is run in a guild (not DMs)
+    // Check if command is run in a guild (not DMs)
     if (!interaction.guild) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.guild_only_title",
@@ -54,7 +54,7 @@ export async function execute(
       return;
     }
 
-    // 2. Check permissions (ManageGuild required)
+    // Check permissions (ManageGuild required)
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     if (!hasPermission) {
@@ -67,15 +67,15 @@ export async function execute(
       return;
     }
 
-    // 3. Load all personas for this server
+    // Load all personas for this server
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
 
-    // 4. Filter to removable personas:
+    // Filter to removable personas:
     // - all alters
     // - duplicate-tagged personas created by schema migration cleanup, even if marked as main
     const removablePersonas = allPersonas.filter((p) => p.is_alter || isDuplicateTaggedName(p.persona_nickname));
 
-    // 5. Error if no alters exist
+    // Error if no alters exist
     if (removablePersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.remove.no_alters_error_title",
@@ -86,13 +86,13 @@ export async function execute(
       return;
     }
 
-    // 6. Build select options for modal
+    // Build select options for modal
     const alterSelectOptions: SelectOption[] = removablePersonas.map((persona, index) => ({
       label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(), // Use index to avoid truncation issues
     }));
 
-    // 7. Show modal with alter selection
+    // Show modal with alter selection
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.persona.remove.modal_title",
@@ -139,7 +139,7 @@ export async function execute(
     }
     const personaId = personaToRemove.persona_id;
 
-    // 8. Delete selected persona from database.
+    // Delete selected persona from database.
     // For non-alter duplicate-tagged rows, ensure at least one main persona remains.
     if (!personaToRemove.is_alter) {
       const mainCount = await personaRepository.countMainPersonasForServer(personaToRemove.server_id);
@@ -169,10 +169,10 @@ export async function execute(
       await deletePersonaAvatarFromStorage(personaToRemove.webhook_avatar_url);
     }
 
-    // 9. Invalidate cache
+    // Invalidate cache
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // 10. Show success embed with deleted persona's nickname
+    // Show success embed with deleted persona's nickname
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.persona.remove.success_title",
       description: localizer(locale, "commands.persona.remove.success_description", {

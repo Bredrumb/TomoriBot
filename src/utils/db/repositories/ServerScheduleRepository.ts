@@ -465,7 +465,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     includeUnassigned = false,
   ): Promise<ReminderRow[] | null> {
     try {
-      // 1. Query for pending reminders (reminder_time > now) for the user
+      // Query for pending reminders (reminder_time > now) for the user
       let reminderData: unknown[];
       if (serverDiscId && typeof personaId === "number") {
         // Join with servers table to filter by server_disc_id
@@ -532,7 +532,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
         return [];
       }
 
-      // 2. Validate each reminder row
+      // Validate each reminder row
       const validatedReminders: ReminderRow[] = [];
       for (const reminder of reminderData) {
         const parsed = reminderSchema.safeParse(reminder);
@@ -992,7 +992,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
   private async sqlGetDueRandomTriggers(): Promise<RandomTriggerRow[]> {
     try {
-      // 1. Fetch all triggers scheduled at or before now
+      // Fetch all triggers scheduled at or before now
       const rows = await sql`
         SELECT * FROM random_triggers
         WHERE next_trigger_at <= NOW()
@@ -1001,7 +1001,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
       if (!rows.length) return [];
 
-      // 2. Validate and return each row
+      // Validate and return each row
       const validated: RandomTriggerRow[] = [];
       for (const row of rows) {
         const parsed = randomTriggerSchema.safeParse(row);
@@ -1046,7 +1046,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
   private async sqlGetServerRandomTriggers(serverId: number): Promise<RandomTriggerRow[]> {
     try {
-      // 1. Fetch all triggers for this server ordered by creation date
+      // Fetch all triggers for this server ordered by creation date
       const rows = await sql`
         SELECT * FROM random_triggers
         WHERE server_id = ${serverId}
@@ -1055,7 +1055,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
       if (!rows.length) return [];
 
-      // 2. Validate and return
+      // Validate and return
       const validated: RandomTriggerRow[] = [];
       for (const row of rows) {
         const parsed = randomTriggerSchema.safeParse(row);
@@ -1074,7 +1074,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
   private async sqlGetServerRandomTriggerCount(serverId: number): Promise<number> {
     try {
-      // 1. Count triggers for this server
+      // Count triggers for this server
       const [row] = await sql<Array<{ count: string | number }>>`
         SELECT COUNT(*) AS count FROM random_triggers
         WHERE server_id = ${serverId}
@@ -1092,7 +1092,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
     personaId: number,
   ): Promise<RandomTriggerRow | null> {
     try {
-      // 1. Find matching trigger for the specific named persona in this channel
+      // Find matching trigger for the specific named persona in this channel
       const [row] = await sql`
         SELECT * FROM random_triggers
         WHERE server_id = ${serverId}
@@ -1103,7 +1103,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
       if (!row) return null;
 
-      // 2. Validate and return
+      // Validate and return
       const parsed = randomTriggerSchema.safeParse(row);
       if (!parsed.success) {
         log.warn(`Invalid random trigger row for persona ${personaId} in channel ${channelDiscId}:`, parsed.error);
@@ -1123,7 +1123,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
   private async sqlInsertRandomTrigger(data: RandomTriggerData): Promise<RandomTriggerRow | null> {
     try {
-      // 1. Insert trigger; schedule first roll after one full timer cycle
+      // Insert trigger; schedule first roll after one full timer cycle
       const [row] = await sql`
         INSERT INTO random_triggers (
           server_id,
@@ -1160,7 +1160,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
         return null;
       }
 
-      // 2. Validate with schema
+      // Validate with schema
       const parsed = randomTriggerSchema.safeParse(row);
       if (!parsed.success) {
         log.error("sqlInsertRandomTrigger: schema validation failed:", parsed.error);
@@ -1183,7 +1183,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
 
   private async sqlUpsertRandomTrigger(triggerId: number, data: RandomTriggerData): Promise<RandomTriggerRow | null> {
     try {
-      // 1. Update the trigger and reschedule the next roll from now
+      // Update the trigger and reschedule the next roll from now
       const [row] = await sql`
         UPDATE random_triggers SET
           timer_hours             = ${data.timerHours},
@@ -1204,7 +1204,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
         return null;
       }
 
-      // 2. Validate with schema
+      // Validate with schema
       const parsed = randomTriggerSchema.safeParse(row);
       if (!parsed.success) {
         log.error("sqlUpsertRandomTrigger: schema validation failed:", parsed.error);
@@ -1258,7 +1258,7 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
           : 0;
       const nextTimerHours = Math.max(1, timerHours + randomOffset);
 
-      // 1. Advance next_trigger_at and persist the current consecutive failure count
+      // Advance next_trigger_at and persist the current consecutive failure count
       const [row] = await sql`
         UPDATE random_triggers
         SET next_trigger_at      = NOW() + (${nextTimerHours} * INTERVAL '1 hour'),

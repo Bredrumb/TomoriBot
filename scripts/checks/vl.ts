@@ -295,7 +295,7 @@ async function runTests(): Promise<ResultItem[]> {
     console.log(output);
   }
 
-  // 1. Prefer the JUnit XML — it lists every file regardless of console logging.
+  // Prefer the JUnit XML — it lists every file regardless of console logging.
   let items: ResultItem[] | null = null;
   try {
     const xml = await Bun.file(junitOutfile).text();
@@ -306,10 +306,10 @@ async function runTests(): Promise<ResultItem[]> {
     await rm(junitOutfile, { force: true }).catch(() => undefined);
   }
 
-  // 2. Fall back to console parsing if JUnit was unavailable.
+  // Fall back to console parsing if JUnit was unavailable.
   const resolved = items ?? parseConsoleOutput(output, exitCode);
 
-  // 3. The runner can exit non-zero without any individual file reporting a failure
+  // The runner can exit non-zero without any individual file reporting a failure
   //    (segfault, OOM, harness error, a batch dying before it emits results). Those
   //    runs must never read as green just because the parsed items all look clean.
   if (exitCode !== 0 && resolved.every((item) => item.exitCode === 0)) {

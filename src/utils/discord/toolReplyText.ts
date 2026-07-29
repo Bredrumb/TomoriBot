@@ -31,14 +31,14 @@ import { cleanLLMOutput } from "@/utils/text/processors/llmOutputProcessor";
 export async function cleanToolReplyText(content: string, context: ToolContext): Promise<string> {
   const contextItems = context.contextItems ?? [];
 
-  // 1. Build the static handle→user-ID lookup from the same conversation context the stream
+  // Build the static handle→user-ID lookup from the same conversation context the stream
   //    path uses, so tool replies resolve @mentions identically to normal replies.
   const { mentionMap, mentionIdSet, personaMentionMap } = buildMentionLookup(contextItems);
 
-  // 2. Drop custom emojis already used in recent bot turns (matches the stream pre-clean).
+  // Drop custom emojis already used in recent bot turns (matches the stream pre-clean).
   const filtered = filterDuplicateCustomEmojis(content, contextItems);
 
-  // 3. Run the shared LLM-output cleaner: resolves emoji shortcodes/tags against the server
+  // Run the shared LLM-output cleaner: resolves emoji shortcodes/tags against the server
   //    emoji list, strips the active persona's own-name labels, resolves @handle mentions, and
   //    applies uncensor transforms. Runs on the still-prefixed text so own-label stripping can
   //    make its real-turn vs leaked-preamble decision correctly.
@@ -61,7 +61,7 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
     personaMentionMap,
   );
 
-  // 4. Strip any leading *foreign* persona speaker labels (e.g. "Bella:") that the own-name-only
+  // Strip any leading *foreign* persona speaker labels (e.g. "Bella:") that the own-name-only
   //    cleaner leaves behind — the model is often steered to prefix its turn with a speaker name.
   const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
     context.personaUsername,
@@ -69,7 +69,7 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
   ]);
   const deLabeled = stripLeadingKnownSpeakerPrefixes(cleaned, speakerNames);
 
-  // 5. Resolve guild-wide @mentions: searches guild members for handles not present in the
+  // Resolve guild-wide @mentions: searches guild members for handles not present in the
   //    conversation context map, then replaces all resolved handles with `<@id>` tags.
   const resolved = await resolveGuildMentions(deLabeled, context.channel, mentionMap, mentionIdSet, personaMentionMap);
 

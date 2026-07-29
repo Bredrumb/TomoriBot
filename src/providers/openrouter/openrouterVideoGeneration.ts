@@ -86,10 +86,10 @@ async function pwshHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // 1. Build the request envelope that pwsh reads from stdin
+  // Build the request envelope that pwsh reads from stdin
   const requestEnvelope = JSON.stringify({ url, method, headers, body });
 
-  // 2. Spawn pwsh with the inline HTTP script
+  // Spawn pwsh with the inline HTTP script
   //    -NoProfile: skip user profile loading for faster startup
   //    -NonInteractive: no prompts — fail immediately on errors
   const proc = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", "-Command", PWSH_HTTP_SCRIPT], {
@@ -98,11 +98,11 @@ async function pwshHttpRequest(
     stderr: "pipe",
   });
 
-  // 3. Write the request envelope to stdin and close it
+  // Write the request envelope to stdin and close it
   proc.stdin.write(requestEnvelope);
   proc.stdin.end();
 
-  // 4. Collect stdout and stderr in parallel
+  // Collect stdout and stderr in parallel
   const [rawOutput, rawStderr] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -114,7 +114,7 @@ async function pwshHttpRequest(
     throw new Error(`pwsh HTTP request failed (exit ${exitCode}): ${rawStderr.slice(0, 500)}`);
   }
 
-  // 5. Parse the JSON response envelope from pwsh
+  // Parse the JSON response envelope from pwsh
   let envelope: { status: number; bodyBase64: string };
   try {
     envelope = JSON.parse(rawOutput) as typeof envelope;
@@ -122,7 +122,7 @@ async function pwshHttpRequest(
     throw new Error(`pwsh HTTP response is not valid JSON: ${rawOutput.slice(0, 300)}`);
   }
 
-  // 6. Decode the base64 body back to a Buffer (handles both JSON and binary MP4 content)
+  // Decode the base64 body back to a Buffer (handles both JSON and binary MP4 content)
   const bodyBuffer = Buffer.from(envelope.bodyBase64, "base64");
 
   return { status: envelope.status, headers: {}, bodyBuffer };
@@ -146,31 +146,31 @@ async function curlHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // 1. Build curl arguments
+  // Build curl arguments
   const args: string[] = ["-s", "-S", "--max-time", "120", "--proto", "=https", "-X", method];
 
-  // 2. Suppress Expect: 100-continue — curl sends this for POST bodies over ~1KB,
+  // Suppress Expect: 100-continue — curl sends this for POST bodies over ~1KB,
   //    which inserts an intermediate "HTTP/1.1 100 Continue" block before the real response.
   //    Our -i parser splits on the first \r\n\r\n, so 100-Continue would break parsing.
   args.push("-H", "Expect:");
 
-  // 3. Add each header, stripping CRLF to prevent header injection
+  // Add each header, stripping CRLF to prevent header injection
   for (const [key, value] of Object.entries(headers)) {
     args.push("-H", `${key}: ${value}`);
   }
 
-  // 4. Add request body via --data-raw (no @filename expansion)
+  // Add request body via --data-raw (no @filename expansion)
   if (body !== undefined) {
     args.push("--data-raw", body);
   }
 
-  // 5. Include response headers in output via -i
+  // Include response headers in output via -i
   args.push("-i");
 
-  // 6. Target URL last
+  // Target URL last
   args.push(url);
 
-  // 7. Spawn curl
+  // Spawn curl
   const proc = Bun.spawn(["curl", ...args], {
     stdout: "pipe",
     stderr: "pipe",
@@ -187,7 +187,7 @@ async function curlHttpRequest(
     throw new Error(`curl exited with code ${exitCode}: ${rawStderr.slice(0, 500)}`);
   }
 
-  // 8. Parse the -i output: headers separated from body by \r\n\r\n
+  // Parse the -i output: headers separated from body by \r\n\r\n
   const fullBuffer = Buffer.from(rawOutput);
   const headerEndIndex = fullBuffer.indexOf("\r\n\r\n");
 
@@ -198,12 +198,12 @@ async function curlHttpRequest(
   const headerSection = fullBuffer.subarray(0, headerEndIndex).toString("utf8");
   const bodyBuffer = fullBuffer.subarray(headerEndIndex + 4);
 
-  // 9. Parse status line (e.g. "HTTP/1.1 200 OK" or "HTTP/2 200")
+  // Parse status line (e.g. "HTTP/1.1 200 OK" or "HTTP/2 200")
   const headerLines = headerSection.split("\r\n");
   const statusMatch = headerLines[0]?.match(/HTTP\/[\d.]+ (\d+)/);
   const status = statusMatch ? Number.parseInt(statusMatch[1], 10) : 0;
 
-  // 10. Parse response headers into lowercase key-value map
+  // Parse response headers into lowercase key-value map
   const responseHeaders: Record<string, string> = {};
   for (let i = 1; i < headerLines.length; i++) {
     const colonIdx = headerLines[i].indexOf(":");
@@ -237,18 +237,18 @@ async function externalHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // 1. Validate URL scheme — only HTTPS allowed to prevent protocol attacks
+  // Validate URL scheme — only HTTPS allowed to prevent protocol attacks
   if (!url.startsWith("https://")) {
     throw new Error(`externalHttpRequest: URL must use HTTPS, got: ${url.slice(0, 80)}`);
   }
 
-  // 2. Sanitize header values — strip CRLF to prevent header injection
+  // Sanitize header values — strip CRLF to prevent header injection
   const sanitizedHeaders: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     sanitizedHeaders[key] = value.replace(/[\r\n]/g, "");
   }
 
-  // 3. Dispatch to platform-appropriate backend
+  // Dispatch to platform-appropriate backend
   return IS_WINDOWS
     ? pwshHttpRequest(url, method, sanitizedHeaders, body)
     : curlHttpRequest(url, method, sanitizedHeaders, body);
@@ -323,7 +323,7 @@ export async function generateOpenRouterNativeVideo(
   };
   const submitBodyJson = JSON.stringify(body);
 
-  // 2. Submit the generation request via external HTTP helper (bypasses Bun's TLS fingerprint issue)
+  // Submit the generation request via external HTTP helper (bypasses Bun's TLS fingerprint issue)
   const submitRaw = await externalHttpRequest(OPENROUTER_VIDEO_URL, "POST", apiHeaders, submitBodyJson);
 
   const submitBodyText = submitRaw.bodyBuffer.toString("utf8");
@@ -364,7 +364,7 @@ export async function generateOpenRouterNativeVideo(
     `OpenRouter video generation: job submitted, polling for completion (jobId: ${jobId}, pollingUrl: ${pollingUrl})`,
   );
 
-  // 3. Poll for completion using the polling_url returned by the submit response.
+  // Poll for completion using the polling_url returned by the submit response.
   //    The URL format is determined by OpenRouter and may differ from a simple ID-based path.
   const pollHeaders = {
     Authorization: `Bearer ${request.apiKey}`,
@@ -425,7 +425,7 @@ export async function generateOpenRouterNativeVideo(
     logLabel: "OpenRouterVideoGeneration",
   });
 
-  // 4. Download the video
+  // Download the video
   //    Use unsigned_urls if available, otherwise use the content endpoint.
   //    The video file may not be immediately available after the poll returns "completed"
   //    due to eventual consistency in OpenRouter's storage — retry a few times on 404.

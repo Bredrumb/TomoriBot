@@ -36,7 +36,7 @@ export namespace ProviderFactory {
     log.info("Discovering providers from src/providers/*...");
 
     try {
-      // 1. Scan for provider directories using Bun.glob
+      // Scan for provider directories using Bun.glob
       const glob = new Glob("*/");
       const providersPath = path.join(import.meta.dir, "../../providers");
 
@@ -56,14 +56,14 @@ export namespace ProviderFactory {
 
       log.info(`Found ${providerDirs.length} provider directories: ${providerDirs.join(", ")}`);
 
-      // 2. For each directory, check if it has a provider implementation file
+      // For each directory, check if it has a provider implementation file
       for (const dir of providerDirs) {
         const providerName = dir.replace(/\/$/, ""); // Remove trailing slash
         const providerFileName = `${providerName}Provider.ts`;
         const providerPath = path.join(providersPath, dir, providerFileName);
 
         try {
-          // 3. Check if the provider file exists
+          // Check if the provider file exists
           const file = Bun.file(providerPath);
           const exists = await file.exists();
 
@@ -72,7 +72,7 @@ export namespace ProviderFactory {
             continue;
           }
 
-          // 4. Register the provider with a lazy loader
+          // Register the provider with a lazy loader
           const importPath = `../../providers/${providerName}/${providerFileName.replace(".ts", "")}`;
           providerRegistry.set(providerName, async () => {
             const module = await import(importPath);
@@ -113,7 +113,7 @@ export namespace ProviderFactory {
 
     const normalizedName = normalizeProviderName(providerName);
 
-    // 1. Check if we already have an instance (check cache first for canonical and alias)
+    // Check if we already have an instance (check cache first for canonical and alias)
     if (providerInstances.has(normalizedName)) {
       const instance = providerInstances.get(normalizedName);
       if (instance) {
@@ -121,7 +121,7 @@ export namespace ProviderFactory {
       }
     }
 
-    // 2. Check if this is a registered canonical provider name
+    // Check if this is a registered canonical provider name
     if (providerRegistry.has(normalizedName)) {
       const ProviderClassLoader = providerRegistry.get(normalizedName);
       if (!ProviderClassLoader) {
@@ -148,7 +148,7 @@ export namespace ProviderFactory {
       return provider;
     }
 
-    // 3. Check if this might be an alias - try loading all providers to check aliases
+    // Check if this might be an alias - try loading all providers to check aliases
     // This is less efficient but handles the case where an alias is used before the provider is loaded
     for (const [registeredName, loader] of providerRegistry.entries()) {
       try {
@@ -179,7 +179,7 @@ export namespace ProviderFactory {
       }
     }
 
-    // 4. Provider not found
+    // Provider not found
     const availableProviders = Array.from(providerRegistry.keys());
     throw new Error(`Unsupported provider: ${providerName}. Available providers: ${availableProviders.join(", ")}`);
   }

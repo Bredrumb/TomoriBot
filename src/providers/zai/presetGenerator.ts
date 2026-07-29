@@ -81,7 +81,7 @@ export async function generatePresetFromPromptZai(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // 1. Build messages: schema-steered system prompt + user character prompt
+  // Build messages: schema-steered system prompt + user character prompt
   const messages: PresetMessage[] = [
     { role: "system", content: buildZaiPresetSystemPrompt() },
     { role: "user", content: buildPresetPrompt(params) },
@@ -91,7 +91,7 @@ export async function generatePresetFromPromptZai(
   let toolRounds = 0;
 
   while (true) {
-    // 2. Build the request body
+    // Build the request body
     const body: Record<string, unknown> = {
       model: apiModel,
       messages,
@@ -100,7 +100,7 @@ export async function generatePresetFromPromptZai(
       stream: false,
     };
 
-    // 3. Skip temperature for reasoning models (they don't support it)
+    // Skip temperature for reasoning models (they don't support it)
     if (!ZAI_REASONING_MODELS.includes(apiModel)) {
       body.temperature = options.temperature ?? 1.0;
     }
@@ -110,7 +110,7 @@ export async function generatePresetFromPromptZai(
       body.tool_choice = "auto";
     }
 
-    // 4. Send the request
+    // Send the request
     const response = await fetch(endpointUrl, {
       method: "POST",
       headers: {
@@ -153,7 +153,7 @@ export async function generatePresetFromPromptZai(
       };
     }
 
-    // 5. Handle tool calls
+    // Handle tool calls
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length > 0) {
       if (!toolsEnabled || !toolContext) {
@@ -222,7 +222,7 @@ export async function generatePresetFromPromptZai(
       continue;
     }
 
-    // 6. Extract and parse the final JSON response
+    // Extract and parse the final JSON response
     const responseText = typeof message.content === "string" ? message.content.trim() : "";
     if (!responseText) {
       return {

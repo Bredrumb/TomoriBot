@@ -55,7 +55,7 @@ class HealthTracker {
     const now = Date.now();
     const timeSinceLastActivity = now - this.lastActivityTimestamp;
 
-    // 1. Check if client is initialized
+    // Check if client is initialized
     if (!this.client) {
       return {
         healthy: false,
@@ -68,7 +68,7 @@ class HealthTracker {
       };
     }
 
-    // 2. Check if Discord client is ready
+    // Check if Discord client is ready
     const isClientReady = this.client.isReady();
     if (!isClientReady) {
       return {
@@ -82,7 +82,7 @@ class HealthTracker {
       };
     }
 
-    // 3. Check WebSocket ping (measures roundtrip latency to Discord)
+    // Check WebSocket ping (measures roundtrip latency to Discord)
     const websocketPing = this.client.ws.ping;
     if (websocketPing < 0 || websocketPing > this.maxPingLatency) {
       return {
@@ -96,7 +96,7 @@ class HealthTracker {
       };
     }
 
-    // 4. Activity timeout check (DISABLED)
+    // Activity timeout check (DISABLED)
     // This check is intentionally commented out to prevent false positives during quiet hours.
     // The "Lonely Bot" problem: During periods of low activity (e.g., 3 AM), no Discord events
     // are received, causing the bot to report "unhealthy" despite being perfectly functional.

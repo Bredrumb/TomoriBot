@@ -89,10 +89,10 @@ export async function execute(
   let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
 
   try {
-    // 1. Get current privacy level
+    // Get current privacy level
     const currentLevel = userData.privacy_level ?? PrivacyLevel.MINIMAL;
 
-    // 2. Show the modal with privacy level selection
+    // Show the modal with privacy level selection
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.personal.privacy.modal_title",
@@ -108,7 +108,7 @@ export async function execute(
       ],
     });
 
-    // 3. Handle modal outcome
+    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Privacy level selection modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -121,7 +121,7 @@ export async function execute(
     const selectedValue = modalResult.values![PRIVACY_SELECT_ID];
     const requestedLevel = Number.parseInt(selectedValue, 10) as PrivacyLevel;
 
-    // 4. Validate the parsed value
+    // Validate the parsed value
     if (
       Number.isNaN(requestedLevel) ||
       ![PrivacyLevel.MINIMAL, PrivacyLevel.PARTIAL, PrivacyLevel.FULL].includes(requestedLevel)
@@ -134,7 +134,7 @@ export async function execute(
       return;
     }
 
-    // 5. Check if this is the same as the current level
+    // Check if this is the same as the current level
     if (requestedLevel === currentLevel) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.personal.privacy.already_set_title",
@@ -147,10 +147,10 @@ export async function execute(
       return;
     }
 
-    // 6. Defer the modal submit interaction before async DB work (3-second Discord limit)
+    // Defer the modal submit interaction before async DB work (3-second Discord limit)
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 7. Update privacy level in database
+    // Update privacy level in database
     const updatedUser = await userRepository.setPrivacyLevel(interaction.user.id, requestedLevel);
 
     if (!updatedUser) {
@@ -163,10 +163,10 @@ export async function execute(
       return;
     }
 
-    // 8. Invalidate user cache so next message gets fresh data
+    // Invalidate user cache so next message gets fresh data
     invalidateUserCache(interaction.user.id);
 
-    // 9. Send success confirmation message
+    // Send success confirmation message
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.personal.privacy.success_title",
       descriptionKey: "commands.personal.privacy.success_description",
@@ -181,7 +181,7 @@ export async function execute(
       `User ${interaction.user.id} (${userData.user_nickname}) changed privacy level from ${currentLevel} to ${requestedLevel}`,
     );
   } catch (error) {
-    // 10. Log error with context
+    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
@@ -193,7 +193,7 @@ export async function execute(
     };
     await log.error(`Error executing /personal privacy for user ${userData.user_disc_id}`, error as Error, context);
 
-    // 11. Inform user of unknown error
+    // Inform user of unknown error
     const replyTarget = modalSubmitInteraction ?? interaction;
     await replyInfoEmbed(replyTarget, locale, {
       titleKey: "general.errors.unknown_error_title",

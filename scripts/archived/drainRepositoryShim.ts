@@ -326,7 +326,7 @@ function parseToken(raw: string): { name: string; isType: boolean } {
  * Returns the modified source string.
  */
 function rewriteImports(source: string): string {
-  // 1. Collect all blocks to replace, tracking what repo vars we'll need.
+  // Collect all blocks to replace, tracking what repo vars we'll need.
   const repoVarsNeeded = new Set<string>();
   const typeNamesKept = new Set<string>();
   const repoInstancesKept = new Set<string>();
@@ -401,7 +401,7 @@ function rewriteImports(source: string): string {
     out = out.slice(0, index) + sub + out.slice(index + length);
   }
 
-  // 2. Remove any stale direct-path imports of repo instances
+  // Remove any stale direct-path imports of repo instances
   // (e.g. `import { personaRepository } from "@/utils/db/repositories/PersonaRepository"`)
   // that are now covered by the consolidated import.
   for (const repoVar of repoVarsNeeded) {

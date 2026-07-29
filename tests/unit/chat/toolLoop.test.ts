@@ -348,7 +348,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 1. Successful tool call
+  // Successful tool call
   // -------------------------------------------------------------------------
 
   it("executes tool with correct args and delivers result to next provider call", async () => {
@@ -399,7 +399,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 2. Tool failure — loop continues, error represented in history
+  // Tool failure — loop continues, error represented in history
   // -------------------------------------------------------------------------
 
   it("tool failure: error is represented in the history entry and the loop continues", async () => {
@@ -437,7 +437,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 3. Consecutive error cap
+  // Consecutive error cap
   // -------------------------------------------------------------------------
 
   it("consecutive tool errors: loop exits with 'error' after MAX_CONSECUTIVE_TOOL_ERRORS failures", async () => {
@@ -461,7 +461,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 4. Deliberate tool exposure guard
+  // Deliberate tool exposure guard
   // -------------------------------------------------------------------------
 
   it("deliberate tool mode: blocked tool is NOT dispatched and gets synthetic failure in history", async () => {
@@ -505,7 +505,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 5. Loop iteration bound
+  // Loop iteration bound
   // -------------------------------------------------------------------------
 
   it("loop bound: exits with 'timeout' after MAX_FUNCTION_CALL_ITERATIONS with no final answer", async () => {
@@ -532,7 +532,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 6. Empty function-call payload aborts immediately
+  // Empty function-call payload aborts immediately
   // -------------------------------------------------------------------------
 
   it("malformed function-call (missing name) aborts with 'error' without dispatching any tool", async () => {
@@ -549,7 +549,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 7. Context-restart signal: injected into contextItems, not into history
+  // Context-restart signal: injected into contextItems, not into history
   // -------------------------------------------------------------------------
 
   it("context-restart response: enriched item injected into contextItems, no history entry for that tool call", async () => {
@@ -591,7 +591,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 8. Pre-tool text preservation (post-tool-call amnesia regression)
+  // Pre-tool text preservation (post-tool-call amnesia regression)
   // -------------------------------------------------------------------------
 
   it("pre-tool text is preserved in the history entry passed to the follow-up provider call", async () => {
@@ -691,7 +691,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 9. Pre-tool text early-exit policy is unchanged
+  // Pre-tool text early-exit policy is unchanged
   // -------------------------------------------------------------------------
 
   it("update_short_term_memory with pre-tool text still ends the turn without a follow-up call", async () => {
@@ -714,7 +714,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 10. Sticker selection is carried only through completed turns
+  // Sticker selection is carried only through completed turns
   // -------------------------------------------------------------------------
 
   it("successful sticker selection is carried on the completed result", async () => {
@@ -783,7 +783,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 11. NovelAI follow-up policy
+  // NovelAI follow-up policy
   // -------------------------------------------------------------------------
 
   it("NovelAI continues after pre-tool text when the successful tool requires follow-up", async () => {
@@ -826,7 +826,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 12. NovelAI tool-failure retry
+  // NovelAI tool-failure retry
   // -------------------------------------------------------------------------
 
   it("NovelAI suppresses repeated text and retries a tool failure after pre-tool text", async () => {
@@ -872,7 +872,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 13. STM single-update guard
+  // STM single-update guard
   // -------------------------------------------------------------------------
 
   it("successful STM update without pre-tool text disables further STM calls and continues", async () => {
@@ -892,7 +892,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 14. Follow-up interrupts do not kill an active tool chain
+  // Follow-up interrupts do not kill an active tool chain
   // -------------------------------------------------------------------------
 
   it("clears a stale follow-up interrupt and lets the tool chain continue", async () => {

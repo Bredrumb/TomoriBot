@@ -74,7 +74,7 @@ export async function execute(
   }
 
   try {
-    // 1. Load registered MCP servers for this guild
+    // Load registered MCP servers for this guild
     const configs = await getCachedGuildMcpConfigs(tomoriState.server_id);
     if (configs.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -86,7 +86,7 @@ export async function execute(
       return;
     }
 
-    // 2. Discord checkbox groups allow at most 10 options each and 5 groups per modal
+    // Discord checkbox groups allow at most 10 options each and 5 groups per modal
     const serverGroupCount = Math.ceil(configs.length / MAX_OPTIONS_PER_GROUP);
     if (serverGroupCount > MAX_GROUPS_PER_MODAL) {
       await replyInfoEmbed(interaction, locale, {
@@ -103,10 +103,10 @@ export async function execute(
       return;
     }
 
-    // 3. Build checkbox groups from registered servers
+    // Build checkbox groups from registered servers
     const checkboxGroups = buildServerCheckboxGroups(configs);
 
-    // 4. Show modal with checkbox groups (modal is the acknowledgment — no pre-defer)
+    // Show modal with checkbox groups (modal is the acknowledgment — no pre-defer)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -129,7 +129,7 @@ export async function execute(
     }
     const replyInteraction = modalResult.interaction;
 
-    // 5. Collect checked server names across checkbox groups
+    // Collect checked server names across checkbox groups
     const checkedServerNames = new Set<string>();
     for (let groupIndex = 0; groupIndex < serverGroupCount; groupIndex++) {
       const groupValues = modalResult.multiValues?.[`${SERVER_CHECKBOX_ID_PREFIX}_${groupIndex}`] ?? [];
@@ -138,7 +138,7 @@ export async function execute(
       }
     }
 
-    // 6. Resolve unchecked entries as removals
+    // Resolve unchecked entries as removals
     const configsToRemove = configs.filter((config) => !checkedServerNames.has(config.name));
     if (configsToRemove.length === 0) {
       await replyInfoEmbed(replyInteraction, locale, {
@@ -149,7 +149,7 @@ export async function execute(
       return;
     }
 
-    // 7. Delete unchecked servers from the database
+    // Delete unchecked servers from the database
     const deletionResults = await Promise.all(
       configsToRemove.map(async (config) => ({
         config,
@@ -159,7 +159,7 @@ export async function execute(
     const removedConfigs = deletionResults.filter((result) => result.deleted).map((result) => result.config);
     const failedConfigs = deletionResults.filter((result) => !result.deleted).map((result) => result.config);
 
-    // 8. Invalidate cache and disconnect only after successful DB writes
+    // Invalidate cache and disconnect only after successful DB writes
     if (removedConfigs.length > 0) {
       await Promise.all(
         removedConfigs.map((config) => getGuildMcpManager().disconnectGuildServer(tomoriState.server_id, config.name)),
@@ -190,7 +190,7 @@ export async function execute(
       return;
     }
 
-    // 9. Success
+    // Success
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "commands.mcp.remove.success_title",
       descriptionKey: "commands.mcp.remove.success_description",

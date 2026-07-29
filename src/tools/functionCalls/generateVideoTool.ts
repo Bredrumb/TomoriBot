@@ -192,10 +192,10 @@ export class GenerateVideoTool extends BaseTool {
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
-    // 1. Build the Components V2 payload: Media Gallery (video) + "Generated in Xs" footer below
+    // Build the Components V2 payload: Media Gallery (video) + "Generated in Xs" footer below
     const componentsPayload = buildGeneratedVideoComponentsV2Payload(filename, elapsedMs, context.locale);
 
-    // 2. Try persona webhook first (Components V2, then plain attachment fallback)
+    // Try persona webhook first (Components V2, then plain attachment fallback)
     if (context.webhook && context.personaUsername) {
       try {
         const webhookAttachment = new AttachmentBuilder(videoData, {
@@ -260,7 +260,7 @@ export class GenerateVideoTool extends BaseTool {
       }
     }
 
-    // 3. Bot message path (Components V2, then plain attachment fallback)
+    // Bot message path (Components V2, then plain attachment fallback)
     try {
       const channelAttachment = new AttachmentBuilder(videoData, {
         name: filename,
@@ -354,7 +354,7 @@ export class GenerateVideoTool extends BaseTool {
     // Capture generation start time for the "Generated in Xs" caption (mirrors image tool)
     const startedAtMs = Date.now();
 
-    // 1. Validate parameters
+    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -363,7 +363,7 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // 2. Check if tool is enabled
+    // Check if tool is enabled
     if (!this.isEnabled(context)) {
       return {
         success: false,
@@ -380,7 +380,7 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // 4. Extract arguments
+    // Extract arguments
     const prompt = args.prompt as string;
     const rawMediaId = args.media_id as string | undefined;
     const messageId = this.resolveMediaId(rawMediaId, context);
@@ -414,7 +414,7 @@ export class GenerateVideoTool extends BaseTool {
     let quotaCheck: VideoQuotaCheckResult = { allowed: true };
 
     try {
-      // 5. Resolve credentials first so we can skip server quota for personal BYOK users
+      // Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "video", {
         userId: context.internalUserId ?? null,
       });
@@ -482,7 +482,7 @@ export class GenerateVideoTool extends BaseTool {
       const apiKey = creds.apiKey;
       const executionProvider = creds.provider;
 
-      // 7. Send progress notice — video generation takes 1-3 minutes
+      // Send progress notice — video generation takes 1-3 minutes
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
@@ -519,7 +519,7 @@ export class GenerateVideoTool extends BaseTool {
         );
       }
 
-      // 8. Extract reference image if media_id provided
+      // Extract reference image if media_id provided
       let referenceImages: Array<{ mimeType: string; data: string; url?: string; fallbackUrl?: string }> | undefined;
 
       if (messageId) {
@@ -533,7 +533,7 @@ export class GenerateVideoTool extends BaseTool {
         }
       }
 
-      // 9. Route to appropriate provider implementation
+      // Route to appropriate provider implementation
       log.info(
         `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, duration: ${durationSeconds}s, resolution: ${resolution})`,
       );
@@ -612,7 +612,7 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // 10. Validate result
+      // Validate result
       if (!videoData) {
         return {
           success: false,
@@ -620,7 +620,7 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // 11. Check Discord file size limit
+      // Check Discord file size limit
       if (videoData.length > DISCORD_FILE_SIZE_LIMIT) {
         const sizeMB = (videoData.length / (1024 * 1024)).toFixed(1);
         log.warn(`Generated video exceeds Discord file size limit: ${sizeMB}MB > 25MB`);
@@ -643,7 +643,7 @@ export class GenerateVideoTool extends BaseTool {
 
       log.success("Successfully generated and sent video to Discord");
 
-      // 13. Increment quota after successful generation (server providers only)
+      // Increment quota after successful generation (server providers only)
       if (creds.source === "server") {
         await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
       }
@@ -659,7 +659,7 @@ export class GenerateVideoTool extends BaseTool {
         });
       }
 
-      // 14. Build success message
+      // Build success message
       let successMessage = `Successfully generated and sent video to Discord (message ID: ${sentMessage.id}). The video has been created based on your prompt${
         referenceImages ? " and the reference image" : ""
       } at ${resolution} for approximately ${durationSeconds} second(s).`;

@@ -175,7 +175,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   if (secretFile) {
     log.info(`Reading secrets from mounted JSON secret file: ${secretFile}`);
     try {
-      // 1. Read and parse the JSON blob written by the platform secret mount
+      // Read and parse the JSON blob written by the platform secret mount
       const fileContent = await Bun.file(secretFile).text();
       if (!fileContent) {
         throw new Error(`Secret file "${secretFile}" is empty. Ensure the secret version is populated.`);
@@ -183,7 +183,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 
       const rawSecrets = JSON.parse(fileContent);
 
-      // 2. Build TomoriSecrets object from the parsed JSON
+      // Build TomoriSecrets object from the parsed JSON
       const secrets: TomoriSecrets = {
         DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
         POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
@@ -194,7 +194,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
       };
 
-      // 3. Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
+      // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
       for (const key of Object.keys(rawSecrets)) {
         if (key.startsWith("CRYPTO_SECRET_V")) {
           secrets[key] = rawSecrets[key];
@@ -202,7 +202,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // 4. Optional fields — same shape as AWS secret blob
+      // Optional fields — same shape as AWS secret blob
       const optionalFields: (keyof TomoriSecrets)[] = [
         "DISCORD_WEBHOOK_URL",
         "AVATAR_GCS_BUCKET",
@@ -239,7 +239,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // 5. Validate required fields
+      // Validate required fields
       validateRequiredSecrets(secrets);
 
       log.info("Successfully loaded secrets from mounted JSON secret file");
@@ -267,24 +267,24 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   log.info(`Fetching secrets from AWS Secrets Manager (production mode, region: ${awsRegion})`);
 
   try {
-    // 1. Create AWS Secrets Manager client with configurable region
+    // Create AWS Secrets Manager client with configurable region
     const client = new SecretsManagerClient({ region: awsRegion });
 
-    // 2. Fetch secret value
+    // Fetch secret value
     const command = new GetSecretValueCommand({
       SecretId: "tomoribot/production",
     });
 
     const response = await client.send(command);
 
-    // 3. Parse SecretString as JSON
+    // Parse SecretString as JSON
     if (!response.SecretString) {
       throw new Error("AWS Secrets Manager returned empty SecretString. Ensure the secret contains a JSON object.");
     }
 
     const rawSecrets = JSON.parse(response.SecretString);
 
-    // 4. Build TomoriSecrets object
+    // Build TomoriSecrets object
     const secrets: TomoriSecrets = {
       DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
       POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
@@ -295,7 +295,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
     };
 
-    // 5. Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
+    // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
     // This allows for unlimited key rotation versions
     for (const key of Object.keys(rawSecrets)) {
       if (key.startsWith("CRYPTO_SECRET_V")) {
@@ -304,7 +304,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // 6. Optional fields
+    // Optional fields
     const optionalFields: (keyof TomoriSecrets)[] = [
       "DISCORD_WEBHOOK_URL",
       "AVATAR_GCS_BUCKET",
@@ -341,7 +341,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // 7. Validate required fields
+    // Validate required fields
     validateRequiredSecrets(secrets);
 
     log.info("Successfully loaded secrets from AWS Secrets Manager");

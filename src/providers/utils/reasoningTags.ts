@@ -64,7 +64,7 @@ export interface TrailingReasoningTagPrefix {
 const MAX_TRAILING_PARTIAL_LEN = 64;
 
 function execFrom(pattern: string, text: string, from: number): ReasoningTagMatch | null {
-  // 1. Fresh regex per call keeps `lastIndex` state local (reentrancy-safe).
+  // Fresh regex per call keeps `lastIndex` state local (reentrancy-safe).
   const re = new RegExp(pattern, "gi");
   re.lastIndex = Math.max(0, from);
   const match = re.exec(text);
@@ -103,7 +103,7 @@ function isThinkWordPrefix(s: string): boolean {
  * still-forming namespace.
  */
 export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningTagPrefix | null {
-  // 1. Isolate a trailing `<` (optional `/`) followed only by tag-interior chars.
+  // Isolate a trailing `<` (optional `/`) followed only by tag-interior chars.
   const match = /<\/?[A-Za-z0-9_.:-]*$/.exec(text);
   if (!match) {
     return null;
@@ -114,11 +114,11 @@ export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningT
     return null;
   }
 
-  // 2. Split off the optional leading slash and inspect the remaining run.
+  // Split off the optional leading slash and inspect the remaining run.
   const hasSlash = candidate[1] === "/";
   const run = candidate.slice(hasSlash ? 2 : 1);
 
-  // 3. Confirm the run can still complete into a real think tag.
+  // Confirm the run can still complete into a real think tag.
   const colonIdx = run.lastIndexOf(":");
   const plausible =
     colonIdx === -1
@@ -128,7 +128,7 @@ export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningT
     return null;
   }
 
-  // 4. Classify: explicit slash or bare `<` is a close; otherwise an open.
+  // Classify: explicit slash or bare `<` is a close; otherwise an open.
   const kind: ReasoningTagPartialKind = hasSlash || run.length === 0 ? "close" : "open";
   return { index: match.index, kind };
 }

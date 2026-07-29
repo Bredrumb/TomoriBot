@@ -88,11 +88,11 @@ describe("Components V2 reply guard", () => {
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call.method).toBe("editReply");
-    // 1. The payload is a V2 component container.
+    // The payload is a V2 component container.
     expect(call.payload.flags).toBe(MessageFlags.IsComponentsV2);
     expect(Array.isArray(call.payload.components)).toBe(true);
     expect((call.payload.components as unknown[]).length).toBeGreaterThan(0);
-    // 2. It MUST NOT carry legacy embeds — Discord rejects those on a V2 message.
+    // It MUST NOT carry legacy embeds — Discord rejects those on a V2 message.
     expect("embeds" in call.payload).toBe(false);
   });
 

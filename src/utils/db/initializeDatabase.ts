@@ -221,15 +221,15 @@ async function resolveLegacyRenameCollision(
   legacyExists: boolean,
   renamedExists: boolean,
 ): Promise<void> {
-  // 1. Only a coexisting (legacy + renamed) pair is a collision worth resolving.
+  // Only a coexisting (legacy + renamed) pair is a collision worth resolving.
   if (!legacyExists || !renamedExists) {
     return;
   }
 
-  // 2. Classify the collision by inspecting the legacy table's row count.
+  // Classify the collision by inspecting the legacy table's row count.
   const legacyRows = await countTableRows(client, legacyTable);
 
-  // 3. Populated legacy table = real data fork. Refuse to auto-resolve.
+  // Populated legacy table = real data fork. Refuse to auto-resolve.
   if (legacyRows > 0) {
     throw new Error(
       `Legacy table "${legacyTable}" (${legacyRows} rows) coexists with renamed table ` +
@@ -238,7 +238,7 @@ async function resolveLegacyRenameCollision(
     );
   }
 
-  // 4. Empty legacy table = rollback artifact. Drop it (CASCADE clears any
+  // Empty legacy table = rollback artifact. Drop it (CASCADE clears any
   //    leftover FKs from sibling legacy tables) and continue.
   await client.unsafe(`DROP TABLE IF EXISTS public.${legacyTable} CASCADE`);
   log.warn(
@@ -265,12 +265,12 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
       to_regclass('public.tomori_configs') IS NOT NULL AS has_tomori_configs
   `;
 
-  // 1. No legacy persona-era tables present: nothing for this bridge to do.
+  // No legacy persona-era tables present: nothing for this bridge to do.
   if (!state?.has_tomoris && !state?.has_tomori_presets && !state?.has_tomori_configs) {
     return;
   }
 
-  // 2. Sweep an empty, deprecated `tomori_configs` first. Migration 008 drops it
+  // Sweep an empty, deprecated `tomori_configs` first. Migration 008 drops it
   //    on the forward path, but pre-008 code re-creates it as an empty shell on
   //    rollback. A *populated* tomori_configs is a legitimate pre-refactor
   //    database that migration 008 rescues + drops, so we leave it untouched.
@@ -285,7 +285,7 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
     }
   }
 
-  // 3. Resolve the rename collisions: drop empty rollback artifacts, refuse
+  // Resolve the rename collisions: drop empty rollback artifacts, refuse
   //    populated data forks. Empty leftovers self-heal so the bot boots; real
   //    data forks still stop here for human review.
   await resolveLegacyRenameCollision(client, "tomoris", "personas", state.has_tomoris, state.has_personas);
@@ -297,7 +297,7 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
     state.has_persona_presets,
   );
 
-  // 4. Apply the idempotent rename migration. This covers the legitimate forward
+  // Apply the idempotent rename migration. This covers the legitimate forward
   //    case (legacy table present, renamed table absent) and is a no-op once the
   //    collisions above are cleared.
   await executeSqlFile(client, migrationPath);

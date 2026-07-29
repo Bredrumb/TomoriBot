@@ -77,7 +77,7 @@ export async function execute(
   let replyUsesComponentsV2 = false;
 
   try {
-    // 1. Check if command is run in a guild (server-only command)
+    // Check if command is run in a guild (server-only command)
     if (!interaction.guild) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.guild_only_title",
@@ -88,7 +88,7 @@ export async function execute(
       return;
     }
 
-    // 2. Show modal with creation fields
+    // Show modal with creation fields
     const modalComponents: ModalComponent[] = [
       {
         customId: CHARACTER_NAME_ID,
@@ -145,7 +145,7 @@ export async function execute(
       true, // Auto-defer with public reply
     );
 
-    // 4. Handle modal outcome
+    // Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Create modal ${modalResult.outcome}`);
       return;
@@ -176,7 +176,7 @@ export async function execute(
     }
     const characterName = parsedNames[0];
 
-    // 5. Validate content lengths (server-side validation, modal maxLength can be bypassed)
+    // Validate content lengths (server-side validation, modal maxLength can be bypassed)
     const descValidation = validateAttribute(characterDesc);
     if (!descValidation.isValid) {
       await modalSubmitInteraction.editReply({
@@ -237,7 +237,7 @@ export async function execute(
       }
     }
 
-    // 6. Reserve persona operation quota (atomic check+increment for DDoS protection)
+    // Reserve persona operation quota (atomic check+increment for DDoS protection)
     const quotaReserve = reservePersonaQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
@@ -257,7 +257,7 @@ export async function execute(
       return;
     }
 
-    // 6. Get optional image attachment from modal
+    // Get optional image attachment from modal
     const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
     let imageBuffer: Buffer | undefined;
 
@@ -358,7 +358,7 @@ export async function execute(
       log.info("Image attachment downloaded successfully");
     }
 
-    // 6. Create minimal preset data structure
+    // Create minimal preset data structure
     // Only include sample dialogues if BOTH fields have content
     const hasSampleDialogue = exampleUser?.trim() && exampleBot?.trim();
 
@@ -373,7 +373,7 @@ export async function execute(
       trigger_words: parsedNames,
     };
 
-    // 7. Validate preset data against schema
+    // Validate preset data against schema
     const validationResult = presetExportDataSchema.safeParse(presetData);
     if (!validationResult.success) {
       // Log detailed validation errors
@@ -404,7 +404,7 @@ export async function execute(
 
     log.success("Created preset passed validation");
 
-    // 8. Get image for export (uploaded image or server avatar)
+    // Get image for export (uploaded image or server avatar)
     let pngBuffer: Buffer;
 
     if (imageBuffer) {
@@ -444,7 +444,7 @@ export async function execute(
       }
     }
 
-    // 9. Create preset export structure with metadata
+    // Create preset export structure with metadata
     const presetExport: PresetExport = {
       version: PRESET_EXPORT_VERSION,
       type: "preset",
@@ -452,7 +452,7 @@ export async function execute(
       data: presetData,
     };
 
-    // 10. Embed metadata in PNG
+    // Embed metadata in PNG
     let finalPngBuffer: Buffer;
     try {
       finalPngBuffer = await embedMetadataInPNG(pngBuffer, presetExport);
@@ -470,7 +470,7 @@ export async function execute(
       return;
     }
 
-    // 11. Create attachment
+    // Create attachment
     const sanitizedNickname = sanitizeAttachmentFilenamePart(characterName, {
       fallback: "persona",
       maxLength: 50,
@@ -481,7 +481,7 @@ export async function execute(
       name: filename,
     });
 
-    // 12. Detect DM context (create is guild-only, so this stays false) and
+    // Detect DM context (create is guild-only, so this stays false) and
     //     assemble the Components V2 result container.
     const isDM = !interaction.guild;
 
@@ -527,7 +527,7 @@ export async function execute(
       ...(isDM ? { footerKey: "commands.persona.create.avatar_update_skipped_dm" } : {}),
     };
 
-    // 13. Send the result. Create is guild-only, so attach the manager-only
+    // Send the result. Create is guild-only, so attach the manager-only
     //     "Import Now" button to import the new persona as an alter in place.
     if (!interaction.guild) {
       await modalSubmitInteraction.editReply({

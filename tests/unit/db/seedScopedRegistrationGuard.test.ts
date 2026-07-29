@@ -23,11 +23,11 @@ describe("model seed scoped-registration guard", () => {
 
   it("guards every backing model table's upsert", () => {
     for (const [table, guard] of Object.entries(expectedGuards)) {
-      // 1. Find the statement targeting this table.
+      // Find the statement targeting this table.
       const statement = statements.find((s) => s.startsWith(`INSERT INTO ${table} `));
       expect(statement, `no seed statement for table ${table}`).toBeDefined();
 
-      // 2. It must promote on conflict AND only touch curated (non-scoped) rows.
+      // It must promote on conflict AND only touch curated (non-scoped) rows.
       expect(statement).toContain("ON CONFLICT");
       expect(statement).toContain(guard);
     }

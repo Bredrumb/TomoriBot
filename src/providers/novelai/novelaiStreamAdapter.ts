@@ -798,11 +798,11 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // doesn't emit <|user|> tokens in completions mode (it just starts "Username: ...")
       //
       // Three stop conditions checked in order:
-      // 1. Dinkus (\n***): Kayra uses *** as a scene break between narrative zones.
+      // Dinkus (\n***): Kayra uses *** as a scene break between narrative zones.
       //    When the model generates \n*** it considers its turn complete. Only triggered
       //    after \n so ****-style censored words at response start are not clipped.
-      // 2. Generic colon-form (\nName:): any speaker label with a colon.
-      // 3. Known-name no-colon (\nName<space>): story-format turns where the model
+      // Generic colon-form (\nName:): any speaker label with a colon.
+      // Known-name no-colon (\nName<space>): story-format turns where the model
       //    writes "Name text" instead of "Name: text". Only fires for known speakers
       //    from this.knownSpeakers to avoid false positives on mid-sentence proper nouns.
       const markdownCodeRanges = findMarkdownCodeRanges(this.generationBuffer);
@@ -1121,7 +1121,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
     this.textScanBuffer += token;
 
-    // 1. Check for wrapped <tool_call> tag
+    // Check for wrapped <tool_call> tag
     const tagIndex = this.textScanBuffer.indexOf(NovelaiStreamAdapter.TOOL_CALL_TAG);
 
     if (tagIndex !== -1) {
@@ -1172,7 +1172,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return { type: "text", content: "" };
     }
 
-    // 2. Check for unwrapped tool call — bare function name on a new line followed by <arg_key>.
+    // Check for unwrapped tool call — bare function name on a new line followed by <arg_key>.
     //    GLM sometimes outputs text then switches to a tool call without <tool_call> wrapper.
     //    Scan for "\n{tool_name}\n<arg_key>" pattern in the buffer.
     if (this.isGlmModel && this.textScanBuffer.includes("<arg_key>")) {
@@ -1209,7 +1209,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 3. No tool tag found yet — flush everything except a small tail to avoid leaking partial tags
+    // No tool tag found yet — flush everything except a small tail to avoid leaking partial tags
     const holdLength = NovelaiStreamAdapter.TOOL_CALL_TAG_LENGTH - 1;
     if (this.textScanBuffer.length <= holdLength) {
       return { type: "text", content: "" };
@@ -1282,13 +1282,13 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         return { mode: "wait" };
       }
 
-      // 1. Handle stray </think> closing tags
+      // Handle stray </think> closing tags
       if (trimmedStart.startsWith("</think>")) {
         buffer = trimmedStart.slice("</think>".length);
         continue;
       }
 
-      // 2. Handle <think>...</think> blocks (consume and continue)
+      // Handle <think>...</think> blocks (consume and continue)
       if (trimmedStart.startsWith("<think>")) {
         const thinkEndIndex = trimmedStart.indexOf("</think>");
         if (thinkEndIndex === -1) {
@@ -1299,12 +1299,12 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         continue;
       }
 
-      // 3. Properly wrapped tool call — <tool_call> tag present
+      // Properly wrapped tool call — <tool_call> tag present
       if (trimmedStart.startsWith("<tool_call>")) {
         return { mode: "tool_call", toolCallText: trimmedStart };
       }
 
-      // 3b. Partial <tool_call> tag — buffer is a prefix of the full tag.
+      // Partial <tool_call> tag — buffer is a prefix of the full tag.
       //     NAI chunks can split the tag at any point (e.g., "<to", "<tool_cal").
       //     Wait for more tokens until the full tag arrives or we can rule it out.
       if (
@@ -1314,7 +1314,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         return { mode: "wait" };
       }
 
-      // 4. Unwrapped tool call — model outputs function name directly without <tool_call> tag.
+      // Unwrapped tool call — model outputs function name directly without <tool_call> tag.
       //    GLM 4.6 sometimes omits the wrapper tag and generates:
       //      web_search\n<arg_key>query</arg_key>\n<arg_value>...</arg_value>
       //    Detect this by checking if the first line matches a known tool name.
@@ -1387,7 +1387,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       .replace(/<\/arg_value>?\s*$/, "</arg_value>")
       .replace(/<\/arg_key>?\s*$/, "</arg_key>");
 
-    // 1. Primary format: XML <arg_key>/<arg_value> pairs (standard GLM tool format)
+    // Primary format: XML <arg_key>/<arg_value> pairs (standard GLM tool format)
     const argMatches = normalizedInner.matchAll(/<arg_key>([\s\S]*?)<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g);
 
     for (const match of argMatches) {
@@ -1402,7 +1402,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       args[argKey] = this.coerceArgValue(rawValue ?? "", expectedType);
     }
 
-    // 2. Fallback: when GLM outputs args in non-XML formats (common in Japanese conversations).
+    // Fallback: when GLM outputs args in non-XML formats (common in Japanese conversations).
     //    GLM 4.6 sometimes drops the XML arg tags entirely when responding in Japanese, outputting:
     //    - JSON object: {"query": "search term"}
     //    - Key-value lines: query: "search term" or query="search term"
@@ -1564,24 +1564,24 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * @returns Normalized tool name matching a registered definition, or rawName if no match
    */
   private normalizeToolName(rawName: string): string {
-    // 1. Exact match
+    // Exact match
     if (this.toolDefinitions.some((tool) => tool.name === rawName)) {
       return rawName;
     }
 
-    // 2. Underscore → hyphen
+    // Underscore → hyphen
     const hyphenName = rawName.replace(/_/g, "-");
     if (this.toolDefinitions.some((tool) => tool.name === hyphenName)) {
       return hyphenName;
     }
 
-    // 3. Hyphen → underscore
+    // Hyphen → underscore
     const underscoreName = rawName.replace(/-/g, "_");
     if (this.toolDefinitions.some((tool) => tool.name === underscoreName)) {
       return underscoreName;
     }
 
-    // 4. Suffix match — handles dropped prefix tokens from high-temperature sampling.
+    // Suffix match — handles dropped prefix tokens from high-temperature sampling.
     //    e.g., model outputs "eb_search" (missing "w"), match "web_search".
     //    Also try with underscore/hyphen normalization on both sides.
     const candidates = [rawName, hyphenName, underscoreName];
@@ -1593,7 +1593,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return suffixMatches[0].name;
     }
 
-    // 5. Levenshtein distance — catch garbled names that aren't simple suffix truncations.
+    // Levenshtein distance — catch garbled names that aren't simple suffix truncations.
     //    Use stricter threshold (40%) than param matching since tool namespace is larger.
     let bestLevMatch: NormalizedToolDefinition | undefined;
     let bestLevDist = Number.POSITIVE_INFINITY;
@@ -1641,19 +1641,19 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
     const knownParams = Object.keys(tool.parameters.properties);
 
-    // 1. Exact match
+    // Exact match
     if (knownParams.includes(rawParamName)) {
       return rawParamName;
     }
 
-    // 2. Suffix match — "uery" matches "query", "ount" matches "count"
+    // Suffix match — "uery" matches "query", "ount" matches "count"
     const suffixMatches = knownParams.filter((p) => p.endsWith(rawParamName) && rawParamName.length >= 3);
     if (suffixMatches.length === 1) {
       log.info(`NovelAI GLM: Fuzzy-matched param name "${rawParamName}" → "${suffixMatches[0]}" (suffix match)`);
       return suffixMatches[0];
     }
 
-    // 3. Containment match — raw name contains a known param or vice versa
+    // Containment match — raw name contains a known param or vice versa
     //    Handles cases like "ave_wuery" where the model garbles across the name.
     //    Find the known param with the longest common subsequence in the raw name.
     const containmentMatches = knownParams.filter((p) => rawParamName.includes(p) || p.includes(rawParamName));
@@ -1664,7 +1664,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return containmentMatches[0];
     }
 
-    // 4. Best suffix overlap — find the param that shares the longest suffix with rawParamName
+    // Best suffix overlap — find the param that shares the longest suffix with rawParamName
     //    e.g., "ave_wuery" shares no direct suffix with "query", but we can check
     //    if the raw name ends with a significant portion of any known param.
     let bestMatch = "";
@@ -1693,7 +1693,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return bestMatch;
     }
 
-    // 5. Levenshtein distance — catch severely garbled names like "ave_wuery" → "query".
+    // Levenshtein distance — catch severely garbled names like "ave_wuery" → "query".
     //    Accept if edit distance is ≤60% of the longer name's length. High tolerance is safe
     //    because the param namespace is small (typically 3-8 params per tool), so false
     //    positives are unlikely. Also requires the best match to be clearly better than runner-up.
@@ -2270,22 +2270,22 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * @returns Formatted ATTG string or null
    */
   private buildAttgBlock(tomoriState: import("@/types/db/schema").TomoriState, model: string): string | null {
-    // 1. Collect non-empty main ATTG fields into a semicolon-separated block
+    // Collect non-empty main ATTG fields into a semicolon-separated block
     const parts: string[] = [];
     if (tomoriState.nai_attg_author?.trim()) parts.push(`Author: ${tomoriState.nai_attg_author.trim()}`);
     if (tomoriState.nai_attg_title?.trim()) parts.push(`Title: ${tomoriState.nai_attg_title.trim()}`);
     if (tomoriState.nai_attg_tags?.trim()) parts.push(`Tags: ${tomoriState.nai_attg_tags.trim()}`);
     if (tomoriState.nai_attg_genre?.trim()) parts.push(`Genre: ${tomoriState.nai_attg_genre.trim()}`);
 
-    // 2. Build the main block only if at least one field is populated
+    // Build the main block only if at least one field is populated
     const mainBlock = parts.length > 0 ? `[ ${parts.join("; ")} ]` : "";
 
-    // 3. Stars block is Erato-exclusive — inject only for llama-3-erato-v1
+    // Stars block is Erato-exclusive — inject only for llama-3-erato-v1
     const isErato = model === "llama-3-erato-v1";
     const stars = tomoriState.nai_attg_stars;
     const starsBlock = isErato && stars != null && stars >= 1 && stars <= 5 ? `[ S: ${stars} ]` : "";
 
-    // 4. Concatenate and return null when nothing is configured
+    // Concatenate and return null when nothing is configured
     const full = `${mainBlock}${starsBlock}`;
     return full || null;
   }
@@ -2364,7 +2364,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     }
 
     for (const item of contextItems) {
-      // 1. Extract text content from parts (images/video unsupported in NAI)
+      // Extract text content from parts (images/video unsupported in NAI)
       const textContent = item.parts
         .filter((p) => p.type === "text")
         .map((p) => (p as { type: "text"; text: string }).text)
@@ -2372,7 +2372,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
       if (!textContent) continue;
 
-      // 2. Route each tagged system item to its formatted section
+      // Route each tagged system item to its formatted section
       if (item.metadataTag && systemTags.includes(item.metadataTag)) {
         switch (item.metadataTag) {
           case ContextItemTag.SYSTEM_PERSONALITY:
@@ -2392,7 +2392,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         instructionParts.push(textContent);
       }
 
-      // 3. Dialogue turns (user/model) that are not system-tagged go to dialogue.
+      // Dialogue turns (user/model) that are not system-tagged go to dialogue.
       //    DIALOGUE_SAMPLE  → sampleDialogueParts (reference material)
       //    DIALOGUE_HISTORY → historyParts (live conversation turns)
       //    Untagged items   → contextParts (e.g. [System: users in conversation];
@@ -2417,7 +2417,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 4. Append tool guide and history into the general instruction block
+    // Append tool guide and history into the general instruction block
     if (includeTools) {
       const toolGuide = this.buildToolCallingGuide(options?.toolDefinitions ?? []);
       if (toolGuide) instructionParts.push(toolGuide);
@@ -2426,31 +2426,31 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       if (toolHistory) instructionParts.push(toolHistory);
     }
 
-    // 5. Assemble formatted blocks using NAI story-format conventions.
+    // Assemble formatted blocks using NAI story-format conventions.
     //    Each section is preceded by a '----' info divider.
     const systemBlocks: string[] = [];
 
-    // 5a. Characters block (personality + bot name header)
+    // Characters block (personality + bot name header)
     if (personalityText) {
       systemBlocks.push(`Characters:\n${botName}\n${personalityText}`);
     }
 
-    // 5b. General instruction block (may span multiple sub-sections)
+    // General instruction block (may span multiple sub-sections)
     const instructionText = instructionParts.join("\n\n");
     if (instructionText) {
       systemBlocks.push(`${instructionText}`);
     }
 
-    // 5c. Server Notes block (only when there are memories to show)
+    // Server Notes block (only when there are memories to show)
     if (memoriesText) {
       systemBlocks.push(`Server Notes:\n${memoriesText}`);
     }
 
-    // 6. Build the full system header: ATTG block + formatted sections
+    // Build the full system header: ATTG block + formatted sections
     const attgPrefix = options?.attgBlock ? `${options.attgBlock}\n` : "";
     const systemHeader = systemBlocks.length > 0 ? `${attgPrefix}${systemBlocks.join("\n")}` : attgPrefix.trimEnd();
 
-    // 7. Combine: system header + context + [ Style: chat ] + samples + *** + [ Style: chat ] + history.
+    // Combine: system header + context + [ Style: chat ] + samples + *** + [ Style: chat ] + history.
     //    Context injections (e.g. [System: users in conversation]) sit with the system header
     //    so the model sees who's present before reading any dialogue.
     //    [ Style: chat ] precedes BOTH the sample dialogues and the live history so Kayra/Erato
@@ -2459,10 +2459,10 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     const sampleText = sampleDialogueParts.join("\n");
     const historyText = historyParts.join("\n");
 
-    // 7a. System section: ATTG + character/instruction blocks + context injections (pre-dialogue).
+    // System section: ATTG + character/instruction blocks + context injections (pre-dialogue).
     const systemSection = [systemHeader, contextText].filter((p) => p?.trim()).join("\n***\n");
 
-    // 7b. Each dialogue block gets its own [ Style: chat ] tag so the model treats both
+    // Each dialogue block gets its own [ Style: chat ] tag so the model treats both
     //     reference samples and live history as chat-format exchanges.
     const styledSampleText = sampleText.trim() ? `[ Style: chat ]\n${sampleText}` : "";
     const styledHistoryText = historyText.trim() ? `[ Style: chat ]\n${historyText}` : "";
@@ -2527,7 +2527,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     const includeTools = (options?.toolDefinitions?.length ?? 0) > 0;
     const systemTags = this.getSystemInstructionTags(includeTools);
 
-    // 1. Classify context items into system instructions and dialogue turns
+    // Classify context items into system instructions and dialogue turns
     for (const item of contextItems) {
       // Extract text content from parts
       const textContent = item.parts
@@ -2562,7 +2562,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 2. Add tool calling guide to system instructions
+    // Add tool calling guide to system instructions
     if (includeTools) {
       const toolGuide = this.buildToolCallingGuide(options?.toolDefinitions ?? []);
       if (toolGuide) {
@@ -2570,7 +2570,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 3. Build the prompt using GLM 4.6 chat template
+    // Build the prompt using GLM 4.6 chat template
     // Thinking directive: <think></think> seeds the expected format when thinking is enabled;
     // /nothink explicitly disables internal reasoning when thinking is turned off.
     const thinkDirective = getNovelAiThinkingDirective(options?.thinkingLevel, options?.forceReason);
@@ -2585,7 +2585,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       promptParts.push(systemInstructionParts.join("\n\n"));
     }
 
-    // 4. Dialogue turns with proper role tags
+    // Dialogue turns with proper role tags
     // By default, strip the bot's speaker label from assistant turns:
     // the <|assistant|> tag already identifies who's speaking, and including
     // "Tomori:" in the content causes the model to try re-generating partial/garbled
@@ -2613,7 +2613,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 5. Tool interaction history (after dialogue, before generation prompt).
+    // Tool interaction history (after dialogue, before generation prompt).
     //    Include even when tools are disabled for the current iteration —
     //    the model needs to see prior tool calls (and failures) plus any text
     //    it already streamed, so it doesn't repeat itself.
@@ -2631,7 +2631,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 6. Generation prompt: signal the model to generate the assistant's response.
+    // Generation prompt: signal the model to generate the assistant's response.
     // thinkDirective is either <think></think> (seeds thinking format) or /nothink (disables reasoning).
     promptParts.push("<|assistant|>");
     promptParts.push(thinkDirective);

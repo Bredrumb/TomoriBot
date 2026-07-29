@@ -178,7 +178,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info(`VertexStreamAdapter: Initializing ${this.providerName} streaming`);
 
-    // 1. Build the provider client (ADC for Vertex, API key for Vertex Express)
+    // Build the provider client (ADC for Vertex, API key for Vertex Express)
     let genAI: GoogleGenAI;
     try {
       genAI = this.clientFactory(config.apiKey);
@@ -195,13 +195,13 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
 
     const vertexConfig_ = config as VertexStreamConfig;
 
-    // 2. Prepare the request configuration
+    // Prepare the request configuration
     const requestConfig: GenerateContentConfig = {
       ...vertexConfig_.generationConfig,
       safetySettings: vertexConfig_.safetySettings,
     };
 
-    // 3. Speaker guard setup (same as Google)
+    // Speaker guard setup (same as Google)
     this.speakerGuardPendingTail = "";
     this.streamedTextTail = "";
     this.pendingUsage = undefined;
@@ -224,13 +224,13 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       requestConfig.stopSequences = mergedStopSequences;
     }
 
-    // 4. Thinking configuration (same as Google)
+    // Thinking configuration (same as Google)
     if (vertexConfig_.thinkingConfig) {
       requestConfig.thinkingConfig = vertexConfig_.thinkingConfig;
       log.info("VertexStreamAdapter: Thinking mode enabled");
     }
 
-    // 5. Assemble context (shared logic)
+    // Assemble context (shared logic)
     const payload = await this.buildTokenCountPayload(
       context.contextItems,
       config.model,
@@ -244,12 +244,12 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       log.info(`Assembled system instruction. Length: ${payload.systemInstruction.length}`);
     }
 
-    // 6. Add tools if available
+    // Add tools if available
     if (config.tools && config.tools.length > 0) {
       requestConfig.tools = config.tools;
     }
 
-    // 7. Add current turn model parts
+    // Add current turn model parts
     if (context.currentTurnModelParts.length > 0) {
       finalContents.push({
         role: "model",
@@ -258,7 +258,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       log.info(`Added ${context.currentTurnModelParts.length} accumulated model parts to API history.`);
     }
 
-    // 8. Add function interaction history
+    // Add function interaction history
     if (context.functionInteractionHistory && context.functionInteractionHistory.length > 0) {
       for (const item of context.functionInteractionHistory) {
         const functionCallPart: Part = {
@@ -328,25 +328,25 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // 9. Ensure model is provided
+    // Ensure model is provided
     if (!config.model) {
       throw new Error("Model must be specified in config. Use VertexProvider.getDefaultModel() if needed.");
     }
 
     log.info(`Generating content with Vertex AI model ${config.model}`);
 
-    // 10. Log sanitized request
+    // Log sanitized request
     this.logSanitizedRequest(requestConfig, finalContents);
 
     try {
-      // 11. Start the streaming
+      // Start the streaming
       const stream = await genAI.models.generateContentStream({
         model: config.model,
         contents: finalContents,
         config: requestConfig,
       });
 
-      // 12. Yield each chunk (same normalisation pipeline as Google)
+      // Yield each chunk (same normalisation pipeline as Google)
       for await (const chunkResponse of stream) {
         // Capture token usage off the raw SDK chunk (dropped by normalization).
         const usageMetadata = (chunkResponse as { usageMetadata?: Record<string, unknown> }).usageMetadata;

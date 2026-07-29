@@ -26,24 +26,24 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 0. Defer the interaction before async file I/O to prevent timeout
+  // Defer the interaction before async file I/O to prevent timeout
   await interaction.deferReply();
 
-  // 1. Load kofibanner.png image as attachment
+  // Load kofibanner.png image as attachment
   const bannerFile = Bun.file("assets/img/kofibanner.png");
   const bannerBuffer = await bannerFile.arrayBuffer();
   const attachment = new AttachmentBuilder(Buffer.from(bannerBuffer), {
     name: "kofibanner.png",
   });
 
-  // 2. Create embed with image attachment
+  // Create embed with image attachment
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.donate.kofi.title"))
     .setDescription(localizer(locale, "commands.donate.kofi.description_text"))
     .setColor(ColorCode.INFO)
     .setImage("attachment://kofibanner.png");
 
-  // 3. Reply with embed and attachment
+  // Reply with embed and attachment
   await interaction.editReply({
     embeds: [embed],
     files: [attachment],

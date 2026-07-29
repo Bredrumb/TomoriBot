@@ -272,14 +272,14 @@ export async function acquireModelModalOpener(
   savedProviders: readonly AnchorProviderChoice[],
   idRoot: string,
 ): Promise<{ button: ButtonInteraction; provider: string } | null> {
-  // 1. Single provider: the only control is the "open selector" button.
+  // Single provider: the only control is the "open selector" button.
   if (savedProviders.length === 1) {
     const button = await awaitAnchorButton(phase, userId, `${idRoot}_open`, locale);
     if (!button) return null;
     return { button, provider: savedProviders[0].provider.toLowerCase() };
   }
 
-  // 2. Multiple providers: collect the picker click.
+  // Multiple providers: collect the picker click.
   const button = await awaitAnchorButton(phase, userId, idRoot, locale);
   if (!button) return null;
   if (button.customId === `${idRoot}_cancel`) {
@@ -343,10 +343,10 @@ export async function acquireModalOptionRange(
   const totalRangePages = Math.ceil(totalRanges / RANGES_PER_SELECTOR_PAGE);
   let rangePage = 0;
 
-  // 1. The first render consumes the caller's pending button; later ones edit in place.
+  // The first render consumes the caller's pending button; later ones edit in place.
   await phase.useButton(button).replace(buildRangeSelectorPayload(locale, prefix, optionCount, rangePage, pageSize));
 
-  // 2. Drive Previous/Next until a range button (or Cancel/timeout) settles the step.
+  // Drive Previous/Next until a range button (or Cancel/timeout) settles the step.
   while (true) {
     const rangeButton = await awaitAnchorButton(phase, userId, prefix, locale);
     if (!rangeButton) return null;

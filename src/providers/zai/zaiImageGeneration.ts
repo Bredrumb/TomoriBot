@@ -50,7 +50,7 @@ export async function generateZaiNativeImage(
     );
   }
 
-  // 1. Send generation request to Z.ai
+  // Send generation request to Z.ai
   const response = await fetch(request.endpointUrl || ZAI_GENERAL_IMAGES_GENERATIONS_URL, {
     method: "POST",
     headers: {
@@ -78,7 +78,7 @@ export async function generateZaiNativeImage(
     throw new Error(`Z.ai image generation failed: ${response.status} ${response.statusText}`);
   }
 
-  // 2. Parse response — expects { data: [{ url }] }
+  // Parse response — expects { data: [{ url }] }
   const result = (await response.json()) as {
     data?: Array<{ url?: string }>;
   };
@@ -91,7 +91,7 @@ export async function generateZaiNativeImage(
     return { imageData: null, mimeType: null };
   }
 
-  // 3. Fetch the image from the URL and convert to base64
+  // Fetch the image from the URL and convert to base64
   const imageResponse = await safeDownload(imageUrl, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
     timeoutMs: 15_000,
@@ -104,11 +104,11 @@ export async function generateZaiNativeImage(
     return { imageData: null, mimeType: null };
   }
 
-  // 4. Determine MIME type from Content-Type header
+  // Determine MIME type from Content-Type header
   const contentType = imageResponse.contentType ?? "image/png";
   const mimeType = contentType.split(";")[0].trim();
 
-  // 5. Convert to base64
+  // Convert to base64
   const base64 = imageResponse.buffer.toString("base64");
 
   return {

@@ -352,7 +352,7 @@ function buildScenarioEstimates(): {
   const baseToolSchemaTokens = estimateToolSchemaTokens();
   const avgMemoryChars = Math.round(limits.maxMemoryLength * 0.5); // e.g., 128 when max is 256
 
-  // 1. Minimum Scenario (Light usage)
+  // Minimum Scenario (Light usage)
   // - 1 user with 0 memories
   // - Minimal persona (single short description)
   // - 80 messages in history (short messages)
@@ -376,7 +376,7 @@ function buildScenarioEstimates(): {
     outputTokens: EST_OUTPUT_SHORT, // Short response (1-2 short paragraphs)
   };
 
-  // 2. Average Scenario (Moderate usage)
+  // Average Scenario (Moderate usage)
   // - 3 users with 10 memories each (~128 chars avg per memory)
   // - 10 server memories (~128 chars avg each)
   // - Typical persona + a few sample dialogues
@@ -404,7 +404,7 @@ function buildScenarioEstimates(): {
     outputTokens: EST_OUTPUT_TYPICAL, // Typical response (a few paragraphs / short explanation)
   };
 
-  // 3. Maximum Scenario (Heavy usage)
+  // Maximum Scenario (Heavy usage)
   // - 5 users with 25 memories each (256 chars max per memory)
   // - 25 server memories (256 chars max each)
   // - Maxed persona + maxed sample dialogues
@@ -486,11 +486,11 @@ function resolveModelPricing(
 ): { input: number; output: number } | null {
   const dbInput = tomoriState.llm.input_price_per_million;
   const dbOutput = tomoriState.llm.output_price_per_million;
-  // 1. DB columns win when both are present (a model priced in the catalog)
+  // DB columns win when both are present (a model priced in the catalog)
   if (typeof dbInput === "number" && typeof dbOutput === "number") {
     return { input: dbInput, output: dbOutput };
   }
-  // 2. Otherwise use the optional fallback, or null when none was supplied (→ "pricing unavailable")
+  // Otherwise use the optional fallback, or null when none was supplied (→ "pricing unavailable")
   return fallback ?? null;
 }
 
@@ -996,7 +996,7 @@ async function measureVertexInputTokens(
   apiKey: string,
   contextItems: StructuredContextItem[],
 ): Promise<LiveCostMeasurement> {
-  // 1. Build the same provider config the streaming path would use (model + tools).
+  // Build the same provider config the streaming path would use (model + tools).
   const provider = new VertexProvider();
   const providerConfig = (await provider.createConfig(tomoriState, apiKey)) as VertexProviderConfig;
   const adapter = new VertexStreamAdapter();
@@ -1004,7 +1004,7 @@ async function measureVertexInputTokens(
   const tokenCountContents = [...payload.contents];
   const inBandPrelude: typeof tokenCountContents = [];
 
-  // 2. countTokens does not accept request-level systemInstruction — inject in-band
+  // countTokens does not accept request-level systemInstruction — inject in-band
   //    so the instruction's tokens are still counted (mirrors the Google path).
   if (payload.systemInstruction) {
     inBandPrelude.push({
@@ -1018,7 +1018,7 @@ async function measureVertexInputTokens(
       ],
     });
   }
-  // 3. Likewise inject tool schemas in-band so the measured prompt includes their size.
+  // Likewise inject tool schemas in-band so the measured prompt includes their size.
   if (providerConfig.tools && providerConfig.tools.length > 0) {
     inBandPrelude.push({
       role: "user",
@@ -1033,7 +1033,7 @@ async function measureVertexInputTokens(
     tokenCountContents.unshift(...inBandPrelude);
   }
 
-  // 4. Construct the ADC-backed client from the composite key and count tokens.
+  // Construct the ADC-backed client from the composite key and count tokens.
   const genAI = createVertexClient(parseVertexCompositeKey(apiKey));
   const countRequest: CountTokensParameters = {
     model: providerConfig.model,
@@ -1046,7 +1046,7 @@ async function measureVertexInputTokens(
     throw new Error("Vertex countTokens did not return totalTokens");
   }
 
-  // 5. Vertex models carry their price on the catalog row; no env fallback remains.
+  // Vertex models carry their price on the catalog row; no env fallback remains.
   const pricing = resolveModelPricing(tomoriState);
   if (!pricing) {
     throw new Error(`No catalog price for Vertex model ${providerConfig.model}`);
@@ -1338,11 +1338,11 @@ async function measureAnthropicInputTokens(
   const provider = new AnthropicProvider();
   const providerConfig = (await provider.createConfig(tomoriState, apiKey)) as AnthropicProviderConfig;
 
-  // 1. Assemble context into Anthropic message format (same logic used during streaming)
+  // Assemble context into Anthropic message format (same logic used during streaming)
   const adapter = new AnthropicStreamAdapter();
   const { system, messages } = await adapter.buildProbeMessages(contextItems, providerConfig.seesImages ?? true);
 
-  // 2. Build the count_tokens request body (same shape as /v1/messages, no stream/max_tokens)
+  // Build the count_tokens request body (same shape as /v1/messages, no stream/max_tokens)
   const requestBody: Record<string, unknown> = {
     model: providerConfig.model,
     messages,
@@ -1350,7 +1350,7 @@ async function measureAnthropicInputTokens(
   if (system) requestBody.system = system;
   if (providerConfig.tools && providerConfig.tools.length > 0) requestBody.tools = providerConfig.tools;
 
-  // 3. Call the dedicated token counting endpoint
+  // Call the dedicated token counting endpoint
   const response = await fetch(ANTHROPIC_COUNT_TOKENS_URL, {
     method: "POST",
     headers: {
@@ -1663,14 +1663,14 @@ async function sendCharacterEstimateFallbackEmbed(
   locale: string,
   errorContext: ErrorContext,
 ): Promise<void> {
-  // 1. Without a catalog price there is nothing to estimate cost against.
+  // Without a catalog price there is nothing to estimate cost against.
   const pricing = resolveModelPricing(tomoriState);
   if (!pricing) {
     await sendLiveEstimateUnavailableEmbed(interaction, locale, tomoriState.llm.llm_provider);
     return;
   }
 
-  // 2. Assemble the same context the live pipeline would (no live provider → no truncator).
+  // Assemble the same context the live pipeline would (no live provider → no truncator).
   let contextItems: StructuredContextItem[];
   let personaReplyCharLengths: number[] = [];
   try {
@@ -1687,11 +1687,11 @@ async function sendCharacterEstimateFallbackEmbed(
     return;
   }
 
-  // 3. Approximate input tokens from character counts (no provider counting API available).
+  // Approximate input tokens from character counts (no provider counting API available).
   const estimatedInputTokens = estimateContextItemsTokens(contextItems);
   const sampleOutputTokens = resolveSampleOutputTokens(tomoriState, personaReplyCharLengths);
 
-  // 4. Render the standard current-context embed, flagged as a character-based estimate.
+  // Render the standard current-context embed, flagged as a character-based estimate.
   await sendLiveEstimateEmbed(
     interaction,
     locale,

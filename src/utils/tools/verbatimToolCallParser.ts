@@ -145,7 +145,7 @@ export class VerbatimToolCallParser {
 
     if (match) {
       const anchorIndex = match.index;
-      // 1. Pull a wrapper opener (e.g. "```json\n" or "`") immediately before
+      // Pull a wrapper opener (e.g. "```json\n" or "`") immediately before
       //    the tool name back into the accumulation buffer so it is preserved
       //    if parsing later fails, rather than leaking as a stray prose char.
       const beforeAnchor = this.buffer.slice(0, anchorIndex);
@@ -156,14 +156,14 @@ export class VerbatimToolCallParser {
       this.buffer = this.buffer.slice(splitAt);
       this.mode = "accumulating";
 
-      // 2. With no prose to emit first, it is safe to resolve in this feed.
+      // With no prose to emit first, it is safe to resolve in this feed.
       if (prose.length === 0) {
         return this.tryCompleteCall();
       }
       return { visibleText: prose, functionCall: null };
     }
 
-    // 3. No anchor: emit the safe prefix, holding back only a tail that could be
+    // No anchor: emit the safe prefix, holding back only a tail that could be
     //    the start of a wrapper opener or a partial tool name on the next chunk.
     const holdback = this.computeHoldback(this.buffer);
     const visibleText = this.buffer.slice(0, this.buffer.length - holdback.length);
@@ -212,7 +212,7 @@ export class VerbatimToolCallParser {
    * optionally preceded by a wrapper opener (backticks + fence language).
    */
   private computeHoldback(buffer: string): string {
-    // 1. Longest suffix that is a prefix of some exposed tool name. The full
+    // Longest suffix that is a prefix of some exposed tool name. The full
     //    name is included (len up to name.length): a complete name whose "("
     //    has not streamed in yet must still be withheld, or the anchor can never
     //    match once the parenthesis finally arrives in the next chunk.
@@ -226,7 +226,7 @@ export class VerbatimToolCallParser {
       }
     }
 
-    // 2. A full tool name followed only by trailing whitespace: the anchor
+    // A full tool name followed only by trailing whitespace: the anchor
     //    permits `name\s*(`, so the "(" may still arrive on the next chunk.
     if (!namePart) {
       const trailingWhitespace = buffer.match(/\s+$/)?.[0] ?? "";
@@ -241,7 +241,7 @@ export class VerbatimToolCallParser {
       }
     }
 
-    // 3. A wrapper opener directly before the partial name (or at the very end)
+    // A wrapper opener directly before the partial name (or at the very end)
     //    might be wrapping a call still arriving on the next chunk.
     const beforeName = buffer.slice(0, buffer.length - namePart.length);
     const opener = beforeName.match(CODE_OPENER_SUFFIX)?.[0] ?? "";

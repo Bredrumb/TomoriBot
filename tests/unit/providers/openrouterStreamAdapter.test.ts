@@ -214,7 +214,7 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
   it("accumulates split tool-call chunks and resolves on the finish chunk", () => {
     const adapter = new OpenrouterStreamAdapter();
 
-    // 1. First chunk: name arrives
+    // First chunk: name arrives
     adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -230,7 +230,7 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       }),
     );
 
-    // 2. Second chunk: arguments fragment arrives
+    // Second chunk: arguments fragment arrives
     adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -242,7 +242,7 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       }),
     );
 
-    // 3. Terminal chunk: finishReason signals the call is complete
+    // Terminal chunk: finishReason signals the call is complete
     const result = adapter.processChunk(
       makeOpenrouterChunk({
         choices: [{ index: 0, finishReason: "tool_calls", delta: {} }],

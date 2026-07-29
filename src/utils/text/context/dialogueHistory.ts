@@ -429,7 +429,7 @@ async function appendTextParts(
   if (params.msg.content) {
     const normalizedContent = normalizeCustomEmojisForLlm(params.msg.content);
 
-    // 1. The author label is text WE author, so identity macros in it must still resolve — it is
+    // The author label is text WE author, so identity macros in it must still resolve — it is
     //    what tells the model which name owns the turn. Resolved BEFORE the join so the body,
     //    which is raw prose, can opt out of macro expansion in step 3.
     const resolvedAuthorLabel = await params.convertMentions(
@@ -457,7 +457,7 @@ async function appendTextParts(
     if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY && params.role === "model") {
       processedContent = humanizeString(processedContent);
     }
-    // 2. Mentions, channel links, and roles still resolve here. Only the identity macros are left
+    // Mentions, channel links, and roles still resolve here. Only the identity macros are left
     //    literal: this string carries a real Discord message body, so rewriting "{bot}"/"{char}"
     //    would corrupt legitimate content (e.g. a persona preset Tomori drafted for a user) and,
     //    on a model-role line, would collapse both macros onto the persona's own name.

@@ -210,27 +210,27 @@ function setupWebSocketInterception(client: unknown) {
                 // Narrowed above: custom_id is guaranteed to be a non-empty string
                 const customId = inner.custom_id as string;
 
-                // 1. String Select (type 3) — store first selected value
+                // String Select (type 3) — store first selected value
                 if (inner.type === 3 && inner.values?.[0]) {
                   selectValues[customId] = inner.values[0];
                 }
 
-                // 2. File Upload (type 19) — store all attachment IDs
+                // File Upload (type 19) — store all attachment IDs
                 if (inner.type === 19 && Array.isArray(inner.values)) {
                   fileUploadValues[customId] = inner.values;
                 }
 
-                // 3. Radio Group (type 21) — store selected value string (null → empty string)
+                // Radio Group (type 21) — store selected value string (null → empty string)
                 if (inner.type === 21) {
                   selectValues[customId] = typeof inner.value === "string" ? inner.value : "";
                 }
 
-                // 4. Checkbox Group (type 22) — store array of selected values
+                // Checkbox Group (type 22) — store array of selected values
                 if (inner.type === 22 && Array.isArray(inner.values)) {
                   checkboxGroupValues[customId] = inner.values;
                 }
 
-                // 5. Checkbox (type 23) — store boolean as "true"/"false" string
+                // Checkbox (type 23) — store boolean as "true"/"false" string
                 if (inner.type === 23) {
                   selectValues[customId] = inner.value === true ? "true" : "false";
                 }
@@ -332,11 +332,11 @@ const CONFIRMATION_DESCRIPTION_LIMIT = 3800; // Budget for description, leaving 
  * @returns True when the wait ended because the user simply never responded
  */
 export function isCollectorTimeoutError(error: unknown): boolean {
-  // 1. Bare end-reason string form.
+  // Bare end-reason string form.
   if (error === "time" || error === "idle") return true;
   if (!error || typeof error !== "object") return false;
 
-  // 2. InteractionCollectorError form — identify by code/name, then read the reason.
+  // InteractionCollectorError form — identify by code/name, then read the reason.
   const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
   const code = typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
   const name = typeof candidate.name === "string" ? candidate.name.toLowerCase() : "";
@@ -450,7 +450,7 @@ export async function promptWithConfirmation(
   locale: string,
   options: ConfirmationOptions,
 ): Promise<ConfirmationResult> {
-  // 1. Destructure options with defaults
+  // Destructure options with defaults
   const {
     embedTitleKey,
     embedDescriptionKey,
@@ -464,13 +464,13 @@ export async function promptWithConfirmation(
   } = options;
   const localizedDescription = localizeConfirmationDescription(locale, embedDescriptionKey, embedDescriptionVars);
 
-  // 2. Create Embed
+  // Create Embed
   const embed = new EmbedBuilder()
     .setColor(embedColor)
     .setTitle(localizer(locale, embedTitleKey))
     .setDescription(localizedDescription);
 
-  // 3. Create Buttons
+  // Create Buttons
   const continueButton = new ButtonBuilder()
     .setCustomId(continueCustomId)
     .setLabel(localizer(locale, continueLabelKey))
@@ -481,10 +481,10 @@ export async function promptWithConfirmation(
     .setLabel(localizer(locale, cancelLabelKey))
     .setStyle(ButtonStyle.Danger);
 
-  // 4. Create Action Row
+  // Create Action Row
   const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(continueButton, cancelButton);
 
-  // 5. Send/Edit the Reply
+  // Send/Edit the Reply
   let message: Message;
   try {
     // First, check if this interaction has already been responded to
@@ -517,13 +517,13 @@ export async function promptWithConfirmation(
     }
   }
 
-  // 6. Create Button Collector Filter
+  // Create Button Collector Filter
   const buttonCollectorFilter = (i: ButtonInteraction) => {
     i.deferUpdate().catch((e) => log.warn("Failed to defer update on button filter:", e));
     return i.user.id === interaction.user.id;
   };
 
-  // 7. Await Component Interaction
+  // Await Component Interaction
   try {
     const buttonInteraction = await message.awaitMessageComponent({
       filter: buttonCollectorFilter,
@@ -531,7 +531,7 @@ export async function promptWithConfirmation(
       time: timeout,
     });
 
-    // 8. Handle Button Click
+    // Handle Button Click
     if (buttonInteraction.customId === continueCustomId) {
       return { outcome: "continue", interaction: buttonInteraction };
     }
@@ -545,7 +545,7 @@ export async function promptWithConfirmation(
     await interaction.editReply({ embeds: [cancelEmbed], components: [] });
     return { outcome: "cancel" };
   } catch (_timeoutError) {
-    // 9. Handle Timeout
+    // Handle Timeout
     log.warn(`Confirmation prompt timed out for user ${interaction.user.id}`);
     const timeoutEmbed = new EmbedBuilder()
       .setColor(ColorCode.ERROR)
@@ -744,10 +744,10 @@ export async function promptWithModal(
 ): Promise<ModalResult> {
   const { modalTitleKey, modalCustomId, components } = options;
 
-  // 1. Create Modal
+  // Create Modal
   const modal = new ModalBuilder().setCustomId(modalCustomId).setTitle(localizer(locale, modalTitleKey));
 
-  // 2. Create Modal Components (Text Inputs Only - String Selects Not Yet Supported)
+  // Create Modal Components (Text Inputs Only - String Selects Not Yet Supported)
   const rows = components.map((component) => {
     if (isModalInputField(component)) {
       // Create text input component
@@ -811,7 +811,7 @@ export async function promptWithModal(
 
   modal.addComponents(...rows);
 
-  // 3. Show Modal
+  // Show Modal
   try {
     await interaction.showModal(modal);
   } catch (error) {
@@ -819,14 +819,14 @@ export async function promptWithModal(
     return { outcome: "timeout" };
   }
 
-  // 4. Wait for submission (use Discord's natural timeout duration ~15 minutes)
+  // Wait for submission (use Discord's natural timeout duration ~15 minutes)
   try {
     const submitted = await interaction.awaitModalSubmit({
       time: 600000, // 10 minutes - matches Discord's natural modal timeout
       filter: (i) => i.customId === modalCustomId && i.user.id === interaction.user.id,
     });
 
-    // 5. Collect field values
+    // Collect field values
     const values: Record<string, string> = {};
     for (const component of components) {
       if (isModalInputField(component)) {
@@ -935,7 +935,7 @@ export async function replyInfoEmbed(
     | MessageFlags.SuppressNotifications
     | undefined = MessageFlags.Ephemeral,
 ): Promise<void> {
-  // 1. Check if "not setup" is actually a transient DB error (e.g. during deployment).
+  // Check if "not setup" is actually a transient DB error (e.g. during deployment).
   //    If the DB was recently unreachable, show a yellow "Currently Updating..." embed
   //    instead of the misleading red "Initial Setup Required" error.
   const isDMContext = !interaction.guild;
@@ -948,7 +948,7 @@ export async function replyInfoEmbed(
     finalOptions.color = ColorCode.WARN;
   }
 
-  // 2. Add DM footer automatically for tomori_not_setup errors in DM context
+  // Add DM footer automatically for tomori_not_setup errors in DM context
   if (
     isDMContext &&
     (finalOptions.titleKey === "general.errors.tomori_not_setup_title" ||
@@ -967,7 +967,7 @@ export async function replyInfoEmbed(
     return;
   }
 
-  // 3. Build the embed using the shared helper for consistency. When tip-item keys are supplied,
+  // Build the embed using the shared helper for consistency. When tip-item keys are supplied,
   //    append the reusable green Tip embed so every send path below emits both embeds together.
   const embed = createStandardEmbed(locale, finalOptions);
   const tipEmbed = finalOptions.tipKeys?.length
@@ -975,7 +975,7 @@ export async function replyInfoEmbed(
     : null;
   const embeds = tipEmbed ? [embed, tipEmbed] : [embed];
 
-  // 4. Defensive interaction state checking
+  // Defensive interaction state checking
   const interactionState = {
     deferred: interaction.deferred,
     replied: interaction.replied,
@@ -984,7 +984,7 @@ export async function replyInfoEmbed(
 
   log.info(`replyInfoEmbed interaction state: ${JSON.stringify(interactionState)}`);
 
-  // 5. Check if interaction was acknowledged via raw REST API (e.g., modal shown)
+  // Check if interaction was acknowledged via raw REST API (e.g., modal shown)
   // Discord.js state may be out of sync in this case
   const wasRawModalSent = rawModalAcknowledged.get(interaction as ChatInputCommandInteraction | ButtonInteraction);
 
@@ -1396,13 +1396,13 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     options.description ??
     (options.descriptionKey ? localizer(locale, options.descriptionKey, options.descriptionVars) : "");
 
-  // 1. Title line, rendered as an H3 heading like every other CV2 container.
+  // Title line, rendered as an H3 heading like every other CV2 container.
   components.push({
     type: ComponentType.TextDisplay,
     content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
   });
 
-  // 2. Body description. Some notices use raw text; others use localized keys.
+  // Body description. Some notices use raw text; others use localized keys.
   if (descriptionText) {
     components.push({
       type: ComponentType.TextDisplay,
@@ -1410,7 +1410,7 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     });
   }
 
-  // 3. Optional embed-style footer, preserved as muted Discord subtext.
+  // Optional embed-style footer, preserved as muted Discord subtext.
   if (options.footerKey) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     components.push({
@@ -1419,7 +1419,7 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     });
   }
 
-  // 4. Optional utility action, rendered inside the card rather than below it.
+  // Optional utility action, rendered inside the card rather than below it.
   if (options.button) {
     const button: ButtonComponentData = {
       type: ComponentType.Button,
@@ -1664,13 +1664,13 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
   const useThumbnailLayout =
     options.layout === "thumbnail-section" && Boolean(options.imageAttachmentName) && sections.length > 0;
 
-  // 1. Title line, rendered as an H3 heading like every other CV2 container.
+  // Title line, rendered as an H3 heading like every other CV2 container.
   components.push({
     type: ComponentType.TextDisplay,
     content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
   });
 
-  // 2. Hero image directly under the title (CV2 has no embed image slot, so the
+  // Hero image directly under the title (CV2 has no embed image slot, so the
   //    attachment is surfaced through a single-item MediaGallery). Skipped in the
   //    thumbnail layout, which shows the avatar beside the final section instead.
   if (options.imageAttachmentName && !useThumbnailLayout) {
@@ -1680,13 +1680,13 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     });
   }
 
-  // 3. Body description.
+  // Body description.
   components.push({
     type: ComponentType.TextDisplay,
     content: localizer(locale, options.descriptionKey, options.descriptionVars),
   });
 
-  // 4. Optional content sections (e.g. sample dialogue, next steps), each grouped
+  // Optional content sections (e.g. sample dialogue, next steps), each grouped
   //    under its own divider. In the thumbnail layout, the final section carries
   //    the avatar as a right-aligned Thumbnail accessory.
   sections.forEach((section, index) => {
@@ -1712,7 +1712,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     }
   });
 
-  // 5. Optional footer note (e.g. the DM avatar-skipped warning), muted via italics.
+  // Optional footer note (e.g. the DM avatar-skipped warning), muted via italics.
   if (options.footerKey) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     components.push({
@@ -1721,7 +1721,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     });
   }
 
-  // 6. Optional action button. Left alignment uses a standard ActionRow; right
+  // Optional action button. Left alignment uses a standard ActionRow; right
   //    alignment uses a Section with the button as an accessory (CV2's only way
   //    to right-align a button), mirroring the persona picker's "select" button.
   if (options.button) {
@@ -1750,7 +1750,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     }
   }
 
-  // 7. Optional closing note after the button, on its own divided row. Keeps the
+  // Optional closing note after the button, on its own divided row. Keeps the
   //    button tight under the avatar while the note sits below it.
   if (options.trailingNoteKey) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
@@ -1902,7 +1902,7 @@ async function resolvePersonaPageAvatarData(
     pagePersonas.map(async (persona, idx) => {
       const absoluteIdx = pageStartIdx + idx;
 
-      // 1. Return cached result immediately — skip all I/O on repeated page visits.
+      // Return cached result immediately — skip all I/O on repeated page visits.
       const cached = sessionCache.get(absoluteIdx);
       if (cached) {
         if (cached.type === "url") {
@@ -1921,7 +1921,7 @@ async function resolvePersonaPageAvatarData(
         return;
       }
 
-      // 2. Try public URL resolution first (http/https refs or configured base URL)
+      // Try public URL resolution first (http/https refs or configured base URL)
       const publicUrl = resolvePersonaAvatarPublicUrl(persona.webhook_avatar_url);
       if (publicUrl) {
         sessionCache.set(absoluteIdx, { type: "url", url: publicUrl });
@@ -1929,7 +1929,7 @@ async function resolvePersonaPageAvatarData(
         return;
       }
 
-      // 3. For local paths with no public URL, load the buffer and attach directly
+      // For local paths with no public URL, load the buffer and attach directly
       const avatarRef = persona.webhook_avatar_url;
       if (avatarRef && isLocalPersonaAvatarPath(avatarRef)) {
         const buffer = await loadStoredPersonaAvatarBuffer(avatarRef);
@@ -1942,7 +1942,7 @@ async function resolvePersonaPageAvatarData(
         }
       }
 
-      // 4. Nothing resolved — use fallback
+      // Nothing resolved — use fallback
       sessionCache.set(absoluteIdx, { type: "url", url: fallbackAvatarUrl });
       avatarUrls.set(idx, fallbackAvatarUrl);
     }),
@@ -2258,10 +2258,10 @@ export async function replyPaginatedChoices(
       // Send or update the message
       let message: Message;
       if (interaction.replied || interaction.deferred) {
-        // 1. Edit the reply if already replied/deferred
+        // Edit the reply if already replied/deferred
         message = await interaction.editReply(baseReplyOptions);
       } else {
-        // 2. Reply initially, then fetch the message for awaitMessageComponent
+        // Reply initially, then fetch the message for awaitMessageComponent
         await interaction.reply({
           ...baseReplyOptions,
           flags: MessageFlags.Ephemeral,
@@ -2523,11 +2523,11 @@ export async function replyPaginatedPersonaChoicesV2(
   const avatarSessionCache: AvatarSessionCache = options.avatarSessionCache ?? new Map();
   try {
     while (true) {
-      // 1. Inner try wraps the ENTIRE loop body — setup, render, and button wait.
+      // Inner try wraps the ENTIRE loop body — setup, render, and button wait.
       //    This ensures every Discord API error is caught here and returned cleanly
       //    without propagating to the outer catch and triggering a second API call.
       try {
-        // 1a. Slash-command entry points may spend most of their 3-second ACK window
+        // Slash-command entry points may spend most of their 3-second ACK window
         //     loading personas before they reach the picker. Acknowledge here before
         //     avatar/file resolution so the initial render uses editReply() instead of
         //     racing the first interaction.reply().
@@ -2535,7 +2535,7 @@ export async function replyPaginatedPersonaChoicesV2(
           await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         }
 
-        // 1b. Guard against the Discord 15-minute interaction token expiry.
+        // Guard against the Discord 15-minute interaction token expiry.
         //     awaitMessageComponent resets its per-iteration timeout on each loop
         //     pass, so an active user clicking buttons can hold the session open
         //     indefinitely — past the point where the token becomes invalid and all
@@ -2561,12 +2561,12 @@ export async function replyPaginatedPersonaChoicesV2(
           return { success: false, reason: "timeout" };
         }
 
-        // 1c. Determine which personas are on the current page.
+        // Determine which personas are on the current page.
         const startIdx = (currentPage - 1) * PERSONA_PAGINATION_ITEMS_PER_PAGE;
         const endIdx = Math.min(startIdx + PERSONA_PAGINATION_ITEMS_PER_PAGE, options.personas.length);
         const pagePersonas = options.personas.slice(startIdx, endIdx);
 
-        // 1d. Pre-resolve avatar URLs (and collect local file attachments when needed).
+        // Pre-resolve avatar URLs (and collect local file attachments when needed).
         //     In non-production without AVATAR_PUBLIC_BASE_URL, alter avatars stored as
         //     local paths are loaded from disk and attached directly to the message.
         //     avatarSessionCache ensures each persona's avatar is only fetched once per session.
@@ -2590,7 +2590,7 @@ export async function replyPaginatedPersonaChoicesV2(
           files,
         };
 
-        // 1e. Send or update the pagination message.
+        // Send or update the pagination message.
         let message: Message;
         if (interaction.replied || interaction.deferred) {
           message = await interaction.editReply({
@@ -3426,7 +3426,7 @@ async function runComponentsV2RangeSelectorModal(
   const totalRangePages = Math.ceil(Math.ceil(optionCount / MODAL_OPTIONS_PER_PAGE) / RANGES_PER_SELECTOR_PAGE);
   let rangePage = 0;
 
-  // 1. Render the initial selector via the path-specific transport, always resolving
+  // Render the initial selector via the path-specific transport, always resolving
   //    to a Message so awaitMessageComponent works on ephemeral replies. The reply now
   //    carries IsComponentsV2 — mark the interaction so a later legacy embed sink renders
   //    a V2 notice instead of throwing (Phase 1 collision guard).
@@ -3456,7 +3456,7 @@ async function runComponentsV2RangeSelectorModal(
     return { outcome: "error", error };
   }
 
-  // 2. Await loop: paginate ranges (Previous/Next), cancel, or pick a range → open modal.
+  // Await loop: paginate ranges (Previous/Next), cancel, or pick a range → open modal.
   while (true) {
     let button: ButtonInteraction;
     try {
@@ -3470,7 +3470,7 @@ async function runComponentsV2RangeSelectorModal(
       return { outcome: "timeout" };
     }
 
-    // 2a. Cancel: acknowledge with a cancelled notice and report the cancellation.
+    // Cancel: acknowledge with a cancelled notice and report the cancellation.
     if (button.customId === `${prefix}_cancel`) {
       try {
         await button.update({
@@ -3488,7 +3488,7 @@ async function runComponentsV2RangeSelectorModal(
       return { outcome: "cancelled" };
     }
 
-    // 2b. Previous / Next: re-render the selector page in place via the button update.
+    // Previous / Next: re-render the selector page in place via the button update.
     if (button.customId === `${prefix}_previous` || button.customId === `${prefix}_next`) {
       rangePage =
         button.customId === `${prefix}_previous`
@@ -3503,7 +3503,7 @@ async function runComponentsV2RangeSelectorModal(
       continue;
     }
 
-    // 2c. Range button: slice options to the chosen 25 and open the modal on this button.
+    // Range button: slice options to the chosen 25 and open the modal on this button.
     const rangeIndex = parseModalRangeIndex(button.customId, prefix);
     if (rangeIndex === null) {
       log.warn(`Unrecognized range-selector custom id: ${button.customId}`);
@@ -3541,10 +3541,10 @@ export async function replyPaginatedStatusPages(
     | MessageFlags.SuppressNotifications
     | undefined = MessageFlags.Ephemeral,
 ): Promise<void> {
-  // 1. Guard: nothing to display
+  // Guard: nothing to display
   if (pages.length === 0) return;
 
-  // 2. Single page: skip navigation buttons entirely
+  // Single page: skip navigation buttons entirely
   if (pages.length === 1) {
     await replySummaryEmbed(interaction, locale, pages[0], flags);
     return;
@@ -3563,7 +3563,7 @@ export async function replyPaginatedStatusPages(
   let currentPage = 0;
   const totalPages = pages.length;
 
-  // 3. Scope button IDs to this interaction to avoid cross-user conflicts
+  // Scope button IDs to this interaction to avoid cross-user conflicts
   const prevId = `${interaction.id}${STATUS_PREV_SUFFIX}`;
   const nextId = `${interaction.id}${STATUS_NEXT_SUFFIX}`;
   const labelId = `${interaction.id}${STATUS_LABEL_SUFFIX}`;
@@ -3594,7 +3594,7 @@ export async function replyPaginatedStatusPages(
     );
   }
 
-  // 4. Send or update the initial reply with the first page and nav buttons
+  // Send or update the initial reply with the first page and nav buttons
   const embed = createSummaryEmbed(locale, pages[currentPage]);
   const navRow = buildNavRow(currentPage);
 
@@ -3613,7 +3613,7 @@ export async function replyPaginatedStatusPages(
     message = await interaction.fetchReply();
   }
 
-  // 5. Pagination loop: keep collecting button presses until timeout
+  // Pagination loop: keep collecting button presses until timeout
   try {
     while (true) {
       const buttonInteraction = await message.awaitMessageComponent({
@@ -3622,14 +3622,14 @@ export async function replyPaginatedStatusPages(
         time: PAGINATION_TIMEOUT_MS,
       });
 
-      // 6. Advance or retreat page index based on which button was pressed
+      // Advance or retreat page index based on which button was pressed
       if (buttonInteraction.customId === prevId) {
         currentPage = Math.max(0, currentPage - 1);
       } else {
         currentPage = Math.min(totalPages - 1, currentPage + 1);
       }
 
-      // 7. Update the message with the new page embed and refreshed nav row
+      // Update the message with the new page embed and refreshed nav row
       const newEmbed = createSummaryEmbed(locale, pages[currentPage]);
       const newNavRow = buildNavRow(currentPage);
       await buttonInteraction.update({
@@ -3642,7 +3642,7 @@ export async function replyPaginatedStatusPages(
       errorType: "PaginationCollectorEnded",
       metadata: { userId: interaction.user.id, error },
     });
-    // 8. Timeout: strip buttons from the last viewed page to keep it clean
+    // Timeout: strip buttons from the last viewed page to keep it clean
     try {
       const timeoutEmbed = createSummaryEmbed(locale, pages[currentPage]);
       await interaction.editReply({ embeds: [timeoutEmbed], components: [] });

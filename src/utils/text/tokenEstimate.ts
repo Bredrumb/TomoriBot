@@ -54,7 +54,7 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
   if (!raw || typeof raw !== "object") return null;
   const u = raw as Record<string, unknown>;
 
-  // 1. Some adapters nest the usage object under `.usage`; unwrap it first.
+  // Some adapters nest the usage object under `.usage`; unwrap it first.
   if (u.usage && typeof u.usage === "object") {
     const nested = normalizeProviderUsage(u.usage);
     if (nested) return nested;
@@ -68,9 +68,9 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
     return 0;
   };
 
-  // 2. Input: OpenAI/OpenRouter prompt tokens, Anthropic input, Gemini prompt count.
+  // Input: OpenAI/OpenRouter prompt tokens, Anthropic input, Gemini prompt count.
   const inputTokens = num("prompt_tokens", "promptTokens", "input_tokens", "inputTokens", "promptTokenCount");
-  // 3. Output: completion/output tokens, Gemini candidates count. Gemini bills
+  // Output: completion/output tokens, Gemini candidates count. Gemini bills
   //    thinking tokens separately (`thoughtsTokenCount`) at the output rate, so
   //    add them to avoid undercounting reasoning models.
   const outputTokens =

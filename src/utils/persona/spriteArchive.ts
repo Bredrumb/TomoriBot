@@ -134,7 +134,7 @@ export async function buildSpriteArchive(options: {
     throw new Error("Failed to create sprite image folder in archive");
   }
 
-  // 1. Write each image under a zero-padded, key-derived filename and record
+  // Write each image under a zero-padded, key-derived filename and record
   //    the manifest entry that points at it.
   const manifestEntries: SpriteArchiveEntry[] = [];
   const usedFilenames = new Set<string>();
@@ -150,7 +150,7 @@ export async function buildSpriteArchive(options: {
     });
   });
 
-  // 2. Write the manifest last so it sits alongside the images.
+  // Write the manifest last so it sits alongside the images.
   const manifest: SpriteArchiveManifest = {
     export_type: SPRITE_ARCHIVE_EXPORT_TYPE,
     version: SPRITE_ARCHIVE_VERSION,
@@ -163,7 +163,7 @@ export async function buildSpriteArchive(options: {
   };
   zip.file(SPRITE_ARCHIVE_MANIFEST_NAME, `${JSON.stringify(manifest, null, 2)}\n`);
 
-  // 3. Generate the bytes. DEFLATE is cheap here (PNGs are already compressed,
+  // Generate the bytes. DEFLATE is cheap here (PNGs are already compressed,
   //    but the manifest and any incidental redundancy still benefit).
   const buffer = await zip.generateAsync({
     type: "nodebuffer",
@@ -193,7 +193,7 @@ export async function readSpriteArchive(
   zipBuffer: Buffer,
   limits: SpriteArchiveReadLimits,
 ): Promise<SpriteArchiveReadResult> {
-  // 1. Load the container. Corrupt or non-zip input throws here.
+  // Load the container. Corrupt or non-zip input throws here.
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(zipBuffer);
@@ -202,7 +202,7 @@ export async function readSpriteArchive(
     return { ok: false, reason: "invalid_zip" };
   }
 
-  // 2. Locate the manifest (case-insensitive, ignoring any folder prefix some
+  // Locate the manifest (case-insensitive, ignoring any folder prefix some
   //    archivers add) and parse it as JSON.
   const manifestFile = findManifestFile(zip);
   if (!manifestFile) {
@@ -218,7 +218,7 @@ export async function readSpriteArchive(
     return { ok: false, reason: "invalid_manifest" };
   }
 
-  // 3. Validate the manifest shape.
+  // Validate the manifest shape.
   const parsedManifest = spriteArchiveManifestSchema.safeParse(manifestJson);
   if (!parsedManifest.success) {
     log.warn(`Invalid sprite archive manifest: ${parsedManifest.error.message}`);
@@ -226,12 +226,12 @@ export async function readSpriteArchive(
   }
   const manifest = parsedManifest.data;
 
-  // 4. Reject archives produced by a newer, incompatible format version.
+  // Reject archives produced by a newer, incompatible format version.
   if (manifest.version > SPRITE_ARCHIVE_VERSION) {
     return { ok: false, reason: "incompatible_version" };
   }
 
-  // 5. Entry-count guards.
+  // Entry-count guards.
   if (manifest.sprites.length === 0) {
     return { ok: false, reason: "empty" };
   }
@@ -239,7 +239,7 @@ export async function readSpriteArchive(
     return { ok: false, reason: "too_many_entries" };
   }
 
-  // 6. Resolve, guard, and read each referenced image.
+  // Resolve, guard, and read each referenced image.
   const entries: SpriteArchiveReadEntry[] = [];
   let totalBytes = 0;
   for (const meta of manifest.sprites) {
@@ -248,7 +248,7 @@ export async function readSpriteArchive(
       return { ok: false, reason: "missing_image" };
     }
 
-    // 6a. Best-effort pre-read size check using JSZip's declared uncompressed
+    // Best-effort pre-read size check using JSZip's declared uncompressed
     //     size, so an oversized entry is rejected before it is decompressed.
     const declaredSize = getDeclaredUncompressedSize(imageFile);
     if (declaredSize !== null && declaredSize > limits.maxFileBytes) {
@@ -257,7 +257,7 @@ export async function readSpriteArchive(
 
     const pngBuffer = (await imageFile.async("nodebuffer")) as Buffer;
 
-    // 6b. Post-read guards: per-file cap, then running total cap.
+    // Post-read guards: per-file cap, then running total cap.
     if (pngBuffer.length > limits.maxFileBytes) {
       return { ok: false, reason: "file_too_large" };
     }

@@ -73,7 +73,7 @@ export async function execute(
   };
 
   try {
-    // 1. Validate guild context
+    // Validate guild context
     if (!interaction.guild || !interaction.guildId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -83,7 +83,7 @@ export async function execute(
       return;
     }
 
-    // 2. Validate ManageGuild permission
+    // Validate ManageGuild permission
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -93,10 +93,10 @@ export async function execute(
       return;
     }
 
-    // 3. Defer before async work (Pattern 2)
+    // Defer before async work (Pattern 2)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 4. Check Matrix bridge is configured
+    // Check Matrix bridge is configured
     if (!isMatrixConfigured()) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -106,7 +106,7 @@ export async function execute(
       return;
     }
 
-    // 5. Load Tomori state (bot must be set up)
+    // Load Tomori state (bot must be set up)
     const tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -120,11 +120,11 @@ export async function execute(
     errorContext.serverId = tomoriState.server_id;
     errorContext.personaId = tomoriState.persona_id;
 
-    // 6. Get command options
+    // Get command options
     const channel = interaction.options.getChannel("channel", true);
     const roomId = interaction.options.getString("room", true).trim();
 
-    // 7. Validate Matrix room ID format: must start with "!" and contain ":"
+    // Validate Matrix room ID format: must start with "!" and contain ":"
     if (!roomId.startsWith("!") || !roomId.includes(":")) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -134,7 +134,7 @@ export async function execute(
       return;
     }
 
-    // 8. Reject encrypted rooms — Matrix encryption is permanent and cannot be
+    // Reject encrypted rooms — Matrix encryption is permanent and cannot be
     //    disabled, so bridging would never work for this room.
     if (await isRoomEncrypted(roomId)) {
       await replyInfoEmbed(interaction, locale, {
@@ -149,17 +149,17 @@ export async function execute(
       return;
     }
 
-    // 10. Fetch previous room ID for this channel (to invalidate old cache entry)
+    // Fetch previous room ID for this channel (to invalidate old cache entry)
     const oldRoomId = await serverRepository.getExistingMatrixLink(channel.id);
 
-    // 11. Upsert: insert or replace existing link for this channel
+    // Upsert: insert or replace existing link for this channel
     await serverRepository.linkMatrix(tomoriState.server_id, channel.id, roomId);
 
-    // 12. Invalidate cache entries for both old and new room IDs
+    // Invalidate cache entries for both old and new room IDs
     invalidateMatrixLinkCache(channel.id, oldRoomId ?? undefined);
     invalidateMatrixLinkCache(channel.id, roomId);
 
-    // 13. Attempt to join the Matrix room as the bot account (non-critical)
+    // Attempt to join the Matrix room as the bot account (non-critical)
     let joinFailed = false;
     try {
       await joinMatrixRoom(roomId);
@@ -168,7 +168,7 @@ export async function execute(
       joinFailed = true;
     }
 
-    // 14. Reply success (with note if join failed)
+    // Reply success (with note if join failed)
     const botUserId = process.env.MATRIX_BOT_USER_ID ?? "the Matrix bot account";
     const helpMatrixMention = commandRegistry.getCommandMention("help", "matrix");
 

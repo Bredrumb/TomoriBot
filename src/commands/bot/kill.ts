@@ -66,9 +66,9 @@ export async function execute(
   }
 
   if (hasActiveStream) {
-    // 1. Signal the stream processing loop to stop gracefully.
+    // Signal the stream processing loop to stop gracefully.
     StreamOrchestrator.requestStop(channelId, interaction.user.id);
-    // 2. Abort the underlying HTTP request and unblock Promise.race so the lock releases immediately.
+    // Abort the underlying HTTP request and unblock Promise.race so the lock releases immediately.
     forceKillChannelStream(channelId);
   }
 

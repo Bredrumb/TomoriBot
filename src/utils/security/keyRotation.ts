@@ -96,7 +96,7 @@ export async function selectApiKey(
   const provider = tomoriState.llm.llm_provider.toLowerCase();
 
   try {
-    // 1. Query all rotation keys for this server and provider, joining runtime telemetry
+    // Query all rotation keys for this server and provider, joining runtime telemetry
     const rotationKeys = await sql`
       SELECT
         akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
@@ -111,13 +111,13 @@ export async function selectApiKey(
       ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
     `;
 
-    // 2. If less than 2 keys, rotation is not active
+    // If less than 2 keys, rotation is not active
     if (!rotationKeys || rotationKeys.length < 2) {
       log.info(`Key rotation not active for server ${serverId} (${rotationKeys?.length || 0} keys)`);
       return null;
     }
 
-    // 3. Filter and find the best available key
+    // Filter and find the best available key
     for (const row of rotationKeys) {
       // Validate the row
       const parsed = apiKeyRotationSchema.safeParse(row);
@@ -144,7 +144,7 @@ export async function selectApiKey(
         continue;
       }
 
-      // 4. Decrypt and return this key
+      // Decrypt and return this key
       let decryptedKey: string;
 
       if (key.is_main_key_pointer) {
@@ -180,7 +180,7 @@ export async function selectApiKey(
       };
     }
 
-    // 5. All keys exhausted or in cooldown
+    // All keys exhausted or in cooldown
     log.warn(`All rotation keys exhausted or in cooldown for server ${serverId}`);
     return null;
   } catch (error) {
@@ -342,14 +342,14 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
   const normalizedProvider = provider.toLowerCase();
 
   try {
-    // 1. Check if main key pointer already exists
+    // Check if main key pointer already exists
     const existingPointer = await sql`
       SELECT rotation_key_id FROM api_key_rotation
       WHERE server_id = ${serverId} AND is_main_key_pointer = true
       LIMIT 1
     `;
 
-    // 2. If no pointer exists, create one first (enables rotation), then seed runtime state
+    // If no pointer exists, create one first (enables rotation), then seed runtime state
     if (!existingPointer || existingPointer.length === 0) {
       log.info(`Creating main key pointer for server ${serverId} to enable rotation`);
       const pointerResult = await sql`
@@ -367,7 +367,7 @@ export async function addRotationKey(serverId: number, provider: string, apiKey:
       }
     }
 
-    // 3. Encrypt and store the new rotation key, then seed runtime state
+    // Encrypt and store the new rotation key, then seed runtime state
     const { encrypted, version } = await encryptApiKey(apiKey);
 
     const keyResult = await sql`

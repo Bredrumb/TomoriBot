@@ -33,14 +33,14 @@ export async function generateConversationSummaryDeepseek(
       return { error: "Invalid DeepSeek API key" };
     }
 
-    // 1. Build the message array
+    // Build the message array
     const messages: Array<Record<string, unknown>> = [];
     if (request.systemPrompt) {
       messages.push({ role: "system", content: request.systemPrompt });
     }
     messages.push({ role: "user", content: request.userPrompt });
 
-    // 2. Build the request body
+    // Build the request body
     const body: Record<string, unknown> = {
       model: request.model,
       messages,
@@ -48,12 +48,12 @@ export async function generateConversationSummaryDeepseek(
       stream: false,
     };
 
-    // 3. Omit temperature for deepseek-reasoner (not supported by that model)
+    // Omit temperature for deepseek-reasoner (not supported by that model)
     if (request.model !== "deepseek-reasoner") {
       body.temperature = request.temperature ?? 0.7;
     }
 
-    // 4. Send the request
+    // Send the request
     const response = await fetch(DEEPSEEK_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -78,7 +78,7 @@ export async function generateConversationSummaryDeepseek(
       };
     }
 
-    // 5. Extract the response text
+    // Extract the response text
     const result = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };

@@ -23,13 +23,13 @@ export default async (_client: Client): Promise<void> => {
   try {
     log.section("Syncing command catalog...");
 
-    // 1. Pull the loaded command universe (cached from command registration).
+    // Pull the loaded command universe (cached from command registration).
     const { executionMap } = await loadCommandData();
 
-    // 2. Flatten to space-joined paths matching stat_counters.metric_key.
+    // Flatten to space-joined paths matching stat_counters.metric_key.
     const entries = getCommandCatalogEntries(executionMap);
 
-    // 3. Reconcile the catalog table (skips prune on an empty/failed load).
+    // Reconcile the catalog table (skips prune on an empty/failed load).
     await statRepository.syncCommandCatalog(entries);
   } catch (error) {
     log.error("Failed to sync command catalog (non-critical)", error as Error);

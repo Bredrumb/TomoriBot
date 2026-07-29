@@ -160,7 +160,7 @@ export function composeInCharacterSystemPrompt(params: {
 export function buildExtractionUserPrompt(formattedMessages: string, previousRestatements: string[] = []): string {
   let prompt = "";
 
-  // 1. Add deduplication context from previous window
+  // Add deduplication context from previous window
   if (previousRestatements.length > 0) {
     prompt += `The following facts were already extracted from the previous section. Do NOT extract duplicates of these:\n`;
     for (const restatement of previousRestatements) {
@@ -169,11 +169,11 @@ export function buildExtractionUserPrompt(formattedMessages: string, previousRes
     prompt += "\n";
   }
 
-  // 2. Add the conversation to extract from
+  // Add the conversation to extract from
   prompt += `Extract information from this conversation log. Output a JSON object with a "memories" array.\n\n`;
   prompt += `--- CONVERSATION LOG ---\n${formattedMessages}\n--- END LOG ---\n\n`;
 
-  // 3. Add extraction requirements
+  // Add extraction requirements
   prompt += `Requirements:
 - Skip trivial chat: ignore simple greetings, acknowledgments, or filler
 - Self-contained: each item must make sense completely on its own`;

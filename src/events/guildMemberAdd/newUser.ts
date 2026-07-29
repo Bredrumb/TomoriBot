@@ -128,7 +128,7 @@ async function getAvatarVisionDescription(member: GuildMember, persona: TomoriSt
   const visionLlm = persona.vision_llm;
   if (!visionLlm || !persona.config.api_key) return null;
 
-  // 1. Download the member's avatar and convert to base64
+  // Download the member's avatar and convert to base64
   const avatarUrl = member.displayAvatarURL({
     extension: "png",
     forceStatic: true,
@@ -137,24 +137,24 @@ async function getAvatarVisionDescription(member: GuildMember, persona: TomoriSt
   const avatarBuffer = await downloadImage(avatarUrl);
   const base64Image = avatarBuffer.toString("base64");
 
-  // 2. Decrypt the server API key
+  // Decrypt the server API key
   const keyVersion = persona.config.key_version || 1;
   const apiKey = await decryptApiKey(persona.config.api_key, keyVersion);
   if (!apiKey) return null;
 
-  // 3. Resolve provider name and API model codename
+  // Resolve provider name and API model codename
   const provider = visionLlm.llm_provider.toLowerCase();
   const apiModelName =
     provider === "zai" || provider === "zaicoding" ? toZaiApiModelName(visionLlm.llm_codename) : visionLlm.llm_codename;
 
   log.info(`newUser: Delegating avatar analysis to vision model ${provider}/${apiModelName} for member ${member.id}`);
 
-  // 4. Route to the appropriate provider API
+  // Route to the appropriate provider API
   if (provider === "google") {
     return await callGoogleVisionForAvatar(apiKey, apiModelName, base64Image, WELCOME_AVATAR_VISION_PROMPT);
   }
 
-  // 5. Resolve endpoint URL for OpenAI-compatible providers
+  // Resolve endpoint URL for OpenAI-compatible providers
   const knownUrl = VISION_PROVIDER_URLS[provider];
   const customUrl = persona.config.custom_endpoint_url;
   const endpointUrl =

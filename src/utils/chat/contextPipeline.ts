@@ -125,7 +125,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname = identity.displayName;
   }
 
-  // 1. Resolve deliberate tool mode + intent allowlist for this turn.
+  // Resolve deliberate tool mode + intent allowlist for this turn.
   // Mirrors main's tomoriChat.ts wiring (~lines 5557–5645). MUST run before
   // buildContext() so any has_tools override flows into context synthesis
   // (e.g. memories.ts:243 gates STM tool affordance text on has_tools).
@@ -177,7 +177,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     deliberateToolTriggerMatches.push(...recentTriggeredToolIntentResult.matches);
   }
 
-  // 2. Reminder-driven adjustments: voice/audio reminders should auto-expose
+  // Reminder-driven adjustments: voice/audio reminders should auto-expose
   // generate_voice_message, and create_task is suppressed during reminder
   // execution (we don't want the bot to schedule a nested reminder).
   if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
@@ -206,7 +206,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }
   }
 
-  // 3. Fail-closed gate: when deliberate-tool mode is active and the turn
+  // Fail-closed gate: when deliberate-tool mode is active and the turn
   // shows no explicit tool intent, suppress all tools for the turn. This is
   // the universal "tools off unless asked" semantic from main. Otherwise,
   // when intent is detected, surface a scoped allowlist for provider
@@ -226,7 +226,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     );
   }
 
-  // 4. Derive an effective persona for this turn, applying overrides in order:
+  // Derive an effective persona for this turn, applying overrides in order:
   //    a) RP-channel: zero out emoji/sticker flags so context builders skip their
   //       DB fallback and the sticker tool is not registered (gates on these flags).
   //    b) disableAllTools: set has_tools=false as the universal kill switch for
@@ -542,7 +542,7 @@ async function buildSimplifiedHistory(
       continue;
     }
 
-    // 0. Blocked-author short-circuit: replace this user's live message with a
+    // Blocked-author short-circuit: replace this user's live message with a
     //    single system notice instead of running the full simplify pipeline.
     const blockComparableId = getBlockComparableAuthorId(msg);
     const activeContextBlock = blockedContextBlocksById.get(blockComparableId);
@@ -584,7 +584,7 @@ async function buildSimplifiedHistory(
     previousBlockNoticeAuthorId = null;
     userIds.add(simplified.authorId);
 
-    // 1. Decide whether this message collapses into the previous turn.
+    // Decide whether this message collapses into the previous turn.
     //    Consecutive messages from the same effective author merge into one turn,
     //    but only when BOTH sides are pure text — if either side carries media we
     //    keep separate turns so per-message media IDs stay unambiguous for
@@ -626,7 +626,7 @@ async function buildSimplifiedHistory(
       !shouldKeepSeparateMediaTurn &&
       !crossesTimeAwarenessDayBoundary
     ) {
-      // 2. Merge: lazily promote the previous entry into a combined entry, then
+      // Merge: lazily promote the previous entry into a combined entry, then
       //    append. The combined* tracking fields let reveal_message_metadata still
       //    expose one ref_N + timestamp per original message (see contextAnnotations).
       if (!previousEntry.combinedMessageIds) {
@@ -642,7 +642,7 @@ async function buildSimplifiedHistory(
       continue;
     }
 
-    // 3. Otherwise start a new turn.
+    // Otherwise start a new turn.
     simplifiedMessages.push(simplified);
     previousEntryWasDebug = isDebug;
   }

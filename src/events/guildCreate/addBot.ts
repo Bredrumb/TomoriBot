@@ -16,17 +16,17 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
   try {
     log.info(`Bot joined new server: ${guild.name} (${guild.id})`);
 
-    // 1. Check if server exists in database via repository
+    // Check if server exists in database via repository
     const serverId = await serverRepository.loadServerIdByDiscId(guild.id);
 
-    // 2. Check if Tomori exists if server found via repository
+    // Check if Tomori exists if server found via repository
     let tomoriExists = false;
     if (serverId) {
       const personas = await personaRepository.loadServerPersonaSummaries(serverId);
       tomoriExists = personas !== null && personas.length > 0;
     }
 
-    // 3. Try to send to system channel first, fallback to best channel
+    // Try to send to system channel first, fallback to best channel
     const serverLocale = guild.preferredLocale;
     let channel = guild.systemChannel;
     let sentSuccessfully = false;
