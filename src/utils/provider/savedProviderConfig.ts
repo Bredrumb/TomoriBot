@@ -1,5 +1,6 @@
 import type {
   CustomEndpointCapability,
+  LlmRow,
   SavedProviderConfigRow,
   SavedProviderConfigUpsert,
   AssembledServerConfig,
@@ -26,6 +27,24 @@ export interface ProviderDefaultSelectionIds {
   nai_diffusion_model_id: number | null;
   video_model_id: number | null;
   vision_llm_id: number | null;
+}
+
+/**
+ * Decide whether a saved text-model selection must fall back to the provider default.
+ *
+ * Active selections are preserved across credential updates, including deliberate
+ * non-default choices. Missing, deprecated, or cross-provider references are not
+ * usable and should be replaced with the provider's current default.
+ *
+ * @param provider - Provider owning the saved configuration
+ * @param model - Model currently referenced by the saved configuration
+ * @returns Whether the caller should load and store the current provider default
+ */
+export function shouldRefreshSavedTextModel(
+  provider: string,
+  model: Pick<LlmRow, "llm_provider" | "is_deprecated"> | null,
+): boolean {
+  return model === null || model.is_deprecated || model.llm_provider.toLowerCase() !== provider.toLowerCase();
 }
 
 export function buildSavedProviderSnapshotFromTomoriState(tomoriState: TomoriState): SavedProviderConfigUpsert {
@@ -102,14 +121,18 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
 }): Promise<SavedProviderConfigUpsert> {
   const normalizedProvider = params.provider.toLowerCase();
   const existingConfig = params.existingConfig ?? null;
-  const defaults = existingConfig ? null : await loadProviderDefaultSelectionIds(normalizedProvider);
+  const candidateLlmId = params.llmId ?? existingConfig?.llm_id ?? null;
+  const candidateLlm = candidateLlmId ? await llmModelRepo.loadById(candidateLlmId) : null;
+  const refreshTextModel = shouldRefreshSavedTextModel(normalizedProvider, candidateLlm);
+  const defaults =
+    !existingConfig || refreshTextModel ? await loadProviderDefaultSelectionIds(normalizedProvider) : null;
 
   return {
     server_id: params.serverId,
     provider: normalizedProvider,
     api_key: params.apiKey,
     key_version: params.keyVersion,
-    llm_id: params.llmId ?? existingConfig?.llm_id ?? defaults?.llm_id ?? null,
+    llm_id: refreshTextModel ? (defaults?.llm_id ?? null) : candidateLlmId,
     diffusion_model_id: existingConfig?.diffusion_model_id ?? defaults?.diffusion_model_id ?? null,
     embedding_model_id: existingConfig?.embedding_model_id ?? defaults?.embedding_model_id ?? null,
     nai_diffusion_model_id: existingConfig?.nai_diffusion_model_id ?? defaults?.nai_diffusion_model_id ?? null,
@@ -141,14 +164,18 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
 }): Promise<UserSavedProviderConfigUpsert> {
   const normalizedProvider = params.provider.toLowerCase();
   const existingConfig = params.existingConfig ?? null;
-  const defaults = existingConfig ? null : await loadProviderDefaultSelectionIds(normalizedProvider);
+  const candidateLlmId = params.llmId ?? existingConfig?.llm_id ?? null;
+  const candidateLlm = candidateLlmId ? await llmModelRepo.loadById(candidateLlmId) : null;
+  const refreshTextModel = shouldRefreshSavedTextModel(normalizedProvider, candidateLlm);
+  const defaults =
+    !existingConfig || refreshTextModel ? await loadProviderDefaultSelectionIds(normalizedProvider) : null;
 
   return {
     user_id: params.userId,
     provider: normalizedProvider,
     api_key: params.apiKey,
     key_version: params.keyVersion,
-    llm_id: params.llmId ?? existingConfig?.llm_id ?? defaults?.llm_id ?? null,
+    llm_id: refreshTextModel ? (defaults?.llm_id ?? null) : candidateLlmId,
     diffusion_model_id: existingConfig?.diffusion_model_id ?? defaults?.diffusion_model_id ?? null,
     embedding_model_id: existingConfig?.embedding_model_id ?? defaults?.embedding_model_id ?? null,
     nai_diffusion_model_id: existingConfig?.nai_diffusion_model_id ?? defaults?.nai_diffusion_model_id ?? null,

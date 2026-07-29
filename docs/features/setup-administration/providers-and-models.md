@@ -41,6 +41,10 @@ or service account. An AI Studio API key alone does not authenticate full Vertex
 project must have billing and the Vertex AI API enabled, and the host identity needs Vertex access.
 The full setup guide lives in `/help api-key provider:Google Vertex AI`.
 
+Google-backed provider setup validates credentials through the authenticated model-listing
+endpoint. It does not generate text or depend on whichever chat model is currently marked as
+the catalog default, so a retired default cannot prevent a valid credential from being saved.
+
 ### Optional: Brave Search key
 
 Brave Search is separate from your AI provider and only enhances web search (adds image,

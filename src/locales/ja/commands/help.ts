@@ -296,16 +296,9 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       step1_title: `ステップ1：APIキーを取得`,
       step1_description: `TomoriBotは複数のAIプロバイダーに対応しています。いずれかのAPIキーが必要です。
 - {helpApikey}で取得方法を確認
-  - **Google Gemini** — 汎用、無料枠あり、すべての機能を実行可能
-  - **OpenRouter** — 多数のAIモデルに一箇所でアクセス
-  - **NovelAI** — 無検閲なロールプレイとストーリーテリング特化
-  - **DeepSeek** — コスト効率の高い推論モデル
-  - **NVIDIA NIM** — NVIDIAホスト型モデル
-  - **Anthropic** — Claudeモデル
-  - **Vertex AI** — ADC経由のGoogle Cloudモデル
-  - **Vertex AI Express** — Express Mode経由のGoogle Cloud APIキーBYOK（Preview、Gemini限定）
-  - **Z.ai (Zhipu)** — 中国のAIモデル、コーディングプランあり ⚠️ *利用規約でコーディング/エージェントのシナリオのみに制限*
-  - **Custom**: OpenAI互換エンドポイント（Ollama、vLLM、LiteLLMなど）
+  - **Google Gemini**（*推奨*）— 汎用、無料で利用可能、すべての機能を実行可能
+  - **NovelAI** — 無検閲なロールプレイ、ストーリーテリング、画像生成
+  - **OpenRouter** — 有料で信頼性の高い、多数のAIモデルへの一箇所からのアクセス
 - このAPIキーを**他人と共有しないでください**
 - Customエンドポイントはセットアップ後に{configApiKeySet}でBearer認証トークンを追加可能`,
       step2_title: `ステップ2：セットアップコマンドを実行`,

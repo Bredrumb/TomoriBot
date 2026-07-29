@@ -47,6 +47,7 @@ import { llmModelRepo } from "@/utils/db/repositories";
 import { callGoogleStructuredJSON } from "@/providers/google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "@/providers/google/compactGenerator";
 import { generatePresetFromPrompt } from "@/providers/google/presetGenerator";
+import { validateGoogleModelsEndpoint } from "@/providers/google/googleCredentialValidation";
 import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
 import type { VertexStreamConfig } from "@/providers/vertex/vertexStreamAdapter";
 import { createVertexexpressClient } from "@/providers/vertexexpress/vertexexpressClient";
@@ -136,26 +137,9 @@ export class VertexexpressProvider
       log.info("Validating Vertex AI Express API key...");
 
       const genAI = this.buildClient(apiKey);
-      const defaultModel = await getDefaultVertexexpressModel();
-      const response = await genAI.models.generateContent({
-        model: defaultModel,
-        contents: [
-          {
-            text: 'This is a test message for verifying API keys. Say "VALID"',
-          },
-        ],
-      });
+      await validateGoogleModelsEndpoint(genAI);
 
-      const responseText = response.text;
-      if (!responseText?.toLowerCase().includes("valid")) {
-        log.warn("Vertex AI Express validation response did not contain 'VALID'");
-        const adapter = new VertexexpressStreamAdapter();
-        const error = new Error("Validation response did not contain expected confirmation");
-        const providerError = adapter.handleProviderError(error);
-        return { valid: false, error: providerError };
-      }
-
-      log.success("Vertex AI Express API key validation successful");
+      log.success("Vertex AI Express API key validation successful via models endpoint");
       return { valid: true };
     } catch (error) {
       const adapter = new VertexexpressStreamAdapter();

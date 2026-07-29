@@ -68,6 +68,7 @@ import { vertexProviderInfo } from "./providerInfo";
 import { callGoogleStructuredJSON } from "../google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "../google/compactGenerator";
 import { generatePresetFromPrompt } from "../google/presetGenerator";
+import { validateGoogleModelsEndpoint } from "../google/googleCredentialValidation";
 import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
@@ -186,31 +187,14 @@ export class VertexProvider
       return { valid: false, error: providerError };
     }
 
-    // 2. Test with a lightweight generateContent call
+    // 2. Exercise ADC, project/location configuration, and Vertex endpoint access
+    // without coupling setup to the current default model.
     try {
       log.info("Validating Vertex AI configuration...");
 
-      const defaultModel = await getDefaultVertexModel();
-      const response = await genAI.models.generateContent({
-        model: defaultModel,
-        contents: [
-          {
-            text: 'This is a test message for verifying configuration. Say "VALID"',
-          },
-        ],
-      });
+      await validateGoogleModelsEndpoint(genAI);
 
-      const responseText = response.text;
-
-      if (!responseText?.toLowerCase().includes("valid")) {
-        log.warn("Vertex validation response did not contain 'VALID'");
-        const adapter = new VertexStreamAdapter();
-        const error = new Error("Validation response did not contain expected confirmation");
-        const providerError = adapter.handleProviderError(error);
-        return { valid: false, error: providerError };
-      }
-
-      log.success("Vertex AI configuration validation successful");
+      log.success("Vertex AI configuration validation successful via models endpoint");
       return { valid: true };
     } catch (error) {
       const adapter = new VertexStreamAdapter();

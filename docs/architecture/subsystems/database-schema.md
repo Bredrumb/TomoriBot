@@ -319,7 +319,9 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 ### Logit bias snapshot storage
 
 - `saved_provider_configs.llm_logit_biases` mirrors `server_chat_configs.llm_logit_biases` so provider snapshots can restore both the original text entries and any cached tokenizer-family resolutions.
-- This keeps provider activation compatible with text-first logit-bias UX across model changes while `/provider add` seeds saved-provider defaults and activates that provider's default text model.
+- This keeps provider activation compatible with text-first logit-bias UX across model changes. `/provider add`
+  preserves an existing active text-model choice when credentials are updated, but replaces a missing,
+  deprecated, or cross-provider saved reference with that provider's current default before activation.
 
 ### Provider snapshot model storage
 

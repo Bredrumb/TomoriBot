@@ -269,7 +269,7 @@ is the whole change — nothing to regenerate or compile.
 
 ```ts
 // src/db/seed/catalog/models.ts
-{ provider: "google", codename: "gemini-2.5-flash", isDefault: true, hasTools: true,
+{ provider: "google", codename: "gemini-3.5-flash-lite", isDefault: true, hasTools: true,
   seesImages: true, seesVideos: true, seesYoutube: true, supportsStructoutput: true,
   desc: "Balanced model…", ja: "汎用…" },
 ```

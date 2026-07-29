@@ -22,6 +22,7 @@ import {
   ZAI_CODING_CHAT_COMPLETIONS_URL,
   ZAI_GENERAL_CHAT_COMPLETIONS_URL,
 } from "@/providers/zai/zaiShared";
+import { resolveWelcomeDelayMs, waitForWelcomeDelay } from "@/events/guildMemberAdd/helpers/welcomeDelay";
 
 /**
  * Provider-to-chat-completions-URL mapping for vision model routing.
@@ -233,16 +234,37 @@ async function buildWelcomeContextItem(params: {
 }
 
 async function triggerWelcomeMessage(client: Client, member: GuildMember): Promise<void> {
-  const tomoriState = await getCachedTomoriState(member.guild.id);
-  if (!tomoriState) return;
+  const initialTomoriState = await getCachedTomoriState(member.guild.id);
+  if (!initialTomoriState) return;
 
-  const welcomeChannelId = tomoriState.config.welcome_channel_disc_id;
-  const additionalPrompt = tomoriState.config.welcome_prompt?.trim();
+  const welcomeChannelId = initialTomoriState.config.welcome_channel_disc_id;
+  const additionalPrompt = initialTomoriState.config.welcome_prompt?.trim();
   if (!welcomeChannelId || !additionalPrompt) return;
 
-  const rawChannel = await member.guild.channels.fetch(welcomeChannelId).catch(() => null);
+  const welcomeDelayMs = resolveWelcomeDelayMs();
+  if (welcomeDelayMs > 0) {
+    log.info(`Waiting ${welcomeDelayMs}ms before welcoming ${member.user.tag}`);
+    await waitForWelcomeDelay(welcomeDelayMs);
+
+    const currentMember = member.guild.members.cache.get(member.id);
+    if (!currentMember || currentMember.joinedTimestamp !== member.joinedTimestamp) {
+      log.info(`Skipping welcome for ${member.user.tag}: original membership ended during the onboarding grace period`);
+      return;
+    }
+  }
+
+  const tomoriState = welcomeDelayMs > 0 ? await getCachedTomoriState(member.guild.id) : initialTomoriState;
+  if (!tomoriState) return;
+
+  const currentWelcomeChannelId = tomoriState.config.welcome_channel_disc_id;
+  const currentAdditionalPrompt = tomoriState.config.welcome_prompt?.trim();
+  if (!currentWelcomeChannelId || !currentAdditionalPrompt) return;
+
+  const rawChannel = await member.guild.channels.fetch(currentWelcomeChannelId).catch(() => null);
   if (!rawChannel || rawChannel.type !== ChannelType.GuildText) {
-    log.warn(`Skipping welcome for ${member.user.tag}: configured welcome channel ${welcomeChannelId} is unavailable`);
+    log.warn(
+      `Skipping welcome for ${member.user.tag}: configured welcome channel ${currentWelcomeChannelId} is unavailable`,
+    );
     return;
   }
 
@@ -299,7 +321,7 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
 
   const welcomeContextItem = await buildWelcomeContextItem({
     member,
-    additionalPrompt,
+    additionalPrompt: currentAdditionalPrompt,
     includeAvatarContext,
     avatarDescription,
   });
