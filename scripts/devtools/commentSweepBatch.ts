@@ -203,6 +203,10 @@ export async function collectCommentSweepVerdicts(
  *
  * One bad batch never blocks the others: a rejected batch contributes no rows and is named
  * in the result so it can be re-run on its own.
+ *
+ * The output file holds exactly this directory's batches. Single-batch collection appends so the
+ * loop below can accumulate; a directory run therefore truncates first, otherwise re-running it
+ * silently doubles every row instead of refreshing them.
  */
 export async function collectCommentSweepDirectory(
   options: CollectDirOptions,
@@ -210,6 +214,8 @@ export async function collectCommentSweepDirectory(
   const manifests = [
     ...new Bun.Glob("*.manifest.json").scanSync(options.batchDir),
   ].sort();
+  await mkdir(dirname(resolve(options.outPath)), { recursive: true });
+  await Bun.write(options.outPath, "");
   const result: CollectDirResult = {
     accepted: [],
     missing: [],
@@ -245,6 +251,7 @@ export async function collectCommentSweepDirectory(
 
 interface JudgeResponse {
   confidence?: number;
+  criterion?: string;
   id: string;
   ordering?: string;
   reason?: string;
@@ -284,7 +291,12 @@ function toLedgerRow(
     return { ...base, rewrite: response.rewrite, verdict: "rewrite" };
   }
 
-  return { ...base, verdict: response.verdict };
+  // Only the line-comment rubrics name a KEEP criterion. Carrying it into the ledger is what
+  // makes "deleted while asserting a criterion applies" auditable as a distinct defect.
+  if (response.criterion === undefined) {
+    return { ...base, verdict: response.verdict };
+  }
+  return { ...base, criterion: response.criterion, verdict: response.verdict };
 }
 
 function renderPrompt(

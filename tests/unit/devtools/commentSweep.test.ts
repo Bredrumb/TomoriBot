@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyCommentSweepLedger } from "../../../scripts/devtools/commentSweepApply";
+import { collectCommentSweepDirectory } from "../../../scripts/devtools/commentSweepBatch";
 import { compareTypeScriptSources } from "../../../scripts/devtools/commentSweepGate";
 import { scanCommentSweepCandidates, type CommentSweepCandidate } from "../../../scripts/devtools/commentSweepScan";
 
@@ -325,6 +326,82 @@ describe("comment sweep apply", () => {
     expect(await Bun.file(sourcePath).text()).toBe(original);
   });
 });
+
+describe("comment sweep batch collector", () => {
+  it("keeps the named KEEP criterion in the ledger", async () => {
+    const { batchDir, responseDir, outPath } = await createCollectorFixture();
+
+    await collectCommentSweepDirectory({ batchDir, outPath, responseDir });
+    const rows = await readLedger(outPath);
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ criterion: "c", verdict: "keep" });
+    expect(rows[1]).toMatchObject({ criterion: "none", verdict: "delete" });
+  });
+
+  it("refreshes the output instead of doubling it when re-run", async () => {
+    const { batchDir, responseDir, outPath } = await createCollectorFixture();
+
+    await collectCommentSweepDirectory({ batchDir, outPath, responseDir });
+    await collectCommentSweepDirectory({ batchDir, outPath, responseDir });
+
+    expect(await readLedger(outPath)).toHaveLength(2);
+  });
+});
+
+async function createCollectorFixture(): Promise<{
+  batchDir: string;
+  outPath: string;
+  responseDir: string;
+}> {
+  const root = await createTemporaryRoot();
+  const batchDir = join(root, "batches");
+  const responseDir = join(root, "responses");
+
+  const member = (line: number, text: string) => ({
+    context_hash: `hash-${line}`,
+    file: "src/example.ts",
+    kind: "line",
+    line,
+    mech_score: 0.5,
+    text,
+    tier: "2",
+  });
+
+  await Bun.write(
+    join(batchDir, "001.manifest.json"),
+    JSON.stringify({
+      block: "B",
+      groups: [
+        { id: "aaaa000001", members: [member(4, "// Defer before async work")], prompt: "" },
+        { id: "bbbb000002", members: [member(9, "// Get the limit")], prompt: "" },
+      ],
+    }),
+  );
+  await Bun.write(
+    join(responseDir, "001.jsonl"),
+    [
+      JSON.stringify({ confidence: 0.9, criterion: "c", id: "aaaa000001", reason: "ack invariant", verdict: "keep" }),
+      JSON.stringify({
+        confidence: 0.9,
+        criterion: "none",
+        id: "bbbb000002",
+        reason: "restates next line",
+        verdict: "delete",
+      }),
+    ].join("\n"),
+  );
+
+  return { batchDir, outPath: join(root, "verdicts.jsonl"), responseDir };
+}
+
+async function readLedger(path: string): Promise<Record<string, unknown>[]> {
+  const text = await Bun.file(path).text();
+  return text
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
 
 async function createTemporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "tomori-comment-sweep-"));
