@@ -246,7 +246,6 @@ export class StickerTool extends BaseTool {
           const looseMatch = StickerTool.pickNewestSticker(looseMatches);
           if (looseMatch) return looseMatch;
 
-          // 3) Guarded fuzzy fallback.
           const scoredCandidates = stickers
             .map((sticker) => {
               const looseName = StickerTool.normalizeStickerNameForLoose(sticker.name);

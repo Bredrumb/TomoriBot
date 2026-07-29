@@ -825,8 +825,8 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // Kayra/Erato: also treat sentence-colon boundaries as turn transitions.
       // Example: "... It is not healthy.: Please, don't say that..."
       // We stop on either:
-      // 1) A complete boundary with following speaker text in-buffer.
-      // 2) A trailing boundary ending in ":" (next token would start the other turn).
+      // - A complete boundary with following speaker text in-buffer.
+      // - A trailing boundary ending in ":" (next token would start the other turn).
       if (!this.isGlmModel) {
         const sentenceColonBoundary = /[.!?…]["')\]]?\s*:\s+(?=[A-Z*"])/;
         const trailingSentenceColonBoundary = /[.!?…]["')\]]?\s*:\s*$/;

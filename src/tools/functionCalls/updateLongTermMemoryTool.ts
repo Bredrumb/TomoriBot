@@ -348,7 +348,6 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         };
       }
 
-      // 2) Personal memory update (index-based, requires target user)
       if (resolvedTargetUserId === context.client.user?.id) {
         return {
           success: false,

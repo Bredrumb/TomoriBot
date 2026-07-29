@@ -320,9 +320,8 @@ export async function execute(
       //      guard skips them); for a materialized persona they are its own rows.
       const spritesBeforeReset = await personaSpriteRepository.listForPersona(targetPersonaId);
 
-      // 11a.2. Capture the persona's current stored avatar too. applyPresetPointerToPersona
-      //        clears webhook_avatar_url (fresh pointer), so any server-owned image is
-      //        deleted afterward; shared presets/ images are skipped by the delete guard.
+      // applyPresetPointerToPersona clears webhook_avatar_url, so retain the current
+      // server-owned image for deletion afterward. The guard skips shared presets/ images.
       const previousMainAvatarUrl = mainPersona.webhook_avatar_url ?? null;
 
       // Turn the main persona into a live preset pointer (this also drops the
@@ -371,8 +370,8 @@ export async function execute(
       await Promise.all(spritesBeforeReset.map((sprite) => deletePersonaSpriteFromStorage(sprite.avatar_url)));
       invalidatePersonaSpriteCache(targetPersonaId);
 
-      // 11c.2. Delete the old server-owned main avatar (now unreferenced after the
-      //        re-point cleared webhook_avatar_url). The guard skips shared presets/.
+      // The old server-owned main avatar is unreferenced after the repoint clears
+      // webhook_avatar_url. The guard skips shared presets/.
       if (previousMainAvatarUrl) {
         await deletePersonaAvatarFromStorage(previousMainAvatarUrl);
       }

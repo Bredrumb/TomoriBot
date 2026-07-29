@@ -264,7 +264,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "Image generation is **disabled** by server configuration.\n\n";
       }
 
-      // 5c-2. Video Generation section (conditional on provider and configuration)
       capabilitiesContent += "## Video Generation\n\n";
       if (config.videogen_enabled && hasVideoSlot) {
         capabilitiesContent += "You CAN generate short videos:\n";
