@@ -86,7 +86,7 @@ export class AnalyzeImageTool extends BaseTool {
   };
 
   /**
-   * Basic provider check — available for all providers.
+   * Basic provider check: available for all providers.
    * The real gating logic is in isAvailableForContext().
    */
   isAvailableFor(_provider: string): boolean {

@@ -1,5 +1,5 @@
 /**
- * Regression harness — UserRepository domain.
+ * Regression harness: UserRepository domain.
  *
  * Covers: loadUserRow, registerUser, setPrivacyLevel, updateUser,
  * loadUserRowsByNormalizedNickname.

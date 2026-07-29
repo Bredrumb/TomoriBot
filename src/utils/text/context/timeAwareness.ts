@@ -42,7 +42,7 @@ export interface BuildReunionNoteArgs {
   displayName: string;
   /**
    * Whether this person triggered the turn. People who are merely present in the
-   * window get the returning-user note only — never the first-timer welcome,
+   * window get the returning-user note only, so never the first-timer welcome,
    * which would have Tomori introduce herself to someone talking past her.
    * Defaults to true (the original triggerer-only behavior).
    */

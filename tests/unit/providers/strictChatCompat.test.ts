@@ -130,7 +130,7 @@ describe("mergeConsecutiveSameRole", () => {
 
     const merged = mergeConsecutiveSameRole(input) as unknown as Array<Record<string, unknown>>;
 
-    // The plain dialogue assistant turn is preserved as its own (still-string) turn — not merged.
+    // The plain dialogue assistant turn is preserved as its own (still-string) turn; not merged.
     expect(merged[1]).toEqual({ role: "assistant", content: "let me check that" });
 
     // The tool_calls turn survives intact with its wiring.

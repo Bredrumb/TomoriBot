@@ -26,7 +26,7 @@ export interface StandardEmbedOptions {
   /**
    * Optional atomic tip-item locale keys. When present, embed senders append a separate green
    * "💡 Tip" embed rendering these keys as a dashed bullet list. Prefer this over baking tips into
-   * the main embed's description/footer — a footer cannot render markdown or hyperlinks.
+   * the main embed's description/footer , so a footer cannot render markdown or hyperlinks.
    */
   tipKeys?: string[];
   /** Shared interpolation vars applied to every tip item in {@link tipKeys}. */

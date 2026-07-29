@@ -57,7 +57,7 @@ export async function crawl4ai_fetch_url(args: Record<string, unknown>, context?
     const filterMode = resolveFilterMode(args);
     const request = { url: args.url.trim(), f: filterMode };
     const cookies = getCrawl4aiCookies();
-    // Use /crawl with browser_config when cookies are configured — /md
+    // Use /crawl with browser_config when cookies are configured, so /md
     //    does not expose a cookies field so injection requires /crawl.
     const result =
       cookies.length > 0

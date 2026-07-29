@@ -1,5 +1,5 @@
 /**
- * WhitelistRepository — manages channel, persona-channel, and role whitelist tables.
+ * WhitelistRepository: manages channel, persona-channel, and role whitelist tables.
  *
  * Consolidates channelWhitelist.ts, personaWhitelist.ts, and roleWhitelist.ts.
  * Also provides the pure functional helpers isPersonaAllowedByWhitelistStatus and
@@ -410,5 +410,5 @@ export class WhitelistRepository {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const whitelistRepository = new WhitelistRepository();

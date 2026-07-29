@@ -21,7 +21,7 @@ import { FeloEngine } from "./feloEngine";
 import { getSearchCategoryLabel } from "./categoryMetadata";
 import type { SearchCategory, WebSearchEngine } from "./types";
 
-// Singleton chain — engines are stateless so a single instance is reusable
+// Singleton chain : engines are stateless so a single instance is reusable
 //    across all tool invocations.
 const ENGINE_CHAIN: readonly WebSearchEngine[] = [
   new BraveEngine(),
@@ -82,7 +82,7 @@ export async function executeWebSearchWithFallback(
     }
   }
 
-  // All engines exhausted — return a localized "category unavailable" message.
+  // All engines exhausted , so return a localized "category unavailable" message.
   //    For text, this means the entire chain is down; for image/video/news, this
   //    is the typical "no provider supports this category" path.
   const description = localizer(context.locale, "tools.search.category_unavailable_description", {

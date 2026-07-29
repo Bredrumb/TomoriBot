@@ -165,7 +165,7 @@ async function buildWelcomeContextItem(params: {
   member: GuildMember;
   additionalPrompt: string;
   includeAvatarContext: boolean;
-  /** Text description from vision model — used when the primary model cannot see images */
+  /** Text description from vision model, so used when the primary model cannot see images */
   avatarDescription?: string;
 }): Promise<StructuredContextItem> {
   const { member, additionalPrompt, includeAvatarContext, avatarDescription } = params;

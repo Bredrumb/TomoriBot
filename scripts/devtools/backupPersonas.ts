@@ -16,9 +16,9 @@ function resolveBackupsRoot(): string {
 // scripts/devtools/backupPersonas.ts
 //   bun run backup:personas  → export ALL personas across all servers
 //
-//   For each persona: writes a single import-compatible file — a PNG with
+//   For each persona: writes a single import-compatible file: a PNG with
 //   embedded metadata when an avatar is stored (restores the PFP too), or a
-//   flat JSON matching the /persona import schema otherwise — plus a
+//   flat JSON matching the /persona import schema otherwise; plus a
 //   `.meta.json` sidecar carrying extras (webhook avatar URL, trigger words,
 //   server memories) that /persona import does not consume. Organized into
 //   per-server subdirectories.
@@ -41,7 +41,7 @@ interface PersonaRow {
 }
 
 interface PersonaManifestEntry {
-  /** Import-compatible file — upload this via /persona import. */
+  /** Import-compatible file: upload this via /persona import. */
   filename: string;
   format: "png" | "json";
   /** Sidecar with extras (meta + memories) not consumed by /persona import. */
@@ -188,7 +188,7 @@ async function runBackup(): Promise<void> {
         });
         const base = `${sanitized}_${persona.persona_id}`;
 
-        // Prefer a PNG with embedded metadata — it round-trips through
+        // Prefer a PNG with embedded metadata because it round-trips through
         //     /persona import as the exact PresetExport shape AND restores
         //     the avatar. Only possible when a stored avatar exists.
         let pngWithMetadata: Buffer | null = null;

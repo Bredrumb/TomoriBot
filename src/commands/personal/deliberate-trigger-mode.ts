@@ -46,9 +46,9 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Sets the personal deliberate trigger mode preference for the invoking user.
- * - `off`    — DTM is always disabled for this user, even if the server has it enabled.
- * - `follow` — (default) DTM mirrors the server's setting.
- * - `on`     — DTM is always enabled for this user, even if the server has it disabled.
+ * - `off`: DTM is always disabled for this user, even if the server has it enabled.
+ * - `follow`: (default) DTM mirrors the server's setting.
+ * - `on`: DTM is always enabled for this user, even if the server has it disabled.
  *              Only direct invocations work: `@{trigger}` prefix, Discord @mention, replies,
  *              or `/bot respond`.
  */

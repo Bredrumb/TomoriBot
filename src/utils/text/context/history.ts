@@ -296,7 +296,7 @@ export async function getUserPresenceDetails(
           case ActivityType.Watching:
             return appendAssetText(`Watching ${activity.name}`) + timeSpent;
           case ActivityType.Custom: {
-            // Custom Status — some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
+            // Custom Status: some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
             const parts: string[] = [];
             if (activity.emoji?.name) parts.push(activity.emoji.name);
             if (activity.state) parts.push(activity.state);

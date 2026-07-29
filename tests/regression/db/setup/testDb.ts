@@ -41,7 +41,7 @@ export const DB_TESTS_AVAILABLE = Boolean(effectivePassword) && process.env.TEST
 /**
  * A direct SQL client for the test database, used exclusively for fixture
  * insertion and cleanup. Test assertions call the real dbRead/dbWrite functions
- * which use the global sql singleton from client.ts — those must also be pointed
+ * which use the global sql singleton from client.ts, so those must also be pointed
  * at the test DB via POSTGRES_DB env var (set by the wrapper).
  */
 export const testSql = new SQL({

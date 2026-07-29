@@ -256,7 +256,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // DM guard — cross-channel only works within a guild
+    // DM guard: cross-channel only works within a guild
     if (!context.guildId) {
       return {
         success: false,
@@ -349,7 +349,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // Permission check — ViewChannel always required; send permissions only for dispatch mode
+    // Permission check: ViewChannel always required; send permissions only for dispatch mode
     const botMember =
       guild.members.me ??
       (context.client.user ? await guild.members.fetch(context.client.user.id).catch(() => null) : null);
@@ -393,7 +393,7 @@ export class CrossChannelMessageTool extends BaseTool {
         };
       }
 
-      // Peek mode only needs ViewChannel — skip send permission check
+      // Peek mode only needs ViewChannel: skip send permission check
       if (!isPeekOnly) {
         const isThread =
           "isThread" in targetChannel && typeof targetChannel.isThread === "function" && targetChannel.isThread();
@@ -424,7 +424,7 @@ export class CrossChannelMessageTool extends BaseTool {
       }
     }
 
-    // Peek-only path — fetch recent messages and return as context without dispatching
+    // Peek-only path: fetch recent messages and return as context without dispatching
     if (isPeekOnly) {
       const fetchLimit = normalizeMessageFetchLimit(context.tomoriState.config.message_fetch_limit);
       let recentMessages: Awaited<ReturnType<typeof targetChannel.messages.fetch>> | null = null;
@@ -579,10 +579,10 @@ export class CrossChannelMessageTool extends BaseTool {
         `Cross-channel tool: Successfully dispatched to #${targetChannel.name} (task: "${(taskArg as string).trim().substring(0, 80)}...")`,
       );
 
-      // Handle boomerang — store data for follow-up generation in source channel
+      // Handle boomerang: store data for follow-up generation in source channel
       if (boomerangArg) {
         // Fetch last 10 messages from target channel (including the one the bot just sent),
-        // but respect refresh embed boundaries — only include messages after the most recent one
+        // but respect refresh embed boundaries, only include messages after the most recent one
         let targetMessages: Array<{
           author: string;
           content: string;
@@ -596,7 +596,7 @@ export class CrossChannelMessageTool extends BaseTool {
           const messagesArray = [...recentMessages.values()];
           const filteredMessages: Message[] = [];
           for (const m of messagesArray) {
-            // Stop if we hit a refresh/reset embed — everything before it is stale context
+            // Stop if we hit a refresh/reset embed, so everything before it is stale context
             if (m.embeds.length > 0 && m.embeds.some(isRefreshMarkerEmbed)) {
               log.info(
                 `Cross-channel tool: Boomerang message fetch hit refresh embed at ${m.id} — truncating older messages`,

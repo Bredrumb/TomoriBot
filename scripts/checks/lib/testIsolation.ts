@@ -15,7 +15,7 @@
  * Marker identifying a test file that stubs shared modules.
  *
  * Assembled from fragments so the literal never appears in this file or in the
- * guard test — the scanners below run over test sources, and a bare occurrence
+ * guard test: the scanners below run over test sources, and a bare occurrence
  * would make them misclassify their own tooling. (Same trap as the locale key
  * scanner, which also reads comments.)
  */
@@ -73,7 +73,7 @@ export function findProcessWideMutations(source: string): string[] {
  * Concatenates the source of every `afterEach`/`afterAll` call in the file.
  *
  * Scans forward from each hook keeping a parenthesis depth count, so the whole
- * call — including a multi-statement arrow body — is captured. A malformed parse
+ * call (including a multi-statement arrow body) is captured. A malformed parse
  * yields a short body and can only cause a mutation to look unrestored, never
  * the reverse, so the failure mode is a loud false positive rather than a silent
  * miss.

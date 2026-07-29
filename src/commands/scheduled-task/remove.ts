@@ -120,7 +120,7 @@ export async function execute(
       return;
     }
 
-    // Build select options — persona_id NULL means the main persona owns the reminder
+    // Build select options: persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder: ReminderSelectionRow, index: number) => {
       const personaName = reminder.persona_nickname ?? state.persona_nickname;
       const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {

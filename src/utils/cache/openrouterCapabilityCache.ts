@@ -157,7 +157,7 @@ function detectImageSupport(model: OpenRouterModel): boolean {
   const modality = model.architecture?.modality?.toLowerCase();
 
   // Check for image capability indicators
-  // OpenRouter uses "text+image->text" notation — check for "image" as the primary signal,
+  // OpenRouter uses "text+image->text" notation , so check for "image" as the primary signal,
   // plus "vision" and "multimodal" for forward compatibility with any future API format changes
   return modality?.includes("image") || modality?.includes("vision") || modality?.includes("multimodal") || false;
 }

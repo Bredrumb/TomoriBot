@@ -673,7 +673,7 @@ export async function setActiveCustomEndpoint(params: {
  * Resolves the custom endpoint row backing a provider for a capability.
  *
  * When an active model id is supplied, the specific endpoint owning that synthetic model is
- * returned — this is how the runtime picks the right row when several models share a label+capability.
+ * returned: this is how the runtime picks the right row when several models share a label+capability.
  * When omitted (or no match, e.g. legacy rows whose model_ref_id was not backfilled), it falls back
  * to the most-recently-updated endpoint for the label+capability. Speech/transcription always use
  * the fallback since they have no synthetic model.

@@ -35,7 +35,7 @@ interface AssignCall {
   userId: number;
   provider: string;
   capability: string;
-  /** The row the updater produced from a pristine baseline — i.e. what would be written. */
+  /** The row the updater produced from a pristine baseline i.e. what would be written. */
   result: CapabilityRow;
 }
 
@@ -429,7 +429,7 @@ describe("personal provider model-* anchor workflow", () => {
       await runSubcommand(subcommand.module);
 
       // The notice is the workflow's INITIAL payload, so the user never sees a picker
-      // flash before the terminal — and nothing downstream runs.
+      // flash before the terminal and nothing downstream runs.
       expect(initialPayloads).toEqual([
         expect.objectContaining({ titleKey: "commands.personal.provider.no_saved_title" }),
       ]);

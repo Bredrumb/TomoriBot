@@ -20,7 +20,7 @@ export function getReplyContextAuthorName(message: Message, botUserId?: string, 
   }
   // Non-webhook bot-authored messages (direct reply fallback). Discord snapshots the
   //    author's guild member on each message, so `message.member.displayName` reflects
-  //    the bot's nickname *at send time* — which, for persona-aware bots that rename
+  //    the bot's nickname *at send time* which, for persona-aware bots that rename
   //    themselves per persona, is the persona that actually sent that message. Prefer it
   //    over `botName` (the *currently* active persona), which is stale whenever an alter
   //    switch happened between send and now.

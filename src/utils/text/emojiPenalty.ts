@@ -208,7 +208,7 @@ export function getRecentlyUsedCustomEmojis(
 
   // Extract all custom emojis from recent messages.
   // History text stores already-converted Discord format (<:name:id>), so normalise it to
-  // shortcode form first — otherwise the `:name:` substring inside the mention is double-matched.
+  // shortcode form first, so otherwise the `:name:` substring inside the mention is double-matched.
   const usedEmojis = new Set<string>();
   for (const message of recentBotMessages) {
     const text = extractTextFromContextItem(message);
@@ -256,7 +256,7 @@ export function filterDuplicateCustomEmojis(generatedText: string, contextItems:
 
   // If filtering collapses output to punctuation only (e.g. ", that's all!" → ","),
   // keep the original text to avoid sending a lone punctuation character.
-  // NOTE: An empty result is intentionally allowed — it means the segment was purely
+  // NOTE: An empty result is intentionally allowed, so it means the segment was purely
   // duplicate emojis, and the orchestrator's empty-segment guard will drop it cleanly.
   const compactFiltered = filtered.replace(/\s+/g, "");
   if (compactFiltered.length > 0 && /^[.,!?;:。！？、，]+$/.test(compactFiltered)) {

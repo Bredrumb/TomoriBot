@@ -1,5 +1,5 @@
 /**
- * WebSearchTool — the single LLM-visible search tool.
+ * WebSearchTool : the single LLM-visible search tool.
  *
  * Replaces the previously-LLM-visible 4-tool Brave surface (`brave_web_search`,
  * `brave_image_search`, `brave_video_search`, `brave_news_search`) with one
@@ -115,7 +115,7 @@ export class WebSearchTool extends BaseTool {
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     try {
-      // Feature flag gate — mirrors the previous BraveSearchTool behavior.
+      // Feature flag gate : mirrors the previous BraveSearchTool behavior.
       if (!this.isEnabled(context)) {
         return {
           success: false,
@@ -137,7 +137,7 @@ export class WebSearchTool extends BaseTool {
         ? (rawCategory as SearchCategory)
         : "text";
 
-      // Normalize count — must be a positive integer, otherwise omit.
+      // Normalize count : must be a positive integer, otherwise omit.
       const rawCount = typeof args.count === "number" && args.count > 0 ? Math.floor(args.count) : undefined;
 
       log.info(

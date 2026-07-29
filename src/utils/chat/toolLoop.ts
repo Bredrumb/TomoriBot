@@ -288,7 +288,7 @@ async function streamOnce(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
-      // A pending stop request (e.g. /bot kill) makes this a terminal stop — no fallback runs, so
+      // A pending stop request (e.g. /bot kill) makes this a terminal stop; no fallback runs, so
       // no superseded-message cleanup will consume in-flight sends. Return immediately; settling
       // here would just make the kill wait out the abandoned stream for no benefit.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
@@ -299,7 +299,7 @@ async function streamOnce(
       // (bounded) for it to actually settle so any Discord send it had already dispatched is recorded
       // in `deliveredMessageRefs` BEFORE the fallback path's superseded-message cleanup runs. Without
       // this, a late straggler would land after cleanup and be misattributed to the surviving
-      // fallback attempt — leaving the exact orphaned partial message this feature exists to remove.
+      // fallback attempt; leaving the exact orphaned partial message this feature exists to remove.
       await settleAbandonedStream(streamPromise);
 
       if (!params.context.streamingContext.suppressUserErrors) {
@@ -463,7 +463,7 @@ async function executeToolCall(
         ...(killPromise ? [killPromise] : []),
       ]);
 
-  // If /bot kill fired, exit the turn immediately — don't feed the failed result back to the model.
+  // If /bot kill fired, exit the turn immediately; don't feed the failed result back to the model.
   if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
     return { kind: "abort", status: "stopped_by_user" };
   }
@@ -488,7 +488,7 @@ async function executeToolCall(
     if (serverId && userId) {
       const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
       // userId is carried on the context (resolved once at turn planning), so no
-      // per-tool-call DB lookup — recordStat just buffers in memory.
+      // per-tool-call DB lookup: recordStat just buffers in memory.
       try {
         statRepository.recordStat({
           serverId,

@@ -62,13 +62,13 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
     }
   }
 
-  // Cache miss or stale — load from DB
+  // Cache miss or stale , so load from DB
   cacheMisses++;
   try {
     const preset = await presetRepository.loadActivePreset(serverId);
 
     if (!preset) {
-      // No active preset — cache the negative result to avoid repeated queries
+      // No active preset , so cache the negative result to avoid repeated queries
       cache.set(serverId, { data: null, cachedAt: now });
       return null;
     }

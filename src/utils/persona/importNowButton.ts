@@ -6,7 +6,7 @@
  * press "Import Now" to import the freshly generated persona as an alter without
  * re-uploading the image via `/persona import`. Because the message is public,
  * the manager-only restriction is enforced on click (not by visibility), and the
- * button is driven by a per-message collector — matching the established pattern
+ * button is driven by a per-message collector; matching the established pattern
  * in `expandableEmbedNotice.ts` (this codebase has no global button router).
  */
 
@@ -139,7 +139,7 @@ function buildImportErrorEmbed(
  *
  * On click: enforces ManageGuild, then runs the shared {@link importAlterPreset}
  * core (always as an alter, identity preserved), disables the button on success,
- * and replies ephemerally with the outcome. The button is one-shot — a successful
+ * and replies ephemerally with the outcome. The button is one-shot: a successful
  * import stops the collector; a failure re-arms it for another attempt.
  *
  */

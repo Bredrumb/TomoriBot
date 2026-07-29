@@ -185,7 +185,7 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // Brave-key dance removed — unified web_search is gated centrally.
+      // Brave-key dance removed: unified web_search is gated centrally.
       if (builtInTools.length > 0) {
         const builtInToolsFormatted = this.convertToolsArray(builtInTools);
         allTools.push(...builtInToolsFormatted);

@@ -22,7 +22,7 @@ import {
 } from "@/types/db/dataExport";
 
 /**
- * ExportRepository — owns all data export operations.
+ * ExportRepository: owns all data export operations.
  *
  * Handles personal and server data export, per-domain slice exports
  * (memories, settings, config, personality), JSON sanitization, and
@@ -157,7 +157,7 @@ export class ExportRepository {
 
       const serverId = serverRows[0].server_id;
 
-      // Get tomori configuration — 13 split-table LEFT JOINs + welcome (E6: replaces dual tomori_configs join).
+      // Get tomori configuration: 13 split-table LEFT JOINs + welcome (E6: replaces dual tomori_configs join).
       //    COALESCE defaults are belt-and-suspenders for the migration window (servers without a split row).
       const configRows = await sql`
         SELECT
@@ -693,5 +693,5 @@ export class ExportRepository {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const exportRepository = new ExportRepository();

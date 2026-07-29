@@ -1,5 +1,5 @@
 /**
- * CooldownRepository — manages the `cooldowns` table.
+ * CooldownRepository: manages the `cooldowns` table.
  *
  * Consolidates cooldownManager.ts, messageCooldown.ts, and cooldownsCleanup.ts
  * into a single repository. Callers import the `cooldownRepository` singleton.
@@ -104,7 +104,7 @@ export class CooldownRepository {
 
   /**
    * Checks if a user is exempt from cooldowns based on type and permissions.
-   * Server managers are exempt from cooldown types 1–3; only STRICT_SERVER_WIDE (4) has no exemptions.
+   * Server managers are exempt from cooldown types 1-3; only STRICT_SERVER_WIDE (4) has no exemptions.
    *
    * @param member       - Guild member to check
    * @returns True if the user is exempt
@@ -615,7 +615,7 @@ export class CooldownRepository {
 
   /**
    * Clears ALL cooldowns from the database.
-   * WARNING: Destructive — use only in development or when explicitly resetting all cooldowns.
+   * WARNING: Destructive. use only in development or when explicitly resetting all cooldowns.
    *
    * @returns CooldownsCleanupResult with success flag and deleted count
    */
@@ -637,5 +637,5 @@ export class CooldownRepository {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const cooldownRepository = new CooldownRepository();

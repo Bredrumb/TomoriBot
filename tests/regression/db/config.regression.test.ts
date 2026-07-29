@@ -1,5 +1,5 @@
 /**
- * Regression harness — ConfigRepository domain.
+ * Regression harness: ConfigRepository domain.
  *
  * Covers: loadTomoriState (config portion), updateTomoriConfig.
  * The config row is read as part of TomoriState; updateTomoriConfig is the

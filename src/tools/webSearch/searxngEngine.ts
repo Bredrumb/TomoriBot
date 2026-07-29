@@ -1,10 +1,10 @@
 /**
- * SearxngEngine — wraps the SearXNG REST service into a uniform WebSearchEngine.
+ * SearxngEngine : wraps the SearXNG REST service into a uniform WebSearchEngine.
  *
  * Supports the common search categories plus SearXNG-only verticals
  * (science/it/files/music).
  * Availability gates on SEARXNG_BASE_URL being configured AND the
- * instance responding healthy (cached probe — see `isSearxngAvailable`).
+ * instance responding healthy (cached probe : see `isSearxngAvailable`).
  *
  * Sits between Brave and DuckDuckGo in the dispatcher chain: when a Brave key
  * isn't configured but a self-hosted SearXNG sidecar is, queries are routed
@@ -32,7 +32,7 @@ export class SearxngEngine implements WebSearchEngine {
   }
 
   async search(query: string, category: SearchCategory, context: ToolContext, count?: number): Promise<ToolResult> {
-    // Surface a "searching..." notice in Discord — parallel to the Brave engine's
+    // Surface a "searching..." notice in Discord ; parallel to the Brave engine's
     //    Internal*Tool classes that call sendToolNotice themselves.
     await sendToolNotice(
       context,

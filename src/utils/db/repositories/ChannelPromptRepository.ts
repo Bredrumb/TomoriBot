@@ -1,5 +1,5 @@
 /**
- * ChannelPromptRepository — manages per-channel system prompt overrides.
+ * ChannelPromptRepository: manages per-channel system prompt overrides.
  *
  * Covered table: channel_prompt_overrides.
  *

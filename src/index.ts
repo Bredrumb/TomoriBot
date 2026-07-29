@@ -44,7 +44,7 @@ await loadSecrets(environment);
 
 // Probe Discord for Presence Intent approval (or honor an explicit override) before
 // building the client, so we request the privileged intent only when it is actually
-// enabled — self-resolving the moment Discord grants approval, with no failed
+// enabled, so self-resolving the moment Discord grants approval, with no failed
 // gateway handshake and no manual env change.
 const includePresences = await resolvePresenceIntentEnabled(environment);
 const client = createDiscordClient(includePresences);
@@ -57,7 +57,7 @@ await initBridges(client);
 
 initTimers(client);
 
-// Login — triggers clientReady which starts all deferred timers.
+// Login, so triggers clientReady which starts all deferred timers.
 // Awaited inside a try/catch as a defensive net: resolvePresenceIntentEnabled
 // already prevents requesting an unapproved privileged intent, so a
 // DisallowedIntents rejection here is a rare edge (e.g. the Presence Intent was

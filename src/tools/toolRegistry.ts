@@ -172,13 +172,13 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   async requiresFollowUp(functionName: string, provider: string, serverId?: number): Promise<boolean> {
     const resolvedFunctionName = resolveBuiltInToolAlias(functionName);
 
-    // Check if it's a global MCP function — all MCP tools require follow-up
+    // Check if it's a global MCP function : all MCP tools require follow-up
     const isMcp = await this.isMCPFunction(resolvedFunctionName, provider);
     if (isMcp) {
       return true;
     }
 
-    // Check if it's a guild MCP function — also requires follow-up
+    // Check if it's a guild MCP function : also requires follow-up
     if (serverId) {
       try {
         const isGuildMcp = await getGuildMcpManager().isGuildMCPFunction(serverId, resolvedFunctionName);

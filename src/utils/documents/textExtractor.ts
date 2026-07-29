@@ -10,14 +10,14 @@ import { normalizeDocumentText } from "@/utils/documents/documentService";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 
 /**
- * Known-binary MIME type prefixes — any file whose content-type starts with one
+ * Known-binary MIME type prefixes: any file whose content-type starts with one
  * of these is treated as non-readable binary and rejected outright.
  * `application/pdf` is intentionally absent; it is handled as a special case below.
  */
 const BINARY_MIME_PREFIXES = ["image/", "video/", "audio/"] as const;
 
 /**
- * Known-binary file extensions — files with these extensions are rejected even
+ * Known-binary file extensions: files with these extensions are rejected even
  * when Discord reports an ambiguous MIME type (e.g. `application/octet-stream`).
  * Source-code and markup extensions are intentionally absent so they pass through.
  */
@@ -94,7 +94,7 @@ const BINARY_EXTENSIONS = new Set([
  *
  * Strategy: blocklist-based rather than allowlist-based.
  * PDF is handled as a named special case (requires `pdf-parse` for binary parsing).
- * Any other file that is not a known binary format is accepted and read as UTF-8 text —
+ * Any other file that is not a known binary format is accepted and read as UTF-8 text:
  * this naturally covers .txt, .md, .py, .ts, .c, .cpp, .java, .rs, .go, .json, .yaml, etc.
  * without needing to enumerate every possible code or markup extension.
  *
@@ -115,7 +115,7 @@ export function isExtractableDocument(contentType: string | null, filename: stri
     return false;
   }
 
-  // Accept everything else — any text-based MIME type (text/*) or unknown
+  // Accept everything else: any text-based MIME type (text/*) or unknown
   //    extension falls through here and will be decoded as UTF-8.
   return true;
 }

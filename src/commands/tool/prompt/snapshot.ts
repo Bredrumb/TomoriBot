@@ -284,7 +284,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * then sends it to the invoking user via DM (or as an ephemeral attachment if DMs are closed).
  *
  * @param interaction - Command interaction (must be in a guild channel)
- * @param userData - Invoker's user row — passed to buildContext so STM loads correctly
+ * @param userData - Invoker's user row, so passed to buildContext so STM loads correctly
  * @param locale - Resolved locale for the interaction
  */
 export async function execute(
@@ -345,14 +345,14 @@ export async function execute(
       return;
     }
 
-    // Build persona select options — index-based values avoid Discord's 100-char value limit
+    // Build persona select options, so index-based values avoid Discord's 100-char value limit
     const personaOptions = personas.map((persona, index) => ({
       label: safeSelectOptionText(persona.persona_nickname),
       value: index.toString(),
       description: persona.is_alter ? "Alter Persona" : "Main Persona",
     }));
 
-    // Show persona select modal — this is the first interaction acknowledgment;
+    // Show persona select modal: this is the first interaction acknowledgment;
     //    do NOT deferReply before this call
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
@@ -463,7 +463,7 @@ export async function execute(
     const fetchedMessages = await textChannel.messages.fetch({ limit: messageFetchLimit });
     const allMessagesArray = Array.from(fetchedMessages.values()).reverse();
 
-    // Respect /refresh and /compact_refresh boundaries — same slicing logic
+    // Respect /refresh and /compact_refresh boundaries: same slicing logic
     //      used by the live chat pipeline in tomoriChat.ts so snapshot reflects
     //      exactly what the LLM would actually see
     const { sliced: messagesArray } = sliceMessagesAtResetMarker(allMessagesArray);
@@ -601,10 +601,10 @@ export async function execute(
       // Process embeds to match tomoriChat.ts conversion rules:
       //   a) System-produced embeds (memory_learning, reminder_set, system_injection,
       //      compact_summary/refresh, reward, punish) are wrapped as `[System: ...]`
-      //      blocks and appended to message content — this applies to ALL messages.
+      //      blocks and appended to message content, so this applies to ALL messages.
       //   b) Link-preview embeds (Twitter/YouTube/articles) are extracted as
       //      `[System: Link preview embed content: ...]` and their images are added
-      //      to imageAttachments — ONLY for non-Tomori-authored messages.
+      //      to imageAttachments, so ONLY for non-Tomori-authored messages.
       const botNickname = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? null;
       const isTomoriAuthored = message.author.id === client.user?.id;
       const embedTextSegments: string[] = [];
@@ -663,7 +663,7 @@ export async function execute(
       }
 
       //   c) Components V2 notices (memory_learning, reminder_set) carry no embeds at
-      //      all — their text lives in the component tree — so they are reconstructed
+      //      all, so their text lives in the component tree, so they are reconstructed
       //      and classified here to keep the snapshot identical to live chat context.
       const cv2Notice = extractNoticeTextFromComponents(message.components);
       if (cv2Notice?.title && cv2Notice.description) {
@@ -692,7 +692,7 @@ export async function execute(
       const mediaSourceMessageIds = hasLocalMedia ? [message.id] : undefined;
 
       // Merge consecutive same-author messages, mirroring the real context path
-      // (buildSimplifiedHistory): collapse only when both sides are pure text — if
+      // (buildSimplifiedHistory): collapse only when both sides are pure text if
       // either side carries media, keep separate turns so per-message media IDs stay
       // unambiguous.
       const prevMsg = simplifiedMessages[simplifiedMessages.length - 1];
@@ -816,13 +816,13 @@ export async function execute(
     const presetData = await getCachedActivePreset(selectedPersona.server_id);
     const presetName = presetData?.preset.preset_name ?? null;
 
-    // Resolve effective model — mirrors the routed answering state used for media resolution.
+    // Resolve effective model: mirrors the routed answering state used for media resolution.
     const providerName = normalizeProviderName(answeringState.llm.llm_provider);
     const modelName = answeringState.llm.llm_codename;
     const timestamp = new Date().toISOString();
 
     // Optionally fetch provider-formatted tool definitions (JSON output only).
-    //     TXT format intentionally omits tools — users are directed to use JSON for tools.
+    //     TXT format intentionally omits tools, so users are directed to use JSON for tools.
     let toolsData: Array<Record<string, unknown>> | null = null;
     if (fetchTools && format === "json") {
       try {
@@ -956,8 +956,8 @@ export async function execute(
  * Human-readable label (and optional command hint) for each `ContextItemTag`.
  * Rendered by `buildTextSnapshot` as `=== Title (command/system-managed) ===` blocks.
  *
- * `subsections` lets a single context item — especially composites like
- * `KNOWLEDGE_USERS_IN_CONVERSATION` — expose multiple `== SubTitle ==` markers
+ * `subsections` lets a single context item (especially composites like
+ * `KNOWLEDGE_USERS_IN_CONVERSATION`: expose multiple `== SubTitle ==` markers
  * so users can see which separate data pools feed into that block.
  */
 type TagLabel = {
@@ -1028,7 +1028,7 @@ function renderTagHeader(tag: string | undefined): string {
  * a human-readable flat-text format that mirrors the order produced by `buildContext`.
  *
  * Each context item gets a `=== Title (/command) ===` header derived from its
- * `metadataTag`. These headers are annotations — they are NOT part of the prompt
+ * `metadataTag`. These headers are annotations: they are NOT part of the prompt
  * actually sent to the LLM. The DM body that ships with the file explains this.
  */
 function buildTextSnapshot(contextItems: StructuredContextItem[]): string {
@@ -1075,7 +1075,7 @@ function buildTextSnapshot(contextItems: StructuredContextItem[]): string {
  * `{model, messages: [{role, content}]}` shape. Messages with media use the
  * OpenAI-vision array-content form; text-only messages use plain strings.
  *
- * Metadata (server/channel/persona/provider/preset) is NOT embedded in the file —
+ * Metadata (server/channel/persona/provider/preset) is NOT embedded in the file:
  * it is rendered in the DM body instead, to keep the file focused on payload.
  *
  * When `toolsData` is provided, a top-level `tools` key is appended in the same
@@ -1111,7 +1111,7 @@ async function buildJsonSnapshot(
     const adapter = googleSnapshotAdapterFactory();
     const payload = await adapter.buildTokenCountPayload(contextItems, modelName);
 
-    // Sanitize — replace inlineData.data (base64) with placeholder (mirrors logSanitizedRequest)
+    // Sanitize: replace inlineData.data (base64) with placeholder (mirrors logSanitizedRequest)
     const sanitizedContents = payload.contents.map((content) => ({
       ...content,
       // biome-ignore lint/suspicious/noExplicitAny: Google Part type lacks index signature; cast needed for sanitization
@@ -1133,7 +1133,7 @@ async function buildJsonSnapshot(
     const adapter = new OpenrouterStreamAdapter();
     const messages = await adapter.buildProbeMessages(contextItems, seesImages, seesVideos);
 
-    // Sanitize — replace data-URI image_url values (mirrors logSanitizedRequest)
+    // Sanitize: replace data-URI image_url values (mirrors logSanitizedRequest)
     const sanitized = messages.map((msg: Record<string, unknown>) => {
       if (!Array.isArray(msg.content)) return msg;
       return {
@@ -1155,7 +1155,7 @@ async function buildJsonSnapshot(
     const adapter = new AnthropicStreamAdapter();
     const { system, messages } = await adapter.buildProbeMessages(contextItems, seesImages);
 
-    // Sanitize — replace base64 image source.data (mirrors logSanitizedRequest)
+    // Sanitize: replace base64 image source.data (mirrors logSanitizedRequest)
     const sanitizedMessages = messages.map((msg: Record<string, unknown>) => {
       const content = msg.content;
       if (typeof content === "string") return msg;
@@ -1342,7 +1342,7 @@ async function fetchProviderTools(
  * Provider shapes:
  *   - google           : `{temperature, top_k, top_p, frequency_penalty, presence_penalty, max_output_tokens, stop_sequences, safety_settings, thinking_config?}`
  *   - vertex / vertexexpress: `{temperature, top_k, top_p, max_output_tokens, stop_sequences, safety_settings, thinking_config?}`
- *   - anthropic        : `{temperature?, top_p?, top_k?, max_tokens, stop_sequences}` (Anthropic rejects sending both temp+top_p — uses `selectAnthropicSamplingParams`)
+ *   - anthropic        : `{temperature?, top_p?, top_k?, max_tokens, stop_sequences}` (Anthropic rejects sending both temp+top_p, uses `selectAnthropicSamplingParams`)
  *   - openai-compat    : `{temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens, stop}`
  *
  * Used in two places:
@@ -1482,7 +1482,7 @@ function buildRequestConfig(persona: TomoriState, providerName: string, modelNam
   };
   requestConfigMutators[providerKey]?.();
 
-  // Acknowledge has_tools flag is mirrored from adapter runtime — informational
+  // Acknowledge has_tools flag is mirrored from adapter runtime: informational
   if (!activeLlm.has_tools) out.tools_disabled = true;
 
   return out;

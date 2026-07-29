@@ -384,7 +384,7 @@ export async function generatePresetFromPrompt(
     const configuredModel = params.modelName || "gemini-2.5-flash";
 
     // Run search sub-agent when web search is requested.
-    //    gemini-2.5-flash is hardcoded for the search step across all models —
+    //    gemini-2.5-flash is hardcoded for the search step across all models because
     //    it supports Google Search Grounding on the free AI Studio tier and is
     //    fast enough that it doesn't meaningfully delay generation.
     const SEARCH_AGENT_MODEL = "gemini-2.5-flash";

@@ -1,5 +1,5 @@
 /**
- * Guild MCP Manager — On-demand connection pool for per-guild remote MCP servers.
+ * Guild MCP Manager: On-demand connection pool for per-guild remote MCP servers.
  *
  * Singleton that manages lazy (production) or eager (dev) connections to remote
  * MCP servers registered by guild admins. Each connection is keyed by
@@ -117,7 +117,7 @@ class GuildMcpManager {
       const existing = this.pool.get(key);
 
       const conn = existing ?? (await this.connectServer(config));
-      if (!conn) continue; // Connection failed — skip this server
+      if (!conn) continue; // Connection failed, so skip this server
 
       tools.push(conn.callableTool as CallableTool);
     }
@@ -250,7 +250,7 @@ class GuildMcpManager {
             );
           }
         } catch (embedError) {
-          // Non-critical — don't block execution if the embed fails
+          // Non-critical, so don't block execution if the embed fails
           log.warn(`[GuildMcpManager] Failed to send MCP tool embed for ${functionName}:`, embedError);
         }
       }
@@ -419,7 +419,7 @@ class GuildMcpManager {
   }
 
   /**
-   * Graceful shutdown — close all connections and stop eviction timer.
+   * Graceful shutdown: close all connections and stop eviction timer.
    */
   async cleanup(): Promise<void> {
     if (this.evictionTimer) {
@@ -478,8 +478,8 @@ class GuildMcpManager {
     // blowing the stream inactivity budget and stalling chat for that guild.
     const cooldownUntil = this.connectFailures.get(key);
     if (cooldownUntil !== undefined) {
-      if (Date.now() < cooldownUntil) return null; // still quarantined — skip silently
-      this.connectFailures.delete(key); // cooldown elapsed — allow one fresh attempt
+      if (Date.now() < cooldownUntil) return null; // still quarantined, so skip silently
+      this.connectFailures.delete(key); // cooldown elapsed, so allow one fresh attempt
     }
 
     if (this.connectingKeys.has(key)) {
@@ -541,13 +541,13 @@ class GuildMcpManager {
   /**
    * Connect an MCP client using the appropriate transport strategy:
    *
-   * 1. **Smithery Connect** — For *.run.tools URLs, uses `@smithery/api/mcp`
+   * 1. **Smithery Connect**: For *.run.tools URLs, uses `@smithery/api/mcp`
    *    to create a managed transport with the auth token as the Smithery API key.
-   * 2. **StreamableHTTP** — Modern MCP transport (tried first for non-Smithery URLs).
-   * 3. **SSE** — Legacy fallback when StreamableHTTP fails at runtime.
+   * 2. **StreamableHTTP**: Modern MCP transport (tried first for non-Smithery URLs).
+   * 3. **SSE**: Legacy fallback when StreamableHTTP fails at runtime.
    *
    * The StreamableHTTP → SSE fallback is necessary because the StreamableHTTP
-   * constructor always succeeds — failures only surface during `client.connect()`
+   * constructor always succeeds because failures only surface during `client.connect()`
    * when the server rejects the POST request (e.g., SSE-only servers like Supergateway).
    *
    * @param client - MCP client instance (will be connected in place)
@@ -677,7 +677,7 @@ class GuildMcpManager {
     try {
       await client.close();
     } catch {
-      // ignore — the client may have no active transport to close
+      // ignore because the client may have no active transport to close
     }
   }
 
@@ -772,7 +772,7 @@ class GuildMcpManager {
       };
     }
 
-    // Success — extract text from the various MCP result formats
+    // Success, so extract text from the various MCP result formats
     let message = "Guild MCP function executed successfully";
     if (mcpResult.text) {
       message = mcpResult.text;

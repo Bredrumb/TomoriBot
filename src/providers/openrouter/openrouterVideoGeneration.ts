@@ -19,7 +19,7 @@ import {
 // Both fetch() and Bun's node:https shim share this same fingerprint.
 //
 // We bypass this by spawning an external process for HTTP requests:
-//   - Windows: PowerShell 7 (pwsh) with Invoke-WebRequest — uses .NET's Schannel TLS
+//   - Windows: PowerShell 7 (pwsh) with Invoke-WebRequest: uses .NET's Schannel TLS
 //     and proper HTTP/2 negotiation, confirmed to bypass Cloudflare.
 //   - Linux/Docker: curl with HTTP/2 support (via nghttp2, standard on Alpine/Debian).
 //     Linux curl produces a different TLS fingerprint than Bun and negotiates HTTP/2
@@ -88,7 +88,7 @@ async function pwshHttpRequest(
 
   // Spawn pwsh with the inline HTTP script
   //    -NoProfile: skip user profile loading for faster startup
-  //    -NonInteractive: no prompts — fail immediately on errors
+  //    -NonInteractive: no prompts: fail immediately on errors
   const proc = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", "-Command", PWSH_HTTP_SCRIPT], {
     stdin: "pipe",
     stdout: "pipe",
@@ -127,9 +127,9 @@ async function pwshHttpRequest(
  * TLS fingerprint that Cloudflare allows through.
  *
  * Key curl flags for correctness and security:
- *   --proto =https — restricts to HTTPS only (blocks file://, ftp://, gopher://, etc.)
- *   --data-raw — prevents @filename expansion in the body
- *   -H "Expect:" — suppresses 100-Continue which breaks the -i header/body parser
+ *   --proto =https: restricts to HTTPS only (blocks file://, ftp://, gopher://, etc.)
+ *   --data-raw: prevents @filename expansion in the body
+ *   -H "Expect:"; suppresses 100-Continue which breaks the -i header/body parser
  */
 async function curlHttpRequest(
   url: string,
@@ -139,7 +139,7 @@ async function curlHttpRequest(
 ): Promise<ExternalHttpResponse> {
   const args: string[] = ["-s", "-S", "--max-time", "120", "--proto", "=https", "-X", method];
 
-  // Suppress Expect: 100-continue — curl sends this for POST bodies over ~1KB,
+  // Suppress Expect: 100-continue because curl sends this for POST bodies over ~1KB,
   //    which inserts an intermediate "HTTP/1.1 100 Continue" block before the real response.
   //    Our -i parser splits on the first \r\n\r\n, so 100-Continue would break parsing.
   args.push("-H", "Expect:");
@@ -217,12 +217,12 @@ async function externalHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // Validate URL scheme — only HTTPS allowed to prevent protocol attacks
+  // Validate URL scheme: only HTTPS allowed to prevent protocol attacks
   if (!url.startsWith("https://")) {
     throw new Error(`externalHttpRequest: URL must use HTTPS, got: ${url.slice(0, 80)}`);
   }
 
-  // Sanitize header values — strip CRLF to prevent header injection
+  // Sanitize header values: strip CRLF to prevent header injection
   const sanitizedHeaders: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     sanitizedHeaders[key] = value.replace(/[\r\n]/g, "");
@@ -357,9 +357,9 @@ export async function generateOpenRouterNativeVideo(
       const pollBodyText = pollRaw.bodyBuffer.toString("utf8");
 
       if (pollRaw.status < 200 || pollRaw.status >= 300) {
-        // Short-circuit on permanent auth errors — retrying won't help for 401/403
+        // Short-circuit on permanent auth errors, so retrying won't help for 401/403
         // Note: 404 is NOT terminal here. OpenRouter's async job system may return 404 briefly
-        // after submission due to eventual consistency — the job takes a few seconds to propagate.
+        // after submission due to eventual consistency because the job takes a few seconds to propagate.
         if (pollRaw.status === 401 || pollRaw.status === 403) {
           return {
             done: true,
@@ -406,12 +406,12 @@ export async function generateOpenRouterNativeVideo(
   // Download the video
   //    Use unsigned_urls if available, otherwise use the content endpoint.
   //    The video file may not be immediately available after the poll returns "completed"
-  //    due to eventual consistency in OpenRouter's storage — retry a few times on 404.
+  //    due to eventual consistency in OpenRouter's storage, so retry a few times on 404.
   const rawVideoUrl = completedJob.unsigned_urls?.[0] ?? `${OPENROUTER_VIDEO_URL}/${jobId}/content?index=0`;
   const videoUrl = new URL(rawVideoUrl, OPENROUTER_ORIGIN).href;
 
   // Security: only send the Authorization header if the download URL is on OpenRouter's domain.
-  // unsigned_urls could theoretically point to a third-party CDN — avoid leaking the API key to it.
+  // unsigned_urls could theoretically point to a third-party CDN, so avoid leaking the API key to it.
   const downloadUrlOrigin = new URL(videoUrl).origin;
   const openRouterOrigin = new URL(OPENROUTER_VIDEO_URL).origin;
   const downloadHeaders: Record<string, string> =

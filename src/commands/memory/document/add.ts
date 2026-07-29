@@ -507,7 +507,7 @@ export async function execute(
       return;
     }
 
-    // Reserve document quota now that all validation has passed — earlier placement
+    // Reserve document quota now that all validation has passed: earlier placement
     // would burn the user's daily slot on credential/limit errors that never produce
     // a document.
     const quotaReserve = reserveDocumentQuota(interaction.user.id);

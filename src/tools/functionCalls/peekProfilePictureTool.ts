@@ -555,7 +555,7 @@ export class PeekProfilePictureTool extends BaseTool {
    */
   private async fetchAndConvertImageToBase64(avatarUrl: string): Promise<string> {
     try {
-      // Data URIs (e.g. local preset avatars) are already base64-encoded — decode directly.
+      // Data URIs (e.g. local preset avatars) are already base64-encoded, so decode directly.
       if (avatarUrl.startsWith("data:")) {
         const markerIndex = avatarUrl.indexOf("base64,");
         if (markerIndex === -1) {

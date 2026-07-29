@@ -7,7 +7,7 @@ import { log } from "../misc/logger";
 
 /**
  * Maximum time to wait for Tenor's HTML page to respond, in milliseconds.
- * Configurable via TENOR_FETCH_TIMEOUT_MS env var. Defaults to 5 s — generous for a static
+ * Configurable via TENOR_FETCH_TIMEOUT_MS env var. Defaults to 5 s (generous for a static
  * HTML fetch, and short enough that a stalled Tenor server can't block the chat turn.
  * Clamped to a minimum of 1 s.
  */
@@ -39,8 +39,8 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
     // Why: undici's default headersTimeout is 300_000 ms (5 min). If Tenor stalls on a
     // malformed/unknown GIF id (e.g. 20-digit overflow IDs) or serves a hanging Cloudflare
     // interstitial, an unguarded fetch blocks the entire chat turn for 5 minutes before
-    // throwing. A failed resolve is non-fatal — the Tenor URL is kept as descriptive text
-    // context — so we can afford an aggressive timeout.
+    // throwing. A failed resolve is non-fatal, so the Tenor URL is kept as descriptive text
+    // context so we can afford an aggressive timeout.
     const response = await fetch(tenorViewUrl, { signal: AbortSignal.timeout(TENOR_FETCH_TIMEOUT_MS) });
     if (!response.ok) {
       log.warn(`Tenor Resolver: Failed to fetch Tenor page: ${response.status}`);

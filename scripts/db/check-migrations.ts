@@ -67,7 +67,7 @@ async function checkMigrationPairing(): Promise<void> {
 
   // Uniqueness: no two up-migrations may share an NNN prefix.
   //    A duplicate number means the runner has to tie-break two migrations
-  //    that were each authored as "the next one" — an ordering hazard and a
+  //    that were each authored as "the next one": an ordering hazard and a
   //    review-clarity hazard. Group stems by their 3-digit prefix and fail on
   //    any group with more than one member.
   const byNumber = new Map<string, string[]>();

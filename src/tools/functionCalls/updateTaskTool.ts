@@ -490,7 +490,7 @@ export class UpdateTaskTool extends BaseTool {
     const reminderPurposeText = truncateReminderPurpose(parsedArgs.newPurpose);
 
     // Show both clocks when the target user has a personal timezone (/personal timezone)
-    // differing from the server's — lets the user spot a mislabeled/misconverted time.
+    // differing from the server's, so lets the user spot a mislabeled/misconverted time.
     // Self tasks target the bot, which has no personal timezone.
     let targetPersonalOffset: number | null = null;
     if (!existingReminder.self_reminder) {

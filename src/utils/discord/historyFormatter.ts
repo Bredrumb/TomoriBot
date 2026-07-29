@@ -20,7 +20,7 @@ export interface FormattedHistoryResult {
   text: string;
 
   /**
-   * Unique persona IDs detected in the batch (for automatic scope) — from webhook-authored
+   * Unique persona IDs detected in the batch (for automatic scope): from webhook-authored
    * messages, plus the main persona when the bot posted under its own account.
    */
   detectedPersonaTomoriIds: number[];
@@ -124,8 +124,8 @@ export function formatMessagesForExtraction(
   }
 
   // The main (non-alter) persona owns any message the bot account posted itself. Webhook
-  // delivery is not guaranteed — it is skipped when webhooks are unavailable for the
-  // channel — so keying detection purely off `webhookId` misses those turns entirely.
+  // delivery is not guaranteed it is skipped when webhooks are unavailable for the
+  // channel so keying detection purely off `webhookId` misses those turns entirely.
   const mainPersonaId = serverPersonas.find((persona) => !persona.is_alter)?.persona_id;
 
   for (const msg of messages) {
@@ -145,7 +145,7 @@ export function formatMessagesForExtraction(
       if (cachedRenderedTable) continue;
 
       if (isAudioAttachment(attachment)) {
-        // Check the in-memory cache first — avoids re-running STT on history audio.
+        // Check the in-memory cache first, so avoids re-running STT on history audio.
         // "tts" source = Tomori's own voice message; caption text is already
         // included in msg.content (sent alongside the attachment), so we just
         // skip the [Attachment] tag to avoid duplication.

@@ -1,5 +1,5 @@
 /**
- * RagRepository — manages documents, chunks, and vector embeddings.
+ * RagRepository: manages documents, chunks, and vector embeddings.
  *
  * Wraps documentService.ts (insert, retrieve, re-embed) and ragDetection.ts
  * (pgvector availability check). All RAG-capable reads go through this
@@ -30,7 +30,7 @@ export type RagExportShape = {
 export class RagRepository implements IRepository<RagExportShape> {
   /**
    * Returns true if pgvector is available in the current database.
-   * Reads the in-process flag set during startup — no DB round-trip.
+   * Reads the in-process flag set during startup: no DB round-trip.
    */
   isAvailable(): boolean {
     return isRagAvailable();
@@ -135,5 +135,5 @@ export class RagRepository implements IRepository<RagExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const ragRepository = new RagRepository();

@@ -10,7 +10,7 @@ const DISCORD_LIMITS = {
   /**
    * Upper bound for `.setMaxLength()` on modal text inputs.
    *
-   * Discord allows a modal text input `max_length` of 1–4000 (a slash-command
+   * Discord allows a modal text input `max_length` of 1-4000 (a slash-command
    * string option allows up to 6000). Patterns 2 and 4 below share a single
    * `.setMaxLength()` regex and cannot tell the two builders apart, so this
    * uses the stricter of the two limits.

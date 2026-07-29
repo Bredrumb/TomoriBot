@@ -276,7 +276,7 @@ export async function execute(
       });
     }
 
-    // Reasoning checkbox — checked = "true", unchecked = "false"
+    // Reasoning checkbox: checked = "true", unchecked = "false"
     modalComponents.push({
       kind: "checkbox" as const,
       customId: "use_reasoning",
@@ -320,7 +320,7 @@ export async function execute(
       replyInteraction = modalResult.interaction;
     }
 
-    // Defer the modal submission — opens a new 3-second window
+    // Defer the modal submission: opens a new 3-second window
     await replyInteraction.deferReply({ flags: deferFlags });
 
     const selectedIndex = Number.parseInt(modalResult.values?.persona_choice ?? "0", 10);

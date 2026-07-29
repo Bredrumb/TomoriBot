@@ -91,7 +91,7 @@ interface PersonaSummary {
   persona_nickname: string;
   webhook_avatar_url: string | null;
   is_alter: boolean;
-  /** From persona_configs — null when no persona-specific prompt is set. */
+  /** From persona_configs: null when no persona-specific prompt is set. */
   persona_prompt: string | null;
   /** Appearance/personality attribute list used by buildContext(). */
   attribute_list: string[];
@@ -438,7 +438,7 @@ export async function execute(
     return;
   }
 
-  // Show the modal (fire-and-forget UX — no public bot response until image posts).
+  // Show the modal (fire-and-forget UX; no public bot response until image posts).
   const defaultPersonaId = availablePersonaSummaries.some((persona) => persona.persona_id === tomoriState.persona_id)
     ? (tomoriState.persona_id ?? fallbackPersonaSummary?.persona_id ?? -1)
     : (fallbackPersonaSummary?.persona_id ?? -1);

@@ -21,7 +21,7 @@ const STATE_SELECT_ID = "mcp_enabled_select";
 
 /**
  * Configure the /config mcp toggle subcommand.
- * No options needed — server and state selection happen via modal string selects.
+ * No options needed: server and state selection happen via modal string selects.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("toggle").setDescription(localizer("en-US", "commands.mcp.toggle.description"));
@@ -80,7 +80,7 @@ export async function execute(
       ),
     }));
 
-    // Show modal with server select + enable checkbox group (modal is the acknowledgment — no pre-defer)
+    // Show modal with server select + enable checkbox group (modal is the acknowledgment; no pre-defer)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,

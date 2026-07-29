@@ -6,7 +6,7 @@ import type { ModalOptions, SelectOption } from "@/types/discord/modal";
 /**
  * Anchor-migration tests for `/model fallback`.
  *
- * This command could not ride the engine's own `>25` bridge — it renders five selects over
+ * This command could not ride the engine's own `>25` bridge: it renders five selects over
  * one shared option list (the bridge slices only the first) and reserves one entry per page
  * for the explicit "None" choice. It therefore picks a range on the anchor message via
  * `acquireModalOptionRange` and hands the modal an already-sliced list. These tests cover
@@ -334,7 +334,7 @@ describe("/model fallback anchor workflow", () => {
 
     const options = modalOptionLists[0];
     // The clear entry is re-prepended to the page, so a user deep in the list can still
-    // empty a slot — the behaviour the flat 25-wide bridge would have lost.
+    // empty a slot: the behaviour the flat 25-wide bridge would have lost.
     expect(options[0]?.value).toBe("__none__");
     expect(options).toHaveLength(25);
     expect(options[1]?.value).toBe("model-25");

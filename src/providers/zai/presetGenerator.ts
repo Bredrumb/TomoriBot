@@ -32,9 +32,9 @@ interface ZaiPresetGenerationOptions {
   tools?: Array<Record<string, unknown>>;
   toolContext?: ToolContext;
   maxToolRounds?: number;
-  /** Override endpoint URL — used by Zaicoding to point to its coding endpoint. */
+  /** Override endpoint URL: used by Zaicoding to point to its coding endpoint. */
   endpointUrl?: string;
-  /** Override tool adapter — used by Zaicoding to supply its own adapter. */
+  /** Override tool adapter: used by Zaicoding to supply its own adapter. */
   toolAdapter?: OpenAICompatibleToolAdapter;
 }
 

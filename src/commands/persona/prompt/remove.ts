@@ -133,7 +133,7 @@ export async function execute(
           }
 
           // Capture the prompt before the write, so the success notice can
-          //    echo it back — this is the user's last chance to copy it.
+          //    echo it back: this is the user's last chance to copy it.
           const removedPreview = buildTextPreview(selectedPersona.persona_prompt);
 
           const ok = await personaRepository.removePrompt(selectedPersona.persona_id);

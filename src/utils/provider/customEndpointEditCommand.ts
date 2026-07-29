@@ -3,7 +3,7 @@
  *
  * Discord's interaction rules:
  *   - Slash command    → showModal (endpoint select) ✓
- *   - ModalSubmit      → reply/defer (NOT showModal) ✓ — so we reply with a button
+ *   - ModalSubmit      → reply/defer (NOT showModal) ✓ so we reply with a button
  *   - ButtonInteraction → showModal (capability fields, pre-filled) ✓
  *   - ModalSubmit      → deferUpdate → register → editReply ✓
  */
@@ -99,7 +99,7 @@ function buildEndpointSelectOptions(
 ): SelectOption[] {
   // First pass: count how many times each base label appears.
   //    Two workflows under the same label with identical names would otherwise
-  //    produce duplicate option labels — Discord silently drops the second one.
+  //    produce duplicate option labels, so Discord silently drops the second one.
   const labelCounts = new Map<string, number>();
   for (const endpoint of endpoints) {
     const primaryName = endpoint.model_name?.trim() || endpoint.display_name;
@@ -373,7 +373,7 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
 
   // Collapse-at-open: replace the summary's now-dead controls before the modal goes up.
   // Discord emits no modal-dismiss event, so without this the Edit Fields/Cancel buttons stay
-  // clickable — and fail — for the modal's full 10-minute lifetime, because the single-shot
+  // clickable (and fail) for the modal's full 10-minute lifetime, because the single-shot
   // collector above has already resolved. The summary message belongs to `selectInteraction`
   // while the modal opens from `buttonInteraction`, so editing here does not acknowledge the
   // button and the modal still opens normally. Doing it *before* the modal leaves no window
@@ -521,7 +521,7 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       supportsPrefixCompletion,
       extraConfig,
       // Edit the exact selected row in place (update its model + row by id) so a renamed model_name
-      // does not collide with — or orphan — sibling models under the same label+capability.
+      // does not collide with (or orphan) sibling models under the same label+capability.
       editingEndpointId: existingEndpoint.custom_endpoint_id,
     });
 

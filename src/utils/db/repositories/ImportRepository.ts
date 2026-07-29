@@ -49,7 +49,7 @@ export interface ImportValidationResult {
 }
 
 /**
- * ImportRepository — owns all data import operations.
+ * ImportRepository: owns all data import operations.
  *
  * Handles personal and server data import, per-domain slice imports
  * (memories, settings, config), import file validation, and cache
@@ -576,7 +576,7 @@ export class ImportRepository {
   }
 
   /**
-   * Raw composite personal import — no cache invalidation.
+   * Raw composite personal import; no cache invalidation.
    * Used internally by importPersonalData (which adds cache) and
    * fromExportShape (which intentionally skips cache for pipeline use).
    */
@@ -611,7 +611,7 @@ export class ImportRepository {
   }
 
   /**
-   * Raw composite server import — no cache invalidation.
+   * Raw composite server import; no cache invalidation.
    * Used internally by importServerData (which adds cache).
    */
   private async sqlImportServerData(
@@ -810,7 +810,7 @@ export class ImportRepository {
 
   /**
    * Imports a previously exported personal data bundle (IRepository contract).
-   * Intentionally bypasses cache invalidation — this is a pipeline/batch entry
+   * Intentionally bypasses cache invalidation: this is a pipeline/batch entry
    * point where the caller controls cache lifecycle.
    *
    * @param ownerId - Discord user snowflake
@@ -825,5 +825,5 @@ export class ImportRepository {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const importRepository = new ImportRepository();

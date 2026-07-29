@@ -7,7 +7,7 @@
  *           from enabled nodes in order
  *   Pass 2: Resolve {{getvar::key}}, content macros, randomization, dice rolls, trim, etc.
  *
- * Identity macros ({{user}}, {{char}}) are intentionally left unresolved here —
+ * Identity macros ({{user}}, {{char}}) are intentionally left unresolved here, so
  * they are handled downstream by convertMentions() / replaceTemplateVariables()
  * in contextBuilder.ts, which applies the stable "User" placeholder optimization.
  */
@@ -28,7 +28,7 @@ export interface MacroContext {
   personality: string;
   /** {{description}} persona description / persona prompt */
   description: string;
-  /** {{scenario}} scenario text (no TomoriBot equivalent — typically empty) */
+  /** {{scenario}} scenario text (no TomoriBot equivalent: typically empty) */
   scenario: string;
   /** {{mesExamples}} formatted sample dialogue text */
   mesExamples: string;
@@ -64,7 +64,7 @@ const VAR_DECLARATION_REGEX = /\{\{(setvar|addvar)::([^:}]+)::([^}]*)\}\}/g;
 /** Matches {{getvar::key}} references */
 const GETVAR_REGEX = /\{\{getvar::([^}]+)\}\}/g;
 
-/** Matches {{random: A, B, C}} selections — negative lookahead prevents matching {{random::...}} double-colon form */
+/** Matches {{random: A, B, C}} selections: negative lookahead prevents matching {{random::...}} double-colon form */
 const RANDOM_COMMA_REGEX = /\{\{random:(?!:)\s*([^}]+)\}\}/gi;
 
 /** Matches legacy {{random::A::B::C}} selections */
@@ -91,7 +91,7 @@ const HTML_TAG_REGEX =
 //
 // Additional placeholder conventions found in real ST presets that fall
 // outside the official ST macro spec. Some presets rely on ST's regex
-// post-processing to resolve these — since we don't implement the regex
+// post-processing to resolve these, since we don't implement the regex
 // engine, we handle them here as direct replacements instead.
 //
 // Each entry documents the observed preset(s) and rationale.
@@ -388,11 +388,11 @@ function mapStRole(stRole: string): "system" | "user" | "model" {
 /**
  * Resolve all ST macros in a set of preset nodes using two-pass variable resolution.
  *
- * **Pass 1** — Walk all enabled non-marker nodes in node_order, applying
+ * **Pass 1**: Walk all enabled non-marker nodes in node_order, applying
  * `{{setvar::key::value}}` / `{{addvar::key::value}}` declarations into a shared
  * variable map. `setvar` replaces, `addvar` appends.
  *
- * **Pass 2** — Walk all nodes (including markers), resolving:
+ * **Pass 2**: Walk all nodes (including markers), resolving:
  *   - {{getvar::key}} from the variable map
  *   - Content macros ({{personality}}, {{description}}, etc.)
  *   - {{random: A, B, C}} random selection

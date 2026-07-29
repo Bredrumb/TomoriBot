@@ -4,7 +4,7 @@
 // shared avatar by (preset_lineage_id, preset_language), and the main-avatar
 // fan-out reconciler uses the hash to gate Discord guild-avatar PATCHes.
 //
-// This is the avatar analogue of presetSpriteSeed.ts — same content-addressed,
+// This is the avatar analogue of presetSpriteSeed.ts: same content-addressed,
 // upload-once, idempotent model. See docs/subsystems/persona-presets.md.
 
 import { createHash } from "node:crypto";
@@ -22,7 +22,7 @@ const CONTENT_HASH_LENGTH = 12;
 /**
  * Seeds every catalog persona's avatar into shared storage, uploading each image
  * once and stamping `preset_avatar_shared_url` + `preset_avatar_hash` on the
- * matching `persona_presets` row. Never throws — a failed image is logged and
+ * matching `persona_presets` row. Never throws, because a failed image is logged and
  * skipped so a single bad asset cannot abort startup.
  *
  * @param client - Active DB client/transaction
@@ -67,7 +67,7 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> 
   const existingUrl = existing?.preset_avatar_shared_url ?? null;
   let sharedUrl: string;
   if (existingUrl?.endsWith(expectedSuffix)) {
-    // Same content already uploaded — skip the (network) upload, refresh metadata only.
+    // Same content already uploaded, so skip the (network) upload, refresh metadata only.
     sharedUrl = existingUrl;
   } else {
     const uploadedUrl = await uploadPresetAvatarToStorage({

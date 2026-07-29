@@ -41,7 +41,7 @@ type StreamSegmentProcessorDependencies = {
 };
 
 /**
- * Loose detector for "something that LOOKS like a decorated speaker label" — a parenthesized
+ * Loose detector for "something that LOOKS like a decorated speaker label": a parenthesized
  * group followed by a colon, anywhere near the head of a segment. Deliberately far more
  * permissive than parseLeadingRenderModifier (no name allowlist, not anchored to the start)
  * so the diagnostic below fires precisely on the cases where the strict parser refused text
@@ -125,9 +125,9 @@ export class StreamSegmentProcessor {
           : await resolveCopiedRenderModifierTarget(renderModifierMatch.modifier, context, sourceDisplayName);
 
       if (renderTarget) {
-        // Non-identity sprites all share the clean persona username, so Discord —
+        // Non-identity sprites all share the clean persona username, so Discord, so
         // which groups consecutive webhook messages by webhook + username and
-        // ignores the per-message avatar — would render back-to-back sprites under
+        // ignores the per-message avatar, so would render back-to-back sprites under
         // the first sprite's avatar. When a sprite change would collide with the
         // previous message's clean name, fall back to the decorated
         // "Persona (sprite)" name for that one message so Discord treats it as a
@@ -166,7 +166,7 @@ export class StreamSegmentProcessor {
     }
 
     // Opening-label leak guard: a response that OPENS with a speaker label the render-modifier
-    // parse refused (e.g. "Chris (smug): ..." — a user name in the persona's decorated-label
+    // parse refused (e.g. "Chris (smug): ...": a user name in the persona's decorated-label
     // grammar) would otherwise reach Discord verbatim, because the generic speaker guard
     // exempts the opening line and stripLeakedOwnNameLabels only covers the active persona.
     // Runs regardless of llm_stop_speaker_pattern_enabled: the shapes it fires on are
@@ -190,7 +190,7 @@ export class StreamSegmentProcessor {
           this.deps.requestStop(context.channel.id, "speaker_guard");
           return;
         }
-        // Budget exhausted: better a stripped reply than silence — drop the leaked label
+        // Budget exhausted: better a stripped reply than silence, so drop the leaked label
         //    and deliver the body as the active persona.
         log.warn(
           `Stream opening-label leak guard: retry budget exhausted, stripping leaked label "${leak.matchedPrefix.trim()}" and delivering body`,
@@ -275,7 +275,7 @@ export class StreamSegmentProcessor {
     // Copied identities (impersonating a user / another persona) expire at the end
     // of their line so the bot reverts to itself on the next line. Persona sprites
     // instead persist across newlines until a *different* sprite/identity label
-    // appears, because an expression is a sustained visual state — e.g.
+    // appears, because an expression is a sustained visual state: e.g.
     //   "Touko (mad): ARGGHHH!\nFine... I'll do it"
     // keeps the "mad" sprite for the second line, and switching only happens when
     // a new "Touko (regret):" label is declared. Sprites (including is_identity
@@ -357,9 +357,9 @@ export class StreamSegmentProcessor {
    * input that decision depends on, letting a leaked label be attributed to exactly one of:
    *
    * - `isInsideCodeBlock` / `isUserImpersonation` vetoing render modifiers outright.
-   * - A name mismatch — the label's speaker name is absent from the allowlist built from
+   * - A name mismatch: the label's speaker name is absent from the allowlist built from
    *    `botName` + `botNameAliases`.
-   * - Anchor loss — text (notably re-attached orphan punctuation) sits ahead of the label,
+   * - Anchor loss: text (notably re-attached orphan punctuation) sits ahead of the label,
    *    so the `^\s*`-anchored pattern cannot reach it.
    *
    * Fires only when the strict parse failed AND the segment still looks like it carried a
@@ -404,14 +404,14 @@ export class StreamSegmentProcessor {
    * Diagnostic probe for the silent-drop branch: the model emitted a well-formed
    * "Name (modifier):" label, the parser accepted it and stripped it, but neither a sprite
    * nor a copied identity resolved. The message then ships under the default identity with
-   * no sprite and no trace — visually identical to the model never having tried.
+   * no sprite and no trace: visually identical to the model never having tried.
    *
    * Logs the persona the sprite lookup was performed against alongside that persona's actual
    * sprite keys, which distinguishes the two candidate causes:
    *
-   * - Wrong persona — `personaId` is not the persona the model was told to speak as, so its
+   * - Wrong persona, so `personaId` is not the persona the model was told to speak as, so its
    *    sprite keys can never match (the failure mode expected on queued/chained turns).
-   * - Right persona, unknown label — the model invented a sprite key, or the sprite exists
+   * - Right persona, unknown label: the model invented a sprite key, or the sprite exists
    *    but its avatar is unusable (`resolveSpriteIdentity` returning null).
    *
    * @param modifier - The modifier text the model used, e.g. "mad"
@@ -479,14 +479,14 @@ export class StreamSegmentProcessor {
   }
 
   /**
-   * Detects a leaked speaker label at the start of a response segment — a label the
+   * Detects a leaked speaker label at the start of a response segment: a label the
    * render-modifier parse already refused (its source name is not the active persona/aliases).
    *
    * Firing rules, per shape:
-   * 1. Decorated "Name (modifier):" — always a leak. The parenthetical grammar belongs
+   * 1. Decorated "Name (modifier):": always a leak. The parenthetical grammar belongs
    *    exclusively to the active persona (sprites, copied identities), so ANY other name using
    *    it is the model cross-breeding history label formats ("Chris (smug): ...").
-   * 2. Plain "Name:" — a leak only when Name is a known conversation participant (another
+   * 2. Plain "Name:": a leak only when Name is a known conversation participant (another
    *    persona or a user in the conversation). Ordinary prose openings ("Note:", "TL;DR:")
    *    never match a participant and pass through untouched.
    *
@@ -510,7 +510,7 @@ export class StreamSegmentProcessor {
     if (!match) return null;
 
     // A decorated label with an allowed source name is upstream's business (the render-modifier
-    //    parse consumes it, including failed sprite resolutions) — never treat it as a leak here.
+    //    parse consumes it, including failed sprite resolutions), so never treat it as a leak here.
     if (matchesRenderModifierName(match.sourceName, allowedSourceNames)) return null;
 
     // Decorated + disallowed name: unambiguous leak.

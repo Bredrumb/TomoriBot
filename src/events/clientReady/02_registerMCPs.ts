@@ -100,7 +100,7 @@ export default async (): Promise<void> => {
       log.info("Shutting down guild MCP connections...");
       await guildMcpManager.cleanup();
       // Drain any buffered usage stats so a normal restart loses nothing
-      // (plan §4 — graceful shutdown covers the documented crash window).
+      // (plan §4: graceful shutdown covers the documented crash window).
       await statRepository.shutdown();
       process.kill(process.pid, signal);
     };
@@ -113,7 +113,7 @@ export default async (): Promise<void> => {
         const allEnabled = await toolRepository.loadAllEnabledMcpServers();
         if (allEnabled.length > 0) {
           log.info(`[GuildMCP] Dev mode: eager-connecting ${allEnabled.length} enabled guild MCP server(s)...`);
-          // Non-blocking — failures are logged but don't prevent startup
+          // Non-blocking, so failures are logged but don't prevent startup
           guildMcpManager.eagerConnectAll(allEnabled).catch((err) => {
             log.warn("[GuildMCP] Eager connect encountered errors (non-fatal)", err);
           });

@@ -5,7 +5,7 @@
  * layer and EXITS NON-ZERO when any genuine violation exists, so the
  * `bun run vl` "SQL Audit" gate enforces the standard (it previously only
  * printed and always passed). The actual scan lives in
- * `scripts/checks/lib/sqlAudit.ts` — shared with the unit test so the two can
+ * `scripts/checks/lib/sqlAudit.ts`: shared with the unit test so the two can
  * never disagree.
  *
  * Run via `bun run audit-sql`.

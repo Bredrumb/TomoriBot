@@ -7,7 +7,7 @@
  * (these get uploaded to Discord on seed), plus bundled assets under assets/img.
  *
  * Historical marketing screenshots under .github/release/** are intentionally
- * NOT scanned — they are immutable release artifacts, not shipped or runtime art.
+ * NOT scanned because they are immutable release artifacts, not shipped or runtime art.
  *
  * The budget is configurable via MEDIA_SIZE_LIMIT_BYTES (see .env.optional.example).
  * Run `bun run compress-media` to losslessly shrink offenders in place.

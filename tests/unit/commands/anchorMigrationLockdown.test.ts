@@ -28,7 +28,7 @@ describe("anchor migration lock-down", () => {
     it(`forbids ${relativePath} from calling any pre-anchor primitive`, () => {
       const source = readFileSync(resolve(repoRoot, relativePath), "utf8");
       // A word-boundary scan catches imports and call sites alike. A migrated file must
-      // not even import these names — reaching for one is the exact band-aid this guards.
+      // not even import these names: reaching for one is the exact band-aid this guards.
       const offenders = PRE_ANCHOR_PRIMITIVES.filter((name) => new RegExp(`\\b${name}\\b`).test(source));
       expect(offenders).toEqual([]);
     });

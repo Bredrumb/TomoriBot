@@ -181,8 +181,8 @@ async function runPreSchemaServerwideQuotaRenameBridge(client: SQL, migrationPat
  *
  * Used by the pre-schema rename bridge to tell an empty rollback artifact
  * (safe to drop) apart from a populated legacy table (must not be touched).
- * `tableName` is always a hardcoded constant from this module — never user
- * input — so interpolating it into the query is safe.
+ * `tableName` is always a hardcoded constant from this module: never user
+ * input so interpolating it into the query is safe.
  *
  * @param client - Active SQL connection.
  * @param tableName - Fully-trusted, hardcoded `public`-schema table identifier.
@@ -205,7 +205,7 @@ async function countTableRows(client: SQL, tableName: string): Promise<number> {
  * step can reconcile, so we refuse and require human review.
  *
  * No-ops when the pair does not collide (e.g. a legitimate pre-rename database
- * where only the legacy table exists — migration 016 renames it normally).
+ * where only the legacy table exists (migration 016 renames it normally).
  *
  * @param client - Active SQL connection.
  */

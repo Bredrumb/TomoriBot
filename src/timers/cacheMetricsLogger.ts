@@ -136,7 +136,7 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     openrouterOnDemandCapability: getOpenRouterOnDemandCapabilityCacheSize(),
     novelaiSubscription: getNovelaiSubscriptionCacheSize(),
 
-    // Webhook manager (no TTL — watch for unbounded growth)
+    // Webhook manager (no TTL, watch for unbounded growth)
     webhookChannel: webhook.webhookChannel,
     webhookPersona: webhook.webhookPersona,
     webhookMutationLocks: webhook.webhookMutationLocks,
@@ -170,14 +170,14 @@ function emitSnapshot(client: Client): void {
 }
 
 /**
- * Start the cache metrics interval. Only runs in production — these logs are
+ * Start the cache metrics interval. Only runs in production, these logs are
  * intended for CloudWatch Logs Insights and are not useful in local dev.
- * Safe to call multiple times — a subsequent call is a no-op if already running.
+ * Safe to call multiple times, so a subsequent call is a no-op if already running.
  *
  * @param intervalMs - Optional override; defaults to CACHE_METRICS_INTERVAL_MS env or 5 min
  */
 export function initializeCacheMetricsLogger(client: Client, intervalMs?: number): void {
-  // Skip in non-production — these snapshots are for CloudWatch, not local dev
+  // Skip in non-production, so these snapshots are for CloudWatch, not local dev
   if (process.env.RUN_ENV !== "production") {
     return;
   }

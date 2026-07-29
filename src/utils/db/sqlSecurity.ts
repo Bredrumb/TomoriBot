@@ -6,7 +6,7 @@
  *
  * Field whitelists are derived from Zod schema shapes at module load time.
  * Only primary keys, foreign keys used as table anchors, and auto-managed timestamps
- * are explicitly excluded — all other schema fields are allowed automatically.
+ * are explicitly excluded, so all other schema fields are allowed automatically.
  * When new columns are added to a schema, they become writable here without any manual update.
  */
 

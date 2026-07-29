@@ -53,7 +53,7 @@ export function splitSqlStatements(sql: string): string[] {
       let j = i + 1;
       while (j < len) {
         if (sql[j] === "'" && sql[j + 1] === "'") {
-          j += 2; // escaped quote — skip both characters
+          j += 2; // escaped quote: skip both characters
         } else if (sql[j] === "'") {
           j++; // closing quote
           break;
@@ -87,7 +87,7 @@ export function splitSqlStatements(sql: string): string[] {
         continue;
       }
       // Not a dollar-quote (e.g. a bare $1 positional param already inside a
-      // dollar-quoted block we consumed earlier) — fall through to normal char.
+      // dollar-quoted block we consumed earlier): fall through to normal char.
     }
 
     if (ch === ";") {

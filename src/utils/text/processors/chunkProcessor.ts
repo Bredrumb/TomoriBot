@@ -55,9 +55,9 @@ const TERMINAL_PUNCTUATION_REGEX = /[.!?。！？]$/;
  *
  * Two carve-outs return true (= inline); everything else falls back to the default
  * isolation behavior in Pass 4:
- *   - List item — the emoji's line starts with a list marker (e.g. "1. ", "- "),
+ *   - List item: the emoji's line starts with a list marker (e.g. "1. ", "- "),
  *      so list numbering stays attached to the emoji it labels.
- *   - Mid-sentence — non-emoji text exists on both sides of the emoji on the same
+ *   - Mid-sentence: non-emoji text exists on both sides of the emoji on the same
  *      line, AND the text immediately before does not end in sentence-terminating
  *      punctuation. Prevents splitting natural prose like
  *      "I really like :Soup:, don't you?" into 3 messages.
@@ -729,7 +729,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     if (isSemanticBlock) {
       let mergedContent = "";
 
-      // Pop the previous block iff it's already a text block — this is true both for
+      // Pop the previous block iff it's already a text block, so this is true both for
       // raw text and for prior semantic blocks (they get pushed AS text, see below).
       // Chaining works: text → quoted → emoji_inline → bold → text all flows into one chunk.
       if (mergedBlocks.length > 0 && mergedBlocks[mergedBlocks.length - 1].type === "text") {

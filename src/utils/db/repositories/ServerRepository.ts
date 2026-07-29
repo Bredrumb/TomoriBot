@@ -1,5 +1,5 @@
 /**
- * ServerRepository — manages server identity, emojis/stickers, managed webhooks,
+ * ServerRepository: manages server identity, emojis/stickers, managed webhooks,
  * and the personalization blacklist.
  *
  * Also owns the atomic setupServer transaction (creates server + tomori rows).
@@ -9,7 +9,7 @@
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  *
  * Size note: ~1,070 lines after Phase 5.5e Stage C SQL inline. setupServer is a
- * single unavoidably large transaction (~400 SQL lines) — splitting it would
+ * single unavoidably large transaction (~400 SQL lines); splitting it would
  * separate transactional setup context from its server repository owner.
  * See refactor-integrity-audit.md Intentional Large File table.
  */
@@ -1300,7 +1300,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
   /**
    * Batch-remove multiple users from the server's personalization blacklist.
-   * Single round trip via `user_disc_id = ANY(...)` — preferable to looping
+   * Single round trip via `user_disc_id = ANY(...)`: preferable to looping
    * `removeUserBlacklist` when removing several IDs at once.
    *
    * @param userDiscIds - Discord IDs of users to remove from the blacklist
@@ -1739,12 +1739,12 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * `column "server_id" does not exist` error and aborts the whole transaction.
    *
    * Excluded by design:
-   *  - `personas` and the persona subtree (`persona_*` tables) — preserved
-   *  - `server_memories` — preserved per product decision
-   *  - `error_logs` — uses ON DELETE SET NULL; nuke leaves history intact
-   *  - `discord_managed_webhooks` — keyed by `guild_disc_id` (handled separately)
-   *  - `documents` — has nullable `persona_id`; serverwide rows handled separately
-   *  - Global seed catalogs (`nai_presets`, `system_prompt_presets`) — shared
+   *  - `personas` and the persona subtree (`persona_*` tables): preserved
+   *  - `server_memories`: preserved per product decision
+   *  - `error_logs`; uses ON DELETE SET NULL; nuke leaves history intact
+   *  - `discord_managed_webhooks`: keyed by `guild_disc_id` (handled separately)
+   *  - `documents`: has nullable `persona_id`; serverwide rows handled separately
+   *  - Global seed catalogs (`nai_presets`, `system_prompt_presets`): shared
    *    across all servers, have NO `server_id` column; never wipe these.
    */
   private static readonly PRESERVE_MODE_WIPE_TABLES: readonly string[] = [
@@ -1837,7 +1837,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Wipes a server's data. Two modes:
    *
    *  - **Full nuke** (`preservePersonas: false`): single
-   *    `DELETE FROM servers WHERE server_id = ?` — all `ON DELETE CASCADE`
+   *    `DELETE FROM servers WHERE server_id = ?`: all `ON DELETE CASCADE`
    *    children (personas, configs, memories, etc.) drop atomically.
    *
    *  - **Preserve personas** (`preservePersonas: true`): leaves the `servers`
@@ -1848,7 +1848,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    *    (only serverwide rows, i.e. `persona_id IS NULL`).
    *
    * Discord-side webhook cleanup (calling `webhook.delete()` on Discord) is the
-   * caller's responsibility — use `listManagedWebhooksDecrypted` beforehand.
+   * caller's responsibility: use `listManagedWebhooksDecrypted` beforehand.
    *
    * @param serverDiscId - Discord guild snowflake (needed for webhook table)
    * @param options.preservePersonas - When true, keep personas + their subtree
@@ -1857,17 +1857,17 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   async nukeServer(serverId: number, serverDiscId: string, options: { preservePersonas: boolean }): Promise<boolean> {
     try {
       if (!options.preservePersonas) {
-        // Full nuke — cascade-delete via the servers row
+        // Full nuke: cascade-delete via the servers row
         const result = await sql`DELETE FROM servers WHERE server_id = ${serverId}`;
         return result.count > 0;
       }
 
-      // Preserve mode — atomic selective wipe inside a transaction
+      // Preserve mode: atomic selective wipe inside a transaction
       let totalDeleted = 0;
       await sql.transaction(async (tx) => {
         // Wipe every server-scoped table in the maintained list
         for (const table of ServerRepository.PRESERVE_MODE_WIPE_TABLES) {
-          // table name is a constant from a private allowlist, not user input — safe to interpolate
+          // table name is a constant from a private allowlist, not user input, so safe to interpolate
           const result = await tx.unsafe(`DELETE FROM ${table} WHERE server_id = $1`, [serverId]);
           totalDeleted += result.count ?? 0;
         }
@@ -1903,5 +1903,5 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const serverRepository = new ServerRepository();

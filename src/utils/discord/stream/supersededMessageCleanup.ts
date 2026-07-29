@@ -62,7 +62,7 @@ export async function deleteSupersededStreamMessages(
 /**
  * Attempts to delete a webhook-delivered message through the supplied webhook.
  * @returns `true` on success; `false` if the delete failed (caller should fall back to a
- *   channel-level delete — e.g. the webhook was recreated mid-stream and no longer owns the message).
+ *   channel-level delete: e.g. the webhook was recreated mid-stream and no longer owns the message).
  */
 async function tryWebhookDelete(webhook: Webhook, messageId: string, threadId: string | undefined): Promise<boolean> {
   try {

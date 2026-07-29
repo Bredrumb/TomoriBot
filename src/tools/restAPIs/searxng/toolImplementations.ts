@@ -7,7 +7,7 @@
  * symmetrically.
  *
  * Image search additionally downloads + validates URLs and sends them to
- * Discord as attachments — same UX as Brave image search — by piggybacking
+ * Discord as attachments (same UX as Brave image search) by piggybacking
  * on the existing helpers.
  */
 
@@ -26,7 +26,7 @@ const SEARXNG_IMAGE_DISCORD_LIMIT_MB = Math.max(
   1,
   Number.parseInt(process.env.BRAVE_IMAGE_DISCORD_LIMIT_MB ?? "8", 10) || 8,
 );
-// Minimum image size in bytes — rejects tiny placeholders/error images that Discord
+// Minimum image size in bytes, so rejects tiny placeholders/error images that Discord
 // renders as raw file attachments rather than inline media (default 5 KB).
 const SEARXNG_IMAGE_MIN_SIZE_BYTES = Math.max(
   1,
@@ -254,7 +254,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
     }
 
     if (!context?.channel) {
-      // No Discord channel — fall back to text-format listing.
+      // No Discord channel, so fall back to text-format listing.
       return createToolResult(true, "SearXNG image search completed (text fallback)", {
         results: formatSearxngResults(result.data, "images"),
         status: "completed",
@@ -323,7 +323,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       );
     }
 
-    // Build Discord attachments — cap to sendCount after validation
+    // Build Discord attachments, so cap to sendCount after validation
     //    so pool failures don't cause us to send more than intended.
     const toSend = validated.slice(0, sendCount);
     const attachments: AttachmentBuilder[] = [];

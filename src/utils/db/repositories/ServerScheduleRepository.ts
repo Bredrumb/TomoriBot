@@ -1,5 +1,5 @@
 /**
- * ServerScheduleRepository — manages the `reminders` and `random_triggers` tables,
+ * ServerScheduleRepository: manages the `reminders` and `random_triggers` tables,
  * plus the Phase 6 `server_trigger_behavior_configs` and
  * `server_auto_trigger_configs` tables.
  *
@@ -1365,5 +1365,5 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const serverScheduleRepository = new ServerScheduleRepository();

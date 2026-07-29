@@ -37,7 +37,7 @@ const BRAVE_IMAGE_DOWNLOAD_MAX_MB = Math.max(
   BRAVE_IMAGE_DISCORD_LIMIT_MB,
   Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
 );
-// Minimum image size in bytes — rejects tiny placeholders/error images that Discord
+// Minimum image size in bytes, so rejects tiny placeholders/error images that Discord
 // renders as raw file attachments rather than inline media (default 5 KB).
 const BRAVE_IMAGE_MIN_SIZE_BYTES = Math.max(1, Number.parseInt(process.env.IMAGE_MIN_SIZE_BYTES ?? "5120", 10) || 5120);
 

@@ -17,7 +17,7 @@ function makeForwardMessage(overrides: {
   sourceChannelId?: string;
   /** Message returned when the forward reference is re-fetched (nested-forward walk). */
   originMessage?: Message;
-  /** When true, the origin channel cannot be fetched — simulates a missing-permission origin. */
+  /** When true, the origin channel cannot be fetched, so simulates a missing-permission origin. */
   originUnreachable?: boolean;
 }): Message {
   const attachments = new Collection<string, unknown>();
@@ -27,7 +27,7 @@ function makeForwardMessage(overrides: {
 
   const snapshot = {
     // Mirrors discord.js MessageSnapshot: identity fields (id/author/channelId)
-    // are always null — only content/attachments/embeds/etc. survive the forward.
+    // are always null, so only content/attachments/embeds/etc. survive the forward.
     channelId: null,
     content: overrides.snapshotContent ?? "",
     attachments,
@@ -161,7 +161,7 @@ describe("buildForwardContext", () => {
 
   test("recovers media from a forward of a forward", async () => {
     // Regression: Discord's message_snapshots is non-recursive, so forwarding an
-    // already-forwarded message hands the bot an EMPTY snapshot — no text, no media.
+    // already-forwarded message hands the bot an EMPTY snapshot, so no text, no media.
     // The wrapper's own reference still points at the intermediate forward, whose
     // snapshots hold the original image, so the chain must be re-fetched.
     const intermediateForward = makeForwardMessage({
@@ -192,7 +192,7 @@ describe("buildForwardContext", () => {
     expect(result.content).toContain("(with 1 image)");
     expect(result.remoteMediaSourceKind).toBe("forwarded");
     // The OUTERMOST wrapper is what resolves in the current channel, so tools must
-    // key off it — re-resolving it walks the same chain again to reach the bytes.
+    // key off it, so re-resolving it walks the same chain again to reach the bytes.
     expect(result.mediaSourceMessageIds).toEqual(["wrapper-2"]);
     expect(registeredIds).toContain("wrapper-2");
   });

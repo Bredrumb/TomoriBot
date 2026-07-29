@@ -1,16 +1,16 @@
 /**
- * SpeechRepository — manages voice sample CRUD and speech endpoint resolution.
+ * SpeechRepository: manages voice sample CRUD and speech endpoint resolution.
  *
  * Owns tables: voice_samples, custom_endpoints (speech/transcription rows),
  * saved_provider_configs (credential lookup by provider name), and
  * persona_voice_configs.speech_voice_sample_id (persona voice assignment).
  *
- * Note: decryptApiKey is NOT called here — credential decryption is a security
+ * Note: decryptApiKey is NOT called here: credential decryption is a security
  * concern owned by the caller (speechEndpointResolver.ts). This repo returns
  * the raw encrypted key and key_version so callers can decrypt with the
  * appropriate key rotation context.
  *
- * Export contract: toExportShape returns null — voice samples reference
+ * Export contract: toExportShape returns null: voice samples reference
  * server-local files and are not portably exportable across servers.
  */
 import type { CustomEndpointRow, VoiceSampleRow } from "@/types/db/schema";
@@ -212,7 +212,7 @@ export async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: nu
 }
 
 /**
- * SpeechRepository class — satisfies IRepository; export shape is null because
+ * SpeechRepository class satisfies IRepository; export shape is null because
  * voice samples reference server-local files that are not portably exportable.
  */
 export class SpeechRepository implements IRepository<null> {
@@ -225,5 +225,5 @@ export class SpeechRepository implements IRepository<null> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const speechRepository = new SpeechRepository();

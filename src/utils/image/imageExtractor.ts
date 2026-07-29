@@ -23,7 +23,7 @@ export interface ImageUrlInfo {
   mimeType: string;
   /** Human-readable source label for logging (e.g. "attachment: photo.png") */
   source: string;
-  /** Discord proxy URL when known — used to dedupe the same media discovered via
+  /** Discord proxy URL when known: used to dedupe the same media discovered via
    *  multiple paths (e.g. a Components V2 attachment also listed as a candidate). */
   proxyUrl?: string;
 }
@@ -104,7 +104,7 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
   return emojiUrls;
 }
 
-/** The subset of Message fields an image can live in — satisfied by both a full
+/** The subset of Message fields an image can live in: satisfied by both a full
  *  Message and a forwarded MessageSnapshot. */
 type MessageImageSource = Pick<Message, "attachments" | "embeds" | "stickers" | "content" | "components">;
 
@@ -194,10 +194,10 @@ function collectImageUrlsFromSource(
  * 3. Embed thumbnails (fallback for embeds that use thumbnail instead of image)
  * 4. Discord stickers (served as PNG)
  * 5. Custom emojis parsed from message text
- * 6. Components V2 media (Media Gallery / Thumbnail / File items) — required for
+ * 6. Components V2 media (Media Gallery / Thumbnail / File items): required for
  *    bot-generated images, whose attachment is referenced only inside a component
  *    and therefore never appears in the top-level attachment/embed sources above.
- * 7. Forwarded message snapshots — a forward wrapper has EMPTY top-level
+ * 7. Forwarded message snapshots: a forward wrapper has EMPTY top-level
  *    content/attachments/embeds; all its media lives inside `messageSnapshots`,
  *    which is re-scanned with sources 1-6. Nested forwards flatten to an empty
  *    snapshot, so the chain is resolved first (see {@link resolveForwardChain}).
@@ -300,7 +300,7 @@ export async function resolveMessageImageUrls(
  * covers attachments, embeds, stickers, custom emojis, Components V2 media,
  * and forwarded-message snapshots.
  *
- * Each source is fetched independently — individual failures are logged and skipped
+ * Each source is fetched independently, so individual failures are logged and skipped
  * so that other images in the same message can still be processed.
  *
  * @throws Error if the message is not found or no images could be processed

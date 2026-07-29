@@ -117,7 +117,7 @@ export class StreamErrorUi {
     tipKeys: string[];
     color: ColorResolvable;
   } {
-    // Detect OpenRouter and whether a fallback chain already exists — both gate conditional tips.
+    // Detect OpenRouter and whether a fallback chain already exists: both gate conditional tips.
     const isOpenRouter = provider.getProviderInfo().name === "openrouter";
     const hasFallbackModels = (context.tomoriState.fallback_llms?.length ?? 0) > 0;
     const modelFallbackTip = hasFallbackModels ? [] : ["genai.tips.model_fallback"];
@@ -147,7 +147,7 @@ export class StreamErrorUi {
       };
     }
 
-    // Model errors (unsupported/unknown/deprecated model IDs) — steer toward a supported model.
+    // Model errors (unsupported/unknown/deprecated model IDs): steer toward a supported model.
     if (isProviderModelError(providerError)) {
       return {
         titleKey: "genai.stream.model_error_title",
@@ -157,7 +157,7 @@ export class StreamErrorUi {
     }
 
     // Credit-affordability ceiling (e.g. OpenRouter 402): the account cannot pay for the
-    //    requested max_tokens. Adding history back does not help — steer toward lowering the
+    //    requested max_tokens. Adding history back does not help, so steer toward lowering the
     //    output-token cap or topping up credits. Checked before the context-length branch
     //    because the 402 copy is the more specific signal.
     if (isCreditAffordabilityError(providerError)) {
@@ -244,7 +244,7 @@ export class StreamErrorUi {
 
   /**
    * Builds the embed description for a provider error: a friendly, localized headline followed by
-   * the raw provider detail. The detail is appended for ALL error types — not just model errors —
+   * the raw provider detail. The detail is appended for ALL error types (not just model errors)
    * so providers that map known codes to hardcoded locale strings (e.g. OpenRouter) no longer hide
    * the actual provider message from the user.
    * @param provider - The active stream provider (supplies the localized headline).

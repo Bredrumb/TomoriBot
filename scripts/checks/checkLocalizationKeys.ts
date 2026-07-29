@@ -72,7 +72,7 @@ interface CommandDescriptionViolation {
 /**
  * Discord enforces different length caps for each modal component slot. These are derived
  * from `src/utils/discord/ui/interactionCore.ts` (setLabel → 45, setPlaceholder → 100,
- * setTitle → 45) — `descriptionKey` shares the placeholder cap because the code at
+ * setTitle → 45); `descriptionKey` shares the placeholder cap because the code at
  * line 664 truncates it via `description.substring(0, 100)` when no explicit placeholder
  * is supplied.
  */
@@ -83,7 +83,7 @@ const MODAL_KIND_LIMITS = {
   placeholder: 100,
   // Discord string-select option fields (`StringSelectMenuOptionBuilder.setLabel`/`setDescription`)
   // both cap at 100 chars. These flow through `label:`/`description:` props inside an `options:`
-  // array — objects shaped `{ value, label, description }` with no `customId`/`labelKey`, so the
+  // array: objects shaped `{ value, label, description }` with no `customId`/`labelKey`, so the
   // modal-component tracer below misses them. Discord silently truncates overruns in the picker UI.
   optionLabel: 100,
   optionDescription: 100,
@@ -293,7 +293,7 @@ function isValidLocalizationKey(key: string): boolean {
   }
 
   // Must start with a known top-level locale prefix
-  // This list is derived from the top-level keys in the locale files —
+  // This list is derived from the top-level keys in the locale files, so
   // update it whenever a new top-level namespace is added to the locale object
   const validPrefixes = [
     "commands",
@@ -442,7 +442,7 @@ function extractStringValues(obj: unknown, prefix = ""): Map<string, string> {
     return values;
   }
 
-  // Arrays are opaque leaf values — skip recursion to avoid index keys like "key.0", "key.1"
+  // Arrays are opaque leaf values, so skip recursion to avoid index keys like "key.0", "key.1"
   if (Array.isArray(obj)) return values;
 
   if (typeof obj === "object" && obj !== null) {
@@ -523,7 +523,7 @@ async function checkModalDescriptionLengths(
 ): Promise<ModalDescriptionViolation[]> {
   const violations: ModalDescriptionViolation[] = [];
 
-  // Discord modal placeholder constraint — `setPlaceholder` accepts up to 100 chars.
+  // Discord modal placeholder constraint: `setPlaceholder` accepts up to 100 chars.
   // Anything beyond is silently truncated by `interactionCore.ts` via `substring(0, 100)`,
   // so we treat >100 as a hard violation rather than allowing a smaller safety margin.
   const MAX_LENGTH = 100;
@@ -568,7 +568,7 @@ async function checkModalDescriptionLengths(
  *
  * Caveat: a naive character-by-character brace counter doesn't strip braces inside strings,
  * template literals, or comments. In practice this is safe for modal field specs because
- * locale keys are short dot-separated identifiers — no embedded braces — and the surrounding
+ * locale keys are short dot-separated identifiers (no embedded braces), and the surrounding
  * TS code in command files keeps each modal field on its own object literal block.
  */
 function findEnclosingObjectRange(content: string, idx: number): { start: number; end: number } | null {
@@ -602,8 +602,8 @@ function findEnclosingObjectRange(content: string, idx: number): { start: number
 /**
  * Source-traces locale keys that flow into Discord modal components at runtime. Unlike
  * the name-pattern checks above (`isModalDescriptionKey`, etc.), this scanner identifies
- * keys by their *usage* — finding object literals that match the `ModalComponent` shape
- * from `src/types/discord/modal.ts` — and binds each key to its Discord cap based on the
+ * keys by their *usage*, finding object literals that match the `ModalComponent` shape
+ * from `src/types/discord/modal.ts`, and binds each key to its Discord cap based on the
  * prop it's assigned to.
  *
  * Detection rules:
@@ -615,7 +615,7 @@ function findEnclosingObjectRange(content: string, idx: number): { start: number
  *    - `descriptionKey: "literal"` → description (cap 100; truncated as placeholder)
  *    - `placeholder: "commands.*"` → placeholder (cap 100; only `commands.*` literals
  *      are treated as locale keys, matching the runtime check at interactionCore.ts:671-674)
- * 3. String-select option object — `label: localizer(locale, "literal")` whose enclosing
+ * 3. String-select option object: `label: localizer(locale, "literal")` whose enclosing
  *    literal also has a `value:` prop (the `{ value, label, description }` shape). These are
  *    the checkbox/select choices rendered inside modals and message components. Within it:
  *    - `label: localizer(…, "literal")` → optionLabel (cap 100)
@@ -651,7 +651,7 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
       continue;
     }
 
-    // modalTitleKey is unambiguous — no enclosing-scope check needed.
+    // modalTitleKey is unambiguous no enclosing-scope check needed.
     const titlePattern = /\bmodalTitleKey\s*:\s*["']([a-zA-Z0-9._-]+)["']/g;
     let titleMatch: RegExpExecArray | null = titlePattern.exec(content);
     while (titleMatch !== null) {
@@ -712,7 +712,7 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
 
 /**
  * Resolves each traced modal usage against the locale strings and flags any whose value
- * exceeds the Discord cap for its slot. Skips keys missing from a locale — the parity
+ * exceeds the Discord cap for its slot. Skips keys missing from a locale because the parity
  * check already covers those.
  */
 async function checkModalComponentUsageLengths(
@@ -1104,7 +1104,7 @@ function extractPipeEncodedLocaleKeys(content: string, availableKeys: Set<string
  * Keys that are provably used at runtime but cannot be detected by static regex analysis
  * because their values come from TypeScript type constraints or object key enumeration.
  * Example: `commands.conditioning.shared.${type}_footer` where type ∈ ConditioningType
- * which is a Zod enum — the values come from a Record<ConditioningType, ...> object
+ * which is a Zod enum; the values come from a Record<ConditioningType, ...> object
  * whose keys cannot be reliably traced back to the template variable without type inference.
  */
 const KNOWN_DYNAMIC_LOCALE_KEYS = new Set([
@@ -1249,7 +1249,7 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
 
   const patterns = [
     /(?:titleKey|descriptionKey|nameKey|labelKey|modalTitleKey|itemLabelKey):\s*["']([a-zA-Z0-9._-]+)["']/g,
-    // localizer() calls — first arg can be a string literal ("en-US") OR a variable (locale)
+    // localizer() calls: first arg can be a string literal ("en-US") OR a variable (locale)
     /localizer\s*\(\s*(?:"[^"]*"|'[^']*'|\w+)\s*,\s*["']([a-zA-Z0-9._-]+)["']/g,
     // Quoted strings that look like localization keys (dot-separated paths).
     // Allow 2-segment keys like "general.cancel" in addition to deeper paths.
@@ -1502,7 +1502,7 @@ function displayResults(results: AnalysisResult): void {
   }
 
   if (results.modalUsageViolations.length > 0) {
-    // Group by kind so each Discord cap is its own section — readers see "all label
+    // Group by kind so each Discord cap is its own section; readers see "all label
     // violations" together rather than mixed in with placeholders and titles.
     const KIND_HEADERS: Record<ModalKind, string> = {
       title: "📏 MODAL TITLE USAGE VIOLATIONS (setTitle cap: ≤45 chars)",

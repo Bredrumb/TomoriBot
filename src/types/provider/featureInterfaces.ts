@@ -195,7 +195,7 @@ export interface SupportsNativeImageGeneration {
 export interface ProviderNativeVideoReference {
   mimeType: string;
   data: string; // Base64-encoded image data (used when url is not available)
-  url?: string; // Original source URL — preferred over base64 for remote APIs to avoid body size limits
+  url?: string; // Original source URL ; preferred over base64 for remote APIs to avoid body size limits
   fallbackUrl?: string;
 }
 
@@ -209,7 +209,7 @@ export interface ProviderNativeVideoGenerationRequest {
   aspectRatio?: string;
   durationSeconds?: number;
   /**
-   * Target frames-per-second for the generated video. Optional — most hosted providers
+   * Target frames-per-second for the generated video. Optional : most hosted providers
    * (Google Veo, OpenRouter, Z.ai) do not expose an FPS control and silently ignore this.
    * Primarily consumed by custom ComfyUI workflows via the `TOMORI_VIDEO_FPS` placeholder.
    */
@@ -227,7 +227,7 @@ export interface ProviderNativeVideoGenerationRequest {
 
 /** Result of a native video generation operation */
 export interface ProviderNativeVideoGenerationResult {
-  videoData: Buffer | null; // Raw MP4 bytes (not base64 — videos are too large)
+  videoData: Buffer | null; // Raw MP4 bytes (not base64 : videos are too large)
   mimeType: string | null;
   filename?: string;
   durationSeconds?: number;

@@ -1,9 +1,9 @@
 /**
- * FeloEngine — last-resort text search using Felo AI via the DDG MCP server.
+ * FeloEngine : last-resort text search using Felo AI via the DDG MCP server.
  *
  * Only invoked when both Brave and DuckDuckGo proper have failed. Felo is
  * already used inside DuckDuckGoHandler.processWebSearch as a transparent
- * fallback for DDG rate limits — this engine exists for the rarer case
+ * fallback for DDG rate limits , so this engine exists for the rarer case
  * where DDG itself cannot even reach its MCP server but Felo can.
  */
 

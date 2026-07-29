@@ -1,10 +1,10 @@
 /**
- * LlmOverrideRepository — manages channel/persona LLM override assignments and fallback refs.
+ * LlmOverrideRepository: manages channel/persona LLM override assignments and fallback refs.
  *
  * Covered tables: channel_llm_overrides, persona_configs (llm_id column),
  * server_model_configs (fallback_llm_ids), server_chat_configs (fallback_model_refs).
  *
- * No IRepository implementation — override state is transient and not exported per-server.
+ * No IRepository implementation, so override state is transient and not exported per-server.
  */
 import type { FallbackModelRef, LlmRow } from "@/types/db/schema";
 import { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } from "@/utils/cache/channelLlmCacheStore";
@@ -437,7 +437,7 @@ export class LlmOverrideRepository {
 
       if (deadChannelIds.length === 0) return 0;
 
-      // Avoid ANY($1) array binding — Bun SQL intermittently fails with 08P01 on array parameters.
+      // Avoid ANY($1) array binding, because Bun SQL intermittently fails with 08P01 on array parameters.
       const placeholders = deadChannelIds.map((_: string, i: number) => `$${i + 2}`).join(", ");
       await sql.unsafe(
         `DELETE FROM channel_llm_overrides WHERE server_id = $1 AND channel_disc_id IN (${placeholders})`,

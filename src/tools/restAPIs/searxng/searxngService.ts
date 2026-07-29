@@ -4,7 +4,7 @@
  * Direct HTTP integration with a self-hosted SearXNG instance. SearXNG
  * normalizes results from upstream engines (Google, Bing, DDG, Brave,
  * Wikipedia, etc.) and exposes a single `/search` endpoint that takes
- * a `categories=` parameter — so unlike Brave (4 endpoints) all supported
+ * a `categories=` parameter, so unlike Brave (4 endpoints) all supported
  * search modes ride one HTTP call here.
  *
  * Availability gates on whether `SEARXNG_BASE_URL` is set AND the
@@ -29,7 +29,7 @@ const USER_AGENT =
 // Per-request timeout. Matches the 5s engine-budget from the migration plan.
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.WEB_SEARCH_TIMEOUT_MS ?? "5000", 10) || 5000);
 
-// Cache duration for the "SearXNG reachable" probe — avoids re-probing on every
+// Cache duration for the "SearXNG reachable" probe, so avoids re-probing on every
 //    LLM tool turn while still allowing recovery within a minute when the sidecar
 //    comes back online.
 const HEALTHCHECK_CACHE_MS =
@@ -111,7 +111,7 @@ async function makeSearxngRequest(
 
   const timeoutMs = config.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
-  // Build query-string. SearXNG returns HTML by default — explicitly request JSON.
+  // Build query-string, so SearXNG returns HTML by default, explicitly request JSON.
   const url = new URL(`${baseUrl}/search`);
   url.searchParams.append("format", "json");
   for (const [key, value] of Object.entries(params)) {
@@ -171,7 +171,7 @@ async function makeSearxngRequest(
 }
 
 /**
- * Generic search — pass any category supported by your SearXNG config.
+ * Generic search: pass any category supported by your SearXNG config.
  */
 export async function searxngSearch(
   query: string,

@@ -208,7 +208,7 @@ async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<vo
     if (health === "healthy") return;
     if (health === "unhealthy") throw new Error(`Container "${containerName}" reported unhealthy.`);
 
-    // No Docker healthcheck on this container — fall back to HTTP probe.
+    // No Docker healthcheck on this container, so fall back to HTTP probe.
     if (health === "" && httpHealthUrl) {
       try {
         const res = await fetch(httpHealthUrl, { signal: AbortSignal.timeout(3_000) });
@@ -329,7 +329,7 @@ async function main(): Promise<void> {
   });
   childProcesses.push(bot);
 
-  // Graceful shutdown — kill all managed processes on Ctrl+C.
+  // Graceful shutdown because kill all managed processes on Ctrl+C.
   let isShuttingDown = false;
   const shutdown = () => {
     if (isShuttingDown) return;

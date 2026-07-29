@@ -239,7 +239,7 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   validateImportFile: { repoVar: "importRepository", methodName: "validateImportFile" },
 };
 
-// Types that remain in index.ts — only need import path kept as-is
+// Types that remain in index.ts: only need import path kept as-is
 const KNOWN_TYPES = new Set(["OpenRouterModelScope", "ImportValidationResult", "ImportFileType"]);
 
 const REPO_INSTANCES = new Set([
@@ -443,7 +443,7 @@ for (const filePath of files) {
 
   if (fileFuncs.size === 0) {
     skipped++;
-    continue; // Only imports repo instances or types — nothing to drain
+    continue; // Only imports repo instances or types: nothing to drain
   }
 
   let updated = source;

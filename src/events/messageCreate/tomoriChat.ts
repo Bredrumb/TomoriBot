@@ -111,7 +111,7 @@ export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionD
   return "run";
 }
 
-/** Thin event-dispatch adapter — satisfies EventFunction(client, ...args) called by the event loader. */
+/** Thin event-dispatch adapter: satisfies EventFunction(client, ...args) called by the event loader. */
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
   await tomoriChat({ client, message, isFromQueue: false });
 }

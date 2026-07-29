@@ -1,5 +1,5 @@
 /**
- * Regression harness — persona-eligibility batched queries.
+ * Regression harness: persona-eligibility batched queries.
  *
  * This is the parity test the eligibility-filter plan requires: for every Class B
  * family, the batched availability query must agree with the loader it filters,
@@ -8,7 +8,7 @@
  *
  * Unlike a mocked-SQL shape test, this exercises the real repositories against a
  * disposable Postgres fixture, so a genuine divergence between a batched query and
- * its loader — the exact bug class the filter exists to prevent — fails here.
+ * its loader (the exact bug class the filter exists to prevent) fails here.
  *
  * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md).
  */
@@ -182,7 +182,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
   });
 
   it("personaIdsWithDocuments agrees with loadDocuments on every fixture persona", async () => {
-    if (!hasDocuments) return; // RAG schema absent (no pgvector) — skip document parity
+    if (!hasDocuments) return; // RAG schema absent (no pgvector), so skip document parity
     const batch = await serverMemoryRepository.personaIdsWithDocuments(serverId);
     for (const persona of [pOwn, pEmpty, pPointer, pShareA, pShareB]) {
       const loaderNonEmpty = (await serverMemoryRepository.loadDocuments(serverId, persona.persona_id)).length > 0;
@@ -192,7 +192,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
   });
 
   it("personaIdsWithHistoryDocuments agrees with loadHistoryDocuments and excludes upload-only personas", async () => {
-    if (!hasDocuments) return; // RAG schema absent (no pgvector) — skip history parity
+    if (!hasDocuments) return; // RAG schema absent (no pgvector), so skip history parity
     const batch = await serverMemoryRepository.personaIdsWithHistoryDocuments(serverId);
     for (const persona of [pOwn, pEmpty, pPointer, pShareA, pShareB]) {
       const loaderNonEmpty =
@@ -247,7 +247,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
   });
 
   it("personaIdsWithSprites agrees with listForPersona, including the zero-own-row preset pointer", async () => {
-    if (!hasSprites) return; // RAG/sprite schema absent (no pgvector) — skip sprite parity
+    if (!hasSprites) return; // RAG/sprite schema absent (no pgvector), so skip sprite parity
     const personas = [pOwn, pEmpty, pPointer, pShareA, pShareB];
     const batch = await personaSpriteRepository.personaIdsWithSprites(personas.map((p) => p.persona_id));
     for (const persona of personas) {

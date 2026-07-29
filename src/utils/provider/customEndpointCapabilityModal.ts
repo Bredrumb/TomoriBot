@@ -666,7 +666,7 @@ export function buildCapabilityEditModalComponents(
       ];
 
       if (isComfyUi) {
-        // Slot 4: workflow upload (replaces auth_token for ComfyUI — token changes are rare,
+        // Slot 4: workflow upload (replaces auth_token for ComfyUI: token changes are rare,
         // workflow iteration is the common edit operation for self-hosted ComfyUI instances).
         baseComponents.push({
           customId: WORKFLOW_UPLOAD_ID,

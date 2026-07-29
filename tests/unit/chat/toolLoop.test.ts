@@ -25,7 +25,7 @@ let clearStopRequestCalls = 0;
 let standardEmbedCalls: Array<{ titleKey?: string; descriptionKey?: string }> = [];
 
 // --------------------------------------------------------------------------
-// Module mocks — all must appear before the first lazy import of toolLoop.ts
+// Module mocks: all must appear before the first lazy import of toolLoop.ts
 // --------------------------------------------------------------------------
 
 mock.module("@/utils/misc/logger", () => ({
@@ -94,12 +94,12 @@ mock.module("@/utils/provider/providerInfoRegistry", () => ({
 }));
 
 // Pass through to the REAL deliberateToolMode (captured at link time above).
-// toolLoop.ts never calls these functions — it reads deliberate-mode data from
-// `context` — so the loop tests don't need a behavioral stub here; the mock
+// toolLoop.ts never calls these functions: it reads deliberate-mode data from
+// `context` so the loop tests don't need a behavioral stub here; the mock
 // exists only to satisfy transitive linking. Returning the real exports keeps
 // the mock harmless if it leaks into a later file in the monolithic `bun test`
 // (e.g. deliberateToolMode.test.ts, which asserts the real behavior). Spreading
-// a statically-captured namespace is safe — unlike `await import()` inside a
+// a statically-captured namespace is safe; unlike `await import()` inside a
 // factory, it was evaluated before any mock.module call took effect.
 mock.module("@/utils/tools/deliberateToolMode", () => ({ ...realDeliberateToolMode }));
 
@@ -238,7 +238,7 @@ function makeProviderConfig(): ProviderConfig {
   return { model: "test-model", apiKey: "test-key", temperature: 0.7 };
 }
 
-/** Function-call stream result — simulates the provider requesting a tool. */
+/** Function-call stream result: simulates the provider requesting a tool. */
 function makeFunctionCallResult(
   name: string,
   args: Record<string, unknown> = {},
@@ -383,7 +383,7 @@ describe("runToolLoop — contract tests", () => {
       makeFunctionCallResult("bad_tool", {}),
       { status: "completed", accumulatedText: "sorry about that" },
     ]);
-    // One failure — below the consecutive-error cap (3).
+    // One failure: below the consecutive-error cap (3).
     toolExecuteQueue.push({ success: false, error: "something broke" });
 
     const context = makeContext();
@@ -489,7 +489,7 @@ describe("runToolLoop — contract tests", () => {
   it("malformed function-call (missing name) aborts with 'error' without dispatching any tool", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
-    // data has no `name` field — should trigger the validation abort path.
+    // data has no `name` field, so should trigger the validation abort path.
     const { provider } = makeProvider([{ status: "function_call", data: {} }]);
 
     const context = makeContext();
@@ -551,7 +551,7 @@ describe("runToolLoop — contract tests", () => {
     const context = makeContext();
     const result = await runToolLoop(makeParams(context, provider));
 
-    // The loop continued to a follow-up provider call — long-term memory
+    // The loop continued to a follow-up provider call, so long-term memory
     // must NOT behave as an end-turn tool.
     expect(result.status).toBe("completed");
     expect(capturedHistories).toHaveLength(2);
@@ -622,7 +622,7 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("completed");
     expect(capturedHistories).toHaveLength(3);
 
-    // The third provider call sees both entries, each with its own text —
+    // The third provider call sees both entries, each with its own text:
     // no duplication across iterations (fresh stream state per streamOnce).
     const thirdHistory = capturedHistories[2] as Array<{
       functionCall: { name: string };

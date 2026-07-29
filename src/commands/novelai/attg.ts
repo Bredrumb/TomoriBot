@@ -46,7 +46,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * 2. Load all personas for the server
  * 3. Paginated persona selector (preserves button interaction for modal opening)
  * 4. Five-field modal for Author, Title, Tags, Genre, Stars
- * 5. Validate Stars field (must be 1–5 or empty)
+ * 5. Validate Stars field (must be 1-5 or empty)
  * 6. All empty → clear ATTG columns for persona (set to NULL)
  * 7. Otherwise → write non-empty values to DB and invalidate cache
  * 8. Reply with success or cleared embed

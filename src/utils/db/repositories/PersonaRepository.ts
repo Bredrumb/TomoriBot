@@ -1,5 +1,5 @@
 /**
- * PersonaRepository — manages the `personas` and persona resolution tables.
+ * PersonaRepository: manages the `personas` and persona resolution tables.
  *
  * Owns TomoriState loading (composite persona + config + memories read) and
  * all writes to the `personas` table. Configuration writes live in
@@ -178,7 +178,7 @@ const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
 ]);
 
 /**
- * A main persona whose Discord guild avatar is out of date with its preset —
+ * A main persona whose Discord guild avatar is out of date with its preset:
  * the unit of work consumed by the background preset-avatar fan-out reconciler.
  */
 export type UnsyncedMainPointer = {
@@ -1189,7 +1189,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Records that a server's main persona guild avatar is now in sync with its
-   * preset — call this immediately after a SUCCESSFUL guild-avatar PATCH at an
+   * preset; call this immediately after a SUCCESSFUL guild-avatar PATCH at an
    * apply site (`/config setup`, `/persona default`). It stamps
    * `applied_avatar_hash = preset_avatar_hash` so the background fan-out
    * reconciler skips this persona until the catalog art actually changes again
@@ -1226,7 +1226,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Loads every server whose active main persona is an unforked preset pointer
    * and whose last-applied avatar hash differs from its preset's current avatar
-   * hash — exactly the work set for the background preset-avatar fan-out
+   * hash: exactly the work set for the background preset-avatar fan-out
    * reconciler. Materialized personas (`is_pointer = false`) and presets without
    * a seeded avatar are excluded by the join/predicates.
    *
@@ -1385,7 +1385,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Replace the persona's trigger_words list with the given remaining set.
-   * Upserts into `persona_configs` — if no row exists yet, one is created
+   * Upserts into `persona_configs`, so if no row exists yet, one is created
    * (matches addTrigger's behavior; the caller no longer needs a guarantor INSERT).
    *
    * @param personaId          - Internal persona DB ID
@@ -2180,7 +2180,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     await this.copyPresetSpritesWithClient(client, personaId, pointerLineageId, pointerLanguage);
     // Freeze the alter avatar by reference too: a pointer alter live-resolves the
     // shared preset avatar, so once it materializes it must keep that exact
-    // reference (still the immutable presets/ URL — no byte duplication, and the
+    // reference (still the immutable presets/ URL: no byte duplication, and the
     // delete guard still protects it). Mains deliver via the guild avatar, so
     // only fill this for alters that have no avatar of their own.
     if (preset.preset_avatar_shared_url) {
@@ -2289,7 +2289,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    *
    * An unforked pointer ALTER with no avatar of its own live-resolves the shared
    * preset avatar (`preset_avatar_shared_url`), so catalog avatar edits fan out
-   * to it on the next reseed — exactly like preset sprites/triggers/prompt. The
+   * to it on the next reseed; exactly like preset sprites/triggers/prompt. The
    * resolution happens once at load time, so every downstream avatar consumer
    * reads it from the cache with no hot-path query, and the existing pointer
    * cache invalidation refreshes it after a seed update. Main personas deliver
@@ -2590,7 +2590,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // Resolve fallback model chain — prefer fallback_model_refs (new), fall back to fallback_llm_ids (legacy)
+      // Resolve fallback model chain: prefer fallback_model_refs (new), fall back to fallback_llm_ids (legacy)
       const rawFallbackIds = configData.fallback_llm_ids;
       const fallbackLlmIds = configData.fallback_llm_ids;
       const fallbackLlms = fallbackLlmIds.length > 0 ? await llmModelRepo.getLlmsByIds(fallbackLlmIds) : [];
@@ -3108,10 +3108,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * same word would route to the main persona AND every alter at once. Here we
    * award each trigger to exactly one persona by priority:
    *
-   *   1. Main persona(s) (`is_alter = false`) — they additionally reserve the
+   *   1. Main persona(s) (`is_alter = false`): they additionally reserve the
    *      configured base trigger words even if their stored list omits them, so
    *      an alter can never steal the bot's own name regardless of server locale.
-   *   2. Alters in creation order (ascending `persona_id`) — first created wins a
+   *   2. Alters in creation order (ascending `persona_id`): first created wins a
    *      contested word; later personas drop it.
    *
    * Each persona keeps only the triggers no higher-priority persona already owns;
@@ -3191,7 +3191,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const validTomoriData = tomoriSchema.partial().parse(tomoriData);
 
       // Extract field names and values for the SQL query.
-      // Filter to only keys present in the original input — Zod injects defaults
+      // Filter to only keys present in the original input, because Zod injects defaults
       // for all schema fields with .default(), which would incorrectly expand the
       // SET clause (e.g. attribute_list: [] would overwrite existing data).
       const fields = Object.keys(validTomoriData).filter((key) => key !== "persona_id" && key in tomoriData);
@@ -3230,7 +3230,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       const finalPlaceholderIndex = values.length + 1;
       values.push(personaId);
 
-      // Execute the UPDATE using sql.unsafe() with the values array (not spread —
+      // Execute the UPDATE using sql.unsafe() with the values array (not spread, because
       // Bun SQL expects a single array argument, not individual arguments).
       const result = await sql.unsafe(
         `
@@ -3285,5 +3285,5 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const personaRepository = new PersonaRepository();

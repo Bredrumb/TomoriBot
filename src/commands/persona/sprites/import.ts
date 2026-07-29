@@ -2,8 +2,8 @@
  * Persona Sprite Import Command (`/persona sprites import`)
  *
  * Imports a sprite archive (`.zip`, produced by `/persona sprites export`) into
- * a chosen persona. Uses a single modal — persona string-select plus a file
- * upload field — mirroring `/persona sprites add`.
+ * a chosen persona. Uses a single modal: persona string-select plus a file
+ * upload field: mirroring `/persona sprites add`.
  *
  * Behavior decisions:
  *  - Name conflicts OVERWRITE the existing sprite (image + metadata).
@@ -174,7 +174,7 @@ export async function execute(
     }
 
     // Reserve one import-operation quota slot for the whole batch (NOT one
-    //    avatar-quota slot per sprite — a batch import is a single operation).
+    //    avatar-quota slot per sprite: a batch import is a single operation).
     const quotaReserve = reserveImportQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt

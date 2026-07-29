@@ -2,7 +2,7 @@
  * Shared Discord avatar/nickname rate-limit detection.
  *
  * Discord throttles guild member avatar (and nickname) changes more aggressively
- * than its documented buckets — beyond a plain HTTP 429 it can return a 200-level
+ * than its documented buckets: beyond a plain HTTP 429 it can return a 200-level
  * error envelope whose `errors.avatar`/`errors.nick` carry an `AVATAR_RATE_LIMIT`
  * code, or a message mentioning a rate limit. Both `/persona import` (immediate,
  * best-effort apply) and the preset-avatar fan-out reconciler must treat any of

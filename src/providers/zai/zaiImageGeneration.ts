@@ -39,7 +39,7 @@ export async function generateZaiNativeImage(
   const apiModel = toZaiApiModelName(request.model);
   const size = ASPECT_RATIO_TO_SIZE[request.aspectRatio] ?? DEFAULT_SIZE;
 
-  // Log warning if reference images were provided — Z.ai doesn't support img2img
+  // Log warning if reference images were provided, so Z.ai doesn't support img2img
   if (request.referenceImages && request.referenceImages.length > 0) {
     log.warn(
       "Z.ai image generation does not support reference images (img2img). Proceeding with text-only generation.",

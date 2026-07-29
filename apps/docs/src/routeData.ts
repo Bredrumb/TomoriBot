@@ -50,7 +50,7 @@ function entryExists(baseId: string, locale: "" | "ja"): boolean {
  * @returns A cleaned description string, or `undefined` when no prose exists.
  */
 function deriveDescription(body: string, maxLength: number): string | undefined {
-  // Strip HTML comments up front — they can span multiple lines, so the
+  // Strip HTML comments up front because they can span multiple lines, so the
   // line-based filtering below cannot reliably skip their continuations.
   const lines = body.replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/);
   const paragraph: string[] = [];
@@ -119,7 +119,7 @@ function deriveDescription(body: string, maxLength: number): string | undefined 
  *    paragraph whenever the frontmatter has no explicit `description`. A
  *    hand-written `description:` in frontmatter always wins (Starlight emits
  *    it before this middleware runs, so we simply do nothing in that case).
- * - Marks internal `wiki/` pages as `noindex` — they are hidden from the
+ * - Marks internal `wiki/` pages as `noindex` because they are hidden from the
  *    sidebar and are maintainer-facing, so they should not appear in search
  *    results or compete with the user-facing pages.
  * - Emits hreflang alternate links for pages that exist in both English and
@@ -141,7 +141,7 @@ export const onRequest = defineRouteMiddleware((context) => {
   }
 
   // hreflang pairs. Fallback pages (ja URL serving English content) are NOT
-  // pairs — only emit when a real translated source file exists, otherwise
+  // pairs only emit when a real translated source file exists, otherwise
   // Google would be told duplicate English content is "the Japanese version".
   const isJa = entry.id === "ja" || entry.id.startsWith("ja/");
   const baseId = isJa ? entry.id.replace(/^ja\/?/, "") : entry.id;

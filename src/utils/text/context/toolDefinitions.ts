@@ -66,7 +66,7 @@ async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promi
   const { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(provider, toolStateForContext);
 
   // Serialize to full native schemas (built-in + global/guild MCP) via the
-  //    OpenAI-compatible adapter — the same shape that lands in `config.tools`.
+  //    OpenAI-compatible adapter: the same shape that lands in `config.tools`.
   const adapter = new OpenAICompatibleToolAdapter(provider);
   return adapter.getAllToolsInProviderFormat(builtInTools, tomoriState.server_id, mcpFunctionNames);
 }

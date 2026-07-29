@@ -112,7 +112,7 @@ export async function execute(
     return;
   }
 
-  // NOTE: No deferReply here — promptWithPaginatedModal must be the first
+  // NOTE: No deferReply here: promptWithPaginatedModal must be the first
   // acknowledgment. Pre-modal checks are cache-backed and complete within 3 seconds.
 
   try {
@@ -160,7 +160,7 @@ export async function execute(
     ];
 
     // Show modal: persona select, respond_to_self select, optional prompt
-    // (This is the first interaction acknowledgement — no deferReply before this)
+    // (This is the first interaction acknowledgement; no deferReply before this)
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.config.random-trigger.add.modal_title",

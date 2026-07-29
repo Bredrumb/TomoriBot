@@ -101,7 +101,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // persona also switches to a webhook whenever a sprite renders, and webhooks cannot use
   // Discord's native reply, so it needs the standalone notice for exactly the same reason.
   // Whether a sprite fires is only known at delivery time, so the allocation happens up front
-  // and the uiUpdater gates the actual send on real webhook delivery — leaving this an inert
+  // and the uiUpdater gates the actual send on real webhook delivery . leaving this an inert
   // no-op for queued turns that end up replying natively.
   if (incoming.isFromQueue) {
     streamingContext.replyNoticeState = { attempted: false, sent: false };
@@ -125,7 +125,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   }
 
   // Resolve deliberate tool mode + intent allowlist for this turn.
-  // Mirrors main's tomoriChat.ts wiring (~lines 5557–5645). MUST run before
+  // Mirrors main's tomoriChat.ts wiring (~lines 5557-5645). MUST run before
   // buildContext() so any has_tools override flows into context synthesis
   // (e.g. memories.ts:243 gates STM tool affordance text on has_tools).
   // Combines: user-intent matches, follow-up matches from recent message
@@ -478,7 +478,7 @@ async function buildSimplifiedHistory(
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
   // notice that includes the remaining block duration (from expires_at). 'mute'
-  // blocks are excluded here — they affect triggering, not dialogue context.
+  // blocks are excluded here ; they affect triggering, not dialogue context.
   const blockedContextBlocksById = new Map<string, PersonaUserBlockRow>();
   for (const block of activeUserBlocks) {
     if (block.block_type === "block") {
@@ -583,7 +583,7 @@ async function buildSimplifiedHistory(
 
     // Decide whether this message collapses into the previous turn.
     //    Consecutive messages from the same effective author merge into one turn,
-    //    but only when BOTH sides are pure text — if either side carries media we
+    //    but only when BOTH sides are pure text : if either side carries media we
     //    keep separate turns so per-message media IDs stay unambiguous for
     //    media-targeted tools. A debug/normal boundary also forces a split even
     //    when the authorId matches.
@@ -657,7 +657,7 @@ async function buildSimplifiedHistory(
         reminderContent += `\n[System: This task is ${incoming.reminderData.reminder_lateness} overdue.]`;
       }
     } else if (incoming.reminderRecipientID && isBridgeUserId(incoming.reminderRecipientID)) {
-      // Matrix user IDs (@user:server) must not be wrapped in <@...> — that produces <@@user:server>.
+      // Matrix user IDs (@user:server) must not be wrapped in <@...> : that produces <@@user:server>.
       const matrixLocalpart = incoming.reminderRecipientID.split(":")[0].replace(/^@/, "");
       reminderContent = `[System: A reminder you set earlier for @${matrixLocalpart} (Mention ID: @{${matrixLocalpart}}) has triggered. Reminder: "${incoming.reminderData.reminder_purpose}". Focus on reminding and pinging @${matrixLocalpart} about this.]`;
       if (incoming.reminderData.reminder_lateness) {

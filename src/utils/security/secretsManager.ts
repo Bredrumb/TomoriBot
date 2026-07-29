@@ -52,7 +52,7 @@ export interface TomoriSecrets {
   MATRIX_ACCESS_TOKEN?: string; // Appservice token (as_token) used to authenticate to the homeserver
   MATRIX_BOT_USER_ID?: string; // e.g., @tomoribot:yourdomain.com
   MATRIX_SERVER_NAME?: string; // Homeserver domain (e.g., localhost or yourdomain.com)
-  MATRIX_HS_TOKEN?: string; // Homeserver token (hs_token) — homeserver sends this to verify its identity
+  MATRIX_HS_TOKEN?: string; // Homeserver token (hs_token): homeserver sends this to verify its identity
   MATRIX_APPSERVICE_PUBLIC_URL?: string; // Optional callback URL used in appservice registration for remote homeservers
   TOPGG_TOKEN?: string; // Optional: Top.gg API token for posting server stats
   CONTAINER_MEMORY_LIMIT_MB?: string; // Optional: Container memory limit in MB (default: 1024)
@@ -72,7 +72,7 @@ export interface TomoriSecrets {
  * - Azure compose mounts the JSON secret at /run/secrets/tomoribot.json and sets SECRET_FILE to that path
  * - Cloud Run mounts the secret at /run/secrets/<secret_id> and sets GCP_SECRET_FILE to that path
  * - File content is identical JSON shape to the AWS secret string
- * - No SDK call needed — plain fs.readFileSync
+ * - No SDK call needed: plain fs.readFileSync
  *
  * AWS Configuration:
  * - AWS_REGION environment variable (defaults to "us-east-1")
@@ -124,7 +124,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Optional fields — read from process.env matching the same keys as the JSON secret blob
+    // Optional fields: read from process.env matching the same keys as the JSON secret blob
     const optionalEnvFields: (keyof TomoriSecrets)[] = [
       "DISCORD_WEBHOOK_URL",
       "AVATAR_GCS_BUCKET",
@@ -200,7 +200,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // Optional fields — same shape as AWS secret blob
+      // Optional fields: same shape as AWS secret blob
       const optionalFields: (keyof TomoriSecrets)[] = [
         "DISCORD_WEBHOOK_URL",
         "AVATAR_GCS_BUCKET",

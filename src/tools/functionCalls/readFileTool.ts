@@ -20,7 +20,7 @@ const CHAT_DOCUMENT_MAX_TEXT_LENGTH = Number.parseInt(process.env.CHAT_DOCUMENT_
 /**
  * Tool for reading text-based file attachments from Discord messages.
  * Supports PDF and any plain-text format (source code, markdown, JSON, YAML, etc.).
- * Returns extracted text directly in the tool result — no context restart needed.
+ * Returns extracted text directly in the tool result, so no context restart needed.
  * Available for all LLM providers since the output is text-only.
  */
 export class ReadFileTool extends BaseTool {
@@ -49,7 +49,7 @@ export class ReadFileTool extends BaseTool {
   /**
    * Read document tool is available for all providers (text-only output).
    * Not gated by sees_images since this returns plain text.
-   * @param _provider - LLM provider name (unused — always available)
+   * @param _provider - LLM provider name (unused: always available)
    * @returns Always true
    */
   isAvailableFor(_provider: string): boolean {
@@ -201,7 +201,7 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // Success — build the result with document content in `data`
+      // Success: build the result with document content in `data`
       // NOTE: In the streaming pipeline (tomoriChat.ts), only `toolResult.data` is
       // serialized into the functionResponse the LLM sees. `toolResult.message` is
       // used by provider adapter convertResult() but NOT the main streaming path.

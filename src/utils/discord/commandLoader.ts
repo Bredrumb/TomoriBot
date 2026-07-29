@@ -44,8 +44,8 @@ export type CommandExecutionMap = Map<string, Map<string, CommandExecuteFunction
 
 /**
  * One row of the command catalog (the full universe of registered commands).
- * `commandName` is the space-joined full path — identical to what
- * `handleCommands.ts` records as `stat_counters.metric_key` for `command_used` —
+ * `commandName` is the space-joined full path: identical to what
+ * `handleCommands.ts` records as `stat_counters.metric_key` for `command_used`,
  * so the catalog JOINs directly against the stat table with no remapping.
  */
 export interface CommandCatalogEntry {
@@ -408,7 +408,7 @@ export async function isCommandModuleEnabledForRegistration(
  * the same command modules. Because ES module evaluation interleaves across
  * `await` points, the second loader could observe a command module that the
  * first had begun but not finished evaluating, reading an export binding while
- * it was still in its Temporal Dead Zone — surfacing as
+ * it was still in its Temporal Dead Zone: surfacing as
  * "Cannot access 'configureSubcommand' before initialization" and silently
  * skipping that command. Memoizing the promise makes every caller await one
  * shared evaluation, eliminating the race.
@@ -438,7 +438,7 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
         return result;
       })
       .catch((error) => {
-        // Never persist a rejected load — allow retries.
+        // Never persist a rejected load, so allow retries.
         cachedCommandDataPromise = null;
         throw error;
       });
@@ -457,7 +457,7 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
  *   - grouped subcommand→ `category group subcommand`    (e.g. "server welcome-channel set")
  *
  * This is the single source of truth for "which commands exist", derived from the
- * loaded modules — never a hardcoded list — so the persisted catalog cannot drift.
+ * loaded modules (never a hardcoded list), so the persisted catalog cannot drift.
  *
  * @returns One {@link CommandCatalogEntry} per registered (sub)command.
  */

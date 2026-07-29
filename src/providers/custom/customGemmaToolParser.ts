@@ -72,7 +72,7 @@ export class GemmaToolCallParser {
   /**
    * Recognised leaked formats, in priority order. The scanner picks whichever
    * dialect's start token appears *earliest* in the stream, so ordering here only
-   * breaks exact-position ties (which cannot happen — the start tokens differ).
+   * breaks exact-position ties (which cannot happen: the start tokens differ).
    */
   private readonly dialects: GemmaDialect[] = [
     // Special-token form: <|tool_call>call:name{key:value}<tool_call|>
@@ -116,7 +116,7 @@ export class GemmaToolCallParser {
       return { pendingText, functionCall: null };
     }
 
-    // Stream ended mid-accumulation — attempt a best-effort parse with the
+    // Stream ended mid-accumulation, so attempt a best-effort parse with the
     // dialect that opened the block.
     log.info("CustomGemmaToolParser: Stream ended during tool call accumulation — attempting truncated parse");
     const functionCall = this.activeDialect?.parse(this.toolBuffer) ?? null;
@@ -154,7 +154,7 @@ export class GemmaToolCallParser {
     }
 
     // No full match. Only hold back the minimum tail that is a genuine prefix of
-    // some dialect's start token — normal prose never ends with `<` mid-token so
+    // some dialect's start token, because normal prose never ends with `<` mid-token so
     // holdback is usually "".
     const holdback = this.longestSuffixPrefix(combined);
     this.scanHoldback = holdback;
@@ -183,7 +183,7 @@ export class GemmaToolCallParser {
 
     const functionCall = dialect.parse(block);
     if (!functionCall) {
-      // Parse failed — emit raw block as text so nothing is silently dropped.
+      // Parse failed, so emit raw block as text so nothing is silently dropped.
       log.warn(`CustomGemmaToolParser: Failed to parse block — emitting as text: ${block.slice(0, 200)}`);
       return { visibleText: prependVisible + block, functionCall: null };
     }
@@ -244,13 +244,13 @@ export class GemmaToolCallParser {
     const args: Record<string, unknown> = {};
     const matchedKeys = new Set<string>();
 
-    // Format A — special token string markers: key:<|"|>value<|"|>
+    // Format A: special token string markers: key:<|"|>value<|"|>
     for (const m of argsStr.matchAll(/(\w+):\s*<\|"\|>([\s\S]*?)<\|"\|>/g)) {
       args[m[1]] = m[2];
       matchedKeys.add(m[1]);
     }
 
-    // Format B — standard double-quoted strings: key: "value" or key:"value"
+    // Format B: standard double-quoted strings: key: "value" or key:"value"
     //    Lazy quantifier stops at the first closing quote to keep args separate.
     for (const m of argsStr.matchAll(/(\w+):\s*"([\s\S]*?)"/g)) {
       if (matchedKeys.has(m[1])) continue;

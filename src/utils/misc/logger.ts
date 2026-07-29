@@ -51,7 +51,7 @@ const usePrettyTransport = !shouldHideLogs && hasPinoPretty;
 
 /**
  * Optional JSONL log file for host-side ingestion (e.g. Azure Monitor Agent
- * tailing a bind-mounted file). Only used in JSON output mode — the
+ * tailing a bind-mounted file). Only used in JSON output mode: the
  * development pino-pretty transport ignores it. See `.env.optional.example`.
  */
 const logFilePath = process.env.TOMORI_LOG_FILE?.trim() || undefined;
@@ -104,7 +104,7 @@ export const buildLogStreams = (
 ): pino.StreamEntry[] | undefined => {
   if (!filePath) return undefined;
 
-  // "trace" lets every record through each sink — level filtering stays on the
+  // "trace" lets every record through each sink; level filtering stays on the
   //    logger itself so both outputs always carry identical lines
   return [
     { stream: stdoutStream, level: "trace" },
@@ -273,7 +273,7 @@ export const log = {
   /**
    * Logs a periodic metric sample as structured JSON.
    * Always emitted regardless of environment (uses custom level 52, above `error`).
-   * Intended for CloudWatch Logs Insights queries — pass flat numeric fields
+   * Intended for CloudWatch Logs Insights queries: pass flat numeric fields
    * so each metric becomes queryable at the top level of the log record.
    *
    * @param name - Short metric name (used as the `metric` field for filtering).

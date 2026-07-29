@@ -1,5 +1,5 @@
 /**
- * PresetRepository — manages SillyTavern preset data, persona preset import/export,
+ * PresetRepository: manages SillyTavern preset data, persona preset import/export,
  * and SillyTavern card conversion.
  *
  * Consolidates stPresetDb.ts, presetExport.ts, presetImport.ts, sillyTavernImport.ts.

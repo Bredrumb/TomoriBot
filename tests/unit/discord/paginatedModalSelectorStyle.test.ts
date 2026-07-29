@@ -3,7 +3,7 @@
  * paginated-modal-selector-consistency plan).
  *
  * Confirms two things at the `>25`-option boundary:
- *   - The DEFAULT (legacy) style is unchanged — a numbered page-button embed.
+ *   - The DEFAULT (legacy) style is unchanged: a numbered page-button embed.
  *   - selectorStyle:"componentsV2" renders the shared range-selector container
  *      (range/previous/cancel/next buttons), carries IsComponentsV2, never emits
  *      legacy embeds, and marks the interaction for the Phase 1 collision guard.

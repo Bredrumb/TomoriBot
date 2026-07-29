@@ -122,7 +122,7 @@ export async function execute(
     if (!opener) return;
     const selectedProvider = opener.provider;
 
-    // Custom provider: no modal — activate the saved vision model directly.
+    // Custom provider: no modal, so activate the saved vision model directly.
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
       const work = await phase.useButton(opener.button).beginInPlaceWork();
@@ -226,7 +226,7 @@ export async function execute(
     const work = await modalPhase.beginInPlaceWork();
     const selectedValue = modalPhase.values[MODEL_SELECT_ID];
 
-    // Handle "clear" selection — remove the vision model.
+    // Handle "clear" selection: remove the vision model.
     if (selectedValue === CLEAR_VISION_VALUE) {
       if (!tomoriState.config.vision_llm_id) {
         await work.message.replace(

@@ -1,5 +1,5 @@
 /**
- * PersonalMemoryRepository — manages the `personal_memories` table.
+ * PersonalMemoryRepository: manages the `personal_memories` table.
  *
  * Personal memories are long-term facts Tomori learns about a specific user,
  * scoped to a persona lineage (or lineage 0 for global cross-persona memories).
@@ -401,5 +401,5 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const personalMemoryRepository = new PersonalMemoryRepository();

@@ -38,7 +38,7 @@ const DESCRIPTION_MAX_LENGTH = 100;
 /**
  * Strip SillyTavern macros from node content to produce a human-readable
  * description preview. Removes comment blocks, {{trim}}, {{setvar::...}},
- * {{addvar::...}}, and {{getvar::...}} wrappers — but for setvar/addvar nodes,
+ * {{addvar::...}}, and {{getvar::...}} wrappers; but for setvar/addvar nodes,
  * extracts the value portion (e.g., `{{setvar::tense::past tense}}` → `past tense`).
  *
  * @param content - Raw node content with ST macros
@@ -109,7 +109,7 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
 
     const options: CheckboxGroupOption[] = chunk.map((node, chunkIdx) => {
       const rawName = node.name.trim();
-      // Discord requires 1–100 chars; fall back to positional label for blank names
+      // Discord requires 1-100 chars; fall back to positional label for blank names
       const nodeNumber = pageOffset + i + chunkIdx + 1;
       const label =
         rawName.length === 0 ? `Node ${nodeNumber}` : rawName.length > 100 ? `${rawName.slice(0, 97)}...` : rawName;
@@ -121,7 +121,7 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
       };
     });
 
-    // Build a dynamic label like "Nodes 1–10" or "Nodes 51–60"
+    // Build a dynamic label like "Nodes 1-10" or "Nodes 51-60"
     // (pageOffset converts page-relative indices to overall node numbers)
     const rangeStart = pageOffset + i + 1;
     const rangeEnd = pageOffset + i + chunk.length;
@@ -130,7 +130,7 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
     groups.push({
       kind: "checkboxGroup" as const,
       customId: `stpreset_nodes_${groupIndex}`,
-      // Pass raw label — localizer returns the key itself when no match is found
+      // Pass raw label: localizer returns the key itself when no match is found
       labelKey: dynamicLabel,
       descriptionKey: "commands.st-preset.node.toggle.group_description",
       minValues: 0,
@@ -161,7 +161,7 @@ function collectSelectedIds(multiValues: Record<string, string[]> | undefined, g
 
 /**
  * Configure the /st-preset node toggle subcommand.
- * No options — node selection happens via checkbox groups in a modal.
+ * No options: node selection happens via checkbox groups in a modal.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("toggle").setDescription(localizer("en-US", "commands.st-preset.node.toggle.description"));
@@ -356,7 +356,7 @@ async function executeSinglePageToggle(
 /**
  * Handle the multi-page flow: page-selection loop with "Done" button.
  * Users can pick a page, toggle nodes in a modal, and return to pick
- * another page — no need to re-run the command.
+ * another page, so no need to re-run the command.
  *
  * @param presetId - The validated preset_id (guaranteed non-null by caller)
  * @param dbNodes - All toggleable nodes (will be reloaded after each toggle)

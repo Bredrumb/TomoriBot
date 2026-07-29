@@ -27,7 +27,7 @@ const PERMISSIONS_MAX_OPTIONS_PER_GROUP = 10;
 // awaitModalSubmit listeners from a previous run resolving on the same submission.
 const PERMISSIONS_CHECKBOX_ID = "config_permissions_checkbox";
 
-// Configure the subcommand — no options needed, UI is a checkbox modal
+// Configure the subcommand: no options needed, UI is a checkbox modal
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("manage").setDescription(localizer("en-US", "commands.capabilities.manage.description"));
 
@@ -41,7 +41,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Scope modal custom ID to this invocation — prevents stale awaitModalSubmit
+  // Scope modal custom ID to this invocation: prevents stale awaitModalSubmit
   //    listeners from a prior (un-submitted) run resolving on this submission.
   const MODAL_CUSTOM_ID = `config_permissions_modal_${interaction.id}`;
 
@@ -54,7 +54,7 @@ export async function execute(
     return;
   }
 
-  // NOTE: No deferReply here — promptWithRawModal must be the first
+  // NOTE: No deferReply here: promptWithRawModal must be the first
   // acknowledgment. Pre-modal checks are cache-backed and complete within 3 seconds.
 
   // Declared outside try/catch so the catch block can use the modal interaction
@@ -108,7 +108,7 @@ export async function execute(
       });
     }
 
-    // Show the checkbox modal — first interaction acknowledgment
+    // Show the checkbox modal: first interaction acknowledgment
     const modalResult = await promptWithRawModal(
       interaction,
       locale,

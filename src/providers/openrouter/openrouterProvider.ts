@@ -572,7 +572,7 @@ export class OpenrouterProvider
         effectiveSeesImages = storedCapabilities.seesImages;
         effectiveSeesVideos = storedCapabilities.seesVideos;
       } else {
-        // Cache is missing or stale — re-fetch using stored model name
+        // Cache is missing or stale, so re-fetch using stored model name
         const otherModelCodename = tomoriState.config.other_model_codename;
 
         if (!otherModelCodename) {
@@ -657,7 +657,7 @@ export class OpenrouterProvider
     }
 
     // Resolve max output tokens from the OpenRouter capability cache.
-    // If the model reports a max_completion_tokens value, use it — but cap it
+    // If the model reports a max_completion_tokens value, use it, but cap it
     // at OPENROUTER_MAX_OUTPUT_TOKENS (default: 8192) to avoid 402 errors on
     // accounts with low daily credit limits.
     // Shared with the context truncator (see resolveMaxOutputTokens) so the reserved output
@@ -677,7 +677,7 @@ export class OpenrouterProvider
     }
     // For custom/unknown models (`other-model`, or a cache miss) we have no reported ceiling to
     // clamp against, so we normally omit max_tokens and let the model self-manage. But an EXPLICIT
-    // `/model parameters` output-token override is a deliberate user choice — honor it so the
+    // `/model parameters` output-token override is a deliberate user choice, so honor it so the
     // "lower output tokens" tip shown on 402/400 errors actually reduces the request for these users.
     if (resolvedMaxOutputTokens === undefined) {
       const explicitOverride = tomoriState.config.llm_max_output_tokens;

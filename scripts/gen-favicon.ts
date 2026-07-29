@@ -1,13 +1,13 @@
 /**
  * Generates a multi-size ICO file and an optimized 256x256 PNG from assets/img/original.png.
  *
- * ICO layout: 16x16, 32x32, 48x48, 256x256 — each stored as a compressed embedded PNG
+ * ICO layout: 16x16, 32x32, 48x48, 256x256 (each stored as a compressed embedded PNG
  * inside the ICO container (supported by all modern browsers and Google's faviconV2 service).
  *
  * Output:
- *   assets/img/tomoricon.ico        — replaces the bloated single-size ICO
- *   apps/docs/public/favicon.ico    — copy served by the docs site
- *   apps/docs/public/tomoricon.png  — optimized 256x256 PNG for docs
+ *   assets/img/tomoricon.ico: replaces the bloated single-size ICO
+ *   apps/docs/public/favicon.ico: copy served by the docs site
+ *   apps/docs/public/tomoricon.png: optimized 256x256 PNG for docs
  */
 
 import sharp from "sharp";

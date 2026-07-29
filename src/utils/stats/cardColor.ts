@@ -1,5 +1,5 @@
 /**
- * cardColor.ts — shared color + image helpers for the `/stats generate`
+ * cardColor.ts: shared color + image helpers for the `/stats generate`
  * infographic gatherers.
  *
  * This module is part of the GATHER layer (it uses `sharp` and reads asset
@@ -7,11 +7,11 @@
  *
  * It centralises:
  * - RGB/HSL math used to derive accessible light-mode palettes.
- * - `extractCardPalette` — samples the selected avatar/icon into a palette for
+ * - `extractCardPalette`: samples the selected avatar/icon into a palette for
  *   Personal Wrapped, Persona Affinity, or the Server Leaderboard.
- * - `extractAvatarAccentColor` — distils a single vivid bar-fill color from an
+ * - `extractAvatarAccentColor`: distils a single vivid bar-fill color from an
  *   avatar, used to tint each persona/member bar on the Server Leaderboard.
- * - `loadTomoriconDataUri` — shared monochrome-stamp tinting used by every card.
+ * - `loadTomoriconDataUri`: shared monochrome-stamp tinting used by every card.
  */
 import { resolve } from "node:path";
 import sharp from "sharp";
@@ -225,7 +225,7 @@ export async function extractCardPalette(avatarDataUri: string | null): Promise<
 }
 
 /**
- * Distils a single vivid bar-fill color from an avatar — the dominant saturated
+ * Distils a single vivid bar-fill color from an avatar: the dominant saturated
  * hue, normalised to a mid lightness so white or dark in-bar text stays legible.
  * Returns `fallback` when the avatar is missing or has no usable saturated color.
  *

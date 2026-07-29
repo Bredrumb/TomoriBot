@@ -7,7 +7,7 @@ import {
 } from "@/commands/persona/default";
 import type { TomoriPresetRow } from "@/types/db/schema";
 
-/** Minimal preset fixture — only the fields used by the pure helpers. */
+/** Minimal preset fixture: only the fields used by the pure helpers. */
 function makePreset(overrides: Partial<TomoriPresetRow> = {}): TomoriPresetRow {
   return {
     persona_preset_id: 1,
@@ -46,7 +46,7 @@ describe("persona default — name resolution helpers", () => {
     });
 
     it("taken-name comparison is case-insensitive", () => {
-      // takenNames has "TOMORI" (upper-case) — must block "Tomori" as default name
+      // takenNames has "TOMORI" (upper-case), so must block "Tomori" as default name
       const result = resolveAvailablePersonaName("Tomori", [], ["TOMORI"]);
       expect(result).toBeNull();
     });

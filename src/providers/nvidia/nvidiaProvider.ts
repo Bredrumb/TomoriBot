@@ -176,7 +176,7 @@ export class NvidiaProvider
 
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     try {
-      // Use the models list endpoint — no model needed, no tokens consumed
+      // Use the models list endpoint: no model needed, no tokens consumed
       const response = await fetch(NVIDIA_MODELS_URL, {
         method: "GET",
         headers: {

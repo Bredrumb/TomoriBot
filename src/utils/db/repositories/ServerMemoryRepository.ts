@@ -1,5 +1,5 @@
 /**
- * ServerMemoryRepository — manages the `server_memories` table.
+ * ServerMemoryRepository: manages the `server_memories` table.
  *
  * Server memories are long-term facts Tomori learns about a Discord server,
  * scoped to a persona lineage. They are read back as part of TomoriState
@@ -546,7 +546,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Returns the set of persona ids that own at least one document in the given
    * server. Batched eligibility source for the persona-scoped `/memory document`
    * picker filters. Mirrors `loadDocuments` for persona scope, which deliberately
-   * applies **no** `source_type` filter — history-sourced documents count here
+   * applies **no** `source_type` filter: history-sourced documents count here
    * exactly as they do in that loader. Serverwide documents (`persona_id IS NULL`)
    * are excluded because the persona picker only concerns persona-owned rows.
    *
@@ -970,5 +970,5 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const serverMemoryRepository = new ServerMemoryRepository();

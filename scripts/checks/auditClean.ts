@@ -3,7 +3,7 @@
  * critical vulnerabilities are found. Low and moderate advisories are reported
  * but do not block the pipeline.
  *
- * bun audit has no working workspace filter — it always audits the whole
+ * bun audit has no working workspace filter: it always audits the whole
  * lockfile, including apps/docs devDeps. Advisories reaching the gate via
  * workspace:tomoribot-docs are build-time-only, but still block audit:clean.
  */

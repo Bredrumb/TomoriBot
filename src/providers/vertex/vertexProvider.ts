@@ -293,7 +293,7 @@ export class VertexProvider
     });
 
     // Build parts: reference images (as inlineData) followed by the text prompt.
-    // SendMessageParameters.message is PartListUnion — inline images must be
+    // SendMessageParameters.message is PartListUnion: inline images must be
     // passed as inlineData parts, not via a non-existent "media" field.
     const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
       ...(request.referenceImages ?? []).map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),

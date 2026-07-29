@@ -8,7 +8,7 @@
  * - channel: Bound to a specific Discord channel (channel option on the slash command)
  * - global:  Server-wide fallback used when neither the active persona nor the channel has a note
  *
- * Persona and channel notes are additive — both are injected when set.
+ * Persona and channel notes are additive; both are injected when set.
  * Submitting a blank note clears (removes) the stored value.
  */
 

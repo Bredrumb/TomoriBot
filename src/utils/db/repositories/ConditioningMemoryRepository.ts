@@ -1,5 +1,5 @@
 /**
- * ConditioningMemoryRepository — manages the `conditioning_history` table.
+ * ConditioningMemoryRepository: manages the `conditioning_history` table.
  *
  * Conditioning memories record reward/punishment events that shape Tomori's
  * persona behavior over time. Reads are aggregated into ConditioningGroup
@@ -422,5 +422,5 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const conditioningMemoryRepository = new ConditioningMemoryRepository();

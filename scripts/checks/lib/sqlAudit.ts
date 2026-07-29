@@ -5,7 +5,7 @@
  * live inside `src/utils/db/repositories/` (the repository layer), with a small,
  * explicitly-listed set of exemptions (security primitives, observability, the
  * RAG service facade). This module is the SINGLE source of truth for detecting
- * violations — it is consumed by both:
+ * violations: it is consumed by both:
  *   - `scripts/checks/audit_sql.ts` (the CLI report + `bun run vl` gate), and
  *   - `tests/unit/db/rawSqlBoundary.test.ts` (the unit-test enforcement).
  *
@@ -57,7 +57,7 @@ export const AUDIT_DIRS = ["src"] as const;
 /**
  * Path fragments that are skipped entirely (substring match on the
  * POSIX-normalized repo-relative path). These are the legitimate homes of raw
- * SQL — the repository layer itself, the DB client/migration plumbing, and type
+ * SQL: the repository layer itself, the DB client/migration plumbing, and type
  * declarations (which may embed SQL only inside doc comments / string types).
  */
 export const IGNORE_PATHS = [
@@ -73,7 +73,7 @@ export const IGNORE_PATHS = [
 /**
  * Files allowed to contain raw SQL outside the repository layer, each paired
  * with a justification. Hits here are reported as EXEMPTIONS (not violations).
- * Keep this list intentional and small — prefer moving SQL into a repository.
+ * Keep this list intentional and small; prefer moving SQL into a repository.
  */
 export const EXEMPT_PATHS = new Map<string, string>([
   ["src/utils/metrics/dbStats.ts", "observability/status helper"],
@@ -117,7 +117,7 @@ export function classifyQuery(query: string): QueryKind {
  * before matching so SQL written inside documentation is never flagged. The
  * `tx` alternative catches transaction callbacks (`sql.begin(async tx => tx`…`)`).
  *
- * This is a pure function over the file content — it performs no I/O — which is
+ * This is a pure function over the file content (it performs no I/O), which is
  * what lets the unit test exercise the detector against synthetic inputs to
  * prove it has no false positives (comments/strings) or false negatives.
  *

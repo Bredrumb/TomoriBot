@@ -1,5 +1,5 @@
 /**
- * cardRenderer.ts — production rasterizer for the `/stats generate` infographic.
+ * cardRenderer.ts: production rasterizer for the `/stats generate` infographic.
  *
  * Graduates the font-loading + render pipeline from the Chunk 1 spike into real
  * module-level code. Font buffers are loaded ONCE (readFileSync at first call,
@@ -7,7 +7,7 @@
  * read cost is paid exactly once per process lifetime.
  *
  * Pipeline: VNode → satori (SVG) → @resvg/resvg-js (PNG buffer).
- * Both stages receive the SAME font buffers directly — no host fontconfig
+ * Both stages receive the SAME font buffers directly, so no host fontconfig
  * dependency (required for Alpine prod image which ships no fonts).
  */
 import { Resvg } from "@resvg/resvg-js";
@@ -20,7 +20,7 @@ const FONT_NAME = "Noto Sans JP";
 const FONT_REGULAR_PATH = resolve("assets/fonts/NotoSansJP-Regular.ttf");
 const FONT_BOLD_PATH = resolve("assets/fonts/NotoSansJP-Bold.ttf");
 
-// Module-level buffer cache — loaded synchronously on first renderCardToPng call.
+// Module-level buffer cache: loaded synchronously on first renderCardToPng call.
 let cachedRegular: Buffer | null = null;
 let cachedBold: Buffer | null = null;
 

@@ -340,7 +340,7 @@ export async function execute(
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     modalSubmitInteraction = modalResult.interaction!;
 
-    // Defer the modal submit interaction — DB write below exceeds the 3-second window
+    // Defer the modal submit interaction because DB write below exceeds the 3-second window
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedValue = modalResult.values![HUMANIZER_SELECT_ID];

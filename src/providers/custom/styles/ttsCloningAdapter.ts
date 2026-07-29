@@ -238,7 +238,7 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
   }
 
   const rawContentType = response.headers.get("content-type") ?? "audio/wav";
-  // Bare MIME type only — Discord rejects waveform metadata for non-bare types.
+  // Bare MIME type only: Discord rejects waveform metadata for non-bare types.
   const contentType = rawContentType.split(";")[0].trim();
 
   if (!contentType.startsWith("audio/")) {

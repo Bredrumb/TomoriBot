@@ -10,8 +10,8 @@ import { VerbatimToolCallParser, getVerbatimToolCallMaxBufferChars } from "@/uti
 
 /**
  * When true, the stream adapter scans `delta.content` for Gemma 4's hallucinated
- * tool-call formats — both the special-token `<|tool_call>...<tool_call|>` form and
- * the Python-call `<tool_code>name(...)</tool_code>` form — and converts matches into
+ * tool-call formats: both the special-token `<|tool_call>...<tool_call|>` form and
+ * the Python-call `<tool_code>name(...)</tool_code>` form; and converts matches into
  * proper function_call chunks. Set CUSTOM_GEMMA_TOOL_PARSER_ENABLED=false to disable
  * if another local model produces similar token strings unexpectedly.
  */
@@ -113,13 +113,13 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
    * Intercept text chunks to handle two Gemma 4 token formats that KoboldCPP
    * does not always convert to standard OpenAI fields:
    *
-   * - `<|channel>thought\n[reasoning]\n<channel|>` — thinking block. KoboldCPP
+   * - `<|channel>thought\n[reasoning]\n<channel|>`: thinking block. KoboldCPP
    *    converts this to `reasoning_content` for pure-text responses, but when a
    *    tool call follows in the same chunk the entire blob arrives as raw content.
    *    GemmaThinkingParser runs first to extract thoughts before the tool parser sees it.
    *
    * - `<|tool_call>call:name{...}<tool_call|>` or `<tool_code>name(...)</tool_code>`
-   *    — hallucinated tool call leaked as text. GemmaToolCallParser recognises both
+   *    : hallucinated tool call leaked as text. GemmaToolCallParser recognises both
    *    dialects and converts completed blocks into function_call chunks.
    *
    * Parsers are intentionally serial and each maintains its own scanHoldback,
@@ -255,7 +255,7 @@ const CHATMOCK_PORT = process.env.CHATMOCK_PORT ?? "8000";
  * Detection heuristic: ChatMock's documented default is `http://127.0.0.1:8000`
  * (or `localhost:8000`), so we match any loopback address on the configured
  * port.  The port defaults to `8000` but is overridable via `CHATMOCK_PORT`.
- * This is intentionally narrow — other common local tools use different ports
+ * This is intentionally narrow because other common local tools use different ports
  * (Ollama: 11434, KoboldCPP: 5001, LM Studio: 1234).
  */
 export function isChatmockEndpoint(apiUrl: string): boolean {
@@ -264,7 +264,7 @@ export function isChatmockEndpoint(apiUrl: string): boolean {
     const isLoopback = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
     return isLoopback && port === CHATMOCK_PORT;
   } catch {
-    // Malformed URL — don't assume ChatMock
+    // Malformed URL, so don't assume ChatMock
     return false;
   }
 }

@@ -4,8 +4,8 @@
  * Fork of GoogleStreamAdapter with one key difference: client construction
  * uses Vertex AI (ADC) instead of an API key.
  *
- * Everything else — context assembly, chunk normalisation, function-call
- * extraction, speaker guard, thought signatures — is identical because
+ * Everything else: context assembly, chunk normalisation, function-call
+ * extraction, speaker guard, thought signatures, so is identical because
  * Vertex exposes the same Gemini wire format.
  *
  * Key changes from GoogleStreamAdapter:
@@ -1086,7 +1086,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
             // Defense-in-depth: an image part reached the adapter but the routed
             // model cannot process it (context built with images for a
             // vision-capable fallback model, then the image-blind primary runs).
-            // Emit a text placeholder instead of silently dropping it — mirrors
+            // Emit a text placeholder instead of silently dropping it, so mirrors
             // the Google, OpenRouter, and OpenAI-compatible message builders.
             geminiParts.push({
               text: "[System: An image is attached to this message that this model cannot process.]",

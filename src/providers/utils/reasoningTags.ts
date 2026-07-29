@@ -5,8 +5,8 @@
  * Several independent guardrails strip or capture these tags (the streaming
  * `ThinkBlockContentStripper`, the Discord-layer `bufferManager`, and the final
  * `cleanLLMOutput` sweep). Historically each one hardcoded the literal
- * `<think>` / `</think>`, so a vendor that emits a *namespaced* variant — e.g.
- * MiniMax's `<mm:think>…</mm:think>` — slipped past all of them at once.
+ * `<think>` / `</think>`, so a vendor that emits a *namespaced* variant: e.g.
+ * MiniMax's `<mm:think>…</mm:think>` slipped past all of them at once.
  *
  * Centralizing the tag definition here means a new vendor namespace is a
  * one-line change (the `NAMESPACE` pattern below) that every guardrail inherits

@@ -176,7 +176,7 @@ export class StreamMessageDelivery {
       // hand the collector whichever webhook actually delivered this table, plus the thread
       // id a parent-channel webhook needs to address a message posted inside a thread.
       // A sprite render can put the main persona on the webhook path without ever populating
-      // `context.webhook`, so resolve it lazily in that case — the lookup is cached.
+      // `context.webhook`, so resolve it lazily in that case, so the lookup is cached.
       const authoringWebhook = sentMessage.webhookId
         ? (context.webhook ?? (await resolveManagedChannelWebhook(context.channel)) ?? undefined)
         : undefined;

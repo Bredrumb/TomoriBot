@@ -130,7 +130,7 @@ export interface StreamContext {
 
   abortSignal?: AbortSignal;
 
-  // Empty-response retry count of the current chat turn — lets the opening-label leak guard
+  // Empty-response retry count of the current chat turn , so lets the opening-label leak guard
   // discard-and-retry while budget remains, then strip-and-deliver on the final attempt
   emptyResponseRetryCount?: number;
 

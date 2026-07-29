@@ -7,7 +7,7 @@
  * shortcodes (`:name:` / malformed `<:name:>`) and `@handle` mentions reach Discord as raw
  * text instead of resolved tags. This helper applies the *same* transform chain the stream
  * path uses (`segmentProcessor.sendBufferSegment`) so tool replies and normal replies render
- * identically — making it the single source of truth for both code paths.
+ * identically: making it the single source of truth for both code paths.
  */
 
 import type { ToolContext } from "@/types/tool/interfaces";
@@ -59,7 +59,7 @@ export async function cleanToolReplyText(content: string, context: ToolContext):
   );
 
   // Strip any leading *foreign* persona speaker labels (e.g. "Bella:") that the own-name-only
-  //    cleaner leaves behind — the model is often steered to prefix its turn with a speaker name.
+  //    cleaner leaves behind, so the model is often steered to prefix its turn with a speaker name.
   const speakerNames = await getKnownPersonaSpeakerNames(context.guildId, [
     context.personaUsername,
     context.tomoriState.persona_nickname,

@@ -13,7 +13,7 @@
  *
  * Two variants exist across Gemma 4 model sizes:
  *   - Thinking ON:  <|channel>thought\n[reasoning]\n<channel|>[answer]
- *   - Thinking OFF: <|channel>thought\n<channel|>[answer]  (empty suppressor — 26B/31B only)
+ *   - Thinking OFF: <|channel>thought\n<channel|>[answer]  (empty suppressor: 26B/31B only)
  *
  * Empty suppressor blocks are dropped silently (no thought log entry created).
  *
@@ -26,8 +26,8 @@ import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 
 /**
  * KoboldCPP renders the <|channel> special token differently depending on context:
- *   - "<|channel>thought" — canonical form (shown in KoboldCPP's own UI / terminal log)
- *   - "</s><thought"      — API stream form (the token decoded to "</s>" + plain text "<thought")
+ *   - "<|channel>thought": canonical form (shown in KoboldCPP's own UI / terminal log)
+ *   - "</s><thought": API stream form (the token decoded to "</s>" + plain text "<thought")
  * Both share the same END_TOKEN, so we scan for whichever start variant arrives first.
  */
 const START_TOKENS = ["</s><thought", "<|channel>thought"] as const;
@@ -76,7 +76,7 @@ export class GemmaThinkingParser {
       return { visibleText, thoughts: [] };
     }
 
-    // Stream ended mid-accumulation — treat buffered content as a partial thought.
+    // Stream ended mid-accumulation, so treat buffered content as a partial thought.
     log.info("CustomGemmaThinkingParser: Stream ended during thinking accumulation — recovering partial thought");
     const content = this.thinkBuffer.replace(/^\n/, "").trim();
     this.reset();
@@ -128,7 +128,7 @@ export class GemmaThinkingParser {
     const remaining = this.thinkBuffer.slice(endIdx + END_TOKEN.length);
     this.reset();
 
-    // Gemma always emits a newline immediately after "thought" — trim it.
+    // Gemma always emits a newline immediately after "thought", so trim it.
     if (content.startsWith("\n")) {
       content = content.slice(1);
     }

@@ -9,7 +9,7 @@
  *
  * Intended workflow:
  *   1. Restore a production snapshot into a scratch database (see
- *      docs/guides/safe-migration.md — the target Postgres MUST have the
+ *      docs/guides/safe-migration.md: the target Postgres MUST have the
  *      `pgvector` extension available, or the snapshot's document_chunks table
  *      fails to restore and silently drops data).
  *   2. Point POSTGRES_DB at that scratch database and run this script.
@@ -29,7 +29,7 @@ import { log } from "@/utils/misc/logger";
 
 config();
 
-// Hard stop if this is somehow running in a production environment — this
+// Hard stop if this is somehow running in a production environment because this
 //    script mutates schema and seed data and is only meant for scratch copies.
 if (process.env.RUN_ENV === "production") {
   log.error("Refusing to run migration rehearsal with RUN_ENV=production. Point this at a scratch database.");
@@ -56,7 +56,7 @@ if (!process.env.DATABASE_URL) {
 log.section("Rehearsing database migrations against the configured database...");
 
 // Run the same bootstrap the bot performs at startup. includeRag defaults to
-//    "auto" so RAG schema is applied only when pgvector is detected — matching
+//    "auto" so RAG schema is applied only when pgvector is detected; matching
 //    real production boot behavior.
 initializeDatabase({ client: sql })
   .then((result) => {

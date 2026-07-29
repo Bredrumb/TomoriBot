@@ -226,7 +226,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
           const guildId = interaction.guildId;
           // Record the full command path (category + optional group + subcommand,
           // space-joined) so stats distinguish subcommands like "config humanizer"
-          // from "config message-fetch-limit" — top-level alone is too coarse for
+          // from "config message-fetch-limit", so top-level alone is too coarse for
           // underused-command detection.
           const fullCommandName = groupName
             ? `${commandName} ${groupName} ${subcommandName}`

@@ -100,30 +100,30 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
       },
     },
 
-    // reply — sets replied=true so subsequent calls route to editReply
+    // reply: sets replied=true so subsequent calls route to editReply
     reply: async (...args: unknown[]) => {
       calls.push({ method: "reply", args });
       interaction.replied = true;
     },
 
-    // deferReply — sets deferred=true; represents the initial deferred ack
+    // deferReply: sets deferred=true; represents the initial deferred ack
     deferReply: async (...args: unknown[]) => {
       calls.push({ method: "deferReply", args });
       interaction.deferred = true;
     },
 
-    // showModal — the acknowledgement path for modal commands; does NOT set
+    // showModal: the acknowledgement path for modal commands; does NOT set
     //    replied=true in Discord.js, but the interaction IS consumed.
     showModal: async (...args: unknown[]) => {
       calls.push({ method: "showModal", args });
     },
 
-    // editReply — only valid after deferReply() or reply()
+    // editReply: only valid after deferReply() or reply()
     editReply: async (...args: unknown[]) => {
       calls.push({ method: "editReply", args });
     },
 
-    // followUp — only valid after any acknowledgement
+    // followUp: only valid after any acknowledgement
     followUp: async (...args: unknown[]) => {
       calls.push({ method: "followUp", args });
     },
@@ -136,7 +136,7 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
       calls.push({ method: "update", args });
     },
 
-    // fetchReply — not an acknowledgement; returns a fake message so ping-style
+    // fetchReply: not an acknowledgement; returns a fake message so ping-style
     // commands that measure latency don't throw.
     fetchReply: async () => ({
       id: "fake_reply_id",

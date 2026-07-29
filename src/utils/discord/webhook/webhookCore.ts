@@ -66,7 +66,7 @@ const persistedManagedWebhookIds = new Set<string>();
 /**
  * Returns current sizes of every in-memory map owned by the webhook manager.
  * Used by the cache metrics logger to detect unbounded growth in webhook caches
- * (none of these maps have a TTL — they only shrink on explicit invalidation).
+ * (none of these maps have a TTL: they only shrink on explicit invalidation).
  */
 export function getWebhookCacheSizes(): {
   webhookChannel: number;
@@ -529,11 +529,11 @@ async function resolvePersonaWebhookAvatar(persona: TomoriState, guild?: Guild):
  */
 /**
  * Resolves the managed webhook for the channel a message will appear in, mapping a thread to
- * its parent — webhooks live on the parent channel and post into threads via `threadId`.
+ * its parent: webhooks live on the parent channel and post into threads via `threadId`.
  *
  * Thin convenience wrapper over {@link getOrCreateWebhook} for callers that hold an arbitrary
  * channel and only want "the webhook, or null". Used by post-turn senders (stickers, the
- * "Fallback Used" notice) which — unlike alter turns — have no pre-resolved
+ * "Fallback Used" notice) which (unlike alter turns) have no pre-resolved
  * `responseTarget.webhook` when the main persona reaches the webhook path via a sprite.
  *
  * @returns The managed webhook, or null when the channel cannot host one or permissions are missing
@@ -1078,7 +1078,7 @@ export async function sendUserTranscriptViaWebhook(
   avatarUrl: string,
   transcript: string,
 ): Promise<Message | null> {
-  // Threads cannot own webhooks — use the parent channel for creation/lookup
+  // Threads cannot own webhooks, so use the parent channel for creation/lookup
   const isThread = channel.isThread();
   const webhookTargetChannel = isThread ? (channel.parent as BaseGuildTextChannel | null) : channel;
 

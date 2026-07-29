@@ -422,7 +422,7 @@ export const MCPTypeGuards = {
 };
 
 /**
- * Guild MCP connection state — represents an active remote MCP connection
+ * Guild MCP connection state : represents an active remote MCP connection
  * for a specific guild. Managed by GuildMcpManager's connection pool.
  *
  * @property guildMcpId - Database row PK (guild_mcp_servers.guild_mcp_id)
@@ -438,15 +438,15 @@ export interface GuildMCPConnection {
   guildMcpId: number;
   serverId: number;
   name: string;
-  client: unknown; // MCP Client — typed as unknown to avoid coupling mcpTypes to SDK imports
-  callableTool: unknown; // CallableTool from @google/genai — same reason
+  client: unknown; // MCP Client : typed as unknown to avoid coupling mcpTypes to SDK imports
+  callableTool: unknown; // CallableTool from @google/genai : same reason
   functionNames: string[];
   connectedAt: number;
   lastUsedAt: number;
 }
 
 /**
- * Result from GuildMcpManager.testConnection() — used by /config mcp add
+ * Result from GuildMcpManager.testConnection() : used by /config mcp add
  * to validate a remote MCP server before persisting the registration.
  */
 export interface GuildMCPTestResult {

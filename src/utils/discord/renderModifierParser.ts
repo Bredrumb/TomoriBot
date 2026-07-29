@@ -121,12 +121,12 @@ const MARKDOWN_MARKER_NAME_RE = /^(?:[-*+>#]\s|\d{1,9}[.)]\s)/;
 /**
  * Parses a leading speaker label of ANY name at the start of `text`, in either the decorated
  * "Name (modifier): body" or plain "Name: body" shape. Unlike {@link parseLeadingRenderModifier},
- * the name is not restricted to the active persona — callers use this to detect *leaked* labels
+ * the name is not restricted to the active persona, so callers use this to detect *leaked* labels
  * (e.g. "Chris (smug): ...") that the allowlisted parser intentionally refuses to match.
  *
  * Shapes that are really prose or markdown are rejected: code-fence openings, list items,
  * blockquotes/headings, names without a word character, and names opening with "[" or "<"
- * (links, mentions, timestamps — mirrors isGenericSpeakerStopLabel).
+ * (links, mentions, timestamps: mirrors isGenericSpeakerStopLabel).
  *
  * @param text - Segment text to inspect (leading whitespace tolerated)
  * @returns The parsed label and remaining body, or null when no label shape is present
@@ -194,10 +194,10 @@ export function isAllowedRenderModifierSpeakerLabel(label: string, sourceNames: 
  * name orientations, and rebuilds the model-facing "SourcePersona (modifier)"
  * label:
  *
- * - Flipped copied-identity format (current): "impersonated (SourcePersona)" —
+ * - Flipped copied-identity format (current): "impersonated (SourcePersona)":
  *    Discord shows the impersonated name first so the disguise reads naturally,
  *    while the model-facing label keeps the source persona first.
- * - Legacy format: "SourcePersona (modifier)" — pre-flip copied identities and
+ * - Legacy format: "SourcePersona (modifier)": pre-flip copied identities and
  *    pre-clean-name sprite messages still in fetched history windows.
  *
  * When BOTH parts match personas (persona impersonating another persona) the

@@ -109,7 +109,7 @@ export interface StreamingContext {
     handle: string;
     userId: string;
   }>; // Additional mention handles to force-resolve (e.g., reminder recipients)
-  suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode — keeps model state coherent but hides repeated text)
+  suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode : keeps model state coherent but hides repeated text)
   /** NAI GLM-4.6: incomplete trailing fragment from previous stream, to append as prompt continuation on retry */
   naiContinuationPrefill?: string;
   /** AbortSignal to cancel the underlying HTTP request when the SDK call timeout fires */

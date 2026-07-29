@@ -1,5 +1,5 @@
 /**
- * Regression harness — ServerRepository domain.
+ * Regression harness: ServerRepository domain.
  *
  * Covers: channel whitelist reads/writes, blacklist, server setup basics.
  * loadTomoriState implicitly tests server row loading; this file focuses on

@@ -77,7 +77,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
   const windowFrom = resolveWindowFrom(timeframe);
   const windowArg = windowFrom ? { from: windowFrom } : {};
 
-  // One grouped query per ranked block — no per-row token/cost lookups.
+  // One grouped query per ranked block: no per-row token/cost lookups.
   const [rawTopMembers, personaTokenCosts, modelCosts, tokenTotals, totalTriggers, estimatedCost] = await Promise.all([
     statRepository.getTopUsers({ serverId, limit: 25, ...windowArg }),
     statRepository.getPersonaTokenCostBreakdown({ serverId, limit: 5, ...windowArg }),
@@ -100,7 +100,7 @@ export async function gatherServerCardData(args: GatherServerCardArgs): Promise<
   const palette = await extractCardPalette(serverIconDataUri);
   const tomoriconDataUri = await loadTomoriconDataUri(palette.ink);
 
-  // Top personas (horizontal bars) — names + avatars from cache, bar tint from avatar.
+  // Top personas (horizontal bars): names + avatars from cache, bar tint from avatar.
   let topPersonas: ServerPersonaBar[] = [];
   let totalPersonas = 0;
   try {

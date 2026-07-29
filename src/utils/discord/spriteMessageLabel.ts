@@ -10,7 +10,7 @@ import { log } from "@/utils/misc/logger";
  * recovered from the persona_sprite_messages mapping so the model still sees
  * "Name (sprite):" in context. Returns null when the message has no sprite
  * mapping or the mapping belongs to a different persona (e.g. the nickname now
- * matches a recreated persona) — callers fall back to the plain persona name.
+ * matches a recreated persona), so callers fall back to the plain persona name.
  *
  * @param personaNickname - current nickname used to build the label
  */

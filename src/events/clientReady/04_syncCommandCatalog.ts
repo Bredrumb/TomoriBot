@@ -32,7 +32,7 @@ export default async (_client: Client): Promise<void> => {
     await statRepository.syncCommandCatalog(entries);
   } catch (error) {
     log.error("Failed to sync command catalog (non-critical)", error as Error);
-    // Non-critical — the Grafana unused-command panel may be stale, but the bot
+    // Non-critical, so the Grafana unused-command panel may be stale, but the bot
     // functions normally.
   }
 };

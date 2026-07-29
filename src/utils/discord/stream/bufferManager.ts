@@ -23,7 +23,7 @@ function shouldDelayTrailingPeriodFlush(buffer: string, periodMatch: RegExpExecA
  * Moves a flush offset out of any markdown table it lands inside.
  *
  * Table rows end in newlines, so every sentence/whitespace heuristic happily treats a row
- * boundary as a safe break — but cutting there splits the block, and only the fragment that
+ * boundary as a safe break; but cutting there splits the block, and only the fragment that
  * still parses as a table reaches the PNG renderer. The rest is delivered as raw pipes.
  *
  * Cutting *before* the table is preferred: it keeps the whole table together for the next
@@ -343,7 +343,7 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
   }
 
   // Count markers across prose only. A table's cells routinely hold characters that are
-  //    not unclosed inline markdown at all — `user_id`, a `Best*` footnote, `(approx` — and
+  //    not unclosed inline markdown at all (`user_id`, a `Best*` footnote, `(approx` (and
   //    a table at the end of a response ALWAYS reaches this repair, because EOF never
   //    terminates a table block (more rows could still stream in).
   const proseOnly = segments
@@ -355,7 +355,7 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
 
   // Land the closers on the last prose segment rather than the buffer's end. Appending
   //    after the final row changes that row's cell count, so the renderer stops recognizing
-  //    it as a body row and drops it from the image — the dropped row then leaks out as raw
+  //    it as a body row and drops it from the image, so the dropped row then leaks out as raw
   //    pipe-delimited text underneath the rendered table.
   //    Only a segment with real prose in it can host them: a text segment sitting between two
   //    tables is often just the newline separating them, and closers placed there would land
@@ -374,7 +374,7 @@ export function autoCloseIncompleteMarkers(buffer: string): string {
   }
 
   // Insert ahead of the segment's trailing whitespace. That whitespace is the newline
-  //    separating prose from the table below it — appending after it would push the closers
+  //    separating prose from the table below it, so appending after it would push the closers
   //    onto the table's first line.
   const proseSegment = segments[lastProseIndex].content;
   const proseCore = proseSegment.replace(/\s+$/u, "");

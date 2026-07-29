@@ -106,7 +106,7 @@ describe("buildPromptContextItems — per-channel prompt override", () => {
       }),
     );
 
-    // Replace must not be dropped by the suppress flag — it supplies the slot content.
+    // Replace must not be dropped by the suppress flag: it supplies the slot content.
     expect(textForTag(items, ContextItemTag.SYSTEM_HUMANIZER_RULES)).toBe(CHANNEL_PROMPT);
   });
 

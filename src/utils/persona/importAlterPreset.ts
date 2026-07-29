@@ -127,7 +127,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
 
   // Filter the incoming triggers to the unique set this alter actually owns.
   //    This is what we store and display for both custom and official-preset
-  //    (pointer) imports — the loader enforces the same ownership at read time.
+  //    (pointer) imports; the loader enforces the same ownership at read time.
   const importTriggers = presetData.trigger_words ?? [];
   const uniqueTriggers = selectUnclaimedTriggerWords(importTriggers, claimedTriggerWords, { lowercase: false });
   const matchingOfficialPreset = await presetRepository.findMatchingOfficialPresetForImport(presetData);

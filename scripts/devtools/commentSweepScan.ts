@@ -24,6 +24,8 @@ const RULE_TAG_PATTERN =
 const RULE_HEAD_TEST = /^(?:\/\/|\*)\s*Rule\s*\d+/;
 const RULE_TAG_TEST = /\(\s*Rule\s*\d+/;
 const DASH_PATTERN = /—|–| -- /;
+const LICENSE_HEADER_PATTERN =
+  /\bCopyright(?:\s+\(c\))?|\bSPDX-License-Identifier\s*:|\bLicensed under the\b|\bPermission is hereby granted\b/i;
 const JSDOC_TAG_PATTERN = /^\s*\*\s+@(param|returns?)\b/;
 const STOP_WORDS = new Set([
   "a",
@@ -207,11 +209,47 @@ async function discoverTypeScriptFiles(
     }
   }
 
-  return [...discovered].sort();
+  return filterGitIgnoredFiles(repoRoot, [...discovered].sort());
 }
 
 function isExcludedPath(path: string): boolean {
   return /(?:^|[\\/])(?:\.git|dist|node_modules)(?:[\\/]|$)/.test(path);
+}
+
+async function filterGitIgnoredFiles(
+  repoRoot: string,
+  paths: string[],
+): Promise<string[]> {
+  if (paths.length === 0) {
+    return paths;
+  }
+
+  const relativePaths = paths.map((path) =>
+    normalizePath(relative(repoRoot, path)),
+  );
+  const process = Bun.spawn({
+    cmd: ["git", "check-ignore", "--stdin", "-z"],
+    cwd: repoRoot,
+    stderr: "pipe",
+    stdin: "pipe",
+    stdout: "pipe",
+  });
+  process.stdin.write(`${relativePaths.join("\0")}\0`);
+  process.stdin.end();
+  const [exitCode, stdout, stderr] = await Promise.all([
+    process.exited,
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+  ]);
+  if (exitCode === 128) {
+    return paths;
+  }
+  if (exitCode !== 0 && exitCode !== 1) {
+    throw new Error(`git check-ignore failed: ${stderr.trim()}`);
+  }
+
+  const ignored = new Set(stdout.split("\0").filter(Boolean));
+  return paths.filter((_, index) => !ignored.has(relativePaths[index]));
 }
 
 function normalizePath(path: string): string {
@@ -330,11 +368,13 @@ function collectCommentTokens(source: string): CommentToken[] {
     ts.SyntaxKind.MultiLineCommentTrivia,
   );
   addStandaloneMatches(
-    /^[\t ]*(\/\*\*[\s\S]*?^[\t ]*\*\/)/gm,
+    /^[\t ]*(\/\*\*[\s\S]*?\*\/)/gm,
     ts.SyntaxKind.MultiLineCommentTrivia,
   );
 
   return [...ranges.values()]
+    .map((range) => normalizeCommentRange(source, range))
+    .filter((range): range is ts.CommentRange => range !== undefined)
     .sort((left, right) => left.pos - right.pos)
     .map((range) => {
       const start = range.pos;
@@ -357,6 +397,44 @@ function collectCommentTokens(source: string): CommentToken[] {
         text,
       };
     });
+}
+
+function normalizeCommentRange(
+  source: string,
+  range: ts.CommentRange,
+): ts.CommentRange | undefined {
+  const text = source.slice(range.pos, range.end);
+  if (
+    (range.kind === ts.SyntaxKind.SingleLineCommentTrivia &&
+      text.startsWith("//")) ||
+    (range.kind === ts.SyntaxKind.MultiLineCommentTrivia &&
+      text.startsWith("/*"))
+  ) {
+    return range;
+  }
+
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    false,
+    ts.LanguageVariant.Standard,
+    text,
+  );
+  const expectedMarker =
+    range.kind === ts.SyntaxKind.SingleLineCommentTrivia ? "//" : "/*";
+  for (
+    let tokenKind = scanner.scan();
+    tokenKind !== ts.SyntaxKind.EndOfFileToken;
+    tokenKind = scanner.scan()
+  ) {
+    if (scanner.getTokenText().startsWith(expectedMarker)) {
+      return {
+        ...range,
+        end: range.pos + scanner.getTextPos(),
+        pos: range.pos + scanner.getTokenPos(),
+      };
+    }
+  }
+  return undefined;
 }
 
 interface CommentProtection {
@@ -418,9 +496,7 @@ function hasSuppressionExplanation(text: string): boolean {
 }
 
 function isLicenseHeader(comment: CommentToken): boolean {
-  return (
-    comment.line <= 10 && /\b(?:copyright|license|SPDX-License-Identifier)\b/i.test(comment.text)
-  );
+  return comment.line <= 10 && LICENSE_HEADER_PATTERN.test(comment.text);
 }
 
 function isLocaleScannerExample(file: string, text: string): boolean {

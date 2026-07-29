@@ -9,7 +9,7 @@ import { isIP } from "node:net";
  * Instance Metadata Service (AWS/Azure/GCP all expose it at `169.254.169.254`)
  * hands out short-lived cloud credentials to anything that can reach it. There
  * is no legitimate `fetch_url`/custom-endpoint use case for them, so this
- * denylist is always enforced as a floor beneath every other network guard —
+ * denylist is always enforced as a floor beneath every other network guard;
  * it cannot be relaxed by the development auto-relax or the operator opt-in.
  *
  * @param address - An already DNS-resolved IP address (IPv4 or IPv6 literal).
@@ -22,7 +22,7 @@ export function isCloudMetadataAddress(address: string): boolean {
   const normalized = address.trim().toLowerCase();
   const family = isIP(normalized);
 
-  // IPv4 link-local (169.254.0.0/16) — includes the 169.254.169.254 IMDS
+  // IPv4 link-local (169.254.0.0/16): includes the 169.254.169.254 IMDS
   //    address used by AWS, Azure, and GCP (metadata.google.internal resolves
   //    here). The whole /16 is non-routable and has no fetch use case.
   if (family === 4) {

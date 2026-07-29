@@ -53,12 +53,12 @@ const CODE_CLOSER_PREFIX = /^\s*`{1,3}\s*/;
  *
  * Recovery strategy (mirrors {@link GemmaToolCallParser}'s anchor approach):
  * 1. Scan buffered text for an anchor `<knownToolName>\s*\(`. Only names from
- *    the exposed tool set trigger — a stray `foo(...)` in prose is ignored.
+ *    the exposed tool set trigger, so a stray `foo(...)` in prose is ignored.
  * 2. Emit any text *before* the anchor (and any wrapper opener) as visible
  *    prose, then accumulate from the tool name until the parentheses balance
  *    (quote-aware, so `)` inside a JSON string does not close early).
  * 3. Parse the completed `name(...)` body. Invalid args (non-JSON, wrong arity)
- *    are rejected and the raw text is emitted instead — this parse validation
+ *    are rejected and the raw text is emitted instead, so this parse validation
  *    is the real guard against false positives, so the name anchor can be loose.
  *
  * Prose and the function call are never returned from the same `feed()` call:
@@ -73,8 +73,8 @@ export class VerbatimToolCallParser {
   private readonly maxBufferChars: number;
   private buffer = "";
   /**
-   * `scanning` — searching buffered text for a tool-name anchor.
-   * `accumulating` — anchor found; buffer starts at the (optionally wrapped)
+   * `scanning`: searching buffered text for a tool-name anchor.
+   * `accumulating`: anchor found; buffer starts at the (optionally wrapped)
    * tool name and we await the call's balancing close paren.
    */
   private mode: "scanning" | "accumulating" = "scanning";
@@ -183,14 +183,14 @@ export class VerbatimToolCallParser {
 
     const closeParenIndex = findBalancedCallEnd(afterOpener, openParenIndex);
     if (closeParenIndex === -1) {
-      // Parens not yet balanced — keep accumulating subsequent chunks.
+      // Parens not yet balanced, so keep accumulating subsequent chunks.
       return { visibleText: "", functionCall: null };
     }
 
     const callText = afterOpener.slice(0, closeParenIndex + 1);
     const functionCall = this.parseToolCall(callText);
     if (!functionCall) {
-      // Not a real call (e.g. invalid JSON args) — surface the raw text instead
+      // Not a real call (e.g. invalid JSON args), so surface the raw text instead
       // of silently dropping it, then resume scanning for a later anchor.
       return this.drainBuffer();
     }

@@ -96,7 +96,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
    * MCP function-dispatch path). Consumed by `webSearch/duckduckgoEngine.ts`
    * so the unified `web_search` tool can route through DDG as an internal
    * fallback. The built-in `tryFeloSearchFallback` inside `processWebSearch`
-   * still runs — meaning a single call here may transparently return Felo
+   * still runs: meaning a single call here may transparently return Felo
    * results when DDG itself is rate-limited.
    *
    * @param query - User search query.

@@ -175,7 +175,7 @@ export const STREAMING_LIMITS = {
 /**
  * Returns memory protection configuration, read lazily from process.env.
  * Must be a function (not a const) so values are read after secrets are
- * loaded in index.ts — module-level consts evaluate before getAppSecrets() runs.
+ * loaded in index.ts, so module-level consts evaluate before getAppSecrets() runs.
  */
 export function MEMORY_PROTECTION() {
   return {
@@ -316,7 +316,7 @@ class MemoryGuard {
       };
     }
 
-    // Use RSS (Resident Set Size) — the total memory the OS has allocated to this
+    // Use RSS (Resident Set Size): the total memory the OS has allocated to this
     // process, including heap, native buffers, and shared libraries. This is what
     // the kernel's OOM killer tracks, so it's the correct metric for preventing crashes.
     const rssBytes = process.memoryUsage().rss;

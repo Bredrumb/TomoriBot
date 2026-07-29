@@ -49,7 +49,7 @@ async function getServerCount(client: Client): Promise<number> {
 /**
  * Posts the current Discord guild count to Top.gg once during startup.
  * Only runs in production and only when TOPGG_TOKEN is configured.
- * Non-critical — failures are logged as warnings and do not affect startup.
+ * Non-critical, so failures are logged as warnings and do not affect startup.
  *
  * @param client - The Discord client instance (must be ready, provides bot ID and guild cache).
  */

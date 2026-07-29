@@ -1,5 +1,5 @@
 /**
- * BraveEngine — wraps the internal Brave service classes into a uniform
+ * BraveEngine : wraps the internal Brave service classes into a uniform
  * WebSearchEngine. Routes on category to the appropriate Internal*Tool.
  *
  * Supports the common 4 categories (text/image/video/news).

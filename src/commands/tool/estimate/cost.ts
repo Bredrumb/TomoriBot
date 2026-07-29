@@ -456,9 +456,9 @@ function calculateCost(
  * Resolve per-million input/output pricing for the active model.
  *
  * Precedence (see docs/subsystems/database-schema.md):
- *  1. The model row's own `input_price_per_million` / `output_price_per_million` columns — the official,
+ *  1. The model row's own `input_price_per_million` / `output_price_per_million` columns: the official,
  *     DB-backed source of truth, seeded from the typed catalog (src/db/seed/catalog/models.ts).
- *  2. The optional caller-supplied `fallback` (e.g. OpenRouter's live API pricing cache) — used only when
+ *  2. The optional caller-supplied `fallback` (e.g. OpenRouter's live API pricing cache), used only when
  *     the row carries no price. First-party providers pass no fallback: a model with no catalog price
  *     resolves to `null`, and the caller surfaces "pricing unavailable" instead of guessing a rate.
  *
@@ -483,7 +483,7 @@ function resolveModelPricing(
  *
  * Reads the Google default model's catalog price so the static example stays in lockstep with the
  * seeded source of truth (src/db/seed/catalog/models.ts) instead of a duplicated env/hardcoded value.
- * The `?? ` literals are a defensive backstop only — the Google default row always carries a price.
+ * The `?? ` literals are a defensive backstop only, because the Google default row always carries a price.
  *
  * @returns Representative input/output price per million tokens
  */
@@ -773,7 +773,7 @@ async function buildRuntimeParityContext(
       hasLocalMedia && (imageAttachments.length > 0 || videoAttachments.length > 0) ? [message.id] : undefined;
 
     // Merge consecutive same-author messages, mirroring the real context path
-    // (buildSimplifiedHistory): collapse only when both sides are pure text — if
+    // (buildSimplifiedHistory): collapse only when both sides are pure text if
     // either side carries media, keep separate turns so per-message media IDs stay
     // unambiguous.
     const previousMessage = simplifiedMessages[simplifiedMessages.length - 1];
@@ -985,7 +985,7 @@ async function measureVertexInputTokens(
   const tokenCountContents = [...payload.contents];
   const inBandPrelude: typeof tokenCountContents = [];
 
-  // countTokens does not accept request-level systemInstruction — inject in-band
+  // countTokens does not accept request-level systemInstruction, so inject in-band
   //    so the instruction's tokens are still counted (mirrors the Google path).
   if (payload.systemInstruction) {
     inBandPrelude.push({
@@ -1370,8 +1370,8 @@ const liveTokenCounters: Record<
 async function sendLiveEstimateEmbed(
   interaction: ChatInputCommandInteraction,
   locale: string,
-  // Accept the structural shape (omit `provider`) so Track A's character estimate — which has
-  // no LiveProvider — can reuse this embed alongside live LiveCostMeasurement objects.
+  // Accept the structural shape (omit `provider`) so Track A's character estimate, which has
+  // no LiveProvider, so can reuse this embed alongside live LiveCostMeasurement objects.
   measurement: Omit<LiveCostMeasurement, "provider">,
   sampleOutputTokens: number | null,
   isCharacterEstimate = false,

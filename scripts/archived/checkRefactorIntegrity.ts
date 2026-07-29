@@ -40,7 +40,7 @@ const knownLargeImplementationPaths = new Set([
   "src/utils/db/repositoryWriteSql.ts",
   "src/utils/text/contextBuilder.ts",
   "src/utils/discord/streamOrchestrator.ts",
-  // Phase 5.5c facade-rename targets — added so the existing
+  // Phase 5.5c facade-rename targets: added so the existing
   // "thin facade to large file" finding fires until they're truly decomposed.
   "src/utils/text/context/core/builderImplementation.ts",
   "src/utils/discord/stream/core/orchestratorImplementation.ts",

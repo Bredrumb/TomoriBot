@@ -23,7 +23,7 @@ const IMAGE_EXTENSION_RE = /\.(png|jpg|jpeg|webp|gif)$/i;
  * Resolves an avatar path to a Buffer.
  * If the path has a known image extension it is read directly.
  * Otherwise the path is treated as a directory and the first image file
- * found (alphabetically) is used — so the filename inside the folder
+ * found (alphabetically) is used so the filename inside the folder
  * does not need to be predetermined.
  */
 export async function resolveAvatarPath(avatarPath: string): Promise<Buffer> {

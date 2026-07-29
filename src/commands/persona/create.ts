@@ -469,7 +469,7 @@ export async function execute(
         body: `**User:** ${userPreview}\n**Bot:** ${botPreview}`,
       });
     }
-    // Create is guild-only, so the Import Now button is always present — the
+    // Create is guild-only, so the Import Now button is always present: the
     // next-steps copy references both the right-aligned PNG and the button.
     // Next Steps is the last section, so the avatar thumbnail attaches here and
     // the Import Now button lands tightly beneath it.

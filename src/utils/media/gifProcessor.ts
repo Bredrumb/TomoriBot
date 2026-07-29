@@ -13,7 +13,7 @@ import { safeDownload } from "@/utils/security/safeDownload";
 /** Maximum width for resized keyframe images (pixels). Images maintain aspect ratio and won't be upscaled. */
 const MAX_KEYFRAME_WIDTH = 800;
 
-/** JPEG compression quality (0–100) for extracted GIF keyframes. Higher = better quality, larger payload. */
+/** JPEG compression quality (0-100) for extracted GIF keyframes. Higher = better quality, larger payload. */
 const JPEG_QUALITY = (() => {
   const parsed = Number.parseInt(process.env.GIF_JPEG_QUALITY || "80", 10);
   return Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : 80;

@@ -80,7 +80,7 @@ export async function execute(
       value: index.toString(),
     }));
 
-    // Show modal with string select — must be called before any defer/reply.
+    // Show modal with string select; must be called before any defer/reply.
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.speech.voice_remove.modal_title",

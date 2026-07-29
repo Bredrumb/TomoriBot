@@ -70,7 +70,7 @@ function cleanReleaseNotes(body: string, locale: string, htmlUrl: string): strin
 /**
  * Execute the /update command.
  * Fetches the latest release from GitHub's public API and posts it as a
- * public embed in the current channel — mirroring the Discord webhook
+ * public embed in the current channel, so mirroring the Discord webhook
  * notification sent by the CI/CD pipeline on deploy.
  */
 export async function execute(
@@ -79,7 +79,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Defer publicly — the release embed is intended for the channel, not just the user
+  // Defer publicly, because the release embed is intended for the channel, not just the user
   await interaction.deferReply();
 
   try {
@@ -110,7 +110,7 @@ export async function execute(
       ? cleanReleaseNotes(release.body, locale, release.html_url)
       : localizer(locale, "commands.update.no_notes");
 
-    // Build embed — matches the structure posted by the CI/CD webhook notification
+    // Build embed: matches the structure posted by the CI/CD webhook notification
     const embed = new EmbedBuilder()
       .setDescription(description)
       .setColor(ColorCode.SUCCESS)

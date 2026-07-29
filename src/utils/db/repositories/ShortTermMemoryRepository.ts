@@ -1,9 +1,9 @@
 /**
- * ShortTermMemoryRepository — manages in-conversation short-term working memory.
+ * ShortTermMemoryRepository: manages in-conversation short-term working memory.
  *
  * Short-term memory is currently stored in-process (shortTermMemoryCache) and
  * is not persisted to the database. This repository wraps the cache layer so
- * callers are insulated from that detail — when a DB-backed STM table ships
+ * callers are insulated from that detail; when a DB-backed STM table ships
  * in a future phase, only this file changes (per OD-R-2).
  *
  * Export contract: toExportShape / fromExportShape are required by IRepository
@@ -26,7 +26,7 @@ import {
 } from "@/utils/cache/shortTermMemoryCache";
 import type { IRepository } from "./IRepository";
 
-/** STM is ephemeral — no portable export shape exists yet. */
+/** STM is ephemeral: no portable export shape exists yet. */
 export type ShortTermMemoryExportShape = Record<string, never>;
 
 export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShape> {
@@ -125,7 +125,7 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   }
 
   /**
-   * Short-term memory is ephemeral — nothing to export.
+   * Short-term memory is ephemeral: nothing to export.
    * Returns null always.
    */
   async toExportShape(_ownerId: string | number): Promise<ShortTermMemoryExportShape | null> {
@@ -133,7 +133,7 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   }
 
   /**
-   * Short-term memory is ephemeral — nothing to import.
+   * Short-term memory is ephemeral: nothing to import.
    * Returns false always.
    */
   async fromExportShape(_ownerId: string | number, _data: ShortTermMemoryExportShape): Promise<boolean> {
@@ -141,5 +141,5 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const shortTermMemoryRepository = new ShortTermMemoryRepository();

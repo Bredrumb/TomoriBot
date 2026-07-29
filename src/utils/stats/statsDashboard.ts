@@ -1,7 +1,7 @@
 /**
  * Shared building blocks for the `/stats` commands (Phase 2 presentation layer).
  * Lives under utils/ (not commands/) because it is a helper module, not a loadable
- * command file — the command loader only scans commands/ for configureSubcommand/execute.
+ * command file: the command loader only scans commands/ for configureSubcommand/execute.
  *
  * - Timeframe → window resolution (daily-bucket floor).
  * - Per-view tab builders (personal / persona / server) that turn StatRepository
@@ -56,7 +56,7 @@ export type Timeframe = "today" | "week" | "month" | "year" | "all_time";
 /** The choice values offered by the `timeframe` slash option, in display order. */
 export const TIMEFRAME_VALUES: Timeframe[] = ["today", "week", "month", "year", "all_time"];
 
-/** Default timeframe when the (optional) slash option is omitted — all-time. */
+/** Default timeframe when the (optional) slash option is omitted: all-time. */
 export const DEFAULT_TIMEFRAME: Timeframe = "all_time";
 
 /** Scope choice for the personal view: current server vs. across all servers. */
@@ -70,7 +70,7 @@ const DASHBOARD_TIMEOUT_MS = (() => {
 
 /**
  * Resolves a timeframe to a `bucket >= from` floor (YYYY-MM-DD, UTC), or undefined
- * for all-time. "today" is the current UTC day only — the daily bucket grain cannot
+ * for all-time. "today" is the current UTC day only: the daily bucket grain cannot
  * express a rolling 24h, so the option is labelled "Today" rather than "24 hours".
  */
 export function resolveWindowFrom(timeframe: Timeframe): string | undefined {
@@ -247,7 +247,7 @@ function page(titleKey: string, subtitle: string, fields: StatField[]): StatsTab
 /**
  * Builds the rows of named tab buttons (≤5 per row); the active tab is disabled.
  * When `disableAll` is set (post-timeout paint), every button is disabled so the
- * card freezes in place — buttons stay visible but unpressable instead of vanishing.
+ * card freezes in place, so buttons stay visible but unpressable instead of vanishing.
  */
 function buildTabButtonRows(
   interactionId: string,
@@ -278,7 +278,7 @@ function buildTabButtonRows(
 /**
  * Renders one tab as a Components V2 container: an H3 title, the subtitle, a divider,
  * the stat fields (consecutive inline scalars merged into one block; ranked lists each
- * in their own labelled block), a muted footer, and — when `withButtons` — the tab
+ * in their own labelled block), a muted footer, and (when `withButtons`) the tab
  * button rows inside the same card.
  */
 function buildTabContainer(
@@ -441,7 +441,7 @@ export async function renderStatsDashboardWithReply(
     buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
   );
 
-  // Persistent collector — no listening gap between clicks, so fast switches queue
+  // Persistent collector, so no listening gap between clicks, so fast switches queue
   //    instead of being dropped into a dead window.
   const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
@@ -782,7 +782,7 @@ export async function buildPersonaTabs(args: {
   if (isAllTime) {
     [conditioning, personalMemoryCount, serverMemoryCount, rewardedBy, punishedBy, remembered] = await Promise.all([
       statRepository.getConditioningTotals({ serverId, lineageId }),
-      // People this persona has personal memories about (global per lineage — personal
+      // People this persona has personal memories about (global per lineage: personal
       // memories carry no server_id).
       statRepository.getPersonaMemoryCount({ lineageId }),
       statRepository.getServerMemoryCount({ serverId, lineageId }),
@@ -972,7 +972,7 @@ export async function buildServerTabs(args: {
       statRepository.getConditioningTotals({ serverId }),
       statRepository.getTopUsersByMemory({ serverId, limit: 5 }),
       // Server-scoped shared facts (exact) vs. members' personal memories (approximate,
-      // cross-server) — kept as separate rows since they are different kinds of memory.
+      // cross-server); kept as separate rows since they are different kinds of memory.
       statRepository.getServerMemoryCount({ serverId }),
       statRepository.getMemberMemoryCount({ serverId }),
     ]);

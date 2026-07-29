@@ -10,10 +10,10 @@
  *  3. If no:   run the suites without DB env vars so the DB regression tests
  *              skip gracefully instead of erroring.
  *
- * Test files are grouped into LANES that run concurrently — see {@link planLanes}
+ * Test files are grouped into LANES that run concurrently: see {@link planLanes}
  * for the grouping rules and why they are safe.
  *
- * Invoke via `bun run test` (package.json) — not `bun test tests/` directly.
+ * Invoke via `bun run test` (package.json): not `bun test tests/` directly.
  */
 
 import { SQL } from "bun";
@@ -173,7 +173,7 @@ async function fileUsesModuleMocks(file: string): Promise<boolean> {
  *
  * `mock.module()` is applied process-wide by Bun and never restored between
  * files, so a file that stubs a shared module (e.g. the `@/utils/db/repositories`
- * barrel) corrupts every file loaded LATER IN THE SAME PROCESS — surfacing as
+ * barrel) corrupts every file loaded LATER IN THE SAME PROCESS: surfacing as
  * ordering-dependent "X is not a function" / "Export named X not found" failures.
  * That hazard is confined to a single process, so the rule required is "no two
  * mock-using files share a process", NOT "no two files ever share a process".
@@ -209,7 +209,7 @@ async function planLanes(files: string[]): Promise<Lane[]> {
     lanes.push({ id: "unit-isolated", batches: isolated.unit.map((file) => ({ files: [file] })) });
   }
 
-  // Shared batch first, then any mock-using regression file on its own — all
+  // Shared batch first, then any mock-using regression file on its own: all
   // sequential within the single DB lane.
   const dbBatches: Batch[] = [
     ...(shared.db.length > 0 ? [{ files: shared.db }] : []),
@@ -312,7 +312,7 @@ async function main(): Promise<void> {
     process.exit(await runTestFiles(testFiles));
   }
 
-  // Non-local host detected — fall back to skip mode to avoid touching remote DBs.
+  // Non-local host detected, so fall back to skip mode to avoid touching remote DBs.
   if (!isLocalHost(params)) {
     console.warn(
       `[test-runner] Postgres host "${params.host}" is not local. Skipping DB provisioning.\n` +

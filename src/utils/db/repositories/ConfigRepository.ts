@@ -1,5 +1,5 @@
 /**
- * ConfigRepository — manages the 13 split server config tables and preset tables.
+ * ConfigRepository: manages the 13 split server config tables and preset tables.
  *
  * All config reads and writes route through typed split-table methods.
  * The legacy `tomori_configs` god table was dropped by migration 008 (Task F2).
@@ -381,7 +381,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   /**
    * Loads model-selection and BYOK columns from the split config tables for a server.
    * Used by credentialResolver to resolve provider for each capability without
-   * bypassing the TomoriState cache — this is an intentional fresh DB read.
+   * bypassing the TomoriState cache (this is an intentional fresh DB read).
    *
    * @param serverId - Internal server DB ID
    */
@@ -503,7 +503,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         return parsed.success ? parsed.data : null;
       }
 
-      // Threshold mode — read current state, compute next, write back atomically.
+      // Threshold mode; read current state, compute next, write back atomically.
       const updatedRuntime = await sql.transaction(async (tx) => {
         const [currentRuntime] = await tx`
           SELECT *
@@ -1300,5 +1300,5 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const configRepository = new ConfigRepository();

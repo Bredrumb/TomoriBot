@@ -1,13 +1,13 @@
 /**
  * Refines the locale category split in two ways:
  *
- * Task 1 — Split commands.ts:
+ * Task 1: Split commands.ts:
  *   Reads each locale's commands.ts, writes one sub-file per top-level key under
  *   commands/ subdirectory, then rewrites commands.ts as a thin assembler that
  *   imports the sub-files. The localizer's *.ts glob picks up commands.ts only;
  *   the sub-files are internal imports resolved at runtime.
  *
- * Task 2 — Move tool-activity keys from genai.* to tools.*:
+ * Task 2: Move tool-activity keys from genai.* to tools.*:
  *   Extracts search, mcp, tool_notice, video, document, image, vision, gif, fetch
  *   from providers.ts and appends them to tools.ts under the same key names.
  *   Then bulk-replaces all "genai.<key>." call-site references in src/ with

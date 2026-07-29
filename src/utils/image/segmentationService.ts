@@ -8,7 +8,7 @@
  *
  * Pipeline:
  * 1. Send image + text target description to Gemini
- * 2. Gemini returns JSON with bounding boxes (normalized 0–1000) and cropped PNG masks
+ * 2. Gemini returns JSON with bounding boxes (normalized 0-1000) and cropped PNG masks
  * 3. Each mask is resized to its bounding box pixel dimensions
  * 4. All masks are composited onto a full-canvas black image (white = redraw area)
  * 5. Final mask is binarized at threshold 127 for clean edges
@@ -18,7 +18,7 @@ import sharp from "sharp";
 import { GoogleGenAI, HarmBlockThreshold, HarmCategory, type SafetySetting } from "@google/genai";
 import { log } from "../misc/logger";
 
-/** Whether to enable debug mode — when true, returns the raw mask buffer for inspection */
+/** Whether to enable debug mode: when true, returns the raw mask buffer for inspection */
 const NAI_INPAINT_DEBUG = (process.env.NAI_INPAINT_DEBUG || "false").toLowerCase() === "true";
 
 /** Gemini model used for image segmentation (configurable for future model upgrades) */
@@ -29,7 +29,7 @@ const NAI_SEGMENTATION_TIMEOUT_MS = Number.parseInt(process.env.NAI_SEGMENTATION
 
 /**
  * Padding added to each side of the bounding box as a fraction of the box dimension.
- * 0.15 = 15% padding on each side — helps capture regions that extend beyond
+ * 0.15 = 15% padding on each side, so helps capture regions that extend beyond
  * Gemini's detected bounding box (e.g. wispy hair strands, flowing fabric).
  * Clamped to image bounds after expansion.
  */
@@ -62,10 +62,10 @@ const SEGMENTATION_SAFETY_SETTINGS: SafetySetting[] = [
 
 /**
  * A single segmentation result from Gemini.
- * Coordinates are normalized to 0–1000 range.
+ * Coordinates are normalized to 0-1000 range.
  */
 interface GeminiSegment {
-  /** Bounding box as [y0, x0, y1, x1], normalized 0–1000 */
+  /** Bounding box as [y0, x0, y1, x1], normalized 0-1000 */
   box_2d: [number, number, number, number];
   /** Base64-encoded PNG mask cropped to the bounding box (white = target region) */
   mask: string;
@@ -77,7 +77,7 @@ interface GeminiSegment {
  * Result of the full segmentation + mask processing pipeline.
  */
 export interface SegmentationResult {
-  /** Final full-canvas B/W mask as base64 PNG — white = redraw, black = preserve */
+  /** Final full-canvas B/W mask as base64 PNG: white = redraw, black = preserve */
   maskBase64: string;
   /** Number of segments detected and merged */
   segmentCount: number;
@@ -114,7 +114,7 @@ async function callGeminiSegmentation(
     `[Segmentation] Sending request to Gemini model "${NAI_SEGMENTATION_MODEL}" (timeout: ${NAI_SEGMENTATION_TIMEOUT_MS}ms, image: ${Math.round((imageBase64.length * 0.75) / 1024)}KB, type: ${imageMimeType})`,
   );
 
-  // Wrap the API call in a timeout — Gemini can hang indefinitely without one
+  // Wrap the API call in a timeout because Gemini can hang indefinitely without one
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(
       () => reject(new Error(`Gemini segmentation timed out after ${NAI_SEGMENTATION_TIMEOUT_MS}ms`)),
@@ -123,7 +123,7 @@ async function callGeminiSegmentation(
   );
 
   // Build the request following Google's spatial understanding reference:
-  // Simple, direct segmentation prompt — no extra reasoning instructions
+  // Simple, direct segmentation prompt: no extra reasoning instructions
   // Text prompt BEFORE image (Gemini processes instructions better when text leads)
   // Temperature 0.5 (prevents model from looping on repeated tokens)
   // Safety settings disabled (prevents silent blocks on anime/artistic content)
@@ -212,13 +212,13 @@ async function callGeminiSegmentation(
  * Key design decisions based on open-source NAI implementations
  * (ComfyUI_NAIDGenerator, novelai-api, novelai-python):
  *
- * - **Elliptical shape** — Organic curves blend better than rectangles in diffusion.
- * - **1/8th resolution quantization** — NAI's diffusion model operates in latent space
+ * - **Elliptical shape**, so Organic curves blend better than rectangles in diffusion.
+ * - **1/8th resolution quantization**, because NAI's diffusion model operates in latent space
  *    at 1/8th pixel resolution. Masks must be pre-quantized to this grid using
  *    nearest-neighbor interpolation (down to `ceil(w/64)*8` × `ceil(h/64)*8`, then
  *    back up to full size). Without this, full-resolution mask edges create intermediate
  *    grey values when the model internally downsamples, producing a visible halo.
- * - **RGBA format** — NAI expects RGBA PNG where white pixels have alpha=255 (redraw)
+ * - **RGBA format**, because NAI expects RGBA PNG where white pixels have alpha=255 (redraw)
  *    and black pixels have alpha=0 (preserve). The alpha channel is the actual mask
  *    signal, matching the `naimask_to_base64()` encoding from ComfyUI_NAIDGenerator.
  *
@@ -243,7 +243,7 @@ async function buildBoundingBoxMask(
     let x1 = Math.round((x1Norm / 1000) * originalWidth);
     let y1 = Math.round((y1Norm / 1000) * originalHeight);
 
-    // Apply padding — expand each side by a fraction of the box dimension
+    // Apply padding: expand each side by a fraction of the box dimension
     // to capture content that extends beyond Gemini's detected bounding box
     const padX = Math.round((x1 - x0) * NAI_INPAINT_PADDING);
     const padY = Math.round((y1 - y0) * NAI_INPAINT_PADDING);
@@ -282,7 +282,7 @@ async function buildBoundingBoxMask(
 
   // Step 2: Quantize mask to NAI's latent space grid (1/8th resolution).
   // NAI's diffusion model operates at 1/8th pixel resolution in latent space.
-  // The mask gets downsampled internally regardless — but if we send a full-res
+  // The mask gets downsampled internally regardless; but if we send a full-res
   // mask with smooth edges, the internal downsampling creates intermediate grey
   // values at boundaries that the model interprets as partial redraw (= halo).
   // Pre-quantizing with nearest-neighbor ensures every mask pixel aligns exactly
@@ -337,7 +337,7 @@ async function buildBoundingBoxMask(
 }
 
 /**
- * Color palette for bounding box overlays — matches Google's spatial understanding example.
+ * Color palette for bounding box overlays: matches Google's spatial understanding example.
  */
 const BBOX_COLORS = [
   "#FF0000",
@@ -378,7 +378,7 @@ async function generateDebugOverlay(
     const color = BBOX_COLORS[i % BBOX_COLORS.length];
     const [y0Norm, x0Norm, y1Norm, x1Norm] = segment.box_2d;
 
-    // Convert normalized 0–1000 coordinates to pixel coordinates (raw Gemini bbox)
+    // Convert normalized 0-1000 coordinates to pixel coordinates (raw Gemini bbox)
     const x0 = Math.round((x0Norm / 1000) * imgWidth);
     const y0 = Math.round((y0Norm / 1000) * imgHeight);
     const x1 = Math.round((x1Norm / 1000) * imgWidth);

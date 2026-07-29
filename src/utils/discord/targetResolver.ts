@@ -518,7 +518,7 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
 
 function formatChannelCandidateLabel(channel: GuildTextBasedChannel): string {
   if (isThreadLike(channel)) {
-    // Parent name is intentionally omitted — threads are referenced by name only.
+    // Parent name is intentionally omitted: threads are referenced by name only.
     // The resolver still accepts qualified "name in #parent" input; we just don't surface
     // parent info in labels to avoid confusing the LLM with decorated channel slugs.
     return channel.name;
@@ -646,7 +646,7 @@ export async function resolveChannelTarget(input: string, context: ToolContext):
     };
   }
 
-  /** Resolve a raw channel ID. Tries client cache, guild fetch, then active threads —
+  /** Resolve a raw channel ID. Tries client cache, guild fetch, then active threads:
    *  because guild.channels.fetch() does not return threads. */
   const resolveById = async (id: string): Promise<GuildTextBasedChannel | null> => {
     const fromClient = await context.client.channels.fetch(id).catch(() => null);
@@ -654,7 +654,7 @@ export async function resolveChannelTarget(input: string, context: ToolContext):
     if (fromGuild && isGuildTextTarget(fromGuild) && "guildId" in fromGuild && fromGuild.guildId === guild.id) {
       return fromGuild as GuildTextBasedChannel;
     }
-    // guild.channels.fetch does not return threads — fall back to active thread list
+    // guild.channels.fetch does not return threads, so fall back to active thread list
     const activeThreads = await getActiveThreadTargets(guild);
     return activeThreads.find((t) => t.id === id) ?? null;
   };
@@ -837,7 +837,7 @@ export async function resolveChannelTarget(input: string, context: ToolContext):
       };
     }
 
-    // Nothing found in cache — fetch all guild channels once and retry
+    // Nothing found in cache, so fetch all guild channels once and retry
     if (fetchFallback) {
       await guild.channels.fetch().catch(() => null);
       return searchChannels(false);

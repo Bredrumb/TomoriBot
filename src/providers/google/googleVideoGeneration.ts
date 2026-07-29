@@ -20,7 +20,7 @@ const PROVIDER_VIDEO_DOWNLOAD_MAX_MB = Math.max(
   Number.parseInt(process.env.PROVIDER_VIDEO_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
 );
 
-/** Aspect ratios supported by Google Veo — "1:1" and others are rejected by the API */
+/** Aspect ratios supported by Google Veo: "1:1" and others are rejected by the API */
 const GOOGLE_SUPPORTED_ASPECT_RATIOS = new Set(["16:9", "9:16"]);
 
 function selectClosestSupportedDuration(
@@ -46,14 +46,14 @@ function normalizeGoogleResolution(requestedResolution: ProviderNativeVideoResol
  * Generate a video using Google's Veo API via the @google/genai SDK.
  *
  * Flow:
- *   1. Call ai.models.generateVideos() — returns a long-running operation
+ *   1. Call ai.models.generateVideos(): returns a long-running operation
  *   2. Poll every 10s via ai.operations.getVideosOperation() until done
  *   3. Download the video from the operation response
  *
  * Supports:
  *   - Text-to-video: prompt only
  *   - Image-to-video: prompt + single reference image as starting frame
- *   - Aspect ratio: "16:9" (default) or "9:16" — unsupported values (e.g. "1:1") are silently ignored and Veo defaults to "16:9"
+ *   - Aspect ratio: "16:9" (default) or "9:16". unsupported values (e.g. "1:1") are silently ignored and Veo defaults to "16:9"
  *
  * @param request - Video generation request with apiKey, model, prompt, and optional parameters
  * @returns Raw MP4 video data as a Buffer, or null values on failure
@@ -75,7 +75,7 @@ export async function generateGoogleNativeVideo(
     prompt: request.prompt,
   };
 
-  // Add config (aspect ratio — only pass values Veo supports; unsupported values like "1:1" cause a 400)
+  // Add config (aspect ratio: only pass values Veo supports; unsupported values like "1:1" cause a 400)
   const config: NonNullable<GenerateVideosParameters["config"]> = {};
   if (request.aspectRatio && GOOGLE_SUPPORTED_ASPECT_RATIOS.has(request.aspectRatio)) {
     config.aspectRatio = request.aspectRatio;

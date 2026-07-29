@@ -13,8 +13,8 @@
  *   Without HF_TOKEN, gated repos return 401/403 and the family is skipped with a warning.
  *
  * Exit codes:
- *   0 — all families downloaded (or already present)
- *   1 — one or more families failed or were access-denied
+ *   0: all families downloaded (or already present)
+ *   1: one or more families failed or were access-denied
  */
 
 import * as path from "node:path";
@@ -104,7 +104,7 @@ async function downloadFile(
 
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
-  // Stream response body to disk — Bun.write() accepts a Response directly
+  // Stream response body to disk: Bun.write() accepts a Response directly
   try {
     await Bun.write(destPath, response);
   } catch (err) {

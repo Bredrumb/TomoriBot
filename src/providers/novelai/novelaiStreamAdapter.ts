@@ -54,18 +54,18 @@ import { getNovelAiThinkingDirective } from "@/utils/provider/thinkingControl";
  * also appends "{botName}:" after <think></think> as a true prefill, steering the model to respond
  * in the persona's voice from the very first token.
  *
- * When OFF: bot name is stripped from assistant turns — <|assistant|> is sufficient as the
+ * When OFF: bot name is stripped from assistant turns: <|assistant|> is sufficient as the
  * structural signal. The original motivation for stripping was garbled name artifacts
  * (e.g., "Tomo", "Tomorleasing"), but keeping the prefix has shown better persona consistency.
  *
- * Only affects GLM 4.6 — Kayra already appends the bot name as a prefill at prompt assembly.
+ * Only affects GLM 4.6; Kayra already appends the bot name as a prefill at prompt assembly.
  */
 const NAI_GLM_CHAR_PREFIX_ENABLED = (process.env.NAI_GLM_CHAR_PREFIX_ENABLED ?? "true").toLowerCase() === "true";
 
 /**
  * Characters-per-token ratio used to estimate GLM 4.6 input token count from prompt length.
  *
- * GLM 4.6 actual tokenization runs ~2.2–2.5 chars/token, far below the 4 chars/token
+ * GLM 4.6 actual tokenization runs ~2.2-2.5 chars/token, far below the 4 chars/token
  * assumed by contextTruncator. This value is used by the dynamic max_length cap to
  * re-estimate token usage from the final assembled prompt (which includes formatting
  * overhead not present in the raw context items seen by the truncator).
@@ -86,7 +86,7 @@ const NAI_GLM_CHARS_PER_TOKEN = Number.parseFloat(process.env.NAI_GLM_CHARS_PER_
 /**
  * Characters-per-token ratio for Kayra/Erato context estimation.
  *
- * Kayra tokenizes at ~3.0–3.5 chars/token, denser than the 4 chars/token assumed by
+ * Kayra tokenizes at ~3.0-3.5 chars/token, denser than the 4 chars/token assumed by
  * contextTruncator. This drives the secondary dynamic max_length cap below.
  *
  * Configured via NAI_KAYRA_CHARS_PER_TOKEN env var (default: "3.5").
@@ -119,7 +119,7 @@ const NAI_GLM_CONTEXT_LIMIT = Number.parseInt(process.env.NAI_GLM_CONTEXT_LIMIT 
  */
 function extractNonSchemaPresetParams(params: Record<string, unknown>): Partial<NovelAIParameters> {
   // These four keys are written to split server config tables and applied via the existing
-  // override logic in getParametersForModel — exclude them here to avoid conflicts.
+  // override logic in getParametersForModel, so exclude them here to avoid conflicts.
   const schemaKeys = new Set(["temperature", "top_k", "top_p", "min_p"]);
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(params)) {
@@ -192,7 +192,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
   private static readonly SYSTEM_INSTRUCTION_TAGS_TOOLING: ContextItemTag[] = [
     ContextItemTag.SYSTEM_FUNCTION_GUIDE,
-    // REMOVED: KNOWLEDGE_SERVER_EMOJIS, KNOWLEDGE_SERVER_STICKERS — GLM 4.6 is text-only
+    // REMOVED: KNOWLEDGE_SERVER_EMOJIS, KNOWLEDGE_SERVER_STICKERS: GLM 4.6 is text-only
     // and cannot use emojis/stickers. Omitting saves significant tokens toward the ~2800
     // token quality threshold.
   ];
@@ -209,7 +209,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   /**
    * Speaker names extracted from DIALOGUE_HISTORY for no-colon turn detection.
    * Populated in startStream() and used by processVisibleText().
-   * Contains only user/other-character names — never the bot's own name.
+   * Contains only user/other-character names: never the bot's own name.
    */
   private knownSpeakers: Set<string> = new Set();
   private speakerStopPatternEnabled = false;
@@ -224,7 +224,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
   /**
    * Tracks whether any visible text has been emitted to the user during this stream.
-   * Used to suppress stray tool calls that appear after text output — these are model
+   * Used to suppress stray tool calls that appear after text output: these are model
    * hallucinations (e.g., empty select_sticker_for_response) that fail on execution.
    */
   private hasEmittedVisibleText = false;
@@ -236,7 +236,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * to continue (which causes garbled artifacts), we hold back text after the
    * last sentence boundary and silently drop it when the stream ends.
    *
-   * Only active for GLM 4.6 — Kayra uses generate_until_sentence at the API level.
+   * Only active for GLM 4.6; Kayra uses generate_until_sentence at the API level.
    */
   private sentenceTrailingBuffer = "";
 
@@ -272,7 +272,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   }
 
   /** Regex matching characters that indicate a natural sentence/thought boundary.
-   * NOTE: Single quote (') is intentionally excluded — contractions like "How's",
+   * NOTE: Single quote (') is intentionally excluded because contractions like "How's",
    * "don't", "it's" are far more common than closing single quotes, causing
    * false positives that cut mid-word (e.g., "How'" instead of "How's it going?").
    */
@@ -294,7 +294,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    *
    * For GLM 4.6 (OpenAI endpoint):
    * - Uses the official GLM chat template with <|system|>, <|user|>, <|assistant|> tags
-   * - Single-pass generation — no continuation loop (NAI's ~150-token cap is accepted)
+   * - Single-pass generation; no continuation loop (NAI's ~150-token cap is accepted)
    * - Incomplete trailing sentences are silently dropped via sentence-boundary buffering
    * - Uses regex speaker detection for turn boundaries (GLM doesn't emit <|user|> tokens)
    *
@@ -398,7 +398,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     // Dynamic max_length safety cap for GLM 4.6.
     //
     // contextTruncator runs earlier on raw context items using a 4 chars/token estimate.
-    // GLM 4.6 actually tokenizes at ~2.2–2.5 chars/token, so the assembled prompt (which
+    // GLM 4.6 actually tokenizes at ~2.2-2.5 chars/token, so the assembled prompt (which
     // also includes GLM role tags, the tool guide, and /nothink directives not present
     // in raw context items) can still exceed the API's 12 288-token ceiling.
     //
@@ -423,7 +423,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // Dynamic max_length safety cap for Kayra/Erato.
       //
       // contextTruncator runs earlier using 4 chars/token. Kayra tokenizes at
-      // ~3.0–3.5 chars/token, so the assembled prompt may still overshoot the
+      // ~3.0-3.5 chars/token, so the assembled prompt may still overshoot the
       // tier's token ceiling. We re-estimate here and:
       //   - Clamp max_length when input fits but input+output would exceed the limit.
       //   - Log a warning when the input alone already exceeds the limit (can't fix
@@ -459,7 +459,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     // These are stored in this.knownSpeakers so processVisibleText() can use them
     // to detect turn boundaries even when the model omits the colon (story format).
     // DIALOGUE_HISTORY is the only tag guaranteeing the "AuthorName: message" prefix.
-    // NOTE: logit_bias_exp is intentionally NOT used here — despite use_string=true,
+    // NOTE: logit_bias_exp is intentionally NOT used here despite use_string=true,
     // logit_bias_exp[].sequence is interpreted as Kayra token IDs, not UTF-8 bytes.
     // Passing byte values as token IDs produces garbage special tokens at generation
     // start (e.g. <|reserved5|>, <|maskend|>). Turn stopping is handled entirely by
@@ -480,7 +480,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
           if (speaker) speakerSet.add(speaker);
         }
       }
-      // Exclude the bot's own name — it may legitimately appear on new lines
+      // Exclude the bot's own name because it may legitimately appear on new lines
       // as it continues its own turn across multiple sentences.
       speakerSet.delete(context.tomoriState.persona_nickname);
       this.knownSpeakers = speakerSet;
@@ -515,7 +515,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Single-pass streaming for Kayra — no continuation loop
+   * Single-pass streaming for Kayra; no continuation loop
    */
   private async *streamSinglePass(
     request: NovelAIGenerationRequest,
@@ -580,7 +580,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // GLM 4.6: If the stream ends while accumulating a tool call (model hit token cap
       // before generating </tool_call>), try to parse what we have. NAI's token limit
       // often cuts off the closing tag, so we synthesize it from the accumulated buffer.
-      // Text preamble before the tool call is fine — it's already been emitted.
+      // Text preamble before the tool call is fine, so it's already been emitted.
       if (this.toolCallMode === "tool_call" && this.toolCallBuffer.trim()) {
         log.info("NovelAI GLM: Stream ended during tool call accumulation — attempting to parse without closing tag");
         const patched = `${this.toolCallBuffer.trimEnd()}\n</tool_call>`;
@@ -640,7 +640,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         if (NovelaiStreamAdapter.SENTENCE_BOUNDARY_PATTERN.test(this.sentenceTrailingBuffer)) {
           finalFlush = this.sentenceTrailingBuffer;
         } else {
-          // Incomplete sentence — save it as a continuation prefill for the retry.
+          // Incomplete sentence, so save it as a continuation prefill for the retry.
           // NovelaiProvider reads this via getPendingContinuationPrefill() after the
           // stream ends and attaches it to StreamResult.naiContinuationPrefill so
           // tomoriChat can append it to the next prompt instead of starting over.
@@ -737,7 +737,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
     // GLM 4.6: Detect stray </think> tags in visible text.
     // After the initial <think></think> block is consumed by stripThinkBlocks(),
-    // any subsequent </think> in the visible text phase indicates model debris —
+    // any subsequent </think> in the visible text phase indicates model debris:
     // the model hallucinates garbage after the tag (e.g., "oggers:</think>\nI'll kill you").
     // Stop the stream immediately and only emit clean text before the tag.
     if (this.isGlmModel) {
@@ -748,7 +748,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
           `NovelAI GLM: Stray </think> detected in visible text — stopping stream. ` +
             `Clean text before tag: "${cleanBefore.substring(0, 80)}"`,
         );
-        // Clear buffers — stream will end naturally after this return
+        // Clear buffers, so stream will end naturally after this return
         this.generationBuffer = "";
         this.sentenceTrailingBuffer = "";
         this.hasEmittedVisibleText = false;
@@ -772,7 +772,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
       this.generationBuffer = "";
     } else {
-      // Detect speaker transitions — the model is generating another character's turn.
+      // Detect speaker transitions: the model is generating another character's turn.
       // Both Kayra and GLM 4.6 need this: Kayra has no API stop sequences, and GLM
       // doesn't emit <|user|> tokens in completions mode (it just starts "Username: ...")
       //
@@ -886,7 +886,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     // GLM 4.6: Sentence-boundary buffering
     // Accumulate text in the trailing buffer, then emit everything up to the
     // last sentence boundary. The remainder stays buffered in case NAI cuts
-    // the output mid-sentence — it gets silently dropped in processChunk on "final".
+    // the output mid-sentence, so it gets silently dropped in processChunk on "final".
     this.sentenceTrailingBuffer += text;
 
     const lastBoundaryIndex = this.findLastSentenceBoundary(this.sentenceTrailingBuffer);
@@ -979,7 +979,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * Sentence boundaries are characters that typically end a complete thought:
    * punctuation (. ! ? …), closing quotes/brackets (" ) ] 」), markdown
    * formatting (* ~), em dash (—), and newlines.
-   * NOTE: Single quote (') excluded — contractions (How's, don't) cause false cuts.
+   * NOTE: Single quote (') excluded because contractions (How's, don't) cause false cuts.
    *
    */
   private findLastSentenceBoundary(text: string): number {
@@ -1015,7 +1015,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     // GLM 4.6 in Japanese conversations sometimes outputs full-width ＜ ＞ instead of ASCII < >,
     // which breaks all downstream tag detection (indexOf, includes, startsWith, regex).
     // This is safe for visible text since full-width angle brackets are extremely rare in
-    // conversational text — the model only produces them when attempting XML tool call tags.
+    // conversational text because the model only produces them when attempting XML tool call tags.
     const normalizedToken = this.normalizeXmlBrackets(token);
 
     if (this.toolCallMode === "undecided") {
@@ -1096,7 +1096,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       const toolPart = this.textScanBuffer.slice(tagIndex);
       this.textScanBuffer = "";
 
-      // Accept tool calls found after text — text + tool call is a valid pattern
+      // Accept tool calls found after text: text + tool call is a valid pattern
       // (model announces "Let me search for that" then calls the tool).
       // Emit any remaining visible text before the tag as preamble.
       this.toolCallMode = "tool_call";
@@ -1139,7 +1139,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return { type: "text", content: "" };
     }
 
-    // Check for unwrapped tool call — bare function name on a new line followed by <arg_key>.
+    // Check for unwrapped tool call: bare function name on a new line followed by <arg_key>.
     //    GLM sometimes outputs text then switches to a tool call without <tool_call> wrapper.
     //    Scan for "\n{tool_name}\n<arg_key>" pattern in the buffer.
     if (this.isGlmModel && this.textScanBuffer.includes("<arg_key>")) {
@@ -1174,7 +1174,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // No tool tag found yet — flush everything except a small tail to avoid leaking partial tags
+    // No tool tag found yet, so flush everything except a small tail to avoid leaking partial tags
     const holdLength = NovelaiStreamAdapter.TOOL_CALL_TAG_LENGTH - 1;
     if (this.textScanBuffer.length <= holdLength) {
       return { type: "text", content: "" };
@@ -1191,7 +1191,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Detect an unwrapped tool call in mid-text — a bare function name on its own line
+   * Detect an unwrapped tool call in mid-text: a bare function name on its own line
    * followed by `<arg_key>`. Returns the match position and tool name, or null.
    *
    * Scans for pattern: `\n{known_tool_name}\n<arg_key>` (newline-delimited tool name
@@ -1263,7 +1263,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         return { mode: "tool_call", toolCallText: trimmedStart };
       }
 
-      // Partial <tool_call> tag — buffer is a prefix of the full tag.
+      // Partial <tool_call> tag: buffer is a prefix of the full tag.
       //     NAI chunks can split the tag at any point (e.g., "<to", "<tool_cal").
       //     Wait for more tokens until the full tag arrives or we can rule it out.
       if (
@@ -1273,7 +1273,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         return { mode: "wait" };
       }
 
-      // Unwrapped tool call — model outputs function name directly without <tool_call> tag.
+      // Unwrapped tool call: model outputs function name directly without <tool_call> tag.
       //    GLM 4.6 sometimes omits the wrapper tag and generates:
       //      web_search\n<arg_key>query</arg_key>\n<arg_value>...</arg_value>
       //    Detect this by checking if the first line matches a known tool name.
@@ -1286,7 +1286,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
         if (matchedTool) {
           if (trimmedStart.includes("<arg_key>")) {
-            // Confirmed unwrapped tool call — wrap in <tool_call> for parsing.
+            // Confirmed unwrapped tool call: wrap in <tool_call> for parsing.
             // Use the ORIGINAL name from the model (not normalized) so parseToolCallBlock
             // can normalize it during parsing.
             log.info(
@@ -1302,7 +1302,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
           );
           return { mode: "wait" };
         }
-        // No tool match — log for debugging unwrapped tool call detection failures
+        // No tool match: log for debugging unwrapped tool call detection failures
         log.info(
           `NovelAI GLM: decideToolCallMode — firstLine "${firstLine}" did not match any tool (normalized: "${normalizedName}"). Falling through to text mode.`,
         );
@@ -1337,10 +1337,10 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     // Normalize to ASCII before parsing to ensure the regex matches.
     let normalizedInner = this.normalizeXmlBrackets(inner);
 
-    // Fix truncated closing tags — the stream frequently cuts off right before
+    // Fix truncated closing tags because the stream frequently cuts off right before
     // the final ">" of the last </arg_value> or </arg_key> tag.
     // e.g., "</arg_value" (missing ">") → "</arg_value>"
-    // The >? makes this idempotent — already-complete tags are left unchanged.
+    // The >? makes this idempotent: already-complete tags are left unchanged.
     normalizedInner = normalizedInner
       .replace(/<\/arg_value>?\s*$/, "</arg_value>")
       .replace(/<\/arg_key>?\s*$/, "</arg_key>");
@@ -1353,7 +1353,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       const rawValue = match[2]?.trim();
       if (!rawArgKey) continue;
 
-      // Normalize garbled param names — GLM drops tokens at high temperature.
+      // Normalize garbled param names because GLM drops tokens at high temperature.
       // e.g., "ave_wuery" → "query", "ount" → "count"
       const argKey = this.normalizeParamName(functionName, rawArgKey);
       const expectedType = this.getToolParamType(functionName, argKey);
@@ -1463,7 +1463,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       } catch {}
     }
 
-    // Strategy B: Key-value lines — e.g. "query: LCK LoL schedule\ncount: 5"
+    // Strategy B: Key-value lines: e.g. "query: LCK LoL schedule\ncount: 5"
     //    Matches patterns: "key: value", "key:value", 'key: "value"', "key: 'value'"
     //    Also handles assignment style: "key=value", 'key="value"'
     const kvLines = body.split("\n");
@@ -1507,7 +1507,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * 1. Exact match
    * 2. Underscore → hyphen conversion
    * 3. Hyphen → underscore conversion
-   * 4. Suffix match — if the raw name is a suffix of exactly one registered tool (handles dropped prefix tokens)
+   * 4. Suffix match: if the raw name is a suffix of exactly one registered tool (handles dropped prefix tokens)
    *
    */
   private normalizeToolName(rawName: string): string {
@@ -1525,7 +1525,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return underscoreName;
     }
 
-    // Suffix match — handles dropped prefix tokens from high-temperature sampling.
+    // Suffix match: handles dropped prefix tokens from high-temperature sampling.
     //    e.g., model outputs "eb_search" (missing "w"), match "web_search".
     //    Also try with underscore/hyphen normalization on both sides.
     const candidates = [rawName, hyphenName, underscoreName];
@@ -1537,7 +1537,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return suffixMatches[0].name;
     }
 
-    // Levenshtein distance — catch garbled names that aren't simple suffix truncations.
+    // Levenshtein distance: catch garbled names that aren't simple suffix truncations.
     //    Use stricter threshold (40%) than param matching since tool namespace is larger.
     let bestLevMatch: NormalizedToolDefinition | undefined;
     let bestLevDist = Number.POSITIVE_INFINITY;
@@ -1570,9 +1570,9 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * e.g., "ave_wuery" instead of "query", "ount" instead of "count".
    *
    * Matching strategy:
-   * 1. Exact match — parameter exists in the tool definition
-   * 2. Suffix match — raw name is a suffix of a known parameter (handles dropped prefix tokens)
-   * 3. Best substring match — find the parameter whose name contains the most of the raw name
+   * 1. Exact match: parameter exists in the tool definition
+   * 2. Suffix match: raw name is a suffix of a known parameter (handles dropped prefix tokens)
+   * 3. Best substring match: find the parameter whose name contains the most of the raw name
    *
    */
   private normalizeParamName(functionName: string, rawParamName: string): string {
@@ -1585,14 +1585,14 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return rawParamName;
     }
 
-    // Suffix match — "uery" matches "query", "ount" matches "count"
+    // Suffix match: "uery" matches "query", "ount" matches "count"
     const suffixMatches = knownParams.filter((p) => p.endsWith(rawParamName) && rawParamName.length >= 3);
     if (suffixMatches.length === 1) {
       log.info(`NovelAI GLM: Fuzzy-matched param name "${rawParamName}" → "${suffixMatches[0]}" (suffix match)`);
       return suffixMatches[0];
     }
 
-    // Containment match — raw name contains a known param or vice versa
+    // Containment match: raw name contains a known param or vice versa
     //    Handles cases like "ave_wuery" where the model garbles across the name.
     //    Find the known param with the longest common subsequence in the raw name.
     const containmentMatches = knownParams.filter((p) => rawParamName.includes(p) || p.includes(rawParamName));
@@ -1603,7 +1603,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return containmentMatches[0];
     }
 
-    // Best suffix overlap — find the param that shares the longest suffix with rawParamName
+    // Best suffix overlap: find the param that shares the longest suffix with rawParamName
     //    e.g., "ave_wuery" shares no direct suffix with "query", but we can check
     //    if the raw name ends with a significant portion of any known param.
     let bestMatch = "";
@@ -1631,7 +1631,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       return bestMatch;
     }
 
-    // Levenshtein distance — catch severely garbled names like "ave_wuery" → "query".
+    // Levenshtein distance: catch severely garbled names like "ave_wuery" → "query".
     //    Accept if edit distance is ≤60% of the longer name's length. High tolerance is safe
     //    because the param namespace is small (typically 3-8 params per tool), so false
     //    positives are unlikely. Also requires the best match to be clearly better than runner-up.
@@ -2012,7 +2012,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       });
 
       // Observation turn with tool response
-      // Strip fetch capability reminder fields recursively to save tokens —
+      // Strip fetch capability reminder fields recursively to save tokens because
       // GLM 4.6 has a strict prompt budget, and fetch MCP is disabled for NovelAI.
       const sanitizedResponse = this.stripFetchReminderFields(item.functionResponse);
       const responseLines: string[] = ["<tool_response>"];
@@ -2397,7 +2397,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    *
    * Key decisions:
    * - User turns keep speaker labels (multi-user Discord needs disambiguation)
-   * - Assistant turns have bot name STRIPPED by default — <|assistant|> is sufficient, and
+   * - Assistant turns have bot name STRIPPED by default: <|assistant|> is sufficient, and
    *   including "Tomori:" causes garbled name artifacts (e.g., "Tomo", "Tomorleasing").
    *   Set NAI_GLM_CHAR_PREFIX_ENABLED=false to strip the name (legacy behaviour).
    * - Thinking mode is controlled by NAI_GLM_THINKING_ENABLED env var (default: true).
@@ -2435,7 +2435,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         .join("\n");
 
       if (!textContent) {
-        // Skip items with no text (images/videos — NovelAI doesn't support these)
+        // Skip items with no text (images/videos: NovelAI doesn't support these)
         continue;
       }
 
@@ -2500,14 +2500,14 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
           // Debug: keep "BotName:" prefix to test persona-voice consistency
           promptParts.push(turn.content);
         } else {
-          // Default: strip prefix — <|assistant|> tag is the structural signal
+          // Default: strip prefix: <|assistant|> tag is the structural signal
           promptParts.push(turn.content.replace(botNamePrefixPattern, ""));
         }
       }
     }
 
     // Tool interaction history (after dialogue, before generation prompt).
-    //    Include even when tools are disabled for the current iteration —
+    //    Include even when tools are disabled for the current iteration:
     //    the model needs to see prior tool calls (and failures) plus any text
     //    it already streamed, so it doesn't repeat itself.
     if (options?.functionInteractionHistory?.length) {

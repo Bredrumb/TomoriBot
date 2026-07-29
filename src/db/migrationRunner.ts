@@ -52,7 +52,7 @@ async function getAppliedMigrations(client: SQL): Promise<Set<string>> {
  * pair is ordered by code-point of their stems rather than by filesystem
  * `readdir` order, so a fresh install and an upgraded install apply them
  * identically. Because stems are unique per file, (version, name) is a total
- * order — no ties survive. Same-number siblings must still be mutually
+ * order, so no ties survive. Same-number siblings must still be mutually
  * order-independent; this tie-break guarantees *stability*, not that an
  * alphabetically-later migration may safely depend on an earlier one.
  *
@@ -129,7 +129,7 @@ export async function markAllMigrationsApplied(client: SQL = defaultSql): Promis
  * Applies a single migration file and records it in schema_migrations.
  *
  * Comment-only files (e.g. the 001_baseline marker) produce zero statements
- * from splitSqlStatements and are recorded without executing any SQL —
+ * from splitSqlStatements and are recorded without executing any SQL, so
  * this is intentional for marker migrations.
  *
  */

@@ -27,7 +27,7 @@ function normalizeProviderName(providerName: string): string | null {
 }
 
 /**
- * LlmModelRepository — global model catalog for all LLM modalities.
+ * LlmModelRepository: global model catalog for all LLM modalities.
  *
  * Owns tables: llms, embedding_models, image_diffusion_models, video_generation_models.
  * Read-only; model catalog is global seed data, not exportable per-server state.
@@ -71,7 +71,7 @@ export class LlmModelRepository {
     if (ids.length === 0) return [];
 
     try {
-      // Avoid ANY($1) array binding — Bun SQL can intermittently fail on
+      // Avoid ANY($1) array binding, because Bun SQL can intermittently fail on
       // integer-array parameters with protocol error 08P01.
       const distinctIds = Array.from(new Set(ids));
       const placeholders = distinctIds.map((_, i) => `$${i + 1}`).join(", ");
@@ -1530,7 +1530,7 @@ export class LlmModelRepository {
    * Updates an existing synthetic custom model row in place by its primary key.
    *
    * Used on the edit path so a renamed model_name (which changes the derived codename) updates the
-   * same row rather than orphaning it — config rows reference the model by id, so the id is stable.
+   * same row rather than orphaning it, so config rows reference the model by id, so the id is stable.
    *
    * @param params - modelRefId + capability select the row/table; remaining fields are the new values
    */
@@ -1602,7 +1602,7 @@ export class LlmModelRepository {
   /**
    * Deletes every synthetic model row owned by a custom provider across all capability tables.
    *
-   * Used when tearing down a custom provider entirely — a label+capability may now own several
+   * Used when tearing down a custom provider entirely, so a label+capability may now own several
    * synthetic models, so codename-by-codename deletion is insufficient.
    *
    * @param provider - Internal custom provider name (e.g. "custom:s123:home")
@@ -1615,5 +1615,5 @@ export class LlmModelRepository {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const llmModelRepo = new LlmModelRepository();

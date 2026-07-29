@@ -213,7 +213,7 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
 
   // Resolve the target. This runs even when the private-network guard is
   //    relaxed, because the always-on cloud-metadata denylist below must see
-  //    the resolved addresses — and for the Crawl4AI engine (which dispatches
+  //    the resolved addresses; and for the Crawl4AI engine (which dispatches
   //    out-of-process, bypassing gate 2) this is the only SSRF check.
   let resolvedAddresses: ResolvedFetchAddress[];
   try {
@@ -244,7 +244,7 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
   }
 
   // Always-on floor: cloud-metadata / link-local addresses are blocked
-  //    unconditionally — the private-network opt-in and dev auto-relax cannot
+  //    unconditionally, so the private-network opt-in and dev auto-relax cannot
   //    reach them, since they are the primary SSRF credential-theft target.
   const metadataAddress = resolvedAddresses.find((entry) => isCloudMetadataAddress(entry.address));
   if (metadataAddress) {

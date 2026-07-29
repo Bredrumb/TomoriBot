@@ -134,7 +134,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
 
       // The unified `web_search` tool is gated centrally in `availability.ts`
       //    via its `requiresFeatureFlag = "web_search"`. No per-adapter Brave-key
-      //    filtering needed here anymore — the dispatcher inside the tool itself
+      //    filtering needed here anymore, because the dispatcher inside the tool itself
       //    decides which engine (Brave/DDG/Felo) serves the request at call time.
       if (builtInTools.length > 0) {
         allTools.push(...this.convertToolsArray(builtInTools));
@@ -175,7 +175,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
               };
 
               // MCP tools use `parametersJsonSchema`, rename to `input_schema`.
-              // Anthropic requires `input_schema` on every tool — fall back to an
+              // Anthropic requires `input_schema` on every tool, so fall back to an
               // empty object schema if the declaration provides no parameters.
               if ("parametersJsonSchema" in declaration) {
                 anthropicDeclaration.input_schema = declaration.parametersJsonSchema;

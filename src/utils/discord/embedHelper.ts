@@ -130,7 +130,7 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
  *
  * Each entry in `tipKeys` is an atomic locale key resolved independently and rendered as its own
  * dashed bullet. Because the content lives in an embed description (not a footer), markdown and
- * hyperlinks render — which is why tips moved out of footers. Conditional tips are handled by the
+ * hyperlinks render: which is why tips moved out of footers. Conditional tips are handled by the
  * caller simply including/excluding a key (e.g. an OpenRouter-only item), so no duplicate paragraph
  * strings are needed in the locales.
  *

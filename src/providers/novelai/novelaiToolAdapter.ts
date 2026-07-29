@@ -177,7 +177,7 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // Brave-key dance removed — unified web_search is gated centrally.
+      // Brave-key dance removed: unified web_search is gated centrally.
       if (builtInTools.length > 0) {
         const builtInToolsFormatted = this.convertToolsArray(builtInTools);
         allTools.push(...builtInToolsFormatted);
@@ -188,7 +188,7 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
       if (mcpManager.isReady() && allowedMCPFunctions) {
         let addedMCPToolsCount = 0;
 
-        // MCP functions disabled for NovelAI GLM — either redundant with
+        // MCP functions disabled for NovelAI GLM because either redundant with
         // other providers or too token-expensive for GLM's strict prompt budget.
         // "fetch" is the dedicated fetch MCP server; "fetch-url" is DDG's variant.
         // Note: brave_* names are no longer LLM-visible (replaced by unified

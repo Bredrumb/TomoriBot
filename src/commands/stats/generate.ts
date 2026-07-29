@@ -163,7 +163,7 @@ async function executePersonalCard(
   // Privacy gate: fully-private users cannot generate personal cards.
   const privacyLevel = await getCachedPrivacyLevel(interaction.user.id);
   if (privacyLevel === PrivacyLevel.FULL) {
-    // replyInfoEmbed defaults to ephemeral — no extra flag needed.
+    // replyInfoEmbed defaults to ephemeral, so no extra flag needed.
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.stats.generate.privacy_title",
       descriptionKey: "commands.stats.generate.privacy_description",
@@ -291,7 +291,7 @@ async function executeServerCard(
   serverName: string,
   timeframe: Timeframe,
 ): Promise<void> {
-  // Acknowledge immediately — DB reads can take a moment.
+  // Acknowledge immediately, because DB reads can take a moment.
   await interaction.deferReply();
 
   const guild = interaction.guild;

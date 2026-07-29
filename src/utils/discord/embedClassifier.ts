@@ -6,7 +6,7 @@
  * so they can be reused by offline/debug consumers like `/tool prompt snapshot`
  * without duplicating the locale-scanning logic.
  *
- * The canonical runtime usage still lives inline in tomoriChat.ts — these
+ * The canonical runtime usage still lives inline in tomoriChat.ts: these
  * helpers are feature-parity copies of that behavior.
  */
 
@@ -81,13 +81,13 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
       return { isTarget: true, type: "system_injection" };
     }
 
-    // Scene-generation status embed — surfaced to the LLM so it knows a scripted
+    // Scene-generation status embed: surfaced to the LLM so it knows a scripted
     //     scene is underway and can read the speaking order / instructions as context.
     if (embedTitle === localizer(supportedLocale, "commands.bot.generate.scene.success_title")) {
       return { isTarget: true, type: "scene_directive" };
     }
 
-    // Reward/punish titles — dynamically discovered from locale sub-keys
+    // Reward/punish titles: dynamically discovered from locale sub-keys
     //    so new reward/punish commands are automatically recognized
     const rewardNames = getLocaleSubKeys(supportedLocale, "commands.reward");
     const rewardTitles = rewardNames
@@ -167,7 +167,7 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 
-  // Skip bot-produced system embeds — those are handled separately
+  // Skip bot-produced system embeds because those are handled separately
   const embedCheck = checkTargetEmbedTitle(embed.title);
   if (embedCheck.isTarget) {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };

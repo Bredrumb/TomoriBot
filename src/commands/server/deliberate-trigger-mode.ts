@@ -23,7 +23,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Toggles deliberate trigger mode for the server.
- * When enabled, plain trigger words no longer fire the bot — only direct invocations work:
+ * When enabled, plain trigger words no longer fire the bot, so only direct invocations work:
  * `@{trigger}` prefix, Discord @mention, replies to the persona, or `/bot respond`.
  */
 export async function execute(

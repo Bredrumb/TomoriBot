@@ -66,7 +66,7 @@ export async function execute(
   const guildDiscId = interaction.guild?.id ?? interaction.user.id;
 
   try {
-    // Permission check — ManageGuild required for destructive server ops
+    // Permission check: ManageGuild required for destructive server ops
     if (interaction.guild) {
       const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
       if (!hasPermission) {
@@ -105,7 +105,7 @@ export async function execute(
       return;
     }
 
-    // Defer once we commit to the destructive path — work may take a few seconds
+    // Defer once we commit to the destructive path because work may take a few seconds
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // Best-effort Discord-side webhook cleanup BEFORE wiping DB rows.
@@ -119,13 +119,13 @@ export async function execute(
         await webhook.delete("TomoriBot /server nuke");
         webhooksDeleted++;
       } catch (error) {
-        // Don't fail nuke if Discord cleanup fails — log and move on
+        // Don't fail nuke if Discord cleanup fails, so log and move on
         webhooksFailed++;
         log.warn(`[Nuke] Failed to delete Discord webhook ${webhookDiscId} for guild ${guildDiscId}`, error);
       }
     }
 
-    // DB wipe — atomic on the preserve-mode branch, single cascade on full nuke
+    // DB wipe: atomic on the preserve-mode branch, single cascade on full nuke
     const nuked = await serverRepository.nukeServer(serverId, guildDiscId, {
       preservePersonas,
     });
@@ -169,7 +169,7 @@ export async function execute(
     };
     await log.error("Error in /server nuke command", error as Error, context);
 
-    // Error reply — use editReply if we already deferred, else replyInfoEmbed
+    // Error reply: use editReply if we already deferred, else replyInfoEmbed
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({
         content: localizer(locale, "general.errors.unknown_error_description"),

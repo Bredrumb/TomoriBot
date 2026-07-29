@@ -99,7 +99,7 @@ export class ReminderTool extends BaseTool {
   }
 
   /**
-   * Context-aware availability check — disabled during non-task reminder-triggered turns
+   * Context-aware availability check: disabled during non-task reminder-triggered turns
    * to prevent the AI from scheduling new reminders while executing an existing one.
    * Self-reminder (task) turns are exempt so tasks can spawn follow-up tasks.
    * @param context - Optional tool context containing streaming flags
@@ -157,7 +157,7 @@ export class ReminderTool extends BaseTool {
 
     // NovelAI GLM recovery: default repetition_interval_hours to 0 (one-time) when missing.
     // GLM frequently omits this required parameter for simple "remind me in X" requests.
-    // Only for NovelAI — other providers have retries and should be required to explicitly
+    // Only for NovelAI, so other providers have retries and should be required to explicitly
     // set this so the model is "conscious" of whether the reminder is one-time or recurring.
     if (context.provider === "novelai" && typeof repetitionIntervalHoursArg !== "number") {
       log.info("Reminder tool: Auto-filling missing repetition_interval_hours with 0 (one-time reminder)");
@@ -186,7 +186,7 @@ export class ReminderTool extends BaseTool {
 
     if (
       !tomoriState ||
-      // Allow null requestingUserRow for Matrix relay webhooks — they have no
+      // Allow null requestingUserRow for Matrix relay webhooks, so they have no
       // users table entry, so created_by_user_id will be stored as null
       (!requestingUserRow && !isMatrixRelayRequester) ||
       (requestingUserRow && !requestingUserRow.user_id) ||
@@ -337,7 +337,7 @@ export class ReminderTool extends BaseTool {
       // Method 1: Absolute time provided - parse in the offset the model labeled
       // the time with (utc_offset), falling back to the server's configured timezone.
       // The model passes wall-clock time as spoken and labels the frame instead of
-      // converting it — deterministic code does the offset arithmetic here.
+      // converting it, so deterministic code does the offset arithmetic here.
       timeCalculationMethod = "absolute";
 
       // Validate utc_offset only when it will actually be used (absolute path)
@@ -433,7 +433,7 @@ export class ReminderTool extends BaseTool {
       let actualNicknameInDB = requestedTargetUser || "Tomori";
       let resolvedTargetUserId = "";
       let resolvedTargetUserLabel = actualNicknameInDB;
-      // Target's personal timezone offset (/personal timezone) — used only for the
+      // Target's personal timezone offset (/personal timezone): used only for the
       // dual-clock confirmation display, never for time interpretation
       let targetPersonalOffset: number | null = null;
 
@@ -538,7 +538,7 @@ export class ReminderTool extends BaseTool {
         const reminderPurposeText =
           reminderPurpose.length > 200 ? `${reminderPurpose.substring(0, 197)}...` : reminderPurpose;
         // Show both clocks when the target has a personal timezone differing from
-        // the server's — lets the user immediately spot a mislabeled/misconverted time
+        // the server's, so lets the user immediately spot a mislabeled/misconverted time
         const reminderTimeText =
           targetPersonalOffset != null && targetPersonalOffset !== timezoneOffset
             ? localizer(context.locale, "reminders.dual_time_display", {

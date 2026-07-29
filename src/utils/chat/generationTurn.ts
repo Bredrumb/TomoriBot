@@ -108,7 +108,7 @@ export async function runGenerationTurn(
         });
 
         if (result.status !== "error") {
-          // Don't credit a timed-out key as successful — a timeout is not a clean completion.
+          // Don't credit a timed-out key as successful : a timeout is not a clean completion.
           if (result.status !== "timeout" && rotationKeyId != null) await recordKeySuccess(rotationKeyId);
           break;
         }
@@ -228,7 +228,7 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
 
   // Model randomizer: when enabled, splice a random pool member to the front so a different model
   //    leads each turn. The remainder keeps its relative order as the failover tail. This is a pure
-  //    reordering — every model (including the original primary) stays in the chain, so failover
+  //    reordering , so every model (including the original primary) stays in the chain, so failover
   //    semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
   if (primaryState.config.model_randomizer_enabled && pool.length > 1) {
     const leadIdx = Math.floor(Math.random() * pool.length);
@@ -261,7 +261,7 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   return attempts;
 }
 
-// Must run before provider.createConfig — providers eagerly attach the full tool
+// Must run before provider.createConfig : providers eagerly attach the full tool
 // list and the streaming path won't strip them if has_tools flips later.
 function applyDeliberateToolKillSwitch(state: TomoriState, disableAllTools: boolean): TomoriState {
   if (disableAllTools && state.llm.has_tools) {
@@ -486,7 +486,7 @@ const MAX_FALLBACK_DETAIL_LENGTH = 600;
 /**
  * Resolves a human-readable failure detail for the "Fallback Model Used" notice. Unlike
  * {@link extractErrorCode} (which prefers terse codes for key-rotation bookkeeping), this prefers
- * the provider's verbose message — e.g. "Unsupported model X. Supported IDs: ..." — so users see
+ * the provider's verbose message: e.g. "Unsupported model X. Supported IDs: ...", so users see
  * the actionable reason instead of an opaque error code.
  * @param streamResult - The last stream result recorded for the failed attempt.
  */
@@ -614,7 +614,7 @@ async function applyProviderContextTruncation(
     if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
       // Reserve the SAME output budget the request builder sends: the server's
       // `/model parameters` override first, then OPENROUTER_MAX_OUTPUT_TOKENS, then a
-      // flat 8192 — clamped to the model's reported completion ceiling. Previously this
+      // flat 8192 , so clamped to the model's reported completion ceiling. Previously this
       // ignored the server override, over-reserving output and dropping fitting history.
       const truncationMaxCompletionTokens = resolveMaxOutputTokens({
         configured: tomoriState.config.llm_max_output_tokens,
@@ -645,7 +645,7 @@ async function applyProviderContextTruncation(
       // reported) no longer over-reserve output and drop history that would otherwise fit.
       // The extra clamp to the model-reported ceiling (which the request builder omits) only
       // bites when the resolved value is ABOVE what the model can emit; reserving the real
-      // ceiling there is correct — the model cannot output more than that regardless of the
+      // ceiling there is correct , so the model cannot output more than that regardless of the
       // requested max, so this never under-reserves relative to actual output.
       const truncationMaxCompletionTokens = resolveMaxOutputTokens({
         configured: tomoriState.config.llm_max_output_tokens,

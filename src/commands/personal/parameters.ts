@@ -168,7 +168,7 @@ export async function execute(
 
     // Load all saved personal text providers and present the picker.
     //    UserSavedProviderConfigRow shares the `provider` field that promptForSavedProvider reads,
-    //    so the cast is safe — the picker only uses that field to build button labels.
+    //    so the cast is safe, because the picker only uses that field to build button labels.
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "text");
     const providerSelection = await promptForSavedProvider(
       interaction,
@@ -186,13 +186,13 @@ export async function execute(
 
     const replyWithResult = async (options: Parameters<typeof replyInfoEmbed>[2]) => {
       if (providerSelection.pickerInteraction) {
-        // A button was clicked — update the picker message in-place (this also acknowledges the button)
+        // A button was clicked, so update the picker message in-place (this also acknowledges the button)
         await (responseInteraction as ButtonInteraction).update({
           embeds: [createStandardEmbed(locale, options)],
           components: [],
         });
       } else {
-        // Single provider was auto-selected — no picker message exists, reply normally
+        // Single provider was auto-selected: no picker message exists, reply normally
         await replyInfoEmbed(interaction, locale, { ...options, flags: MessageFlags.Ephemeral });
       }
     };

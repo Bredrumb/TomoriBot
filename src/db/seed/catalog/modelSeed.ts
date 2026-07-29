@@ -3,7 +3,7 @@
 // This is the single source of truth for seeded models: the catalog is rendered
 // into INSERT … ON CONFLICT statements and executed directly during database
 // initialization (see `seedModelsFromCatalog`). There is no generated .sql file
-// to keep in sync — editing `models.ts` is all that's needed.
+// to keep in sync, so editing `models.ts` is all that's needed.
 //
 // The same row tuples and ON CONFLICT upserts used by the old 01_models.sql are
 // reproduced here, so seeding behavior (idempotent upsert on every startup) is
@@ -32,7 +32,7 @@ interface TableSpec<T extends RowLike> {
   columns: string;
   /** Positional value tuple for one row, without the surrounding parentheses. */
   tuple: (m: T) => string;
-  /** `ON CONFLICT ...` block (no trailing semicolon — executed via client.unsafe). */
+  /** `ON CONFLICT ...` block (no trailing semicolon: executed via client.unsafe). */
   onConflict: string;
   /** Whether this table has an is_smartest column (only `llms`). */
   hasSmartest: boolean;
@@ -262,7 +262,7 @@ export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
 // Providers billed per-token by the live `/tool estimate cost` path. Every active, billable row of these
 // providers must carry an explicit catalog price: the env-based price fallback has been removed, so an
 // unpriced row makes resolveModelPricing (src/commands/tool/estimate/cost.ts) return null and the command
-// reports "pricing unavailable". OpenRouter is intentionally absent — it is priced live from the OpenRouter
+// reports "pricing unavailable". OpenRouter is intentionally absent, because it is priced live from the OpenRouter
 // API cache, with any catalog price acting only as a cache-miss fallback.
 const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "google",

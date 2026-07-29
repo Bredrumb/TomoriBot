@@ -207,7 +207,7 @@ export async function execute(
   const personaWorkflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   try {
-    // Channel scope: anchor one-message flow — provider picker → model picker →
+    // Channel scope: anchor one-message flow; provider picker → model picker →
     //    channel override → terminal result, all edited in place on one ephemeral message.
     if (scope === "channel") {
       const currentChannelModel =
@@ -571,7 +571,7 @@ export async function execute(
       return;
     }
 
-    // Global scope: anchor one-message flow — provider picker → (custom capability
+    // Global scope: anchor one-message flow; provider picker → (custom capability
     //    activation | model picker) → mirror write → terminal result, all on one message.
     const idRoot = "model_text_global";
     const initialPayload =

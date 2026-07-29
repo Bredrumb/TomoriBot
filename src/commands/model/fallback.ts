@@ -58,7 +58,7 @@ const CUSTOM_ENDPOINT_VALUE_PREFIX = "ce:";
 /** Custom-id root for this command's anchor provider picker / opener buttons. */
 const ID_ROOT = "model_fallback";
 // One of Discord's 25 select options is reserved for the explicit "None" / clear choice,
-// which is re-prepended to every page — so only 24 models fit per range.
+// which is re-prepended to every page, so only 24 models fit per range.
 const ITEMS_PER_PAGE = 24;
 const FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
   (process.env.FALLBACK_DEBUG_ENABLED ?? "").trim().toLowerCase(),
@@ -254,7 +254,7 @@ export async function execute(
     let allModelOptions: SelectOption[];
 
     if (isCustomProvider(selectedProvider)) {
-      // Custom endpoint path — enumerate registered endpoints for this label
+      // Custom endpoint path: enumerate registered endpoints for this label
       const parsed = parseCustomProvider(selectedProvider);
       const label = parsed?.label ?? null;
       const allEndpoints = await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id);
@@ -386,10 +386,10 @@ export async function execute(
       const raw = (values[SLOT_IDS[i]] ?? "").trim();
 
       if (raw === "") {
-        // User didn't touch this slot — preserve existing ref
+        // User didn't touch this slot, so preserve existing ref
         if (existingRefs[i]) mergedRefs.push(existingRefs[i]);
       } else if (raw === CLEAR_SLOT_VALUE) {
-        // Explicit clear — skip (no push)
+        // Explicit clear, so skip (no push)
       } else if (raw.startsWith(CUSTOM_ENDPOINT_VALUE_PREFIX)) {
         // Custom endpoint selection
         const epId = Number.parseInt(raw.slice(CUSTOM_ENDPOINT_VALUE_PREFIX.length), 10);

@@ -2,7 +2,7 @@
  * Video Generation Command (/generate video)
  * Allows users to generate AI videos using Google Veo, OpenRouter, or Z.ai.
  * Supports text-to-video and image-to-video via an optional reference image upload.
- * Video generation is async — takes 1-5 minutes with provider-side polling.
+ * Video generation is async: takes 1-5 minutes with provider-side polling.
  */
 
 import {
@@ -72,7 +72,7 @@ const MAX_VIDEO_FPS = parsePositiveIntEnv("VIDEO_GEN_MAX_FPS", 60);
  */
 function parseModalInteger(raw: string | undefined, min: number, max: number): { value?: number; error?: true } {
   const trimmed = raw?.trim();
-  // Blank input is treated as "not provided" — callers decide if that's allowed.
+  // Blank input is treated as "not provided", so callers decide if that's allowed.
   if (!trimmed) {
     return { value: undefined };
   }

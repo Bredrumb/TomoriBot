@@ -158,7 +158,7 @@ export async function checkTextQuota(serverId: number, userDiscId: string): Prom
 /**
  * Increment both user daily and server-wide text quotas after successful generation.
  * Should only be called AFTER a text response succeeds.
- * Only increments counters that have an active limit -- skips writes when quota is unlimited (0)
+ * Only increments counters that have an active limit, so skips writes when quota is unlimited (0)
  * so usage does not accumulate retroactively before limits are first configured.
  */
 export async function incrementTextQuota(serverId: number, userDiscId: string): Promise<void> {

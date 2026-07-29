@@ -1,13 +1,13 @@
 /**
  * Preset main-avatar fan-out reconciler.
  *
- * Main persona avatars are the bot's Discord guild member avatar — Discord-owned
+ * Main persona avatars are the bot's Discord guild member avatar: Discord-owned
  * state that cannot be live-resolved per message (unlike alter avatars/sprites).
  * So when a default preset's avatar art changes in the catalog, the only way to
  * fan it out to every server whose main persona is still an unforked pointer is
  * to PATCH each guild's member avatar once.
  *
- * This is a throttled, best-effort, resumable BACKGROUND reconciler — never a
+ * This is a throttled, best-effort, resumable BACKGROUND reconciler; never a
  * startup burst and never blocking boot. Every PATCH is gated on a real byte
  * change via the hash columns (persona_presets.preset_avatar_hash vs
  * personas.applied_avatar_hash), which makes the run naturally idempotent and
@@ -27,7 +27,7 @@ import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";
 /**
  * Parses a non-negative-integer env var, falling back to a default when unset or
  * malformed. Keeps the throttle knobs configurable without hardcoding limits.
- * (0 is allowed — it is the documented "unlimited" sentinel for MAX_PER_RUN.)
+ * (0 is allowed: it is the documented "unlimited" sentinel for MAX_PER_RUN.)
  */
 function readIntEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
@@ -130,7 +130,7 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
 
   log.info(`[Preset Avatar Fanout] ${targets.length} main persona(s) pending guild-avatar sync`);
 
-  // Cache the avatar PNG (as a data URI) per shared URL — most servers point at
+  // Cache the avatar PNG (as a data URI) per shared URL, because most servers point at
   // the same handful of preset images, so this downloads each at most once.
   const dataUriByUrl = new Map<string, string | null>();
   let applied = 0;

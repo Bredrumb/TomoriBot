@@ -23,7 +23,7 @@ const MAX_ENTRIES_PER_MODAL = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
 
 /**
  * Configure the /config mcp remove subcommand.
- * No options needed — server selection happens via modal string select.
+ * No options needed: server selection happens via modal string select.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.mcp.remove.description"));
@@ -93,7 +93,7 @@ export async function execute(
 
     const checkboxGroups = buildServerCheckboxGroups(configs);
 
-    // Show modal with checkbox groups (modal is the acknowledgment — no pre-defer)
+    // Show modal with checkbox groups (modal is the acknowledgment; no pre-defer)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,

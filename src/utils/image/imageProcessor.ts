@@ -39,9 +39,9 @@ export interface OptimizedImage {
  * Fetch an image from a URL and conditionally downscale it for LLM context use.
  *
  * Uses a three-tier cost check to avoid unnecessary work:
- * 1. **Buffer byte length** (O(1)) — if under threshold, return as-is.
- * 2. **Sharp metadata** (header-only read, <1 ms) — check pixel dimensions.
- * 3. **Sharp resize** (decode + encode) — only runs when the image actually exceeds
+ * 1. **Buffer byte length** (O(1)) if under threshold, return as-is.
+ * 2. **Sharp metadata** (header-only read, <1 ms): check pixel dimensions.
+ * 3. **Sharp resize** (decode + encode); only runs when the image actually exceeds
  *    the maximum dimension, converting to JPEG for significantly smaller payloads.
  *
  * This prevents multi-MB base64 payloads from causing provider stream timeouts
@@ -101,7 +101,7 @@ export async function fetchAndOptimizeImage(url: string, sourceMimeType?: string
       mimeType: "image/jpeg",
     };
   } catch (sharpError) {
-    // Sharp failed (corrupt image, unsupported format, etc.) — fall back to raw data
+    // Sharp failed (corrupt image, unsupported format, etc.), so fall back to raw data
     // so the provider can still attempt to process it
     log.warn(
       `Image optimization failed, sending raw (${(rawSize / 1024 / 1024).toFixed(1)} MB): ${sharpError instanceof Error ? sharpError.message : String(sharpError)}`,

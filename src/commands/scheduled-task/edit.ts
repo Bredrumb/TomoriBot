@@ -309,7 +309,7 @@ export async function execute(
       return;
     }
 
-    // Build select options — persona_id NULL means the main persona owns the reminder
+    // Build select options: persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder, index) => {
       const personaName = reminder.persona_nickname ?? state.persona_nickname;
       const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
@@ -397,7 +397,7 @@ export async function execute(
 
     // Confirm which reminder will be edited.
     // Pass selectModalInteraction directly (unacknowledged) so the confirmation becomes
-    // the one ephemeral message for this whole flow — success will update it in-place.
+    // the one ephemeral message for this whole flow, so success will update it in-place.
     const confirmationResult = await promptWithUnacknowledgedConfirmation(selectModalInteraction, locale, {
       embedTitleKey: "commands.scheduled-task.edit.confirm_title",
       embedDescriptionKey: "commands.scheduled-task.edit.confirm_description",

@@ -1,11 +1,11 @@
 /**
- * McpRepository — manages the `guild_mcp_servers` table.
+ * McpRepository: manages the `guild_mcp_servers` table.
  *
  * MCP guild config is a distinct integration domain (guild-registered MCP tool servers).
  * Currently one SQL operation (SELECT); isolated here so MCP config management
  * can grow without blurring server-identity concerns in ServerRepository.
  *
- * Export contract: toExportShape returns null — MCP server registrations contain
+ * Export contract: toExportShape returns null: MCP server registrations contain
  * server-specific auth tokens and are not portably exportable.
  */
 import type { GuildMcpServerRow } from "@/types/db/schema";
@@ -46,5 +46,5 @@ export class McpRepository implements IRepository<null> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const mcpRepository = new McpRepository();

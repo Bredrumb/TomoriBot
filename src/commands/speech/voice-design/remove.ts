@@ -141,7 +141,7 @@ export async function execute(
           }
 
           // Capture the design prompt before the write, so the success
-          //    notice can echo it back — voice prompts are tuned by ear and
+          //    notice can echo it back, because voice prompts are tuned by ear and
           //    effectively unrecoverable once nulled.
           const removedPreview = buildTextPreview(selectedPersona.speech_voice_design_prompt);
 

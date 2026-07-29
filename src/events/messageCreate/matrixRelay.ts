@@ -178,12 +178,12 @@ function escapeHtml(text: string): string {
  *
  * Handles two mention formats that appear in TomoriBot's Discord messages:
  *
- *   `<@userId>` / `<@!userId>` — Discord snowflake mentions (already resolved by Discord.js
+ *   `<@userId>` / `<@!userId>`: Discord snowflake mentions (already resolved by Discord.js
  *     before matrixRelay.ts sees the message). The guild member's display name is used to
  *     look up a corresponding Matrix ID; if found, rendered as a Matrix mention anchor.
  *     If the user is Discord-only, rendered as plain display name.
  *
- *   `@{name}` — TomoriBot's internal mention format injected by contextBuilder.ts.
+ *   `@{name}`: TomoriBot's internal mention format injected by contextBuilder.ts.
  *     Resolved the same way as above using the display name directly.
  *
  * Resolution rules (same for both formats):
@@ -235,7 +235,7 @@ function resolveDiscordTextForMatrix(
         bodyParts.push(matrixId);
         htmlParts.push(`<a href="https://matrix.to/#/${matrixId}">${escapeHtml(displayName)}</a>`);
       } else {
-        // Discord-only user — strip <@id>, keep their display name
+        // Discord-only user, so strip <@id>, keep their display name
         bodyParts.push(displayName);
         htmlParts.push(escapeHtml(displayName));
       }
@@ -248,7 +248,7 @@ function resolveDiscordTextForMatrix(
         bodyParts.push(matrixId);
         htmlParts.push(`<a href="https://matrix.to/#/${matrixId}">${escapeHtml(internalName)}</a>`);
       } else {
-        // Discord-only or unknown user — strip @{} wrapper, keep name
+        // Discord-only or unknown user, so strip @{} wrapper, keep name
         bodyParts.push(internalName);
         htmlParts.push(escapeHtml(internalName));
       }
@@ -326,7 +326,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
       resolveRenderModifierSourcePersona(message.author.username, personaByNickname)?.persona ??
       personaByNickname.get(normalizeRenderModifierName(message.author.username));
 
-    // Warn if no persona matched — the fallback uses the webhook username as the
+    // Warn if no persona matched, because the fallback uses the webhook username as the
     // virtual user localpart, which may create an orphaned Matrix user
     if (!persona) {
       log.warn(
@@ -341,7 +341,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
   const personaName = persona?.persona_nickname ?? message.author.username;
 
   // Relay the text content (skip if empty after trim)
-  //    Identity is conveyed by the virtual Matrix user — no bold prefix needed.
+  //    Identity is conveyed by the virtual Matrix user, so no bold prefix needed.
   //    @{name} placeholders are transformed to proper Matrix mention links so
   //    Matrix clients highlight and notify the mentioned user (MSC3952).
   const rawText = message.content.trim();

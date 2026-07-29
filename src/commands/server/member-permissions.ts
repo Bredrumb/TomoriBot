@@ -22,7 +22,7 @@ import {
 // awaitModalSubmit listeners from a previous run resolving on the same submission.
 const MEMBERPERMISSIONS_CHECKBOX_ID = "memberpermissions_checkbox";
 
-// Configure the subcommand — no options needed, UI is a checkbox modal
+// Configure the subcommand: no options needed, UI is a checkbox modal
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("member-permissions")
@@ -38,7 +38,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Scope modal custom ID to this invocation — prevents stale awaitModalSubmit
+  // Scope modal custom ID to this invocation: prevents stale awaitModalSubmit
   //    listeners from a prior (un-submitted) run resolving on this submission.
   const MODAL_CUSTOM_ID = `server_memberpermissions_modal_${interaction.id}`;
 
@@ -51,7 +51,7 @@ export async function execute(
     return;
   }
 
-  // NOTE: No deferReply here — promptWithRawModal must be the first
+  // NOTE: No deferReply here: promptWithRawModal must be the first
   // acknowledgment. Pre-modal checks are cache-backed and complete within 3 seconds.
 
   // Declared outside try/catch so the catch block can use the modal interaction
@@ -77,7 +77,7 @@ export async function execute(
       default: def.getState(tomoriState.config),
     }));
 
-    // Show the checkbox modal — first interaction acknowledgment
+    // Show the checkbox modal: first interaction acknowledgment
     const modalResult = await promptWithRawModal(
       interaction,
       locale,

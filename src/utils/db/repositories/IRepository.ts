@@ -1,11 +1,11 @@
 /**
  * Base contract every repository must satisfy.
  *
- * TExport — the shape returned by toExportShape() and expected by fromExportShape()
+ * TExport: the shape returned by toExportShape() and expected by fromExportShape()
  *
  * All repositories must implement both export methods from day one.
  * Phase 6 (#16.7) replaces the old god-table export pipeline by composing
- * per-repository toExportShape() calls — any repository that ships without
+ * per-repository toExportShape() calls, so any repository that ships without
  * them requires a second touch during that phase.
  */
 export interface IRepository<TExport = unknown> {
@@ -19,7 +19,7 @@ export interface IRepository<TExport = unknown> {
 
   /**
    * Deserializes and writes back a previously exported shape.
-   * Must be idempotent — re-importing the same shape must not create duplicates.
+   * Must be idempotent, so re-importing the same shape must not create duplicates.
    *
    * @param ownerId - Discord snowflake or internal DB ID of the import target
    * @returns true on success, false on validation or write failure

@@ -125,7 +125,7 @@ export async function execute(
       return;
     }
 
-    // Reject encrypted rooms — Matrix encryption is permanent and cannot be
+    // Reject encrypted rooms: Matrix encryption is permanent and cannot be
     //    disabled, so bridging would never work for this room.
     if (await isRoomEncrypted(roomId)) {
       await replyInfoEmbed(interaction, locale, {

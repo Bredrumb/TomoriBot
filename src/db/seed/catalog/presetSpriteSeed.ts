@@ -25,7 +25,7 @@ const CONTENT_HASH_LENGTH = 12;
 
 /**
  * Seeds all catalog-authored preset sprites into `preset_sprites`, uploading
- * each image once and reconciling removed sprites. Never throws — a failed image
+ * each image once and reconciling removed sprites. Never throws, because a failed image
  * is logged and skipped so a single bad asset cannot abort startup.
  *
  * @param client - Active DB client/transaction
@@ -95,7 +95,7 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
   const existingUrl = existing?.avatar_url ?? null;
   let avatarUrl: string;
   if (existingUrl?.endsWith(expectedSuffix)) {
-    // Same content already uploaded — skip the (network) upload, refresh metadata only.
+    // Same content already uploaded, so skip the (network) upload, refresh metadata only.
     avatarUrl = existingUrl;
   } else {
     const uploadedUrl = await uploadPresetSpriteToStorage({

@@ -441,7 +441,7 @@ export async function execute(
 
       // Re-encode to PNG before uploading. Discord returns 200 OK for
       // structurally corrupt files (e.g. exported preset PNGs with a bad tEXt
-      // chunk length) but stores an unservable asset — the CDN 415s and clients
+      // chunk length) but stores an unservable asset, so the CDN 415s and clients
       // silently keep the old avatar. Re-encoding guarantees a clean PNG, same
       // as the alter path below.
       let pngBuffer: Buffer;

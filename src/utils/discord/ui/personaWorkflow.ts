@@ -559,7 +559,7 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
    * Collapse-at-open: fire-and-forget replacement of the anchor message's live
    * controls with an inert notice as a modal opens. Discord emits no modal-dismiss
    * event, so without this a dismissed modal would strand clickable buttons for the
-   * full modal timeout. Not awaited here — the promise is stored (and swallowed at
+   * full modal timeout. Not awaited here: the promise is stored (and swallowed at
    * storage) so the modal's own await is never blocked, and {@link settlePendingCollapse}
    * lets the terminal edit order itself after it.
    */
@@ -886,7 +886,7 @@ async function openRawWorkflowModal(
 
   // Collapse-at-open: as the modal opens, replace the anchor message's live
   // controls (provider picker, modal-ready button, or range selector) with an
-  // inert notice. Fire-and-forget relative to the modal await below — Discord
+  // inert notice. Fire-and-forget relative to the modal await below, because Discord
   // emits no modal-dismiss event, so this is the only thing that keeps a dismissed
   // modal from leaving clickable-but-dead buttons until the 10-minute timeout.
   // The edit uses the root token because `button` is consumed by showModal; every

@@ -55,7 +55,7 @@ export async function execute(
       personal_deliberate_tool_mode: selectedMode,
     });
 
-    // A null result means the write (or its validation) failed — surface the
+    // A null result means the write (or its validation) failed, so surface the
     //    generic update-failed embed.
     if (!updatedUser) {
       const context: ErrorContext = {

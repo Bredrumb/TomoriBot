@@ -32,7 +32,7 @@ const CONTEXT_LENGTH_ERROR_PATTERNS: RegExp[] = [
   /\breduce\s+the\s+length\s+of\b/i,
 ];
 
-// The account cannot afford the request at the requested max_tokens — a credit
+// The account cannot afford the request at the requested max_tokens: a credit
 // ceiling, not a context-window ceiling. Example (OpenRouter 402): "This request
 // requires more credits, or fewer max_tokens. You requested up to 16384 tokens,
 // but can only afford 7783."
@@ -60,7 +60,7 @@ export function isContextLengthError(error: ProviderError): boolean {
 /**
  * Detects a credit-affordability ceiling (the account cannot pay for the
  * requested max_tokens). Distinct from a context overflow: adding history back
- * does not help — the fix is more credits or fewer output tokens.
+ * does not help, so the fix is more credits or fewer output tokens.
  * @param error - The normalized provider error.
  * @returns True when any collected message signals a credit-affordability limit.
  */

@@ -5,7 +5,7 @@ import { ContextItemTag } from "@/types/misc/context";
  * Estimates the input token count from a list of context items.
  *
  * Uses a 4-characters-per-token approximation applied only to text parts.
- * Image and video parts are excluded — their token cost is absorbed by the
+ * Image and video parts are excluded, so their token cost is absorbed by the
  * 10% safety margin in {@link truncateDialogueHistory}.
  *
  */

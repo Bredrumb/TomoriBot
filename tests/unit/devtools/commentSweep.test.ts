@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyCommentSweepLedger } from "../../../scripts/devtools/commentSweepApply";
-import { collectCommentSweepDirectory } from "../../../scripts/devtools/commentSweepBatch";
+import { collectCommentSweepDirectory, renderCommentSweepBatches } from "../../../scripts/devtools/commentSweepBatch";
 import { compareTypeScriptSources } from "../../../scripts/devtools/commentSweepGate";
 import { scanCommentSweepCandidates, type CommentSweepCandidate } from "../../../scripts/devtools/commentSweepScan";
 
@@ -73,6 +73,76 @@ describe("comment sweep scanner", () => {
     expect(candidates.some((row) => row.tier === "2")).toBeTrue();
     expect(candidates.some((row) => row.tier === "2b")).toBeTrue();
     expect(candidates.some((row) => row.tier === "2c")).toBeTrue();
+  });
+
+  it("keeps Tier 2c out of strings and regexes while retaining inline comments", async () => {
+    const root = await createTemporaryRoot();
+    await Bun.write(
+      join(root, "fixture.ts"),
+      [
+        'const prose = "Do not rewrite — this string";',
+        "/** One-line contract */",
+        'const normalized = prose.replace(/[—–]/g, "-");',
+        "interface Source {",
+        "  url?: string; // Prefer the URL — remote APIs reject large bodies",
+        "}",
+        "// Keep rationale — callers depend on it",
+        "",
+      ].join("\n"),
+    );
+
+    const candidates = await scanCommentSweepCandidates({
+      paths: ["fixture.ts"],
+      repoRoot: root,
+      tiers: ["2c"],
+    });
+
+    expect(candidates.map((row) => row.text)).toEqual([
+      "// Prefer the URL — remote APIs reject large bodies",
+      "// Keep rationale — callers depend on it",
+    ]);
+  });
+
+  it("does not mistake an early dependency-license mention for a license header", async () => {
+    const root = await createTemporaryRoot();
+    await Bun.write(
+      join(root, "fixture.ts"),
+      [
+        "/**",
+        " * The dependency requires accepting its license agreement.",
+        " * Exit codes:",
+        " *   0 — all assets downloaded",
+        " */",
+        "export const complete = true;",
+        "",
+      ].join("\n"),
+    );
+
+    const candidates = await scanCommentSweepCandidates({
+      paths: ["fixture.ts"],
+      repoRoot: root,
+      tiers: ["2c"],
+    });
+
+    expect(candidates.map((row) => row.text)).toEqual(["*   0 — all assets downloaded"]);
+  });
+
+  it("excludes files ignored by the repository", async () => {
+    const root = await createTemporaryRoot();
+    const init = Bun.spawnSync(["git", "init", "--quiet"], { cwd: root });
+    expect(init.exitCode).toBe(0);
+    await Bun.write(join(root, ".git", "info", "exclude"), "local-only.ts\n");
+    await Bun.write(join(root, "local-only.ts"), "// Local note — never include this\n");
+    await Bun.write(join(root, "tracked-scope.ts"), "// Repository note — include this\n");
+
+    const candidates = await scanCommentSweepCandidates({
+      paths: ["."],
+      repoRoot: root,
+      tiers: ["2c"],
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].file).toBe("tracked-scope.ts");
   });
 
   it("defers numbered JSDoc lines to judgment instead of stripping them", async () => {
@@ -377,6 +447,46 @@ describe("comment sweep apply", () => {
 });
 
 describe("comment sweep batch collector", () => {
+  it("renders an inline Tier 2c comment without treating its code prefix as drift", async () => {
+    const root = await createTemporaryRoot();
+    await Bun.write(
+      join(root, "fixture.ts"),
+      "interface Source {\n  url?: string; // Prefer URL — remote APIs reject large bodies\n}\n",
+    );
+    const candidates = await scanCommentSweepCandidates({
+      paths: ["fixture.ts"],
+      repoRoot: root,
+      tiers: ["2c"],
+    });
+    const ledgerPath = join(root, "candidates.jsonl");
+    await writeLedger(ledgerPath, candidates);
+    const promptsPath = join(root, "prompts.md");
+    await Bun.write(
+      promptsPath,
+      [
+        "## Block A — preamble",
+        "```text",
+        "Judge this comment.",
+        "```",
+        "## Block D — rewrite",
+        "```text",
+        "Rewrite the dash.",
+        "```",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await renderCommentSweepBatches({
+      block: "D",
+      ledgerPath,
+      outDir: join(root, "batches"),
+      promptsPath,
+      repoRoot: root,
+    });
+
+    expect(result).toMatchObject({ driftSkipped: 0, groups: 1, rows: 1 });
+  });
+
   it("keeps the named KEEP criterion in the ledger", async () => {
     const { batchDir, responseDir, outPath } = await createCollectorFixture();
 
@@ -395,6 +505,49 @@ describe("comment sweep batch collector", () => {
     await collectCommentSweepDirectory({ batchDir, outPath, responseDir });
 
     expect(await readLedger(outPath)).toHaveLength(2);
+  });
+
+  it("keeps the Tier 2c relation in the ledger", async () => {
+    const root = await createTemporaryRoot();
+    const batchDir = join(root, "batches");
+    const responseDir = join(root, "responses");
+    const outPath = join(root, "verdicts.jsonl");
+    const member = {
+      context_hash: "hash-1",
+      file: "src/example.ts",
+      kind: "line",
+      line: 1,
+      mech_score: 0.5,
+      text: "// Explain this — the second half defines it",
+      tier: "2c",
+    };
+
+    await Bun.write(
+      join(batchDir, "001.manifest.json"),
+      JSON.stringify({
+        block: "D",
+        groups: [{ id: "aaaa000001", members: [member], prompt: "" }],
+      }),
+    );
+    await Bun.write(
+      join(responseDir, "001.jsonl"),
+      JSON.stringify({
+        confidence: 0.9,
+        id: "aaaa000001",
+        relation: "explain",
+        rewrite: "// Explain this: the second half defines it",
+      }),
+    );
+
+    await collectCommentSweepDirectory({ batchDir, outPath, responseDir });
+
+    expect(await readLedger(outPath)).toEqual([
+      expect.objectContaining({
+        relation: "explain",
+        rewrite: "// Explain this: the second half defines it",
+        verdict: "rewrite",
+      }),
+    ]);
   });
 });
 

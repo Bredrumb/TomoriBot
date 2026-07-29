@@ -2,9 +2,9 @@
  * Web-search engine-abstraction layer.
  *
  * Public surface:
- * - `WebSearchTool` — the single LLM-visible tool (auto-discovered).
- * - `executeWebSearchWithFallback` / `getActiveWebSearchEngine` — dispatcher API.
- * - `WebSearchEngine` / `SearchCategory` — types for new engine implementations
+ * - `WebSearchTool` : the single LLM-visible tool (auto-discovered).
+ * - `executeWebSearchWithFallback` / `getActiveWebSearchEngine` : dispatcher API.
+ * - `WebSearchEngine` / `SearchCategory` : types for new engine implementations
  *   (e.g. SearXNG in Phase 2).
  */
 

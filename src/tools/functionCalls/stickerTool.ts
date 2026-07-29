@@ -122,7 +122,7 @@ export class StickerTool extends BaseTool {
 
   /**
    * Check if sticker tool is available for the given provider.
-   * Disabled for NovelAI — GLM 4.6 can't reliably generate Japanese/CJK sticker
+   * Disabled for NovelAI, so GLM 4.6 can't reliably generate Japanese/CJK sticker
    * names as tool arguments due to token-level instability.
    * @returns True if provider supports sticker selection
    */
@@ -168,7 +168,7 @@ export class StickerTool extends BaseTool {
       };
     }
 
-    // Empty args recovery — model ran out of tokens before generating sticker_name.
+    // Empty args recovery: model ran out of tokens before generating sticker_name.
     // Return the available sticker list so the model can retry with a specific name
     // on its next generation pass (fresh token budget).
     if (!hasStickerName && !hasStickerId) {
@@ -348,7 +348,7 @@ export class StickerTool extends BaseTool {
         `Sticker '${normalizedStickerName || stickerId}' not found even after cache refresh. Sticker does not exist.`,
       );
 
-      // Get available stickers for error message — include names inline so the model
+      // Get available stickers for error message, so include names inline so the model
       // can retry with an exact name on its next generation pass.
       const availableStickers = guild.stickers.cache;
       const availableStickerData = availableStickers

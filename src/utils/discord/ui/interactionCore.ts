@@ -71,7 +71,7 @@ export function hasRawModalAcknowledgement(interaction: ChatInputCommandInteract
 /**
  * Tracks interactions whose reply message has been rendered as a Components V2
  * payload. Discord permanently stamps `IsComponentsV2` on such a message, and that
- * flag can never be removed by a later edit — nor can a V2 message carry legacy
+ * flag can never be removed by a later edit, so nor can a V2 message carry legacy
  * `embeds`/`content`. So once a selector (or any V2 writer) renders onto an
  * interaction's reply, a subsequent legacy `editReply({ embeds })` on the SAME
  * interaction would be rejected by Discord.
@@ -135,11 +135,11 @@ function transformModalSubmissionPacket(packet: RawDiscordWebSocketPacket): void
               values: nestedComponent.values, // Array of attachment IDs
             }),
             ...(nestedComponent.type === 21 && {
-              // RADIO_GROUP — value is the selected option string (or null)
+              // RADIO_GROUP: value is the selected option string (or null)
               value: nestedComponent.value,
             }),
             ...(nestedComponent.type === 22 && {
-              // CHECKBOX_GROUP — values is an array of selected option strings
+              // CHECKBOX_GROUP: values is an array of selected option strings
               values: nestedComponent.values,
             }),
             ...(nestedComponent.type === 23 && {
@@ -198,22 +198,22 @@ function setupWebSocketInterception(client: unknown) {
                 // Narrowed above: custom_id is guaranteed to be a non-empty string
                 const customId = inner.custom_id as string;
 
-                // String Select (type 3) — store first selected value
+                // String Select (type 3): store first selected value
                 if (inner.type === 3 && inner.values?.[0]) {
                   selectValues[customId] = inner.values[0];
                 }
 
-                // File Upload (type 19) — store all attachment IDs
+                // File Upload (type 19): store all attachment IDs
                 if (inner.type === 19 && Array.isArray(inner.values)) {
                   fileUploadValues[customId] = inner.values;
                 }
 
-                // Radio Group (type 21) — store selected value string (null → empty string)
+                // Radio Group (type 21): store selected value string (null → empty string)
                 if (inner.type === 21) {
                   selectValues[customId] = typeof inner.value === "string" ? inner.value : "";
                 }
 
-                // Checkbox Group (type 22) — store array of selected values
+                // Checkbox Group (type 22): store array of selected values
                 if (inner.type === 22 && Array.isArray(inner.values)) {
                   checkboxGroupValues[customId] = inner.values;
                 }
@@ -311,14 +311,14 @@ const CONFIRMATION_DESCRIPTION_LIMIT = 3800; // Budget for description, leaving 
  *   - `Message#awaitMessageComponent` and `awaitModalSubmit` reject with an
  *      `InteractionCollectorError` whose message embeds the end reason, e.g.
  *      "Collector received no interactions before ending with reason: time".
- * Only `time`/`idle` count as expiry — `limit`, `messageDelete`, and channel/guild
+ * Only `time`/`idle` count as expiry: `limit`, `messageDelete`, and channel/guild
  * deletions are genuine failures the caller must surface as errors.
  */
 export function isCollectorTimeoutError(error: unknown): boolean {
   if (error === "time" || error === "idle") return true;
   if (!error || typeof error !== "object") return false;
 
-  // InteractionCollectorError form — identify by code/name, then read the reason.
+  // InteractionCollectorError form: identify by code/name, then read the reason.
   const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
   const code = typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
   const name = typeof candidate.name === "string" ? candidate.name.toLowerCase() : "";
@@ -830,8 +830,8 @@ function standardOptionsToNotice(
 /**
  * Delivers a {@link buildNoticeContainer} payload to an interaction whose reply message
  * already carries `IsComponentsV2`. Mirrors the three delivery situations of the legacy
- * embed sinks — `editReply` when acknowledged, `webhook.send` after a raw modal, `reply`
- * otherwise — but never emits legacy `embeds`, which Discord rejects on a V2 message.
+ * embed sinks: `editReply` when acknowledged, `webhook.send` after a raw modal, `reply`
+ * otherwise, so but never emits legacy `embeds`, which Discord rejects on a V2 message.
  *
  * A marked interaction is, by construction, an ephemeral private workflow message, so
  * the fresh-response paths stay ephemeral.
@@ -902,7 +902,7 @@ export async function replyInfoEmbed(
   //      IsComponentsV2 (e.g. a range selector rendered onto it), a legacy
   //      `editReply({ embeds })` would be rejected by Discord. Render the same
   //      title/description/footer as a V2 notice container instead. Tip embeds are
-  //      dropped here — they are rare on the error/info paths that hit this guard.
+  //      dropped here, so they are rare on the error/info paths that hit this guard.
   if (hasComponentsV2Reply(interaction)) {
     await replyNoticeContainerV2(interaction, standardOptionsToNotice(locale, finalOptions));
     return;
@@ -932,7 +932,7 @@ export async function replyInfoEmbed(
     // State desync detected: raw REST modal acknowledged the interaction on Discord's
     // side, but Discord.js still thinks replied=false / deferred=false.
     // interaction.followUp() would throw INTERACTION_NOT_REPLIED because of a
-    // Discord.js internal guard — bypass it by calling webhook.send() directly.
+    // Discord.js internal guard, so bypass it by calling webhook.send() directly.
     log.info(`Raw modal state desync detected for interaction ${interaction.id}, using webhook.send directly`);
     try {
       await interaction.webhook.send({
@@ -961,7 +961,7 @@ export async function replyInfoEmbed(
       if (errorMessage.includes("has already been acknowledged")) {
         // Interaction was acknowledged via raw REST (e.g. modal shown) but
         // Discord.js state is out of sync. followUp() would hit the same
-        // INTERACTION_NOT_REPLIED guard — use webhook.send() instead.
+        // INTERACTION_NOT_REPLIED guard, so use webhook.send() instead.
         log.info("Attempting webhook.send due to acknowledgment conflict (raw REST desync)");
         await interaction.webhook.send({
           embeds,
@@ -1020,7 +1020,7 @@ export async function replySummaryEmbed(
 ): Promise<void> {
   // Components V2 collision guard (see replyInfoEmbed step 2.5). A summary embed cannot
   // be edited onto a V2 message, so flatten the title/description plus each field into a
-  // single notice container. Docs link and appended embeds are dropped — this path is a
+  // single notice container. Docs link and appended embeds are dropped, so this path is a
   // rare defensive fallback for a marked interaction.
   if (hasComponentsV2Reply(interaction)) {
     const fieldLines = options.fields.map((field) => {
@@ -1536,7 +1536,7 @@ export interface PersonaResultContainerOptions {
    * Image arrangement. "image-top" (default) shows the attachment as a full-width
    * MediaGallery under the title. "thumbnail-section" instead pins it as a
    * right-aligned Thumbnail accessory on the final section, with the button
-   * directly beneath it — mirroring the persona picker's avatar-above-button look.
+   * directly beneath it, so mirroring the persona picker's avatar-above-button look.
    */
   layout?: "image-top" | "thumbnail-section";
   /** Optional content blocks (e.g. sample dialogue, next steps), each after a divider. */
@@ -1564,8 +1564,8 @@ export interface PersonaResultContainerOptions {
 }
 
 /**
- * Builds a Components V2 container that mirrors a classic "result" embed — title,
- * hero image, description, optional next-steps block, optional footer — but can
+ * Builds a Components V2 container that mirrors a classic "result" embed: title,
+ * hero image, description, optional next-steps block, optional footer; but can
  * also host an action button inside the same card. Used by `/persona generate`
  * and `/persona create` success messages so the "Import Now" button sits within
  * the result rather than dangling beneath a separate embed.
@@ -1768,7 +1768,7 @@ export async function acknowledgeModalSubmitForRefresh(interaction: ModalSubmitI
 
 /**
  * Resolved avatar data for a single persona, cached across page renders within a picker session.
- * - `url`: a public HTTP(S) URL or the bot fallback — no file attachment needed.
+ * - `url`: a public HTTP(S) URL or the bot fallback, so no file attachment needed.
  * - `buffer`: raw image bytes for a local-disk avatar that must be attached to the Discord message.
  */
 export type AvatarCacheEntry = { type: "url"; url: string } | { type: "buffer"; buffer: Buffer };
@@ -1787,7 +1787,7 @@ export type AvatarSessionCache = Map<number, AvatarCacheEntry>;
  * Resolution order per alter persona (only runs on first visit per persona):
  * 1. Public HTTP(S) URL (always works in production, and in dev when
  *    AVATAR_PUBLIC_BASE_URL is configured)
- * 2. Discord file attachment — used in non-production when the avatar is stored
+ * 2. Discord file attachment: used in non-production when the avatar is stored
  *    as a local path and AVATAR_PUBLIC_BASE_URL is not set. The buffer is loaded
  *    from disk and returned as an AttachmentBuilder so the caller can include it
  *    in the reply. The media URL is set to `attachment://avatar_{idx}.png` which
@@ -1809,7 +1809,7 @@ async function resolvePersonaPageAvatarData(
     pagePersonas.map(async (persona, idx) => {
       const absoluteIdx = pageStartIdx + idx;
 
-      // Return cached result immediately — skip all I/O on repeated page visits.
+      // Return cached result immediately, so skip all I/O on repeated page visits.
       const cached = sessionCache.get(absoluteIdx);
       if (cached) {
         if (cached.type === "url") {
@@ -1847,7 +1847,7 @@ async function resolvePersonaPageAvatarData(
         }
       }
 
-      // Nothing resolved — use fallback
+      // Nothing resolved, so use fallback
       sessionCache.set(absoluteIdx, { type: "url", url: fallbackAvatarUrl });
       avatarUrls.set(idx, fallbackAvatarUrl);
     }),
@@ -2355,7 +2355,7 @@ export async function replyPaginatedPersonaChoicesV2(
     };
   }
 
-  // Compute fallback avatar URL once — used when no persona avatar can be resolved.
+  // Compute fallback avatar URL once; used when no persona avatar can be resolved.
   // Mirrors the same logic inside buildPersonaPageComponents so both agree on the fallback.
   const serverAvatarUrl = interaction.guild?.members.me?.displayAvatarURL({
     extension: "png",
@@ -2372,14 +2372,14 @@ export async function replyPaginatedPersonaChoicesV2(
     "https://cdn.discordapp.com/embed/avatars/0.png";
 
   // Outer try catches only programming errors (e.g. bad options). It must NOT make
-  // Discord API calls — by the time an error escapes the inner try, the interaction
+  // Discord API calls because by the time an error escapes the inner try, the interaction
   // token may already be dead and any recovery attempt just wastes rate-limit quota.
   const sessionStart = Date.now();
   // Reuse the workflow-owned cache across retries, or create one for direct internal use.
   const avatarSessionCache: AvatarSessionCache = options.avatarSessionCache ?? new Map();
   try {
     while (true) {
-      // Inner try wraps the ENTIRE loop body — setup, render, and button wait.
+      // Inner try wraps the ENTIRE loop body: setup, render, and button wait.
       //    This ensures every Discord API error is caught here and returned cleanly
       //    without propagating to the outer catch and triggering a second API call.
       try {
@@ -2394,7 +2394,7 @@ export async function replyPaginatedPersonaChoicesV2(
         // Guard against the Discord 15-minute interaction token expiry.
         //     awaitMessageComponent resets its per-iteration timeout on each loop
         //     pass, so an active user clicking buttons can hold the session open
-        //     indefinitely — past the point where the token becomes invalid and all
+        //     indefinitely; past the point where the token becomes invalid and all
         //     editReply calls start throwing "Invalid Webhook Token".
         if (Date.now() - sessionStart >= PAGINATION_SESSION_MAX_MS) {
           try {
@@ -2609,7 +2609,7 @@ export async function replyPaginatedPersonaChoicesV2(
       } catch (innerError) {
         // Discord.js signals an awaitMessageComponent expiry either with the bare
         // string "time" or with an InteractionCollectorError carrying the end
-        // reason, depending on the surface — isCollectorTimeoutError covers both.
+        // reason, depending on the surface: isCollectorTimeoutError covers both.
         // Any other value is a real Discord API error (rate limit, expired token,
         // lost permission, etc.) and must stay classified as fatal.
         const isTimeout = isCollectorTimeoutError(innerError);
@@ -2642,7 +2642,7 @@ export async function replyPaginatedPersonaChoicesV2(
         }
 
         // "fatal" signals callers that the interaction token is dead and they must
-        // NOT continue their own while(true) loop — doing so would call this
+        // NOT continue their own while(true) loop, because doing so would call this
         // function again on a dead interaction, creating an infinite API spam loop.
         return {
           success: false,
@@ -2652,7 +2652,7 @@ export async function replyPaginatedPersonaChoicesV2(
     }
   } catch (error) {
     // Only genuine programming errors reach here (e.g. bad options, sync throws).
-    // Do NOT make Discord API calls in this handler — the interaction state is
+    // Do NOT make Discord API calls in this handler because the interaction state is
     // unknown at this point and any attempt would just waste rate-limit quota.
     log.error("Unexpected error during replyPaginatedPersonaChoicesV2 setup:", error);
 
@@ -2678,7 +2678,7 @@ export async function promptWithRawModal(
   const { modalTitleKey, modalCustomId, components } = options;
 
   // Generate a unique nonce for this modal instance. Discord's client caches
-  // checked state by custom_id — without a nonce, re-opening a modal (or
+  // checked state by custom_id because without a nonce, re-opening a modal (or
   // opening a different page that reuses the same component custom_ids)
   // causes the client to restore stale selections instead of honoring defaults.
   const modalNonce = Date.now().toString(36);
@@ -2694,7 +2694,7 @@ export async function promptWithRawModal(
         custom_id: noncedModalCustomId,
         title: safeSelectOptionText(localizer(locale, modalTitleKey), MODAL_TITLE_MAX_LENGTH),
         components: components.map((component) => {
-          // Check kind-discriminated types first — before any structural guards.
+          // Check kind-discriminated types first: before any structural guards.
           // isModalSelectField checks "options" in component, which would also match
           // RadioGroupField and CheckboxGroupField. isModalInputField's fallback
           // (no options/minValues/style) would match CheckboxField. Checking `kind`
@@ -2906,7 +2906,7 @@ export async function promptWithRawModal(
       const fileUploadComponentCount = components.filter((component) => isModalFileUploadField(component)).length;
 
       // Check kind-based guards (radio, checkbox group, checkbox) BEFORE the
-      // catch-all isModalInputField — it matches anything without select-like
+      // catch-all isModalInputField: it matches anything without select-like
       // properties and would swallow checkbox/radio components otherwise.
       for (const component of components) {
         if (isModalRadioGroupField(component)) {
@@ -3052,7 +3052,7 @@ export const MODAL_OPTIONS_PER_PAGE = 25;
 /**
  * Finds the single option-bearing select component in a modal's component list.
  * Radio/checkbox groups also carry `options`, but they are capped well under the
- * page size so pagination never triggers for them — matching prior behavior in
+ * page size so pagination never triggers for them: matching prior behavior in
  * both the legacy and persona paths.
  *
  * @returns The paginatable select component, or `undefined` when none exists.
@@ -3114,7 +3114,7 @@ export async function promptWithPaginatedModal(
   const optionCount = selectComponent && "options" in selectComponent ? selectComponent.options.length : 0;
 
   // If no select component or (≤25 options and interaction not yet acknowledged), use direct modal.
-  // On loop re-entry the original slash interaction is already acknowledged — either via Discord.js
+  // On loop re-entry the original slash interaction is already acknowledged: either via Discord.js
   // (interaction.replied) or via raw REST modal (rawModalAcknowledged) which bypasses Discord.js
   // state tracking. In that case fall through to the paginated path, which uses editReply + a
   // fresh button interaction to open the modal.
@@ -3174,7 +3174,7 @@ export async function promptWithPaginatedModal(
       components: [actionRow],
     });
   } else if (wasRawModalAcked) {
-    // Raw REST modal consumed the initial response — no reply to edit, followUp()
+    // Raw REST modal consumed the initial response, so no reply to edit, followUp()
     // guard blocks. Use webhook.send() directly to send the page picker.
     pageSelectMessage = (await interaction.webhook.send({
       embeds: [pageSelectEmbed],
@@ -3219,8 +3219,8 @@ export async function promptWithPaginatedModal(
  * workflow's `>25` selector) and drives its own await loop.
  *
  * Delivery is path-specific by design (see the plan's "Delivery must stay path-specific"):
- * this branch preserves the global path's three situations — `reply` when unacknowledged,
- * `editReply` when deferred/replied, and `webhook.send` after a raw modal — rather than
+ * this branch preserves the global path's three situations: `reply` when unacknowledged,
+ * `editReply` when deferred/replied, and `webhook.send` after a raw modal; rather than
  * routing through the persona anchor-message controller.
  *
  * @param selectComponent - The paginatable select (already guaranteed non-null by the caller).
@@ -3243,7 +3243,7 @@ async function runComponentsV2RangeSelectorModal(
 
   // Render the initial selector via the path-specific transport, always resolving
   //    to a Message so awaitMessageComponent works on ephemeral replies. The reply now
-  //    carries IsComponentsV2 — mark the interaction so a later legacy embed sink renders
+  //    carries IsComponentsV2, so mark the interaction so a later legacy embed sink renders
   //    a V2 notice instead of throwing (Phase 1 collision guard).
   const payload = buildRangeSelectorPayload(locale, prefix, optionCount, rangePage);
   let selectorMessage: Message;

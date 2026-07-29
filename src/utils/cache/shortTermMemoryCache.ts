@@ -50,7 +50,7 @@ export interface ShortTermMemoryEntry {
   /** Discord channel ID */
   channelId: string;
 
-  /** Parent channel ID when channelId is a thread — used for privacy/RP inheritance checks */
+  /** Parent channel ID when channelId is a thread , so used for privacy/RP inheritance checks */
   parentChannelId?: string | null;
 
   /** Optional channel name (for same-server channel mentions) */

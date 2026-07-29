@@ -6,13 +6,13 @@
  * the single source of truth used by both the CLI validation check and its unit
  * tests, mirroring `personaWorkflowBoundary.ts`.
  *
- * Rule 1 — `baked-ellipsis`
+ * Rule 1: `baked-ellipsis`
  *   A locale string where a `{placeholder}` is immediately followed by `...`.
  *   The ellipsis renders whether or not the value was actually truncated, so it
  *   claims truncation that may never have happened. Signal truncation from the
  *   command side instead, via `textPreviewFooterKey`.
  *
- * Rule 2 — `unguarded-fenced-placeholder`
+ * Rule 2: `unguarded-fenced-placeholder`
  *   A locale string that interpolates a `{placeholder}` inside a ``` fence,
  *   consumed by a file that does not import `buildTextPreview`. User-authored
  *   text containing its own fence closes the block early and mangles the rest
@@ -28,7 +28,7 @@ export const REQUIRED_HELPER = "buildTextPreview";
 
 /**
  * Every locale audited for rule 1. Both are scanned because `check-locales`
- * enforces key PARITY, not content — a baked ellipsis added only to `ja` would
+ * enforces key PARITY, not content, so a baked ellipsis added only to `ja` would
  * otherwise pass every gate.
  */
 export const AUDITED_LOCALES = ["en-US", "ja"] as const;
@@ -36,7 +36,7 @@ export const AUDITED_LOCALES = ["en-US", "ja"] as const;
 /**
  * Pre-existing rule 2 sites, frozen so the guard blocks NEW violations while
  * the backlog stays visible. Remove entries as they are migrated to
- * {@link REQUIRED_HELPER} — do not add to this list.
+ * {@link REQUIRED_HELPER}; do not add to this list.
  */
 export const KNOWN_UNGUARDED = new Set([
   "commands.persona.image-tags.success_description",
@@ -72,7 +72,7 @@ export interface TextPreviewAuditResult {
 }
 
 /**
- * Rule 1 — scans a single locale string for an unconditional ellipsis.
+ * Rule 1: scans a single locale string for an unconditional ellipsis.
  *
  * Pure and synchronous so unit tests can exercise it without touching disk.
  *
@@ -99,7 +99,7 @@ export function hasFencedPlaceholder(value: string): boolean {
 }
 
 /**
- * Rule 2 — checks that every consumer of a fenced-placeholder key guards it.
+ * Rule 2: checks that every consumer of a fenced-placeholder key guards it.
  *
  * Keys with no locatable consumer are SKIPPED rather than flagged: some call
  * sites build key names dynamically (e.g. `embed${n}_description`), and a
@@ -165,7 +165,7 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   const violations: TextPreviewViolation[] = [];
 
   // Flatten every audited locale so each string carries its dotted key.
-  //    Locales load concurrently — this runs inside `bun run vl`'s shared unit
+  //    Locales load concurrently because this runs inside `bun run vl`'s shared unit
   //    lane, so avoidable serial I/O lands directly on the critical path.
   const loaded = await Promise.all(
     AUDITED_LOCALES.map(async (locale) => [locale, await loadLocale(locale)] as const),
@@ -177,7 +177,7 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
     perLocale.set(locale, flat);
   }
 
-  // Rule 1 runs per locale — a translation must not reintroduce it alone.
+  // Rule 1 runs per locale, so a translation must not reintroduce it alone.
   for (const [locale, flat] of perLocale) {
     for (const [key, value] of flat) violations.push(...scanBakedEllipsis(key, value, locale));
   }

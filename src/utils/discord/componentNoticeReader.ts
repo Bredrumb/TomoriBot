@@ -2,13 +2,13 @@
  * Components V2 notice reader.
  *
  * Several system notices that used to be sent as Discord embeds are now sent as
- * Components V2 containers (see `expandableEmbedNotice.ts` — memory-learning and
+ * Components V2 containers (see `expandableEmbedNotice.ts`: memory-learning and
  * scheduled-task confirmations). A CV2 message carries an EMPTY `message.embeds`
  * array and an empty `message.content`: all of its text lives inside
  * `message.components` as `TextDisplay` blocks nested in a `Container`.
  *
  * Every context consumer in the chat/compaction pipelines was written against
- * `message.embeds`, so those notices became completely invisible to the LLM —
+ * `message.embeds`, so those notices became completely invisible to the LLM:
  * causing Tomori to re-run tools she had already run. This module restores the
  * old behavior by reconstructing the embed-equivalent {title, description,
  * footer} triple from a CV2 container, so the existing title classifiers
@@ -81,7 +81,7 @@ function collectTextDisplayBlocks(component: unknown, blocks: string[]): void {
   const data = toComponentRecord(component);
   if (!data) return;
 
-  // Leaf case — a TextDisplay carries the actual notice text.
+  // Leaf case: a TextDisplay carries the actual notice text.
   if (data.type === ComponentType.TextDisplay && typeof data.content === "string" && data.content.length > 0) {
     blocks.push(data.content);
   }

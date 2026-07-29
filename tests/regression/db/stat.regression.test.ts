@@ -1,5 +1,5 @@
 /**
- * Regression harness — StatRepository (stat_counters) write/buffer + aggregation.
+ * Regression harness: StatRepository (stat_counters) write/buffer + aggregation.
  *
  * Covers plan §11: buffered additive UPSERT, per-tuple collapsing, per-user grain,
  * persona-agnostic sentinel, token accumulation + cost read, shutdown drain, the
@@ -15,7 +15,7 @@ import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 const TEST_MODEL = "_rt_stat_model";
 const REUNION_OTHER_SERVER_DISC_ID = "_rt_stat_reunion_other_server";
 
-/** YYYY-MM-DD for `n` days before today (UTC) — matches StatRepository's bucket grain. */
+/** YYYY-MM-DD for `n` days before today (UTC): matches StatRepository's bucket grain. */
 function dayOffset(n: number): string {
   return new Date(Date.now() - n * 86_400_000).toISOString().split("T")[0];
 }
@@ -447,7 +447,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
 
   it("getActivityHeatmap timezone offset crossing midnight rolls into the previous weekday's cell", async () => {
     // Seed Tuesday (2024-01-02 = dow 2) at 01:00 UTC. With a UTC-2 personal offset
-    // the local time is 23:00 MONDAY — the hour roll must move the weekday too.
+    // the local time is 23:00 MONDAY, so the hour roll must move the weekday too.
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
       VALUES
@@ -462,7 +462,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
 
   it("getActivityHeatmap timezone offset wraps across the week boundary", async () => {
     // Sunday (2024-01-07 = dow 0) at 00:00 UTC with a UTC-1 offset is 23:00 SATURDAY
-    // of the prior week — the week-hour index must wrap mod 168 (0 → 167).
+    // of the prior week, so the week-hour index must wrap mod 168 (0 → 167).
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
       VALUES

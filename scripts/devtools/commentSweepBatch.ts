@@ -255,6 +255,7 @@ interface JudgeResponse {
   id: string;
   ordering?: string;
   reason?: string;
+  relation?: string;
   rewrite?: string;
   verdict?: string;
 }
@@ -288,7 +289,12 @@ function toLedgerRow(
   }
 
   if (block === "D") {
-    return { ...base, rewrite: response.rewrite, verdict: "rewrite" };
+    return {
+      ...base,
+      relation: response.relation,
+      rewrite: response.rewrite,
+      verdict: "rewrite",
+    };
   }
 
   // Only the line-comment rubrics name a KEEP criterion. Carrying it into the ledger is what
@@ -343,7 +349,12 @@ async function buildRowGroups(
       continue;
     }
     const lines = await readSource(repoRoot, candidate.file, cache);
-    if (lines[candidate.line - 1]?.trim() !== candidate.text.trim()) {
+    const sourceLine = lines[candidate.line - 1];
+    if (
+      sourceLine === undefined ||
+      (sourceLine.trim() !== candidate.text.trim() &&
+        !sourceLine.includes(candidate.text))
+    ) {
       continue;
     }
     const start = Math.max(0, candidate.line - 1 - contextLines);

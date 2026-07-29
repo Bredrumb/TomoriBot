@@ -452,7 +452,7 @@ export async function execute(
     const characterDesc = characterInfo;
     const speechExamples = characterInfo; // AI will extract speech patterns from context
 
-    // Effective generation context — may be overridden to use vision_llm when the primary
+    // Effective generation context: may be overridden to use vision_llm when the primary
     // model lacks vision support but a dedicated vision model is configured
     let generationTomoriState = tomoriState;
     let generationProviderName = providerName;
@@ -583,21 +583,21 @@ export async function execute(
       }
 
       // Validate that model supports image vision; fall back to vision_llm if configured
-      // If card/preset data was extracted, vision is optional — the data serves as text context
+      // If card/preset data was extracted, vision is optional because the data serves as text context
       if (!tomoriState.llm.sees_images) {
         const visionLlm = tomoriState.vision_llm;
 
         if (!visionLlm?.sees_images) {
           // Neither the primary model nor the vision model supports vision
           if (extractedPresetContext) {
-            // Card data was found — proceed without vision, using extracted data instead
+            // Card data was found, so proceed without vision, using extracted data instead
             log.info(
               "No vision support available, but card/preset data was extracted from image. Proceeding with text-only context.",
             );
             imageBase64 = undefined;
             imageMimeType = undefined;
           } else {
-            // No card data and no vision — cannot process the image at all
+            // No card data and no vision, so cannot process the image at all
             await modalSubmitInteraction.editReply({
               embeds: [
                 new EmbedBuilder()

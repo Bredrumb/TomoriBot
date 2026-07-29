@@ -46,7 +46,7 @@ export type ChannelLlmCacheOptions = LlmProviderCacheOptions & {
 };
 
 /**
- * LlmProviderRepository — saved provider configs, custom endpoints, and OpenRouter registrations.
+ * LlmProviderRepository: saved provider configs, custom endpoints, and OpenRouter registrations.
  *
  * Owns tables: saved_provider_configs, user_saved_provider_configs, custom_endpoints,
  * openrouter_model_registrations, openrouter_embedding_model_registrations,
@@ -586,7 +586,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
     if (ids.length === 0) return [];
 
     try {
-      // Avoid ANY($1) array binding — Bun SQL can intermittently fail on
+      // Avoid ANY($1) array binding, because Bun SQL can intermittently fail on
       // integer-array parameters with protocol error 08P01.
       const distinctIds = Array.from(new Set(ids));
       const placeholders = distinctIds.map((_, i) => `$${i + 1}`).join(", ");
@@ -678,7 +678,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
    * Returns the custom endpoint that owns a specific synthetic model row.
    *
    * Used at runtime to resolve the currently-active model back to its exact endpoint when several
-   * models share a label+capability. Matching is by (owner, capability, model_ref_id) — the
+   * models share a label+capability. Matching is by (owner, capability, model_ref_id): the
    * model_ref_id uniquely identifies the synthetic model, so label is not required.
    *
    * @param params - Scope (serverId or userId), capability, and the synthetic model's id
@@ -1920,7 +1920,7 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
 
   /**
    * Exports server-scoped provider configuration.
-   * Stub — full composition with the unified export pipeline lands in Phase 6 (#16.7).
+   * Stub: full composition with the unified export pipeline lands in Phase 6 (#16.7).
    *
    * @param ownerId - Internal server DB ID
    */
@@ -1933,12 +1933,12 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
 
   /**
    * Restores server-scoped provider configuration from an export.
-   * Stub — full implementation lands in Phase 6 (#16.7).
+   * Stub: full implementation lands in Phase 6 (#16.7).
    */
   async fromExportShape(_ownerId: string | number, _data: LlmProviderExportShape): Promise<boolean> {
     return false;
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const llmProviderRepo = new LlmProviderRepository();

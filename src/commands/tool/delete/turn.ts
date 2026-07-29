@@ -16,7 +16,7 @@ import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallbac
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-/** Module-level lock set keyed by channelId — prevents double-invocation. */
+/** Module-level lock set keyed by channelId, so prevents double-invocation. */
 const activeDeleteLocks = new Set<string>();
 
 /**
@@ -34,7 +34,7 @@ interface DeleteTurnStatus {
 
 /**
  * Resolves the parent text channel that owns the webhook for the given channel.
- * Threads cannot own webhooks — the parent channel is used instead.
+ * Threads cannot own webhooks, so the parent channel is used instead.
  * @returns The BaseGuildTextChannel that owns webhooks, or null if unavailable
  */
 function resolveWebhookHostChannel(channel: Message["channel"]): BaseGuildTextChannel | null {
@@ -127,7 +127,7 @@ export async function execute(
   }
 
   // Permission check: requires ManageGuild OR use in a designated RP channel.
-  //    When the command is run inside a thread, channelId is the thread's own ID —
+  //    When the command is run inside a thread, channelId is the thread's own ID:
   //    not the parent channel's ID. Check both so threads inherit their parent's RP status.
   const hasManageGuild = interaction.memberPermissions?.has("ManageGuild") ?? false;
   const parentChannelId = channel.isThread() ? channel.parentId : null;
@@ -143,7 +143,7 @@ export async function execute(
     return;
   }
 
-  // Check bot's MANAGE_MESSAGES permission — determines whether direct
+  // Check bot's MANAGE_MESSAGES permission: determines whether direct
   //      deletion methods (bulkDelete, msg.delete) will work. The command
   //      proceeds regardless, but uses webhook-based deletion as fallback.
   const botMember = interaction.guild.members.me;
@@ -152,7 +152,7 @@ export async function execute(
     botHasManageMessages = Boolean(channel.permissionsFor(botMember)?.has("ManageMessages"));
   }
 
-  // Race-condition lock check — prevents double-invocation for the same channel
+  // Race-condition lock check, so prevents double-invocation for the same channel
   if (activeDeleteLocks.has(channelId)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.delete.turn.already_running_title",
@@ -174,7 +174,7 @@ export async function execute(
       initialPersona: TomoriState | null,
       updateStatus: (status: DeleteTurnStatus) => Promise<void>,
     ): Promise<void> => {
-      // Target persona tracking — null means auto-detect from message history
+      // Target persona tracking: null means auto-detect from message history
       let resolvedPersona = initialPersona;
 
       const fetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
@@ -252,7 +252,7 @@ export async function execute(
           for (const msg of messages) {
             try {
               if (webhook) {
-                // Webhook API deletion — no channel permission required
+                // Webhook API deletion: no channel permission required
                 await webhook.deleteMessage(msg.id, threadId);
                 deletedCount++;
               } else if (botHasManageMessages) {
@@ -346,7 +346,7 @@ export async function execute(
             }
           }
         } else {
-          // Bot lacks MANAGE_MESSAGES — cannot delete direct bot messages at all
+          // Bot lacks MANAGE_MESSAGES, so cannot delete direct bot messages at all
           failedCount += directBotMessages.length;
           log.warn(
             `[deleteTurn] Bot lacks MANAGE_MESSAGES in channelId=${channelId}; skipping ${directBotMessages.length} direct bot messages`,
@@ -413,7 +413,7 @@ export async function execute(
             // Prevent the self-reply suppression guard from blocking this trigger
             suppressNextSelfReply(channel.id);
 
-            // Fire-and-forget — do not await so the command interaction resolves
+            // Fire-and-forget, so do not await so the command interaction resolves
             void tomoriChat({
               client,
               message: lastMessage,
@@ -532,7 +532,7 @@ export async function execute(
         ],
       });
     } catch {
-      // Interaction may have already expired — nothing we can do
+      // Interaction may have already expired, so nothing we can do
     }
   } finally {
     // Always release the channel lock regardless of outcome

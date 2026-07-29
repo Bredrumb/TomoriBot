@@ -94,7 +94,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Guild-only — a channel picker is meaningless in DMs (validation before try-catch).
+  // Guild-only: a channel picker is meaningless in DMs (validation before try-catch).
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -107,7 +107,7 @@ export async function execute(
 
   const selectedChannel = interaction.options.getChannel("channel", true);
 
-  // Load server state (cached) before showing the modal — stays within the 3s window.
+  // Load server state (cached) before showing the modal, so stays within the 3s window.
   const tomoriState = await getCachedTomoriState(interaction.guild.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -131,7 +131,7 @@ export async function execute(
     );
     const prefillMode = existing?.mode ?? DEFAULT_MODE;
 
-    // Show the modal — 4 text parts (all optional; empty submit removes) + mode radio.
+    // Show the modal: 4 text parts (all optional; empty submit removes) + mode radio.
     //    Do NOT deferReply before this call (Pattern 3). Arg 4 auto-defers the submit.
     const modalResult = await promptWithRawModal(
       interaction,

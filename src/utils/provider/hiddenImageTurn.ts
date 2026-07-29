@@ -6,12 +6,12 @@
  * generate an image of the current channel scene.
  *
  * Key properties vs. a normal bot turn:
- * - Text output is suppressed  (`suppressTextOutput: true`) — only the image appears.
+ * - Text output is suppressed  (`suppressTextOutput: true`), so only the image appears.
  * - The target image tool (generate_image or generate_image_nai) signals `endTurn: true`
  *   on success via the `endTurnAfterTools` mechanism, stopping the loop immediately.
- * - STM writes are disabled (`disableShortTermMemoryUpdate: true`) — a hidden turn
+ * - STM writes are disabled (`disableShortTermMemoryUpdate: true`), because a hidden turn
  *   should not pollute the short-term memory log.
- * - No webhook / persona avatar — the image is posted directly by the tool.
+ * - No webhook / persona avatar: the image is posted directly by the tool.
  */
 
 import type { Client, Guild, Webhook } from "discord.js";
@@ -136,7 +136,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     internalUserId,
   } = params;
 
-  // Verify the active model supports function calling — required for tool-based generation.
+  // Verify the active model supports function calling: required for tool-based generation.
   if (!tomoriState.llm.has_tools) {
     return {
       success: false,
@@ -174,7 +174,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     const authorId = msg.author.id;
     const authorName = stripBridgePrefix(msg.member?.displayName ?? msg.author.id);
 
-    // Skip image attachments — the hidden agent only needs text context to plan the
+    // Skip image attachments because the hidden agent only needs text context to plan the
     // image prompt. Including images would cause the provider to base64-encode and
     // upload them all inline, producing a multi-MB payload that overwhelms the model.
 
@@ -299,7 +299,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     disableShortTermMemoryUpdate: true, // Do not pollute STM from a hidden agent turn
     suppressTextOutput: true, // No visible text — only the image
     isManuallyTriggered: true,
-    // End the turn as soon as either image tool succeeds — both are listed so the
+    // End the turn as soon as either image tool succeeds, so both are listed so the
     // loop terminates cleanly even if the model calls the non-preferred backend.
     endTurnAfterTools: ["generate_image", "generate_image_nai"],
     messageIdMap,
@@ -370,7 +370,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     log.info(`[Hidden Image Agent] Iteration ${i + 1}/${BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS}`);
 
     // Stream one LLM turn.
-    // No per-stream timeout — normal chat (tomoriChat.ts) also has none.
+    // No per-stream timeout because normal chat (tomoriChat.ts) also has none.
     // Protection against infinite loops comes from BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS.
     let streamResult: Awaited<ReturnType<typeof provider.streamToDiscord>>;
     try {

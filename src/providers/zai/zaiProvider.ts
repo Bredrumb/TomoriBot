@@ -352,7 +352,7 @@ export class ZaiProvider
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      // Z.ai uses a single endpoint — no beta URL needed for prefill
+      // Z.ai uses a single endpoint, so no beta URL needed for prefill
       if (streamingContext && tomoriState.llm.has_tools) {
         log.info("ZaiProvider: Reloading tools with streaming context for context-aware availability");
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);

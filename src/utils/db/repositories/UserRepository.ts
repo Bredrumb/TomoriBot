@@ -1,5 +1,5 @@
 /**
- * UserRepository — manages the `users` and `personalization_blacklist` tables.
+ * UserRepository: manages the `users` and `personalization_blacklist` tables.
  *
  * Export contract: toExportShape / fromExportShape are required by IRepository
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
@@ -385,7 +385,7 @@ export class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
-   * Registers a user (upsert — preserves existing nickname and preferences on conflict).
+   * Registers a user (upsert: preserves existing nickname and preferences on conflict).
    * Invalidates the user cache after write.
    *
    * @param language    - Registration locale
@@ -651,7 +651,7 @@ export class UserRepository implements IRepository<UserExportShape> {
       return status;
     }
 
-    // Orphaned spotlight — remove it so it doesn't accumulate
+    // Orphaned spotlight: remove it so it doesn't accumulate
     await this.removePersonalSpotlight(serverId, userId, channelDiscId);
     return null;
   }
@@ -724,7 +724,7 @@ export class UserRepository implements IRepository<UserExportShape> {
 
   /**
    * Returns true if the given personaId is permitted by the spotlight status.
-   * A null spotlight means no restriction — all personas are allowed.
+   * A null spotlight means no restriction: all personas are allowed.
    *
    * @param spotlightStatus - Current spotlight, or null/undefined if none
    */
@@ -1251,5 +1251,5 @@ export class UserRepository implements IRepository<UserExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const userRepository = new UserRepository();

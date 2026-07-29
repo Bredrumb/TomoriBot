@@ -411,7 +411,7 @@ export class GenerateImageTool extends BaseTool {
   /**
    * Standard image generation is available for any tool-capable chat model.
    * The actual execution provider is resolved from the configured image slot.
-   * @returns Always true — actual availability is gated by config + credential resolution
+   * @returns Always true, so actual availability is gated by config + credential resolution
    */
   isAvailableFor(_provider: string): boolean {
     return true;
@@ -1099,7 +1099,7 @@ export class GenerateImageTool extends BaseTool {
         userId: context.internalUserId ?? null,
       });
 
-      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      // Personal BYOK users bring their own API quota, so bypass server quota entirely
       if (creds.source === "server") {
         quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
       }
@@ -1180,7 +1180,7 @@ export class GenerateImageTool extends BaseTool {
         log.info(`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`);
       }
 
-      // Skip avatar references during inpaint when a message image is the edit source —
+      // Skip avatar references during inpaint when a message image is the edit source, so
       // the source image already defines the layout being edited.
       const allowAvatarReference = targetIdentities.length > 0 && !(inpaint && !!messageId);
 

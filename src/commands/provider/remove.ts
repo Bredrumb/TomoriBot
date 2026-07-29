@@ -83,7 +83,7 @@ export async function execute(
     const rawSavedConfigs = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
     // Custom providers with live endpoints are managed via /provider custom-endpoint remove.
     // Orphaned custom provider rows (no matching custom_endpoints) are kept here as a
-    // cleanup path — they have no other way to be removed.
+    // cleanup path, because they have no other way to be removed.
     const visibleSavedConfigs = (
       await Promise.all(
         rawSavedConfigs.map(async (config) => {

@@ -50,13 +50,13 @@ export async function getCachedGuildMcpConfigs(serverId: number): Promise<GuildM
     }
   }
 
-  // Cache miss or stale — load from DB via repository
+  // Cache miss or stale : load from DB via repository
   cacheMisses++;
 
   try {
     const configs = await mcpRepository.loadGuildMcpConfigs(serverId);
 
-    // Cache the result (even if empty — avoids repeated DB queries for guilds with no MCP servers)
+    // Cache the result (even if empty - avoids repeated DB queries for guilds with no MCP servers)
     cache.set(serverId, {
       configs,
       cachedAt: now,

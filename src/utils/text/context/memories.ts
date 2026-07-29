@@ -53,7 +53,7 @@ export async function buildServerMemoryContextItem(params: {
   let serverMemoryLines: string[] = [];
   try {
     // Without a resolved server id + persona lineage there is nothing to scope
-    // to — treat it as "no memories" (the previous raw query interpolated NULL,
+    // to treat it as "no memories" (the previous raw query interpolated NULL,
     // matching none).
     const serverId = params.tomoriState.server_id;
     const personaLineageId = params.tomoriState.persona_lineage_id;
@@ -68,7 +68,7 @@ export async function buildServerMemoryContextItem(params: {
       const contentTags = normalized.filter((t) => !t.startsWith("#"));
 
       // Channel tags gate: if present and channel_memory_enabled, channel must match.
-      // Channel and content filters are independent — channel match does not exempt a memory
+      // Channel and content filters are independent; channel match does not exempt a memory
       // from the content/corpus check below (per baetican's intended design).
       if (params.channelMemoryEnabled && channelTags.length > 0) {
         const channelAllowed = channelTags.some((t) => t.slice(1).toLowerCase() === params.channelName.toLowerCase());

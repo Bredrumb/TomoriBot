@@ -88,7 +88,7 @@ export async function execute(
       },
     ];
 
-    // Show modal (modal is the acknowledgment — no pre-defer)
+    // Show modal (modal is the acknowledgment; no pre-defer)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -142,7 +142,7 @@ export async function execute(
     const url = modalResult.values?.[URL_INPUT_ID]?.trim();
     const authToken = modalResult.values?.[AUTH_TOKEN_INPUT_ID]?.trim() || undefined;
     const serverTypeRaw = modalResult.values?.[SERVER_TYPE_SELECT_ID]?.trim();
-    // "none" or empty means no type — store as null
+    // "none" or empty means no type: store as null
     const serverType = serverTypeRaw && serverTypeRaw !== "none" ? serverTypeRaw : null;
 
     if (!modalResult.interaction) {

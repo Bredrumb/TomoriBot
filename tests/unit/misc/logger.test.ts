@@ -62,7 +62,7 @@ describe("buildLogStreams", () => {
     // Custom metric level (52) sits above error and must pass through
     // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
     (logger as any).metric({ metric: "cache_sizes" }, "metric:cache_sizes");
-    // Below the production "error" level — must be filtered from BOTH sinks
+    // Below the production "error" level, so must be filtered from BOTH sinks
     logger.info("hidden in production");
 
     // Both sinks received byte-identical newline-delimited records

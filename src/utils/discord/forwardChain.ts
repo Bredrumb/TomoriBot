@@ -4,7 +4,7 @@
  * Discord's `message_snapshots` payload is deliberately NON-recursive: a snapshot
  * carries only attachments/components/content/embeds/flags/mentions/stickers/type,
  * so it can never report that it was itself a forward. Forwarding an already
- * forwarded message therefore hands the bot an EMPTY snapshot — no text, no media —
+ * forwarded message therefore hands the bot an EMPTY snapshot (no text, no media)
  * and every downstream media walk silently finds nothing.
  *
  * The wrapper message's own `reference` survives that flattening, though, and points
@@ -54,7 +54,7 @@ export function isEmptyForwardSnapshot(snapshot: MessageSnapshot): boolean {
  * Fetch the message a forward reference points at, tolerating every access failure.
  *
  * The origin can sit in a channel the bot cannot read (another guild, a DM, revoked
- * permissions) or may have been deleted, so this never throws — an unreachable origin
+ * permissions) or may have been deleted, so this never throws; an unreachable origin
  * degrades to an explicit "unresolved" chain rather than failing the whole context build.
  *
  * @param message - Message whose client and reference drive the lookup
@@ -82,8 +82,8 @@ async function fetchForwardOrigin(message: Message, channelId: string, messageId
  * Walk a message's forward chain until snapshots with real content are found.
  *
  * Returns immediately for non-forwards and for ordinary single forwards (the common
- * case, costing zero extra fetches). Only an empty snapshot — the nested-forward
- * signature — triggers a re-fetch of the intermediate wrapper.
+ * case, costing zero extra fetches). Only an empty snapshot: the nested-forward
+ * signature: triggers a re-fetch of the intermediate wrapper.
  *
  * @param message - Message received in the current channel (the outermost forward)
  * @returns Resolved snapshots plus how far the walk had to go, and whether it gave up

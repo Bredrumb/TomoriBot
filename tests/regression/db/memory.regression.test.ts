@@ -1,5 +1,5 @@
 /**
- * Regression harness — Memory repositories domain.
+ * Regression harness: Memory repositories domain.
  *
  * Covers: ServerMemoryRepository (addServerMemoryByTomori),
  * PersonalMemoryRepository (addPersonalMemoryByTomori, loadPersonalMemoriesForUserLineage),

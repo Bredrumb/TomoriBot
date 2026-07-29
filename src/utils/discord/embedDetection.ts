@@ -8,7 +8,7 @@ import type { Embed, Message } from "discord.js";
 import { localizer, getSupportedLocales } from "@/utils/text/localizer";
 
 /**
- * Checks whether a single embed is a "refresh marker" — an embed that signals
+ * Checks whether a single embed is a "refresh marker": an embed that signals
  * a conversation reset or compact-refresh boundary.
  *
  * Matches the following localizer keys across all supported locales:
@@ -70,7 +70,7 @@ export function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_ref
     if (title === localizer(supportedLocale, "commands.tool.refresh.title")) {
       return "reset";
     }
-    // Compact refresh markers — summary, scene, or manual refresh
+    // Compact refresh markers: summary, scene, or manual refresh
     if (
       title === localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed") ||
       title === localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed") ||
@@ -91,7 +91,7 @@ export function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_ref
  * Exactly mirrors the slicing logic in `tomoriChat.ts`:
  *   - If no marker is found: return the full array
  *   - `reset` marker: slice starts at `resetIndex + 1` (drop the marker itself)
- *   - `compact_refresh` marker: slice starts at `resetIndex` (keep the marker —
+ *   - `compact_refresh` marker: slice starts at `resetIndex` (keep the marker:
  *     it carries the compact summary that replaces old history)
  *
  * @param messages - Messages in chronological order (oldest first, newest last)

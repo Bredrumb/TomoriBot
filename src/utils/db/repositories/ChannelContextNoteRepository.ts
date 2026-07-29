@@ -1,5 +1,5 @@
 /**
- * ChannelContextNoteRepository — manages per-channel context note entries.
+ * ChannelContextNoteRepository: manages per-channel context note entries.
  *
  * Covered table: channel_context_notes.
  *

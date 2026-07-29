@@ -19,7 +19,7 @@ export function initTimers(client: Client): void {
 
   log.section("Initializing Scheduled Work Coordinator...");
   try {
-    // Dynamic import deferred — module references timers that require the client to be ready
+    // Dynamic import deferred, because module references timers that require the client to be ready
     import("@/timers/scheduledWorkCoordinator")
       .then(({ initializeScheduledWorkCoordinator }) => {
         client.once("clientReady", () => {

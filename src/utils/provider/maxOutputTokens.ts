@@ -9,16 +9,16 @@
  *    to keep.
  *
  * When these two figures drift, the truncator over-reserves output budget and
- * silently drops chat history that would otherwise fit — the "TomoriBot forgets
+ * silently drops chat history that would otherwise fit: the "TomoriBot forgets
  * everything after each message" class of bug. Keeping the resolution in one
  * place makes the intended parity explicit.
  *
  * Resolution order (highest priority first):
- *   - `configured` — the server's `/model parameters` output-token override
+ *   - `configured`: the server's `/model parameters` output-token override
  *      (`config.llm_max_output_tokens`).
- *   - `envRaw` — the provider-specific env cap (e.g. `OPENROUTER_MAX_OUTPUT_TOKENS`,
+ *   - `envRaw`: the provider-specific env cap (e.g. `OPENROUTER_MAX_OUTPUT_TOKENS`,
  *      `GOOGLE_MAX_OUTPUT_TOKENS`), when set to a usable positive integer.
- *   - `fallback` — the caller's last-resort value. Providers that want to fall
+ *   - `fallback`: the caller's last-resort value. Providers that want to fall
  *      back to the model's own reported ceiling pass that ceiling here; providers
  *      that want a flat default (OpenRouter's historical 8192) pass that instead.
  *

@@ -19,7 +19,7 @@ const MAX_OPTIONS_PER_GROUP = 10;
 
 /**
  * Configure the /st-preset remove subcommand.
- * No options — lists all imported presets as a checklist; unchecked ones are deleted.
+ * No options: lists all imported presets as a checklist; unchecked ones are deleted.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.st-preset.remove.description"));
@@ -104,7 +104,7 @@ export async function execute(
     const checkboxGroups = buildPresetCheckboxGroups(allPresets);
     const groupCount = checkboxGroups.length;
 
-    // Show the modal — no defer needed before modal display
+    // Show the modal: no defer needed before modal display
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.st-preset.remove.modal_title",
@@ -170,7 +170,7 @@ export async function execute(
     let promotedPreset: (StPresetRow & { preset_id: number }) | null = null;
     if (removingActivePreset) {
       const remainingPresets = allPresets.filter((p) => !keptPresetIds.has(p.preset_id) === false);
-      // loadPresetsForServer orders by created_at ASC — last entry is most recent
+      // loadPresetsForServer orders by created_at ASC: last entry is most recent
       const candidate = remainingPresets[remainingPresets.length - 1] ?? null;
       if (candidate) {
         const promoted = await presetRepository.setActivePreset(tomoriState.server_id, candidate.preset_id);

@@ -797,7 +797,7 @@ async function runIncrementalExtraction(params: {
         totalWindows: windows.length,
       };
     }
-    // Every window "succeeded" yet nothing survived validation — that is a malformed-output
+    // Every window "succeeded" yet nothing survived validation: that is a malformed-output
     // problem, not an empty conversation, so it must not read as "no facts found".
     if (discardedEntries > 0) {
       return {
@@ -1080,7 +1080,7 @@ export async function execute(
           : "conversation";
     const messageFetchLimit = interaction.options.getInteger("limit") ?? 100;
 
-    // In-character extraction requires a single persona's identity to do its job —
+    // In-character extraction requires a single persona's identity to do its job:
     // reject global/automatic combinations rather than silently degrading.
     if (promptMode === "in_character" && scope !== "persona") {
       await replyInfoEmbed(interaction, locale, {

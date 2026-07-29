@@ -24,8 +24,8 @@ export interface PostgresPoolOptions {
 /**
  * Connection-pool hygiene for remote/managed PostgreSQL (in seconds).
  *
- * Any networked PostgreSQL fronted by a gateway, proxy, or load-balancer — managed
- * cloud endpoints, RDS Proxy, PgBouncer, a NAT/LB in the path — may silently reap
+ * Any networked PostgreSQL fronted by a gateway, proxy, or load-balancer: managed
+ * cloud endpoints, RDS Proxy, PgBouncer, a NAT/LB in the path; may silently reap
  * idle TCP connections without sending a RST. A pooled connection reaped this way
  * becomes a black hole: the next query hangs into it until an app timeout fires,
  * which surfaces most on longer, less frequent work (e.g. chat turns) rather than
@@ -42,7 +42,7 @@ export interface PostgresPoolOptions {
  */
 function resolveProductionPoolOptions(): PostgresPoolOptions {
   return {
-    // Close idle pooled connections after 30s — before any gateway/proxy can reap them.
+    // Close idle pooled connections after 30s before any gateway/proxy can reap them.
     idleTimeout: parseIntegerEnvFlag(process.env.POSTGRES_IDLE_TIMEOUT_SECONDS, 30, 5),
     // Hard age cap so no connection lingers indefinitely even under steady load.
     maxLifetime: parseIntegerEnvFlag(process.env.POSTGRES_MAX_LIFETIME_SECONDS, 600, 30),
@@ -89,7 +89,7 @@ function createDatabaseClient(): SQL {
     // pooled socket can't black-hole a subsequent query (see helper docs).
     const poolOptions = resolveProductionPoolOptions();
 
-    // Unix socket path (e.g. /cloudsql/<connection-name>) — Cloud SQL Auth Proxy handles TLS
+    // Unix socket path (e.g. /cloudsql/<connection-name>): Cloud SQL Auth Proxy handles TLS
     // internally; the client connects via a local socket and must not add a second TLS layer.
     if (host.startsWith("/")) {
       return new SQL({

@@ -1,5 +1,5 @@
 /**
- * ToolRepository — manages guild MCP server configurations.
+ * ToolRepository: manages guild MCP server configurations.
  *
  * Owns the `guild_mcp_servers` table. The Brave API key status read lives
  * here too since it gates tool availability.
@@ -327,5 +327,5 @@ export class ToolRepository implements IRepository<ToolExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const toolRepository = new ToolRepository();

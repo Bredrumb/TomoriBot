@@ -12,7 +12,7 @@ type PickerOutcome = "cancel" | "timeout" | "collector-timeout";
 
 /**
  * Builds the error discord.js v14 actually rejects with when
- * `Message#awaitMessageComponent` expires — an `InteractionCollectorError`
+ * `Message#awaitMessageComponent` expires: an `InteractionCollectorError`
  * rather than the bare "time" string used by raw collectors.
  */
 function makeInteractionCollectorError(reason: string): Error {

@@ -164,7 +164,7 @@ async function findStaleTranslations(): Promise<StaleEntry[]> {
 }
 
 /**
- * Main entry — two modes:
+ * Main entry: two modes:
  *   (default)     Print a compact human-readable review list to the console
  *   --export      Write a JSON file for use with the translation script
  */

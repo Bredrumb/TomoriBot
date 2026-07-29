@@ -7,9 +7,9 @@ import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 // the OpenAI-compatible builder) unable to front strict backends such as Claude. This module
 // centralizes the three normalizations behind one tested seam:
 //
-//   A. Prefix-completion  — vendor "continue this assistant turn" extension (`prefix: true`).
-//   B. Role alternation   — merge consecutive same-role turns + guarantee a leading `user` turn.
-//   C. Media relocation   — assistant turns cannot carry media; peel it into a synthetic `user`
+//   A. Prefix-completion: vendor "continue this assistant turn" extension (`prefix: true`).
+//   B. Role alternation: merge consecutive same-role turns + guarantee a leading `user` turn.
+//   C. Media relocation: assistant turns cannot carry media; peel it into a synthetic `user`
 //                           turn. This one is ALWAYS-ON (universal across OpenAI/Anthropic/Gemini
 //                           shaped APIs) and is never gated by a toggle.
 //
@@ -114,7 +114,7 @@ function normalizeToParts(content: string | Array<Record<string, unknown>>): Arr
 
 /**
  * Whether a message carries OpenAI-style top-level tool wiring: `tool_calls` on an assistant turn
- * or `tool_call_id` on a tool result turn. Such turns must NOT be merged — the merge keeps only the
+ * or `tool_call_id` on a tool result turn. Such turns must NOT be merged, so the merge keeps only the
  * run's first message's non-`content` keys (see {@link mergeConsecutiveSameRole}), which would
  * silently drop a second turn's `tool_calls`/`tool_call_id` and orphan the matching tool result,
  * producing an invalid request body. Anthropic carries tool data inside `content` blocks rather
@@ -149,7 +149,7 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
   for (let i = 1; i < messages.length; i++) {
     const next = messages[i];
     // Merge only same-role neighbors, and never across a tool-bearing turn (which would drop its
-    // top-level tool_calls/tool_call_id — see hasToolMetadata).
+    // top-level tool_calls/tool_call_id: see hasToolMetadata).
     if (current.role === next.role && !hasToolMetadata(current) && !hasToolMetadata(next)) {
       const combined = [...normalizeToParts(current.content), ...normalizeToParts(next.content)];
       const allText = combined.every((part) => part.type === "text");

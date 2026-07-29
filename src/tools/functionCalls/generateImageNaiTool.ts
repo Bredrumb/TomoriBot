@@ -52,7 +52,7 @@ import {
 // can hurt generation reliability; enable again once the API is consistently healthy.
 const NAI_IMAGE_ENABLE_TAG_RESOLUTION =
   (process.env.NAI_IMAGE_ENABLE_TAG_RESOLUTION || "false").toLowerCase() === "true";
-// Inpainting strength: denoising level for the masked region (0.0–1.0).
+// Inpainting strength: denoising level for the masked region (0.0-1.0).
 // 1.0 fully redraws the masked area from the prompt with no original pixel bleed-through.
 // Lower values preserve more of the original structure but cause color blending artifacts
 // when the edit changes colors (e.g. white hair → red hair at 0.7 produces grey).
@@ -60,7 +60,7 @@ const NAI_INPAINT_STRENGTH = Number.parseFloat(process.env.NAI_INPAINT_STRENGTH 
 const NAI_ENABLE_CHAR_REFERENCES = (process.env.NAI_ENABLE_CHAR_REFERENCES || "true").toLowerCase() === "true";
 // Intentionally disabled: profile-driven autofill can conflict with inline tags the
 // LLM picks from context. The LLM reads Physical Appearance tags from context and writes them
-// directly into `tags` — no DB merge needed.  Re-enable only after conflict resolution
+// directly into `tags`, so no DB merge needed.  Re-enable only after conflict resolution
 // strategy is designed and validated.
 const NAI_ENABLE_PROFILE_CHARACTER_AUTOFILL = false;
 const NAI_ENABLE_PROFILE_CHARACTER_REMOVE_TAGS = false;
@@ -224,7 +224,7 @@ export class GenerateImageNaiTool extends BaseTool {
    * NovelAI image generation is available for any provider that supports tools.
    * When the active provider is not 'novelai', the tool requires a NovelAI opt API key
    * (checked by the tool registry's post-filtering in getAvailableToolsWithMCP).
-   * @returns Always true — actual availability is gated by opt key check in the registry
+   * @returns Always true, so actual availability is gated by opt key check in the registry
    */
   isAvailableFor(_provider: string): boolean {
     return true;
@@ -377,7 +377,7 @@ export class GenerateImageNaiTool extends BaseTool {
   /**
    * Derive the inpainting model codename from the base model.
    * NovelAI inpainting models use a `-inpainting` suffix and are NOT stored
-   * in the `image_diffusion_models` table — the codename is derived at runtime.
+   * in the `image_diffusion_models` table, so the codename is derived at runtime.
    * @param baseCodename - Base model codename (e.g. "nai-diffusion-4-5-curated")
    * @returns Inpainting model codename (e.g. "nai-diffusion-4-5-curated-inpainting")
    */
@@ -917,7 +917,7 @@ export class GenerateImageNaiTool extends BaseTool {
         userId: context.internalUserId ?? null,
       });
 
-      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      // Personal BYOK users bring their own API quota, so bypass server quota entirely
       if (creds.source === "server") {
         quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
       }
@@ -1032,7 +1032,7 @@ export class GenerateImageNaiTool extends BaseTool {
         );
       }
 
-      // Build base scene tag list — server style tags are trusted and should
+      // Build base scene tag list, so server style tags are trusted and should
       //    bypass suggest-tags normalization. Character tags are handled separately
       //    through v4_prompt.caption.char_captions when characters[] is provided.
       const effectiveImageParams = resolveNaiImageParams(context.tomoriState.config);
@@ -1290,7 +1290,7 @@ export class GenerateImageNaiTool extends BaseTool {
       return {
         success: true,
         message: successMessage,
-        // imageMetadata intentionally omitted — Discord CDN URLs are protected
+        // imageMetadata intentionally omitted, so Discord CDN URLs are protected
         // End the LLM turn immediately when this tool is the target of a hidden agent turn
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };

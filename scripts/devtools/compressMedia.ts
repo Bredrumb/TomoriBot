@@ -14,7 +14,7 @@
  *      Release cards are web-viewed showcase art where WebP crushes PNG. Any
  *      non-WebP card is converted to WebP q90 (RELEASE_CARD_WEBP_QUALITY) at full
  *      resolution, the old file is removed, and sibling release-notes.md references
- *      are rewritten. Files that are ALREADY WebP are left untouched — re-encoding a
+ *      are rewritten. Files that are ALREADY WebP are left untouched because re-encoding a
  *      lossy format every run would accumulate generational artifacts.
  *      NOTE: published GitHub release bodies hotlink raw/main and must be updated
  *      separately (the command prints the exact `gh release edit` reminder per tag).
@@ -45,7 +45,7 @@ config({ quiet: true });
 /** Smallest long-edge we will downscale to before giving up (keeps art recognizable). */
 const MIN_DIMENSION = 96;
 
-/** Lossless PNG encoder settings — NO `effort`/`palette` (those trigger lossy quantisation). */
+/** Lossless PNG encoder settings: NO `effort`/`palette` (those trigger lossy quantisation). */
 const PNG_LOSSLESS = { compressionLevel: 9, adaptiveFiltering: true } as const;
 
 /** Lowercased extension without the dot. */
@@ -87,7 +87,7 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
   const ext = extOf(file.path);
   const input = Buffer.from(await Bun.file(file.path).arrayBuffer());
 
-  // Lossless at native resolution — preferred (full quality).
+  // Lossless at native resolution: preferred (full quality).
   const native = await encodeLossless(sharp(input), ext);
   if (!native) {
     return { path: file.path, newPath: file.path, oldSize: file.size, newSize: file.size, written: false, note: `no optimizer for .${ext}` };
@@ -147,7 +147,7 @@ function rewriteSiblingReferences(filePath: string, oldName: string, newName: st
 async function runWebp(file: CompressTarget, quality: number, dryRun: boolean): Promise<Outcome> {
   const ext = extOf(file.path);
 
-  // Already WebP — leave it alone (re-encoding lossy WebP each run degrades it).
+  // Already WebP, so leave it alone (re-encoding lossy WebP each run degrades it).
   if (ext === "webp") {
     return { path: file.path, newPath: file.path, oldSize: file.size, newSize: file.size, written: false, note: "already webp" };
   }

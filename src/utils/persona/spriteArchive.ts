@@ -30,7 +30,7 @@ const SPRITE_ARCHIVE_IMAGE_DIR = "sprites";
 /**
  * A single sprite entry as stored in `manifest.json`. Mirrors the importable
  * subset of `PersonaSpriteRow` (storage references and DB ids are intentionally
- * excluded — they are meaningless on another server).
+ * excluded because they are meaningless on another server).
  */
 export const spriteArchiveEntrySchema = z.object({
   sprite_name: z.string().min(1).max(64),

@@ -58,7 +58,7 @@ export interface SpriteMessageRecordInfo {
  * `sprite_shown` count from the non-identity `sprite_emotion` count.
  */
 export interface SpriteShownEntry {
-  /** Sprite name — the user-given tag, used directly as the stat metric_key. */
+  /** Sprite name : the user-given tag, used directly as the stat metric_key. */
   name: string;
   /** Identity (DID-alter) sprites count toward sprite_shown but never sprite_emotion. */
   isIdentity: boolean;
@@ -129,7 +129,7 @@ export interface StreamState {
   /**
    * Real, provider-reported token usage for this stream segment, normalized
    * (via normalizeProviderUsage) from whichever chunk's metadata carried it.
-   * Captured across the whole loop — not just the terminal `done` chunk — so
+   * Captured across the whole loop: not just the terminal `done` chunk, so
    * providers that emit usage on a separate trailing chunk (OpenAI
    * `include_usage`) or clobber the done metadata (Anthropic `message_stop`)
    * are still counted. Drained into StreamResult.usage. Undefined when the
@@ -160,7 +160,7 @@ export interface TextProcessingConfig {
   mentionIdSet?: Set<string>;
   personaMentionMap?: Map<string, string>;
   botName: string;
-  /** Extra names the active persona answers to (lore/default name, trigger names) — used to strip
+  /** Extra names the active persona answers to (lore/default name, trigger names) : used to strip
    *  a leaked multi-name opening label chain like "Tomori: Lilya: ..." */
   botNameAliases: string[];
   registeredSpeakerNamesLower: Set<string>;

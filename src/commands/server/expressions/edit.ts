@@ -4,8 +4,8 @@
  * Lets a server manager manually correct a single emoji or sticker's expression
  * data. The user provides the raw expression name (e.g. `:happycat:` for an emoji
  * or `Dog Dance` for a sticker). When the name matches a synced expression, a modal
- * opens with two required fields — the emotion it conveys and its usage instructions
- * — pre-filled with the current values. Submitting writes the new values back.
+ * opens with two required fields: the emotion it conveys and its usage instructions
+ * : pre-filled with the current values. Submitting writes the new values back.
  */
 
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
@@ -56,7 +56,7 @@ type ExpressionMatch = { type: "emoji"; row: ServerEmojiRow } | { type: "sticker
  * @returns The emoji's bare name and Discord snowflake ID, or null if not a mention
  */
 function parseEmojiMention(input: string): { name: string; id: string } | null {
-  // <a?:name:id> — the optional leading "a" marks an animated emoji.
+  // <a?:name:id>: the optional leading "a" marks an animated emoji.
   const mentionMatch = input.match(/^<a?:(\w+):(\d+)>$/);
   if (!mentionMatch) {
     return null;
@@ -139,7 +139,7 @@ export async function execute(
 
     // Load synced emojis/stickers from the DB. These are kept current by the
     //    guildEmojisUpdate / guildStickersUpdate event handlers, so a fast read is
-    //    sufficient — important because we must open the modal within the 3s ack
+    //    sufficient; important because we must open the modal within the 3s ack
     //    window and a deferred interaction cannot show a modal.
     const [emojis, stickers] = await Promise.all([
       serverRepository.loadEmojis(tomoriState.server_id),

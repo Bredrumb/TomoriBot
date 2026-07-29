@@ -425,7 +425,7 @@ export class CustomProvider
    * @param apiKey - The decrypted API key (may be endpoint URL or auth token)
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<CustomProviderConfig> {
-    // Get endpoint URL — prefer the server model config mirror (populated when the active text model
+    // Get endpoint URL: prefer the server model config mirror (populated when the active text model
     // is a custom one). The mirror can be NULL when a persona override points at a custom LLM while
     // the global text model is non-custom. In that case fall back to the custom_endpoints table.
     let endpointUrl = tomoriState.config.custom_endpoint_url ?? null;

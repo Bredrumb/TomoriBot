@@ -22,7 +22,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Toggles the always-reply mode for the main persona.
  * When enabled, the main persona replies to ALL user messages in guild channels (like DMs),
- * unless an alter persona's trigger is detected — in which case only the alter responds.
+ * unless an alter persona's trigger is detected; in which case only the alter responds.
  */
 export async function execute(
   _client: Client,

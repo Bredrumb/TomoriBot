@@ -42,7 +42,7 @@ Don't add analysis beyond what's necessary for context - let the original chat d
  * In-character extraction framing template. Shown in the modal pre-filled with
  * {persona_nickname} already substituted, then runtime context blocks (attributes,
  * existing memories, retrieved document chunks) are appended after submit. The
- * user can edit the framing freely without losing the dynamic context — those
+ * user can edit the framing freely without losing the dynamic context, so those
  * blocks are always appended by composeInCharacterSystemPrompt.
  */
 export const EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT = `You are {persona_nickname}. The conversation log you're about to read is happening in your world — read it as yourself, not as a neutral observer.
@@ -118,7 +118,7 @@ export function composeInCharacterSystemPrompt(params: {
   }
   sections.push(identityLines.join("\n"));
 
-  // Existing memories block — what the persona already knows, so it can avoid duplicating.
+  // Existing memories block: what the persona already knows, so it can avoid duplicating.
   if (existingMemoryLines.length > 0) {
     const memoryBlock = [
       "\n---",

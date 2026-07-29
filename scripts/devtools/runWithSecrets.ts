@@ -3,7 +3,7 @@
  *
  * Lets cutover tasks target a specific database (GCP Cloud SQL, Azure Flexible
  * Server, local dev) without editing `.env`. Point it at a flat JSON blob of
- * env-style keys — the same shape as the `TOMORI_SECRETS_JSON` deploy secret —
+ * env-style keys (the same shape as the `TOMORI_SECRETS_JSON` deploy secret),
  * and every string/number/boolean value is exported into the child process
  * before the wrapped script starts. JSON values win over `.env` because dotenv
  * never overrides variables that are already set.

@@ -38,7 +38,7 @@ export interface BuildStreamContextParams {
   emojiStrings?: string[];
   functionInteractionHistory?: StreamContext["functionInteractionHistory"];
 
-  // Locale — the helper applies the shared `en-US` fallback.
+  // Locale: the helper applies the shared `en-US` fallback.
   userLocale?: string;
 
   // Turn/tool metadata that carries the shared copy-through fields (suppress flags, prefill,
@@ -93,7 +93,7 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
 
     forcedMentions: streamingContext?.forcedMentions,
 
-    // NAI GLM-4.6 prompt continuation — trailing fragment from a previous truncated stream.
+    // NAI GLM-4.6 prompt continuation: trailing fragment from a previous truncated stream.
     //    Only ever populated for NovelAI streams; a no-op copy-through for other providers.
     naiContinuationPrefill: streamingContext?.naiContinuationPrefill,
 
@@ -104,7 +104,7 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     // Opaque message ID map for snowflake ID abstraction in LLM-visible text
     messageIdMap: streamingContext?.messageIdMap,
 
-    // Superseded-delivery sink — copy the ARRAY REFERENCE (not a clone) so the orchestrator's
+    // Superseded-delivery sink: copy the ARRAY REFERENCE (not a clone) so the orchestrator's
     //    successful-send appends are visible to runGenerationTurn even after the SDK-call-timeout
     //    race abandons this StreamContext's owning promise.
     deliveredMessageRefs: streamingContext?.deliveredMessageRefs,

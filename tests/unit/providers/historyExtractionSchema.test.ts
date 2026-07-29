@@ -8,7 +8,7 @@ import {
  * Regression guard for collapsed history-extraction entries.
  *
  * `HistoryMemoryEntry` has exactly one required field, and models routinely emit the field's
- * value directly instead of wrapping it — Gemini via OpenRouter returned
+ * value directly instead of wrapping it: Gemini via OpenRouter returned
  * `memories: ["fact", ...]`, which failed validation for every element and aborted the whole
  * import. The collapsed form is unambiguous, so the schema repairs it.
  */

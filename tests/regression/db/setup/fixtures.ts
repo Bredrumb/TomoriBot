@@ -44,7 +44,7 @@ const SERVER_CONFIG_TABLES = [
 
 /**
  * Inserts the minimal fixture set needed across all regression test files.
- * Idempotent — uses ON CONFLICT DO NOTHING wherever possible.
+ * Idempotent: uses ON CONFLICT DO NOTHING wherever possible.
  *
  */
 export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
@@ -162,6 +162,6 @@ export async function cleanupFixtures(db: SQL): Promise<void> {
   // Cascade via FK: deletes personas, split config rows, persona_configs, server_memories
   await db`DELETE FROM servers WHERE server_disc_id = ${FIXTURE_IDS.serverDiscId}`;
 
-  // Users have no cascade from servers — clean up separately
+  // Users have no cascade from servers, so clean up separately
   await db`DELETE FROM users WHERE user_disc_id LIKE '_rt_%'`;
 }

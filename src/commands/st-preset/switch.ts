@@ -19,7 +19,7 @@ const PRESET_SELECT_ID = "preset_select";
 
 /**
  * Configure the /st-preset switch subcommand.
- * No options — lists all imported presets for selection.
+ * No options: lists all imported presets for selection.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("switch").setDescription(localizer("en-US", "commands.st-preset.switch.description"));

@@ -52,7 +52,7 @@ const CUSTOM_ENDPOINT_VALUE_PREFIX = "ce:";
 /** Custom-id root for this command's anchor provider picker / opener buttons. */
 const ID_ROOT = "personal_model_fallback";
 // One of Discord's 25 select options is reserved for the explicit "None" / clear choice,
-// which is re-prepended to every page — so only 24 models fit per range.
+// which is re-prepended to every page so only 24 models fit per range.
 const ITEMS_PER_PAGE = 24;
 
 function getLocalizedDescription(model: LlmRow, locale: string): string {

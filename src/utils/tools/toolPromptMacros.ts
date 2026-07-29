@@ -372,7 +372,7 @@ async function loadToolPromptMacroAvailability(
       loadGuildToolFamilyNames(stateForContext.server_id),
     ]);
     // Names that are filtered globally in `availability.ts` but might still
-    // appear in MCP listings — kept here as a defensive trim.
+    // appear in MCP listings, so kept here as a defensive trim.
     const providerHiddenGlobalFunctions = new Set([
       "felo-search",
       "iask-search",

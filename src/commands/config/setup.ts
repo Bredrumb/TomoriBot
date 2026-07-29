@@ -76,7 +76,7 @@ export async function execute(
       if (hasMain) {
         const existingTomoriState = await personaRepository.loadState(serverId);
 
-        // Main persona row exists AND state is fully valid — server is healthy, block re-setup.
+        // Main persona row exists AND state is fully valid: server is healthy, block re-setup.
         //    If personaRepository.loadState returns null despite the row existing, the server is in a broken
         //    state (missing split config rows or deleted LLM). Fall through to cleanup so the
         //    user isn't permanently locked out by a setup guard that uses a weaker health check
@@ -133,7 +133,7 @@ export async function execute(
           return;
         }
 
-        // Main persona row exists but personaRepository.loadState returned null — broken state
+        // Main persona row exists but personaRepository.loadState returned null: broken state
         //     (e.g. config row deleted, or llm_id points to a removed model).
         //     Do NOT nuke personas here: alters may be perfectly healthy and only the config
         //     row or model reference is missing. Guide the user to targeted repair commands.
@@ -155,7 +155,7 @@ export async function execute(
         return;
       }
 
-      // No main persona row — orphaned alters or empty server entry.
+      // No main persona row: orphaned alters or empty server entry.
       //     Wipe every config-table row to clear orphaned data; alter rows in `personas`
       //     are preserved since serverRepository.setup only inserts a new main persona (is_alter=false).
       log.warn(`[Setup] Server ${serverId} has no main persona — clearing config, preserving alters`);
@@ -541,10 +541,10 @@ export async function execute(
 
       // NovelAI auto-disable: flip emoji and sticker usage off immediately after setup.
       // The schema defaults both to true, but NovelAI's token budget makes them
-      // counterproductive — they consume context without the model being able to use them.
+      // counterproductive: they consume context without the model being able to use them.
       // The user is notified in the success embed and can re-enable via /capabilities manage.
       // Load the newly-created TomoriState once and reuse for both the NovelAI
-      // capability auto-disable and the emoji/sticker sync below — avoids a
+      // capability auto-disable and the emoji/sticker sync below: avoids a
       // duplicate cache fetch and gives us the internal server_id.
       const newTomoriState = await personaRepository.loadState(serverId);
 
@@ -556,7 +556,7 @@ export async function execute(
           });
           log.info(`[Setup] Auto-disabled emoji/sticker usage for NovelAI server ${serverId}`);
         } catch (disableError) {
-          // Non-critical — log but don't fail setup
+          // Non-critical, so log but don't fail setup
           log.warn(`[Setup] Failed to auto-disable emoji/sticker for NovelAI: ${disableError}`);
         }
       }
@@ -664,7 +664,7 @@ export async function execute(
 
       // Provider/mode-specific notes go into a conditional yellow "A Few Things to Note" embed,
       //    rendered only when at least one applies. Each note is a bold top-level bullet (label) with
-      //    an indented detail sub-bullet — nothing shows for a plain paid-provider setup.
+      //    an indented detail sub-bullet, so nothing shows for a plain paid-provider setup.
       const headsUpNotes: Array<{ label: string; detail: string }> = [];
 
       if (normalizedProvider === "novelai") {

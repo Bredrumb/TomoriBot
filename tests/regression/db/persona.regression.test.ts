@@ -1,5 +1,5 @@
 /**
- * Regression harness — PersonaRepository domain.
+ * Regression harness: PersonaRepository domain.
  *
  * Covers: loadTomoriState, loadAllPersonasForServer, loadPersonaConfigRow,
  * updateTomori.

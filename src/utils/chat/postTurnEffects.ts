@@ -42,7 +42,7 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   scheduleBoomerangFollowUp(context);
   // Fire-and-forget so stat tracking never adds latency to the response path.
   void recordUsageStats(context, result);
-  // Phase 2 of the reunion presence protocol — see @/utils/chat/reunionPresence.
+  // Phase 2 of the reunion presence protocol: see @/utils/chat/reunionPresence.
   recordReunionPresence(context.reunionPresence, result);
 }
 
@@ -53,13 +53,13 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
   let stickerSent = false;
   // Post the sticker as whoever actually delivered the last message, so Discord groups the two
   // instead of splitting the sticker off under a different author. Crucially this reuses the
-  // recorded username verbatim — which may be the decorated `Persona (sprite)` form picked by
+  // recorded username verbatim: which may be the decorated `Persona (sprite)` form picked by
   // the group-break alternation. Re-resolving the persona's default identity here would produce
   // a different name and force exactly the split we are avoiding.
   //
   // Not gated on `is_alter`: the main persona also delivers through a webhook whenever a sprite
   // renders. A null identity means the last delivery was an ordinary bot message, so the sticker
-  // should be one too — which the bot path below handles.
+  // should be one too: which the bot path below handles.
   const deliveredIdentity = getChannelDeliveredWebhookIdentity(context.channel.id);
 
   if (deliveredIdentity) {
@@ -131,7 +131,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
   if (!serverId) return;
 
   try {
-    // Triggerer's internal users FK — resolved once at turn planning and
+    // Triggerer's internal users FK: resolved once at turn planning and
     //    carried on the context, so stat recording needs no per-turn DB lookup.
     const userId = context.triggererUserId;
     if (!userId) return;
@@ -153,7 +153,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "active_hour", metricKey: hour });
 
     // Per responding persona: one message exchanged (drives favorite-persona
-    //    affinity), plus that persona's emoji usage and output-token volume — all
+    //    affinity), plus that persona's emoji usage and output-token volume: all
     //    persona-scoped, so keyed to the response's own lineage.
     const lineages = new Set<number>();
     let estimatedOutputTokens = 0;
@@ -161,7 +161,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       const lineageId = response.personaLineageId ?? primaryLineage;
       lineages.add(lineageId);
 
-      // Output token volume (character-estimated) for this response — used
+      // Output token volume (character-estimated) for this response: used
       //     only as the fallback when the provider reported no real usage (5).
       if (response.text) estimatedOutputTokens += charsToTokensText(response.text.length);
 
@@ -239,8 +239,8 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     // Sprite deliveries surfaced from the stream (one entry per delivered sprite
     //    message). Sprites are the answering persona's own, so key on primaryLineage.
     //    Two counts are pre-aggregated per sprite name:
-    //      - sprite_shown:   every delivered sprite (identity or not) — the leaderboard.
-    //      - sprite_emotion: non-identity sprites only — the sprite's user-given tag is
+    //      - sprite_shown:   every delivered sprite (identity or not): the leaderboard.
+    //      - sprite_emotion: non-identity sprites only: the sprite's user-given tag is
     //        treated as an emotion (getEmotionBreakdown unions this metric directly, no
     //        classification join), so identity (DID-alter) sprites are excluded here.
     const spriteCounts = new Map<string, number>();

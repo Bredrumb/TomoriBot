@@ -1,6 +1,6 @@
 /**
  * Helpers for rendering user-authored text back to the user inside a Discord
- * notice — either at the moment it is deleted, or to confirm what was just
+ * notice: either at the moment it is deleted, or to confirm what was just
  * saved.
  *
  * Two problems recur across every command that does this:

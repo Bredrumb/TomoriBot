@@ -158,7 +158,7 @@ describe("appendDialogueHistoryContext — identity macros in message bodies", (
 
 // Sample dialogues are authored content stored once and rendered per turn, so they keep the
 // default "resolve" mode. They sit next to dialogue history in the assembled prompt but take a
-// different code path, and crucially pass the *real* triggerer as `triggererName` — which is why
+// different code path, and crucially pass the *real* triggerer as `triggererName` which is why
 // they never suffered the persona-name collapse. Pinned here so widening "preserve" cannot
 // silently turn stored macros into literal braces in the prompt.
 describe("buildSampleDialogueContextItems — identity macros still resolve", () => {

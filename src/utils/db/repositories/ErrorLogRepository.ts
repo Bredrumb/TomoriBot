@@ -63,7 +63,7 @@ function toErrorStack(err: unknown): string | null {
 /**
  * Thin repository for the `error_logs` table.
  *
- * Intentionally does NOT import `logger.ts` — this file sits between the
+ * Intentionally does NOT import `logger.ts`: this file sits between the
  * logger and the DB client, breaking the circular dependency.
  */
 export class ErrorLogRepository {
@@ -87,5 +87,5 @@ export class ErrorLogRepository {
   }
 }
 
-/** Singleton — import this in callers. */
+/** Singleton: import this in callers. */
 export const errorLogRepository = new ErrorLogRepository();

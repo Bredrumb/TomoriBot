@@ -27,7 +27,7 @@ const LEGACY_STORY_BLOCK_REGEX = /\{\{#if\s+([a-zA-Z_][\w]*)\}\}([\s\S]*?)\{\{\/
 /**
  * Regex to detect comment-only content in SillyTavern nodes.
  * Matches content that is purely `{{// ... }}` blocks and `{{trim}}` macros
- * with optional whitespace — meaning the node produces no output after
+ * with optional whitespace: meaning the node produces no output after
  * template resolution.
  */
 const COMMENT_ONLY_REGEX = /^(\s*\{\{\/\/[^}]*\}\}\s*|\s*\{\{trim\}\}\s*)+$/;
@@ -509,7 +509,7 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     const content = prompt.content ?? "";
     const isMarker = prompt.marker === true;
 
-    // Flag comment-only nodes — stored in DB and visible in the toggle UI,
+    // Flag comment-only nodes: stored in DB and visible in the toggle UI,
     // but never injected into the prompt regardless of enabled state
     const isComment = !isMarker && isCommentOnly(content);
     if (isComment) {
@@ -685,7 +685,7 @@ export async function execute(
 
     const markerCount = nodes.filter((n) => n.is_marker).length;
     const toggleableCount = nodes.filter((n) => !n.is_marker).length;
-    // Excludes comment-only nodes — they never inject regardless of enabled state
+    // Excludes comment-only nodes: they never inject regardless of enabled state
     const enabledCount = nodes.filter((n) => n.is_enabled && !n.is_marker && !n.is_comment).length;
 
     const unsupportedEnabledMacros = collectUnsupportedEnabledMacros(nodes);

@@ -3,7 +3,7 @@
  *
  * Thin wrapper around GoogleToolAdapter. Vertex uses the same Gemini API
  * wire format, so tool conversion, MCP delegation, and result handling
- * are identical — only the provider name differs.
+ * are identical: only the provider name differs.
  */
 
 import type { Tool, MCPCapableToolAdapter, ToolContext, ToolResult } from "../../types/tool/interfaces";

@@ -10,7 +10,7 @@
  *
  * ## Why tier → contextLimit (not perks.contextTokens)
  * The subscription API returns perks.contextTokens, but that field does NOT
- * represent the model's context window size — it appears to be an unrelated
+ * represent the model's context window size , so it appears to be an unrelated
  * metric. The context window limit is tier-dependent and must be derived from
  * the tier number using known NAI tier limits.
  */
@@ -86,10 +86,10 @@ export function setCachedContextTokens(guildId: string, contextLimit: number, ti
  * context limit from the tier number, caches it under guildId, and returns it.
  *
  * If NAI_KAYRA_CONTEXT_LIMIT is explicitly set in the environment, it takes
- * priority over the API-derived tier lookup — no API call is made. This lets
+ * priority over the API-derived tier lookup , so no API call is made. This lets
  * operators who know their exact limit skip the subscription fetch entirely.
  *
- * Returns undefined (without throwing) if the fetch fails — the caller should
+ * Returns undefined (without throwing) if the fetch fails , so the caller should
  * fall back to the NAI_KAYRA_CONTEXT_LIMIT env var default in that case.
  *
  * @param guildId - Discord guild (server) ID (used as cache key)
@@ -97,7 +97,7 @@ export function setCachedContextTokens(guildId: string, contextLimit: number, ti
  */
 export async function refreshNovelAISubscription(guildId: string, apiKey: string): Promise<number | undefined> {
   // If the operator has explicitly set NAI_KAYRA_CONTEXT_LIMIT, trust it over
-  // the tier lookup — skip the subscription API call entirely.
+  // the tier lookup : skip the subscription API call entirely.
   if (process.env.NAI_KAYRA_CONTEXT_LIMIT !== undefined) {
     const explicitLimit = Number.parseInt(process.env.NAI_KAYRA_CONTEXT_LIMIT, 10);
     if (!Number.isNaN(explicitLimit) && explicitLimit > 0) {

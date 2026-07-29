@@ -11,7 +11,7 @@ const NOVELAI_API_BASE_URL = "https://text.novelai.net";
 /** Default timeout for NovelAI API requests in milliseconds */
 const REQUEST_TIMEOUT = Number.parseInt(process.env.NOVELAI_REQUEST_TIMEOUT_MS || "60000", 10);
 
-/** Per-read inactivity timeout for streaming — if no data arrives within this window, abort.
+/** Per-read inactivity timeout for streaming: if no data arrives within this window, abort.
  *  Prevents indefinite hangs when NAI's server stops sending chunks mid-stream. */
 const STREAM_READ_TIMEOUT_MS = Number.parseInt(process.env.NOVELAI_STREAM_READ_TIMEOUT_MS || "30000", 10);
 
@@ -197,7 +197,7 @@ export function getGlmParameters(): NovelAIParameters {
 
 /**
  * Previously converted temperature from a Gemini-centric scale to NovelAI model scale.
- * Now a direct passthrough — temperature is used as-is across all providers.
+ * Now a direct passthrough: temperature is used as-is across all providers.
  *
  */
 export function convertTemperatureToNovelAI(temperature: number, _model: string): number {
@@ -212,7 +212,7 @@ export function convertTemperatureToNovelAI(temperature: number, _model: string)
  * Merge priority (lowest → highest):
  * 1. Model hardcoded defaults (getKayraParameters / getGlmParameters)
  * 2. NAI-specific preset overrides (order, tail_free_sampling, phrase_rep_pen, etc.)
- * 3. DB schema values (temperature, topK, topP, minP) — always win if non-neutral
+ * 3. DB schema values (temperature, topK, topP, minP): always win if non-neutral
  *
  * @param temperature - Optional temperature in Gemini scale (will be converted to NovelAI scale)
  * @param topK - Optional top-K sampling override (0 = use model preset)
@@ -236,7 +236,7 @@ export function getParametersForModel(
     Object.assign(params, presetOverrides);
   }
 
-  // Apply DB schema overrides (highest priority — always win if non-neutral)
+  // Apply DB schema overrides (highest priority: always win if non-neutral)
   // Override temperature if provided (convert from Gemini scale to NovelAI scale)
   if (temperature !== undefined) {
     params.temperature = convertTemperatureToNovelAI(temperature, model);
@@ -429,7 +429,7 @@ async function* novelaiGenerateStreamOpenAI(
           error: "Request timed out",
         };
       } else if (error.message.includes("stream read timed out")) {
-        // Per-read inactivity timeout — NAI stopped sending data mid-stream.
+        // Per-read inactivity timeout because NAI stopped sending data mid-stream.
         // Yield a final chunk so the stream adapter can flush any buffered text
         // (e.g., incomplete sentence trailing buffer) and terminate cleanly.
         log.warn(`NovelAI OpenAI: ${error.message} — yielding final chunk to flush buffers`);
@@ -563,7 +563,7 @@ async function* novelaiGenerateStreamNative(
         log.error("NovelAI streaming timed out");
         yield { error: "Request timed out" };
       } else if (error.message.includes("stream read timed out")) {
-        // Per-read inactivity timeout — NAI stopped sending data mid-stream
+        // Per-read inactivity timeout because NAI stopped sending data mid-stream
         log.warn(`NovelAI Native: ${error.message} — yielding final chunk to flush buffers`);
         yield { final: true };
       } else {
@@ -626,7 +626,7 @@ export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
       return true;
     }
 
-    // Non-OK response — key is invalid or something else went wrong.
+    // Non-OK response: key is invalid or something else went wrong.
     // Carry the response body into the error message: NovelaiStreamAdapter
     // classifies some failures by matching the body text (e.g. trial-account
     // recaptcha 400s), and it is what makes host/endpoint migrations
@@ -695,7 +695,7 @@ const NOVELAI_ACCOUNT_API_BASE_URL = "https://text.novelai.net";
 
 /**
  * Shape of the perks object returned by GET /user/subscription.
- * Only contextTokens is used here — other perks are preserved for completeness.
+ * Only contextTokens is used here; other perks are preserved for completeness.
  */
 export interface NovelAISubscriptionPerks {
   maxPriorityActions: number;
