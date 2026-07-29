@@ -169,7 +169,7 @@ mock.module("@/utils/provider/providerFactory", () => ({
 // never restored, so it replaces crypto.ts for every test file loaded after
 // this one. If any real export is omitted here, later files that import it fail
 // to link ("Export named X not found"), and which files become victims depends
-// on module load order — making the suite fragile to unrelated import changes.
+// on module load order, making the suite fragile to unrelated import changes.
 mock.module("@/utils/security/crypto", () => ({
   encryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
   decryptApiKey: async () => "decrypted-key",

@@ -83,7 +83,6 @@ import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 async function getDefaultVertexModel(): Promise<string> {
   const providerName = "vertex";
 
-  // 1. Try cache first (fastest, no DB query)
   if (isLLMCacheReady()) {
     const cachedDefault = getCachedDefaultLLM(providerName);
     if (cachedDefault) {
@@ -104,7 +103,6 @@ async function getDefaultVertexModel(): Promise<string> {
     });
   }
 
-  // 3. Fallback to first non-deprecated model
   try {
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {

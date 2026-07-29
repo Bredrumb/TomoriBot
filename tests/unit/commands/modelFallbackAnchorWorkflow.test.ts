@@ -89,7 +89,7 @@ const tomoriState = {
   fallback_chain: [],
 } as unknown as TomoriState;
 
-// Full export surface — see the repositories mock below for why partial stubs are unsafe.
+// Full export surface: see the repositories mock below for why partial stubs are unsafe.
 mock.module("@/utils/cache/tomoriStateCache", () => ({
   getCachedTomoriState: async () => tomoriState,
   getCachedAllPersonas: async () => [],
@@ -105,7 +105,7 @@ mock.module("@/utils/provider/savedProviderConfig", () => ({
   loadUserSavedProvidersForCapability: async () => [{ provider: "provider-a" }],
 }));
 
-// Full barrel surface — `mock.module` is process-wide, so a partial stub would break
+// Full barrel surface: `mock.module` is process-wide, so a partial stub would break
 // module linking for anything else importing a missing repository name.
 mock.module("@/utils/db/repositories", () => ({
   llmModelRepo: {
