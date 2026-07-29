@@ -4,7 +4,7 @@ export default {
   provider: {
     description: `Manage saved provider configurations`,
     add: {
-      description: `Add or update a saved provider configuration and activate its default text model.`,
+      description: `Add or update a saved provider configuration and activate its saved text model.`,
       modal_title: `Add Saved Provider`,
       success_title: `Provider Saved`,
       success: `Saved credentials for **{provider}** and set the current text model to \`{model_name}\`. Use \`/model embedding|image|video|vision\` if you want to configure other capabilities.`,

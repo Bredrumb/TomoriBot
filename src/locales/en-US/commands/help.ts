@@ -296,16 +296,9 @@ Transcription supports ~100 languages (auto-detected).`,
       step1_title: `Step 1: Get an API Key`,
       step1_description: `TomoriBot supports multiple AI providers. You'll need an API key from one of them.
 - Use {helpApikey} to learn how to get one
-  - **Google Gemini**: general-purpose, free tier, runs all features
-  - **OpenRouter**: access to many AI models in one place
-  - **NovelAI**: uncensored role-playing and storytelling
-  - **DeepSeek**: cost-effective reasoning models
-  - **NVIDIA NIM**: hosted NVIDIA models
-  - **Anthropic**: Claude models
-  - **Vertex AI**: Google Cloud models via ADC
-  - **Vertex AI Express**: Google Cloud API-key BYOK via Express Mode (Preview, Gemini subset)
-  - **Z.ai (Zhipu)**: Chinese AI models with a coding plan ⚠️ *ToS restricts usage to coding/agent scenarios only*
-  - **Custom**: any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.)
+  - **Google Gemini** *(recommended)*: general-purpose, free usage, runs all features
+  - **NovelAI**: uncensored role-playing, storytelling, and image generation
+  - **OpenRouter**: paid, reliable access to many AI models in one place
 - Do **NOT** share this API key with anyone else
 - Custom endpoints can add a Bearer auth token after setup via {configApiKeySet}`,
       step2_title: `Step 2: Run the Setup Command`,

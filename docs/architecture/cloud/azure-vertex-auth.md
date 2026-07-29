@@ -59,9 +59,10 @@ does not use this path.
 ## Verification
 
 After deployment, verify that the container is healthy, the credential file is mounted read-only,
-and a small Vertex request succeeds. `countTokens` is suitable for an authentication smoke test
-because it exercises ADC, federation, service-account impersonation, and the Vertex endpoint
-without generating a model response.
+and a small Vertex request succeeds. TomoriBot's provider setup uses `models.list` with a one-item
+page as its authentication smoke test. This exercises ADC, federation, service-account
+impersonation, project/location configuration, and the Vertex endpoint without generating a
+model response or depending on a particular model ID.
 
 Billing budgets and alerts are monitoring controls, not hard spending caps. Keep this project free
 of unrelated resources so its billing activity is attributable to Vertex usage.

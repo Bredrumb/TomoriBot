@@ -19,6 +19,7 @@ import type {
 import type { ZodType } from "zod";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
 import { GoogleStreamAdapter, type GoogleStreamConfig } from "./googleStreamAdapter";
+import { validateGoogleModelsEndpoint } from "./googleCredentialValidation";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "./compactGenerator";
 import { generatePresetFromPrompt } from "./presetGenerator";
 import type { ProviderError, StreamContext } from "../../types/stream/interfaces";
@@ -241,7 +242,7 @@ export class GoogleProvider
   }
 
   /**
-   * Validate a Google API key by making a test request
+   * Validate a Google API key through the authenticated models endpoint
    * @param apiKey - The API key to validate
    * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
    */
@@ -261,29 +262,9 @@ export class GoogleProvider
       // Initialize the Google AI client with the provided API key
       const genAI = new GoogleGenAI({ apiKey });
 
-      // Use the default model with proper fallback chain
-      const defaultModel = await getDefaultGoogleModel();
-      const response = await genAI.models.generateContent({
-        model: defaultModel,
-        contents: [
-          {
-            text: 'This is a test message for verifying API keys. Say "VALID"',
-          },
-        ],
-      });
+      await validateGoogleModelsEndpoint(genAI);
 
-      const responseText = response.text; // Use the text getter
-
-      if (!responseText?.toLowerCase().includes("valid")) {
-        log.warn("API key validation response did not contain 'VALID'");
-        // Treat unexpected response as an error
-        const googleAdapter = new GoogleStreamAdapter();
-        const error = new Error("API key validation response did not contain expected confirmation");
-        const providerError = googleAdapter.handleProviderError(error);
-        return { valid: false, error: providerError };
-      }
-
-      log.success("API key validation successful");
+      log.success("Google API key validation successful via models endpoint");
       return { valid: true };
     } catch (error) {
       // Use GoogleStreamAdapter to parse and format the error

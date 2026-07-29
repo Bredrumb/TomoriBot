@@ -306,7 +306,7 @@ Manage saved provider configurations
 
 | Command | Summary |
 |---|---|
-| `/provider add` | Add or update a saved provider configuration and activate its default text model. |
+| `/provider add` | Add or update a saved provider configuration and activate its saved text model. |
 | `/provider api-key rotation` | Manage API key rotation for load balancing and failover. |
 | `/provider custom-endpoint add` | Register a model under a custom endpoint label (reuse the label to add more). |
 | `/provider custom-endpoint edit` | Edit fields on a registered custom endpoint. |
