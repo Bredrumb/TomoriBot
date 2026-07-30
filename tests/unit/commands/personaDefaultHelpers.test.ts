@@ -7,7 +7,7 @@ import {
 } from "@/commands/persona/default";
 import type { TomoriPresetRow } from "@/types/db/schema";
 
-/** Minimal preset fixture — only the fields used by the pure helpers. */
+/** Minimal preset fixture: only the fields used by the pure helpers. */
 function makePreset(overrides: Partial<TomoriPresetRow> = {}): TomoriPresetRow {
   return {
     persona_preset_id: 1,
@@ -46,7 +46,7 @@ describe("persona default — name resolution helpers", () => {
     });
 
     it("taken-name comparison is case-insensitive", () => {
-      // takenNames has "TOMORI" (upper-case) — must block "Tomori" as default name
+      // takenNames has "TOMORI" (upper-case), so must block "Tomori" as default name
       const result = resolveAvailablePersonaName("Tomori", [], ["TOMORI"]);
       expect(result).toBeNull();
     });
@@ -65,13 +65,11 @@ describe("persona default — name resolution helpers", () => {
     });
 
     it("capitalizes the first letter of a trigger word and lowercases the rest", () => {
-      // "ALICE" → "Alice" (first char upper, remaining lower)
       const result = resolveAvailablePersonaName("Tomori", ["ALICE"], ["Tomori"]);
       expect(result).toBe("Alice");
     });
 
     it("does not capitalize trigger words that start with a non-alpha character", () => {
-      // "123abc" does not match the alpha-start regex, so it is returned as-is
       const result = resolveAvailablePersonaName("Tomori", ["123abc"], ["Tomori"]);
       expect(result).toBe("123abc");
     });
@@ -83,7 +81,6 @@ describe("persona default — name resolution helpers", () => {
     });
 
     it("returns the lineage id when preset_lineage_id is stored as a string number", () => {
-      // Schema pre-processes string → number; test via the numeric path after parsing
       expect(resolvePresetLineageId(makePreset({ preset_lineage_id: 42 }))).toBe(42);
     });
 

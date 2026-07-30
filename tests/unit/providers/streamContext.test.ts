@@ -5,7 +5,7 @@ import type { StreamingContext } from "@/types/tool/interfaces";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { type BuildStreamContextParams, buildStreamContext } from "@/utils/provider/streamContext";
 
-// Minimal Discord/Tomori stand-ins — the helper only shuttles references, never invokes them.
+// Minimal Discord/Tomori stand-ins: the helper only shuttles references, never invokes them.
 const CHANNEL = { id: "channel_1" } as unknown as TextChannel;
 const CLIENT = {} as Client;
 const TOMORI_STATE = { server_id: 1, config: {} } as unknown as TomoriState;

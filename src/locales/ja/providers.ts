@@ -1,5 +1,3 @@
-// locales/ja/providers.ts
-
 export default {
   genai: {
     generic_error_title: `生成エラー`,

@@ -1,5 +1,3 @@
-// locales/en-US/commands/optional-key.ts
-
 export default {
   "optional-key": {
     description: `Manage optional service API keys`,

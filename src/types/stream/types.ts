@@ -14,24 +14,19 @@ import type { TokenUsage } from "@/utils/text/tokenEstimate";
  * These control message length limits, buffer sizes, and timing behavior
  */
 export const DISCORD_STREAMING_CONSTANTS = {
-  // Message length limits
   MAX_SINGLE_MESSAGE_LENGTH: 1950,
 
-  // Buffer flush sizes
   FLUSH_BUFFER_SIZE_REGULAR: 1000, // For normal text
   FLUSH_BUFFER_SIZE_CODE_BLOCK: 15000, // For code blocks (much larger)
 
-  // Typing simulation timing
   BASE_TYPE_SPEED_MS_PER_CHAR: 10,
   MAX_TYPING_TIME_MS: 4000,
   MIN_VISIBLE_TYPING_DURATION_MS: 750,
 
-  // Random pause timing for natural feel
   MIN_RANDOM_PAUSE_MS: 250,
   MAX_RANDOM_PAUSE_MS: 1500,
   THINKING_PAUSE_CHANCE: 0.25,
 
-  // Stream timeout
   INACTIVITY_TIMEOUT_MS: 120000, // 2 minutes
 } as const;
 
@@ -63,7 +58,7 @@ export interface SpriteMessageRecordInfo {
  * `sprite_shown` count from the non-identity `sprite_emotion` count.
  */
 export interface SpriteShownEntry {
-  /** Sprite name — the user-given tag, used directly as the stat metric_key. */
+  /** Sprite name : the user-given tag, used directly as the stat metric_key. */
   name: string;
   /** Identity (DID-alter) sprites count toward sprite_shown but never sprite_emotion. */
   isIdentity: boolean;
@@ -134,7 +129,7 @@ export interface StreamState {
   /**
    * Real, provider-reported token usage for this stream segment, normalized
    * (via normalizeProviderUsage) from whichever chunk's metadata carried it.
-   * Captured across the whole loop — not just the terminal `done` chunk — so
+   * Captured across the whole loop: not just the terminal `done` chunk, so
    * providers that emit usage on a separate trailing chunk (OpenAI
    * `include_usage`) or clobber the done metadata (Anthropic `message_stop`)
    * are still counted. Drained into StreamResult.usage. Undefined when the
@@ -165,7 +160,7 @@ export interface TextProcessingConfig {
   mentionIdSet?: Set<string>;
   personaMentionMap?: Map<string, string>;
   botName: string;
-  /** Extra names the active persona answers to (lore/default name, trigger names) — used to strip
+  /** Extra names the active persona answers to (lore/default name, trigger names) : used to strip
    *  a leaked multi-name opening label chain like "Tomori: Lilya: ..." */
   botNameAliases: string[];
   registeredSpeakerNamesLower: Set<string>;

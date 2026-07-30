@@ -104,7 +104,7 @@ export class OpenAICompatibleToolAdapter implements MCPCapableToolAdapter {
   ): Promise<Array<Record<string, unknown>>> {
     try {
       const allTools: Record<string, unknown>[] = [];
-      // Brave-key dance removed — unified web_search is gated centrally.
+      // Brave-key dance removed: unified web_search is gated centrally.
       if (builtInTools.length > 0) {
         allTools.push(...this.convertToolsArray(builtInTools));
         log.info(`${this.providerName} adapter: Converted ${builtInTools.length} built-in tools`);
@@ -160,7 +160,6 @@ export class OpenAICompatibleToolAdapter implements MCPCapableToolAdapter {
         log.info(`${this.providerName} adapter: Added ${addedMCPToolsCount} MCP tools using centralized filtering`);
       }
 
-      // Add guild MCP tools (per-guild remote servers)
       if (serverId && allowedMCPFunctions) {
         try {
           const guildMcpManager = getGuildMcpManager();

@@ -121,12 +121,12 @@ const MARKDOWN_MARKER_NAME_RE = /^(?:[-*+>#]\s|\d{1,9}[.)]\s)/;
 /**
  * Parses a leading speaker label of ANY name at the start of `text`, in either the decorated
  * "Name (modifier): body" or plain "Name: body" shape. Unlike {@link parseLeadingRenderModifier},
- * the name is not restricted to the active persona — callers use this to detect *leaked* labels
+ * the name is not restricted to the active persona, so callers use this to detect *leaked* labels
  * (e.g. "Chris (smug): ...") that the allowlisted parser intentionally refuses to match.
  *
  * Shapes that are really prose or markdown are rejected: code-fence openings, list items,
  * blockquotes/headings, names without a word character, and names opening with "[" or "<"
- * (links, mentions, timestamps — mirrors isGenericSpeakerStopLabel).
+ * (links, mentions, timestamps: mirrors isGenericSpeakerStopLabel).
  *
  * @param text - Segment text to inspect (leading whitespace tolerated)
  * @returns The parsed label and remaining body, or null when no label shape is present
@@ -134,7 +134,7 @@ const MARKDOWN_MARKER_NAME_RE = /^(?:[-*+>#]\s|\d{1,9}[.)]\s)/;
 export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpeakerLabelMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
-  // 1. Decorated shape first ("Name (modifier):"), since the plain pattern cannot cross a "(".
+  // Decorated shape first ("Name (modifier):"), since the plain pattern cannot cross a "(".
   const decorated = new RegExp(
     `^\\s*([^\\n\\r():：]{1,${WEBHOOK_USERNAME_LIMIT}}?)\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`,
     "u",
@@ -148,7 +148,7 @@ export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpe
     return null;
   }
 
-  // 2. Plain shape ("Name:").
+  // Plain shape ("Name:").
   const plain = new RegExp(`^\\s*([^\\n\\r():：]{1,${WEBHOOK_USERNAME_LIMIT}}?)\\s*[:：][ \\t]*`, "u").exec(text);
   const plainName = plain?.[1]?.trim();
   if (plain && plainName && isPlausibleSpeakerLabelName(plainName)) {
@@ -167,7 +167,6 @@ function isPlausibleSpeakerLabelName(name: string): boolean {
 /**
  * Returns true when `name` matches any of `names` after render-modifier normalization
  * (the same comparison used by isAllowedRenderModifierSpeakerLabel).
- * @param name - Candidate speaker name
  * @param names - Names to compare against (not yet normalized)
  */
 export function matchesRenderModifierName(name: string, names: readonly string[]): boolean {
@@ -195,10 +194,10 @@ export function isAllowedRenderModifierSpeakerLabel(label: string, sourceNames: 
  * name orientations, and rebuilds the model-facing "SourcePersona (modifier)"
  * label:
  *
- * 1. Flipped copied-identity format (current): "impersonated (SourcePersona)" —
+ * - Flipped copied-identity format (current): "impersonated (SourcePersona)":
  *    Discord shows the impersonated name first so the disguise reads naturally,
  *    while the model-facing label keeps the source persona first.
- * 2. Legacy format: "SourcePersona (modifier)" — pre-flip copied identities and
+ * - Legacy format: "SourcePersona (modifier)": pre-flip copied identities and
  *    pre-clean-name sprite messages still in fetched history windows.
  *
  * When BOTH parts match personas (persona impersonating another persona) the

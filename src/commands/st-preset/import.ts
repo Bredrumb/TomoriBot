@@ -15,8 +15,6 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import type { UserRow, ErrorContext, StPresetNodeRow } from "@/types/db/schema";
 
-// ─── Constants ───────────────────────────────────────────────────────
-
 /** Maximum file size for preset JSON uploads (in MB) */
 const MAX_PRESET_FILE_SIZE_MB = 2;
 
@@ -29,12 +27,10 @@ const LEGACY_STORY_BLOCK_REGEX = /\{\{#if\s+([a-zA-Z_][\w]*)\}\}([\s\S]*?)\{\{\/
 /**
  * Regex to detect comment-only content in SillyTavern nodes.
  * Matches content that is purely `{{// ... }}` blocks and `{{trim}}` macros
- * with optional whitespace — meaning the node produces no output after
+ * with optional whitespace: meaning the node produces no output after
  * template resolution.
  */
 const COMMENT_ONLY_REGEX = /^(\s*\{\{\/\/[^}]*\}\}\s*|\s*\{\{trim\}\}\s*)+$/;
-
-// ─── Types ───────────────────────────────────────────────────────────
 
 /** Raw prompt node from SillyTavern preset JSON */
 interface RawSTPromptNode {
@@ -67,12 +63,9 @@ interface RawSTPreset {
   [key: string]: unknown;
 }
 
-// ─── Subcommand Configuration ────────────────────────────────────────
-
 /**
  * Configure the /st-preset import subcommand.
  * Accepts a required JSON file attachment containing a SillyTavern preset.
- * @param subcommand - The subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -85,11 +78,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setRequired(true),
     );
 
-// ─── Validation ──────────────────────────────────────────────────────
-
 /**
  * Validate that the attachment is a JSON file.
- * @param attachment - Discord attachment to validate
  * @returns Validation result with optional error key
  */
 function validateAttachment(attachment: Attachment): {
@@ -98,12 +88,11 @@ function validateAttachment(attachment: Attachment): {
 } {
   const filename = attachment.name?.toLowerCase() ?? "";
 
-  // 1. Check file extension
   if (!filename.endsWith(".json")) {
     return { isValid: false, errorKey: "invalid_format" };
   }
 
-  // 2. Check content type if provided (Discord may not always set this)
+  // Check content type if provided (Discord may not always set this)
   if (attachment.contentType && !attachment.contentType.includes("json")) {
     return { isValid: false, errorKey: "invalid_format" };
   }
@@ -125,14 +114,11 @@ function isCommentOnly(content: string): boolean {
  * Derive a preset name from the imported filename.
  * Strips the .json extension and truncates to MAX_PRESET_NAME_LENGTH.
  * @param filename - Original filename from the Discord attachment
- * @returns Cleaned preset name
  */
 function derivePresetName(filename: string): string {
   const name = filename.replace(/\.json$/i, "").trim();
   return name.length > MAX_PRESET_NAME_LENGTH ? name.slice(0, MAX_PRESET_NAME_LENGTH) : name;
 }
-
-// ─── Preset Parsing ──────────────────────────────────────────────────
 
 /** Result of parsing a preset, including nodes and filtering stats */
 interface ParseResult {
@@ -477,7 +463,6 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     return null;
   }
 
-  // 1. Build lookup from prompts array: identifier → node definition
   const promptMap = new Map<string, RawSTPromptNode>();
   for (const prompt of prompts) {
     if (prompt.identifier) {
@@ -485,7 +470,7 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     }
   }
 
-  // 2. Find the user-prompt order (character_id 100001)
+  // Find the user-prompt order (character_id 100001)
   //    Falls back to character_id 100000 (system prompt order) if 100001 is missing
   const promptOrders = normalizedPreset.preset.prompt_order;
   let orderEntries: RawSTPromptOrderEntry[] | null = null;
@@ -505,7 +490,6 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     }
   }
 
-  // 3. If no prompt_order found, fall back to prompts array order
   if (!orderEntries) {
     orderEntries = prompts.map((p) => ({
       identifier: p.identifier,
@@ -513,7 +497,6 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     }));
   }
 
-  // 4. Walk the order and build nodes, tracking filtering stats
   const nodes: Omit<StPresetNodeRow, "node_id" | "preset_id">[] = [];
   let nodeOrder = 0;
   let commentOnlyCount = 0;
@@ -526,14 +509,13 @@ function parsePresetNodes(normalizedPreset: NormalizedPresetShape): ParseResult 
     const content = prompt.content ?? "";
     const isMarker = prompt.marker === true;
 
-    // Flag comment-only nodes — stored in DB and visible in the toggle UI,
+    // Flag comment-only nodes: stored in DB and visible in the toggle UI,
     // but never injected into the prompt regardless of enabled state
     const isComment = !isMarker && isCommentOnly(content);
     if (isComment) {
       commentOnlyCount++;
     }
 
-    // Track nodes disabled by the preset's prompt_order
     if (!isMarker && !isComment && !entry.enabled) {
       disabledByPreset++;
     }
@@ -589,18 +571,12 @@ function collectUnsupportedEnabledMacros(nodes: Omit<StPresetNodeRow, "node_id" 
   return [...labels];
 }
 
-// ─── Execution ───────────────────────────────────────────────────────
-
 /**
  * Execute /st-preset import.
  * Downloads the attached JSON file, validates it as a SillyTavern preset,
  * parses prompt nodes from the prompt_order, and stores the preset + nodes
  * in the database for this server.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -608,7 +584,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Verify server setup
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -621,7 +596,6 @@ export async function execute(
     return;
   }
 
-  // 2. Get and validate the attachment
   const attachment = interaction.options.getAttachment("file", true);
   const validation = validateAttachment(attachment);
   if (!validation.isValid) {
@@ -634,7 +608,6 @@ export async function execute(
     return;
   }
 
-  // 3. Check file size before downloading
   const maxSizeBytes = MAX_PRESET_FILE_SIZE_MB * 1024 * 1024;
   if (attachment.size && attachment.size > maxSizeBytes) {
     await replyInfoEmbed(interaction, locale, {
@@ -647,11 +620,10 @@ export async function execute(
     return;
   }
 
-  // 4. Defer reply (download + parsing may take a moment)
+  // Defer reply (download + parsing may take a moment)
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 5. Download the file safely
     const downloadResult = await safeDownload(attachment.url, {
       maxSizeMB: MAX_PRESET_FILE_SIZE_MB,
       timeoutMs: 15000,
@@ -665,7 +637,6 @@ export async function execute(
       return;
     }
 
-    // 6. Parse the JSON
     let rawPreset: RawSTPreset;
     try {
       rawPreset = JSON.parse(downloadResult.buffer.toString("utf-8"));
@@ -676,7 +647,6 @@ export async function execute(
       return;
     }
 
-    // 7. Normalize supported ST preset formats (modern Prompt Manager or legacy text-completions)
     const normalizedPreset = normalizePresetShape(rawPreset);
     if (!normalizedPreset) {
       await replyInfoEmbed(interaction, locale, {
@@ -688,7 +658,6 @@ export async function execute(
       return;
     }
 
-    // 8. Parse nodes from the preset
     const parseResult = parsePresetNodes(normalizedPreset);
     if (!parseResult) {
       await interaction.editReply({
@@ -699,10 +668,8 @@ export async function execute(
 
     const { nodes, commentOnlyCount, disabledByPreset, legacyNodeCount, sourceKind } = parseResult;
 
-    // 9. Derive preset name from filename
     const presetName = derivePresetName(attachment.name ?? "Unnamed Preset");
 
-    // 10. Insert into database
     const preset = await presetRepository.insertPresetWithNodes(tomoriState.server_id, presetName, rawPreset, nodes);
 
     if (!preset) {
@@ -712,20 +679,17 @@ export async function execute(
       return;
     }
 
-    // 11. Activate the newly imported preset (deactivates any previously active preset)
     if (preset.preset_id) {
       await presetRepository.setActivePreset(tomoriState.server_id, preset.preset_id);
     }
 
-    // 12. Count node types for the summary
     const markerCount = nodes.filter((n) => n.is_marker).length;
     const toggleableCount = nodes.filter((n) => !n.is_marker).length;
-    // Excludes comment-only nodes — they never inject regardless of enabled state
+    // Excludes comment-only nodes: they never inject regardless of enabled state
     const enabledCount = nodes.filter((n) => n.is_enabled && !n.is_marker && !n.is_comment).length;
 
     const unsupportedEnabledMacros = collectUnsupportedEnabledMacros(nodes);
 
-    // 13. Build filtering notes for the success embed
     const filterNotes: string[] = [];
     if (commentOnlyCount > 0) {
       filterNotes.push(
@@ -769,7 +733,6 @@ export async function execute(
     const stPresetRemoveMention = commandRegistry.getCommandMention("st-preset", "remove");
     const helpStPresetMention = commandRegistry.getCommandMention("help", "st-preset");
 
-    // 14. Success response
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.st-preset.import.success_title",
       descriptionKey: "commands.st-preset.import.success_description",

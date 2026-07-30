@@ -339,7 +339,6 @@ export async function showPersonaStatus(
               )
             : localizer(locale, "commands.tool.status.persona_model_server_default");
 
-          //     Each field is shown individually; null fields display as "None"
           const noneLabel = localizer(locale, "commands.choices.none");
           const attgAuthor = selectedPersona.nai_attg_author ?? noneLabel;
           const attgTitle = selectedPersona.nai_attg_title ?? noneLabel;

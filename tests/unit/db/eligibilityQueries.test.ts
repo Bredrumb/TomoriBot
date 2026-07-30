@@ -44,7 +44,7 @@ describe("ServerMemoryRepository batched eligibility queries", () => {
     expect([...result].sort()).toEqual([10, 20]);
     // Persona scope only: serverwide (persona_id IS NULL) rows are excluded.
     expect(sqlCalls[0]?.text).toContain("persona_id IS NOT NULL");
-    // No source_type filter — history documents count here, matching loadDocuments.
+    // No source_type filter: history documents count here, matching loadDocuments.
     expect(sqlCalls[0]?.text).not.toContain("source_type");
   });
 

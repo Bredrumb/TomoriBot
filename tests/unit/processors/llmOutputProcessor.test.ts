@@ -9,8 +9,6 @@ import {
 import { isAllowedRenderModifierSpeakerLabel } from "@/utils/discord/renderModifierParser";
 import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
 
-// ─── cleanLLMOutput ─────────────────────────────────────────────────────────
-
 const PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV = "EMOJI_PRESERVE_UNRESOLVED_SHORTCODES";
 
 function withPreserveUnresolvedShortcodes(value: string | undefined, assertion: () => void): void {
@@ -115,10 +113,8 @@ describe("cleanLLMOutput", () => {
   });
 });
 
-// ─── stripLeakedOwnNameLabels ────────────────────────────────────────────────
-
 describe("stripLeakedOwnNameLabels", () => {
-  // Branch A: the model opened its turn with its own label — real speech. The starter is dropped
+  // Branch A: the model opened its turn with its own label: real speech. The starter is dropped
   // and any *later* self-labels are collapsed at their turn boundary, PRESERVING preceding text.
   describe("opened with own label (real turn — keep preceding, collapse later labels)", () => {
     it("removes the starter label", () => {
@@ -172,7 +168,7 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
-  // Branch B: the model did NOT open with its own label — content before the first leak-shaped
+  // Branch B: the model did NOT open with its own label: content before the first leak-shaped
   // label is a leaked "thought" and is dropped, keeping only the real response.
   describe("did not open with own label (leaked thought — cut the preamble)", () => {
     it("cuts a thought glued to the re-introduction label", () => {
@@ -238,7 +234,7 @@ describe("stripLeakedOwnNameLabels", () => {
   });
 
   // Identity-macro labels: the model sometimes labels its own turn with the template syntax
-  // ("{bot}:") instead of the resolved name. Stripped only at the opening — mid-text macros are
+  // ("{bot}:") instead of the resolved name. Stripped only at the opening; mid-text macros are
   // legitimate content whenever the persona is drafting a preset or system prompt for a user.
   describe("identity-macro opening labels", () => {
     it("peels a leading {bot} label", () => {
@@ -323,7 +319,7 @@ describe("stripLeakedOwnNameLabels", () => {
     });
 
     it("does not mangle an emoji named exactly like the persona", () => {
-      // "<:Tomori:id>" contains "Tomori:" preceded by a colon — excluded from the glued char so the
+      // "<:Tomori:id>" contains "Tomori:" preceded by a colon, so excluded from the glued char so the
       // emoji is preserved, while the genuinely leaked label after ">" is still collapsed.
       expect(stripLeakedOwnNameLabels("Tomori: hi <:Tomori:123456789012345678> there", "Tomori").trim()).toBe(
         "hi <:Tomori:123456789012345678> there",
@@ -339,8 +335,6 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 });
-
-// ─── findMarkdownCodeRanges ──────────────────────────────────────────────────
 
 describe("findMarkdownCodeRanges", () => {
   it("returns empty array when no backticks present", () => {
@@ -400,8 +394,6 @@ describe("findMarkdownCodeRanges", () => {
   });
 });
 
-// ─── isGenericSpeakerStopLabel ───────────────────────────────────────────────
-
 describe("isGenericSpeakerStopLabel", () => {
   describe("valid speaker labels", () => {
     it("accepts 'User'", () => {
@@ -442,8 +434,6 @@ describe("isGenericSpeakerStopLabel", () => {
     });
   });
 });
-
-// ─── truncateBeforeGenericSpeakerLine ────────────────────────────────────────
 
 describe("truncateBeforeGenericSpeakerLine", () => {
   describe("no speaker present — pass through unchanged", () => {

@@ -1,6 +1,6 @@
-// Typed model catalog — the human-authored source of truth for seeded models.
+// Typed model catalog: the human-authored source of truth for seeded models.
 // Flags default to false; list only the ones that are true.
-// Seeded into the database at startup by seedModelsFromCatalog (./modelSeed.ts) — there
+// Seeded into the database at startup by seedModelsFromCatalog (./modelSeed.ts), so there
 // is no generated SQL file. Edit and commit; the change seeds on the next boot.
 // Run `bun run check-seed-catalogs` to validate the per-provider invariants offline.
 
@@ -22,7 +22,7 @@ import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } f
 // Deprecated Gemini preview snapshots are priced to their stable SKU's verified rate (same model, alias),
 // so users still on a deprecated codename keep accurate costs now that the env fallback is gone.
 // OpenRouter rows are priced live from the OpenRouter API cache (authoritative, auto-updating). The
-// inputPricePerMillion / outputPricePerMillion below are a cache-miss fallback only — used solely when the
+// inputPricePerMillion / outputPricePerMillion below are a cache-miss fallback only, used solely when the
 // live cache has no entry. Researched 2026-06-11 from the OpenRouter model pages. Free/image/`:free` and
 // `other-model` rows stay undefined.
 export const llmSections: ModelSection<LlmInput>[] = [

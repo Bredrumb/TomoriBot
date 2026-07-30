@@ -3,8 +3,8 @@
  * paginated-modal-selector-consistency plan).
  *
  * Confirms two things at the `>25`-option boundary:
- *   1. The DEFAULT (legacy) style is unchanged — a numbered page-button embed.
- *   2. selectorStyle:"componentsV2" renders the shared range-selector container
+ *   - The DEFAULT (legacy) style is unchanged: a numbered page-button embed.
+ *   - selectorStyle:"componentsV2" renders the shared range-selector container
  *      (range/previous/cancel/next buttons), carries IsComponentsV2, never emits
  *      legacy embeds, and marks the interaction for the Phase 1 collision guard.
  *
@@ -105,16 +105,16 @@ describe("promptWithPaginatedModal selectorStyle", () => {
     expect(result.outcome).toBe("timeout");
     expect(calls).toHaveLength(1);
     const payload = calls[0].payload;
-    // 1. Legacy path carries embeds, never IsComponentsV2.
+    // Legacy path carries embeds, never IsComponentsV2.
     expect(Array.isArray(payload.embeds)).toBe(true);
     const flags = (payload.flags as number) ?? 0;
     expect(flags & MessageFlags.IsComponentsV2).toBe(0);
-    // 2. Numbered page buttons: 26 options -> 2 pages -> page_1, page_2.
+    // Numbered page buttons: 26 options -> 2 pages -> page_1, page_2.
     const actionRow = (payload.components as Array<{ toJSON: () => unknown }>)[0];
     const ids = collectCustomIds(actionRow.toJSON());
     expect(ids).toContain("page_1");
     expect(ids).toContain("page_2");
-    // 3. The legacy selector must NOT mark the interaction as V2.
+    // The legacy selector must NOT mark the interaction as V2.
     expect(hasComponentsV2Reply(interaction)).toBe(false);
   });
 
@@ -126,17 +126,17 @@ describe("promptWithPaginatedModal selectorStyle", () => {
     expect(result.outcome).toBe("timeout");
     expect(calls).toHaveLength(1);
     const payload = calls[0].payload;
-    // 1. V2 payload: components + IsComponentsV2 + Ephemeral, never embeds.
+    // V2 payload: components + IsComponentsV2 + Ephemeral, never embeds.
     expect("embeds" in payload).toBe(false);
     expect(payload.flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
-    // 2. Range + navigation buttons scoped to a per-session prefix.
+    // Range + navigation buttons scoped to a per-session prefix.
     const ids = collectCustomIds(payload.components);
     expect(ids.some((id) => id.endsWith("_range_0"))).toBe(true);
     expect(ids.some((id) => id.endsWith("_range_1"))).toBe(true);
     expect(ids.some((id) => id.endsWith("_cancel"))).toBe(true);
     expect(ids.some((id) => id.endsWith("_previous"))).toBe(true);
     expect(ids.some((id) => id.endsWith("_next"))).toBe(true);
-    // 3. The interaction is marked so a later legacy embed sink renders a V2 notice.
+    // The interaction is marked so a later legacy embed sink renders a V2 notice.
     expect(hasComponentsV2Reply(interaction)).toBe(true);
   });
 });

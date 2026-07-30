@@ -344,7 +344,7 @@ async function buildUserDetailLines(
       const contentTags = normalized.filter((t) => !t.startsWith("#"));
 
       // Channel tags gate: if present and channel_memory_enabled, channel must match.
-      // Channel and content filters are independent — channel match does not exempt a memory
+      // Channel and content filters are independent; channel match does not exempt a memory
       // from the content/corpus check below (per baetican's intended design).
       if (params.tomoriConfig.channel_memory_enabled && channelTags.length > 0) {
         const channelAllowed = channelTags.some((t) => t.slice(1).toLowerCase() === params.channelName.toLowerCase());
@@ -485,7 +485,7 @@ async function applyPublicPersonaProfiles(
       targetEntry = userEntries.find((entry) => entry.displayName === publicPersona.personaName);
     }
 
-    // 1. Build the header and the attribute lines separately so we can avoid
+    // Build the header and the attribute lines separately so we can avoid
     //    re-pushing the header when appending to an entry that already has one.
     const attributeHeader = `- Known Information about ${publicPersona.personaName}:`;
     const attributeLines = convertedAttributes.map((attr) => `  - ${attr}`);

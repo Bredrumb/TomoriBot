@@ -65,7 +65,7 @@ export async function execute(
       return;
     }
 
-    // 1. Reset defaults across all split config tables in parallel via typed repository methods.
+    // Reset defaults across all split config tables in parallel via typed repository methods.
     //    Each method returns a boolean indicating whether any row was updated.
     const results = await Promise.all([
       configRepository.updateModelConfig(serverId, {

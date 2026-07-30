@@ -123,7 +123,6 @@ function extractCustomEmojiImages(content: string): Array<{ url: string; name: s
  * produce identical compaction input.
  *
  * @param baseContent - The message text accumulated so far.
- * @param source - Title and description of the notice, from either transport.
  * @returns `baseContent` with the notice appended, or unchanged when the notice
  *          is not one of the classified system types.
  */

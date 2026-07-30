@@ -2,13 +2,13 @@
  * Components V2 notice reader.
  *
  * Several system notices that used to be sent as Discord embeds are now sent as
- * Components V2 containers (see `expandableEmbedNotice.ts` — memory-learning and
+ * Components V2 containers (see `expandableEmbedNotice.ts`: memory-learning and
  * scheduled-task confirmations). A CV2 message carries an EMPTY `message.embeds`
  * array and an empty `message.content`: all of its text lives inside
  * `message.components` as `TextDisplay` blocks nested in a `Container`.
  *
  * Every context consumer in the chat/compaction pipelines was written against
- * `message.embeds`, so those notices became completely invisible to the LLM —
+ * `message.embeds`, so those notices became completely invisible to the LLM:
  * causing Tomori to re-run tools she had already run. This module restores the
  * old behavior by reconstructing the embed-equivalent {title, description,
  * footer} triple from a CV2 container, so the existing title classifiers
@@ -75,19 +75,18 @@ function toComponentRecord(component: unknown): Record<string, unknown> | null {
  * order. Descends through `Container` and `Section` children so a notice keeps
  * its text even if the UI layer later nests it more deeply.
  *
- * @param component - The component (or component subtree) to walk.
  * @param blocks - Accumulator that receives each TextDisplay's content, in order.
  */
 function collectTextDisplayBlocks(component: unknown, blocks: string[]): void {
   const data = toComponentRecord(component);
   if (!data) return;
 
-  // 1. Leaf case — a TextDisplay carries the actual notice text.
+  // Leaf case: a TextDisplay carries the actual notice text.
   if (data.type === ComponentType.TextDisplay && typeof data.content === "string" && data.content.length > 0) {
     blocks.push(data.content);
   }
 
-  // 2. Recurse into any nested children (Container -> components,
+  // Recurse into any nested children (Container -> components,
   //    Section -> components). Buttons/separators have no text and are skipped
   //    naturally because they carry no TextDisplay descendants.
   if (Array.isArray(data.components)) {
@@ -109,7 +108,6 @@ function collectTextDisplayBlocks(component: unknown, blocks: string[]): void {
  *   - Lines prefixed with `-# ` (Discord subtext) form the footer.
  *   - Every remaining line forms the description.
  *
- * @param components - The message's top-level components (`message.components`).
  * @returns The reconstructed notice text, or null when the tree holds no text at all.
  */
 export function extractNoticeTextFromComponents(
@@ -117,17 +115,17 @@ export function extractNoticeTextFromComponents(
 ): ComponentNoticeText | null {
   if (!components || components.length === 0) return null;
 
-  // 1. Flatten every TextDisplay in the tree into ordered text blocks.
+  // Flatten every TextDisplay in the tree into ordered text blocks.
   const blocks: string[] = [];
   for (const component of components) {
     collectTextDisplayBlocks(component, blocks);
   }
   if (blocks.length === 0) return null;
 
-  // 2. Split into lines, preserving order across blocks.
+  // Split into lines, preserving order across blocks.
   const lines = blocks.join("\n").split("\n");
 
-  // 3. Pull the title off line 0 only, and only if it is a heading.
+  // Pull the title off line 0 only, and only if it is a heading.
   let title: string | null = null;
   const headingMatch = lines[0]?.match(HEADING_LINE_PATTERN);
   if (headingMatch) {
@@ -135,7 +133,7 @@ export function extractNoticeTextFromComponents(
     lines.shift();
   }
 
-  // 4. Partition the remainder into footer (subtext) and description lines.
+  // Partition the remainder into footer (subtext) and description lines.
   const descriptionLines: string[] = [];
   const footerLines: string[] = [];
   for (const line of lines) {

@@ -1,5 +1,3 @@
-// locales/en-US/tools.ts
-
 export default {
   tools: {
     generate_image: {

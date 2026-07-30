@@ -1,5 +1,5 @@
 /**
- * Regression harness — ConfigRepository domain.
+ * Regression harness: ConfigRepository domain.
  *
  * Covers: loadTomoriState (config portion), updateTomoriConfig.
  * The config row is read as part of TomoriState; updateTomoriConfig is the
@@ -31,7 +31,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Config — regression", () => {
   it("loadTomoriState config has expected default values", async () => {
     const state = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
     expect(state?.config).not.toBeNull();
-    // Schema defaults
     expect(state?.config.message_fetch_limit).toBe(80);
     expect(state?.config.humanizer_degree).toBe(1);
     expect(state?.config.tool_use_enabled ?? true).toBe(true);

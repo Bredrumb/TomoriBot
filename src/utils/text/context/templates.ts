@@ -114,11 +114,11 @@ export async function buildPromptContextItems(params: {
   if (!params.isUserImpersonation) {
     const channelOverride = params.channelPromptOverride;
 
-    // 1. Resolve the server-level system prompt (or default fallback).
+    // Resolve the server-level system prompt (or default fallback).
     const baseSystemPrompt =
       params.tomoriConfig.system_prompt?.trim() || (params.suppressDefaultSystemPrompt ? null : DEFAULT_SYSTEM_PROMPT);
 
-    // 2. Replace mode: the channel prompt fully takes over the system-prompt slot's
+    // Replace mode: the channel prompt fully takes over the system-prompt slot's
     //    content (persona prompt + attributes below are untouched). Otherwise keep
     //    the server/default system prompt in that slot.
     const systemPrompt = channelOverride?.mode === "replace" ? channelOverride.prompt : baseSystemPrompt;
@@ -140,7 +140,7 @@ export async function buildPromptContextItems(params: {
       });
     }
 
-    // 3. Append mode: emit the channel prompt as its own distinct block placed
+    // Append mode: emit the channel prompt as its own distinct block placed
     //    immediately after the system prompt (and before the persona prompt).
     if (channelOverride?.mode === "append" && channelOverride.prompt.trim()) {
       const channelPromptText = await params.convertMentions(

@@ -53,12 +53,12 @@ const CODE_CLOSER_PREFIX = /^\s*`{1,3}\s*/;
  *
  * Recovery strategy (mirrors {@link GemmaToolCallParser}'s anchor approach):
  * 1. Scan buffered text for an anchor `<knownToolName>\s*\(`. Only names from
- *    the exposed tool set trigger — a stray `foo(...)` in prose is ignored.
+ *    the exposed tool set trigger, so a stray `foo(...)` in prose is ignored.
  * 2. Emit any text *before* the anchor (and any wrapper opener) as visible
  *    prose, then accumulate from the tool name until the parentheses balance
  *    (quote-aware, so `)` inside a JSON string does not close early).
  * 3. Parse the completed `name(...)` body. Invalid args (non-JSON, wrong arity)
- *    are rejected and the raw text is emitted instead — this parse validation
+ *    are rejected and the raw text is emitted instead, so this parse validation
  *    is the real guard against false positives, so the name anchor can be loose.
  *
  * Prose and the function call are never returned from the same `feed()` call:
@@ -73,8 +73,8 @@ export class VerbatimToolCallParser {
   private readonly maxBufferChars: number;
   private buffer = "";
   /**
-   * `scanning` — searching buffered text for a tool-name anchor.
-   * `accumulating` — anchor found; buffer starts at the (optionally wrapped)
+   * `scanning`: searching buffered text for a tool-name anchor.
+   * `accumulating`: anchor found; buffer starts at the (optionally wrapped)
    * tool name and we await the call's balancing close paren.
    */
   private mode: "scanning" | "accumulating" = "scanning";
@@ -95,7 +95,6 @@ export class VerbatimToolCallParser {
       return { visibleText: "", functionCall: null };
     }
 
-    // No parseable tools — nothing to detect, pass everything through.
     if (!this.anchorRegex) {
       return { visibleText: text, functionCall: null };
     }
@@ -114,7 +113,6 @@ export class VerbatimToolCallParser {
 
   flush(): VerbatimToolCallFlushResult {
     if (this.mode === "accumulating") {
-      // Stream ended while a call was buffered — attempt a final completion.
       const result = this.tryCompleteCall();
       const pendingText = result.visibleText + this.buffer;
       this.reset();
@@ -138,14 +136,13 @@ export class VerbatimToolCallParser {
    * immediately so a single-chunk call resolves without an extra round-trip.
    */
   private scanForAnchor(): VerbatimToolCallFeedResult {
-    // anchorRegex is non-null here (feed() guards the null case).
     const regex = this.anchorRegex as RegExp;
     regex.lastIndex = 0;
     const match = regex.exec(this.buffer);
 
     if (match) {
       const anchorIndex = match.index;
-      // 1. Pull a wrapper opener (e.g. "```json\n" or "`") immediately before
+      // Pull a wrapper opener (e.g. "```json\n" or "`") immediately before
       //    the tool name back into the accumulation buffer so it is preserved
       //    if parsing later fails, rather than leaking as a stray prose char.
       const beforeAnchor = this.buffer.slice(0, anchorIndex);
@@ -156,14 +153,13 @@ export class VerbatimToolCallParser {
       this.buffer = this.buffer.slice(splitAt);
       this.mode = "accumulating";
 
-      // 2. With no prose to emit first, it is safe to resolve in this feed.
       if (prose.length === 0) {
         return this.tryCompleteCall();
       }
       return { visibleText: prose, functionCall: null };
     }
 
-    // 3. No anchor: emit the safe prefix, holding back only a tail that could be
+    // No anchor: emit the safe prefix, holding back only a tail that could be
     //    the start of a wrapper opener or a partial tool name on the next chunk.
     const holdback = this.computeHoldback(this.buffer);
     const visibleText = this.buffer.slice(0, this.buffer.length - holdback.length);
@@ -187,14 +183,14 @@ export class VerbatimToolCallParser {
 
     const closeParenIndex = findBalancedCallEnd(afterOpener, openParenIndex);
     if (closeParenIndex === -1) {
-      // Parens not yet balanced — keep accumulating subsequent chunks.
+      // Parens not yet balanced, so keep accumulating subsequent chunks.
       return { visibleText: "", functionCall: null };
     }
 
     const callText = afterOpener.slice(0, closeParenIndex + 1);
     const functionCall = this.parseToolCall(callText);
     if (!functionCall) {
-      // Not a real call (e.g. invalid JSON args) — surface the raw text instead
+      // Not a real call (e.g. invalid JSON args), so surface the raw text instead
       // of silently dropping it, then resume scanning for a later anchor.
       return this.drainBuffer();
     }
@@ -212,7 +208,7 @@ export class VerbatimToolCallParser {
    * optionally preceded by a wrapper opener (backticks + fence language).
    */
   private computeHoldback(buffer: string): string {
-    // 1. Longest suffix that is a prefix of some exposed tool name. The full
+    // Longest suffix that is a prefix of some exposed tool name. The full
     //    name is included (len up to name.length): a complete name whose "("
     //    has not streamed in yet must still be withheld, or the anchor can never
     //    match once the parenthesis finally arrives in the next chunk.
@@ -226,7 +222,7 @@ export class VerbatimToolCallParser {
       }
     }
 
-    // 2. A full tool name followed only by trailing whitespace: the anchor
+    // A full tool name followed only by trailing whitespace: the anchor
     //    permits `name\s*(`, so the "(" may still arrive on the next chunk.
     if (!namePart) {
       const trailingWhitespace = buffer.match(/\s+$/)?.[0] ?? "";
@@ -241,7 +237,7 @@ export class VerbatimToolCallParser {
       }
     }
 
-    // 3. A wrapper opener directly before the partial name (or at the very end)
+    // A wrapper opener directly before the partial name (or at the very end)
     //    might be wrapping a call still arriving on the next chunk.
     const beforeName = buffer.slice(0, buffer.length - namePart.length);
     const opener = beforeName.match(CODE_OPENER_SUFFIX)?.[0] ?? "";

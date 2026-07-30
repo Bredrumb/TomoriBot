@@ -3,7 +3,7 @@
  *
  * Lets cutover tasks target a specific database (GCP Cloud SQL, Azure Flexible
  * Server, local dev) without editing `.env`. Point it at a flat JSON blob of
- * env-style keys — the same shape as the `TOMORI_SECRETS_JSON` deploy secret —
+ * env-style keys (the same shape as the `TOMORI_SECRETS_JSON` deploy secret),
  * and every string/number/boolean value is exported into the child process
  * before the wrapped script starts. JSON values win over `.env` because dotenv
  * never overrides variables that are already set.
@@ -42,7 +42,7 @@ function loadSecretsAsEnv(filePath: string): Record<string, string> {
   const envVars: Record<string, string> = {};
   const skippedKeys: string[] = [];
 
-  // 1. Keep scalar values (strings/numbers/booleans) and stringify them for the env;
+  // Keep scalar values (strings/numbers/booleans) and stringify them for the env;
   //    skip nested objects/arrays/null so a malformed blob fails loudly instead of silently.
   for (const [key, value] of Object.entries(parsed)) {
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -67,7 +67,7 @@ async function runWithSecrets(): Promise<void> {
     process.exit(1);
   }
 
-  // 2. Resolve and validate both file arguments before spawning anything.
+  // Resolve and validate both file arguments before spawning anything.
   const secretsPath = resolve(process.cwd(), secretsArg);
   const scriptPath = resolve(process.cwd(), scriptArg);
 
@@ -89,10 +89,10 @@ async function runWithSecrets(): Promise<void> {
     process.exit(1);
   }
 
-  // 3. Log key NAMES only (never values) so the target is auditable without leaking secrets.
+  // Log key NAMES only (never values) so the target is auditable without leaking secrets.
   log.info(`Injecting ${injectedKeys.length} env var(s): ${injectedKeys.join(", ")}`);
 
-  // 4. Spawn the wrapped script with inherited stdio; injected values are placed
+  // Spawn the wrapped script with inherited stdio; injected values are placed
   //    after process.env so the JSON wins over anything from the parent shell/.env.
   const subprocess = Bun.spawn(["bun", "run", scriptPath, ...scriptArgs], {
     env: { ...process.env, ...injectedEnv },
@@ -101,7 +101,7 @@ async function runWithSecrets(): Promise<void> {
     stderr: "inherit",
   });
 
-  // 5. Mirror the child's exit code so CI/shell callers see failures.
+  // Mirror the child's exit code so CI/shell callers see failures.
   process.exit(await subprocess.exited);
 }
 

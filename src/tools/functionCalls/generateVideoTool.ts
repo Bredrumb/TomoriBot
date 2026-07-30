@@ -4,7 +4,7 @@
  * Supports text-to-video and image-to-video (via media_id reference).
  *
  * Key difference from image generation: all video APIs are async with polling,
- * so the execute() method blocks for 30s–5min while the video renders.
+ * so the execute() method blocks for 30s-5min while the video renders.
  */
 
 import { AttachmentBuilder } from "discord.js";
@@ -130,8 +130,7 @@ export class GenerateVideoTool extends BaseTool {
   /**
    * Standard video generation is available for any tool-capable chat model.
    * The actual execution provider is resolved from the configured video slot.
-   * @param _provider - LLM provider name
-   * @returns Always true — actual availability is gated by config + credential resolution
+   * @returns Always true, so actual availability is gated by config + credential resolution
    */
   isAvailableFor(_provider: string): boolean {
     return true;
@@ -146,7 +145,6 @@ export class GenerateVideoTool extends BaseTool {
 
   /**
    * Check if video generation is enabled in Tomori config.
-   * @param context - Tool execution context
    * @returns True if video generation is enabled
    */
   protected isEnabled(context: ToolContext): boolean {
@@ -155,7 +153,6 @@ export class GenerateVideoTool extends BaseTool {
 
   /**
    * Get the video model codename from the database via repository.
-   * @param videoModelId - Database ID of the video generation model
    * @returns The model codename string (e.g., "veo-3.1-generate-preview")
    */
   private async getVideoModelCodename(videoModelId: number): Promise<string> {
@@ -174,13 +171,10 @@ export class GenerateVideoTool extends BaseTool {
    * The video is sent inside a Components V2 Media Gallery so a "Generated in Xs"
    * footer can sit BELOW the inline player (a plain `content` caption would render
    * above the attachment). Each path falls back to a plain attachment-only message
-   * if Components V2 is rejected — that fallback preserves Discord's native inline
+   * if Components V2 is rejected, so that fallback preserves Discord's native inline
    * video player, just without the timing footer.
-   * @param context - Tool execution context
    * @param videoData - Raw video bytes
-   * @param filename - Attachment filename to send
    * @param elapsedMs - Wall-clock generation time in milliseconds, used for the "Generated in Xs" footer
-   * @returns The sent Discord message
    */
   private async sendGeneratedVideo(
     context: ToolContext,
@@ -192,10 +186,9 @@ export class GenerateVideoTool extends BaseTool {
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
-    // 1. Build the Components V2 payload: Media Gallery (video) + "Generated in Xs" footer below
     const componentsPayload = buildGeneratedVideoComponentsV2Payload(filename, elapsedMs, context.locale);
 
-    // 2. Try persona webhook first (Components V2, then plain attachment fallback)
+    // Try persona webhook first (Components V2, then plain attachment fallback)
     if (context.webhook && context.personaUsername) {
       try {
         const webhookAttachment = new AttachmentBuilder(videoData, {
@@ -260,7 +253,7 @@ export class GenerateVideoTool extends BaseTool {
       }
     }
 
-    // 3. Bot message path (Components V2, then plain attachment fallback)
+    // Bot message path (Components V2, then plain attachment fallback)
     try {
       const channelAttachment = new AttachmentBuilder(videoData, {
         name: filename,
@@ -306,9 +299,7 @@ export class GenerateVideoTool extends BaseTool {
 
   /**
    * Extract the first image from a Discord message for image-to-video generation.
-   * Returns the source URL directly — providers that need base64 can fetch it themselves.
-   * @param messageId - Discord message ID to fetch image from
-   * @param context - Tool execution context
+   * Returns the source URL directly, so providers that need base64 can fetch it themselves.
    * @returns Reference image with url and mimeType, or null if no image found
    */
   private async extractReferenceImageFromMessage(
@@ -323,13 +314,13 @@ export class GenerateVideoTool extends BaseTool {
         log.info(`Using image from replied-to message ${sourceMessageId} for image-to-video reference ${messageId}`);
       }
 
-      // Return the URL directly — embedding large images as base64 in the request body
+      // Return the URL directly, so embedding large images as base64 in the request body
       // can exceed provider body size limits. Providers fetch the URL themselves.
       return {
         url: image.proxyUrl || image.url,
         ...(image.proxyUrl && image.proxyUrl !== image.url ? { fallbackUrl: image.url } : {}),
         mimeType: image.mimeType,
-        data: "", // Empty — providers that need base64 must fetch the url themselves
+        data: "", // Empty: providers that need base64 must fetch the url themselves
       };
     } catch (error) {
       log.error(`Failed to extract reference image from message ${messageId}`, error as Error);
@@ -354,7 +345,6 @@ export class GenerateVideoTool extends BaseTool {
     // Capture generation start time for the "Generated in Xs" caption (mirrors image tool)
     const startedAtMs = Date.now();
 
-    // 1. Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -363,7 +353,6 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // 2. Check if tool is enabled
     if (!this.isEnabled(context)) {
       return {
         success: false,
@@ -380,7 +369,6 @@ export class GenerateVideoTool extends BaseTool {
       };
     }
 
-    // 4. Extract arguments
     const prompt = args.prompt as string;
     const rawMediaId = args.media_id as string | undefined;
     const messageId = this.resolveMediaId(rawMediaId, context);
@@ -414,12 +402,12 @@ export class GenerateVideoTool extends BaseTool {
     let quotaCheck: VideoQuotaCheckResult = { allowed: true };
 
     try {
-      // 5. Resolve credentials first so we can skip server quota for personal BYOK users
+      // Resolve credentials first so we can skip server quota for personal BYOK users
       const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "video", {
         userId: context.internalUserId ?? null,
       });
 
-      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      // Personal BYOK users bring their own API quota, so bypass server quota entirely
       if (creds.source === "server") {
         quotaCheck = await checkVideoQuota(context.tomoriState.server_id, userDiscId);
       }
@@ -482,7 +470,7 @@ export class GenerateVideoTool extends BaseTool {
       const apiKey = creds.apiKey;
       const executionProvider = creds.provider;
 
-      // 7. Send progress notice — video generation takes 1-3 minutes
+      // Send progress notice, so video generation takes 1-3 minutes
       if (!context.suppressProgressNotices) {
         const baseNoticeDescription = localizer(
           context.locale,
@@ -519,7 +507,6 @@ export class GenerateVideoTool extends BaseTool {
         );
       }
 
-      // 8. Extract reference image if media_id provided
       let referenceImages: Array<{ mimeType: string; data: string; url?: string; fallbackUrl?: string }> | undefined;
 
       if (messageId) {
@@ -533,7 +520,6 @@ export class GenerateVideoTool extends BaseTool {
         }
       }
 
-      // 9. Route to appropriate provider implementation
       log.info(
         `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, duration: ${durationSeconds}s, resolution: ${resolution})`,
       );
@@ -612,7 +598,6 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // 10. Validate result
       if (!videoData) {
         return {
           success: false,
@@ -620,7 +605,7 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // 11. Check Discord file size limit
+      // Check Discord file size limit
       if (videoData.length > DISCORD_FILE_SIZE_LIMIT) {
         const sizeMB = (videoData.length / (1024 * 1024)).toFixed(1);
         log.warn(`Generated video exceeds Discord file size limit: ${sizeMB}MB > 25MB`);
@@ -643,7 +628,7 @@ export class GenerateVideoTool extends BaseTool {
 
       log.success("Successfully generated and sent video to Discord");
 
-      // 13. Increment quota after successful generation (server providers only)
+      // Increment quota after successful generation (server providers only)
       if (creds.source === "server") {
         await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
       }
@@ -654,12 +639,10 @@ export class GenerateVideoTool extends BaseTool {
           userId: context.internalUserId,
           lineageId: context.tomoriState.persona_lineage_id ?? 0,
           metric: "video_generated",
-          // Key by model codename for a per-model generation breakdown at read time.
           metricKey: modelCodename,
         });
       }
 
-      // 14. Build success message
       let successMessage = `Successfully generated and sent video to Discord (message ID: ${sentMessage.id}). The video has been created based on your prompt${
         referenceImages ? " and the reference image" : ""
       } at ${resolution} for approximately ${durationSeconds} second(s).`;
@@ -695,7 +678,6 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // Check for common error patterns
       if (errorMessage.includes("timed out")) {
         return {
           success: false,

@@ -257,7 +257,7 @@ export async function getUserPresenceDetails(
 
     if (member.presence.activities && member.presence.activities.length > 0) {
       const activityDetails = member.presence.activities.map((activity) => {
-        // 1. Diagnostic log so we can see exactly what the gateway delivered
+        // Diagnostic log so we can see exactly what the gateway delivered
         //    (useful for third-party RPC apps like Last.fm whose payload shape changes upstream)
         const largeText = activity.assets?.largeText?.trim() || null;
         const smallText = activity.assets?.smallText?.trim() || null;
@@ -265,7 +265,6 @@ export async function getUserPresenceDetails(
           `Activity found for ${member?.user.username}: type=${activity.type} name="${activity.name}" details="${activity.details ?? ""}" state="${activity.state ?? ""}" emoji="${activity.emoji?.name ?? ""}" largeText="${largeText ?? ""}" smallText="${smallText ?? ""}" appId="${activity.applicationId ?? ""}"`,
         );
 
-        // 2. Compose extra fields once so each case can surface asset text uniformly
         const timeSpent = getTimeSpent(activity.timestamps?.start, activity.timestamps?.end);
         const appendAssetText = (base: string): string => {
           const extras: string[] = [];
@@ -276,7 +275,6 @@ export async function getUserPresenceDetails(
 
         switch (activity.type) {
           case ActivityType.Playing: {
-            // Surface details, state, and any asset hover text
             const segments: string[] = [`Playing ${activity.name}`];
             if (activity.details) segments.push(activity.details);
             if (activity.state) segments.push(activity.state);
@@ -298,7 +296,7 @@ export async function getUserPresenceDetails(
           case ActivityType.Watching:
             return appendAssetText(`Watching ${activity.name}`) + timeSpent;
           case ActivityType.Custom: {
-            // Custom Status — some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
+            // Custom Status: some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
             const parts: string[] = [];
             if (activity.emoji?.name) parts.push(activity.emoji.name);
             if (activity.state) parts.push(activity.state);

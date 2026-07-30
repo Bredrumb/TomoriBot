@@ -7,7 +7,7 @@ import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 // Capture the REAL repository barrel before the mock below replaces it. Importing
 // it is side-effect-free (the DB client connects lazily, not at import), and
-// `mock.module` runs in source order — not hoisted — so this static import resolves
+// `mock.module` runs in source order (not hoisted), so this static import resolves
 // to the real module. Spreading it into the mock keeps every repository export
 // present, so command modules pulled into the SUT's dynamic-import graph can
 // satisfy their static `import { ... }` bindings. Without this, running this file
@@ -169,7 +169,7 @@ mock.module("@/utils/provider/providerFactory", () => ({
 // never restored, so it replaces crypto.ts for every test file loaded after
 // this one. If any real export is omitted here, later files that import it fail
 // to link ("Export named X not found"), and which files become victims depends
-// on module load order — making the suite fragile to unrelated import changes.
+// on module load order, making the suite fragile to unrelated import changes.
 mock.module("@/utils/security/crypto", () => ({
   encryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
   decryptApiKey: async () => "decrypted-key",
@@ -564,7 +564,6 @@ describe("runGenerationTurn fallback behavior", () => {
     const fallbackModel = makeLlm(2, "fallback-model");
     const context = makeContext(primaryModel, fallbackModel);
 
-    // Attach a persona webhook so webhook-delivered partials are removed via the webhook path.
     const deletedWebhookMessageIds: string[] = [];
     (context as unknown as { responseTarget?: unknown }).responseTarget = {
       webhook: {

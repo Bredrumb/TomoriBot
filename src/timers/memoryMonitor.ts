@@ -53,7 +53,6 @@ export class MemoryMonitor {
       });
     });
 
-    // Run immediately on start
     this.checkMemoryStatus().catch((error) => {
       log.error("Error during initial memory check on monitor start:", error);
     });
@@ -112,7 +111,6 @@ export class MemoryMonitor {
           log.success(`Memory status recovered to SAFE: ${summary}`);
         }
 
-        // Update last status
         this.lastStatus = currentStatus;
       }
     } catch (error) {

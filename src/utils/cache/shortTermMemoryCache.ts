@@ -50,7 +50,7 @@ export interface ShortTermMemoryEntry {
   /** Discord channel ID */
   channelId: string;
 
-  /** Parent channel ID when channelId is a thread — used for privacy/RP inheritance checks */
+  /** Parent channel ID when channelId is a thread , so used for privacy/RP inheritance checks */
   parentChannelId?: string | null;
 
   /** Optional channel name (for same-server channel mentions) */
@@ -77,26 +77,21 @@ interface CacheStats {
   expirations: number;
 }
 
-// Environment variables for configuration
 const CRUDE_CONVERSATION_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_TTL_HOURS || "12", 10);
 const SUMMARY_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS || "24", 10);
 const MAX_SUMMARY_LENGTH = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH || "1500", 10);
 const MAX_MESSAGES_PER_CHANNEL = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL || "10", 10);
 
-// Convert hours to milliseconds
 const CRUDE_CONVERSATION_TTL_MS = CRUDE_CONVERSATION_TTL_HOURS * 60 * 60 * 1000;
 const SUMMARY_TTL_MS = SUMMARY_TTL_HOURS * 60 * 60 * 1000;
 
-// Export constants for use in tools and context builders
 export { MAX_SUMMARY_LENGTH };
 
 const USER_CACHE_PREFIX = "shortterm:user";
 const SERVER_CACHE_PREFIX = "shortterm:server";
 
-// In-memory cache: Map<scope:key, ShortTermMemoryEntry>
 const cache = new Map<string, ShortTermMemoryEntry>();
 
-// Cache statistics
 const stats: CacheStats = {
   hits: 0,
   misses: 0,
@@ -131,14 +126,12 @@ function getServerCacheKey(serverId: string, channelId: string, personaId?: numb
 
 /**
  * Check if a cache entry has expired based on TTL
- * @param entry - The cache entry to check
  * @returns True if expired, false otherwise
  */
 function isExpired(entry: ShortTermMemoryEntry): boolean {
   const now = Date.now();
   const age = now - entry.lastUpdated;
 
-  // If summary exists, use summary TTL; otherwise use crude conversation TTL
   const ttl = entry.summary ? SUMMARY_TTL_MS : CRUDE_CONVERSATION_TTL_MS;
 
   return age > ttl;
@@ -146,19 +139,15 @@ function isExpired(entry: ShortTermMemoryEntry): boolean {
 
 /**
  * Format a timestamp as a relative time string
- * @param timestamp - Unix timestamp in milliseconds
- * @returns Human-readable relative time (e.g., "2 hours ago", "just now")
  */
 export function getRelativeTimestamp(timestamp: number): string {
   const now = Date.now();
   const diffMs = now - timestamp;
 
-  // Convert to different units
   const diffMinutes = Math.floor(diffMs / (60 * 1000));
   const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
   const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
 
-  // Format based on age
   if (diffMinutes < 1) {
     return "just now";
   }
@@ -383,7 +372,6 @@ export function storeShortTermMemory(
  * @param userId - Discord user ID
  * @param excludeChannelId - Optional channel ID to exclude (e.g., current channel)
  * @param personaLineageId - Optional persona lineage ID to filter by (only returns entries matching this lineage)
- * @returns Array of non-expired memory entries
  */
 export function getShortTermMemoriesForUser(
   userId: string,
@@ -408,7 +396,6 @@ export function getShortTermMemoriesForUser(
  * @param serverId - Discord server ID
  * @param excludeChannelId - Optional channel ID to exclude (e.g., current channel)
  * @param personaLineageId - Optional persona lineage ID to filter by
- * @returns Array of non-expired memory entries
  */
 export function getShortTermMemoriesForServer(
   serverId: string,
@@ -621,7 +608,6 @@ export function clearShortTermMemoryForChannel(channelId: string): void {
   try {
     let clearedCount = 0;
 
-    // Find and delete all entries for this channel (across all users)
     for (const [key, entry] of cache.entries()) {
       if (entry.channelId === channelId) {
         cache.delete(key);
@@ -686,7 +672,6 @@ export function clearShortTermMemoryForUser(userId: string): void {
   try {
     let clearedCount = 0;
 
-    // Find and delete all user-scoped entries for this user
     for (const key of cache.keys()) {
       if (key.startsWith(`${USER_CACHE_PREFIX}:${userId}:`)) {
         cache.delete(key);
@@ -711,7 +696,6 @@ export function clearExpiredEntries(): void {
   try {
     let expiredCount = 0;
 
-    // Iterate and remove expired entries
     for (const [key, entry] of cache.entries()) {
       if (isExpired(entry)) {
         cache.delete(key);
@@ -749,7 +733,6 @@ export function clearShortTermMemoryCache(): void {
 /**
  * Get cache statistics for monitoring performance
  *
- * @returns Cache hit/miss/store/invalidation/expiration stats
  */
 export function getShortTermMemoryCacheStats(): CacheStats & {
   size: number;

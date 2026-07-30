@@ -88,7 +88,6 @@ export class ZaiProvider
 
   /**
    * Validate a Z.ai API key by sending a minimal request.
-   * @param apiKey - The API key to validate
    * @returns Validation result indicating success or failure with error details
    */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
@@ -136,10 +135,8 @@ export class ZaiProvider
 
   /**
    * Call Z.ai with structured JSON output.
-   * @param request - Structured JSON request parameters
    * @param responseSchema - JSON Schema for expected response
    * @param zodSchema - Zod schema for runtime validation
-   * @returns Parsed and validated structured output
    */
   async callStructuredJSON<T>(
     request: ProviderStructuredJsonRequest,
@@ -162,7 +159,6 @@ export class ZaiProvider
 
   /**
    * Get available tools formatted for Z.ai's OpenAI-compatible tool calling.
-   * @param tomoriState - Current server state
    * @param streamingContext - Optional streaming context for filtering
    * @returns Array of tool definitions in OpenAI format
    */
@@ -272,8 +268,6 @@ export class ZaiProvider
 
   /**
    * Create a provider config from TomoriState.
-   * @param tomoriState - Current server state
-   * @param apiKey - Decrypted API key
    * @returns Provider config ready for streaming
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<ZaiProviderConfig> {
@@ -290,7 +284,6 @@ export class ZaiProvider
       ...samplingParams,
     };
 
-    // Attach runtime logit_bias map if the server has any active entries for this model
     const runtimeLogitBias = buildRuntimeLogitBiasMapForLlm(tomoriState.config.llm_logit_biases ?? [], tomoriState.llm);
     if (Object.keys(runtimeLogitBias).length > 0) {
       config.logitBias = runtimeLogitBias;
@@ -305,12 +298,6 @@ export class ZaiProvider
 
   /**
    * Stream a Z.ai response to Discord using the OpenAI-compatible stream pipeline.
-   * @param channel - Discord channel to stream to
-   * @param client - Discord client instance
-   * @param tomoriState - Current server state
-   * @param config - Provider config from createConfig
-   * @param contextItems - Structured context items for the conversation
-   * @param currentTurnModelParts - Current turn model parts
    * @param emojiStrings - Optional emoji strings for the response
    * @param functionInteractionHistory - Optional function call history
    * @param initialInteraction - Optional initial command interaction
@@ -321,7 +308,6 @@ export class ZaiProvider
    * @param personaAvatarUrl - Optional persona avatar URL
    * @param personaUsername - Optional persona username
    * @param prefixStrippingName - Optional prefix stripping name
-   * @returns Stream result with status and data
    */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
@@ -366,7 +352,7 @@ export class ZaiProvider
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      // Z.ai uses a single endpoint — no beta URL needed for prefill
+      // Z.ai uses a single endpoint, so no beta URL needed for prefill
       if (streamingContext && tomoriState.llm.has_tools) {
         log.info("ZaiProvider: Reloading tools with streaming context for context-aware availability");
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);

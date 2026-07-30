@@ -1,5 +1,5 @@
 /**
- * Regression harness — ToolRepository + RagRepository domains.
+ * Regression harness: ToolRepository + RagRepository domains.
  *
  * ToolRepository: MCP server config, guild MCP reads.
  * RagRepository: RAG availability detection (schema-level, no pgvector assumed).

@@ -46,7 +46,6 @@ async function buildUserParts(userPrompt: string, images?: Array<{ url: string; 
 /**
  * Generate a conversation summary using Google Gemini.
  *
- * @param request - Summary generation request
  * @param client - Optional pre-built GoogleGenAI client (used by Vertex provider)
  */
 export async function generateConversationSummaryGoogle(
@@ -126,7 +125,6 @@ function buildRoleplaySchema() {
 /**
  * Generate a roleplay summary using Google Gemini with structured output.
  *
- * @param request - Summary generation request
  * @param client - Optional pre-built GoogleGenAI client (used by Vertex provider)
  */
 export async function generateRoleplaySummaryGoogle(

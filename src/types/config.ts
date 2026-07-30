@@ -8,7 +8,7 @@ export type AppEnvironment = "production" | "development";
  * this object carries only values that benefit from explicit typing.
  */
 export interface AppConfig {
-  /** Resolved runtime environment — defaults to "development" if RUN_ENV is unset */
+  /** Resolved runtime environment : defaults to "development" if RUN_ENV is unset */
   environment: AppEnvironment;
   /** Discord.js client instance, created during discord init */
   client: Client;

@@ -318,7 +318,7 @@ export class CreateThreadTool extends BaseTool {
     }
     const targetChannel = targetResult.channel;
 
-    // Blocklist guard — mirrors the cross_channel_message check so blocked channels
+    // Blocklist guard: mirrors the cross_channel_message check so blocked channels
     // cannot be targeted via thread creation either.
     const blockedChannelIds = new Set(context.tomoriState.config.crosschannel_blocklist_ids ?? []);
     if (blockedChannelIds.has(targetChannel.id)) {

@@ -23,7 +23,7 @@ export interface ImageUrlInfo {
   mimeType: string;
   /** Human-readable source label for logging (e.g. "attachment: photo.png") */
   source: string;
-  /** Discord proxy URL when known — used to dedupe the same media discovered via
+  /** Discord proxy URL when known: used to dedupe the same media discovered via
    *  multiple paths (e.g. a Components V2 attachment also listed as a candidate). */
   proxyUrl?: string;
 }
@@ -45,8 +45,6 @@ export interface ResolvedMessageImageUrls {
 /**
  * Build a Discord CDN URL for a custom emoji.
  * Always uses PNG so animated emojis fall back to their first frame.
- * @param emojiId - Discord emoji snowflake ID
- * @returns CDN URL string
  */
 function buildEmojiCdnUrl(emojiId: string): string {
   return `https://cdn.discordapp.com/emojis/${emojiId}.png`;
@@ -78,7 +76,6 @@ function isLikelyImageAttachment(attachment: {
  * Extract custom emoji image URLs from message text content.
  * Deduplicates by emoji ID so the same emoji used twice only produces one image.
  * @param content - Raw message text
- * @returns Array of image URL info objects for each unique custom emoji
  */
 function extractCustomEmojis(content: string): ImageUrlInfo[] {
   const emojiUrls: ImageUrlInfo[] = [];
@@ -107,7 +104,7 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
   return emojiUrls;
 }
 
-/** The subset of Message fields an image can live in — satisfied by both a full
+/** The subset of Message fields an image can live in: satisfied by both a full
  *  Message and a forwarded MessageSnapshot. */
 type MessageImageSource = Pick<Message, "attachments" | "embeds" | "stickers" | "content" | "components">;
 
@@ -115,7 +112,6 @@ type MessageImageSource = Pick<Message, "attachments" | "embeds" | "stickers" | 
  * Walk one message-like source (a full message or a forwarded snapshot) and feed
  * every discovered image URL to the collector.
  *
- * @param source - Message or snapshot to scan
  * @param addImageUrl - Deduplicating collector provided by the caller
  * @param labelPrefix - Prepended to `source` labels for logging (e.g. "forwarded ")
  */
@@ -124,7 +120,7 @@ function collectImageUrlsFromSource(
   addImageUrl: (info: ImageUrlInfo) => void,
   labelPrefix = "",
 ): void {
-  // 1. Direct attachments
+  // Direct attachments
   const imageAttachments = source.attachments.filter((attachment) => isLikelyImageAttachment(attachment));
 
   for (const attachment of imageAttachments.values()) {
@@ -136,7 +132,7 @@ function collectImageUrlsFromSource(
     });
   }
 
-  // 2. Embed images and thumbnails
+  // Embed images and thumbnails
   for (const embed of source.embeds) {
     if (embed.image?.url) {
       addImageUrl({
@@ -155,7 +151,7 @@ function collectImageUrlsFromSource(
     }
   }
 
-  // 3. Discord stickers
+  // Discord stickers
   if (source.stickers.size > 0) {
     for (const sticker of source.stickers.values()) {
       addImageUrl({
@@ -166,14 +162,13 @@ function collectImageUrlsFromSource(
     }
   }
 
-  // 4. Custom emojis from message text
   if (source.content) {
     for (const emoji of extractCustomEmojis(source.content)) {
       addImageUrl({ ...emoji, source: `${labelPrefix}${emoji.source}` });
     }
   }
 
-  // 5. Components V2 media (Media Gallery / Thumbnail / File). Reuses the same
+  // Components V2 media (Media Gallery / Thumbnail / File). Reuses the same
   //    component-walking + attachment-resolution logic the context pipeline uses
   //    so bot-generated images (referenced only inside a component) are found.
   const componentImages: SimplifiedMessageForContext["imageAttachments"] = [];
@@ -199,10 +194,10 @@ function collectImageUrlsFromSource(
  * 3. Embed thumbnails (fallback for embeds that use thumbnail instead of image)
  * 4. Discord stickers (served as PNG)
  * 5. Custom emojis parsed from message text
- * 6. Components V2 media (Media Gallery / Thumbnail / File items) — required for
+ * 6. Components V2 media (Media Gallery / Thumbnail / File items): required for
  *    bot-generated images, whose attachment is referenced only inside a component
  *    and therefore never appears in the top-level attachment/embed sources above.
- * 7. Forwarded message snapshots — a forward wrapper has EMPTY top-level
+ * 7. Forwarded message snapshots: a forward wrapper has EMPTY top-level
  *    content/attachments/embeds; all its media lives inside `messageSnapshots`,
  *    which is re-scanned with sources 1-6. Nested forwards flatten to an empty
  *    snapshot, so the chain is resolved first (see {@link resolveForwardChain}).
@@ -210,7 +205,6 @@ function collectImageUrlsFromSource(
  * This is the single source of truth for "where can an image live in a message",
  * shared by every tool that needs to re-fetch image bytes by message/media ID.
  *
- * @param message - Fetched Discord message to scan
  * @returns Array of discovered image URL descriptors (may be empty)
  */
 export async function collectImageUrlsFromMessage(message: Message): Promise<ImageUrlInfo[]> {
@@ -252,9 +246,6 @@ export async function collectImageUrlsFromMessage(message: Message): Promise<Ima
  * message whose media they are discussing, and a bounded lookup avoids surprising walks
  * through long reply chains.
  *
- * @param messageId - Discord message snowflake ID to fetch
- * @param context - Tool execution context providing channel access
- * @returns Image URL descriptors and the ID of the message that owns them
  * @throws Error if the requested message cannot be fetched or neither message has images
  */
 export async function resolveMessageImageUrls(
@@ -309,16 +300,12 @@ export async function resolveMessageImageUrls(
  * covers attachments, embeds, stickers, custom emojis, Components V2 media,
  * and forwarded-message snapshots.
  *
- * Each source is fetched independently — individual failures are logged and skipped
+ * Each source is fetched independently, so individual failures are logged and skipped
  * so that other images in the same message can still be processed.
  *
- * @param messageId - Discord message snowflake ID to fetch
- * @param context - Tool execution context providing channel access
- * @returns Array of base64-encoded images with MIME types
  * @throws Error if the message is not found or no images could be processed
  */
 export async function extractImagesFromMessage(messageId: string, context: ToolContext): Promise<ExtractedImage[]> {
-  // 1. Resolve every image URL from the requested message or its direct reply target.
   const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
   log.info(
     `Found ${imageUrls.length} image(s) in message ${sourceMessageId}${
@@ -326,7 +313,6 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
     }`,
   );
 
-  // 2. Convert each URL to base64
   const results: ExtractedImage[] = [];
 
   for (const imageInfo of imageUrls) {
@@ -361,8 +347,6 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
 /**
  * Fetch an image from a URL and return it as a raw Buffer.
  * Useful for tools that need the buffer directly (e.g. for sharp processing).
- * @param imageUrl - URL to fetch
- * @returns Image data as a Buffer
  * @throws Error if the fetch fails
  */
 export async function fetchImageAsBuffer(imageUrl: string): Promise<Buffer> {
@@ -380,7 +364,6 @@ export async function fetchImageAsBuffer(imageUrl: string): Promise<Buffer> {
 /**
  * Fetch an image from a URL and return it as a base64-encoded string.
  * Convenience wrapper over fetchImageAsBuffer for tools that need base64 directly.
- * @param imageUrl - URL to fetch
  * @returns Base64-encoded image data (no data-URI prefix)
  * @throws Error if the fetch fails
  */

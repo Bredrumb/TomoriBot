@@ -58,7 +58,7 @@ const CUSTOM_ENDPOINT_VALUE_PREFIX = "ce:";
 /** Custom-id root for this command's anchor provider picker / opener buttons. */
 const ID_ROOT = "model_fallback";
 // One of Discord's 25 select options is reserved for the explicit "None" / clear choice,
-// which is re-prepended to every page — so only 24 models fit per range.
+// which is re-prepended to every page, so only 24 models fit per range.
 const ITEMS_PER_PAGE = 24;
 const FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
   (process.env.FALLBACK_DEBUG_ENABLED ?? "").trim().toLowerCase(),
@@ -92,7 +92,6 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
 /**
  * Returns a capability flags string for a custom endpoint (e.g. "(TOOLS+IMG)").
  *
- * @param ep - The custom endpoint row
  * @returns Flag prefix string or empty string if no flags
  */
 function getEndpointFlagPrefix(ep: CustomEndpointRow): string {
@@ -112,7 +111,6 @@ function truncatePlaceholderValue(value: string): string {
  * Builds a human-readable label for one slot in the fallback chain.
  * Includes the provider name in parentheses when the entry is from a different provider than selected.
  *
- * @param locale - User locale
  * @param entry - Resolved fallback entry for this slot, or null if empty
  * @param rawRef - Raw ref from config (for unknown/unresolved IDs)
  * @param selectedProvider - The provider currently being configured (to decide if provider suffix is needed)
@@ -168,7 +166,6 @@ function buildSlotPlaceholder(
   });
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("fallback").setDescription(localizer("en-US", "commands.model.fallback.description"));
 
@@ -178,9 +175,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Supports mixing models from different providers and custom endpoints.
  *
  * @param _client - Discord client instance (unused)
- * @param interaction - The slash command interaction
- * @param userData - Invoking user's database record
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -188,11 +182,11 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1a. Scope modal custom ID to this invocation so stale awaitModalSubmit listeners
+  // Scope modal custom ID to this invocation so stale awaitModalSubmit listeners
   //     from earlier (un-submitted) runs don't also resolve on this submission.
   const MODAL_CUSTOM_ID = `config_model_fallback_modal_${interaction.id}`;
 
-  // 1b. Ensure the command is run in a channel context
+  // Ensure the command is run in a channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -202,7 +196,6 @@ export async function execute(
     return;
   }
 
-  // 2. Load the Tomori state for this server
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverDiscId);
   if (!tomoriState) {
@@ -225,7 +218,7 @@ export async function execute(
   let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
-    // 3. Load saved providers and open the anchor message with the right initial control
+    // Load saved providers and open the anchor message with the right initial control
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "text");
     const initialPayload =
       savedProviders.length === 0
@@ -255,13 +248,13 @@ export async function execute(
     // one and hands back the range button in its place.
     let modalButton: ButtonInteraction = opener.button;
 
-    // 4. Load model options for the selected provider
+    // Load model options for the selected provider
     let availableModels: LlmRow[] = [];
     let availableEndpoints: CustomEndpointRow[] = [];
     let allModelOptions: SelectOption[];
 
     if (isCustomProvider(selectedProvider)) {
-      // Custom endpoint path — enumerate registered endpoints for this label
+      // Custom endpoint path: enumerate registered endpoints for this label
       const parsed = parseCustomProvider(selectedProvider);
       const label = parsed?.label ?? null;
       const allEndpoints = await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id);
@@ -316,7 +309,7 @@ export async function execute(
       }));
     }
 
-    // 5. Build per-slot placeholders from the existing fallback_chain (cross-provider aware)
+    // Build per-slot placeholders from the existing fallback_chain (cross-provider aware)
     const existingRefs = tomoriState.config.fallback_model_refs ?? [];
     const existingChain = tomoriState.fallback_chain ?? [];
     const currentFallbackPlaceholders = SLOT_IDS.map((_, index) =>
@@ -329,7 +322,7 @@ export async function execute(
       description: safeSelectOptionText(localizer(locale, "commands.model.fallback.clear_option_description")),
     };
 
-    // 6. Past 24 models the user picks a range on the anchor message first. This modal
+    // Past 24 models the user picks a range on the anchor message first. This modal
     //    can't use the engine's own >25 bridge: it has five selects over one shared list
     //    (the bridge slices only the first) and reserves a slot for the clear option.
     let optionsForModal: SelectOption[];
@@ -349,7 +342,7 @@ export async function execute(
       optionsForModal = [clearOption, ...allModelOptions];
     }
 
-    // 7. Show modal with 5 select fields (one per fallback slot)
+    // Show modal with 5 select fields (one per fallback slot)
     const modalPhase = await openAnchorModal(phase, modalButton, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.model.fallback.modal_title",
@@ -363,11 +356,11 @@ export async function execute(
     });
     if (!modalPhase) return;
 
-    // 7a. Acknowledge the modal submit within 3s; every terminal below edits in place.
+    // Acknowledge the modal submit within 3s; every terminal below edits in place.
     const work = await modalPhase.beginInPlaceWork();
     const values = modalPhase.values;
 
-    // 8. Build fast lookup maps for the current provider's options and existing chain
+    // Build fast lookup maps for the current provider's options and existing chain
     const resolvedModelMap = new Map<number, LlmRow>();
     for (const m of availableModels) {
       if (m.llm_id !== undefined) resolvedModelMap.set(m.llm_id, m);
@@ -387,22 +380,21 @@ export async function execute(
       }
     }
 
-    // 9. Per-slot merge: blank = keep existing, __none__ = clear, value = update
+    // Per-slot merge: blank = keep existing, __none__ = clear, value = update
     const mergedRefs: FallbackModelRef[] = [];
     for (let i = 0; i < 5; i++) {
       const raw = (values[SLOT_IDS[i]] ?? "").trim();
 
       if (raw === "") {
-        // User didn't touch this slot — preserve existing ref
+        // User didn't touch this slot, so preserve existing ref
         if (existingRefs[i]) mergedRefs.push(existingRefs[i]);
       } else if (raw === CLEAR_SLOT_VALUE) {
-        // Explicit clear — skip (no push)
+        // Explicit clear, so skip (no push)
       } else if (raw.startsWith(CUSTOM_ENDPOINT_VALUE_PREFIX)) {
         // Custom endpoint selection
         const epId = Number.parseInt(raw.slice(CUSTOM_ENDPOINT_VALUE_PREFIX.length), 10);
         if (!Number.isNaN(epId)) mergedRefs.push({ type: "custom_endpoint", id: epId });
       } else {
-        // LLM codename selection
         if (selectedProvider === "openrouter" && raw === "other-model") {
           await work.message.replace(buildOpenRouterMovedNotice(locale, "server"));
           return;
@@ -412,7 +404,6 @@ export async function execute(
       }
     }
 
-    // 10. Deduplicate by type+id, preserving order
     const seen = new Set<string>();
     const finalRefs: FallbackModelRef[] = [];
     for (const ref of mergedRefs) {
@@ -423,7 +414,7 @@ export async function execute(
       }
     }
 
-    // 11. Validate: no fallback can duplicate the primary model
+    // Validate: no fallback can duplicate the primary model
     const primaryLlmId = tomoriState.config.llm_id;
     if (primaryLlmId && finalRefs.some((r) => r.type === "llm" && r.id === primaryLlmId)) {
       await work.message.replace(
@@ -444,7 +435,6 @@ export async function execute(
       );
     }
 
-    // 12. Write to database
     const writeOk = await llmOverrideRepo.setFallbackModelRefs(tomoriState.server_id, finalRefs, { serverDiscId });
     if (!writeOk) {
       await work.message.replace(
@@ -458,7 +448,7 @@ export async function execute(
       return;
     }
 
-    // 13. Render the terminal on the anchor message
+    // Render the terminal on the anchor message
     if (finalRefs.length === 0) {
       await work.message.replace(
         buildPersonaWorkflowNotice({
@@ -521,9 +511,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

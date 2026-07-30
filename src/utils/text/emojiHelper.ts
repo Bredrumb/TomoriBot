@@ -15,7 +15,6 @@ const EMOJI_REGEX =
 
 /**
  * Count the number of emojis in a given text string
- * @param text - The text to analyze for emojis
  * @returns The total count of emojis found in the text
  */
 export function countEmojis(text: string): number {
@@ -27,8 +26,6 @@ export function countEmojis(text: string): number {
 
 /**
  * Extract all unique emojis from a text string
- * @param text - The text to extract emojis from
- * @returns Array of unique emoji strings found in the text
  */
 export function extractEmojis(text: string): string[] {
   if (!text) return [];
@@ -36,13 +33,11 @@ export function extractEmojis(text: string): string[] {
   const matches = text.match(EMOJI_REGEX);
   if (!matches) return [];
 
-  // Return unique emojis only
   return [...new Set(matches)];
 }
 
 /**
  * Check if a specific emoji appears multiple times consecutively in text
- * @param text - The text to analyze
  * @param emoji - The specific emoji to check for repetition
  * @param threshold - Minimum consecutive appearances to be considered repetitive (default: 2)
  * @returns True if the emoji appears consecutively at or above the threshold
@@ -50,10 +45,8 @@ export function extractEmojis(text: string): string[] {
 export function hasConsecutiveEmoji(text: string, emoji: string, threshold = 2): boolean {
   if (!text || !emoji) return false;
 
-  // Escape special regex characters in the emoji
   const escapedEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  // Create a regex to match the emoji repeated consecutively
   const consecutiveRegex = new RegExp(`(${escapedEmoji}){${threshold},}`, "g");
 
   return consecutiveRegex.test(text);
@@ -61,7 +54,6 @@ export function hasConsecutiveEmoji(text: string, emoji: string, threshold = 2):
 
 /**
  * Count total emojis across multiple text strings
- * @param texts - Array of text strings to analyze
  * @returns Total emoji count across all provided texts
  */
 export function countEmojisInMultiple(texts: string[]): number {
@@ -97,13 +89,11 @@ export function extractCustomEmojis(text: string): string[] {
   const matches = text.match(CUSTOM_EMOJI_REGEX);
   if (!matches) return [];
 
-  // Return unique custom emojis only
   return [...new Set(matches)];
 }
 
 /**
  * Filter out specific custom emojis from text
- * @param text - The text to filter
  * @param emojisToRemove - Set of emoji strings to remove (e.g., ":tomori:", ":pepehands:")
  * @returns Text with specified custom emojis removed
  */
@@ -112,14 +102,11 @@ export function filterCustomEmojis(text: string, emojisToRemove: Set<string>): s
 
   let filtered = text;
 
-  // Remove each emoji from the set
   for (const emoji of emojisToRemove) {
-    // Create regex to match the emoji (case-insensitive for custom emojis)
     const emojiRegex = new RegExp(emoji.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     filtered = filtered.replace(emojiRegex, "").trim();
   }
 
-  // Clean up multiple spaces left by removal
   filtered = filtered.replace(/\s{2,}/g, " ").trim();
 
   return filtered;

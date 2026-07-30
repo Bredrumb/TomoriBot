@@ -2,18 +2,17 @@
  * Stat-tracking metric catalog.
  *
  * Each value is one `metric` in the `stat_counters` table. Adding a new metric
- * is a new entry here — never an `ALTER TABLE` (the long/narrow counter table
- * carries the metric and its sub-key as data, not columns). See
- * plans/stat-tracking.md §5 for the full catalog and grain notes.
+ * is a new entry here: never an `ALTER TABLE` (the long/narrow counter table
+ * carries the metric and its sub-key as data, not columns).
  *
  * `metric_key` semantics per metric:
  *   - presence_seen → "" (one per turn per human author present in the context
  *                     window, including the triggerer). This is the *behavioral*
  *                     "when did this persona last see this person" clock behind
- *                     reunion notes — deliberately separate from message_sent so
+ *                     reunion notes, so deliberately separate from message_sent so
  *                     leaderboards, favorite-persona shares, and cost reads keep
  *                     counting only real exchanges. Unlike message_sent it is
- *                     recorded in DMs — but it still requires a response, since a
+ *                     recorded in DMs, but it still requires a response, since a
  *                     turn that never answered delivered no acknowledgment and must
  *                     not consume the reunion. Owned end-to-end by
  *                     `@/utils/chat/reunionPresence` (resolve at context build,

@@ -205,7 +205,7 @@ const bigintToNumber = (value: unknown): unknown => {
  * Schema for the stat_counters telemetry table (migration 035). One row per
  * (server, user, persona lineage, metric, metric_key, day). `count` is a generic
  * accumulator and `persona_lineage_id` is the cross-server persona anchor (both
- * BIGINT in Postgres). See plans/stat-tracking.md and src/constants/statMetrics.ts.
+ * BIGINT in Postgres). See src/constants/statMetrics.ts.
  */
 export const statCounterSchema = z.object({
   server_id: z.number().int(),
@@ -221,7 +221,7 @@ export const statCounterSchema = z.object({
 export type StatCounterRow = z.infer<typeof statCounterSchema>;
 
 /**
- * Schema for voice_samples table — reference audio clips for local TTS voice cloning.
+ * Schema for voice_samples table : reference audio clips for local TTS voice cloning.
  * file_path stores either a production S3/CloudFront URL or a local data/voice-samples path.
  */
 export const voiceSampleSchema = z.object({
@@ -418,7 +418,7 @@ export type OpenRouterVideoModelRegistrationRow = z.infer<typeof openRouterVideo
 /**
  * Normalizes a JSONB array value from the database driver.
  * Handles the case where Bun SQL returns JSONB columns as strings
- * instead of parsed objects — parses the string before returning.
+ * instead of parsed objects ; parses the string before returning.
  * @param value - Raw value from the database (may be array, string, or other)
  * @returns Parsed array, or empty array if parsing fails
  */
@@ -463,7 +463,7 @@ export const fallbackModelRefSchema = z.object({
 });
 export type FallbackModelRef = z.infer<typeof fallbackModelRefSchema>;
 
-/** Resolved fallback entry — either a known LLM row or a custom endpoint row. */
+/** Resolved fallback entry : either a known LLM row or a custom endpoint row. */
 export type FallbackEntry =
   | { kind: "llm"; model: z.infer<typeof llmSchema> }
   | { kind: "custom_endpoint"; endpoint: z.infer<typeof customEndpointSchema> };
@@ -612,8 +612,6 @@ export const autochatPersonaOverrideSchema = z.object({
   persona_id: z.number().int(),
 });
 export type AutochatPersonaOverride = z.infer<typeof autochatPersonaOverrideSchema>;
-
-// ── Split Config Tables (Phase 6 / Stage A & B) ──────────────────────────
 
 export const userPersonalizationConfigsSchema = z.object({
   user_id: z.number().int(),
@@ -833,7 +831,7 @@ export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
 /**
  * Assembled view over the 13 split server config tables (Phase 6 / Stage B).
  * Replaces the previous monolithic `tomori_configs` row shape.
- * Callers read this as a flat object — nested restructuring (config.model.X) is deferred to Task G.
+ * Callers read this as a flat object : nested restructuring (config.model.X) is deferred to Task G.
  *
  * Composition order: serverModelConfigSchema anchors the merge chain (13 tables total).
  * Shared identity columns (server_id, created_at, updated_at) are omitted from every
@@ -883,7 +881,6 @@ export const assembledServerConfigSchema = serverModelConfigSchema
         .nullable()
         .optional(),
     ),
-    // Welcome fields live in server_welcome_configs (not part of the 13-schema merge).
     welcome_channel_disc_id: z.string().nullable().optional(),
     welcome_prompt: z.string().nullable().optional(),
     welcome_persona_id: z.number().int().nullable().optional(),
@@ -1035,7 +1032,6 @@ export const serverStickerSchema = z.object({
   sticker_desc: z.string().default(""),
   emotion_key: z.string(),
   is_global: z.boolean().default(false),
-  //is_animated: z.boolean().default(false),
   sticker_format: z.nativeEnum(StickerFormatType).default(StickerFormatType.PNG),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -1223,16 +1219,13 @@ export type PersonalSpotlightPersonaRow = z.infer<typeof personalSpotlightPerson
 
 export const errorLogSchema = z.object({
   error_log_id: z.number().optional(), // Primary key, optional as it's generated
-  // Context IDs - Optional because errors can occur outside specific contexts
   persona_id: z.number().nullable().optional(),
   user_id: z.number().nullable().optional(),
   server_id: z.number().nullable().optional(),
-  // Error Details
   error_type: z.string().default("GenericError"), // Categorize the error, default if not specified
   error_message: z.string(), // The main error message, required
   stack_trace: z.string().nullable().optional(), // Dedicated field for stack trace, optional
   error_metadata: z.record(z.string(), z.unknown()).nullable().optional().default({}), // Flexible JSON for extra context, optional
-  // Timestamps
   created_at: z.date().optional(), // Handled by DB default
   updated_at: z.date().optional(), // Handled by DB default/trigger
 });
@@ -1610,7 +1603,7 @@ export const setupResultSchema = z.object({
 export type SetupResult = z.infer<typeof setupResultSchema>;
 
 /**
- * Guild MCP Server — per-guild remote MCP server registration.
+ * Guild MCP Server : per-guild remote MCP server registration.
  * Stored in guild_mcp_servers table; auth_token is PGP-encrypted BYTEA.
  */
 export const guildMcpServerSchema = z.object({
@@ -1628,7 +1621,7 @@ export const guildMcpServerSchema = z.object({
 export type GuildMcpServerRow = z.infer<typeof guildMcpServerSchema>;
 
 /**
- * Saved Provider Config — snapshot of provider-specific settings stored in
+ * Saved Provider Config : snapshot of provider-specific settings stored in
  * saved_provider_configs. One row per provider per server; UPSERT on save.
  */
 export const savedProviderConfigSchema = z.object({
@@ -1679,7 +1672,7 @@ export const personalProviderCapabilitySchema = z.enum(["text", "embedding", "im
 export type PersonalProviderCapability = z.infer<typeof personalProviderCapabilitySchema>;
 
 /**
- * User Saved Provider Config — personal provider snapshot stored in
+ * User Saved Provider Config : personal provider snapshot stored in
  * user_saved_provider_configs. One row per provider per user; UPSERT on save.
  */
 export const userSavedProviderConfigSchema = z.object({
@@ -1734,7 +1727,7 @@ export type UserSavedProviderConfigUpsert = Omit<
 >;
 
 /**
- * SillyTavern Preset — imported preset metadata + raw JSON blob.
+ * SillyTavern Preset : imported preset metadata + raw JSON blob.
  * Stored in st_presets table; scoped per server_id.
  * Multiple presets may exist per server; only one is active at a time.
  */
@@ -1750,7 +1743,7 @@ export const stPresetSchema = z.object({
 export type StPresetRow = z.infer<typeof stPresetSchema>;
 
 /**
- * SillyTavern Preset Node — individual toggleable prompt node parsed
+ * SillyTavern Preset Node : individual toggleable prompt node parsed
  * from a preset's prompts array. Stored in st_preset_nodes table.
  * Nodes are ordered by node_order (matching the preset's prompt_order).
  */

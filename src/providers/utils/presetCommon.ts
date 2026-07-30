@@ -10,10 +10,6 @@
 import type { ToolResult } from "@/types/tool/interfaces";
 import { PRESET_MAX_STRING_LENGTH } from "@/types/preset/presetExport";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 /** A text or image_url content part in an OpenAI-compatible message. */
 export type PresetContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
@@ -37,10 +33,6 @@ export interface PresetToolCall {
     arguments?: string;
   };
 }
-
-// ---------------------------------------------------------------------------
-// Response schema
-// ---------------------------------------------------------------------------
 
 /**
  * JSON Schema for the preset generation structured output.
@@ -80,10 +72,6 @@ export function buildPresetResponseSchema() {
     required: ["attribute_list", "sample_dialogues_in", "sample_dialogues_out"],
   };
 }
-
-// ---------------------------------------------------------------------------
-// Prompt builder
-// ---------------------------------------------------------------------------
 
 /**
  * Build the full preset generation prompt from user-supplied parameters.
@@ -194,10 +182,6 @@ ${params.existingPresetContext.trim()}`;
   return prompt;
 }
 
-// ---------------------------------------------------------------------------
-// Schema sanitization helpers
-// ---------------------------------------------------------------------------
-
 /**
  * Recursively strip JSON Schema array constraints unsupported by Anthropic's
  * structured-output endpoint (`maxItems`, `minItems`).
@@ -209,7 +193,6 @@ export function stripAnthropicUnsupportedConstraints(schema: Record<string, unkn
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(schema)) {
-    // Drop array-level constraints Anthropic rejects
     if (key === "maxItems" || key === "minItems") continue;
 
     // Recurse into nested schema objects (properties, items, etc.) but not into
@@ -224,17 +207,13 @@ export function stripAnthropicUnsupportedConstraints(schema: Record<string, unkn
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Response extraction
-// ---------------------------------------------------------------------------
-
 /**
  * Extract text from an OpenAI-compatible response `content` field.
  *
  * Handles three formats:
- * 1. Plain string content
- * 2. Array of content parts (filters for `type: "text"` parts)
- * 3. Null/undefined → empty string
+ * - Plain string content
+ * - Array of content parts (filters for `type: "text"` parts)
+ * - Null/undefined → empty string
  */
 export function extractResponseText(content: unknown): string {
   if (typeof content === "string") {
@@ -258,10 +237,6 @@ export function extractResponseText(content: unknown): string {
 
   return "";
 }
-
-// ---------------------------------------------------------------------------
-// Tool error helper
-// ---------------------------------------------------------------------------
 
 /**
  * Build a standard ToolResult for tool-call errors.

@@ -23,8 +23,6 @@ import { serverScheduleRepository } from "@/utils/db/repositories";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const MODAL_CUSTOM_ID = "config_randomtrigger_add_modal";
 const PERSONA_SELECT_ID = "persona_select";
 const RESPOND_TO_SELF_ID = "respond_to_self";
@@ -35,8 +33,6 @@ const RANDOM_PERSONA_VALUE = "random";
 
 /** Default per-server cap; configurable via env */
 const MAX_TRIGGERS_PER_SERVER = Number.parseInt(process.env.RANDOM_TRIGGER_MAX_PER_SERVER ?? "10", 10);
-
-// ─── Subcommand Configuration ─────────────────────────────────────────────────
 
 /**
  * Configures the 'add' subcommand for /config random-trigger.
@@ -89,8 +85,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
         .setRequired(false),
     );
 
-// ─── Execute ──────────────────────────────────────────────────────────────────
-
 /**
  * Executes the /config random-trigger add command.
  * Flow:
@@ -101,10 +95,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  *   5. Parse modal submission and INSERT or UPSERT trigger
  *   6. Reply with success or override embed
  *
- * @param _client - Discord client instance
- * @param interaction - Slash command interaction
- * @param userData - Invoking user's data
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -112,7 +102,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -123,11 +112,10 @@ export async function execute(
     return;
   }
 
-  // NOTE: No deferReply here — promptWithPaginatedModal must be the first
+  // NOTE: No deferReply here: promptWithPaginatedModal must be the first
   // acknowledgment. Pre-modal checks are cache-backed and complete within 3 seconds.
 
   try {
-    // 2. Parse and validate slash options
     const channel = interaction.options.getChannel("channel", true);
     const timerHours = interaction.options.getInteger("timer_hours", true);
     const randomOffsetRange = interaction.options.getInteger("random_offset_range", false) ?? null;
@@ -135,7 +123,6 @@ export async function execute(
     const silenceThreshold = interaction.options.getInteger("silence_threshold", false) ?? null;
     const failureThreshold = interaction.options.getInteger("failure_threshold", false) ?? null;
 
-    // 3. Load Tomori state to verify the server is set up
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -147,7 +134,6 @@ export async function execute(
       return;
     }
 
-    // 4. Check per-server trigger cap before proceeding
     const triggerCount = await serverScheduleRepository.getServerTriggerCount(tomoriState.server_id);
     if (triggerCount >= MAX_TRIGGERS_PER_SERVER) {
       await replyInfoEmbed(interaction, locale, {
@@ -160,10 +146,8 @@ export async function execute(
       return;
     }
 
-    // 5. Load all personas for this guild to build the select menu
     const allPersonas = await getCachedAllPersonas(interaction.guild.id);
 
-    // 6. Build select options: "Random" first, then each named persona
     const personaOptions: SelectOption[] = [
       {
         label: safeSelectOptionText(localizer(locale, "commands.config.random-trigger.add.persona_random_label")),
@@ -175,13 +159,12 @@ export async function execute(
       })),
     ];
 
-    // 7. Show modal: persona select, respond_to_self select, optional prompt
-    // (This is the first interaction acknowledgement — no deferReply before this)
+    // Show modal: persona select, respond_to_self select, optional prompt
+    // (This is the first interaction acknowledgement; no deferReply before this)
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.config.random-trigger.add.modal_title",
       components: [
-        // Persona selection (string select rendered as paginated modal)
         {
           customId: PERSONA_SELECT_ID,
           labelKey: "commands.config.random-trigger.add.persona_select_label",
@@ -205,7 +188,6 @@ export async function execute(
             },
           ],
         },
-        // Optional custom prompt injected as manualSystemPrompt
         {
           customId: PROMPT_INPUT_ID,
           labelKey: "commands.config.random-trigger.add.prompt_label",
@@ -218,7 +200,6 @@ export async function execute(
       ],
     });
 
-    // 8. Handle modal cancellation or timeout
     if (modalResult.outcome !== "submit") {
       log.info(`Randomtrigger add modal ${modalResult.outcome} for user ${interaction.user.id}`);
       return;
@@ -229,22 +210,18 @@ export async function execute(
     // biome-ignore lint/style/noNonNullAssertion: "submit" outcome guarantees interaction and values exist
     const values = modalResult.values!;
 
-    // Defer the modal submit interaction
     if (!modalInteraction.deferred && !modalInteraction.replied) {
       await modalInteraction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
-    // 9. Parse modal values
     const personaRawValue = values[PERSONA_SELECT_ID] ?? RANDOM_PERSONA_VALUE;
     const customPromptRaw = values[PROMPT_INPUT_ID]?.trim() || null;
 
     // Map "random" sentinel → null (DB stores NULL for random selection)
     const personaId = personaRawValue === RANDOM_PERSONA_VALUE ? null : Number.parseInt(personaRawValue, 10);
 
-    // Checkbox Group: "yes" present in multiValues = respond to self enabled
     const respondToSelf = (modalResult.multiValues?.[RESPOND_TO_SELF_ID] ?? []).includes("yes");
 
-    // Resolve display name for success/override embeds
     const personaDisplayName =
       personaId === null
         ? localizer(locale, "commands.config.random-trigger.add.persona_random_label")
@@ -264,7 +241,6 @@ export async function execute(
       failureThreshold,
     };
 
-    // 10. Override check: if a named persona already has a trigger for this channel, update it
     if (personaId !== null) {
       const existing = await serverScheduleRepository.getTriggerByPersonaAndChannel(
         tomoriState.server_id,
@@ -273,7 +249,6 @@ export async function execute(
       );
 
       if (existing?.trigger_id) {
-        // UPSERT the existing trigger with new settings
         const updated = await serverScheduleRepository.upsertTrigger(existing.trigger_id, triggerData);
 
         if (!updated) {
@@ -295,7 +270,6 @@ export async function execute(
           return;
         }
 
-        // Notify user that an existing trigger was updated (override)
         await replyInfoEmbed(modalInteraction, locale, {
           titleKey: "commands.config.random-trigger.add.override_title",
           descriptionKey: "commands.config.random-trigger.add.override_description",
@@ -309,7 +283,7 @@ export async function execute(
       }
     }
 
-    // 11. INSERT new trigger (includes all Random triggers regardless of duplicates)
+    // INSERT new trigger (includes all Random triggers regardless of duplicates)
     const inserted = await serverScheduleRepository.insertTrigger(triggerData);
 
     if (!inserted) {
@@ -331,7 +305,6 @@ export async function execute(
       return;
     }
 
-    // 12. Build optional suffix strings for non-default settings
     const offsetSuffix =
       randomOffsetRange !== null && randomOffsetRange > 0
         ? localizer(locale, "commands.config.random-trigger.add.success_offset_suffix", {
@@ -349,7 +322,6 @@ export async function execute(
         })
       : "";
 
-    // 13. Reply with success summary
     await replyInfoEmbed(modalInteraction, locale, {
       titleKey: "commands.config.random-trigger.add.success_title",
       descriptionKey: "commands.config.random-trigger.add.success_description",

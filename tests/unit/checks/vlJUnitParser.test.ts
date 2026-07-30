@@ -4,7 +4,7 @@
  * Bun's JUnit reporter emits `name` and `file` using the host platform's path
  * separator. A parser that normalizes only one of the two matches nothing on
  * Windows, silently falls back to console parsing, and reports a near-empty
- * board on a green run — which is exactly what shipped before these tests.
+ * board on a green run which is exactly what shipped before these tests.
  */
 import { describe, expect, it } from "bun:test";
 import { parseJUnitSuites } from "../../../scripts/checks/vl";

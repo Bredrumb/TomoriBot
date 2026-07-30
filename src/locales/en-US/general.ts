@@ -1,5 +1,3 @@
-// locales/en-US/general.ts
-
 export default {
   general: {
     yes: `Yes`,

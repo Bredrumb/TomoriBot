@@ -40,11 +40,11 @@ describe("validateRemoteMcpUrl cloud-metadata denylist", () => {
   it("relaxes ordinary private targets in production when opted in, but not metadata", async () => {
     process.env[RUN_ENV_NAME] = "production";
 
-    // 1. An ordinary private address is permitted under the opt-in.
+    // An ordinary private address is permitted under the opt-in.
     const privateResult = await validateRemoteMcpUrl("https://192.168.1.50/", { allowPrivateNetwork: true });
     expect(privateResult.valid).toBe(true);
 
-    // 2. Link-local / metadata stays blocked regardless of the opt-in.
+    // Link-local / metadata stays blocked regardless of the opt-in.
     const metadataResult = await validateRemoteMcpUrl("https://169.254.169.254/", { allowPrivateNetwork: true });
     expect(metadataResult.valid).toBe(false);
   });

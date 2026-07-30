@@ -63,7 +63,6 @@ const pendingBoomerangs = new Map<string, PendingBoomerang>();
  * Store a pending boomerang for a given source channel.
  * Exposed so other tools (e.g. create_thread) can register boomerangs
  * without duplicating the map or the consume/build logic.
- * @param boomerang - The boomerang payload to store
  */
 export function storePendingBoomerang(boomerang: PendingBoomerang): void {
   pendingBoomerangs.set(boomerang.sourceChannelId, boomerang);
@@ -97,7 +96,6 @@ function inferTargetChannelFromTask(task: unknown): string | undefined {
 /**
  * Consume (retrieve and delete) a pending boomerang for a given channel.
  * Called by tomoriChat after STM storage to check if a follow-up is needed.
- * @param channelId - The channel ID to check for pending boomerangs
  * @returns The boomerang data if one exists, otherwise undefined
  */
 export function consumePendingBoomerang(channelId: string): PendingBoomerang | undefined {
@@ -111,10 +109,8 @@ export function consumePendingBoomerang(channelId: string): PendingBoomerang | u
 /**
  * Build the injected context items for a boomerang report-back generation.
  * @param boomerang - The boomerang data to format
- * @returns StructuredContextItem array for injection into tomoriChat
  */
 export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredContextItem[] {
-  // Format target channel messages for context
   let messagesBlock = "";
   if (boomerang.targetChannelMessages.length > 0) {
     const formatted = boomerang.targetChannelMessages.map((m) => `"${m.author}: ${m.content}"`).join("\n");
@@ -143,8 +139,6 @@ export function buildBoomerangContext(boomerang: PendingBoomerang): StructuredCo
     },
   ];
 }
-
-// ─── Cross-Channel Message Tool ──────────────────────────────────────
 
 /**
  * Tool for sending an instant, natural message to a different channel in the same server,
@@ -187,7 +181,6 @@ export class CrossChannelMessageTool extends BaseTool {
   /**
    * Check if cross-channel message tool is available for the given provider.
    * Excluded for NovelAI (GLM) due to token budget limitations.
-   * @param provider - LLM provider name
    * @returns True if provider supports this tool
    */
   isAvailableFor(provider: string): boolean {
@@ -213,9 +206,6 @@ export class CrossChannelMessageTool extends BaseTool {
    * 2. Fetches a context message from the target channel
    * 3. Calls tomoriChat() with injected task context
    * 4. Optionally stores boomerang data for follow-up
-   * @param args - Tool arguments
-   * @param context - Tool execution context
-   * @returns Promise resolving to tool result
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     if (context.streamContext?.disableCrossChannelMessage) {
@@ -230,7 +220,6 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 1. Extract and validate parameters
     const targetChannelArg = args.target_channel as string | undefined;
     const legacyChannelIdArg = args.channel_id as string | undefined;
     const legacyChannelNameArg = args.channel_name as string | undefined;
@@ -267,7 +256,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 2. DM guard — cross-channel only works within a guild
+    // DM guard: cross-channel only works within a guild
     if (!context.guildId) {
       return {
         success: false,
@@ -279,7 +268,6 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 3. Resolve the target channel
     const guild = await context.client.guilds.fetch(context.guildId).catch(() => null);
     if (!guild) {
       return {
@@ -323,7 +311,7 @@ export class CrossChannelMessageTool extends BaseTool {
 
     const targetChannel: GuildTextBasedChannel = channelResolution.channel;
 
-    // 4. Same-channel guard
+    // Same-channel guard
     if (targetChannel.id === context.channel.id) {
       return {
         success: false,
@@ -361,7 +349,7 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 5. Permission check — ViewChannel always required; send permissions only for dispatch mode
+    // Permission check: ViewChannel always required; send permissions only for dispatch mode
     const botMember =
       guild.members.me ??
       (context.client.user ? await guild.members.fetch(context.client.user.id).catch(() => null) : null);
@@ -405,7 +393,7 @@ export class CrossChannelMessageTool extends BaseTool {
         };
       }
 
-      // Peek mode only needs ViewChannel — skip send permission check
+      // Peek mode only needs ViewChannel: skip send permission check
       if (!isPeekOnly) {
         const isThread =
           "isThread" in targetChannel && typeof targetChannel.isThread === "function" && targetChannel.isThread();
@@ -436,7 +424,7 @@ export class CrossChannelMessageTool extends BaseTool {
       }
     }
 
-    // 6. Peek-only path — fetch recent messages and return as context without dispatching
+    // Peek-only path: fetch recent messages and return as context without dispatching
     if (isPeekOnly) {
       const fetchLimit = normalizeMessageFetchLimit(context.tomoriState.config.message_fetch_limit);
       let recentMessages: Awaited<ReturnType<typeof targetChannel.messages.fetch>> | null = null;
@@ -509,7 +497,6 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 7. Fetch last message from target channel (context for tomoriChat)
     let lastMessage: Message | undefined;
     try {
       const messages = await targetChannel.messages.fetch({ limit: 1 });
@@ -541,24 +528,21 @@ export class CrossChannelMessageTool extends BaseTool {
       };
     }
 
-    // 8. Build injected context with the task instruction
     const taskInjection: StructuredContextItem = {
       role: "user",
       parts: [
         {
           type: "text",
-          // taskArg is guaranteed non-empty here — validated above for non-peek mode
           text: `[System: You have been dispatched to this channel to perform a task.\nTask: "${(taskArg as string).trim()}".\nComplete this task naturally as a conversational message.]`,
         },
       ],
       metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
     };
 
-    // 9. Suppress self-reply to avoid loop
+    // Suppress self-reply to avoid loop
     const { suppressNextSelfReply } = await import("../../events/messageCreate/tomoriChat");
     suppressNextSelfReply(targetChannel.id);
 
-    // 10. Call tomoriChat in the target channel
     const { tomoriChat } = await import("../../events/messageCreate/tomoriChat");
 
     const sourcePersonaId = context.activePersonaId ?? context.tomoriState.persona_id ?? undefined;
@@ -595,10 +579,10 @@ export class CrossChannelMessageTool extends BaseTool {
         `Cross-channel tool: Successfully dispatched to #${targetChannel.name} (task: "${(taskArg as string).trim().substring(0, 80)}...")`,
       );
 
-      // 11. Handle boomerang — store data for follow-up generation in source channel
+      // Handle boomerang: store data for follow-up generation in source channel
       if (boomerangArg) {
         // Fetch last 10 messages from target channel (including the one the bot just sent),
-        // but respect refresh embed boundaries — only include messages after the most recent one
+        // but respect refresh embed boundaries, only include messages after the most recent one
         let targetMessages: Array<{
           author: string;
           content: string;
@@ -612,7 +596,7 @@ export class CrossChannelMessageTool extends BaseTool {
           const messagesArray = [...recentMessages.values()];
           const filteredMessages: Message[] = [];
           for (const m of messagesArray) {
-            // Stop if we hit a refresh/reset embed — everything before it is stale context
+            // Stop if we hit a refresh/reset embed, so everything before it is stale context
             if (m.embeds.length > 0 && m.embeds.some(isRefreshMarkerEmbed)) {
               log.info(
                 `Cross-channel tool: Boomerang message fetch hit refresh embed at ${m.id} — truncating older messages`,

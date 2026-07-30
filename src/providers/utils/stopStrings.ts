@@ -35,7 +35,7 @@ const SPECIALIZED_STOP_STRING_RULES: readonly SpecializedStopStringRule[] = [
     // NovelAI's OpenAI-compatible GLM endpoint may emit role tags or stray
     // closing think tags in completions mode. Stop strings are sent to the API
     // and matched literally, so a namespaced variant (e.g. `</mm:think>`) must
-    // be added here explicitly per model — see reasoningTags.ts for the shape.
+    // be added here explicitly per model, so see reasoningTags.ts for the shape.
     providerName: "novelai",
     exactModels: ["glm-4-6"],
     stopStrings: ["<|user|>", "<|observation|>", "<|system|>", THINK_CLOSE_TAG],

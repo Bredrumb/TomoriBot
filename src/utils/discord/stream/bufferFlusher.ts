@@ -119,7 +119,7 @@ export class StreamBufferFlusher {
       );
 
       // A zero index means every candidate breakpoint would split a markdown table. Hold the
-      // buffer instead — the table stays whole and the final flush renders it as one image.
+      // buffer instead, so the table stays whole and the final flush renders it as one image.
       if (flushIndex <= 0) {
         log.info("Stream Seg: Deferring oversized buffer flush to keep a markdown table intact");
         break;

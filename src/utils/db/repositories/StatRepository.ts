@@ -1,6 +1,6 @@
 /**
- * StatRepository — write path + flush buffer for the `stat_counters` telemetry
- * table (plans/stat-tracking.md, Phase 1).
+ * StatRepository: write path + flush buffer for the `stat_counters` telemetry
+ * table.
  *
  * Increments do NOT hit the DB directly. `recordStat` accumulates deltas into an
  * in-memory buffer keyed by the same tuple as the table PK, so a buffer entry
@@ -8,7 +8,7 @@
  * on an interval, when it grows past a size cap, and on graceful shutdown.
  *
  * Crash window (documented tradeoff, plan §4): anything still buffered at a hard
- * crash is lost. For aggregate usage telemetry this is acceptable — graceful
+ * crash is lost. For aggregate usage telemetry this is acceptable; graceful
  * shutdown covers the normal restart case.
  *
  * Export contract: stat_counters is high-frequency runtime telemetry and is not
@@ -25,8 +25,6 @@ import { log } from "@/utils/misc/logger";
 import type { SQL } from "bun";
 import type { IRepository } from "./IRepository";
 
-// ── Env knobs (CLAUDE.md rule #6 — documented in .env.optional.example) ───────
-
 /**
  * Reads a non-negative integer env var, falling back to a default when unset or
  * malformed. Mirrors the readIntEnv pattern used by the preset avatar reconciler.
@@ -38,17 +36,15 @@ function readIntEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-/** Master kill switch — set false to disable all stat recording (write side). */
+/** Master kill switch: set false to disable all stat recording (write side). */
 const STAT_TRACKING_ENABLED = (process.env.STAT_TRACKING_ENABLED?.trim().toLowerCase() ?? "true") !== "false";
 /** Interval between automatic buffer flushes. */
 const FLUSH_INTERVAL_MS = readIntEnv("STAT_FLUSH_INTERVAL_MS", 5000);
 /** Buffer entry count that forces an immediate flush before the next interval. */
 const FLUSH_MAX_BUFFER = readIntEnv("STAT_FLUSH_MAX_BUFFER", 1000);
 
-/** Delimiter for buffer keys — unit separator, never present in metric data. */
+/** Delimiter for buffer keys: unit separator, never present in metric data. */
 const KEY_DELIMITER = "\x1f";
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 /** Input accepted by recordStat. lineageId/metricKey/delta have sensible defaults. */
 export interface RecordStatInput {
@@ -66,7 +62,7 @@ export interface RecordStatInput {
   delta?: number;
 }
 
-/** One accumulated buffer entry — maps 1:1 to a single additive UPSERT. */
+/** One accumulated buffer entry: maps 1:1 to a single additive UPSERT. */
 interface StatBufferEntry {
   serverId: number;
   userId: number;
@@ -92,7 +88,7 @@ type StatUpsertRow = Record<PropertyKey, unknown> & {
   last_at: Date;
 };
 
-/** UTC YYYY-MM-DD for the current day — the daily bucket grain. */
+/** UTC YYYY-MM-DD for the current day: the daily bucket grain. */
 function currentBucketDate(): string {
   return new Date().toISOString().split("T")[0];
 }
@@ -106,8 +102,6 @@ function windowFloor(from?: Date | string): string {
   if (from instanceof Date) return from.toISOString().split("T")[0];
   return from;
 }
-
-// ── Read/aggregation result shapes (§6) ───────────────────────────────────────
 
 /** Optional time window: rows with `bucket >= from` (omit for all-time). */
 export interface StatWindow {
@@ -125,7 +119,7 @@ export interface FavoritePersona {
   lineageId: number;
   count: number;
   totalCount: number;
-  /** count / totalCount as a 0–100 percentage (0 when no data). */
+  /** count / totalCount as a 0-100 percentage (0 when no data). */
   loyaltyPct: number;
 }
 
@@ -135,7 +129,7 @@ export interface CommandUsageEntry {
   count: number;
 }
 
-/** One model's usage count (model_used) — favorite/diversity reads. */
+/** One model's usage count (model_used): favorite/diversity reads. */
 export interface ModelUsageEntry {
   model: string;
   count: number;
@@ -182,7 +176,7 @@ export interface TokenTotals {
   outputTokens: number;
 }
 
-/** Hour-of-day (0–23) and weekday (0=Sun–6=Sat) activity histograms. */
+/** Hour-of-day (0-23) and weekday (0=Sun-6=Sat) activity histograms. */
 export interface ActivityHistogram {
   byHour: Record<number, number>;
   byWeekday: Record<number, number>;
@@ -190,7 +184,7 @@ export interface ActivityHistogram {
 
 /**
  * 2-D joint weekday×hour activity grid (the heatmap). Keyed `dow → hour → count`
- * (dow 0=Sun–6=Sat, hour 0–23) and always fully populated (every cell present,
+ * (dow 0=Sun-6=Sat, hour 0-23) and always fully populated (every cell present,
  * 0 when no activity) so consumers can index any cell without a presence check.
  * Unlike {@link ActivityHistogram}'s two independent 1-D marginals, this is the
  * joint distribution, so a timezone shift must rotate the (weekday, hour) pair
@@ -268,7 +262,7 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
-   * Buffers a usage increment. Never throws and never awaits the DB — it only
+   * Buffers a usage increment. Never throws and never awaits the DB: it only
    * mutates the in-memory buffer and (re)arms the flush timer / size-cap flush.
    * Safe to call from any hot path. No-ops when stat tracking is disabled or the
    * required ids are missing (e.g. a command run outside a guild has no server).
@@ -279,20 +273,20 @@ export class StatRepository implements IRepository<null> {
     if (!STAT_TRACKING_ENABLED) return;
 
     const { serverId, userId, metric } = input;
-    // 1. Guard required scope: server + user are NOT NULL FKs. A missing id
+    // Guard required scope: server + user are NOT NULL FKs. A missing id
     //    (e.g. a DM command with no server) is silently skipped, not an error.
     if (!Number.isInteger(serverId) || !Number.isInteger(userId)) return;
 
     const delta = input.delta ?? 1;
     if (delta === 0) return;
 
-    // 2. Persona-agnostic metrics always key on the lineage-0 sentinel.
+    // Persona-agnostic metrics always key on the lineage-0 sentinel.
     const lineageId = PERSONA_AGNOSTIC_METRICS.has(metric) ? 0 : (input.lineageId ?? 0);
     const metricKey = input.metricKey ?? "";
     const bucket = currentBucketDate();
     const now = new Date();
 
-    // 3. Accumulate into the existing buffer entry, or create a new one.
+    // Accumulate into the existing buffer entry, or create a new one.
     const key = this.bufferKey({ serverId, userId, lineageId, metric, metricKey, bucket });
     const existing = this.buffer.get(key);
     if (existing) {
@@ -312,7 +306,7 @@ export class StatRepository implements IRepository<null> {
       });
     }
 
-    // 4. Flush triggers: size cap (fire-and-forget) or arm the interval timer.
+    // Flush triggers: size cap (fire-and-forget) or arm the interval timer.
     if (this.buffer.size >= FLUSH_MAX_BUFFER) {
       void this.flush();
     } else {
@@ -371,13 +365,13 @@ export class StatRepository implements IRepository<null> {
 
   /** Persists one atomically-swapped buffer snapshot. Called only by flush(). */
   private async flushSnapshot(): Promise<boolean> {
-    // 1. Atomically take ownership of the current buffer contents.
+    // Atomically take ownership of the current buffer contents.
     const draining = this.buffer;
     this.buffer = new Map();
     const entries = Array.from(draining.values());
 
     try {
-      // 2. One transaction and one multi-row additive UPSERT. The buffer already
+      // One transaction and one multi-row additive UPSERT. The buffer already
       // collapsed same-tuple increments, so this is the minimum round-trip count.
       const rows: StatUpsertRow[] = entries.map((entry) => ({
         server_id: entry.serverId,
@@ -413,7 +407,7 @@ export class StatRepository implements IRepository<null> {
       });
       return true;
     } catch (error) {
-      // 3. Re-merge drained deltas back into the live buffer for retry.
+      // Re-merge drained deltas back into the live buffer for retry.
       for (const e of entries) {
         const key = this.bufferKey(e);
         const existing = this.buffer.get(key);
@@ -443,7 +437,7 @@ export class StatRepository implements IRepository<null> {
     }
   }
 
-  /** Current buffered entry count — used by tests and diagnostics. */
+  /** Current buffered entry count: used by tests and diagnostics. */
   get bufferedEntryCount(): number {
     return this.buffer.size;
   }
@@ -465,7 +459,7 @@ export class StatRepository implements IRepository<null> {
 
   /**
    * Reads prior-day activity and today's persisted presence count for a batch of
-   * users against one persona lineage — the two facts the reunion note needs.
+   * users against one persona lineage: the two facts the reunion note needs.
    * Batched because the caller resolves every human in the context window, not
    * just the triggerer, and one grouped query beats N round-trips on the hot path.
    *
@@ -482,7 +476,7 @@ export class StatRepository implements IRepository<null> {
    * @param userIds  - Internal users FKs to read; duplicates are harmless.
    * @param lineageId - Persona lineage whose relationship clock is being read.
    * @returns Map keyed by user id (users with no rows are absent), or `null` when
-   *          the read failed — callers must treat `null` as "inject nothing"
+   *          the read failed, so callers must treat `null` as "inject nothing"
    *          rather than as "no history".
    */
   async getUsersPersonaReunionInfo(
@@ -614,7 +608,7 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
-   * Returns the subset of `allCommands` that have NO usage rows on the server —
+   * Returns the subset of `allCommands` that have NO usage rows on the server:
    * the underused/never-used set. Zero-count commands have no row, so they must
    * come from the command registry (passed in by the caller), not the table.
    *
@@ -662,7 +656,7 @@ export class StatRepository implements IRepository<null> {
    * @param entries - Current command paths + categories (see getCommandCatalogEntries).
    */
   async syncCommandCatalog(entries: { commandName: string; category: string }[]): Promise<void> {
-    // 1. Never prune against an empty set — a failed load must not empty the catalog.
+    // Never prune against an empty set, so a failed load must not empty the catalog.
     if (entries.length === 0) {
       log.warn("StatRepository.syncCommandCatalog: received no commands, leaving catalog untouched");
       return;
@@ -673,7 +667,7 @@ export class StatRepository implements IRepository<null> {
       const names = rows.map((row) => row.command_name);
 
       await sql.begin(async (tx: SQL) => {
-        // 2. Upsert current commands. first_seen_at is set on insert only; ON
+        // Upsert current commands. first_seen_at is set on insert only; ON
         //    CONFLICT refreshes the mutable columns without touching it.
         await tx`
           INSERT INTO command_catalog ${tx(rows, "command_name", "category")}
@@ -681,7 +675,7 @@ export class StatRepository implements IRepository<null> {
             category       = EXCLUDED.category,
             last_synced_at = now()
         `;
-        // 3. Prune commands that no longer exist in the codebase.
+        // Prune commands that no longer exist in the codebase.
         await tx`
           DELETE FROM command_catalog
           WHERE NOT (command_name = ANY(${sql.array(names, "text")}))
@@ -723,8 +717,8 @@ export class StatRepository implements IRepository<null> {
    * Estimated lifetime cost (USD) from token counts, joined to llms pricing.
    *
    * Input and output tokens are tracked as separate metrics (`tokens_in` /
-   * `tokens_out`), so cost applies the correct per-direction rate exactly —
-   * input tokens × input price + output tokens × output price — rather than a
+   * `tokens_out`), so cost applies the correct per-direction rate exactly:
+   * input tokens × input price + output tokens × output price: rather than a
    * blended average. Models with no pricing row (e.g. free / OpenRouter-dynamic)
    * contribute 0. Narrow by any combination of userId / serverId / lineageId.
    */
@@ -819,13 +813,13 @@ export class StatRepository implements IRepository<null> {
    * Timezone correctness (the trap): for the personal scope a per-user hour offset
    * can roll past midnight and CHANGE the weekday, so the two axes CANNOT be shifted
    * independently. Each cell is collapsed to a single week-hour index
-   * `wh = dow*24 + hour` (0–167), the offset (in hours) is added, taken mod 168, then
+   * `wh = dow*24 + hour` (0-167), the offset (in hours) is added, taken mod 168, then
    * re-split into (dow, hour). Pass offsetHours for the personal scope (sourced from
    * `users.timezone_offset`, the same source the histogram's peak-hour read uses);
    * omit it for server/persona scope, which use server wall-clock like the rest of
    * the dashboard.
    *
-   * Returns RAW joint counts — per-weekday-occurrence normalization is a presentation
+   * Returns RAW joint counts: per-weekday-occurrence normalization is a presentation
    * concern handled by the card layer, not here.
    *
    * @param args - userId (required), optional serverId filter, optional personal
@@ -834,7 +828,7 @@ export class StatRepository implements IRepository<null> {
   async getActivityHeatmap(
     args: { userId: number; serverId?: number; offsetHours?: number | null } & StatWindow,
   ): Promise<ActivityHeatmap> {
-    // 1. Pre-populate a full 7×24 grid of zeros so every cell is always present.
+    // Pre-populate a full 7×24 grid of zeros so every cell is always present.
     const grid: ActivityHeatmap = {};
     for (let dow = 0; dow < 7; dow++) {
       grid[dow] = {};
@@ -844,7 +838,7 @@ export class StatRepository implements IRepository<null> {
     try {
       const from = windowFloor(args.from);
       const serverId = args.serverId ?? null;
-      // 2. Raw joint aggregate in server wall-clock: weekday from the bucket date,
+      // Raw joint aggregate in server wall-clock: weekday from the bucket date,
       //    hour from metric_key, summed per (weekday, hour) cell.
       const rows = await sql<{ dow: number | string; hour: string; total: number | string }[]>`
         SELECT EXTRACT(DOW FROM bucket)::int AS dow, metric_key AS hour, SUM(count) AS total
@@ -855,19 +849,19 @@ export class StatRepository implements IRepository<null> {
         GROUP BY dow, hour
       `;
 
-      // 3. Normalize the offset into whole hours (0 when unset / server scope).
+      // Normalize the offset into whole hours (0 when unset / server scope).
       const offset = Math.trunc(args.offsetHours ?? 0);
 
       for (const r of rows) {
         const dow = Number(r.dow);
         const hour = Number.parseInt(String(r.hour), 10);
-        // 4. Skip malformed hour keys (active_hour is always 0–23, but be safe).
+        // Skip malformed hour keys (active_hour is always 0-23, but be safe).
         if (!Number.isInteger(dow) || !Number.isInteger(hour) || hour < 0 || hour > 23) continue;
         const total = Number(r.total);
 
-        // 5. Rotate the (weekday, hour) pair TOGETHER via the week-hour index so a
+        // Rotate the (weekday, hour) pair TOGETHER via the week-hour index so a
         //    midnight-crossing offset moves the weekday correctly. The rotation is a
-        //    bijection on 0–167, so no two raw cells collide into one shifted cell.
+        //    bijection on 0-167, so no two raw cells collide into one shifted cell.
         const wh = dow * 24 + hour;
         const shifted = (((wh + offset) % 168) + 168) % 168;
         const newDow = Math.floor(shifted / 24);
@@ -905,7 +899,7 @@ export class StatRepository implements IRepository<null> {
       const DAY_MS = 86_400_000;
       const lastActiveDate = new Date(days[0]).toISOString().split("T")[0];
 
-      // 1. Longest streak: walk descending dates, counting consecutive days.
+      // Longest streak: walk descending dates, counting consecutive days.
       let longest = 1;
       let run = 1;
       for (let i = 1; i < days.length; i++) {
@@ -918,7 +912,7 @@ export class StatRepository implements IRepository<null> {
         }
       }
 
-      // 2. Current streak: only counts if the most recent day is today/yesterday.
+      // Current streak: only counts if the most recent day is today/yesterday.
       const todayMs = new Date(`${currentBucketDate()}T00:00:00Z`).getTime();
       let current = 0;
       if (todayMs - days[0] <= DAY_MS) {
@@ -937,7 +931,7 @@ export class StatRepository implements IRepository<null> {
   }
 
   /**
-   * Generic metric_key breakdown (highest first) for any keyed metric — emoji_used,
+   * Generic metric_key breakdown (highest first) for any keyed metric: emoji_used,
    * sticker_used, sprite_shown, tool_used, command_used, model_used. Scope narrows by
    * any combination of userId / serverId / lineageId; omit a filter to aggregate over it.
    *
@@ -1201,7 +1195,7 @@ export class StatRepository implements IRepository<null> {
   /**
    * Per-persona reward/punishment totals (conditioning_history), for "Most Rewarded /
    * Most Punished Personas". NOTE: conditioning_history counts are lifetime per
-   * (action, reason, user, persona) tuple — not daily-bucketed — so this is all-time
+   * (action, reason, user, persona) tuple (not daily-bucketed), so this is all-time
    * and intentionally not windowed. Narrow by serverId / userId / lineageId.
    */
   async getConditioningPersonaBreakdown(args: {
@@ -1258,7 +1252,7 @@ export class StatRepository implements IRepository<null> {
   /**
    * Top personas on a server by messages received (message_sent grouped by lineage),
    * highest first. message_sent is persona-scoped and daily-bucketed, so this is
-   * windowable — it powers the server "Most Popular Personas" leaderboard row.
+   * windowable, so it powers the server "Most Popular Personas" leaderboard row.
    *
    * @param args - serverId (required), optional time window and result limit.
    */
@@ -1288,7 +1282,7 @@ export class StatRepository implements IRepository<null> {
   /**
    * Per-persona personal-memory counts for one user (personal_memories grouped by
    * lineage), highest first. personal_memories is not daily-bucketed (it has no
-   * created-date stat grain here), so this is intentionally all-time only — it
+   * created-date stat grain here), so this is intentionally all-time only; it
    * powers the personal "Memories by Persona" list.
    *
    * @param args - userId (required) and optional result limit.
@@ -1313,7 +1307,7 @@ export class StatRepository implements IRepository<null> {
 
   /**
    * Count of personal memories held under a persona lineage (across all users).
-   * personal_memories has no server_id, so this is global per lineage — consistent
+   * personal_memories has no server_id, so this is global per lineage, so consistent
    * with lineage being the cross-server identity anchor. Powers the persona
    * "Memories Saved" overview field. All-time only (not bucketed).
    */
@@ -1367,7 +1361,7 @@ export class StatRepository implements IRepository<null> {
   /**
    * Top users by reward/punishment count for a scope ("most rewarded/punished by"),
    * from conditioning_history joined to users. Narrow by serverId / lineageId. All-
-   * time only — conditioning_history is a lifetime counter, not daily-bucketed.
+   * time only: conditioning_history is a lifetime counter, not daily-bucketed.
    *
    * @param args - conditioning type (required), optional serverId / lineageId, limit.
    */
@@ -1404,7 +1398,7 @@ export class StatRepository implements IRepository<null> {
   /**
    * Per-model estimated token usage + cost, highest total-tokens first. Aggregates the
    * tokens_in / tokens_out metrics (both keyed by model id) and joins llms pricing so
-   * each row carries input tokens, output tokens, and the per-direction cost — the
+   * each row carries input tokens, output tokens, and the per-direction cost: the
    * richer "31,386 in / 155 out / $0.0000" model rows. Models with no pricing row
    * (free / OpenRouter-dynamic) contribute 0 cost. Narrow by userId / serverId /
    * lineageId; omit a filter to aggregate over it.
@@ -1466,9 +1460,9 @@ export class StatRepository implements IRepository<null> {
 
   /**
    * Top emotion categories expressed, highest first. Sums three streams by emotion:
-   *   1. emoji_used   — joined to the per-server emotion_key on server_emojis
-   *   2. sticker_used — joined to the per-server emotion_key on server_stickers
-   *   3. sprite_emotion — the sprite's user-given tag IS the emotion key (no join;
+   *   - emoji_used  : joined to the per-server emotion_key on server_emojis
+   *   - sticker_used: joined to the per-server emotion_key on server_stickers
+   *   - sprite_emotion: the sprite's user-given tag IS the emotion key (no join;
    *      identity sprites were already excluded upstream when this metric was recorded)
    * Emojis/stickers not yet classified (NULL emotion_key) are excluded; sprite tags are
    * lower-cased so casing variants collapse and align with the lower-case emoji/sticker
@@ -1528,7 +1522,7 @@ export class StatRepository implements IRepository<null> {
 
   /**
    * Count of server-scoped shared memories (`server_memories`) for a server, optionally
-   * narrowed to one persona lineage. Exact and genuinely server-scoped — unlike
+   * narrowed to one persona lineage. Exact and genuinely server-scoped; unlike
    * `personal_memories`, which has no `server_id`. Powers the "Server Memories" row on
    * both the server and persona Overviews. All-time only (memory tables are not bucketed).
    *
@@ -1551,7 +1545,7 @@ export class StatRepository implements IRepository<null> {
   /**
    * Approximate count of members' personal memories: the `personal_memories` of users
    * active on the server (joined via stat_counters, since personal_memories has no
-   * server_id). APPROXIMATE by nature — a member's personal memory bank spans every
+   * server_id). APPROXIMATE by nature because a member's personal memory bank spans every
    * server they share with the bot, so this is "memories about this server's members",
    * not "memories created here". Powers the server Overview "Member Memories" row.
    * All-time only.
@@ -1569,8 +1563,6 @@ export class StatRepository implements IRepository<null> {
     }
   }
 
-  // ── IRepository stub (telemetry is never exported) ─────────────────────────
-
   async toExportShape(_ownerId: string | number): Promise<null> {
     return null;
   }
@@ -1580,5 +1572,5 @@ export class StatRepository implements IRepository<null> {
   }
 }
 
-/** Singleton instance — import this in callers and chokepoints. */
+/** Singleton instance: import this in callers and chokepoints. */
 export const statRepository = new StatRepository();

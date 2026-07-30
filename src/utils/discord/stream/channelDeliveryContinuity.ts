@@ -6,18 +6,18 @@ import { log } from "@/utils/misc/logger";
  *
  * Discord groups consecutive webhook messages by `webhook_id` + `username` and ignores the
  * per-message avatar. Two things depend on that, and both need state that outlives a single
- * stream — `StreamState` is rebuilt for every SDK call, so anything held there is reset at
+ * stream: `StreamState` is rebuilt for every SDK call, so anything held there is reset at
  * every turn boundary (queued chain, follow-up, persona job, tool-loop continuation):
  *
- * 1. **Sprite group-break alternation** — adjacent *different* sprites must not share a
+ * - **Sprite group-break alternation**: adjacent *different* sprites must not share a
  *    username, or the second renders under the first one's avatar. Held per channel because
  *    grouping spans turns.
- * 2. **Last delivered webhook identity** — post-turn artifacts (stickers, the "Fallback Used"
+ * - **Last delivered webhook identity**: post-turn artifacts (stickers, the "Fallback Used"
  *    notice) should be posted as the identity that actually delivered the final message, so
  *    they group with it instead of splitting off under a different name.
  *
  * Entries expire once messages are far enough apart that Discord would not group them anyway.
- * Runtime-authoritative state with no database behind it — mirrors `utils/chat/selfReplyState.ts`.
+ * Runtime-authoritative state with no database behind it: mirrors `utils/chat/selfReplyState.ts`.
  */
 
 function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
@@ -28,7 +28,7 @@ function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, mi
 }
 
 // Discord stops grouping consecutive same-author messages after a few minutes, so continuity
-// beyond that window is pointless — an expired entry is equivalent to a fresh channel.
+// beyond that window is pointless, so an expired entry is equivalent to a fresh channel.
 const CONTINUITY_TTL_MS = parseIntegerEnvFlag(process.env.SPRITE_GROUP_CONTINUITY_TTL_MINUTES, 10, 1) * 60 * 1000;
 
 // Housekeeping (not an operational limit): channels are unbounded, so sweep expired entries
@@ -92,9 +92,6 @@ function getLiveEntry(channelId: string, now: number): ChannelDeliveryState {
  * same-sprite runs keep an identical username and still group naturally, while adjacent
  * different-sprite messages are guaranteed to differ.
  *
- * @param channelId - Channel the sprite message is being sent to
- * @param spriteKey - Sprite key (or name) about to be rendered
- * @returns `false` to use the clean persona name, `true` to use the decorated `Persona (sprite)` name
  */
 export function advanceChannelSpriteGroupParity(channelId: string, spriteKey: string): boolean {
   const now = Date.now();
@@ -102,7 +99,7 @@ export function advanceChannelSpriteGroupParity(channelId: string, spriteKey: st
   entry.updatedAt = now;
 
   // A null previous key means this sprite is the channel's first in the current window, so it
-  // stays on the clean name — there is nothing before it to collide with.
+  // stays on the clean name, so there is nothing before it to collide with.
   if (entry.lastSpriteKey !== null && entry.lastSpriteKey !== spriteKey) {
     entry.groupParity = !entry.groupParity;
   }
@@ -114,11 +111,10 @@ export function advanceChannelSpriteGroupParity(channelId: string, spriteKey: st
  * Records the identity a webhook message was just delivered under, so later sends in the same
  * channel can reuse it verbatim and group with it.
  *
- * The stored username is the one actually sent — which may be the decorated `Persona (sprite)`
+ * The stored username is the one actually sent: which may be the decorated `Persona (sprite)`
  * form chosen by the group-break alternation. Re-resolving the sprite from scratch would produce
  * the clean name instead and split the group, which is exactly what this avoids.
  *
- * @param channelId - Channel the message was delivered to
  * @param identity - Identity used for the send
  */
 export function recordChannelDeliveredWebhookIdentity(channelId: string, identity: ResolvedWebhookIdentity): void {
@@ -133,7 +129,6 @@ export function recordChannelDeliveredWebhookIdentity(channelId: string, identit
  * remembered webhook identity. Without this a stale identity would be reused after the persona
  * had already reverted to the bot, putting artifacts under a name nothing else is using.
  *
- * @param channelId - Channel the message was delivered to
  */
 export function recordChannelDeliveredBotMessage(channelId: string): void {
   const now = Date.now();
@@ -147,7 +142,6 @@ export function recordChannelDeliveredBotMessage(channelId: string): void {
  * delivery was an ordinary bot message, nothing has been delivered, or the window has expired.
  * Callers should send as the bot when this is null.
  *
- * @param channelId - Channel to read
  */
 export function getChannelDeliveredWebhookIdentity(channelId: string): ResolvedWebhookIdentity | null {
   const entry = channelDeliveryStates.get(channelId);

@@ -25,7 +25,6 @@ import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderC
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "config_model_vision_modal";
 const MODEL_SELECT_ID = "vision_model_select";
 
@@ -35,9 +34,6 @@ const CLEAR_VISION_VALUE = "__clear__";
 /**
  * Helper function to get localized LLM description based on user's locale.
  * Only shows vision-relevant capability flags.
- * @param model - LLM model row from database
- * @param locale - User's preferred locale (e.g., "ja", "en-US")
- * @returns Localized description with flags prepended
  */
 function getLocalizedDescription(model: LlmRow, locale: string): string {
   if (model.is_scoped_registration) {
@@ -58,7 +54,6 @@ function getLocalizedDescription(model: LlmRow, locale: string): string {
   return `${flagPrefix}${baseDescription}`;
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("vision").setDescription(localizer("en-US", "commands.model.vision.description"));
 
@@ -66,10 +61,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Sets a dedicated vision model for image analysis.
  * When set, non-vision chat models gain the `analyze_image` tool to delegate
  * image analysis to this vision model.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -77,7 +68,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -87,7 +77,6 @@ export async function execute(
     return;
   }
 
-  // 2. Load the Tomori state for this server
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -109,7 +98,7 @@ export async function execute(
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "vision");
     const idRoot = "model_vision";
 
-    // 1. Open the anchor message with the right initial control for the provider count.
+    // Open the anchor message with the right initial control for the provider count.
     const currentModel = tomoriState.vision_llm?.llm_codename ?? localizer(locale, "general.unknown");
     const currentProvider = tomoriState.vision_llm?.llm_provider ?? localizer(locale, "general.unknown");
     const initialPayload =
@@ -128,12 +117,12 @@ export async function execute(
     anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
-    // 2. Resolve the provider and the unacknowledged button the modal opens from.
+    // Resolve the provider and the unacknowledged button the modal opens from.
     const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
     if (!opener) return;
     const selectedProvider = opener.provider;
 
-    // 3a. Custom provider: no modal — activate the saved vision model directly.
+    // Custom provider: no modal, so activate the saved vision model directly.
     if (isCustomProvider(selectedProvider)) {
       const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
       const work = await phase.useButton(opener.button).beginInPlaceWork();
@@ -184,7 +173,7 @@ export async function execute(
       return;
     }
 
-    // 3b. Regular provider: vision-capable model picker with a "clear" option.
+    // Regular provider: vision-capable model picker with a "clear" option.
     const allModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
@@ -237,7 +226,7 @@ export async function execute(
     const work = await modalPhase.beginInPlaceWork();
     const selectedValue = modalPhase.values[MODEL_SELECT_ID];
 
-    // Handle "clear" selection — remove the vision model.
+    // Handle "clear" selection: remove the vision model.
     if (selectedValue === CLEAR_VISION_VALUE) {
       if (!tomoriState.config.vision_llm_id) {
         await work.message.replace(
@@ -383,9 +372,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

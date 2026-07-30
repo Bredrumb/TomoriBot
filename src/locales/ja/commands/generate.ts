@@ -1,5 +1,3 @@
-// locales/ja/commands/generate.ts
-
 export default {
   generate: {
     image: {

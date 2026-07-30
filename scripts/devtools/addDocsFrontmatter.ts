@@ -17,13 +17,11 @@ for await (const rel of glob.scan(docsDir)) {
   const filePath = join(docsDir, rel);
   const content = await Bun.file(filePath).text();
 
-  // Already has frontmatter
   if (content.startsWith("---")) {
     skipped++;
     continue;
   }
 
-  // Extract first H1
   const h1Match = content.match(/^#\s+(.+)/m);
   if (!h1Match) {
     console.warn(`  [skip] No H1 found: ${rel}`);
@@ -31,7 +29,6 @@ for await (const rel of glob.scan(docsDir)) {
     continue;
   }
 
-  // Strip leading "N. " numbering (e.g. "3. Architecture Overview" → "Architecture Overview")
   const title = h1Match[1].trim().replace(/^\d+\.\s+/, "");
 
   await Bun.write(filePath, `---\ntitle: "${title}"\n---\n\n${content}`);

@@ -2,7 +2,7 @@
  * Shared character-based token estimator (the "Track A" fallback).
  *
  * These primitives are the single source of truth for "how many tokens is this
- * text, roughly?" — used both by `/tool estimate cost` (when a provider exposes
+ * text, roughly?": used both by `/tool estimate cost` (when a provider exposes
  * no live token-counting API) and by the post-turn stat recorder
  * (`recordUsageStats`), so the two surfaces always agree on the same ratios.
  *
@@ -10,7 +10,7 @@
  * - Tokenization varies a lot by language (English vs Japanese), punctuation/JSON,
  *   and provider/model. These numbers are intentionally "ballpark".
  * - Japanese tokenizes denser than ~4 chars/token, so this over-counts JP-heavy
- *   text — acceptable for rough statistics / cost estimates, never billing truth.
+ *   text, so acceptable for rough statistics / cost estimates, never billing truth.
  * - Tool/function schemas (JSON) tokenize a bit denser than natural-language prose.
  */
 import type { StructuredContextItem } from "@/types/misc/context";
@@ -27,8 +27,8 @@ export const CHARS_PER_TOKEN_JSON = 3.5;
  * The streaming orchestrator collapses every provider's native usage shape
  * (OpenAI `prompt_tokens`/`completion_tokens`, OpenRouter camelCase, Anthropic
  * flat `input_tokens`/`output_tokens`, Gemini `usageMetadata`) into this one
- * shape (see {@link normalizeProviderUsage}) so downstream consumers — the
- * post-turn stat recorder above all — never branch on provider.
+ * shape (see {@link normalizeProviderUsage}), so downstream consumers: the
+ * post-turn stat recorder above all: never branch on provider.
  */
 export interface TokenUsage {
   /** Real prompt/input tokens billed for this response. */
@@ -54,7 +54,6 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
   if (!raw || typeof raw !== "object") return null;
   const u = raw as Record<string, unknown>;
 
-  // 1. Some adapters nest the usage object under `.usage`; unwrap it first.
   if (u.usage && typeof u.usage === "object") {
     const nested = normalizeProviderUsage(u.usage);
     if (nested) return nested;
@@ -68,9 +67,9 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
     return 0;
   };
 
-  // 2. Input: OpenAI/OpenRouter prompt tokens, Anthropic input, Gemini prompt count.
+  // Input: OpenAI/OpenRouter prompt tokens, Anthropic input, Gemini prompt count.
   const inputTokens = num("prompt_tokens", "promptTokens", "input_tokens", "inputTokens", "promptTokenCount");
-  // 3. Output: completion/output tokens, Gemini candidates count. Gemini bills
+  // Output: completion/output tokens, Gemini candidates count. Gemini bills
   //    thinking tokens separately (`thoughtsTokenCount`) at the output rate, so
   //    add them to avoid undercounting reasoning models.
   const outputTokens =
@@ -109,8 +108,6 @@ export function sumTurnUsage(streamResults: ReadonlyArray<{ usage?: TokenUsage }
 
 /**
  * Estimate token count from a prose character count.
- * @param chars - Number of characters
- * @returns Estimated token count
  */
 export function charsToTokensText(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN_TEXT);
@@ -119,8 +116,6 @@ export function charsToTokensText(chars: number): number {
 /**
  * Estimate token count for JSON-ish strings (tools, schemas), which tokenize
  * slightly denser than prose.
- * @param chars - Number of characters
- * @returns Estimated token count
  */
 export function charsToTokensJson(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN_JSON);
@@ -131,7 +126,7 @@ export function charsToTokensJson(chars: number): number {
  *
  * Sums the character length of every text part across all context items and applies
  * the standard text ratio ({@link charsToTokensText}). Non-text parts (images/videos)
- * are intentionally not counted — this is a deliberately rough estimate.
+ * are intentionally not counted, so this is a deliberately rough estimate.
  * @param contextItems - The assembled runtime-parity context
  * @returns Estimated input token count
  */

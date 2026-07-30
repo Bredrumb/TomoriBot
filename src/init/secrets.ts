@@ -10,7 +10,6 @@ import type { AppEnvironment } from "@/types/config";
  *
  * Must be called before any module that reads credentials from process.env.
  *
- * @param environment - Resolved runtime environment
  */
 export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   log.section("Loading Application Secrets...");
@@ -25,7 +24,6 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   process.env.POSTGRES_DB = secrets.POSTGRES_DB;
   process.env.CRYPTO_SECRET = secrets.CRYPTO_SECRET;
 
-  // Auto-detect and assign key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
   if (secrets.CRYPTO_SECRET_V1) process.env.CRYPTO_SECRET_V1 = secrets.CRYPTO_SECRET_V1;
   if (secrets.CRYPTO_SECRET_V2) process.env.CRYPTO_SECRET_V2 = secrets.CRYPTO_SECRET_V2;
   if (secrets.CRYPTO_SECRET_V3) process.env.CRYPTO_SECRET_V3 = secrets.CRYPTO_SECRET_V3;

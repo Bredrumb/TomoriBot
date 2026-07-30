@@ -4,9 +4,6 @@ import path from "node:path";
 /**
  * Gets all files (or directories) in a directory, non-recursively.
  *
- * @param directory - Absolute path to the directory to scan
- * @param getDirs - When true, returns subdirectory paths instead of file paths
- * @returns Array of absolute paths to matching files or directories
  */
 export default async function getAllFiles(directory: string, getDirs = false): Promise<string[]> {
   try {

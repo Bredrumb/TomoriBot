@@ -1,5 +1,5 @@
 /**
- * ChannelPromptRepository — manages per-channel system prompt overrides.
+ * ChannelPromptRepository: manages per-channel system prompt overrides.
  *
  * Covered table: channel_prompt_overrides.
  *
@@ -44,7 +44,6 @@ export class ChannelPromptRepository {
    *
    * @param serverId      - Internal server DB ID
    * @param channelDiscId - Discord snowflake ID of the channel
-   * @param prompt        - The channel prompt text
    * @param mode          - "append" or "replace"
    */
   async setChannelPromptOverride(
@@ -63,7 +62,7 @@ export class ChannelPromptRepository {
           channel_prompt_mode = EXCLUDED.channel_prompt_mode,
           updated_at = CURRENT_TIMESTAMP
       `;
-      // Invalidate only after a successful write (CLAUDE.md cache rule)
+      // Invalidate only after a successful write
       invalidateChannelPromptCache(serverId, channelDiscId);
       return true;
     } catch (error) {
@@ -85,7 +84,7 @@ export class ChannelPromptRepository {
         WHERE server_id = ${serverId}
           AND channel_disc_id = ${channelDiscId}
       `;
-      // Invalidate only after a successful write (CLAUDE.md cache rule)
+      // Invalidate only after a successful write
       invalidateChannelPromptCache(serverId, channelDiscId);
       return true;
     } catch (error) {

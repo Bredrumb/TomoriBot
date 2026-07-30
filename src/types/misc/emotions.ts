@@ -79,7 +79,7 @@ export const getAllEmotionKeys = (): string[] => {
 /**
  * Emotion keys intentionally excluded from the manual `/server expressions edit`
  * picker. The full 28-key taxonomy is retained everywhere else (AI classification,
- * storage, any future classifier) — these three are simply hidden from the manual
+ * storage, any future classifier) , so these three are simply hidden from the manual
  * dropdown so it fits within Discord's 25-option string-select limit. Each was chosen
  * because it is rare in actual emoji/sticker art and folds cleanly into a neighbor:
  *   - grief       → sadness

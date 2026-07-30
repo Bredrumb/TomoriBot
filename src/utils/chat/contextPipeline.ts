@@ -101,7 +101,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // persona also switches to a webhook whenever a sprite renders, and webhooks cannot use
   // Discord's native reply, so it needs the standalone notice for exactly the same reason.
   // Whether a sprite fires is only known at delivery time, so the allocation happens up front
-  // and the uiUpdater gates the actual send on real webhook delivery — leaving this an inert
+  // and the uiUpdater gates the actual send on real webhook delivery . leaving this an inert
   // no-op for queued turns that end up replying natively.
   if (incoming.isFromQueue) {
     streamingContext.replyNoticeState = { attempted: false, sent: false };
@@ -110,7 +110,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   const assets = await loadPersonaAssets(turn);
   const history = await buildSimplifiedHistory(turn, messageIdMap);
 
-  // Resolve impersonation identity fields needed by contextBuilder (Fix #4).
   let impersonatedUserNickname: string | undefined;
   let impersonatedUserPrompt: string | undefined;
   if (incoming.isUserImpersonation && incoming.impersonatedUserId) {
@@ -125,8 +124,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname = identity.displayName;
   }
 
-  // 1. Resolve deliberate tool mode + intent allowlist for this turn.
-  // Mirrors main's tomoriChat.ts wiring (~lines 5557–5645). MUST run before
+  // Resolve deliberate tool mode + intent allowlist for this turn.
+  // Mirrors main's tomoriChat.ts wiring (~lines 5557-5645). MUST run before
   // buildContext() so any has_tools override flows into context synthesis
   // (e.g. memories.ts:243 gates STM tool affordance text on has_tools).
   // Combines: user-intent matches, follow-up matches from recent message
@@ -177,7 +176,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     deliberateToolTriggerMatches.push(...recentTriggeredToolIntentResult.matches);
   }
 
-  // 2. Reminder-driven adjustments: voice/audio reminders should auto-expose
+  // Reminder-driven adjustments: voice/audio reminders should auto-expose
   // generate_voice_message, and create_task is suppressed during reminder
   // execution (we don't want the bot to schedule a nested reminder).
   if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
@@ -206,7 +205,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }
   }
 
-  // 3. Fail-closed gate: when deliberate-tool mode is active and the turn
+  // Fail-closed gate: when deliberate-tool mode is active and the turn
   // shows no explicit tool intent, suppress all tools for the turn. This is
   // the universal "tools off unless asked" semantic from main. Otherwise,
   // when intent is detected, surface a scoped allowlist for provider
@@ -226,7 +225,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     );
   }
 
-  // 4. Derive an effective persona for this turn, applying overrides in order:
+  // Derive an effective persona for this turn, applying overrides in order:
   //    a) RP-channel: zero out emoji/sticker flags so context builders skip their
   //       DB fallback and the sticker tool is not registered (gates on these flags).
   //    b) disableAllTools: set has_tools=false as the universal kill switch for
@@ -479,7 +478,7 @@ async function buildSimplifiedHistory(
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
   // notice that includes the remaining block duration (from expires_at). 'mute'
-  // blocks are excluded here — they affect triggering, not dialogue context.
+  // blocks are excluded here ; they affect triggering, not dialogue context.
   const blockedContextBlocksById = new Map<string, PersonaUserBlockRow>();
   for (const block of activeUserBlocks) {
     if (block.block_type === "block") {
@@ -542,12 +541,11 @@ async function buildSimplifiedHistory(
       continue;
     }
 
-    // 0. Blocked-author short-circuit: replace this user's live message with a
+    // Blocked-author short-circuit: replace this user's live message with a
     //    single system notice instead of running the full simplify pipeline.
     const blockComparableId = getBlockComparableAuthorId(msg);
     const activeContextBlock = blockedContextBlocksById.get(blockComparableId);
     if (activeContextBlock) {
-      // Collapse a run of messages from the same blocked user into one notice.
       if (previousBlockNoticeAuthorId === blockComparableId) {
         continue;
       }
@@ -580,13 +578,12 @@ async function buildSimplifiedHistory(
     );
     if (!result) continue;
     const { message: simplified, isDebug } = result;
-    // A real (non-blocked) message breaks any run of block notices.
     previousBlockNoticeAuthorId = null;
     userIds.add(simplified.authorId);
 
-    // 1. Decide whether this message collapses into the previous turn.
+    // Decide whether this message collapses into the previous turn.
     //    Consecutive messages from the same effective author merge into one turn,
-    //    but only when BOTH sides are pure text — if either side carries media we
+    //    but only when BOTH sides are pure text : if either side carries media we
     //    keep separate turns so per-message media IDs stay unambiguous for
     //    media-targeted tools. A debug/normal boundary also forces a split even
     //    when the authorId matches.
@@ -626,7 +623,7 @@ async function buildSimplifiedHistory(
       !shouldKeepSeparateMediaTurn &&
       !crossesTimeAwarenessDayBoundary
     ) {
-      // 2. Merge: lazily promote the previous entry into a combined entry, then
+      // Merge: lazily promote the previous entry into a combined entry, then
       //    append. The combined* tracking fields let reveal_message_metadata still
       //    expose one ref_N + timestamp per original message (see contextAnnotations).
       if (!previousEntry.combinedMessageIds) {
@@ -638,11 +635,9 @@ async function buildSimplifiedHistory(
       previousEntry.individualContents?.push(simplified.content);
       previousEntry.combinedCreatedAts?.push(simplified.createdAt ?? 0);
       previousEntry.content = `${previousEntry.content}\n${simplified.content}`;
-      // The merged-into entry keeps its debug/normal kind, so previousEntryWasDebug is unchanged.
       continue;
     }
 
-    // 3. Otherwise start a new turn.
     simplifiedMessages.push(simplified);
     previousEntryWasDebug = isDebug;
   }
@@ -651,7 +646,6 @@ async function buildSimplifiedHistory(
     userIds.add(turn.lockedTurn.admission.client.user.id);
   }
 
-  // Inject reminder prompt as a synthetic System message so the LLM knows what to remind about.
   const incoming = turn.lockedTurn.admission.incoming;
   if (incoming.reminderData && (incoming.reminderRecipientID || incoming.reminderData.self_reminder)) {
     const isSelfReminder = incoming.reminderData.self_reminder === true;
@@ -663,7 +657,7 @@ async function buildSimplifiedHistory(
         reminderContent += `\n[System: This task is ${incoming.reminderData.reminder_lateness} overdue.]`;
       }
     } else if (incoming.reminderRecipientID && isBridgeUserId(incoming.reminderRecipientID)) {
-      // Matrix user IDs (@user:server) must not be wrapped in <@...> — that produces <@@user:server>.
+      // Matrix user IDs (@user:server) must not be wrapped in <@...> : that produces <@@user:server>.
       const matrixLocalpart = incoming.reminderRecipientID.split(":")[0].replace(/^@/, "");
       reminderContent = `[System: A reminder you set earlier for @${matrixLocalpart} (Mention ID: @{${matrixLocalpart}}) has triggered. Reminder: "${incoming.reminderData.reminder_purpose}". Focus on reminding and pinging @${matrixLocalpart} about this.]`;
       if (incoming.reminderData.reminder_lateness) {
@@ -880,7 +874,6 @@ async function simplifyMessage(
         imageAttachments.length > 0 || videoAttachments.length > 0
           ? hasLocalMedia
             ? // Forwarded media registers the wrapper id (= msg.id), so dedupe
-              // against the local-media entry to avoid listing it twice.
               [...new Set([msg.id, ...mediaSourceMessageIds])]
             : mediaSourceMessageIds.length > 0
               ? mediaSourceMessageIds
@@ -976,7 +969,6 @@ function getBlockComparableAuthorId(msg: Message): string {
  *
  * @param msg - The original (blocked) Discord message.
  * @param comparableId - The block-comparable author ID from getBlockComparableAuthorId.
- * @returns A human-readable label for the blocked user.
  */
 async function resolveBlockedAuthorLabel(msg: Message, comparableId: string): Promise<string> {
   const row = await getCachedUserRow(comparableId);

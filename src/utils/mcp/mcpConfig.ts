@@ -71,7 +71,6 @@ export class MCPConfigManager {
 
   /**
    * Load configuration for a specific MCP server
-   * @param serverName - Name of the server directory
    * @returns Enhanced server configuration or null if not found/invalid
    */
   private loadServerConfiguration(serverName: string): EnhancedMCPServerConfig | null {
@@ -97,11 +96,8 @@ export class MCPConfigManager {
   /**
    * Validate and enhance a raw configuration object
    * @param rawConfig - Raw configuration from JSON file
-   * @param serverName - Name of the server (for validation)
-   * @returns Enhanced and validated configuration
    */
   private validateAndEnhanceConfig(rawConfig: Record<string, unknown>, serverName: string): EnhancedMCPServerConfig {
-    // Validate required fields
     const requiredFields = ["name", "displayName", "description", "enabled"];
     for (const field of requiredFields) {
       if (!(field in rawConfig)) {
@@ -132,22 +128,18 @@ export class MCPConfigManager {
           ? (rawConfig.transport as "stdio" | "http" | "websocket")
           : "stdio",
 
-      // Optional fields
       npmPackage: typeof rawConfig.npmPackage === "string" ? rawConfig.npmPackage : undefined,
       command: typeof rawConfig.command === "string" ? rawConfig.command : undefined,
       args: Array.isArray(rawConfig.args) ? rawConfig.args : [],
       timeout: typeof rawConfig.timeout === "number" ? rawConfig.timeout : 30000,
 
-      // Handler configuration
       behaviorHandler: this.determineBehaviorHandler(serverName),
 
-      // Capabilities (will be determined at runtime)
       supportedFunctions: Array.isArray(rawConfig.supportedFunctions) ? rawConfig.supportedFunctions : [],
       requiresAuth: requiredEnvVars.length > 0,
       rateLimited: typeof rawConfig.rateLimited === "boolean" ? rawConfig.rateLimited : false,
     };
 
-    // Validate the configuration
     this.validateConfiguration(enhancedConfig);
 
     return enhancedConfig;
@@ -155,7 +147,6 @@ export class MCPConfigManager {
 
   /**
    * Determine the behavior handler class name for a server
-   * @param serverName - Name of the server
    * @returns Handler class name or undefined
    */
   private determineBehaviorHandler(serverName: string): string | undefined {
@@ -170,28 +161,23 @@ export class MCPConfigManager {
 
   /**
    * Validate a server configuration
-   * @param config - Configuration to validate
    * @throws Error if configuration is invalid
    */
   private validateConfiguration(config: EnhancedMCPServerConfig): void {
-    // Validate transport type
     const validTransports = ["stdio", "http", "websocket"];
     if (!validTransports.includes(config.transport)) {
       throw new Error(`Invalid transport '${config.transport}' for ${config.name}`);
     }
 
-    // Validate category
     const validCategories = ["search", "utility", "media", "ai", "data"];
     if (!validCategories.includes(config.category)) {
       throw new Error(`Invalid category '${config.category}' for ${config.name}`);
     }
 
-    // Validate priority
     if (config.priority < 1 || config.priority > 10) {
       throw new Error(`Priority must be between 1-10 for ${config.name}`);
     }
 
-    // Validate command setup
     if (!config.npmPackage && !config.command) {
       throw new Error(`Either npmPackage or command must be specified for ${config.name}`);
     }
@@ -200,7 +186,6 @@ export class MCPConfigManager {
   /**
    * Get all available server configurations
    * @param enabledOnly - Whether to return only enabled servers
-   * @returns Array of server configurations
    */
   public getAllConfigurations(enabledOnly = false): EnhancedMCPServerConfig[] {
     const configs = Array.from(this.configCache.values());
@@ -209,7 +194,6 @@ export class MCPConfigManager {
 
   /**
    * Get configuration for a specific server
-   * @param serverName - Name of the server
    * @returns Server configuration or null if not found
    */
   public getConfiguration(serverName: string): EnhancedMCPServerConfig | null {
@@ -228,7 +212,6 @@ export class MCPConfigManager {
 
   /**
    * Get configurations for servers that require API keys
-   * @returns Array of configurations that require authentication
    */
   public getAuthRequiredConfigurations(): EnhancedMCPServerConfig[] {
     return this.getAllConfigurations(true).filter((config) => config.requiresAuth);
@@ -236,8 +219,6 @@ export class MCPConfigManager {
 
   /**
    * Convert enhanced configuration to the format expected by mcpManager
-   * @param config - Enhanced configuration
-   * @returns Configuration in mcpManager format
    */
   public toManagerConfiguration(config: EnhancedMCPServerConfig): {
     name: string;
@@ -249,7 +230,6 @@ export class MCPConfigManager {
     apiKeyEnvVar?: string;
     timeout?: number;
   } {
-    // Determine command and args based on configuration
     let command: string;
     let args: string[];
 
@@ -266,17 +246,14 @@ export class MCPConfigManager {
       command = "bunx";
       args = [config.npmPackage];
     } else if (config.command) {
-      // Use specified command
       command = config.command;
       args = config.args || [];
     } else {
       throw new Error(`No command configuration for server: ${config.name}`);
     }
 
-    // Build environment variables
     const env: Record<string, string> = {};
 
-    // Add required environment variables if they exist in process.env
     for (const envVar of config.requiredEnvVars) {
       const value = process.env[envVar];
       if (value) {
@@ -284,7 +261,6 @@ export class MCPConfigManager {
       }
     }
 
-    // Add optional environment variables if they exist
     for (const envVar of config.optionalEnvVars) {
       const value = process.env[envVar];
       if (value) {
@@ -292,7 +268,6 @@ export class MCPConfigManager {
       }
     }
 
-    // Special handling for Brave Search transport mode
     if (config.name === "brave-search") {
       env.BRAVE_MCP_TRANSPORT = "stdio"; // Force STDIO mode for consistency
     }
@@ -311,15 +286,12 @@ export class MCPConfigManager {
 
   /**
    * Check if a server should be initialized based on environment
-   * @param config - Server configuration
-   * @returns True if server should be initialized
    */
   public shouldInitializeServer(config: EnhancedMCPServerConfig): boolean {
     if (!config.enabled) {
       return false;
     }
 
-    // Check if required environment variables are present
     for (const envVar of config.requiredEnvVars) {
       if (!process.env[envVar]) {
         log.info(`Skipping ${config.displayName}: missing required environment variable ${envVar}`);
@@ -332,7 +304,6 @@ export class MCPConfigManager {
 
   /**
    * Get initialization summary for logging
-   * @returns Summary of server initialization status
    */
   public getInitializationSummary(): {
     totalServers: number;
@@ -363,7 +334,6 @@ export class MCPConfigManager {
 
   /**
    * Reload configurations from disk
-   * @returns Number of configurations reloaded
    */
   public reloadConfigurations(): number {
     this.configCache.clear();

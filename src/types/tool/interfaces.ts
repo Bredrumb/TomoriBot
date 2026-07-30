@@ -109,7 +109,7 @@ export interface StreamingContext {
     handle: string;
     userId: string;
   }>; // Additional mention handles to force-resolve (e.g., reminder recipients)
-  suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode — keeps model state coherent but hides repeated text)
+  suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode : keeps model state coherent but hides repeated text)
   /** NAI GLM-4.6: incomplete trailing fragment from previous stream, to append as prompt continuation on retry */
   naiContinuationPrefill?: string;
   /** AbortSignal to cancel the underlying HTTP request when the SDK call timeout fires */
@@ -130,7 +130,6 @@ export interface StreamingContext {
    */
   endTurnAfterTools?: string[];
 
-  // Opaque message ID map — threaded from tomoriChat through to StreamContext and ToolContext
   messageIdMap?: MessageIdMap;
 
   /**
@@ -149,26 +148,21 @@ export interface StreamingContext {
  * Contains all necessary Discord and Tomori state information
  */
 export interface ToolContext {
-  // Discord context
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;
   message?: Message;
 
-  // Tomori context
   tomoriState: TomoriState;
   locale: string;
 
-  // Provider context
   provider: string;
 
-  // Optional additional context
   emojiStrings?: string[];
   userId?: string;
   internalUserId?: number;
   guildId?: string;
   streamContext?: StreamingContext; // Optional streaming context for enhanced functionality
 
-  // Optional persona webhook context (for alter persona embeds/tools)
   webhook?: Webhook;
   personaUsername?: string;
   personaAvatarUrl?: string; // URL or data URI for the active persona/user identity
@@ -179,7 +173,6 @@ export interface ToolContext {
   showKillHint?: boolean; // When true, tool notice footers include the /bot kill hint (set after SOFT_WARN_ITERATION_THRESHOLD)
   contextItems?: StructuredContextItem[]; // Current LLM context for tools that need hidden resolution metadata
 
-  // Opaque message ID map for resolving media_N/ref_N keys back to Discord snowflake IDs
   messageIdMap?: MessageIdMap;
 
   /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /bot kill. */
@@ -258,24 +251,18 @@ export interface ToolAssemblyContext {
  * All tools must implement this interface regardless of provider
  */
 export interface Tool {
-  // Metadata
   name: string;
   description: string;
   category: ToolCategory;
 
-  // Provider-agnostic parameter schema
   parameters: ToolParameterSchema;
 
-  // Execution method
   execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;
 
-  // Provider compatibility check
   isAvailableFor(provider: string): boolean;
 
-  // Optional LLM-visible schema assembly hook
   assembleForContext?(context: ToolAssemblyContext): Tool | null | Promise<Tool | null>;
 
-  // Optional tool configuration
   requiredModelCapabilities?: ToolModelCapabilityRequirements;
   requiresPermissions?: string[];
   requiresFeatureFlag?: string;
@@ -292,12 +279,10 @@ export abstract class BaseTool implements Tool {
   abstract parameters: ToolParameterSchema;
   requiredModelCapabilities?: ToolModelCapabilityRequirements;
 
-  // Default implementation - available for all providers
   isAvailableFor(_provider: string): boolean {
     return true;
   }
 
-  // Abstract execution method to be implemented by each tool
   abstract execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;
 
   /**
@@ -313,14 +298,12 @@ export abstract class BaseTool implements Tool {
     const missingParams: string[] = [];
     const errors: string[] = [];
 
-    // Check required parameters
     for (const requiredParam of this.parameters.required) {
       if (!(requiredParam in args) || args[requiredParam] === undefined || args[requiredParam] === null) {
         missingParams.push(requiredParam);
       }
     }
 
-    // Check parameter types
     for (const [paramName, paramValue] of Object.entries(args)) {
       if (paramValue === undefined || paramValue === null) continue;
 
@@ -391,7 +374,6 @@ export abstract class BaseTool implements Tool {
    * @returns True if the tool should be available
    */
   protected isEnabled(_context: ToolContext): boolean {
-    // Subclasses should override this method to check specific feature flags
     return true;
   }
 }
@@ -402,21 +384,16 @@ export abstract class BaseTool implements Tool {
 export interface ToolAdapter {
   /**
    * Convert a generic tool to provider-specific format
-   * @param tool - The generic tool to convert
-   * @returns Provider-specific tool definition
    */
   convertTool(tool: Tool): Record<string, unknown>;
 
   /**
    * Convert tool result back to provider-specific format
-   * @param result - The generic tool result
-   * @returns Provider-specific result format
    */
   convertResult(result: ToolResult): Record<string, unknown>;
 
   /**
    * Get the provider name this adapter supports
-   * @returns Provider identifier
    */
   getProviderName(): string;
 }
@@ -428,10 +405,8 @@ export interface ToolAdapter {
 export interface MCPCapableToolAdapter extends ToolAdapter {
   /**
    * Get all available tools (built-in + MCP) in provider-specific format
-   * @param builtInTools - Array of built-in tools
    * @param serverId - Optional Discord server ID for server-specific tool selection
    * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   * @returns Combined provider-specific tool configuration
    */
   getAllToolsInProviderFormat(
     builtInTools: Tool[],
@@ -441,17 +416,13 @@ export interface MCPCapableToolAdapter extends ToolAdapter {
 
   /**
    * Check if a function name belongs to an MCP tool
-   * @param functionName - Name of the function to check
    * @returns Promise<boolean> - True if this is an MCP tool function
    */
   isMCPFunction(functionName: string): Promise<boolean>;
 
   /**
    * Execute an MCP tool function
-   * @param functionName - Name of the MCP function to execute
-   * @param args - Arguments for the function
    * @param context - Tool execution context for Discord operations
-   * @returns Promise<TypedMCPToolResult> - Enhanced typed tool result
    */
   executeMCPFunction(
     functionName: string,
@@ -465,11 +436,9 @@ export interface MCPCapableToolAdapter extends ToolAdapter {
  * Additional context specific to MCP tool execution
  */
 export interface MCPToolContext extends ToolContext {
-  // MCP-specific context
   mcpServerName?: string;
   mcpFunctionName: string;
 
-  // Provider-specific MCP data
   providerMcpData?: Record<string, unknown>;
 }
 
@@ -479,15 +448,12 @@ export interface MCPToolContext extends ToolContext {
  * @deprecated Use TypedMCPToolResult from mcpTypes.ts for better type safety
  */
 export interface MCPToolResult extends ToolResult {
-  // MCP source information
   source: "mcp";
   functionName: string;
   serverName?: string;
 
-  // Raw MCP result for debugging/logging
   rawResult?: MCPServerResponse;
 
-  // Execution metadata
   executionTime?: number;
   providerFormat?: Record<string, unknown>;
 }
@@ -515,41 +481,33 @@ export interface MCPServerConfig {
 export interface MCPManagerInterface {
   /**
    * Initialize all available MCP servers during application startup
-   * @returns Promise<void>
    */
   initializeMCPServers(): Promise<void>;
 
   /**
    * Check if MCP manager is ready (initialization completed)
-   * @returns boolean
    */
   isReady(): boolean;
 
   /**
    * Get count of connected MCP servers
-   * @returns number
    */
   getConnectedServerCount(): number;
 
   /**
    * Get connection status for all MCP servers
-   * @returns Record<string, boolean>
    */
   getConnectionStatus(): Record<string, boolean>;
 
   /**
    * Get MCP tools available for a specific provider
    * @param provider - Provider name (google, openai, anthropic, etc.)
-   * @returns Promise<unknown[]> - Provider-specific MCP tools
    */
   getMCPToolsForProvider(provider: string): Promise<unknown[]>;
 
   /**
    * Execute an MCP function with provider-agnostic result
-   * @param functionName - Name of the function to execute
-   * @param args - Function arguments
    * @param context - Optional execution context for Discord operations
-   * @returns Promise<TypedMCPToolResult> - Enhanced typed result
    */
   executeMCPFunction(
     functionName: string,
@@ -559,33 +517,27 @@ export interface MCPManagerInterface {
 
   /**
    * Get available MCP function names across all connected servers
-   * @returns Promise<string[]>
    */
   getAvailableMCPFunctions(): Promise<string[]>;
 
   /**
    * Get MCP server configurations
-   * @returns Promise<EnhancedMCPServerConfig[]>
    */
   getServerConfigurations(): Promise<EnhancedMCPServerConfig[]>;
 
   /**
    * Check if a specific MCP function is available
-   * @param functionName - Name of the function to check
-   * @returns Promise<boolean>
    */
   isFunctionAvailable(functionName: string): Promise<boolean>;
 
   /**
    * Get the server name that provides a specific function
-   * @param functionName - Name of the function
    * @returns Promise<string | null>
    */
   getServerForFunction(functionName: string): Promise<string | null>;
 
   /**
    * Cleanup all MCP connections (for graceful shutdown)
-   * @returns Promise<void>
    */
   cleanup(): Promise<void>;
 }
@@ -610,37 +562,29 @@ export interface ToolExecutionEvent {
 export interface ToolRegistryInterface {
   /**
    * Register a new tool
-   * @param tool - The tool to register
    */
   registerTool(tool: Tool): void;
 
   /**
    * Get a tool by name
-   * @param name - Tool name
    * @returns The tool instance or undefined if not found
    */
   getTool(name: string): Tool | undefined;
 
   /**
    * Get all tools available for a specific provider
-   * @param provider - Provider name
    * @param context - Tool context for feature flag checking
-   * @returns Array of available tools
    */
   getAvailableTools(provider: string, context: ToolContext): Tool[];
 
   /**
    * Get all registered tools
-   * @returns Array of all tools
    */
   getAllTools(): Tool[];
 
   /**
    * Execute a tool by name
-   * @param toolName - Name of the tool to execute
    * @param args - Arguments for the tool
-   * @param context - Execution context
-   * @returns Tool execution result
    */
   executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;
 }

@@ -90,7 +90,7 @@ export async function buildOpenAICompatibleMessages(
         continue;
       }
       if (!options.seesImages) {
-        // Image part present but model cannot process it — add a text placeholder
+        // Image part present but model cannot process it, so add a text placeholder
         // so the model is still aware an image was attached. This can happen when
         // context was built with images included for a vision-capable fallback model.
         contentParts.push({
@@ -111,7 +111,7 @@ export async function buildOpenAICompatibleMessages(
     if (role === "assistant") {
       // Emit the assistant turn with its parts intact. relocateAssistantMediaToUserTurns (run after
       // the dialogue loop) peels any image parts into a synthetic user turn and flattens the
-      // remaining text-only assistant content back to a string — matching the previous output.
+      // remaining text-only assistant content back to a string, so matching the previous output.
       if (contentParts.length > 0) {
         messages.push({
           role,
@@ -137,18 +137,18 @@ export async function buildOpenAICompatibleMessages(
 
   // Relocate media off assistant turns into synthetic user turns (always-on, never gated by a
   // toggle): the assistant role cannot carry media in input history across OpenAI/Anthropic/Gemini
-  // shaped APIs. Runs only over the dialogue turns assembled above — system, tool/function history,
+  // shaped APIs. Runs only over the dialogue turns assembled above: system, tool/function history,
   // and prefill turns are appended afterwards and never carry relocatable media.
   messages = relocateAssistantMediaToUserTurns(messages);
 
   if (systemInstructionParts.length > 0) {
     const systemContent = systemInstructionParts.join("\n\n");
 
-    // 1. Some endpoints (e.g. Chatmock proxying Codex CLI) strip system-role
+    // Some endpoints (e.g. Chatmock proxying Codex CLI) strip system-role
     //    turns before forwarding to the underlying model.  When the adapter
     //    signals this via supportsSystemRole: false, inject the instructions
     //    as the first user turn so the model still receives them in-band.
-    // 2. The wrapper preamble mirrors the Gemma in-band injection pattern
+    // The wrapper preamble mirrors the Gemma in-band injection pattern
     //    used in googleStreamAdapter.ts.
     if (options.supportsSystemRole === false) {
       messages.unshift({
@@ -332,7 +332,6 @@ async function convertImagePartToOpenAIContentPart(
   }
 
   try {
-    // Fetch and optimize oversized images for LLM context
     const optimized = await fetchAndOptimizeImage(part.uri, part.mimeType);
     return {
       type: "image_url",

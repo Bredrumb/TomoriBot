@@ -211,9 +211,7 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
       const errorBody = (await response.json()) as { error?: unknown; detail?: unknown };
       const structuredDetail = stringifyErrorDetail(errorBody.error ?? errorBody.detail);
       if (structuredDetail) errorDetails += `: ${structuredDetail}`;
-    } catch {
-      // Ignore JSON parse failures on error responses.
-    }
+    } catch {}
     log.warn(`[TtsVoiceDesign] ${endpointUrl}/synthesize returned error: ${errorDetails}`);
     return { success: false, errorKind: "request_failed", details: errorDetails };
   }

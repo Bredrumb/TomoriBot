@@ -213,7 +213,7 @@ function selectionPhase(iteration: number) {
 
 mock.module("@/utils/discord/ui/personaWorkflow", () => ({
   PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS: 120_000,
-  // Present only for module linking — the persona scope never enters the anchor
+  // Present only for module linking: the persona scope never enters the anchor
   // private workflow (that path is exercised by modelTextGlobalPersistence.test.ts).
   beginAnchorPrivateWorkflow: async () => {
     throw new Error("beginAnchorPrivateWorkflow is not used by the persona scope");
@@ -321,7 +321,7 @@ mock.module("@/utils/cache/tomoriStateCache", () => ({
   },
   invalidateTomoriStateCache: () => undefined,
   // Rest of the module's export surface. `mock.module` is process-wide, so a partial stub
-  // breaks module linking as soon as anything else in this process imports a missing name —
+  // breaks module linking as soon as anything else in this process imports a missing name,
   // and text.ts now reaches interactionCore through the shared anchor helpers.
   getCachedMainPersona: async () => serverState,
   getLastDbError: () => null,

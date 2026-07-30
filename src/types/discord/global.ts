@@ -29,7 +29,6 @@ export interface CommandOption {
   options?: CommandOption[];
 }
 
-// Base command interface
 export interface BaseCommand {
   name: string;
   description: string;
@@ -39,12 +38,10 @@ export interface BaseCommand {
   callback: (client: Client, interaction: ChatInputCommandInteraction, userData: UserRow) => Promise<void>;
 }
 
-// Local command interface (for file loading)
 export interface LocalCommand extends BaseCommand {
   deleted?: boolean;
 }
 
-// Extended command interface (for runtime with additional properties)
 export interface ExtendedCommand extends BaseCommand {
   devOnly?: boolean;
   testOnly?: boolean;
@@ -73,7 +70,6 @@ export type EventArg =
   | GuildEmoji
   | Sticker;
 
-// i18n
 export interface LocaleObject {
   [key: string]: LocaleValue;
 }

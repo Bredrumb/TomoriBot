@@ -539,7 +539,6 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
   }
 
   async #editRoot(payload: PersonaWorkflowComponentsV2Payload, retainAttachments: boolean): Promise<Message> {
-    // A terminal/in-place render must land after any collapse-at-open edit.
     await this.settlePendingCollapse();
     return this.#editRootInner(payload, retainAttachments);
   }
@@ -560,14 +559,12 @@ class AnchorMessageController implements PersonaWorkflowMessageController {
    * Collapse-at-open: fire-and-forget replacement of the anchor message's live
    * controls with an inert notice as a modal opens. Discord emits no modal-dismiss
    * event, so without this a dismissed modal would strand clickable buttons for the
-   * full modal timeout. Not awaited here — the promise is stored (and swallowed at
+   * full modal timeout. Not awaited here: the promise is stored (and swallowed at
    * storage) so the modal's own await is never blocked, and {@link settlePendingCollapse}
    * lets the terminal edit order itself after it.
    */
   public collapseAtOpen(payload: PersonaWorkflowComponentsV2Payload): void {
-    // 1. One collapse per open; a repeated call keeps the first in-flight edit.
     if (this.#pendingCollapse) return;
-    // 2. Swallow at storage: a rejected collapse must never surface as a submit error.
     this.#pendingCollapse = this.#editRootInner(payload, false).catch(() => undefined);
   }
 
@@ -889,7 +886,7 @@ async function openRawWorkflowModal(
 
   // Collapse-at-open: as the modal opens, replace the anchor message's live
   // controls (provider picker, modal-ready button, or range selector) with an
-  // inert notice. Fire-and-forget relative to the modal await below — Discord
+  // inert notice. Fire-and-forget relative to the modal await below, because Discord
   // emits no modal-dismiss event, so this is the only thing that keeps a dismissed
   // modal from leaving clickable-but-dead buttons until the 10-minute timeout.
   // The edit uses the root token because `button` is consumed by showModal; every
@@ -1269,7 +1266,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
   const ledger = new AcknowledgementLedger();
   const { eligibility } = options;
 
-  // 0. Resolve eligibility once. `filterPersonas` is the single filtering point;
+  // Resolve eligibility once. `filterPersonas` is the single filtering point;
   //    both the initial entry and every persona-supplying retry pass through it,
   //    so the picker can never render a persona the command cannot act on.
   const filterPersonas = (list: readonly TPersona[]): { filtered: readonly TPersona[]; excluded: number } => {
@@ -1282,7 +1279,7 @@ export async function runPersonaPickerWorkflow<TPersona extends TomoriState, TVa
   let currentPersonas = initialFilter.filtered;
   let currentExcluded = initialFilter.excluded;
 
-  // 0a. Pre-picker empty case. The caller owns rendering its own notice on its
+  // Pre-picker empty case. The caller owns rendering its own notice on its
   //     deferred reply (it computes the same eligible set for its own guard), so
   //     the workflow returns `empty` here without ever rendering a picker.
   if (eligibility && currentPersonas.length === 0) {

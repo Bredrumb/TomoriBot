@@ -8,7 +8,7 @@
  *
  * Pipeline:
  * 1. Send image + text target description to Gemini
- * 2. Gemini returns JSON with bounding boxes (normalized 0–1000) and cropped PNG masks
+ * 2. Gemini returns JSON with bounding boxes (normalized 0-1000) and cropped PNG masks
  * 3. Each mask is resized to its bounding box pixel dimensions
  * 4. All masks are composited onto a full-canvas black image (white = redraw area)
  * 5. Final mask is binarized at threshold 127 for clean edges
@@ -18,7 +18,7 @@ import sharp from "sharp";
 import { GoogleGenAI, HarmBlockThreshold, HarmCategory, type SafetySetting } from "@google/genai";
 import { log } from "../misc/logger";
 
-/** Whether to enable debug mode — when true, returns the raw mask buffer for inspection */
+/** Whether to enable debug mode: when true, returns the raw mask buffer for inspection */
 const NAI_INPAINT_DEBUG = (process.env.NAI_INPAINT_DEBUG || "false").toLowerCase() === "true";
 
 /** Gemini model used for image segmentation (configurable for future model upgrades) */
@@ -29,7 +29,7 @@ const NAI_SEGMENTATION_TIMEOUT_MS = Number.parseInt(process.env.NAI_SEGMENTATION
 
 /**
  * Padding added to each side of the bounding box as a fraction of the box dimension.
- * 0.15 = 15% padding on each side — helps capture regions that extend beyond
+ * 0.15 = 15% padding on each side, so helps capture regions that extend beyond
  * Gemini's detected bounding box (e.g. wispy hair strands, flowing fabric).
  * Clamped to image bounds after expansion.
  */
@@ -62,10 +62,10 @@ const SEGMENTATION_SAFETY_SETTINGS: SafetySetting[] = [
 
 /**
  * A single segmentation result from Gemini.
- * Coordinates are normalized to 0–1000 range.
+ * Coordinates are normalized to 0-1000 range.
  */
 interface GeminiSegment {
-  /** Bounding box as [y0, x0, y1, x1], normalized 0–1000 */
+  /** Bounding box as [y0, x0, y1, x1], normalized 0-1000 */
   box_2d: [number, number, number, number];
   /** Base64-encoded PNG mask cropped to the bounding box (white = target region) */
   mask: string;
@@ -77,7 +77,7 @@ interface GeminiSegment {
  * Result of the full segmentation + mask processing pipeline.
  */
 export interface SegmentationResult {
-  /** Final full-canvas B/W mask as base64 PNG — white = redraw, black = preserve */
+  /** Final full-canvas B/W mask as base64 PNG: white = redraw, black = preserve */
   maskBase64: string;
   /** Number of segments detected and merged */
   segmentCount: number;
@@ -101,7 +101,6 @@ export interface SegmentationResult {
  * @param imageMimeType - MIME type of the source image
  * @param editTarget - Natural language description of what to segment (e.g. "the cat", "her hair")
  * @param apiKey - Decrypted Google API key
- * @returns Array of segmentation results from Gemini
  */
 async function callGeminiSegmentation(
   imageBase64: string,
@@ -115,7 +114,7 @@ async function callGeminiSegmentation(
     `[Segmentation] Sending request to Gemini model "${NAI_SEGMENTATION_MODEL}" (timeout: ${NAI_SEGMENTATION_TIMEOUT_MS}ms, image: ${Math.round((imageBase64.length * 0.75) / 1024)}KB, type: ${imageMimeType})`,
   );
 
-  // Wrap the API call in a timeout — Gemini can hang indefinitely without one
+  // Wrap the API call in a timeout because Gemini can hang indefinitely without one
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(
       () => reject(new Error(`Gemini segmentation timed out after ${NAI_SEGMENTATION_TIMEOUT_MS}ms`)),
@@ -124,11 +123,11 @@ async function callGeminiSegmentation(
   );
 
   // Build the request following Google's spatial understanding reference:
-  // 1. Simple, direct segmentation prompt — no extra reasoning instructions
-  // 2. Text prompt BEFORE image (Gemini processes instructions better when text leads)
-  // 3. Temperature 0.5 (prevents model from looping on repeated tokens)
-  // 4. Safety settings disabled (prevents silent blocks on anime/artistic content)
-  // 5. Thinking disabled (adds latency without quality benefit for structured extraction)
+  // Simple, direct segmentation prompt: no extra reasoning instructions
+  // Text prompt BEFORE image (Gemini processes instructions better when text leads)
+  // Temperature 0.5 (prevents model from looping on repeated tokens)
+  // Safety settings disabled (prevents silent blocks on anime/artistic content)
+  // Thinking disabled (adds latency without quality benefit for structured extraction)
   const apiCallPromise = genAI.models.generateContent({
     model: NAI_SEGMENTATION_MODEL,
     contents: [
@@ -172,7 +171,6 @@ async function callGeminiSegmentation(
     .replace(/\n?```$/, "")
     .trim();
 
-  // Parse the JSON array response
   let segments: GeminiSegment[];
   try {
     const parsed = JSON.parse(responseText);
@@ -182,7 +180,6 @@ async function callGeminiSegmentation(
     throw new Error(`Failed to parse segmentation response: ${(parseErr as Error).message}`);
   }
 
-  // Validate each segment has required fields
   const validSegments = segments.filter((seg) => {
     if (!seg.box_2d || !Array.isArray(seg.box_2d) || seg.box_2d.length !== 4) {
       log.warn(`Skipping segment with invalid box_2d: ${JSON.stringify(seg.box_2d)}`);
@@ -215,13 +212,13 @@ async function callGeminiSegmentation(
  * Key design decisions based on open-source NAI implementations
  * (ComfyUI_NAIDGenerator, novelai-api, novelai-python):
  *
- * 1. **Elliptical shape** — Organic curves blend better than rectangles in diffusion.
- * 2. **1/8th resolution quantization** — NAI's diffusion model operates in latent space
+ * - **Elliptical shape**, so Organic curves blend better than rectangles in diffusion.
+ * - **1/8th resolution quantization**, because NAI's diffusion model operates in latent space
  *    at 1/8th pixel resolution. Masks must be pre-quantized to this grid using
  *    nearest-neighbor interpolation (down to `ceil(w/64)*8` × `ceil(h/64)*8`, then
  *    back up to full size). Without this, full-resolution mask edges create intermediate
  *    grey values when the model internally downsamples, producing a visible halo.
- * 3. **RGBA format** — NAI expects RGBA PNG where white pixels have alpha=255 (redraw)
+ * - **RGBA format**, because NAI expects RGBA PNG where white pixels have alpha=255 (redraw)
  *    and black pixels have alpha=0 (preserve). The alpha channel is the actual mask
  *    signal, matching the `naimask_to_base64()` encoding from ComfyUI_NAIDGenerator.
  *
@@ -229,7 +226,6 @@ async function callGeminiSegmentation(
  * @param originalWidth - Width of the source image in pixels
  * @param originalHeight - Height of the source image in pixels
  * @param isV4 - Whether the target model is V4+ (affects quantization grid)
- * @returns Full-canvas RGBA PNG mask buffer (white+opaque = redraw, black+transparent = preserve)
  */
 async function buildBoundingBoxMask(
   segments: GeminiSegment[],
@@ -237,19 +233,17 @@ async function buildBoundingBoxMask(
   originalHeight: number,
   isV4: boolean,
 ): Promise<Buffer> {
-  // Build SVG ellipses for each segment's bounding box
   const svgEllipses: string[] = [];
 
   for (const segment of segments) {
     const [y0Norm, x0Norm, y1Norm, x1Norm] = segment.box_2d;
 
-    // Convert normalized 0–1000 coordinates to pixel coordinates
     let x0 = Math.round((x0Norm / 1000) * originalWidth);
     let y0 = Math.round((y0Norm / 1000) * originalHeight);
     let x1 = Math.round((x1Norm / 1000) * originalWidth);
     let y1 = Math.round((y1Norm / 1000) * originalHeight);
 
-    // Apply padding — expand each side by a fraction of the box dimension
+    // Apply padding: expand each side by a fraction of the box dimension
     // to capture content that extends beyond Gemini's detected bounding box
     const padX = Math.round((x1 - x0) * NAI_INPAINT_PADDING);
     const padY = Math.round((y1 - y0) * NAI_INPAINT_PADDING);
@@ -261,7 +255,6 @@ async function buildBoundingBoxMask(
     const bboxWidth = Math.max(x1 - x0, 1);
     const bboxHeight = Math.max(y1 - y0, 1);
 
-    // Ellipse center and radii (inscribed within the padded bounding box)
     const cx = x0 + bboxWidth / 2;
     const cy = y0 + bboxHeight / 2;
     const rx = bboxWidth / 2;
@@ -278,7 +271,6 @@ async function buildBoundingBoxMask(
     throw new Error("No valid bounding boxes to build mask from");
   }
 
-  // Create SVG with white ellipses on a black background
   const svgMask = Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${originalWidth}" height="${originalHeight}">` +
       `<rect width="100%" height="100%" fill="black"/>` +
@@ -286,12 +278,11 @@ async function buildBoundingBoxMask(
       `</svg>`,
   );
 
-  // Step 1: Render SVG to a greyscale image at full resolution
   let maskBuffer = await sharp(svgMask).resize(originalWidth, originalHeight).greyscale().toBuffer();
 
   // Step 2: Quantize mask to NAI's latent space grid (1/8th resolution).
   // NAI's diffusion model operates at 1/8th pixel resolution in latent space.
-  // The mask gets downsampled internally regardless — but if we send a full-res
+  // The mask gets downsampled internally regardless; but if we send a full-res
   // mask with smooth edges, the internal downsampling creates intermediate grey
   // values at boundaries that the model interprets as partial redraw (= halo).
   // Pre-quantizing with nearest-neighbor ensures every mask pixel aligns exactly
@@ -299,7 +290,6 @@ async function buildBoundingBoxMask(
   const latentW = Math.ceil(originalWidth / 64) * 8;
   const latentH = Math.ceil(originalHeight / 64) * 8;
 
-  // Downscale to latent grid using nearest-neighbor (preserves hard binary edges)
   maskBuffer = await sharp(maskBuffer).resize(latentW, latentH, { kernel: sharp.kernel.nearest }).toBuffer();
 
   // For V4+ models: upscale back to full resolution (still nearest-neighbor)
@@ -318,18 +308,14 @@ async function buildBoundingBoxMask(
   // (Matches naimask_to_base64() from ComfyUI_NAIDGenerator)
   const { data, info } = await sharp(maskBuffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
-  // Walk the raw RGBA pixel data: set alpha=255 where white, alpha=0 where black
   for (let i = 0; i < data.length; i += 4) {
-    // Check if any RGB channel is non-zero (i.e. part of the white mask region)
     const isWhite = data[i] > 127 || data[i + 1] > 127 || data[i + 2] > 127;
     if (isWhite) {
-      // Redraw region: pure white + fully opaque
       data[i] = 255;
       data[i + 1] = 255;
       data[i + 2] = 255;
       data[i + 3] = 255;
     } else {
-      // Preserve region: pure black + fully transparent
       data[i] = 0;
       data[i + 1] = 0;
       data[i + 2] = 0;
@@ -351,7 +337,7 @@ async function buildBoundingBoxMask(
 }
 
 /**
- * Color palette for bounding box overlays — matches Google's spatial understanding example.
+ * Color palette for bounding box overlays: matches Google's spatial understanding example.
  */
 const BBOX_COLORS = [
   "#FF0000",
@@ -375,7 +361,6 @@ const BBOX_COLORS = [
  * see exactly what region is being sent to NAI for inpainting.
  *
  * @param imageBuffer - Original source image as a Buffer
- * @param segments - Gemini segmentation results with bounding box coordinates
  * @param imgWidth - Source image width in pixels
  * @param imgHeight - Source image height in pixels
  * @returns PNG buffer of the original image with bounding box overlays
@@ -386,7 +371,6 @@ async function generateDebugOverlay(
   imgWidth: number,
   imgHeight: number,
 ): Promise<Buffer> {
-  // Build SVG overlay with bounding boxes, padded ellipses, and labels
   const svgElements: string[] = [];
 
   for (let i = 0; i < segments.length; i++) {
@@ -394,7 +378,7 @@ async function generateDebugOverlay(
     const color = BBOX_COLORS[i % BBOX_COLORS.length];
     const [y0Norm, x0Norm, y1Norm, x1Norm] = segment.box_2d;
 
-    // Convert normalized 0–1000 coordinates to pixel coordinates (raw Gemini bbox)
+    // Convert normalized 0-1000 coordinates to pixel coordinates (raw Gemini bbox)
     const x0 = Math.round((x0Norm / 1000) * imgWidth);
     const y0 = Math.round((y0Norm / 1000) * imgHeight);
     const x1 = Math.round((x1Norm / 1000) * imgWidth);
@@ -402,12 +386,10 @@ async function generateDebugOverlay(
     const bboxWidth = Math.max(x1 - x0, 1);
     const bboxHeight = Math.max(y1 - y0, 1);
 
-    // 1. Draw raw bounding box rectangle (dashed outline to distinguish from ellipse)
     svgElements.push(
       `<rect x="${x0}" y="${y0}" width="${bboxWidth}" height="${bboxHeight}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="6,4"/>`,
     );
 
-    // 2. Compute padded bounding box (same logic as buildBoundingBoxMask)
     const padX = Math.round(bboxWidth * NAI_INPAINT_PADDING);
     const padY = Math.round(bboxHeight * NAI_INPAINT_PADDING);
     const px0 = Math.max(0, x0 - padX);
@@ -417,7 +399,6 @@ async function generateDebugOverlay(
     const paddedW = px1 - px0;
     const paddedH = py1 - py0;
 
-    // 3. Draw the padded ellipse (semi-transparent fill to show coverage area)
     const cx = px0 + paddedW / 2;
     const cy = py0 + paddedH / 2;
     const rx = paddedW / 2;
@@ -426,9 +407,7 @@ async function generateDebugOverlay(
       `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="2"/>`,
     );
 
-    // 4. Draw label text above the bounding box
     const label = segment.label || `Segment ${i + 1}`;
-    // Escape XML special characters in label text
     const escapedLabel = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const labelY = Math.max(py0 - 4, 14); // Keep label visible at top edge
     svgElements.push(
@@ -440,7 +419,6 @@ async function generateDebugOverlay(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${imgWidth}" height="${imgHeight}">${svgElements.join("")}</svg>`,
   );
 
-  // Composite the SVG overlay onto the original image
   const overlayBuffer = await sharp(imageBuffer)
     .composite([{ input: svgOverlay, top: 0, left: 0 }])
     .png()
@@ -455,7 +433,6 @@ async function generateDebugOverlay(
  *
  * @param imageBase64 - Base64-encoded source image
  * @param imageMimeType - MIME type of the source image (e.g. "image/png")
- * @param editTarget - Natural language description of the region to edit
  * @param apiKey - Decrypted Google API key for Gemini
  * @param isV4 - Whether the target NAI model is V4+ (affects mask quantization grid)
  * @returns SegmentationResult with the final mask and metadata
@@ -467,7 +444,6 @@ export async function segmentImage(
   apiKey: string,
   isV4 = true,
 ): Promise<SegmentationResult> {
-  // 1. Get image dimensions from the source image
   const imageBuffer = Buffer.from(imageBase64, "base64");
   const metadata = await sharp(imageBuffer).metadata();
 
@@ -477,15 +453,14 @@ export async function segmentImage(
 
   log.info(`Starting segmentation for "${editTarget}" on ${metadata.width}x${metadata.height} image`);
 
-  // 2. Call Gemini segmentation API
+  // Call Gemini segmentation API
   const segments = await callGeminiSegmentation(imageBase64, imageMimeType, editTarget, apiKey);
 
-  // 3. Build mask from bounding boxes (elliptical fill, quantized to latent grid)
   const maskBuffer = await buildBoundingBoxMask(segments, metadata.width, metadata.height, isV4);
 
   const maskBase64 = maskBuffer.toString("base64");
 
-  // 4. Generate debug artifacts when debug mode is enabled
+  // Generate debug artifacts when debug mode is enabled
   let debugMaskBuffer: Buffer | undefined;
   let debugOverlayBuffer: Buffer | undefined;
 

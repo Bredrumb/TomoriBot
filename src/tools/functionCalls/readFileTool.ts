@@ -20,7 +20,7 @@ const CHAT_DOCUMENT_MAX_TEXT_LENGTH = Number.parseInt(process.env.CHAT_DOCUMENT_
 /**
  * Tool for reading text-based file attachments from Discord messages.
  * Supports PDF and any plain-text format (source code, markdown, JSON, YAML, etc.).
- * Returns extracted text directly in the tool result — no context restart needed.
+ * Returns extracted text directly in the tool result, so no context restart needed.
  * Available for all LLM providers since the output is text-only.
  */
 export class ReadFileTool extends BaseTool {
@@ -49,7 +49,7 @@ export class ReadFileTool extends BaseTool {
   /**
    * Read document tool is available for all providers (text-only output).
    * Not gated by sees_images since this returns plain text.
-   * @param _provider - LLM provider name (unused — always available)
+   * @param _provider - LLM provider name (unused: always available)
    * @returns Always true
    */
   isAvailableFor(_provider: string): boolean {
@@ -73,7 +73,6 @@ export class ReadFileTool extends BaseTool {
    * @returns Promise resolving to tool result with extracted text
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // 1. Validate required parameters
     const messageId = args.media_id as string;
     const filenameFilter = args.filename as string | undefined;
 
@@ -92,12 +91,11 @@ export class ReadFileTool extends BaseTool {
     );
 
     try {
-      // 2. Fetch recent messages from the channel (last 100)
+      // Fetch recent messages from the channel (last 100)
       const recentMessages = await context.channel.messages.fetch({
         limit: 100,
       });
 
-      // 3. Find the target message by ID
       const targetMessage = recentMessages.get(messageId);
       if (!targetMessage) {
         log.warn(`ReadFileTool: Message ${messageId} not found in recent 100 messages`);
@@ -110,7 +108,7 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // 4. Find document attachment by extension/MIME type
+      // Find document attachment by extension/MIME type
       let docAttachment: {
         url: string;
         name: string;
@@ -126,7 +124,6 @@ export class ReadFileTool extends BaseTool {
           continue;
         }
 
-        // If a filename filter is provided, match against it
         if (filenameFilter && !attachName.toLowerCase().includes(filenameFilter.toLowerCase())) {
           continue;
         }
@@ -155,7 +152,7 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // 5. Send "Reading document..." embed indicator
+      // Send "Reading document..." embed indicator
       await sendToolProgressNotice(
         context,
         "document_reading",
@@ -168,7 +165,6 @@ export class ReadFileTool extends BaseTool {
         "ReadFileTool",
       );
 
-      // 6. Download and extract text
       const result = await extractTextFromUrl(docAttachment.url, docAttachment.name, docAttachment.contentType, {
         maxSizeBytes: CHAT_DOCUMENT_MAX_SIZE_BYTES,
         maxTextLength: CHAT_DOCUMENT_MAX_TEXT_LENGTH,
@@ -176,7 +172,6 @@ export class ReadFileTool extends BaseTool {
         timeoutMs: 15000,
       });
 
-      // 7. Handle extraction result
       if (!result.success) {
         const errorMessages: Record<string, string> = {
           memory_pressure:
@@ -206,7 +201,7 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // Success — build the result with document content in `data`
+      // Success: build the result with document content in `data`
       // NOTE: In the streaming pipeline (tomoriChat.ts), only `toolResult.data` is
       // serialized into the functionResponse the LLM sees. `toolResult.message` is
       // used by provider adapter convertResult() but NOT the main streaming path.
@@ -216,7 +211,6 @@ export class ReadFileTool extends BaseTool {
         : "";
       const authorName = targetMessage.author?.displayName || targetMessage.author?.username || "unknown user";
 
-      // Notify the user visually if the file was too large and had to be cut
       if (result.truncated) {
         await sendToolProgressNotice(
           context,

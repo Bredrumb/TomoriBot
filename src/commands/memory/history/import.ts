@@ -168,7 +168,6 @@ function buildFooter(params: {
  * comparison (server_memories tags are stored with surrounding quotes).
  *
  * @param serverId Internal server id
- * @param personaLineageId Persona lineage id (cross-version persona identity)
  * @param filterChannelTags Channel tag names without `#` prefix (e.g. ["general", "dev"])
  */
 async function loadInCharacterMemoryLines(
@@ -275,7 +274,7 @@ async function showExtractionFailedEmbed(
     total_windows: failure.totalWindows.toString(),
   });
   const suffix = `\n\n${footer}`;
-  // 1. Provider errors can be long (schema-validation dumps in particular), so reserve room
+  // Provider errors can be long (schema-validation dumps in particular), so reserve room
   //    for the headline, the code fence, and the pagination footer before truncating.
   const fenceOverhead = "\n\n```\n\n```".length;
   const detail = truncateForEmbedDescription(failure.error, headline.length + suffix.length + fenceOverhead);
@@ -696,7 +695,7 @@ async function runIncrementalExtraction(params: {
   const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
   const allChunks: string[] = [];
   let previousRestatements: string[] = [];
-  // 1. Failure bookkeeping: the first provider error is the one shown to the user, since
+  // Failure bookkeeping: the first provider error is the one shown to the user, since
   //    a model that cannot emit structured output fails identically on every window.
   //    `discardedEntries` counts facts the model returned in an unusable shape, which is a
   //    softer failure than a window erroring outright but must not vanish silently.
@@ -733,7 +732,7 @@ async function runIncrementalExtraction(params: {
       endpointUrl,
     );
 
-    // 2. A failed window is recorded and skipped rather than treated as "found nothing",
+    // A failed window is recorded and skipped rather than treated as "found nothing",
     //    so the run can still report the real cause if no window ever succeeds.
     if (!windowOutcome.ok) {
       failedWindows++;
@@ -786,7 +785,7 @@ async function runIncrementalExtraction(params: {
     }
   }
 
-  // 3. Nothing persisted: report the provider failure when one occurred, and fall back to
+  // Nothing persisted: report the provider failure when one occurred, and fall back to
   //    the genuine "nothing worth extracting" terminal only when every window succeeded.
   if (allChunks.length === 0) {
     if (firstExtractionError !== null) {
@@ -798,7 +797,7 @@ async function runIncrementalExtraction(params: {
         totalWindows: windows.length,
       };
     }
-    // Every window "succeeded" yet nothing survived validation — that is a malformed-output
+    // Every window "succeeded" yet nothing survived validation: that is a malformed-output
     // problem, not an empty conversation, so it must not read as "no facts found".
     if (discardedEntries > 0) {
       return {
@@ -1081,7 +1080,7 @@ export async function execute(
           : "conversation";
     const messageFetchLimit = interaction.options.getInteger("limit") ?? 100;
 
-    // In-character extraction requires a single persona's identity to do its job —
+    // In-character extraction requires a single persona's identity to do its job:
     // reject global/automatic combinations rather than silently degrading.
     if (promptMode === "in_character" && scope !== "persona") {
       await replyInfoEmbed(interaction, locale, {
@@ -1111,9 +1110,7 @@ export async function execute(
 
     const allPersonas = await personaRepository.loadAllForServer(guildId);
 
-    // ====================================================================
     // SCOPE: PERSONA
-    // ====================================================================
     if (scope === "persona") {
       if (allPersonas.length === 0) {
         await replyInfoEmbed(interaction, locale, {
@@ -1334,9 +1331,6 @@ export async function execute(
       return;
     }
 
-    // ====================================================================
-    // SCOPE: GLOBAL
-    // ====================================================================
     if (scope === "global") {
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
@@ -1526,7 +1520,6 @@ export async function execute(
     }
 
     if (detectedTomoriIds.length === 0) {
-      // No personas detected — fall back to global scope
       const scopeLabel = localizer(locale, "commands.memory.history.import.scope_label_global");
 
       if (!(await reserveDocumentQuotaForImport(interaction.user.id, modalSubmitInteraction, locale))) return;
@@ -1639,7 +1632,6 @@ export async function execute(
       return;
     }
 
-    // Run extraction once, writing each window's chunks to all persona documents
     const extractResult = await runIncrementalExtraction({
       formattedResult,
       provider,

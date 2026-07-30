@@ -83,7 +83,6 @@ import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 async function getDefaultVertexModel(): Promise<string> {
   const providerName = "vertex";
 
-  // 1. Try cache first (fastest, no DB query)
   if (isLLMCacheReady()) {
     const cachedDefault = getCachedDefaultLLM(providerName);
     if (cachedDefault) {
@@ -92,7 +91,6 @@ async function getDefaultVertexModel(): Promise<string> {
     }
   }
 
-  // 2. Query database for is_default model
   try {
     const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
@@ -105,7 +103,6 @@ async function getDefaultVertexModel(): Promise<string> {
     });
   }
 
-  // 3. Fallback to first non-deprecated model
   try {
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
@@ -117,7 +114,6 @@ async function getDefaultVertexModel(): Promise<string> {
     log.error(`Failed to load available models for ${providerName}`, error as Error);
   }
 
-  // 4. No models found
   throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 
@@ -159,22 +155,15 @@ export class VertexProvider
     return vertexProviderInfo;
   }
 
-  // ─── Client helper ──────────────────────────────────────────────────
-
   /**
    * Build a Vertex GoogleGenAI client from the composite key.
-   * @param compositeKey - The stored {project_id}::{location} string
-   * @returns GoogleGenAI client configured for Vertex AI
    */
   private buildClient(compositeKey: string): GoogleGenAI {
     const config = parseVertexCompositeKey(compositeKey);
     return createVertexClient(config);
   }
 
-  // ─── ApiKeyValidation ────────────────────────────────────────────────
-
   async validateApiKey(compositeKey: string): Promise<ApiKeyValidationResult> {
-    // 1. Parse and validate composite-key format
     let genAI: GoogleGenAI;
     try {
       genAI = this.buildClient(compositeKey);
@@ -187,7 +176,7 @@ export class VertexProvider
       return { valid: false, error: providerError };
     }
 
-    // 2. Exercise ADC, project/location configuration, and Vertex endpoint access
+    // Exercise ADC, project/location configuration, and Vertex endpoint access
     // without coupling setup to the current default model.
     try {
       log.info("Validating Vertex AI configuration...");
@@ -212,14 +201,10 @@ export class VertexProvider
     }
   }
 
-  // ─── Error formatting ───────────────────────────────────────────────
-
   formatErrorDescription(error: ProviderError, locale: string): string | null {
     const adapter = new VertexStreamAdapter();
     return adapter.createErrorDescription(error, locale);
   }
-
-  // ─── SupportsEmbeddings ─────────────────────────────────────────────
 
   supportsEmbeddingTaskType(): boolean {
     return true;
@@ -261,8 +246,6 @@ export class VertexProvider
     return results.filter((values) => values.length > 0);
   }
 
-  // ─── SupportsStructuredOutput ────────────────────────────────────────
-
   getExpressionInitializationBatchSize(): number {
     return 30;
   }
@@ -276,8 +259,6 @@ export class VertexProvider
     return await callGoogleStructuredJSON(request, responseSchema, zodSchema, client);
   }
 
-  // ─── SupportsPresetGeneration ────────────────────────────────────────
-
   async generatePreset(request: ProviderPresetGenerationRequest): Promise<PresetGenerationResult> {
     const client = this.buildClient(request.apiKey);
     return await generatePresetFromPrompt(
@@ -290,8 +271,6 @@ export class VertexProvider
       client,
     );
   }
-
-  // ─── SupportsConversationCompaction ──────────────────────────────────
 
   async generateConversationSummary(request: ProviderCompactSummaryRequest): Promise<CompactConversationResult> {
     const client = this.buildClient(request.apiKey);
@@ -312,7 +291,7 @@ export class VertexProvider
     });
 
     // Build parts: reference images (as inlineData) followed by the text prompt.
-    // SendMessageParameters.message is PartListUnion — inline images must be
+    // SendMessageParameters.message is PartListUnion: inline images must be
     // passed as inlineData parts, not via a non-existent "media" field.
     const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
       ...(request.referenceImages ?? []).map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
@@ -341,8 +320,6 @@ export class VertexProvider
 
     throw new Error("Vertex image generation response did not contain inline image data");
   }
-
-  // ─── Tools ──────────────────────────────────────────────────────────
 
   async getTools(
     tomoriState: TomoriState,
@@ -388,7 +365,6 @@ export class VertexProvider
         totalCount,
       } = await getAvailableToolsWithMCP("vertex", toolStateForContext);
 
-      // Apply streaming context filtering if available
       let finalBuiltInTools = availableBuiltInTools;
       let finalMcpFunctionNames = availableMcpFunctionNames;
       if (streamingContext) {
@@ -441,13 +417,9 @@ export class VertexProvider
     }
   }
 
-  // ─── Default model ──────────────────────────────────────────────────
-
   async getDefaultModel(): Promise<string> {
     return await getDefaultVertexModel();
   }
-
-  // ─── Config ─────────────────────────────────────────────────────────
 
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<VertexProviderConfig> {
     const maxOutputTokens =
@@ -505,8 +477,6 @@ export class VertexProvider
 
     return config;
   }
-
-  // ─── Streaming ──────────────────────────────────────────────────────
 
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
@@ -583,7 +553,6 @@ export class VertexProvider
         log.info(`VertexProvider: Applied thinking config for model ${config.model}`);
       }
 
-      // Override tools with context-aware tools when streaming context is provided
       if (streamingContext && tomoriState.llm.has_tools) {
         log.info("VertexProvider: Reloading tools with streaming context for context-aware availability");
         const contextAwareTools = await this.getTools(tomoriState, streamingContext);
@@ -592,7 +561,6 @@ export class VertexProvider
         log.info("VertexProvider: Skipping context-aware tool reload - model doesn't support tools");
       }
 
-      // Create streaming context
       const streamContext: StreamContext = buildStreamContext({
         provider: "vertex",
         channel,
@@ -612,7 +580,6 @@ export class VertexProvider
         prefixStrippingName,
       });
 
-      // Create streaming components
       const orchestrator = new StreamOrchestrator();
       const vertexAdapter = new VertexStreamAdapter();
 

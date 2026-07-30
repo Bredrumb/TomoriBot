@@ -1,5 +1,3 @@
-// locales/ja/commands/provider.ts
-
 export default {
   provider: {
     description: `保存されたプロバイダー設定を管理`,

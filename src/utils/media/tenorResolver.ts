@@ -7,7 +7,7 @@ import { log } from "../misc/logger";
 
 /**
  * Maximum time to wait for Tenor's HTML page to respond, in milliseconds.
- * Configurable via TENOR_FETCH_TIMEOUT_MS env var. Defaults to 5 s — generous for a static
+ * Configurable via TENOR_FETCH_TIMEOUT_MS env var. Defaults to 5 s (generous for a static
  * HTML fetch, and short enough that a stalled Tenor server can't block the chat turn.
  * Clamped to a minimum of 1 s.
  */
@@ -35,12 +35,12 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
     const slugMatch = tenorViewUrl.match(/\/view\/([a-zA-Z0-9%-]+)-gif-\d+/);
     const urlSlug = slugMatch?.[1] || "";
 
-    // 1. Fetch the Tenor page HTML with a bounded timeout.
+    // Fetch the Tenor page HTML with a bounded timeout.
     // Why: undici's default headersTimeout is 300_000 ms (5 min). If Tenor stalls on a
     // malformed/unknown GIF id (e.g. 20-digit overflow IDs) or serves a hanging Cloudflare
     // interstitial, an unguarded fetch blocks the entire chat turn for 5 minutes before
-    // throwing. A failed resolve is non-fatal — the Tenor URL is kept as descriptive text
-    // context — so we can afford an aggressive timeout.
+    // throwing. A failed resolve is non-fatal, so the Tenor URL is kept as descriptive text
+    // context so we can afford an aggressive timeout.
     const response = await fetch(tenorViewUrl, { signal: AbortSignal.timeout(TENOR_FETCH_TIMEOUT_MS) });
     if (!response.ok) {
       log.warn(`Tenor Resolver: Failed to fetch Tenor page: ${response.status}`);
@@ -49,14 +49,14 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
 
     const html = await response.text();
 
-    // 2. Method 1 (Primary): Try to extract from <script id="gif-json"> tag
+    // Method 1 (Primary): Try to extract from <script id="gif-json"> tag
     const gifUrl = extractFromGifJson(html);
     if (gifUrl) {
       log.success(`Tenor Resolver: Resolved via JSON method: ${gifUrl}`);
       return gifUrl;
     }
 
-    // 3. Method 2 (Fallback): Use regex to find media URLs matching the slug
+    // Method 2 (Fallback): Use regex to find media URLs matching the slug
     const regexMediaUrl = extractViaRegex(html, urlSlug);
     if (regexMediaUrl) {
       log.success(`Tenor Resolver: Resolved via regex method: ${regexMediaUrl}`);
@@ -83,19 +83,16 @@ export async function resolveTenorUrl(tenorViewUrl: string): Promise<string | nu
  */
 function extractFromGifJson(html: string): string | null {
   try {
-    // Look for <script id="gif-json"> tag
     const gifJsonMatch = html.match(/<script[^>]*id=["']gif-json["'][^>]*>(.*?)<\/script>/s);
 
     if (!gifJsonMatch) {
       return null;
     }
 
-    // Parse the JSON content
     const jsonContent = gifJsonMatch[1].trim();
 
     const gifData = JSON.parse(jsonContent);
 
-    // Navigate to gif URL: media_formats.gif.url
     const gifUrl = gifData?.media_formats?.gif?.url;
 
     if (typeof gifUrl === "string" && gifUrl.endsWith(".gif")) {
@@ -114,7 +111,6 @@ function extractFromGifJson(html: string): string | null {
 /**
  * Extract media URL using regex pattern (Method 2 - Fallback)
  * Searches for media.tenor.com URLs matching the slug
- * @param html - The HTML content to search
  * @param urlSlug - The slug from the view URL to match against (e.g., "tsukimura-dark-souls-death")
  */
 function extractViaRegex(html: string, urlSlug: string): string | null {
@@ -126,12 +122,9 @@ function extractViaRegex(html: string, urlSlug: string): string | null {
       return null;
     }
 
-    // Decode the URL slug for matching (handles URL-encoded characters)
     const decodedSlug = decodeURIComponent(urlSlug);
 
-    // Filter URLs that match the slug from the view URL
     const matchingUrls = allMediaTenorMatches.filter((url) => {
-      // Extract the filename part (without extension)
       const filename = url.split("/").pop() || "";
       const filenameWithoutExt = filename.replace(/\.(gif|mp4|webm|png)$/i, "");
 
@@ -145,13 +138,11 @@ function extractViaRegex(html: string, urlSlug: string): string | null {
     }
 
     if (matchingUrls.length > 0) {
-      // Prioritize GIF format if available
       const gifUrl = matchingUrls.find((url) => url.endsWith(".gif"));
       if (gifUrl) {
         return gifUrl;
       }
 
-      // If no GIF, return the first matching URL (likely MP4/WebM)
       return matchingUrls[0];
     }
 

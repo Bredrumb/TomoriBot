@@ -1,5 +1,3 @@
-// locales/en-US/commands/forget.ts
-
 export default {
   forget: {
     sampledialogue: {

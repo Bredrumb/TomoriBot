@@ -1,5 +1,3 @@
-// locales/ja/commands/config.ts
-
 export default {
   config: {
     options: {

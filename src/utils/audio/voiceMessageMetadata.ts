@@ -2,14 +2,14 @@
  * Generates Discord voice message metadata (waveform + duration) from an audio buffer.
  *
  * Discord's native voice message UI requires two extra fields on the attachment:
- *   - `waveform`      — base64-encoded uint8 array of ~100 amplitude samples
- *   - `duration_secs` — audio duration in seconds
+ *   - `waveform`      : base64-encoded uint8 array of ~100 amplitude samples
+ *   - `duration_secs` : audio duration in seconds
  *
  * Duration is parsed from the audio header via music-metadata (pure JS, <5ms).
  * Waveform is computed by decoding the audio to raw PCM via ffmpeg-static
  * (bundled binary, no system install required) and downsampling the amplitude.
  *
- * Returns null on any failure — callers should fall back to a plain attachment.
+ * Returns null on any failure , so callers should fall back to a plain attachment.
  */
 
 import ffmpegPath from "ffmpeg-static";
@@ -26,7 +26,7 @@ const FFMPEG_TIMEOUT_MS =
     : 5_000;
 
 export interface VoiceMessageMetadata {
-  /** Base64-encoded uint8 array of amplitude samples (100 values, 0–255). */
+  /** Base64-encoded uint8 array of amplitude samples (100 values, 0-255). */
   waveform: string;
   /** Audio duration in seconds. */
   durationSecs: number;
@@ -44,7 +44,6 @@ export async function generateVoiceMessageMetadata(
   mimeType: string,
 ): Promise<VoiceMessageMetadata | null> {
   try {
-    // 1. Parse audio header for duration — pure JS, no subprocess needed
     const metadata = await parseBuffer(audioBuffer, { mimeType });
     const durationSecs = metadata.format.duration;
     if (!durationSecs || durationSecs <= 0) {
@@ -52,7 +51,7 @@ export async function generateVoiceMessageMetadata(
       return null;
     }
 
-    // 2. Decode to raw mono PCM via the ffmpeg-static bundled binary
+    // Decode to raw mono PCM via the ffmpeg-static bundled binary
     if (!ffmpegPath) {
       log.warn("[VoiceWaveform] ffmpeg-static binary not available");
       return null;
@@ -81,7 +80,6 @@ export async function generateVoiceMessageMetadata(
       },
     );
 
-    // 3. Race subprocess exit against a timeout to avoid hanging
     const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), FFMPEG_TIMEOUT_MS));
     const exitPromise = proc.exited.then(() => new Response(proc.stdout).arrayBuffer());
 
@@ -98,8 +96,8 @@ export async function generateVoiceMessageMetadata(
       return null;
     }
 
-    // 4. Compute 100 amplitude samples by splitting PCM into equal chunks
-    //    and taking the peak absolute value in each chunk, normalized 0–255.
+    // Compute 100 amplitude samples by splitting PCM into equal chunks
+    //    and taking the peak absolute value in each chunk, normalized 0-255.
     const sampleCount = Math.floor(pcmBuffer.length / 2); // 16-bit = 2 bytes
     const chunkSize = Math.max(1, Math.floor(sampleCount / WAVEFORM_SAMPLES));
     const waveformBytes = new Uint8Array(WAVEFORM_SAMPLES);
@@ -112,7 +110,7 @@ export async function generateVoiceMessageMetadata(
         const amplitude = Math.abs(pcmBuffer.readInt16LE(j * 2));
         if (amplitude > peak) peak = amplitude;
       }
-      // Normalize 0–32767 → 0–255
+      // Normalize 0-32767 → 0-255
       waveformBytes[i] = Math.round((peak / 32767) * 255);
     }
 

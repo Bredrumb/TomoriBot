@@ -1,5 +1,3 @@
-// locales/ja/commands/memory.ts
-
 export default {
   memory: {
     description: `保存された記憶とドキュメントを管理します。`,

@@ -32,34 +32,31 @@ let cacheMisses = 0;
  * Returns all rows (enabled + disabled) from cache or DB.
  *
  * Cache flow:
- * 1. Check in-memory cache
+ * - Check in-memory cache
  *    - HIT & FRESH → return immediately (0 DB queries)
  *    - MISS or STALE → load from DB, cache, and return
  *
- * @param serverId - Internal server_id (FK to servers table)
  * @returns Array of GuildMcpServerRow (may be empty if none registered)
  */
 export async function getCachedGuildMcpConfigs(serverId: number): Promise<GuildMcpServerRow[]> {
   const now = Date.now();
   const entry = cache.get(serverId);
 
-  // 1. Cache hit check
   if (entry) {
     const age = now - entry.cachedAt;
     if (age < CACHE_TTL_MS) {
       cacheHits++;
       return entry.configs;
     }
-    // Stale — fall through to refresh
   }
 
-  // 2. Cache miss or stale — load from DB via repository
+  // Cache miss or stale : load from DB via repository
   cacheMisses++;
 
   try {
     const configs = await mcpRepository.loadGuildMcpConfigs(serverId);
 
-    // 3. Cache the result (even if empty — avoids repeated DB queries for guilds with no MCP servers)
+    // Cache the result (even if empty - avoids repeated DB queries for guilds with no MCP servers)
     cache.set(serverId, {
       configs,
       cachedAt: now,
@@ -83,8 +80,6 @@ export async function getCachedGuildMcpConfigs(serverId: number): Promise<GuildM
  * Get only enabled guild MCP server configurations.
  * Convenience wrapper that filters getCachedGuildMcpConfigs().
  *
- * @param serverId - Internal server_id
- * @returns Array of enabled GuildMcpServerRow
  */
 export async function getCachedEnabledGuildMcpConfigs(serverId: number): Promise<GuildMcpServerRow[]> {
   const configs = await getCachedGuildMcpConfigs(serverId);
@@ -95,7 +90,6 @@ export async function getCachedEnabledGuildMcpConfigs(serverId: number): Promise
  * Invalidate the cache for a specific server.
  * Must be called after any DB write (insert/delete/toggle) to ensure consistency.
  *
- * @param serverId - Internal server_id to invalidate
  */
 export function invalidateGuildMcpConfigCache(serverId: number): void {
   cache.delete(serverId);
@@ -114,7 +108,6 @@ export function clearGuildMcpConfigCache(): void {
 /**
  * Get cache statistics for monitoring and debugging.
  *
- * @returns Object with hits, misses, hit rate, and current cache size
  */
 export function getGuildMcpConfigCacheStats(): {
   hits: number;

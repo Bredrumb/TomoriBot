@@ -51,7 +51,7 @@ const usePrettyTransport = !shouldHideLogs && hasPinoPretty;
 
 /**
  * Optional JSONL log file for host-side ingestion (e.g. Azure Monitor Agent
- * tailing a bind-mounted file). Only used in JSON output mode — the
+ * tailing a bind-mounted file). Only used in JSON output mode: the
  * development pino-pretty transport ignores it. See `.env.optional.example`.
  */
 const logFilePath = process.env.TOMORI_LOG_FILE?.trim() || undefined;
@@ -102,10 +102,9 @@ export const buildLogStreams = (
   createFileStream: (dest: string) => pino.DestinationStream = (dest) =>
     pino.destination({ dest, append: true, mkdir: true, sync: true }),
 ): pino.StreamEntry[] | undefined => {
-  // 1. Without a file path, keep pino's default single-stream stdout construction
   if (!filePath) return undefined;
 
-  // 2. "trace" lets every record through each sink — level filtering stays on the
+  // "trace" lets every record through each sink; level filtering stays on the
   //    logger itself so both outputs always carry identical lines
   return [
     { stream: stdoutStream, level: "trace" },
@@ -227,7 +226,6 @@ const toLoggableError = (err: unknown): Record<string, unknown> => {
 export const log = {
   /**
    * Logs informational messages (hidden in production).
-   * @param msg - The message to log.
    */
   info: (msg: string) => {
     pinoLogger.info(shouldHideLogs ? msg : `${colors.cyan}${msg}${colors.reset}`);
@@ -235,7 +233,6 @@ export const log = {
 
   /**
    * Logs success messages (hidden in production).
-   * @param msg - The message to log.
    */
   success: (msg: string) => {
     // Pino adds custom level methods at runtime, but TypeScript doesn't know about them
@@ -245,7 +242,6 @@ export const log = {
 
   /**
    * Logs warning messages with optional error details (hidden in production).
-   * @param msg - The warning message to log.
    * @param err - Optional error object to include.
    */
   warn: (msg: string, err?: unknown) => {
@@ -260,7 +256,6 @@ export const log = {
   /**
    * Logs Discord API rate limit events.
    * Always shown in production for monitoring purposes.
-   * @param msg - The rate limit message to log.
    * @param metadata - Optional metadata object with rate limit details.
    */
   rateLimit: (msg: string, metadata?: Record<string, unknown>) => {
@@ -278,16 +273,14 @@ export const log = {
   /**
    * Logs a periodic metric sample as structured JSON.
    * Always emitted regardless of environment (uses custom level 52, above `error`).
-   * Intended for CloudWatch Logs Insights queries — pass flat numeric fields
+   * Intended for CloudWatch Logs Insights queries: pass flat numeric fields
    * so each metric becomes queryable at the top level of the log record.
    *
    * @param name - Short metric name (used as the `metric` field for filtering).
-   * @param fields - Flat key/value map of numeric fields to attach to the log.
    */
   metric: (name: string, fields: Record<string, number | string>) => {
-    // 1. Merge the metric name into the payload so it's queryable via `filter metric = "..."`
     const payload = { metric: name, ...fields };
-    // 2. Pino adds custom level methods at runtime; TS doesn't know about them
+    // Pino adds custom level methods at runtime; TS doesn't know about them
     // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
     (pinoLogger as any).metric(payload, `metric:${name}`);
   },
@@ -295,7 +288,6 @@ export const log = {
   /**
    * Logs an error message to the console and attempts to insert it into the database.
    * Always shown in production.
-   * @param msg - The primary error message to log.
    * @param err - The actual Error object or unknown error data (optional).
    * @param context - Optional context containing IDs and metadata for DB logging.
    */
@@ -321,14 +313,12 @@ export const log = {
     try {
       await errorLogRepository.insertErrorLog(dbPayload);
     } catch (dbError) {
-      // Avoid infinite recursion — fall back to console directly
       pinoLogger.error({ err: toLoggableError(dbError) }, "Failed to persist the sanitized error record");
     }
   },
 
   /**
    * Logs section dividers for grouping related logs (hidden in production).
-   * @param msg - The section title.
    */
   section: (msg: string) => {
     const coloredMsg = shouldHideLogs ? `\n=== ${msg} ===` : `${colors.magenta}\n=== ${msg} ===${colors.reset}`;

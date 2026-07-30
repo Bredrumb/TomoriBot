@@ -1,5 +1,5 @@
 /**
- * PersonaRepository — manages the `personas` and persona resolution tables.
+ * PersonaRepository: manages the `personas` and persona resolution tables.
  *
  * Owns TomoriState loading (composite persona + config + memories read) and
  * all writes to the `personas` table. Configuration writes live in
@@ -44,8 +44,6 @@ import { log } from "@/utils/misc/logger";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
-
-// ── persona config table row shapes ─────────────────────────────────
 
 /** Row shape for persona_context_note_configs (Phase 6). */
 export type PersonaContextNoteConfigsRow = {
@@ -180,7 +178,7 @@ const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
 ]);
 
 /**
- * A main persona whose Discord guild avatar is out of date with its preset —
+ * A main persona whose Discord guild avatar is out of date with its preset:
  * the unit of work consumed by the background preset-avatar fan-out reconciler.
  */
 export type UnsyncedMainPointer = {
@@ -194,8 +192,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   private static readonly FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
     (process.env.FALLBACK_DEBUG_ENABLED ?? "").trim().toLowerCase(),
   );
-
-  // ── reads ──────────────────────────────────────────────────────────────────
 
   /**
    * Loads the full composite TomoriState for a server's main persona.
@@ -305,8 +301,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Updates arbitrary fields on a Tomori row.
    * Invalidates the server's tomori state cache after write.
@@ -328,8 +322,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
   }
-
-  // ── persona operations ─────────────────────────────────────────────────────
 
   async replaceAttributes(personaId: number, attributes: string[], publicFlags?: boolean[]): Promise<boolean> {
     try {
@@ -1197,7 +1189,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Records that a server's main persona guild avatar is now in sync with its
-   * preset — call this immediately after a SUCCESSFUL guild-avatar PATCH at an
+   * preset; call this immediately after a SUCCESSFUL guild-avatar PATCH at an
    * apply site (`/config setup`, `/persona default`). It stamps
    * `applied_avatar_hash = preset_avatar_hash` so the background fan-out
    * reconciler skips this persona until the catalog art actually changes again
@@ -1234,7 +1226,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Loads every server whose active main persona is an unforked preset pointer
    * and whose last-applied avatar hash differs from its preset's current avatar
-   * hash — exactly the work set for the background preset-avatar fan-out
+   * hash: exactly the work set for the background preset-avatar fan-out
    * reconciler. Materialized personas (`is_pointer = false`) and presets without
    * a seeded avatar are excluded by the join/predicates.
    *
@@ -1287,7 +1279,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Errors propagate so the caller can log and retry on the next boot.
    *
    * @param personaId        - Internal persona DB ID
-   * @param presetAvatarHash - The preset avatar hash to record as applied
    */
   async stampPointerAvatarHash(personaId: number, presetAvatarHash: string): Promise<void> {
     await sql`
@@ -1394,7 +1385,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Replace the persona's trigger_words list with the given remaining set.
-   * Upserts into `persona_configs` — if no row exists yet, one is created
+   * Upserts into `persona_configs`, so if no row exists yet, one is created
    * (matches addTrigger's behavior; the caller no longer needs a guarantor INSERT).
    *
    * @param personaId          - Internal persona DB ID
@@ -1458,8 +1449,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return false;
     }
   }
-
-  // ── limit checks ───────────────────────────────────────────────────────────
 
   /**
    * Check if a server has reached its trigger word limit.
@@ -1613,8 +1602,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Exports all personas and their Phase 6 config bundles for a server.
    *
@@ -1686,8 +1673,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── resolve internal server ID ──────────────────────────────────
-
   private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
       SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
@@ -1712,8 +1697,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return [];
     }
   }
-
-  // ── persona config table reads ──────────────────────────────────
 
   private async sqlLoadPersonaContextNoteConfigs(personaId: number): Promise<PersonaContextNoteConfigsRow | null> {
     try {
@@ -1767,8 +1750,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return null;
     }
   }
-
-  // ── persona config table upserts (new tables) ───────────────────
 
   private async sqlUpsertPersonaContextNoteConfigs(row: PersonaContextNoteConfigsRow): Promise<void> {
     await sql`
@@ -1827,8 +1808,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         updated_at      = NOW()
       `;
   }
-
-  // ── private helpers: row normalization ────────────────────────────────────
 
   /**
    * Converts a Postgres bytea hex-string representation (e.g., "\\xDEADBEEF") to Buffer.
@@ -1902,8 +1881,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     return row;
   }
-
-  // ── private SQL: config loading ───────────────────────────────────────────
 
   /**
    * Shared SELECT column list for all split-table config joins.
@@ -2133,8 +2110,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     return parsedConfig.data;
   }
 
-  // ── private SQL: preset pointer helpers ───────────────────────────────────
-
   async materializeIfPointer(personaId: number): Promise<boolean> {
     try {
       return await sql.transaction((tx) => this.materializeIfPointerWithClient(personaId, tx));
@@ -2205,7 +2180,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     await this.copyPresetSpritesWithClient(client, personaId, pointerLineageId, pointerLanguage);
     // Freeze the alter avatar by reference too: a pointer alter live-resolves the
     // shared preset avatar, so once it materializes it must keep that exact
-    // reference (still the immutable presets/ URL — no byte duplication, and the
+    // reference (still the immutable presets/ URL: no byte duplication, and the
     // delete guard still protects it). Mains deliver via the guild avatar, so
     // only fill this for alters that have no avatar of their own.
     if (preset.preset_avatar_shared_url) {
@@ -2314,7 +2289,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    *
    * An unforked pointer ALTER with no avatar of its own live-resolves the shared
    * preset avatar (`preset_avatar_shared_url`), so catalog avatar edits fan out
-   * to it on the next reseed — exactly like preset sprites/triggers/prompt. The
+   * to it on the next reseed; exactly like preset sprites/triggers/prompt. The
    * resolution happens once at load time, so every downstream avatar consumer
    * reads it from the cache with no hot-path query, and the existing pointer
    * cache invalidation refreshes it after a seed update. Main personas deliver
@@ -2415,8 +2390,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     `;
   }
 
-  // ── private SQL: persona reads ────────────────────────────────────────────
-
   private withPersonaSplitConfigFields(row: Record<string, unknown>): TomoriRow & PersonaScopedConfigFields {
     return {
       ...row,
@@ -2440,7 +2413,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async loadTomoriState(serverDiscId: string): Promise<TomoriState | null> {
     try {
-      // 1. Load main persona row using server Discord ID
+      // Load main persona row using server Discord ID
       const tomoriRows = await sql`
         SELECT
           t.*,
@@ -2474,7 +2447,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       }
       const tomoriData = this.withPersonaSplitConfigFields(tomoriRows[0] as Record<string, unknown>);
 
-      // 2. Load associated config using server_id (server-scoped config)
+      // Load associated config using server_id (server-scoped config)
       // biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
       const personaId = tomoriData.persona_id!;
       const serverId = tomoriData.server_id;
@@ -2493,7 +2466,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         return null;
       }
 
-      // 3. Load LLM data using the llm_id from the config (with cache fallback).
+      // Load LLM data using the llm_id from the config (with cache fallback).
       // BYOK-only servers may intentionally leave llm_id NULL until a personal provider is overlaid.
       let llmData: LlmRow;
       if (!configData.llm_id) {
@@ -2520,7 +2493,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 4. Load persona-scoped trigger words + optional persona prompt
+      // Load persona-scoped trigger words + optional persona prompt
       const personaConfigRows = await sql`
         SELECT *
         FROM persona_configs
@@ -2537,7 +2510,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 5. Load server memories scoped by persona lineage.
+      // Load server memories scoped by persona lineage.
       const rawLineageId = tomoriData.persona_lineage_id;
       const parsedPersonaLineageId =
         typeof rawLineageId === "bigint"
@@ -2557,7 +2530,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // Extract memory content strings into an array
       const serverMemories = serverMemoriesRows.map((row: { content: string }) => row.content);
 
-      // 6. Load autochat runtime counters for this persona (default to 0 if row not yet created).
+      // Load autochat runtime counters for this persona (default to 0 if row not yet created).
       const autochRuntimeRows = await sql`
         SELECT autoch_counter, autoch_next_target
         FROM persona_autoch_runtime_state
@@ -2572,7 +2545,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             }
           : { autoch_counter: 0, autoch_next_target: 0 };
 
-      // 7. Load API key rotation pool for this server (if any)
+      // Load API key rotation pool for this server (if any)
       const rotationKeysRows = await sql`
         SELECT
           akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
@@ -2598,7 +2571,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 8. Load active NAI preset if one is configured for this server
+      // Load active NAI preset if one is configured for this server
       let naiPreset: NaiPresetRow | undefined;
       const presetName = configData.nai_preset_name;
       if (presetName) {
@@ -2617,7 +2590,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 9. Resolve fallback model chain — prefer fallback_model_refs (new), fall back to fallback_llm_ids (legacy)
+      // Resolve fallback model chain: prefer fallback_model_refs (new), fall back to fallback_llm_ids (legacy)
       const rawFallbackIds = configData.fallback_llm_ids;
       const fallbackLlmIds = configData.fallback_llm_ids;
       const fallbackLlms = fallbackLlmIds.length > 0 ? await llmModelRepo.getLlmsByIds(fallbackLlmIds) : [];
@@ -2627,7 +2600,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         );
       }
 
-      // 8b. Build typed fallback_chain from fallback_model_refs (supports both llm and custom_endpoint refs)
+      // Build typed fallback_chain from fallback_model_refs (supports both llm and custom_endpoint refs)
       const modelRefs = configData.fallback_model_refs ?? [];
       let fallbackChain: FallbackEntry[] | undefined;
       if (modelRefs.length > 0) {
@@ -2656,7 +2629,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         if (resolved.length > 0) fallbackChain = resolved;
       }
 
-      // 10. Load vision model if configured (for non-vision chat model image analysis delegation)
+      // Load vision model if configured (for non-vision chat model image analysis delegation)
       let visionLlm: LlmRow | undefined;
       if (configData.vision_llm_id) {
         visionLlm = getCachedLLM(configData.vision_llm_id) as LlmRow | undefined;
@@ -2696,7 +2669,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // stream buffer, context templates) sees the persona-scoped value unchanged.
       const humanizerOverride = personaConfig?.humanizer_degree ?? null;
 
-      // 11. Combine and validate the full state
+      // Combine and validate the full state
       const combinedState = {
         ...tomoriData,
         // Pointer alters live-resolve the shared preset avatar (see helper).
@@ -2739,7 +2712,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     return (
       (await withCachedPlanRetry(async () => {
         try {
-          // 1. Load all Tomori persona rows for this server (main first, then alters)
+          // Load all Tomori persona rows for this server (main first, then alters)
           const tomoriRows = await sql`
             SELECT
               t.*,
@@ -2777,7 +2750,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
           const serverId = typedTomoriRows[0].server_id;
           const pointerPresetsByPersonaId = await this.loadPointerPresetsForRows(typedTomoriRows);
 
-          // 2. Load server-scoped config once (fallback to main persona config)
+          // Load server-scoped config once (fallback to main persona config)
           let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
 
           if (!configData) {
@@ -2796,7 +2769,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             return [];
           }
 
-          // 3. Resolve server-scoped fallback chain once (shared across all personas for this server).
+          // Resolve server-scoped fallback chain once (shared across all personas for this server).
           const rawFallbackIds = configData.fallback_llm_ids;
           const fallbackLlmIds = configData.fallback_llm_ids;
           const fallbackLlms = fallbackLlmIds.length > 0 ? await llmModelRepo.getLlmsByIds(fallbackLlmIds) : [];
@@ -2806,7 +2779,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             );
           }
 
-          // 3b. Build typed fallback_chain from fallback_model_refs
+          // Build typed fallback_chain from fallback_model_refs
           const modelRefs = configData.fallback_model_refs ?? [];
           let fallbackChain: FallbackEntry[] | undefined;
           if (modelRefs.length > 0) {
@@ -2835,7 +2808,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             if (resolved.length > 0) fallbackChain = resolved;
           }
 
-          // 4. Load LLM data once (with cache fallback). BYOK-only servers may intentionally
+          // Load LLM data once (with cache fallback). BYOK-only servers may intentionally
           // omit the server text model until a member overlays a personal provider.
           let llmData: LlmRow;
           if (!configData.llm_id) {
@@ -2862,7 +2835,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             }
           }
 
-          // 5. Load rotation keys once (server-scoped)
+          // Load rotation keys once (server-scoped)
           const rotationKeysRows = await sql`
             SELECT
               akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
@@ -2887,7 +2860,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             }
           }
 
-          // 6. Load persona configs for all personas in this server
+          // Load persona configs for all personas in this server
           const personaConfigRows = await sql`
             SELECT pc.*
             FROM persona_configs pc
@@ -2904,7 +2877,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             }
           }
 
-          // 7. Load server memories once, grouped by persona_lineage_id
+          // Load server memories once, grouped by persona_lineage_id
           const memoryRows = await sql<
             Array<{
               persona_lineage_id: number | string | bigint | null;
@@ -2933,7 +2906,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             memoriesByLineage.set(lineageId, existing);
           }
 
-          // 8. Batch-load autochat runtime counters for all personas in this server.
+          // Batch-load autochat runtime counters for all personas in this server.
           const personaIds: number[] = typedTomoriRows
             .map((r: TomoriRow & PersonaScopedConfigFields) => r.persona_id)
             .filter((id): id is number => typeof id === "number");
@@ -2982,7 +2955,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             });
           }
 
-          // 9. Load vision model if configured (server-scoped, loaded once for all personas)
+          // Load vision model if configured (server-scoped, loaded once for all personas)
           let visionLlm: LlmRow | undefined;
           if (configData.vision_llm_id) {
             visionLlm = getCachedLLM(configData.vision_llm_id) as LlmRow | undefined;
@@ -2996,7 +2969,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             }
           }
 
-          // 10. Build persona states
+          // Build persona states
           const personas: TomoriState[] = [];
           for (const tomoriRow of typedTomoriRows) {
             const personaId = tomoriRow.persona_id;
@@ -3135,10 +3108,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * same word would route to the main persona AND every alter at once. Here we
    * award each trigger to exactly one persona by priority:
    *
-   *   1. Main persona(s) (`is_alter = false`) — they additionally reserve the
+   *   1. Main persona(s) (`is_alter = false`): they additionally reserve the
    *      configured base trigger words even if their stored list omits them, so
    *      an alter can never steal the bot's own name regardless of server locale.
-   *   2. Alters in creation order (ascending `persona_id`) — first created wins a
+   *   2. Alters in creation order (ascending `persona_id`): first created wins a
    *      contested word; later personas drop it.
    *
    * Each persona keeps only the triggers no higher-priority persona already owns;
@@ -3149,7 +3122,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * @param personas - Assembled persona states for one server.
    */
   private applyTriggerWordOwnership(personas: TomoriState[]): void {
-    // 1. Seed the claimed set with base trigger words for both shipped locales so
+    // Seed the claimed set with base trigger words for both shipped locales so
     //    the main persona implicitly owns the bot's name in any language.
     const claimedTriggerKeys = new Set<string>();
     for (const baseWord of [...getBaseTriggerWords("en-US"), ...getBaseTriggerWords("ja")]) {
@@ -3159,7 +3132,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       }
     }
 
-    // 2. Visit personas in ownership priority: main first, then alters oldest-first.
+    // Visit personas in ownership priority: main first, then alters oldest-first.
     const personasByOwnershipPriority = [...personas].sort((a, b) => {
       if (a.is_alter !== b.is_alter) {
         return a.is_alter ? 1 : -1;
@@ -3168,7 +3141,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     });
 
     for (const persona of personasByOwnershipPriority) {
-      // 2a. Alters drop any trigger a higher-priority persona already owns; the
+      // Alters drop any trigger a higher-priority persona already owns; the
       //     main persona keeps its full list unchanged.
       if (persona.is_alter) {
         persona.trigger_words = selectUnclaimedTriggerWords(persona.trigger_words ?? [], claimedTriggerKeys, {
@@ -3176,7 +3149,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         });
       }
 
-      // 2b. Claim whatever this persona kept so later personas can't reuse it.
+      // Claim whatever this persona kept so later personas can't reuse it.
       for (const trigger of persona.trigger_words ?? []) {
         const normalizedTrigger = normalizeTriggerWord(trigger);
         if (normalizedTrigger.length > 0) {
@@ -3212,15 +3185,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── private SQL: tomori writes ────────────────────────────────────────────
-
   private async updateTomori(personaId: number, tomoriData: Partial<TomoriRow>): Promise<TomoriRow | null> {
     try {
       // Validate the partial data with Zod (Rule #7)
       const validTomoriData = tomoriSchema.partial().parse(tomoriData);
 
       // Extract field names and values for the SQL query.
-      // Filter to only keys present in the original input — Zod injects defaults
+      // Filter to only keys present in the original input, because Zod injects defaults
       // for all schema fields with .default(), which would incorrectly expand the
       // SET clause (e.g. attribute_list: [] would overwrite existing data).
       const fields = Object.keys(validTomoriData).filter((key) => key !== "persona_id" && key in tomoriData);
@@ -3233,11 +3204,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // Security validation: Ensure all field names are whitelisted to prevent SQL injection
       validateTomoriFields(fields);
 
-      // 1. Prepare arrays for placeholders and values
+      // Prepare arrays for placeholders and values
       const setParts: string[] = [];
       const values: SqlParameterArray = [];
 
-      // 2. Iterate through fields to build SET clause parts and collect values.
+      // Iterate through fields to build SET clause parts and collect values.
       // sql.unsafe() cannot infer PostgreSQL column types, so JavaScript arrays
       // must be manually serialized to PostgreSQL array literals (e.g. {"a","b"}).
       fields.forEach((field, index) => {
@@ -3252,14 +3223,14 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       });
 
-      // 3. Join the SET parts
+      // Join the SET parts
       const setClause = setParts.join(", ");
 
-      // 4. Add the personaId as the last parameter for the WHERE clause
+      // Add the personaId as the last parameter for the WHERE clause
       const finalPlaceholderIndex = values.length + 1;
       values.push(personaId);
 
-      // 5. Execute the UPDATE using sql.unsafe() with the values array (not spread —
+      // Execute the UPDATE using sql.unsafe() with the values array (not spread, because
       // Bun SQL expects a single array argument, not individual arguments).
       const result = await sql.unsafe(
         `
@@ -3314,5 +3285,5 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const personaRepository = new PersonaRepository();

@@ -96,7 +96,7 @@ describe("collectImageUrlsFromMessage", () => {
   });
 
   test("discovers images inside forwarded message snapshots", async () => {
-    // Regression: a forward wrapper has EMPTY top-level content/attachments — all
+    // Regression: a forward wrapper has EMPTY top-level content/attachments: all
     // media lives in messageSnapshots. Discovery must scan the snapshots, or every
     // media-ID tool (image analysis, reference images) fails on forwarded images.
     const message = makeMessage({

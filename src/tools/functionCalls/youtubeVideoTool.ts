@@ -67,8 +67,6 @@ export class YouTubeVideoTool extends BaseTool {
 
   /**
    * Enhanced availability check that considers context flags and model vision capabilities
-   * @param provider - LLM provider name
-   * @param context - Tool context that may contain disable flags and tomoriState
    * @returns True if tool should be available
    */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
@@ -77,7 +75,6 @@ export class YouTubeVideoTool extends BaseTool {
       return false;
     }
 
-    // Require context with tomoriState
     if (!context?.tomoriState) {
       log.warn("YouTubeVideoTool: No tomoriState in context, defaulting to unavailable");
       return false;
@@ -106,7 +103,6 @@ export class YouTubeVideoTool extends BaseTool {
   /**
    * Execute YouTube video processing
    * @param args - Arguments containing youtube_url and optional reason
-   * @param context - Tool execution context
    * @returns Promise resolving to tool result with processed video data
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
@@ -126,7 +122,6 @@ export class YouTubeVideoTool extends BaseTool {
       };
     }
 
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -200,7 +195,6 @@ export class YouTubeVideoTool extends BaseTool {
         ],
       };
 
-      // Return restart signal with enhanced context
       return {
         success: true,
         message: "YouTube video processing initiated - restarting with enhanced context",
@@ -209,7 +203,6 @@ export class YouTubeVideoTool extends BaseTool {
           video_id: videoId,
           video_url: youtubeUrl,
           reason: reason,
-          // Enhanced context item to add
           enhanced_context_item: videoContextItem,
         },
       };
@@ -257,7 +250,6 @@ export class YouTubeVideoTool extends BaseTool {
   /**
    * Helper method to get all video IDs from a text containing multiple YouTube URLs
    * @param text - Text that may contain YouTube URLs
-   * @returns Array of extracted video IDs
    */
   static extractAllVideoIds(text: string): string[] {
     const videoIds: string[] = [];
@@ -269,7 +261,6 @@ export class YouTubeVideoTool extends BaseTool {
         }
       }
     }
-    // Remove duplicates
     return [...new Set(videoIds)];
   }
 }

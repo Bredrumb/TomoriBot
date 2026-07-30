@@ -37,7 +37,7 @@ export async function validateElevenLabsApiKey(apiKey: string): Promise<ElevenLa
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Use /v1/voices for validation — accessible with TTS permissions alone,
+    // Use /v1/voices for validation , so accessible with TTS permissions alone,
     // unlike /v1/user/subscription which requires account:read scope and
     // returns 401 (not 403) for fine-grained STT/TTS-only keys.
     const response = await fetch(`${ELEVENLABS_API_BASE_URL}/v1/voices`, {

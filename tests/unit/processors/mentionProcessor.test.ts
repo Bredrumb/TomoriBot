@@ -6,8 +6,6 @@ import {
 } from "@/utils/text/processors/mentionProcessor";
 import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
 
-// ─── sanitizeUnknownTemplatePlaceholders ────────────────────────────────────
-
 describe("sanitizeUnknownTemplatePlaceholders", () => {
   describe("single-brace allowed vars", () => {
     it("preserves {user}", () => {
@@ -76,8 +74,6 @@ describe("sanitizeUnknownTemplatePlaceholders", () => {
   });
 });
 
-// ─── normalizeCustomEmojisForLlm ────────────────────────────────────────────
-
 describe("normalizeCustomEmojisForLlm", () => {
   describe("emoji normalization", () => {
     it("converts static custom emoji to :name:", () => {
@@ -124,13 +120,11 @@ describe("normalizeCustomEmojisForLlm", () => {
   });
 });
 
-// ─── replaceMentionHandles ───────────────────────────────────────────────────
-
 describe("replaceMentionHandles", () => {
   const mentionMap = new Map([
     ["alice", ["111111111111111111"]],
     ["bob", ["222222222222222222"]],
-    ["ambiguous", ["333333333333333333", "444444444444444444"]], // two IDs — ambiguous
+    ["ambiguous", ["333333333333333333", "444444444444444444"]], // two IDs, so ambiguous
   ]);
   const mentionIdSet = new Set(["111111111111111111", "222222222222222222"]);
 

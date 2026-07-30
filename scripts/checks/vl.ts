@@ -13,7 +13,7 @@ type ResultItem = {
   isWarning?: boolean;
   subItems?: string[];
   summary?: string;
-  /** Inline hint shown on failure — takes precedence over the global HINTS lookup */
+  /** Inline hint shown on failure: takes precedence over the global HINTS lookup */
   hint?: string;
   /** Used by CATEGORIES to identify test-file buckets without string matching */
   _category?: "unit-test" | "regression-test";
@@ -227,7 +227,7 @@ export function parseJUnitSuites(xml: string): ResultItem[] | null {
  * Legacy fallback: parse `bun test`'s piped console output into per-file items.
  * Used only when the JUnit XML is unavailable (older bun, reporter failure).
  * Note: bun omits per-file headers for files that log nothing, so this path can
- * under-report — the JUnit path above is preferred.
+ * under-report, so the JUnit path above is preferred.
  */
 function parseConsoleOutput(output: string, exitCode: number): ResultItem[] {
   const testBlocks = output.split(/([a-zA-Z0-9_\\/\-.]+\.test\.ts):/);
@@ -290,26 +290,23 @@ async function runTests(): Promise<ResultItem[]> {
 
   const output = stdout + stderr;
 
-  // Print full output only on failure so vl stays concise on green runs
   if (exitCode !== 0) {
     console.log(output);
   }
 
-  // 1. Prefer the JUnit XML — it lists every file regardless of console logging.
+  // Prefer the JUnit XML because it lists every file regardless of console logging.
   let items: ResultItem[] | null = null;
   try {
     const xml = await Bun.file(junitOutfile).text();
     items = parseJUnitSuites(xml);
   } catch {
-    // JUnit file missing/unreadable — fall back below.
   } finally {
     await rm(junitOutfile, { force: true }).catch(() => undefined);
   }
 
-  // 2. Fall back to console parsing if JUnit was unavailable.
   const resolved = items ?? parseConsoleOutput(output, exitCode);
 
-  // 3. The runner can exit non-zero without any individual file reporting a failure
+  // The runner can exit non-zero without any individual file reporting a failure
   //    (segfault, OOM, harness error, a batch dying before it emits results). Those
   //    runs must never read as green just because the parsed items all look clean.
   if (exitCode !== 0 && resolved.every((item) => item.exitCode === 0)) {
@@ -361,7 +358,7 @@ async function runLint(): Promise<ResultItem> {
 async function runAudit(): Promise<ResultItem> {
   console.log(`> Running Dependency Audit (bun audit)...`);
 
-  // bun audit has no working workspace filter — it always audits the whole
+  // bun audit has no working workspace filter: it always audits the whole
   // lockfile, including apps/docs devDeps. Advisories reaching the gate via
   // workspace:tomoribot-docs are build-time-only, but still block audit:clean.
   // We use cmd.exe on Windows for bun audit to prevent pipe hangs, just in case.
@@ -392,7 +389,7 @@ async function runAudit(): Promise<ResultItem> {
   console.log(output);
 
   // A timed-out audit proves nothing either way, so report it as a warning rather
-  // than a pass or a failure — the advisory state is simply unknown this run.
+  // than a pass or a failure, so the advisory state is simply unknown this run.
   if (timedOut) {
     return {
       name: "Dependency Audit (bun audit)",
@@ -411,7 +408,7 @@ async function runAudit(): Promise<ResultItem> {
   return {
     name: "Dependency Audit (bun audit)",
     exitCode: hasHighOrCritical ? 1 : exitCode !== 0 ? 1 : 0,
-    // Audit issues are never contributor-caused — warn locally, block only in the deploy pipeline
+    // Audit issues are never contributor-caused; warn locally, block only in the deploy pipeline
     fatal: false,
     isWarning: hasHighOrCritical || exitCode !== 0,
   };
@@ -433,7 +430,7 @@ function isDbConfigured(): boolean {
  * Sections are rendered by independent filters, so an item matching two
  * predicates would print (and be counted) twice. Test files are named after their
  * top-level `describe`, which is arbitrary prose that can easily contain a word a
- * named-check predicate looks for — "Database Only Lifecycle Secrets" matches
+ * named-check predicate looks for: "Database Only Lifecycle Secrets" matches
  * `includes("Lifecycle")`, for example. Test items are therefore routed solely by
  * `_category`, and every named-check predicate is gated on this guard.
  */
@@ -451,7 +448,7 @@ const CATEGORIES = {
       r.name.includes("Linting") ||
       r.name.includes("Runtime Imports") ||
       r.name.includes("SQL Audit")),
-  // Assets and seed data rather than source code — these fail on *content*
+  // Assets and seed data rather than source code: these fail on *content*
   // (an oversized PNG, a malformed catalog entry), not on how code is written.
   CONTENT: (r: ResultItem) =>
     isNamedCheck(r) && (r.name.includes("Media Size") || r.name.includes("Seed Catalog")),
@@ -508,7 +505,7 @@ async function main() {
     runCheck("Localization Keys (bun run check-locales)", ["bun", "run", "check-locales"], false),
     // Discord length limits are a hard blocker: modal placeholders/descriptions and command
     // descriptions get silently truncated by Discord beyond their max length, so any
-    // violation here must block the PR gate (fatal: true) — unlike the broader locale
+    // violation here must block the PR gate (fatal: true); unlike the broader locale
     // parity check above, which tolerates missing Japanese translations.
     runCheck(
       "Localization Discord Limits (bun run check-locale-lengths)",
@@ -546,7 +543,7 @@ async function main() {
   console.log("VALIDATION RESULTS");
   console.log("====================================\n");
 
-  // Compute before printing — avoids relying on printItem side-effects and handles
+  // Compute before printing, so avoids relying on printItem side-effects and handles
   // any item that might not match a category filter
   const allFatalPassed = results.every(
     (r) => r.skippedReason !== undefined || r.exitCode === 0 || r.isWarning || !r.fatal,
@@ -584,7 +581,6 @@ async function main() {
 
   const printItem = (r: ResultItem) => {
     const summary = r.summary ? ` ${r.summary}` : "";
-    // Prefer per-item hint (test files); fall back to global HINTS lookup for named checks
     const hintText = r.hint ? `\n      💡 Hint: ${r.hint}` : getHint(r.name);
 
     if (r.skippedReason) {

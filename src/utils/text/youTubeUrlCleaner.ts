@@ -20,13 +20,11 @@ export const YOUTUBE_URL_PATTERNS = [
 /**
  * Extract all YouTube URLs from text content
  * @param text - Text content to search for YouTube URLs
- * @returns Array of YouTube URLs found in the text
  */
 export function extractYouTubeUrls(text: string): string[] {
   const urls: string[] = [];
 
   for (const pattern of YOUTUBE_URL_PATTERNS) {
-    // Reset regex lastIndex to ensure proper matching
     pattern.lastIndex = 0;
 
     let match: RegExpExecArray | null;
@@ -35,24 +33,20 @@ export function extractYouTubeUrls(text: string): string[] {
       urls.push(match[0]);
     }
 
-    // Reset again after processing
     pattern.lastIndex = 0;
   }
 
-  // Remove duplicates and return
   return [...new Set(urls)];
 }
 
 /**
  * Extract all YouTube video IDs from text content
  * @param text - Text content to search for YouTube URLs
- * @returns Array of unique YouTube video IDs
  */
 export function extractYouTubeVideoIds(text: string): string[] {
   const videoIds: string[] = [];
 
   for (const pattern of YOUTUBE_URL_PATTERNS) {
-    // Reset regex lastIndex to ensure proper matching
     pattern.lastIndex = 0;
 
     let match: RegExpExecArray | null;
@@ -63,29 +57,23 @@ export function extractYouTubeVideoIds(text: string): string[] {
       }
     }
 
-    // Reset again after processing
     pattern.lastIndex = 0;
   }
 
-  // Remove duplicates and return
   return [...new Set(videoIds)];
 }
 
 /**
  * Remove all YouTube URLs from text content
  * Replaces YouTube URLs with optional replacement text
- * @param text - Text content to clean
  * @param replacement - Optional replacement text (default: empty string)
- * @returns Text with YouTube URLs removed/replaced
  */
 export function removeYouTubeUrls(text: string, replacement = ""): string {
   let cleanedText = text;
 
   for (const pattern of YOUTUBE_URL_PATTERNS) {
-    // Reset regex lastIndex to ensure proper matching
     pattern.lastIndex = 0;
     cleanedText = cleanedText.replace(pattern, replacement);
-    // Reset again after processing
     pattern.lastIndex = 0;
   }
 
@@ -96,26 +84,21 @@ export function removeYouTubeUrls(text: string, replacement = ""): string {
 /**
  * Replace YouTube URLs with descriptive placeholders
  * Useful for maintaining context while preventing function call loops
- * @param text - Text content to process
- * @param placeholder - Placeholder text template (default includes video ID)
  * @returns Text with YouTube URLs replaced with placeholders
  */
 export function replaceYouTubeUrlsWithPlaceholders(text: string, placeholder = "[YouTube video processed]"): string {
   let processedText = text;
 
   for (const pattern of YOUTUBE_URL_PATTERNS) {
-    // Reset regex lastIndex to ensure proper matching
     pattern.lastIndex = 0;
 
     processedText = processedText.replace(pattern, (_, videoId) => {
-      // If placeholder contains {videoId}, replace it with actual video ID
       if (placeholder.includes("{videoId}") && videoId) {
         return placeholder.replace("{videoId}", videoId);
       }
       return placeholder;
     });
 
-    // Reset again after processing
     pattern.lastIndex = 0;
   }
 
@@ -124,19 +107,14 @@ export function replaceYouTubeUrlsWithPlaceholders(text: string, placeholder = "
 
 /**
  * Check if text contains any YouTube URLs
- * @param text - Text content to check
- * @returns True if text contains YouTube URLs
  */
 export function containsYouTubeUrls(text: string): boolean {
   for (const pattern of YOUTUBE_URL_PATTERNS) {
-    // Reset regex lastIndex to ensure proper matching
     pattern.lastIndex = 0;
     if (pattern.test(text)) {
-      // Reset after test
       pattern.lastIndex = 0;
       return true;
     }
-    // Reset again just to be safe
     pattern.lastIndex = 0;
   }
   return false;
@@ -144,8 +122,6 @@ export function containsYouTubeUrls(text: string): boolean {
 
 /**
  * Get statistics about YouTube URLs in text
- * @param text - Text content to analyze
- * @returns Object with URL count and unique video IDs
  */
 export function getYouTubeUrlStats(text: string): {
   urlCount: number;

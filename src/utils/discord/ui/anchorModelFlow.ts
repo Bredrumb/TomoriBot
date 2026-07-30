@@ -25,8 +25,8 @@ import {
  * Shared delivery mechanics for the anchor one-message model-config commands
  * (`/model text|vision|video|image|embedding` and their personal-scope siblings).
  *
- * Each command owns its business logic — which model table, which config field, which
- * terminal copy — and calls these helpers only for the lifecycle: render the provider
+ * Each command owns its business logic: which model table, which config field, which
+ * terminal copy, so and calls these helpers only for the lifecycle: render the provider
  * step on the anchor message, collect the opening button, and open the model modal
  * (routing `>25` options through the anchor range selector automatically). This is
  * what keeps "adding a picker→modal command touches one file": the lifecycle lives here,
@@ -78,7 +78,7 @@ export function buildProviderPickerPayload(
     },
   ];
 
-  // Muted subtext showing the current selection(s) — matches the footer convention in
+  // Muted subtext showing the current selection(s): matches the footer convention in
   // buildNoticeContainer. Kept as its own TextDisplay (not "\n\n" appended) so the
   // Container's built-in gap doesn't stack into an oversized break. De-duplicated on the
   // provider+model pair, mirroring the legacy picker's behaviour.
@@ -102,7 +102,6 @@ export function buildProviderPickerPayload(
     });
   }
 
-  // Optional caller guidance (e.g. the NovelAI pipeline note on /model image).
   if (options?.note) {
     components.push({ type: ComponentType.TextDisplay, content: options.note });
   }
@@ -169,7 +168,7 @@ export function buildOpenSelectorPayload(locale: string, openId: string): Person
 /**
  * Terminal notice for the legacy OpenRouter "other-model" sentinel, which was moved to
  * dedicated add/remove commands. The V2 equivalent of `replyLegacyOpenRouterOtherModelMoved`
- * — and, like it, points at the command pair that matches the caller's scope.
+ * and, like it, points at the command pair that matches the caller's scope.
  */
 export function buildOpenRouterMovedNotice(
   locale: string,
@@ -262,7 +261,7 @@ export async function awaitAnchorButton(
  *   collects the click and returns the lone provider.
  * - 2+ providers: collects the picker click, handling cancel and invalid selection.
  *
- * Returns null when the user cancels/times out — the anchor message already shows the
+ * Returns null when the user cancels/times out, so the anchor message already shows the
  * terminal notice in those cases.
  */
 export async function acquireModelModalOpener(
@@ -272,14 +271,12 @@ export async function acquireModelModalOpener(
   savedProviders: readonly AnchorProviderChoice[],
   idRoot: string,
 ): Promise<{ button: ButtonInteraction; provider: string } | null> {
-  // 1. Single provider: the only control is the "open selector" button.
   if (savedProviders.length === 1) {
     const button = await awaitAnchorButton(phase, userId, `${idRoot}_open`, locale);
     if (!button) return null;
     return { button, provider: savedProviders[0].provider.toLowerCase() };
   }
 
-  // 2. Multiple providers: collect the picker click.
   const button = await awaitAnchorButton(phase, userId, idRoot, locale);
   if (!button) return null;
   if (button.customId === `${idRoot}_cancel`) {
@@ -316,17 +313,12 @@ export async function acquireModelModalOpener(
  *
  * The anchor engine's own bridge (see {@link openAnchorModal}) already does this for
  * the common case, but it slices exactly one select component and assumes every entry is a
- * real option. This helper exists for modals that neither assumption fits — `/model fallback`
+ * real option. This helper exists for modals that neither assumption fits: `/model fallback`
  * and its personal sibling render **five** selects over one shared option list and reserve one
  * entry per page for an explicit "None" choice. They pick a range here first, then hand
  * {@link openAnchorModal} an already-sliced `<=25` list, which opens directly.
  *
- * @param phase - The live anchor workflow phase.
- * @param button - The unacknowledged button the selector replaces (the provider/opener click).
- * @param userId - Discord id allowed to drive the selector.
- * @param locale - Locale for the selector shell.
  * @param optionCount - Total selectable options, excluding any reserved entries.
- * @param pageSize - Options per range; pass `< MODAL_OPTIONS_PER_PAGE` when reserving entries.
  * @returns The chosen range plus the button to open the modal from, or null.
  */
 export async function acquireModalOptionRange(
@@ -343,10 +335,8 @@ export async function acquireModalOptionRange(
   const totalRangePages = Math.ceil(totalRanges / RANGES_PER_SELECTOR_PAGE);
   let rangePage = 0;
 
-  // 1. The first render consumes the caller's pending button; later ones edit in place.
   await phase.useButton(button).replace(buildRangeSelectorPayload(locale, prefix, optionCount, rangePage, pageSize));
 
-  // 2. Drive Previous/Next until a range button (or Cancel/timeout) settles the step.
   while (true) {
     const rangeButton = await awaitAnchorButton(phase, userId, prefix, locale);
     if (!rangeButton) return null;
@@ -395,7 +385,7 @@ export async function acquireModalOptionRange(
 /**
  * Opens the model-selection modal on the anchor message from `button`, routing the
  * `>25` case through the anchor range selector automatically. Returns the submitted
- * modal phase, or null when the flow ended without a submit — cancel and timeout are
+ * modal phase, or null when the flow ended without a submit, so cancel and timeout are
  * rendered in place by the bridge; a transport error renders the generic error notice.
  */
 export async function openAnchorModal(

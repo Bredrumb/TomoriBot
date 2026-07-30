@@ -62,7 +62,7 @@ describe("scanFileForSqlQueries — false-positive guards", () => {
   });
 
   it("ignores a plain string that merely contains SQL text", () => {
-    // Not a tagged template — just a string. Must not be flagged.
+    // Not a tagged template: just a string. Must not be flagged.
     expect(scanFileForSqlQueries('const note = "SELECT * FROM users";')).toEqual([]);
   });
 
@@ -79,7 +79,7 @@ describe("classifyQuery", () => {
   });
 
   it("does not misread a column that merely contains a keyword (updated_at)", () => {
-    // `updated_at` contains "UPDATE" as a substring — must still classify as READ.
+    // `updated_at` contains "UPDATE" as a substring, so must still classify as READ.
     expect(classifyQuery("SELECT MAX(updated_at) AS last_updated FROM server_emojis")).toBe("READ");
   });
 

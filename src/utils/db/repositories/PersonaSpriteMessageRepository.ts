@@ -13,7 +13,7 @@ export type PersonaSpriteMessageRecordInput = {
  * Persists the message → sprite-label mapping for webhook-delivered sprite messages.
  *
  * Rows are immutable (a sent message's sprite never changes), so writes never
- * require cache invalidation — callers seed the read cache directly instead.
+ * require cache invalidation, so callers seed the read cache directly instead.
  * Missing rows degrade gracefully: context rebuilding falls back to the plain
  * persona name, never an error.
  */
@@ -42,7 +42,7 @@ export class PersonaSpriteMessageRepository {
    * Single round trip via `message_disc_id = ANY(...)` so context builds can
    * resolve an entire history window in one query.
    *
-   * @returns null on query failure — callers must NOT cache misses in that case,
+   * @returns null on query failure, so callers must NOT cache misses in that case,
    *   or a transient DB error would negative-cache real sprite messages
    */
   async getByMessageIds(messageDiscIds: string[]): Promise<Map<string, PersonaSpriteMessageRow> | null> {

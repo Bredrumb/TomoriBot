@@ -1,8 +1,8 @@
 /**
- * DuckDuckGoEngine — wraps DuckDuckGoHandler.executeWebSearchInternal().
+ * DuckDuckGoEngine : wraps DuckDuckGoHandler.executeWebSearchInternal().
  *
  * Text-only engine. When DDG itself rate-limits, the underlying
- * processWebSearch() already cascades to Felo automatically — that's why
+ * processWebSearch() already cascades to Felo automatically , so that's why
  * this engine doesn't need to chain to FeloEngine itself. FeloEngine is
  * a separate last-resort entry in the dispatcher chain for the case where
  * DDG can't even reach its MCP server.
@@ -20,7 +20,7 @@ export class DuckDuckGoEngine implements WebSearchEngine {
   private readonly handler = getDuckDuckGoHandler();
 
   async available(_context: ToolContext): Promise<boolean> {
-    // 1. DDG availability == MCP manager is ready and the web-search function exists.
+    // DDG availability == MCP manager is ready and the web-search function exists.
     const mgr = getMCPManager();
     if (!mgr.isReady()) return false;
     try {

@@ -46,7 +46,7 @@ export type CopiedRenderTarget = {
   /**
    * True only for identity sprites. Identity sprites already use a distinct
    * decorated "Sprite (Persona)" webhook name, so the zero-width group-break
-   * marker (applied to clean-named non-identity sprites) must not be appended —
+   * marker (applied to clean-named non-identity sprites) must not be appended, so
    * a trailing marker would break the decorated-name round-trip in
    * resolveRenderModifierSourcePersona.
    */

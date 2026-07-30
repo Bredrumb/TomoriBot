@@ -40,7 +40,7 @@ const knownLargeImplementationPaths = new Set([
   "src/utils/db/repositoryWriteSql.ts",
   "src/utils/text/contextBuilder.ts",
   "src/utils/discord/streamOrchestrator.ts",
-  // Phase 5.5c facade-rename targets — added so the existing
+  // Phase 5.5c facade-rename targets: added so the existing
   // "thin facade to large file" finding fires until they're truly decomposed.
   "src/utils/text/context/core/builderImplementation.ts",
   "src/utils/discord/stream/core/orchestratorImplementation.ts",
@@ -262,7 +262,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
   const allowedRepoFilenames = /^(index|IRepository|.*Repository)\.ts$/;
   for (const file of files) {
     if (!file.repoPath.startsWith(repoDir)) continue;
-    // Only check files directly in repositories/ (not deeper subfolders)
     const remainder = file.repoPath.slice(repoDir.length);
     if (remainder.includes("/")) continue;
     if (!allowedRepoFilenames.test(basename(file.absPath))) {

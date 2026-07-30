@@ -92,7 +92,6 @@ export class ReminderTool extends BaseTool {
 
   /**
    * Check if reminder tool is available for the given provider
-   * @param _provider - LLM provider name (unused)
    * @returns True if provider supports reminder functionality
    */
   isAvailableFor(_provider: string): boolean {
@@ -100,10 +99,9 @@ export class ReminderTool extends BaseTool {
   }
 
   /**
-   * Context-aware availability check — disabled during non-task reminder-triggered turns
+   * Context-aware availability check: disabled during non-task reminder-triggered turns
    * to prevent the AI from scheduling new reminders while executing an existing one.
    * Self-reminder (task) turns are exempt so tasks can spawn follow-up tasks.
-   * @param _provider - LLM provider name (unused)
    * @param context - Optional tool context containing streaming flags
    */
   isAvailableForContext(_provider: string, context?: ToolContext): boolean {
@@ -114,11 +112,8 @@ export class ReminderTool extends BaseTool {
   /**
    * Execute reminder creation
    * @param args - Arguments containing reminder details
-   * @param context - Tool execution context
-   * @returns Promise resolving to tool result
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -131,7 +126,6 @@ export class ReminderTool extends BaseTool {
       };
     }
 
-    // Extract arguments
     const reminderPurposeArg = args.reminder_purpose as string;
     const targetUserArg = args.target_user as string | undefined;
     const legacyTargetUserNicknameArg = args.target_user_nickname as string | undefined;
@@ -153,9 +147,7 @@ export class ReminderTool extends BaseTool {
     // Normalize common variants before parseTimeWithOffset rejects them.
     if (reminderTimeArg && typeof reminderTimeArg === "string") {
       let normalized = reminderTimeArg.trim();
-      // 1. Replace slash date separators with dashes (2025/09/05 → 2025-09-05)
       normalized = normalized.replace(/^(\d{4})\/(\d{2})\/(\d{2})/, "$1-$2-$3");
-      // 2. Replace space or T between date and time with underscore
       normalized = normalized.replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/, "$1_$2");
       if (normalized !== reminderTimeArg) {
         log.info(`Reminder tool: Normalized time format "${reminderTimeArg}" → "${normalized}"`);
@@ -165,19 +157,17 @@ export class ReminderTool extends BaseTool {
 
     // NovelAI GLM recovery: default repetition_interval_hours to 0 (one-time) when missing.
     // GLM frequently omits this required parameter for simple "remind me in X" requests.
-    // Only for NovelAI — other providers have retries and should be required to explicitly
+    // Only for NovelAI, so other providers have retries and should be required to explicitly
     // set this so the model is "conscious" of whether the reminder is one-time or recurring.
     if (context.provider === "novelai" && typeof repetitionIntervalHoursArg !== "number") {
       log.info("Reminder tool: Auto-filling missing repetition_interval_hours with 0 (one-time reminder)");
       repetitionIntervalHoursArg = 0;
     }
 
-    // Import database functions and utilities
     const { userRepository, serverScheduleRepository } = await import("@/utils/db/repositories");
     const { sendTaskEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
     const { ColorCode } = await import("../../utils/misc/logger");
 
-    // Get server and user context
     const tomoriState = context.tomoriState;
     const resolvedUserId = context.message?.author?.id || context.userId;
 
@@ -196,14 +186,13 @@ export class ReminderTool extends BaseTool {
 
     if (
       !tomoriState ||
-      // Allow null requestingUserRow for Matrix relay webhooks — they have no
+      // Allow null requestingUserRow for Matrix relay webhooks, so they have no
       // users table entry, so created_by_user_id will be stored as null
       (!requestingUserRow && !isMatrixRelayRequester) ||
       (requestingUserRow && !requestingUserRow.user_id) ||
       !tomoriState.server_id ||
       !resolvedUserId
     ) {
-      // Log which specific value is missing for diagnostics
       const missing = [
         !tomoriState && "tomoriState",
         !requestingUserRow && !isMatrixRelayRequester && "requestingUserRow",
@@ -237,7 +226,6 @@ export class ReminderTool extends BaseTool {
       };
     }
 
-    // Validate target user nickname
     const botUserId = context.client.user?.id;
     const isSelfReminder =
       selfReminderArg === true ||
@@ -269,7 +257,6 @@ export class ReminderTool extends BaseTool {
       };
     }
 
-    // Validate repetition interval (0 = one-time, 1+ = recurring)
     let repetitionIntervalHours: number | null = null;
     if (typeof repetitionIntervalHoursArg === "number") {
       if (
@@ -290,7 +277,6 @@ export class ReminderTool extends BaseTool {
       repetitionIntervalHours = repetitionIntervalHoursArg > 0 ? repetitionIntervalHoursArg : null;
     }
 
-    // Resolve and validate target channel (optional override)
     let resolvedChannelId = channelId;
     let resolvedChannelLabel = "Current channel";
     if (requestedTargetChannel) {
@@ -351,7 +337,7 @@ export class ReminderTool extends BaseTool {
       // Method 1: Absolute time provided - parse in the offset the model labeled
       // the time with (utc_offset), falling back to the server's configured timezone.
       // The model passes wall-clock time as spoken and labels the frame instead of
-      // converting it — deterministic code does the offset arithmetic here.
+      // converting it, so deterministic code does the offset arithmetic here.
       timeCalculationMethod = "absolute";
 
       // Validate utc_offset only when it will actually be used (absolute path)
@@ -381,7 +367,6 @@ export class ReminderTool extends BaseTool {
         };
       }
     } else {
-      // Method 2: Relative time parameters - calculate from current time
       const hasRelativeParams =
         (typeof minutesFromNowArg === "number" && minutesFromNowArg > 0) ||
         (typeof hoursFromNowArg === "number" && hoursFromNowArg > 0) ||
@@ -395,12 +380,10 @@ export class ReminderTool extends BaseTool {
         log.info("No time parameters provided for reminder - defaulting to 1 minute from now");
       }
 
-      // Calculate relative time by adding all "from now" parameters
       timeCalculationMethod = "relative";
       const currentTime = new Date();
       let totalMilliseconds = 0;
 
-      // Add each time component (convert to milliseconds)
       if (typeof effectiveMinutesFromNow === "number" && effectiveMinutesFromNow > 0) {
         totalMilliseconds += effectiveMinutesFromNow * 60 * 1000;
       }
@@ -420,7 +403,6 @@ export class ReminderTool extends BaseTool {
 
     const reminderPurpose = reminderPurposeArg.trim();
 
-    // Validate that the calculated time is in the future (both absolute and relative times)
     if (!finalReminderTime || !validateFutureTime(finalReminderTime)) {
       const timeDisplay =
         timeCalculationMethod === "absolute"
@@ -451,7 +433,7 @@ export class ReminderTool extends BaseTool {
       let actualNicknameInDB = requestedTargetUser || "Tomori";
       let resolvedTargetUserId = "";
       let resolvedTargetUserLabel = actualNicknameInDB;
-      // Target's personal timezone offset (/personal timezone) — used only for the
+      // Target's personal timezone offset (/personal timezone): used only for the
       // dual-clock confirmation display, never for time interpretation
       let targetPersonalOffset: number | null = null;
 
@@ -499,7 +481,6 @@ export class ReminderTool extends BaseTool {
             `Reminder: Target is a bridge user (${resolvedTargetUserId}), storing display label "${actualNicknameInDB}" without a DB lookup`,
           );
         } else {
-          // Load target user to verify they exist
           const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId);
 
           if (!targetUserRow?.user_id) {
@@ -538,7 +519,6 @@ export class ReminderTool extends BaseTool {
           `Reminder created (ID: ${dbResult.reminder_id}): "${reminderPurpose}" for ${actualNicknameInDB} (${resolvedTargetUserId}) at ${finalReminderTime.toISOString()}`,
         );
 
-        // Calculate time remaining for user-friendly display
         const timeRemainingMs = finalReminderTime.getTime() - Date.now();
         const timeRemainingStr = formatTimeRemaining(timeRemainingMs);
 
@@ -558,7 +538,7 @@ export class ReminderTool extends BaseTool {
         const reminderPurposeText =
           reminderPurpose.length > 200 ? `${reminderPurpose.substring(0, 197)}...` : reminderPurpose;
         // Show both clocks when the target has a personal timezone differing from
-        // the server's — lets the user immediately spot a mislabeled/misconverted time
+        // the server's, so lets the user immediately spot a mislabeled/misconverted time
         const reminderTimeText =
           targetPersonalOffset != null && targetPersonalOffset !== timezoneOffset
             ? localizer(context.locale, "reminders.dual_time_display", {

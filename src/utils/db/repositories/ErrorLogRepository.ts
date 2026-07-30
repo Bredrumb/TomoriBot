@@ -39,8 +39,6 @@ export function buildErrorLogPayload(msg: string, err: unknown, context?: ErrorC
   };
 }
 
-// ── private error normalisation helpers ──────────────────────────────────────
-
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
 function toErrorMessage(err: unknown): string {
@@ -62,12 +60,10 @@ function toErrorStack(err: unknown): string | null {
   return null;
 }
 
-// ── repository ────────────────────────────────────────────────────────────────
-
 /**
  * Thin repository for the `error_logs` table.
  *
- * Intentionally does NOT import `logger.ts` — this file sits between the
+ * Intentionally does NOT import `logger.ts`: this file sits between the
  * logger and the DB client, breaking the circular dependency.
  */
 export class ErrorLogRepository {
@@ -91,5 +87,5 @@ export class ErrorLogRepository {
   }
 }
 
-/** Singleton — import this in callers. */
+/** Singleton: import this in callers. */
 export const errorLogRepository = new ErrorLogRepository();

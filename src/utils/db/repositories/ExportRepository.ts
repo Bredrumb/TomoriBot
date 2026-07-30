@@ -22,7 +22,7 @@ import {
 } from "@/types/db/dataExport";
 
 /**
- * ExportRepository — owns all data export operations.
+ * ExportRepository: owns all data export operations.
  *
  * Handles personal and server data export, per-domain slice exports
  * (memories, settings, config, personality), JSON sanitization, and
@@ -30,16 +30,13 @@ import {
  * invalidation is performed here.
  */
 export class ExportRepository {
-  // ── private helpers ─────────────────────────────────────────────────────────
-
   /**
    * Sanitizes a string for safe JSON serialization.
    * Removes control characters (except newlines and tabs) that could break JSON.
-   * @param content - The content to sanitize
    * @returns Object with sanitized content and flag indicating if sanitization occurred
    */
   private sanitizeForJson(content: string): { sanitized: string; wasSanitized: boolean } {
-    // 1. Remove null bytes and control characters except \n (0x0A) and \t (0x09)
+    // Remove null bytes and control characters except \n (0x0A) and \t (0x09)
     // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for sanitization
     const cleaned = content.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F]/g, "");
     return { sanitized: cleaned, wasSanitized: cleaned !== content };
@@ -52,8 +49,6 @@ export class ExportRepository {
       return { content: sanitized, tags: item.tags };
     });
   }
-
-  // ── export operations ───────────────────────────────────────────────────────
 
   /**
    * Exports personal user data (nickname, language preference, impersonation prompt, memories).
@@ -68,7 +63,6 @@ export class ExportRepository {
     includeGlobalMemories = true,
   ): Promise<ExportResult> {
     try {
-      // 1. Query user data from database (personalization fields live in the split table)
       const rows = await sql`
         SELECT
           u.user_id,
@@ -89,7 +83,6 @@ export class ExportRepository {
 
       const userData = rows[0];
 
-      // 2. Load personal memories from lineage-scoped table
       const memoryRows =
         includeGlobalMemories && personaLineageId !== 0
           ? await sql`
@@ -115,10 +108,9 @@ export class ExportRepository {
         tags: row.tags ?? [],
       }));
 
-      // 3. Sanitize memories for safe JSON export
+      // Sanitize memories for safe JSON export
       const sanitizedMemories = this.sanitizeMemoryItems(rawPersonalMemories, "personal memories");
 
-      // 4. Build export object
       const exportData: PersonalExport = {
         version: EXPORT_VERSION,
         type: "personal",
@@ -131,7 +123,6 @@ export class ExportRepository {
         },
       };
 
-      // 5. Validate export data structure
       const validated = getPersonalExportSchema().safeParse(exportData);
       if (!validated.success) {
         log.error(`Personal export validation failed for user ${userDiscId}:`, validated.error);
@@ -153,7 +144,6 @@ export class ExportRepository {
    */
   async exportServerData(serverDiscId: string, personaId?: number): Promise<ExportResult> {
     try {
-      // 1. Get internal server ID
       const serverRows = await sql`
         SELECT server_id
         FROM servers
@@ -167,7 +157,7 @@ export class ExportRepository {
 
       const serverId = serverRows[0].server_id;
 
-      // 2. Get tomori configuration — 13 split-table LEFT JOINs + welcome (E6: replaces dual tomori_configs join).
+      // Get tomori configuration: 13 split-table LEFT JOINs + welcome (E6: replaces dual tomori_configs join).
       //    COALESCE defaults are belt-and-suspenders for the migration window (servers without a split row).
       const configRows = await sql`
         SELECT
@@ -265,7 +255,6 @@ export class ExportRepository {
 
       const configData = configRows[0];
 
-      // 3. Resolve target persona/lineage for server memory export
       let targetPersonaId = personaId;
       let targetPersonaLineageId: number | null = null;
       if (!targetPersonaId) {
@@ -314,7 +303,6 @@ export class ExportRepository {
         targetPersonaLineageId = null;
       }
 
-      // 4. Get lineage-scoped server memories for the selected persona target
       const memoryRows =
         targetPersonaLineageId !== null
           ? await sql`
@@ -336,10 +324,9 @@ export class ExportRepository {
         tags: row.tags ?? [],
       }));
 
-      // 5. Sanitize memories for safe JSON export
+      // Sanitize memories for safe JSON export
       const sanitizedServerMemories = this.sanitizeMemoryItems(rawServerMemories, "server memories");
 
-      // 6. Build export object
       const exportData: ServerExport = {
         version: EXPORT_VERSION,
         type: "server",
@@ -420,7 +407,6 @@ export class ExportRepository {
         },
       };
 
-      // 7. Validate export data structure
       const validated = getServerExportSchema().safeParse(exportData);
       if (!validated.success) {
         log.error(`Server export validation failed for server ${serverDiscId}:`, validated.error);
@@ -493,7 +479,6 @@ export class ExportRepository {
    */
   async exportPersonalSettings(userDiscId: string): Promise<ExportResult> {
     try {
-      // 1. Query user settings including image appearance fields and behavioral preferences
       const rows = await sql`
         SELECT
           u.user_nickname,
@@ -518,7 +503,6 @@ export class ExportRepository {
 
       const userData = rows[0];
 
-      // 2. Build export object with NAI character fields and behavioral preferences
       const exportData: PersonalSettingsExport = {
         version: EXPORT_VERSION,
         type: "personal_settings",
@@ -537,7 +521,6 @@ export class ExportRepository {
         },
       };
 
-      // 3. Validate export data structure
       const validated = personalSettingsExportSchema.safeParse(exportData);
       if (!validated.success) {
         log.error(`Personal settings export validation failed for user ${userDiscId}:`, validated.error);
@@ -612,7 +595,6 @@ export class ExportRepository {
    */
   async exportPersonalityData(serverDiscId: string, personaId?: number): Promise<PersonalityExportResult> {
     try {
-      // 1. Get persona data (selected persona or default main persona)
       const rows =
         typeof personaId === "number"
           ? await sql`
@@ -646,7 +628,6 @@ export class ExportRepository {
 
       const personalityData = rows[0];
 
-      // 2. Format personality data as human-readable text
       let textOutput = "";
 
       textOutput += `========================================\n`;
@@ -701,8 +682,6 @@ export class ExportRepository {
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Exports a user's full personal data bundle (IRepository contract).
    * The ownerId is the Discord snowflake of the user.
@@ -714,5 +693,5 @@ export class ExportRepository {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const exportRepository = new ExportRepository();

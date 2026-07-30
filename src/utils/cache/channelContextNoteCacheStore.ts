@@ -1,6 +1,6 @@
 /**
  * Resolved per-channel context note.
- * `null` (cached) means the channel has no note — a negative-cache hit.
+ * `null` (cached) means the channel has no note : a negative-cache hit.
  */
 export type ChannelContextNote = {
   note: string;

@@ -1,5 +1,5 @@
 /**
- * cardColor.ts — shared color + image helpers for the `/stats generate`
+ * cardColor.ts: shared color + image helpers for the `/stats generate`
  * infographic gatherers.
  *
  * This module is part of the GATHER layer (it uses `sharp` and reads asset
@@ -7,11 +7,11 @@
  *
  * It centralises:
  * - RGB/HSL math used to derive accessible light-mode palettes.
- * - `extractCardPalette` — samples the selected avatar/icon into a palette for
+ * - `extractCardPalette`: samples the selected avatar/icon into a palette for
  *   Personal Wrapped, Persona Affinity, or the Server Leaderboard.
- * - `extractAvatarAccentColor` — distils a single vivid bar-fill color from an
+ * - `extractAvatarAccentColor`: distils a single vivid bar-fill color from an
  *   avatar, used to tint each persona/member bar on the Server Leaderboard.
- * - `loadTomoriconDataUri` — shared monochrome-stamp tinting used by every card.
+ * - `loadTomoriconDataUri`: shared monochrome-stamp tinting used by every card.
  */
 import { resolve } from "node:path";
 import sharp from "sharp";
@@ -160,7 +160,6 @@ async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBu
     .toBuffer({ resolveWithObject: true });
   const buckets = new Map<string, { red: number; green: number; blue: number; count: number }>();
 
-  // 1. Quantize each opaque, sufficiently-saturated pixel into a coarse bucket.
   for (let index = 0; index < data.length; index += info.channels) {
     if (data[index + 3] < 200) continue;
     const red = Math.round(data[index] / 32) * 32;
@@ -175,7 +174,6 @@ async function sampleColorBuckets(avatarDataUri: string | null): Promise<ColorBu
   }
 
   if (buckets.size === 0) return null;
-  // 2. Attach HSL to every surviving bucket for downstream selection.
   return [...buckets.values()].map((bucket) => ({ ...bucket, ...rgbToHsl(bucket.red, bucket.green, bucket.blue) }));
 }
 
@@ -227,7 +225,7 @@ export async function extractCardPalette(avatarDataUri: string | null): Promise<
 }
 
 /**
- * Distils a single vivid bar-fill color from an avatar — the dominant saturated
+ * Distils a single vivid bar-fill color from an avatar: the dominant saturated
  * hue, normalised to a mid lightness so white or dark in-bar text stays legible.
  * Returns `fallback` when the avatar is missing or has no usable saturated color.
  *
@@ -241,7 +239,6 @@ export async function extractAvatarAccentColor(avatarDataUri: string | null, fal
     if (!colorBuckets) return fallback;
     const dominant = [...colorBuckets].sort((left, right) => right.count - left.count)[0];
     if (!dominant) return fallback;
-    // Boost saturation and pin lightness so every bar reads as a vivid, even tone.
     return hslToHex(dominant.hue, clamp(Math.round(dominant.saturation * 100), 50, 84), 48);
   } catch (error) {
     log.warn("cardColor: avatar accent extraction failed", error as Error);

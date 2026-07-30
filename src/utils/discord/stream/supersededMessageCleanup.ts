@@ -17,7 +17,6 @@ import { log } from "@/utils/misc/logger";
  * @param refs - Messages delivered by the superseded attempt (order preserved).
  * @param options.channel - The channel the turn is streaming into; used for bot-native deletes,
  *   for the webhook-delete fallback, and to resolve the thread ID webhook deletion needs in threads.
- * @param options.webhook - The persona/alter webhook, if this turn streams through one. Preferred
  *   for webhook-delivered messages because it needs no Manage Messages permission.
  */
 export async function deleteSupersededStreamMessages(
@@ -32,12 +31,12 @@ export async function deleteSupersededStreamMessages(
   }
 
   const { channel, webhook } = options;
-  // 1. Webhook deletion inside a thread needs the thread ID; a whole turn streams into one
+  // Webhook deletion inside a thread needs the thread ID; a whole turn streams into one
   //    channel, so resolve it once from the shared channel rather than per message.
   const threadId = "isThread" in channel && channel.isThread() ? channel.id : undefined;
 
   for (const ref of refs) {
-    // 2. Prefer the webhook for webhook-delivered messages: it can delete its own messages without
+    // Prefer the webhook for webhook-delivered messages: it can delete its own messages without
     //    the Manage Messages permission a channel-level delete requires. This can still fail if the
     //    webhook was recreated mid-stream (its id/token no longer matches the message), so treat it
     //    as a first attempt only, not the sole path.
@@ -45,7 +44,7 @@ export async function deleteSupersededStreamMessages(
       continue;
     }
 
-    // 3. Fallback: a channel-level delete. Covers bot-native messages and webhook messages whose
+    // Fallback: a channel-level delete. Covers bot-native messages and webhook messages whose
     //    originating webhook is no longer the one we hold (needs Manage Messages; best-effort).
     if ("messages" in channel) {
       try {
@@ -63,7 +62,7 @@ export async function deleteSupersededStreamMessages(
 /**
  * Attempts to delete a webhook-delivered message through the supplied webhook.
  * @returns `true` on success; `false` if the delete failed (caller should fall back to a
- *   channel-level delete — e.g. the webhook was recreated mid-stream and no longer owns the message).
+ *   channel-level delete: e.g. the webhook was recreated mid-stream and no longer owns the message).
  */
 async function tryWebhookDelete(webhook: Webhook, messageId: string, threadId: string | undefined): Promise<boolean> {
   try {

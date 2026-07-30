@@ -25,7 +25,6 @@ import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderC
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "config_model_image_modal";
 const MODEL_SELECT_ID = "model_select";
 
@@ -93,7 +92,6 @@ function getImageModelDisplayName(
   return description && description.length > 0 ? description : null;
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("image")
@@ -121,10 +119,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Changes Tomori's image diffusion model
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -132,7 +126,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -142,7 +135,6 @@ export async function execute(
     return;
   }
 
-  // 2. Load the Tomori state for this server
   const tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -191,7 +183,7 @@ export async function execute(
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "image");
     const idRoot = "model_image";
 
-    // 1. Open the anchor message with the right initial control for the provider count.
+    // Open the anchor message with the right initial control for the provider count.
     const hasNaiProviders = savedProviders.some(
       (provider) => getStaticProviderInfo(provider.provider)?.featureSupport.imageGeneration === "nai-pipeline",
     );
@@ -221,13 +213,13 @@ export async function execute(
     anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
-    // 2. Resolve the provider and the unacknowledged button the modal opens from.
+    // Resolve the provider and the unacknowledged button the modal opens from.
     const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
     if (!opener) return;
     const selectedProvider = opener.provider;
     const isCustom = isCustomProvider(selectedProvider);
 
-    // 3. Load this provider's diffusion models (custom + regular share the list).
+    // Load this provider's diffusion models (custom + regular share the list).
     const availableModels = (
       (await llmModelRepo.loadAvailableDiffusionModels(selectedProvider, false, {
         kind: "server",
@@ -261,7 +253,7 @@ export async function execute(
         ? (tomoriState.config.nai_diffusion_model_id ?? null)
         : (tomoriState.config.diffusion_model_id ?? null);
 
-    // 4. Acquire the selected model. A custom provider with a single registered model
+    // Acquire the selected model. A custom provider with a single registered model
     //    activates directly (no modal); otherwise a string-select modal is shown in place.
     let work: PersonaWorkflowInPlacePhase;
     let chosenModel: ImageModelChoice | null;
@@ -411,9 +403,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

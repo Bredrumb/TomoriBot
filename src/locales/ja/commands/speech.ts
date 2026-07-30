@@ -1,5 +1,3 @@
-// locales/ja/commands/speech.ts
-
 export default {
   speech: {
     description: `音声出力の声とサンプルを管理します。`,

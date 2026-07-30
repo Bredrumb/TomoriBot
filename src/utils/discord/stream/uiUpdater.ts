@@ -43,11 +43,10 @@ function isInvalidWebhookError(error: unknown): boolean {
 
 /**
  * Detects transient webhook send failures (network aborts/timeouts) where the
- * webhook itself is still valid — the individual HTTP request just did not land.
+ * webhook itself is still valid, so the individual HTTP request just did not land.
  * Unlike {@link isInvalidWebhookError}, these are safe to retry with the same
  * persona identity so the persona avatar/username is preserved on the retry.
  *
- * @param error - The error thrown by the webhook send attempt
  * @returns True when the failure is a transient abort worth a single retry
  */
 function isTransientWebhookError(error: unknown): boolean {
@@ -147,8 +146,8 @@ export class StreamUiUpdater {
       }
 
       let sentMessage: Message | null = null;
-      // Captured so recordSuccessfulSend can remember exactly which identity Discord saw —
-      // including the decorated group-break username — for later sends to reuse.
+      // Captured so recordSuccessfulSend can remember exactly which identity Discord saw:
+      // including the decorated group-break username: for later sends to reuse.
       let deliveredWebhookIdentity: ResolvedWebhookIdentity | undefined;
       const webhookForIdentity = identityOverride
         ? await this.resolveWebhookForIdentityOverride(context)
@@ -171,7 +170,7 @@ export class StreamUiUpdater {
         );
 
         // Any webhook delivery forfeits Discord's native reply (webhooks cannot reply), so the
-        // standalone notice embed is the only reply indicator available — for the main persona
+        // standalone notice embed is the only reply indicator available: for the main persona
         // rendering a sprite just as much as for an alter. Gating this on `is_alter` hid the
         // notice whenever the main persona switched to a webhook for a sprite, and gating on
         // `!identityOverride` hid it from sprite renders generally, alters included.
@@ -397,10 +396,10 @@ export class StreamUiUpdater {
     webhookAllowedMentions: NonNullable<StreamSendPayload["allowedMentions"]>,
     identityOverride?: ResolvedWebhookIdentity,
   ): Promise<Message | null> {
-    // 1. Recover whenever a webhook-backed persona identity was in play — mirror
+    // Recover whenever a webhook-backed persona identity was in play: mirror
     //    the send/fallback gate (context.webhook && personaUsername) rather than
     //    limiting to alters, since non-alter sprite personas send via webhook too.
-    // 2. Retry on invalid-webhook errors (stale webhook -> recreate) AND transient
+    // Retry on invalid-webhook errors (stale webhook -> recreate) AND transient
     //    aborts (webhook still valid -> recreate + resend preserves persona avatar).
     const shouldRecoverWebhook =
       context.webhook &&

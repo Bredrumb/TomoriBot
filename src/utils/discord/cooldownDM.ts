@@ -7,11 +7,7 @@ import { ColorCode } from "@/utils/misc/logger";
 
 /**
  * Sends a cooldown notification to the user via DM, with fallback to ephemeral channel reply
- * @param user - Discord user to notify
  * @param locale - User's locale for localization
- * @param titleKey - Localization key for embed title
- * @param descriptionKey - Localization key for embed description
- * @param descriptionVars - Variables for description localization
  * @param footerKey - Optional localization key for embed footer
  * @param interaction - Optional interaction for ephemeral fallback (slash commands only)
  * @param ephemeralFlags - Optional MessageFlags for ephemeral replies

@@ -55,7 +55,7 @@ export interface SceneTurnMetadata {
   additionalInstructions?: string;
 }
 
-/** Public input to tomoriChat() — optional fields apply defaults in normalizeChatInvocation. */
+/** Public input to tomoriChat(): optional fields apply defaults in normalizeChatInvocation. */
 export interface TomoriChatInput {
   client: Client;
   message: Message;
@@ -230,7 +230,7 @@ export interface ChatTurnContext {
   /**
    * Who the answering persona could see this turn, committed as `presence_seen`
    * only after a response actually lands. Phase 1 of the protocol fills it and
-   * phase 2 drains it — both live in `@/utils/chat/reunionPresence`.
+   * phase 2 drains it; both live in `@/utils/chat/reunionPresence`.
    */
   reunionPresence: ReunionPresenceScope | null;
   currentPersona: TomoriState;

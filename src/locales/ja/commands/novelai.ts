@@ -1,5 +1,3 @@
-// locales/ja/commands/novelai.ts
-
 export default {
   novelai: {
     "character-reference": {

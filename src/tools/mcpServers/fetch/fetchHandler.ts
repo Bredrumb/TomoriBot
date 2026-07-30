@@ -91,11 +91,8 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 
   /**
    * Process MCP function result before returning to LLM
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
    * @param context - Execution context with Discord channel access
-   * @param args - Function arguments used
-   * @returns Processed tool result
    */
   public async processResult(
     functionName: string,
@@ -131,9 +128,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
   /**
    * Process Fetch MCP server results
    * @param mcpResult - The raw MCP result from fetch
-   * @param context - Execution context
    * @param args - The arguments used for the fetch (contains URL)
-   * @returns Promise<TypedMCPToolResult> - Processed result for the LLM
    */
   private async processFetchResult(
     mcpResult: MCPServerResponse,
@@ -145,20 +140,17 @@ export class FetchHandler implements MCPServerBehaviorHandler {
       const isFetchResponse = MCPTypeGuards.isFetchResponse(mcpResult);
       const fetchResult = mcpResult as FetchMCPResponse;
 
-      // Extract result text from various possible locations
       let resultText = "";
       let url = "";
       let title = "";
       let statusCode = 200;
 
       if (isFetchResponse) {
-        // Handle structured fetch response
         resultText = fetchResult.markdown || fetchResult.text || "";
         url = fetchResult.url || (args.url as string) || "";
         title = fetchResult.title || "";
         statusCode = fetchResult.status_code || 200;
 
-        // Check for fetch errors
         if (fetchResult.error || statusCode >= 400) {
           return {
             success: false,
@@ -175,7 +167,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
           };
         }
       } else {
-        // Handle generic response format
         if (mcpResult.text) {
           resultText = mcpResult.text;
         } else if (mcpResult.functionResponse?.response?.text) {
@@ -190,7 +181,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
         url = (args.url as string) || "";
       }
 
-      // Check for top-level error flag
       if (mcpResult.isError) {
         return {
           success: false,
@@ -281,7 +271,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
           rawResult: mcpResult,
           executionTime: Date.now() - context.executionStartTime,
           status: "completed",
-          // Additional fetch-specific metadata
           contentLength: resultText.length,
           url: url,
           title: title,
@@ -308,11 +297,7 @@ export class FetchHandler implements MCPServerBehaviorHandler {
 
   /**
    * Process standard results for unknown functions
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
-   * @param context - Execution context
-   * @param args - Function arguments used
-   * @returns TypedMCPToolResult - Standard processed result
    */
   private processStandardResult(
     functionName: string,
@@ -332,7 +317,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
         resultText = JSON.stringify(mcpResult, null, 2);
       }
 
-      // Check if this is an error result
       if (mcpResult.isError) {
         return {
           success: false,
@@ -349,7 +333,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
         };
       }
 
-      // Successful execution
       return {
         success: true,
         message: resultText || `${functionName} executed successfully`,

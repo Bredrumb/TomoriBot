@@ -11,7 +11,7 @@ import { z } from "zod";
  *
  * Accepts a bare string as well as the object form. The entry has exactly one required
  * field, and models routinely collapse such a single-field object down to the field's value
- * — observed with Gemini via OpenRouter returning `memories: ["fact", ...]`. The collapsed
+ * : observed with Gemini via OpenRouter returning `memories: ["fact", ...]`. The collapsed
  * form is unambiguous, so it is repaired here rather than failing the whole window.
  */
 export const HistoryMemoryEntrySchema = z.preprocess(
@@ -36,7 +36,7 @@ export type HistoryMemoryEntry = z.infer<typeof HistoryMemoryEntrySchema>;
  *
  * Validates entries individually and keeps the good ones, reporting how many were
  * discarded. A single malformed entry used to fail the whole window through
- * `z.array(HistoryMemoryEntrySchema)`, throwing away every valid fact alongside it — the
+ * `z.array(HistoryMemoryEntrySchema)`, throwing away every valid fact alongside it, so the
  * count is surfaced instead of the loss being silent.
  */
 export const HistoryExtractionResultSchema = z

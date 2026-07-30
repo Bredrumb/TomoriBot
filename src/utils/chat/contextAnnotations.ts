@@ -275,7 +275,7 @@ export function annotateRecentMessageMetadataInContext(params: {
   // into that turn. Merged turns expand to all constituents; plain turns map to one.
   const constituentIdsByEntryId = new Map<string, string[]>();
   for (const message of params.simplifiedMessages) {
-    // 1. Resolve the original messages folded into this entry. Merged entries carry
+    // Resolve the original messages folded into this entry. Merged entries carry
     //    combinedMessageIds + combinedCreatedAts (parallel arrays); plain entries
     //    fall back to their own id + createdAt.
     const isMerged = !!message.combinedMessageIds && message.combinedMessageIds.length > 0;
@@ -321,7 +321,7 @@ export function annotateRecentMessageMetadataInContext(params: {
     if (textParts.some((part) => part.text.includes("[System: Message metadata: ref="))) {
       continue;
     }
-    // 2. Emit one metadata line per constituent message (in message order) so each
+    // Emit one metadata line per constituent message (in message order) so each
     //    original message in a merged turn still exposes its own ref_N handle and
     //    sent timestamp for manage_message / interact_with_recent_message.
     const annotationBlock = constituentIds

@@ -1,5 +1,3 @@
-// locales/ja/commands/scheduled-task.ts
-
 export default {
   "scheduled-task": {
     description: `スケジュール済みタスクとリマインダーを管理します。`,

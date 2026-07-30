@@ -4,8 +4,8 @@
  * Phase 4: User Controls & Privacy
  *
  * Allows users to:
- * 1. Toggle cross-server memory sharing (opt-in)
- * 2. Clear all short-term memories
+ * - Toggle cross-server memory sharing (opt-in)
+ * - Clear all short-term memories
  */
 
 import type { Client, ChatInputCommandInteraction, SlashCommandSubcommandBuilder } from "discord.js";
@@ -58,7 +58,6 @@ export async function execute(
 
   try {
     if (setting === "crossserver") {
-      // Toggle cross-server opt-in
       const newValue = await userRepository.toggleCrossServerShmOptIn(interaction.user.id);
 
       // Invalidate user cache to ensure fresh data on next access
@@ -68,7 +67,6 @@ export async function execute(
         `[personalStmCommand] Toggled cross-server short-term memory opt-in - userId=${interaction.user.id}, newValue=${newValue}`,
       );
 
-      // Reply with status
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.SUCCESS,
         titleKey: "commands.personal.stm.crossserver.title",
@@ -77,7 +75,6 @@ export async function execute(
           : "commands.personal.stm.crossserver.disabled",
       });
     } else if (setting === "clear") {
-      // Clear all short-term memories for user
       clearShortTermMemoryForUser(interaction.user.id);
 
       log.success(`[personalStmCommand] Cleared all short-term memories for user - userId=${interaction.user.id}`);
