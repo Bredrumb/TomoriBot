@@ -36,9 +36,6 @@ export class MCPManager {
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
 
-  /**
-   * Get the singleton instance of MCPManager
-   */
   static getInstance(): MCPManager {
     if (!MCPManager.instance) {
       MCPManager.instance = new MCPManager();
@@ -110,7 +107,6 @@ export class MCPManager {
   }
 
   /**
-   * Get MCP server configurations from the configuration manager
    */
   private getServerConfigurations(): MCPServerConfig[] {
     const configManager = getMCPConfigManager();
@@ -121,9 +117,6 @@ export class MCPManager {
     return readyConfigs.map((config) => configManager.toManagerConfiguration(config));
   }
 
-  /**
-   * Initialize a single MCP server
-   */
   private async initializeServer(config: MCPServerConfig): Promise<void> {
     const { name, displayName, command, args, env, timeout = 30000 } = config;
 
@@ -245,9 +238,6 @@ export class MCPManager {
     return this.isInitialized;
   }
 
-  /**
-   * Get connection status for all MCP servers
-   */
   getConnectionStatus(): Record<string, boolean> {
     const status: Record<string, boolean> = {};
 
@@ -258,24 +248,17 @@ export class MCPManager {
     return status;
   }
 
-  /**
-   * Get count of connected MCP servers
-   */
   getConnectedServerCount(): number {
     return this.mcpClients.size;
   }
 
   /**
-   * Get enhanced server configurations
    */
   getEnhancedServerConfigurations(): EnhancedMCPServerConfig[] {
     const configManager = getMCPConfigManager();
     return configManager.getConfigurationsByPriority(true); // Get only enabled configs
   }
 
-  /**
-   * Get initialization summary for logging and monitoring
-   */
   getInitializationSummary() {
     const configManager = getMCPConfigManager();
     return configManager.getInitializationSummary();

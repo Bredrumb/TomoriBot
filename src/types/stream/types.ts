@@ -286,9 +286,6 @@ export interface DetailedStreamResult {
   warnings: string[];
 }
 
-/**
- * Helper function to create default stream state
- */
 export function createDefaultStreamState(): StreamState {
   return {
     buffer: "",
@@ -321,9 +318,6 @@ export function createDefaultStreamState(): StreamState {
   };
 }
 
-/**
- * Helper function to create default stream metrics
- */
 export function createDefaultStreamMetrics(): StreamMetrics {
   return {
     startTime: Date.now(),

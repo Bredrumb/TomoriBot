@@ -49,9 +49,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand.setName("image").setDescription(localizer("en-US", "commands.generate.image.description"));
 
 /**
- * Get the diffusion model codename from the database
  * @param diffusionModelId - Database ID of the diffusion model
- * @returns The model codename string (e.g., "gemini-2.5-flash-image")
  */
 async function getDiffusionModelCodename(diffusionModelId: number): Promise<string> {
   const model = await llmModelRepo.loadDiffusionModelById(diffusionModelId);

@@ -53,7 +53,6 @@ export async function initializeLLMCache(): Promise<void> {
 }
 
 /**
- * Gets a cached LLM configuration by ID
  * Returns undefined if LLM is not found in cache
  * @param llmId - ID of the LLM to retrieve
  * @returns LLM configuration or undefined
@@ -70,7 +69,6 @@ export function getAllCachedLLMs(): LlmRow[] {
 }
 
 /**
- * Gets all cached LLM configurations for a specific provider
  * @param provider - Provider name (e.g., "google", "openai", "anthropic")
  */
 export function getCachedLLMsByProvider(provider: string): LlmRow[] {

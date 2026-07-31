@@ -96,7 +96,6 @@ export function invalidateGuildMcpConfigCache(serverId: number): void {
 }
 
 /**
- * Clear the entire guild MCP config cache.
  * Useful for testing or manual refresh.
  */
 export function clearGuildMcpConfigCache(): void {

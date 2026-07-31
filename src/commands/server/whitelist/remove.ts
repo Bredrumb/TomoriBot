@@ -462,7 +462,6 @@ function getCooldownTypeName(cooldownType: CooldownType, locale: string): string
 }
 
 /**
- * Get the locale key suffix for a cooldown type
  * @returns The locale key suffix (e.g., "off", "per_user", "per_channel")
  */
 function getCooldownTypeKey(cooldownType: CooldownType): string {

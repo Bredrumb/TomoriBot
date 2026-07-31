@@ -202,7 +202,6 @@ export function getLocaleSubKeys(locale: string, path: string): string[] {
 }
 
 /**
- * Get the default bot name for a specific locale.
  * Uses the localization system to fetch the appropriate bot name based on the server's locale.
  * Falls back to environment variables and hardcoded defaults if locale keys are not found.
  * @param locale - The locale code (e.g., 'en-US', 'ja')
@@ -225,7 +224,6 @@ export function getDefaultBotName(locale: string): string {
 }
 
 /**
- * Get the base trigger words for a specific locale.
  * Uses the localization system to fetch locale-appropriate trigger words.
  * Falls back to environment variables and hardcoded defaults if locale keys are not found.
  * @param locale - The locale code (e.g., 'en-US', 'ja')

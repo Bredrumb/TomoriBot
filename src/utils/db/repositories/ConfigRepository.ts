@@ -264,7 +264,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 
   /**
-   * Loads full preset rows for a given locale.
    *
    */
   async loadPresetRowsByLocale(locale: string): Promise<TomoriPresetRow[] | null> {
@@ -334,7 +333,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /** Loads all system-prompt preset rows. */
   async loadSystemPromptPresets(): Promise<SystemPromptPresetRow[] | null> {
     try {
       const presets = await sql`

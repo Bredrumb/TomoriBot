@@ -96,7 +96,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand.setName("video").setDescription(localizer("en-US", "commands.generate.video.description"));
 
 /**
- * Get the video model codename from the database.
  * @param videoModelId - Database ID of the video generation model
  * @returns The model codename string (e.g., "veo-3.1-generate-preview")
  */

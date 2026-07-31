@@ -676,7 +676,6 @@ export class ImportRepository {
   }
 
   /**
-   * Imports server memories from an export payload.
    * @param serverDiscId - Discord server snowflake
    * @param memories - Array of memory items to import
    * @param target - Target scope: persona (with optional personaId) or global

@@ -93,7 +93,6 @@ export function extractCustomEmojis(text: string): string[] {
 }
 
 /**
- * Filter out specific custom emojis from text
  * @param emojisToRemove - Set of emoji strings to remove (e.g., ":tomori:", ":pepehands:")
  * @returns Text with specified custom emojis removed
  */

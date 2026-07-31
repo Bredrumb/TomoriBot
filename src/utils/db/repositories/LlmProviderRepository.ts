@@ -980,7 +980,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
   }
 
   /**
-   * Upserts a saved provider config snapshot for a server.
    *
    * @param serverId - Internal server DB ID
    * @param config   - Provider config fields to save
@@ -1093,7 +1092,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
   }
 
   /**
-   * Upserts a personal saved provider config for a user.
    *
    * @param userId - Internal user DB ID
    * @param config - Personal provider config fields to save
@@ -1196,7 +1194,6 @@ export class LlmProviderRepository implements IRepository<LlmProviderExportShape
   }
 
   /**
-   * Upserts a custom endpoint for a server or user.
    *
    * @param params  - Endpoint configuration
    * @param options - Optional cache invalidation options

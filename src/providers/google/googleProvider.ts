@@ -439,7 +439,6 @@ export class GoogleProvider
   }
 
   /**
-   * Get the default model for this provider
    * Uses the robust fallback chain: cache > database > env > hardcoded
    * @returns Promise<string> - The default model codename
    */

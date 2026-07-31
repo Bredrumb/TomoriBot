@@ -402,7 +402,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 
   /**
-   * Check if a server has reached its memory limit.
    *
    * @param personaLineageId - Optional persona lineage scope
    * @returns MemoryValidationResult indicating whether the limit is exceeded

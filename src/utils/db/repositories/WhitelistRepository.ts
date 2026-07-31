@@ -239,7 +239,6 @@ export class WhitelistRepository {
   }
 
   /**
-   * Remove a channel from the whitelist.
    *
    * @returns True if a row was deleted, false if not found
    */
@@ -262,7 +261,6 @@ export class WhitelistRepository {
   }
 
   /**
-   * Replace the full channel whitelist set for a persona.
    * Passing an empty array clears the persona-specific channel restriction.
    *
    * @param channelDiscIds - Discord channel snowflakes to allow for this persona
@@ -285,7 +283,6 @@ export class WhitelistRepository {
   }
 
   /**
-   * Remove a single persona-channel whitelist entry.
    *
    * @returns True if an entry was deleted, false if not found
    */
@@ -298,7 +295,6 @@ export class WhitelistRepository {
   }
 
   /**
-   * Get the channel whitelist entries for a single persona.
    *
    * @returns Array of ChannelPersonaWhitelistRow ordered by channel then creation time
    */
@@ -374,7 +370,6 @@ export class WhitelistRepository {
   }
 
   /**
-   * Remove a role from the whitelist.
    *
    * @returns True if a row was deleted, false if not found
    */

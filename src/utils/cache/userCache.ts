@@ -180,7 +180,6 @@ export function invalidateUserBlacklistCache(serverDiscId: string, userDiscId: s
 }
 
 /**
- * Clears entire in-memory user cache.
  * Useful for testing or manual refresh operations.
  */
 export function clearUserCache(): void {

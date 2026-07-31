@@ -230,9 +230,6 @@ export async function execute(
   }
 }
 
-/**
- * Builds persona select options for the export modal.
- */
 function buildPersonaSelectOptions(personas: TomoriState[], locale: string): SelectOption[] {
   return personas
     .filter((persona) => persona.persona_id !== undefined)

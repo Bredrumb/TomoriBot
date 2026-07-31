@@ -607,7 +607,6 @@ export class PresetRepository {
   }
 
   /**
-   * Load the currently active preset for a server, if any.
    *
    * @returns The active preset row or null
    */

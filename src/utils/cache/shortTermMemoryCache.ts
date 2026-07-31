@@ -291,7 +291,6 @@ function updateSummaryForKey(
 }
 
 /**
- * Store a short-term memory for a user in a channel
  *
  * @param userId - Discord user ID
  * @param channelId - Discord channel ID

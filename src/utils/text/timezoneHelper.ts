@@ -204,7 +204,6 @@ export function parseTimeWithOffset(timeStr: string, offsetHours: number): Date 
 }
 
 /**
- * Adds hours to a Date object
  * @param hours - Number of hours to add (can be negative)
  * @returns New Date object with hours added
  *

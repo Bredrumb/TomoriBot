@@ -36,7 +36,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
   ];
 
   /**
-   * Check if this handler supports a specific function
    * @returns True if this handler supports the function
    */
   public supportsFunction(functionName: string): boolean {

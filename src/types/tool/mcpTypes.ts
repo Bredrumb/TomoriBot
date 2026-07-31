@@ -281,7 +281,6 @@ export interface MCPServerBehaviorHandler {
   ): Promise<ToolResult>;
 
   /**
-   * Check if this handler supports a specific function
    * @param functionName - Function name to check
    * @returns True if this handler supports the function
    */

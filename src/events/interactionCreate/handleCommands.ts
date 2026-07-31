@@ -34,23 +34,14 @@ const COOLDOWN_MAP = new Map<string, number>([
 let executionMap: CommandExecutionMap | null = null;
 let cooldownMap: CommandCooldownMap | null = null;
 
-/**
- * Checks if a command is on cooldown for a user
- */
 async function checkCooldown(userId: string, category: string): Promise<boolean> {
   return cooldownRepository.hasCommandCategoryCooldown(userId, category);
 }
 
-/**
- * Gets the remaining cooldown time in seconds
- */
 async function getRemainingCooldown(userId: string, category: string): Promise<number> {
   return cooldownRepository.getRemainingCommandCategoryCooldownSeconds(userId, category);
 }
 
-/**
- * Sets a cooldown for a command category
- */
 async function setCooldown(userId: string, category: string, duration: number): Promise<void> {
   await cooldownRepository.setCommandCategoryCooldown(userId, category, duration);
 }

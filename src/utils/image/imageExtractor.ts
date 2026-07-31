@@ -44,7 +44,6 @@ export interface ResolvedMessageImageUrls {
 }
 
 /**
- * Build a Discord CDN URL for a custom emoji.
  * Always uses PNG so animated emojis fall back to their first frame.
  */
 function buildEmojiCdnUrl(emojiId: string): string {

@@ -12,7 +12,6 @@ function getDayOfWeek(date: Date): string {
 }
 
 /**
- * Gets the current time in a formatted string
  * @returns Current time in format "Month Day, Year | Hour:Minutes AM/PM | Weekday"
  */
 export function getCurrentTime(): string {
@@ -245,7 +244,6 @@ export function formatBooleanLocalized(value: boolean, locale: string): string {
 }
 
 /**
- * Formats time remaining in a human-readable format
  * @returns Formatted string like "2 days, 3 hours, 15 minutes" or "45 minutes"
  */
 export function formatTimeRemaining(milliseconds: number): string {

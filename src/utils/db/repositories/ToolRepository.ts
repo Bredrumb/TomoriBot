@@ -23,7 +23,6 @@ export type ToolExportShape = {
 
 export class ToolRepository implements IRepository<ToolExportShape> {
   /**
-   * Loads all MCP server configs for a guild.
    *
    */
   async loadMcpServers(serverId: number): Promise<GuildMcpServerRow[]> {

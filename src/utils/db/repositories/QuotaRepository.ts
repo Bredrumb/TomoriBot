@@ -431,7 +431,6 @@ export async function cleanupOldImageQuotas(): Promise<number> {
 }
 
 /**
- * Update the daily-per-user image quota limit.
  *
  * @param serverId - Internal server DB ID
  * @param limit    - New limit (0 = unlimited)
@@ -656,7 +655,6 @@ export async function incrementVideoQuota(serverId: number, userDiscId: string):
 }
 
 /**
- * Update the daily-per-user video quota limit.
  *
  * @param serverId - Internal server DB ID
  * @param limit    - New limit (0 = unlimited)

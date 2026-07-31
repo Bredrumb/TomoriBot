@@ -172,9 +172,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Start streaming from Vertex AI
-   */
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info(`VertexStreamAdapter: Initializing ${this.providerName} streaming`);
 

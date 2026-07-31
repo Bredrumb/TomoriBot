@@ -232,7 +232,6 @@ export namespace ProviderFactory {
   }
 
   /**
-   * Get all available providers and their information
    */
   export async function getAvailableProviders(): Promise<Array<{ name: string; info: ProviderInfo }>> {
     await discoverProviders();

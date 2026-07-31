@@ -85,7 +85,6 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
 }
 
 /**
- * Send images as Discord attachments
  * @param imageUrls - Array of image URLs to send
  * @param channel - Discord channel to send images to
  * @param query - Search query for context
@@ -275,7 +274,6 @@ async function getBraveApiKey(serverId?: number): Promise<string | null> {
 }
 
 /**
- * Make a request to the Brave Search API
  * @param params - Query parameters
  * @param config - Request configuration
  */
@@ -472,7 +470,6 @@ export async function braveNewsSearch(
 }
 
 /**
- * Check if Brave Search is available for a given server
  * @param serverId - Discord server ID (optional)
  * @returns True if API key is available
  */

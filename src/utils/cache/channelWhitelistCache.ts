@@ -45,7 +45,6 @@ function getCacheKey(
 }
 
 /**
- * Get cached whitelist status or fetch from database
  * @param serverDiscId - Discord server ID (snowflake)
  * @param channelDiscId - Discord channel ID (snowflake)
  * @param memberRoleDiscIds - Optional member role IDs used for role-whitelist checks
@@ -85,7 +84,6 @@ export async function getCachedWhitelistStatus(
 }
 
 /**
- * Invalidate whitelist cache for a server
  * If channelDiscId is provided, only invalidate that specific channel (and any thread checks referencing it)
  * Otherwise, invalidate ALL channels for the server
  * @param serverDiscId - Discord server ID (snowflake)

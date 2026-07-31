@@ -111,7 +111,6 @@ function isCommentOnly(content: string): boolean {
 }
 
 /**
- * Derive a preset name from the imported filename.
  * Strips the .json extension and truncates to MAX_PRESET_NAME_LENGTH.
  * @param filename - Original filename from the Discord attachment
  */

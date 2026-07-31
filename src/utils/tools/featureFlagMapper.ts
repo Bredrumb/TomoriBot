@@ -62,9 +62,6 @@ export const ALL_TOOL_FEATURE_FLAGS = {
   ...MCP_TOOL_FEATURE_FLAGS,
 };
 
-/**
- * Get the required feature flag for a tool
- */
 export function getRequiredFeatureFlag(toolName: string): string | undefined {
   return ALL_TOOL_FEATURE_FLAGS[toolName];
 }

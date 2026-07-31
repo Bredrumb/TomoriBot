@@ -55,9 +55,6 @@ interface GoogleObjectSchema extends GoogleParameterSchema {
 export class GoogleToolAdapter implements MCPCapableToolAdapter {
   private static instance: GoogleToolAdapter;
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): GoogleToolAdapter {
     if (!GoogleToolAdapter.instance) {
       GoogleToolAdapter.instance = new GoogleToolAdapter();
@@ -65,9 +62,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     return GoogleToolAdapter.instance;
   }
 
-  /**
-   * Get the provider name this adapter supports
-   */
   getProviderName(): string {
     return "google";
   }

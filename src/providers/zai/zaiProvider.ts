@@ -134,7 +134,6 @@ export class ZaiProvider
   }
 
   /**
-   * Call Z.ai with structured JSON output.
    * @param responseSchema - JSON Schema for expected response
    * @param zodSchema - Zod schema for runtime validation
    */
@@ -267,7 +266,6 @@ export class ZaiProvider
   }
 
   /**
-   * Create a provider config from TomoriState.
    * @returns Provider config ready for streaming
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<ZaiProviderConfig> {

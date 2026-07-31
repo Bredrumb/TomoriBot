@@ -308,7 +308,6 @@ export async function convertToPNG(buffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Get metadata from an image buffer
  *
  * @returns Promise<Metadata> - Image metadata
  */

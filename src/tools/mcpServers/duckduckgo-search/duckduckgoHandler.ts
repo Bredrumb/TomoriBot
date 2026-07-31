@@ -39,7 +39,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
   ];
 
   /**
-   * Check if this handler supports a specific function
    * @returns True if this handler supports the function
    */
   public supportsFunction(functionName: string): boolean {
@@ -287,7 +286,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
   }
 
   /**
-   * Process URL metadata extraction results
    * Provides structured metadata including title, description, and images
    * @param mcpResult - The raw MCP result from URL metadata extraction
    * @param args - The modified arguments used (contains url)

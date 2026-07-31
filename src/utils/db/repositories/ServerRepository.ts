@@ -240,7 +240,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   }
 
   /**
-   * Loads all synced server stickers by internal server DB ID.
    * Used by context builders that already hold the resolved server_id.
    *
    */
@@ -322,7 +321,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   }
 
   /**
-   * Upserts a managed Discord webhook for a channel.
    *
    * @param params - Webhook parameters (guildDiscId, kind, channelDiscId, webhookDiscId, rawToken)
    * @returns true on success, false on failure or missing params

@@ -1444,9 +1444,6 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   };
 }
 
-/**
- * Formats and displays the analysis results
- */
 function displayResults(results: AnalysisResult): void {
   const hasErrors =
     results.parityIssues.length > 0 ||

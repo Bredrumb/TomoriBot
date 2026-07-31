@@ -1221,7 +1221,6 @@ export function invalidatePersonaWebhookCacheForPersona(personaId: number): numb
 }
 
 /**
- * Clears the entire webhook cache.
  * Useful for testing or manual refresh operations.
  */
 export function clearWebhookCache(): void {

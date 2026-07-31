@@ -25,7 +25,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.st-preset.remove.description"));
 
 /**
- * Build checkbox group components from the preset list.
  * Each group holds up to MAX_OPTIONS_PER_GROUP presets, all pre-checked.
  * The preset_id is stored as each option's value for direct DB lookup.
  *

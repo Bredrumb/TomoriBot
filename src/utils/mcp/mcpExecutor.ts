@@ -146,9 +146,6 @@ class MCPHandlerRegistry {
   private static instance: MCPHandlerRegistry;
   private handlers: Map<string, MCPServerBehaviorHandler> = new Map();
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): MCPHandlerRegistry {
     if (!MCPHandlerRegistry.instance) {
       MCPHandlerRegistry.instance = new MCPHandlerRegistry();
@@ -163,9 +160,6 @@ class MCPHandlerRegistry {
     this.initializeDefaultHandlers();
   }
 
-  /**
-   * Initialize the default MCP server handlers
-   */
   private initializeDefaultHandlers(): void {
     this.registerHandler(getBraveSearchHandler());
     this.registerHandler(getFetchHandler());
@@ -185,7 +179,6 @@ class MCPHandlerRegistry {
   }
 
   /**
-   * Get handler for a specific server
    * @returns The handler or null if not found
    */
   public getHandler(serverName: string): MCPServerBehaviorHandler | null {
@@ -206,7 +199,6 @@ class MCPHandlerRegistry {
   }
 
   /**
-   * Get all registered handler names
    * @returns Array of server names that have handlers
    */
   public getRegisteredHandlers(): string[] {
@@ -222,9 +214,6 @@ export class MCPExecutor {
   private static instance: MCPExecutor;
   private handlerRegistry: MCPHandlerRegistry;
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): MCPExecutor {
     if (!MCPExecutor.instance) {
       MCPExecutor.instance = new MCPExecutor();

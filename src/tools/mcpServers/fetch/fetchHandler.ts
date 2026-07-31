@@ -29,7 +29,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
   private readonly SUPPORTED_FUNCTIONS = ["fetch"];
 
   /**
-   * Check if this handler supports a specific function
    * @param functionName - Function name to check
    * @returns True if this handler supports the function
    */
@@ -126,7 +125,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
   }
 
   /**
-   * Process Fetch MCP server results
    * @param mcpResult - The raw MCP result from fetch
    * @param args - The arguments used for the fetch (contains URL)
    */
@@ -296,7 +294,6 @@ export class FetchHandler implements MCPServerBehaviorHandler {
   }
 
   /**
-   * Process standard results for unknown functions
    * @param mcpResult - Raw result from MCP server
    */
   private processStandardResult(

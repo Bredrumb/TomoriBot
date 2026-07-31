@@ -437,9 +437,6 @@ function buildArchiveErrorEmbed(result: Extract<SpriteArchiveReadResult, { ok: f
   }
 }
 
-/**
- * Builds persona select options for the import modal.
- */
 function buildPersonaSelectOptions(personas: TomoriState[], locale: string): SelectOption[] {
   return personas
     .filter((persona) => persona.persona_id !== undefined)

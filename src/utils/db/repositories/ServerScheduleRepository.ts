@@ -256,7 +256,6 @@ export class ServerScheduleRepository implements IRepository<ServerScheduleExpor
   }
 
   /**
-   * Inserts a new random trigger.
    *
    */
   async insertTrigger(data: RandomTriggerData): Promise<RandomTriggerRow | null> {

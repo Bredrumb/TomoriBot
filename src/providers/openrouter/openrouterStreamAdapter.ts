@@ -396,9 +396,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Start streaming from OpenRouter's API
-   */
   async *startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown> {
     log.info("OpenrouterStreamAdapter: Initializing OpenRouter streaming");
 

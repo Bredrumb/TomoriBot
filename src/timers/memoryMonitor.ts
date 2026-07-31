@@ -159,9 +159,6 @@ export function initializeMemoryMonitor(clientOrPollIntervalMs?: Client | number
   log.success("Memory monitoring system initialized");
 }
 
-/**
- * Stops the memory monitoring system
- */
 export function stopMemoryMonitor(): void {
   if (memoryMonitorInstance) {
     memoryMonitorInstance.stop();
@@ -170,9 +167,6 @@ export function stopMemoryMonitor(): void {
   }
 }
 
-/**
- * Gets the status of the memory monitoring system
- */
 export function getMemoryMonitorStatus(): {
   isRunning: boolean;
   intervalMs: number;

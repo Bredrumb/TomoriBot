@@ -290,7 +290,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Start streaming from NovelAI's API
    *
    * For GLM 4.6 (OpenAI endpoint):
    * - Uses the official GLM chat template with <|system|>, <|user|>, <|assistant|> tags
@@ -2114,7 +2113,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Create NovelAI-specific error description for embedding
    */
   createErrorDescription(error: ProviderError, locale: string): string | null {
     // Get NovelAI-specific message based on error code
@@ -2540,7 +2538,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Log sanitized request configuration for debugging
    */
   private logSanitizedRequest(request: NovelAIGenerationRequest, promptLength: number): void {
     log.section("NovelAIStreamAdapter: Request Details");

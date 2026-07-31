@@ -376,7 +376,6 @@ class GuildMcpManager {
   }
 
   /**
-   * Disconnect a specific guild server from the pool.
    * Called when removing or disabling a server via commands.
    *
    * @param serverId - Internal server_id

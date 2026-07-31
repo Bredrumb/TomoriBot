@@ -303,7 +303,6 @@ export class CustomProvider
   }
 
   /**
-   * Get the default model for this provider
    * Returns the placeholder since custom models are user-defined
    *
    * @returns Promise<string> - The default model placeholder

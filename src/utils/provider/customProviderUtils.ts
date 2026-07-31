@@ -91,7 +91,6 @@ function slugifyCodenamePart(value: string): string {
 }
 
 /**
- * Builds the synthetic model codename for a custom endpoint.
  *
  * When a model name is supplied it is appended as a slug so several models can coexist under one
  * provider+capability with distinct codenames (e.g. `custom-s5-home-text-llama3-1-8b`). When omitted

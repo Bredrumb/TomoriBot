@@ -277,7 +277,6 @@ export interface LLMProvider {
   ): Promise<StreamResult>;
 
   /**
-   * Get the default model for this provider
    * @returns Promise<string> - The default model codename
    */
   getDefaultModel(): Promise<string>;

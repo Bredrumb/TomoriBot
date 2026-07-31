@@ -71,9 +71,6 @@ function buildStickerCDNUrl(stickerId: string): string {
   return `https://cdn.discordapp.com/stickers/${stickerId}.png`;
 }
 
-/**
- * Build system prompt for LLM
- */
 function buildSystemPrompt(): string {
   return `You are an expert visual analyzer specializing in classifying emojis and stickers based on their emotional expression.
 
@@ -88,10 +85,6 @@ Guidelines:
 - Match emoji/sticker names case-insensitively`;
 }
 
-/**
- * Build user prompt for LLM
- *
- */
 function buildUserPrompt(items: Array<{ name: string; type: "emoji" | "sticker" }>): string {
   const itemList = items.map((item, idx) => `${idx + 1}. ${item.name} (${item.type})`).join("\n");
 

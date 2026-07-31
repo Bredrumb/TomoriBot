@@ -72,7 +72,6 @@ async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promi
 }
 
 /**
- * Builds the verbatim tool-definitions context item.
  *
  * Only emitted when the verbatim tool-calling workaround is enabled and the
  * active model is tool-capable (gated identically to the verbatim nudge so the

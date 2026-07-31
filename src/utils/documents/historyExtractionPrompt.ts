@@ -146,7 +146,6 @@ export function composeInCharacterSystemPrompt(params: {
 }
 
 /**
- * Builds the user prompt for a single extraction window.
  * Includes optional context from previous windows to avoid duplication.
  *
  * @param formattedMessages - The formatted message text for this window

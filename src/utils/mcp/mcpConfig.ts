@@ -18,9 +18,6 @@ export class MCPConfigManager {
   private configCache: Map<string, EnhancedMCPServerConfig> = new Map();
   private readonly MCP_SERVERS_DIR = join(process.cwd(), "src", "tools", "mcpServers");
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): MCPConfigManager {
     if (!MCPConfigManager.instance) {
       MCPConfigManager.instance = new MCPConfigManager();
@@ -70,7 +67,6 @@ export class MCPConfigManager {
   }
 
   /**
-   * Load configuration for a specific MCP server
    * @returns Enhanced server configuration or null if not found/invalid
    */
   private loadServerConfiguration(serverName: string): EnhancedMCPServerConfig | null {
@@ -160,7 +156,6 @@ export class MCPConfigManager {
   }
 
   /**
-   * Validate a server configuration
    * @throws Error if configuration is invalid
    */
   private validateConfiguration(config: EnhancedMCPServerConfig): void {
@@ -193,7 +188,6 @@ export class MCPConfigManager {
   }
 
   /**
-   * Get configuration for a specific server
    * @returns Server configuration or null if not found
    */
   public getConfiguration(serverName: string): EnhancedMCPServerConfig | null {
@@ -201,7 +195,6 @@ export class MCPConfigManager {
   }
 
   /**
-   * Get configurations sorted by priority
    * @param enabledOnly - Whether to return only enabled servers
    * @returns Array of configurations sorted by priority (1 = highest priority)
    */
@@ -302,9 +295,6 @@ export class MCPConfigManager {
     return true;
   }
 
-  /**
-   * Get initialization summary for logging
-   */
   public getInitializationSummary(): {
     totalServers: number;
     enabledServers: number;
@@ -332,9 +322,6 @@ export class MCPConfigManager {
     };
   }
 
-  /**
-   * Reload configurations from disk
-   */
   public reloadConfigurations(): number {
     this.configCache.clear();
     this.loadAllConfigurations();

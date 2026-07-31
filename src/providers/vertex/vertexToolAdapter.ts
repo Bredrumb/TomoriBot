@@ -22,9 +22,6 @@ export class VertexToolAdapter implements MCPCapableToolAdapter {
     this.googleAdapter = GoogleToolAdapter.getInstance();
   }
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): VertexToolAdapter {
     if (!VertexToolAdapter.instance) {
       VertexToolAdapter.instance = new VertexToolAdapter();
@@ -32,9 +29,6 @@ export class VertexToolAdapter implements MCPCapableToolAdapter {
     return VertexToolAdapter.instance;
   }
 
-  /**
-   * Get the provider name this adapter supports
-   */
   getProviderName(): string {
     return "vertex";
   }

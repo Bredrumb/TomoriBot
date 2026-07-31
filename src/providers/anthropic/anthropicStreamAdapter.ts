@@ -589,7 +589,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Extract function call from accumulated data.
    * Called after the stream ends to get the final function call if stop_reason is tool_use.
    */
   extractFunctionCall(_chunk: RawStreamChunk): FunctionCall | null {

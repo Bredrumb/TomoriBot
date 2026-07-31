@@ -429,9 +429,6 @@ function buildScenarioEstimates(): {
   return { minimum, average, maximum };
 }
 
-/**
- * Calculate total input tokens for a scenario
- */
 function calculateTotalInputTokens(scenario: ScenarioEstimate): number {
   return Object.values(scenario.components).reduce((sum, val) => sum + val, 0);
 }

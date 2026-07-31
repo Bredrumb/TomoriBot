@@ -1351,7 +1351,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Log sanitized request configuration for debugging
    */
   private logSanitizedRequest(requestConfig: GenerateContentConfig, contents: Content[]): void {
     log.section("GoogleStreamAdapter: Request Details");

@@ -46,9 +46,6 @@ class HealthTracker {
     this.lastActivityTimestamp = Date.now();
   }
 
-  /**
-   * Get comprehensive health status of the bot
-   */
   getHealthStatus(): HealthStatus {
     const now = Date.now();
     const timeSinceLastActivity = now - this.lastActivityTimestamp;
@@ -129,9 +126,6 @@ class HealthTracker {
     };
   }
 
-  /**
-   * Get time since last Discord activity in milliseconds
-   */
   getTimeSinceLastActivity(): number {
     return Date.now() - this.lastActivityTimestamp;
   }

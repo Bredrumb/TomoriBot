@@ -203,7 +203,6 @@ export async function callAnthropicStructuredJSON<T>(
 }
 
 /**
- * Call Anthropic for expression initialization structured output.
  * Uses the same forced tool use pattern as callAnthropicStructuredJSON.
  *
  * For expression initialization, the schema is provided by the expression system

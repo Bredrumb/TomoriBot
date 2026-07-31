@@ -393,7 +393,6 @@ export interface ToolAdapter {
   convertResult(result: ToolResult): Record<string, unknown>;
 
   /**
-   * Get the provider name this adapter supports
    */
   getProviderName(): string;
 }
@@ -490,12 +489,10 @@ export interface MCPManagerInterface {
   isReady(): boolean;
 
   /**
-   * Get count of connected MCP servers
    */
   getConnectedServerCount(): number;
 
   /**
-   * Get connection status for all MCP servers
    */
   getConnectionStatus(): Record<string, boolean>;
 
@@ -521,12 +518,10 @@ export interface MCPManagerInterface {
   getAvailableMCPFunctions(): Promise<string[]>;
 
   /**
-   * Get MCP server configurations
    */
   getServerConfigurations(): Promise<EnhancedMCPServerConfig[]>;
 
   /**
-   * Check if a specific MCP function is available
    */
   isFunctionAvailable(functionName: string): Promise<boolean>;
 
@@ -557,18 +552,15 @@ export interface ToolExecutionEvent {
  */
 export interface ToolRegistryInterface {
   /**
-   * Register a new tool
    */
   registerTool(tool: Tool): void;
 
   /**
-   * Get a tool by name
    * @returns The tool instance or undefined if not found
    */
   getTool(name: string): Tool | undefined;
 
   /**
-   * Get all tools available for a specific provider
    * @param context - Tool context for feature flag checking
    */
   getAvailableTools(provider: string, context: ToolContext): Tool[];
@@ -579,7 +571,6 @@ export interface ToolRegistryInterface {
   getAllTools(): Tool[];
 
   /**
-   * Execute a tool by name
    * @param args - Arguments for the tool
    */
   executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;

@@ -133,9 +133,6 @@ async function discoverAndRegisterTools(filePath: string, source: string): Promi
   return discoveredCount;
 }
 
-/**
- * Get initialization status
- */
 export function getInitializationStatus(): {
   isInitialized: boolean;
   toolCount: number;

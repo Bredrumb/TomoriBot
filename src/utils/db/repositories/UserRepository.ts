@@ -79,7 +79,6 @@ export function isEligibleContextReferenceUser(user: UserRow, evidence: ContextR
 
 export class UserRepository implements IRepository<UserExportShape> {
   /**
-   * Loads a user row by Discord ID.
    *
    * @returns UserRow or null if not found
    */
@@ -398,7 +397,6 @@ export class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
-   * Sets the user's global privacy level.
    * Invalidates the user cache after write.
    *
    * @returns Updated UserRow or null on failure

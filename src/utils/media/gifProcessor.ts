@@ -78,7 +78,6 @@ const DEFAULT_CONFIG: Required<GifProcessorConfig> = {
 };
 
 /**
- * Extract keyframes from an animated GIF
  *
  * Algorithm:
  * 1. Always includes first frame (index 0)

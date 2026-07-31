@@ -273,7 +273,6 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
   }
 
   /**
-   * Get the default model for this provider
    * Uses the robust fallback chain: cache > database
    * @returns Promise<string> - The default model codename
    */

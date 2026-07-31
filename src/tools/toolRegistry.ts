@@ -72,7 +72,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   private mcpAdapters = new Map<string, MCPCapableToolAdapter>();
 
   /**
-   * Register a new tool in the registry
    * @throws Error if tool with same name already exists
    */
   registerTool(tool: Tool): void {
@@ -87,7 +86,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   }
 
   /**
-   * Get a tool by its name
    * @param name - Tool name to lookup
    * @returns Tool instance or undefined if not found
    */
@@ -97,7 +95,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   }
 
   /**
-   * Get all tools available for a specific provider and context
    * @param provider - Provider name (e.g., "google", "openai")
    * @param context - Tool context for checking feature flags and permissions
    */
@@ -330,7 +327,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   }
 
   /**
-   * Execute a built-in tool
    * @param args - Tool arguments
    * @param startTime - Execution start time for metrics
    */
@@ -429,7 +425,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   }
 
   /**
-   * Get execution history for debugging and monitoring
    */
   getExecutionHistory(limit = 100): ToolExecutionEvent[] {
     return this.executionHistory.slice(-limit).reverse(); // Most recent first

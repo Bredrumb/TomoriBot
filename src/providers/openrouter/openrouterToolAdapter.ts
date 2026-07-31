@@ -48,9 +48,6 @@ interface OpenAIObjectSchema extends OpenAIParameterSchema {
 export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
   private static instance: OpenrouterToolAdapter;
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): OpenrouterToolAdapter {
     if (!OpenrouterToolAdapter.instance) {
       OpenrouterToolAdapter.instance = new OpenrouterToolAdapter();
@@ -58,9 +55,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     return OpenrouterToolAdapter.instance;
   }
 
-  /**
-   * Get the provider name this adapter supports
-   */
   getProviderName(): string {
     return "openrouter";
   }

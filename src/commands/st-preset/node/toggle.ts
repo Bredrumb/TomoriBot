@@ -90,7 +90,6 @@ function buildCommentNodeDescription(content: string): string | undefined {
 }
 
 /**
- * Build checkbox groups for a page of nodes.
  * Chunks the given nodes into groups of MAX_OPTIONS_PER_GROUP and
  * creates up to MAX_GROUPS_PER_MODAL checkbox group components.
  *

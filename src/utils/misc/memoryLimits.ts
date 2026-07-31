@@ -119,9 +119,6 @@ function parseNonNegativeIntegerEnv(name: string, defaultValue: number): number 
   return parsedValue;
 }
 
-/**
- * Validate memory content length
- */
 export function validateMemoryContent(content: string): MemoryValidationResult {
   const limits = getMemoryLimits();
 
@@ -137,7 +134,6 @@ export function validateMemoryContent(content: string): MemoryValidationResult {
 }
 
 /**
- * Validate attribute content length.
  * Attributes use a higher limit (default 2000) than regular memories (default 1000).
  */
 export function validateAttribute(content: string): MemoryValidationResult {
@@ -155,7 +151,6 @@ export function validateAttribute(content: string): MemoryValidationResult {
 }
 
 /**
- * Validate sample dialogue content length.
  * Sample dialogues use a higher limit (default 2000) than regular memories (default 1000).
  */
 export function validateSampleDialogue(content: string): MemoryValidationResult {

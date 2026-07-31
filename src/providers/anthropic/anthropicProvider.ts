@@ -163,9 +163,6 @@ export class AnthropicProvider
     return await callAnthropicStructuredJSON(request, responseSchema, zodSchema);
   }
 
-  /**
-   * Get expression initialization batch size.
-   */
   getExpressionInitializationBatchSize(): number | null {
     return 50;
   }
@@ -273,9 +270,6 @@ export class AnthropicProvider
     }
   }
 
-  /**
-   * Get the default model codename for this provider.
-   */
   async getDefaultModel(): Promise<string> {
     return DEFAULT_ANTHROPIC_MODEL;
   }

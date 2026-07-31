@@ -111,7 +111,6 @@ export async function loadVoiceSamples(serverId: number): Promise<VoiceSampleRow
 }
 
 /**
- * Load a single voice sample by ID.
  *
  * @returns Parsed VoiceSampleRow or null if not found
  */
@@ -165,10 +164,6 @@ export async function updateVoiceSamplePath(sampleId: number, filePath: string):
   await sql`UPDATE voice_samples SET file_path = ${filePath} WHERE sample_id = ${sampleId}`;
 }
 
-/**
- * Delete a voice sample row by ID.
- *
- */
 export async function deleteVoiceSample(sampleId: number): Promise<void> {
   await sql`DELETE FROM voice_samples WHERE sample_id = ${sampleId}`;
 }

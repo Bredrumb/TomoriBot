@@ -88,7 +88,6 @@ async function sendApiKeyErrorEmbed(context?: ToolContext, searchType = "search"
 }
 
 /**
- * Create standardized tool result
  * @param success - Whether the operation was successful
  * @param message - Result message for humans
  * @param dataOrError - Either structured data for LLM processing, or error string

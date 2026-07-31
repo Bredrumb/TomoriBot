@@ -29,7 +29,6 @@ interface AnthropicPresetGenerationOptions {
 }
 
 /**
- * Build the system prompt for Anthropic preset generation.
  * Injects the response schema so the model knows the expected output shape.
  */
 function buildAnthropicPresetSystemPrompt(): string {

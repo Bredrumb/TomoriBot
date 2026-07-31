@@ -285,7 +285,6 @@ export async function recordKeySuccess(rotationKeyId: number): Promise<void> {
 }
 
 /**
- * Records an API error for a rotation key.
  * Sets cooldown based on error type and increments error_count in the runtime state table.
  * Uses UPSERT to ensure the runtime row exists even if somehow absent after migration.
  *
@@ -322,7 +321,6 @@ export async function recordKeyError(
 }
 
 /**
- * Adds a new rotation key to the pool.
  * Also creates the main key pointer if this is the first rotation key.
  * Each api_key_rotation insert is followed by a runtime state row insert.
  *

@@ -49,9 +49,6 @@ interface OpenAIObjectSchema extends OpenAIParameterSchema {
 export class NovelaiToolAdapter implements MCPCapableToolAdapter {
   private static instance: NovelaiToolAdapter;
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): NovelaiToolAdapter {
     if (!NovelaiToolAdapter.instance) {
       NovelaiToolAdapter.instance = new NovelaiToolAdapter();
@@ -59,9 +56,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
     return NovelaiToolAdapter.instance;
   }
 
-  /**
-   * Get the provider name this adapter supports
-   */
   getProviderName(): string {
     return "novelai";
   }
@@ -395,9 +389,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
   }
 }
 
-/**
- * Get singleton instance of the NovelAI tool adapter
- */
 export function getNovelaiToolAdapter(): NovelaiToolAdapter {
   return NovelaiToolAdapter.getInstance();
 }

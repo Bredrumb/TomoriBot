@@ -227,7 +227,6 @@ export function getRecentlyUsedCustomEmojis(
 }
 
 /**
- * Filter duplicate custom emojis from generated text
  * Removes any custom emojis that were already used in recent bot messages
  * @returns Filtered text with duplicate custom emojis removed
  */
