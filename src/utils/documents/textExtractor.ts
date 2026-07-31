@@ -10,19 +10,18 @@ import { normalizeDocumentText } from "@/utils/documents/documentService";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 
 /**
- * Known-binary MIME type prefixes — any file whose content-type starts with one
+ * Known-binary MIME type prefixes: any file whose content-type starts with one
  * of these is treated as non-readable binary and rejected outright.
  * `application/pdf` is intentionally absent; it is handled as a special case below.
  */
 const BINARY_MIME_PREFIXES = ["image/", "video/", "audio/"] as const;
 
 /**
- * Known-binary file extensions — files with these extensions are rejected even
+ * Known-binary file extensions: files with these extensions are rejected even
  * when Discord reports an ambiguous MIME type (e.g. `application/octet-stream`).
  * Source-code and markup extensions are intentionally absent so they pass through.
  */
 const BINARY_EXTENSIONS = new Set([
-  // Images
   ".jpg",
   ".jpeg",
   ".png",
@@ -34,7 +33,6 @@ const BINARY_EXTENSIONS = new Set([
   ".tif",
   ".avif",
   ".heic",
-  // Video
   ".mp4",
   ".avi",
   ".mov",
@@ -43,7 +41,6 @@ const BINARY_EXTENSIONS = new Set([
   ".flv",
   ".wmv",
   ".m4v",
-  // Audio
   ".mp3",
   ".wav",
   ".ogg",
@@ -52,7 +49,6 @@ const BINARY_EXTENSIONS = new Set([
   ".m4a",
   ".wma",
   ".opus",
-  // Archives
   ".zip",
   ".tar",
   ".gz",
@@ -61,7 +57,6 @@ const BINARY_EXTENSIONS = new Set([
   ".7z",
   ".xz",
   ".zst",
-  // Executables / compiled artifacts
   ".exe",
   ".dll",
   ".so",
@@ -74,18 +69,15 @@ const BINARY_EXTENSIONS = new Set([
   ".wasm",
   ".o",
   ".a",
-  // Fonts
   ".ttf",
   ".otf",
   ".woff",
   ".woff2",
-  // Databases / binary data
   ".db",
   ".sqlite",
   ".sqlite3",
   ".dat",
   ".bin",
-  // Office binary (structured XML containers, not plain text)
   ".docx",
   ".xlsx",
   ".pptx",
@@ -102,32 +94,28 @@ const BINARY_EXTENSIONS = new Set([
  *
  * Strategy: blocklist-based rather than allowlist-based.
  * PDF is handled as a named special case (requires `pdf-parse` for binary parsing).
- * Any other file that is not a known binary format is accepted and read as UTF-8 text —
+ * Any other file that is not a known binary format is accepted and read as UTF-8 text:
  * this naturally covers .txt, .md, .py, .ts, .c, .cpp, .java, .rs, .go, .json, .yaml, etc.
  * without needing to enumerate every possible code or markup extension.
  *
  * @param contentType - MIME type of the file (may be null)
  * @param filename - Filename used to check the extension
- * @returns True if the file should be read as text
  */
 export function isExtractableDocument(contentType: string | null, filename: string): boolean {
   const lowerName = filename.toLowerCase();
 
-  // 1. Always accept PDF regardless of MIME type (special binary parser)
   if (lowerName.endsWith(".pdf") || contentType === "application/pdf") return true;
 
-  // 2. Reject known-binary MIME prefixes (image/*, video/*, audio/*)
   if (contentType && BINARY_MIME_PREFIXES.some((prefix) => contentType.startsWith(prefix))) {
     return false;
   }
 
-  // 3. Reject known-binary extensions regardless of reported MIME type
   const dotIdx = lowerName.lastIndexOf(".");
   if (dotIdx !== -1 && BINARY_EXTENSIONS.has(lowerName.slice(dotIdx))) {
     return false;
   }
 
-  // 4. Accept everything else — any text-based MIME type (text/*) or unknown
+  // Accept everything else: any text-based MIME type (text/*) or unknown
   //    extension falls through here and will be decoded as UTF-8.
   return true;
 }
@@ -139,7 +127,6 @@ export function isExtractableDocument(contentType: string | null, filename: stri
  * @param buffer - Raw file buffer
  * @param filename - Filename used to determine file type
  * @param contentType - Optional MIME type for additional type detection
- * @returns Extracted text content
  */
 export async function extractTextFromBuffer(
   buffer: Buffer,
@@ -178,10 +165,6 @@ export interface ExtractTextResult {
  * Full extraction pipeline: download -> extract -> normalize -> truncate
  * Handles memory guard checks, safe download, text extraction, and truncation
  *
- * @param url - URL to download the document from
- * @param filename - Filename for type detection
- * @param contentType - MIME type of the file
- * @param options - Size and length limits
  * @returns Extraction result with text or error details
  */
 export async function extractTextFromUrl(
@@ -195,14 +178,13 @@ export async function extractTextFromUrl(
     timeoutMs?: number;
   },
 ): Promise<ExtractTextResult> {
-  // 1. Check memory guard — block under warning/critical pressure
   const memCheck = memoryGuard.checkMemory();
   if (memCheck.status === "warning" || memCheck.status === "critical") {
     log.warn(`textExtractor: Blocked extraction due to memory pressure (${memCheck.status})`);
     return { success: false, truncated: false, error: "memory_pressure" };
   }
 
-  // 2. Download the file with size and timeout protections
+  // Download the file with size and timeout protections
   const maxSizeMB = options.maxSizeBytes / (1024 * 1024);
   const downloadResult = await safeDownload(url, {
     maxSizeMB,
@@ -221,7 +203,6 @@ export async function extractTextFromUrl(
     return { success: false, truncated: false, error: errorType };
   }
 
-  // 3. Extract text from the buffer
   let rawText: string;
   try {
     rawText = await extractTextFromBuffer(downloadResult.buffer, filename, contentType);
@@ -230,14 +211,12 @@ export async function extractTextFromUrl(
     return { success: false, truncated: false, error: "extraction_failed" };
   }
 
-  // 4. Normalize text (remove null bytes, normalize whitespace)
   const normalizedText = normalizeDocumentText(rawText);
 
   if (!normalizedText || normalizedText.trim().length === 0) {
     return { success: false, truncated: false, error: "empty_document" };
   }
 
-  // 5. Truncate if necessary
   const truncated = normalizedText.length > options.maxTextLength;
   const finalText = truncated ? normalizedText.slice(0, options.maxTextLength) : normalizedText;
 

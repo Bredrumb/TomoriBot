@@ -1,5 +1,5 @@
 /**
- * Reunion presence — the behavioral "when did this persona last see this person"
+ * Reunion presence: the behavioral "when did this persona last see this person"
  * clock behind reunion notes.
  *
  * The clock is deliberately **presence**, not the `message_sent` telemetry metric.
@@ -11,10 +11,10 @@
  *
  * This module owns both halves, which run in different pipeline phases:
  *
- *  1. {@link resolveReunionNotes} — at **context build** (`contextPipeline`).
+ *  1. {@link resolveReunionNotes}: at **context build** (`contextPipeline`).
  *     Resolves who the persona can see, reads their clocks in one grouped query,
  *     and returns the notes to inject plus the presence scope to commit later.
- *  2. {@link recordReunionPresence} — at **post-turn** (`postTurnEffects`).
+ *  2. {@link recordReunionPresence}: at **post-turn** (`postTurnEffects`).
  *     Commits that scope as `presence_seen` ticks.
  *
  * Splitting them is load-bearing in both directions:
@@ -22,7 +22,7 @@
  *  - Writing during phase 1 would let the read see the turn's own tick, so a turn
  *    would consume the grace window it just opened.
  *  - Writing during phase 1 would also tick turns that never answered. A failed or
- *    silent turn delivered no acknowledgment, so it must not consume the reunion —
+ *    silent turn delivered no acknowledgment, so it must not consume the reunion:
  *    it would burn today's grace and, worse, reset tomorrow's day gap, permanently
  *    losing a reunion the user never received.
  *
@@ -59,12 +59,11 @@ interface ReunionCandidate {
 }
 
 /**
- * Phase 1 — builds this turn's reunion notes and the presence scope to commit
+ * Phase 1: builds this turn's reunion notes and the presence scope to commit
  * once the turn produces a response.
  *
  * @param args - Turn scope, the effective persona, and the identities to exclude.
- * @returns `notes` — raw bodies (the dialogue-history stage wraps them in
- *          `[System: ]`), triggerer first, capped at TIME_AWARENESS_MAX_REUNION_NOTES —
+ *          `[System: ]`), triggerer first, capped at TIME_AWARENESS_MAX_REUNION_NOTES;
  *          and `presence`, the scope handed to {@link recordReunionPresence}.
  */
 export async function resolveReunionNotes(args: {
@@ -79,7 +78,7 @@ export async function resolveReunionNotes(args: {
   const lineageId = effectivePersona.persona_lineage_id;
   const serverId = effectivePersona.server_id;
 
-  // 1. Preconditions. Stat tracking is one of them: with the write side off every
+  // Preconditions. Stat tracking is one of them: with the write side off every
   //    read returns "no history", which would greet everyone as a stranger forever.
   if (
     effectivePersona.config.time_awareness_enabled === false ||
@@ -94,7 +93,7 @@ export async function resolveReunionNotes(args: {
     return { notes: [], presence: null };
   }
 
-  // 2. Candidate set, insertion-ordered: the triggerer first, then the distinct
+  // Candidate set, insertion-ordered: the triggerer first, then the distinct
   //    human authors of the trailing presence window, most recent first.
   const candidates = new Map<number, ReunionCandidate>();
   const triggererUserId = turn.userRow.user_id;
@@ -115,7 +114,7 @@ export async function resolveReunionNotes(args: {
     if (visitedAuthorDiscIds.has(msg.authorId)) continue;
     visitedAuthorDiscIds.add(msg.authorId);
 
-    // 2a. Bridged/synthetic authors have no users row; skip them rather than
+    // Bridged/synthetic authors have no users row; skip them rather than
     //     registering an account as a side effect of building context.
     const userRow = await getCachedUserRow(msg.authorId).catch(() => null);
     const userId = userRow?.user_id;
@@ -130,16 +129,16 @@ export async function resolveReunionNotes(args: {
   }
   if (candidates.size === 0) return { notes: [], presence: null };
 
-  // 3. One grouped read for the whole candidate set. A failed read yields null,
-  //    which must mean "say nothing" — never "nobody here has any history".
+  // One grouped read for the whole candidate set. A failed read yields null,
+  //    which must mean "say nothing"; never "nobody here has any history".
   const reunionInfoByUserId = await statRepository.getUsersPersonaReunionInfo(Array.from(candidates.keys()), lineageId);
   if (!reunionInfoByUserId) return { notes: [], presence: null };
 
-  // 4. Presence scope for the post-turn commit (see the module header for why it
+  // Presence scope for the post-turn commit (see the module header for why it
   //    is not written here).
   const presence: ReunionPresenceScope = { serverId, lineageId, userIds: Array.from(candidates.keys()) };
 
-  // 5. Notes in candidate order (triggerer first), capped so a channel waking up
+  // Notes in candidate order (triggerer first), capped so a channel waking up
   //    doesn't bury the conversation under greetings.
   const notes: string[] = [];
   for (const [userId, candidate] of candidates) {
@@ -158,7 +157,7 @@ export async function resolveReunionNotes(args: {
 }
 
 /**
- * Phase 2 — commits the turn's `presence_seen` ticks.
+ * Phase 2: commits the turn's `presence_seen` ticks.
  *
  * Only runs when the turn actually produced a response (see the module header).
  * Unlike `recordUsageStats` this deliberately does NOT skip DMs: excluding them is

@@ -169,7 +169,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         if (processedChunk.type === "done" && processedChunk.metadata) {
           terminalDoneMetadata = processedChunk.metadata;
         }
-        // Capture real provider usage from whichever chunk carries it — not only
+        // Capture real provider usage from whichever chunk carries it: not only
         // the terminal `done`. OpenAI `include_usage` emits usage on a separate
         // trailing chunk and Anthropic clobbers its done metadata, so relying on
         // terminalDoneMetadata alone would miss both. Latest non-null wins.

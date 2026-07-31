@@ -120,9 +120,7 @@ export async function synthesizeSpeechWithElevenLabs(request: ElevenLabsTtsReque
         if (typeof responseJson.detail === "string") {
           details = responseJson.detail;
         }
-      } catch {
-        // Ignore JSON parse failures for error bodies.
-      }
+      } catch {}
 
       return {
         success: false,

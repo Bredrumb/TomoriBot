@@ -108,14 +108,13 @@ export async function runGenerationTurn(
         });
 
         if (result.status !== "error") {
-          // Don't credit a timed-out key as successful — a timeout is not a clean completion.
+          // Don't credit a timed-out key as successful : a timeout is not a clean completion.
           if (result.status !== "timeout" && rotationKeyId != null) await recordKeySuccess(rotationKeyId);
           break;
         }
 
         if (!hasFallbackKey) break;
 
-        // Record error for the key that just failed, then rotate to the next one.
         context.streamingContext.rotationKeyRetriesUsed = true;
         if (rotationKeyId != null) {
           const errorCode = extractErrorCode(result.streamResults.at(-1));
@@ -225,19 +224,18 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   const fallbackEntries =
     primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 
-  // 1. Build a unified pool: the primary model leads at index 0, then the existing failover chain.
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
 
-  // 2. Model randomizer: when enabled, splice a random pool member to the front so a different model
+  // Model randomizer: when enabled, splice a random pool member to the front so a different model
   //    leads each turn. The remainder keeps its relative order as the failover tail. This is a pure
-  //    reordering — every model (including the original primary) stays in the chain, so failover
+  //    reordering , so every model (including the original primary) stays in the chain, so failover
   //    semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
   if (primaryState.config.model_randomizer_enabled && pool.length > 1) {
     const leadIdx = Math.floor(Math.random() * pool.length);
     pool.unshift(...pool.splice(leadIdx, 1));
   }
 
-  // 3. Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
+  // Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
   //    primary's own llm entry yields a state equivalent to primaryState (provider matches, no config
   //    swap), so index 0 stays semantically identical to the old dedicated "primary" attempt.
   const attempts: GenerationAttempt[] = [];
@@ -249,7 +247,7 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
         // so at least one valid attempt always remains in the chain.
         continue;
       }
-      // 4. Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
+      // Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
       //    The true model still surfaces via successModel for log verification.
       if (index === 0) {
         attempt.label = "primary";
@@ -263,7 +261,7 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   return attempts;
 }
 
-// Must run before provider.createConfig — providers eagerly attach the full tool
+// Must run before provider.createConfig : providers eagerly attach the full tool
 // list and the streaming path won't strip them if has_tools flips later.
 function applyDeliberateToolKillSwitch(state: TomoriState, disableAllTools: boolean): TomoriState {
   if (disableAllTools && state.llm.has_tools) {
@@ -417,7 +415,7 @@ async function createAttempt(
     ? await ProviderFactory.getProviderByName(forcedProviderName)
     : await getProviderForTomori(effectiveState);
 
-  // 1. Try the rotation pool first; fall back to the server's own encrypted key.
+  // Try the rotation pool first; fall back to the server's own encrypted key.
   const rotationSelection = await selectApiKey(effectiveState);
   const apiKey = rotationSelection ? rotationSelection.apiKey : await resolveApiKey(effectiveState);
   const rotationKeyId = rotationSelection?.rotationKeyId ?? null;
@@ -488,10 +486,9 @@ const MAX_FALLBACK_DETAIL_LENGTH = 600;
 /**
  * Resolves a human-readable failure detail for the "Fallback Model Used" notice. Unlike
  * {@link extractErrorCode} (which prefers terse codes for key-rotation bookkeeping), this prefers
- * the provider's verbose message — e.g. "Unsupported model X. Supported IDs: ..." — so users see
+ * the provider's verbose message: e.g. "Unsupported model X. Supported IDs: ...", so users see
  * the actionable reason instead of an opaque error code.
  * @param streamResult - The last stream result recorded for the failed attempt.
- * @returns A trimmed, length-capped detail string.
  */
 function extractErrorDetail(streamResult: StreamResult | undefined): string {
   const data = streamResult?.data;
@@ -502,13 +499,11 @@ function extractErrorDetail(streamResult: StreamResult | undefined): string {
     return truncateFallbackDetail(data.message || "error");
   }
 
-  // 1. Prefer the normalized provider detail (userMessage/message/originalError) used by the error embed.
   const providerDetail = getProviderErrorDetail(data as ProviderError);
   if (providerDetail) {
     return truncateFallbackDetail(providerDetail);
   }
 
-  // 2. Fall back to whatever identifying field is present on the raw result.
   const record = data as Record<string, unknown>;
   return truncateFallbackDetail(
     String(record.message ?? record.code ?? record.type ?? streamResult?.status ?? "unknown"),
@@ -619,7 +614,7 @@ async function applyProviderContextTruncation(
     if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
       // Reserve the SAME output budget the request builder sends: the server's
       // `/model parameters` override first, then OPENROUTER_MAX_OUTPUT_TOKENS, then a
-      // flat 8192 — clamped to the model's reported completion ceiling. Previously this
+      // flat 8192 , so clamped to the model's reported completion ceiling. Previously this
       // ignored the server override, over-reserving output and dropping fitting history.
       const truncationMaxCompletionTokens = resolveMaxOutputTokens({
         configured: tomoriState.config.llm_max_output_tokens,
@@ -650,7 +645,7 @@ async function applyProviderContextTruncation(
       // reported) no longer over-reserve output and drop history that would otherwise fit.
       // The extra clamp to the model-reported ceiling (which the request builder omits) only
       // bites when the resolved value is ABOVE what the model can emit; reserving the real
-      // ceiling there is correct — the model cannot output more than that regardless of the
+      // ceiling there is correct , so the model cannot output more than that regardless of the
       // requested max, so this never under-reserves relative to actual output.
       const truncationMaxCompletionTokens = resolveMaxOutputTokens({
         configured: tomoriState.config.llm_max_output_tokens,

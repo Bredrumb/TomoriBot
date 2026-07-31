@@ -14,7 +14,7 @@ import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapa
  */
 describe("history extraction outcome", () => {
   test("reports a provider with no structured-output capability as an explicit failure", async () => {
-    // 1. NovelAI genuinely exposes no `callStructuredJSON`, so this exercises the real
+    // NovelAI genuinely exposes no `callStructuredJSON`, so this exercises the real
     //    capability-resolution path rather than a stub.
     expect(await resolveStructuredOutputCapability("novelai")).toBeNull();
 
@@ -26,7 +26,7 @@ describe("history extraction outcome", () => {
       userPrompt: "user",
     });
 
-    // 2. The failure must be a typed failure, never an empty success.
+    // The failure must be a typed failure, never an empty success.
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error("expected an unsupported-provider failure");
     expect(outcome.reason).toBe("unsupported");
@@ -34,7 +34,7 @@ describe("history extraction outcome", () => {
   });
 
   test("keeps an empty extraction distinguishable from a failed one", () => {
-    // 3. The whole point of the union: an empty result is still `ok`, so callers can only
+    // The whole point of the union: an empty result is still `ok`, so callers can only
     //    reach the "no facts" terminal when nothing actually went wrong.
     const empty = { ok: true, entries: [] } as const;
     const failed = { ok: false, reason: "failed", error: "Invalid response structure" } as const;

@@ -12,7 +12,7 @@ const log = {
 
 /**
  * Returns true for assembler files that re-export sub-slices via relative imports.
- * These files have no own string values — only leaf files do.
+ * These files have no own string values, so only leaf files do.
  */
 function isAssembler(content: string): boolean {
   return /import\s+\w+\s+from\s+['"]\./.test(content);
@@ -100,7 +100,7 @@ interface LocaleSlice {
   /**
    * The locale key segment that the parent assembler adds above this file's exports.
    * For files in a subdirectory (e.g. commands/bot.ts) this is the dir name ("commands").
-   * For top-level files (e.g. general.ts) this is "" — the file's own export keys are root-level.
+   * For top-level files (e.g. general.ts) this is "": the file's own export keys are root-level.
    */
   keyPrefix: string;
   obj: Record<string, unknown>;
@@ -108,7 +108,7 @@ interface LocaleSlice {
 
 /**
  * Loads all non-assembler locale slice files across all locales.
- * Assembler files (commands.ts, etc.) are skipped — they have no own string values.
+ * Assembler files (commands.ts, etc.) are skipped because they have no own string values.
  */
 async function loadLocaleSlices(): Promise<LocaleSlice[]> {
   const slices: LocaleSlice[] = [];
@@ -124,7 +124,6 @@ async function loadLocaleSlices(): Promise<LocaleSlice[]> {
     const module = await import(filePath);
     const obj = structuredClone(module.default) as Record<string, unknown>;
 
-    // relPath: "en-US/commands/bot.ts" or "en-US/general.ts"
     const relPath = relative(localesPath, filePath).replace(/\\/g, "/");
     const segments = relPath.split("/"); // ["en-US", "commands", "bot.ts"] or ["en-US", "general.ts"]
 
@@ -141,7 +140,7 @@ async function loadLocaleSlices(): Promise<LocaleSlice[]> {
  * Loads the allowlist of keys/prefixes the pruner must never delete.
  * The allowlist exists because the static scanner has known blind spots
  * (joined-string roots, cross-function plumbing, property access in templates).
- * Treat it as the load-bearing safety net — not the scanner.
+ * Treat it as the load-bearing safety net; not the scanner.
  */
 async function loadAllowlist(): Promise<{ preservedPrefixes: string[]; preservedKeys: Set<string> }> {
   const allowlistPath = join(process.cwd(), "scripts", "devtools", "locale-prune-allowlist.json");
@@ -176,7 +175,7 @@ async function main(): Promise<void> {
     log.info("DRY RUN — no files will be written");
   }
 
-  // 1. Identify unused keys via the same analysis used by check-locales
+  // Identify unused keys via the same analysis used by check-locales
   log.info("Running locale analysis to identify unused keys…");
   const results = await analyzeLocalizationKeys();
   const allowlist = await loadAllowlist();
@@ -193,11 +192,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 2. Load all leaf slice files
   const slices = await loadLocaleSlices();
   log.info(`Loaded ${slices.length} leaf slice files`);
 
-  // 3. For each unused key, find the matching slice(s) and delete the sub-path.
+  // For each unused key, find the matching slice(s) and delete the sub-path.
   //    A key like "commands.bot.generate.description" maps to sub-path "bot.generate.description"
   //    in the slice whose keyPrefix is "commands".
   //    A key like "general.defaults.bot_name" maps to sub-path "general.defaults.bot_name"
@@ -229,12 +227,12 @@ async function main(): Promise<void> {
     }
   }
 
-  // 4. Remove empty parent objects left behind by deletions
+  // Remove empty parent objects left behind by deletions
   for (const i of modifiedSlices) {
     pruneEmptyObjects(slices[i].obj);
   }
 
-  // 5. Write back only the modified files
+  // Write back only the modified files
   for (const i of modifiedSlices) {
     const slice = slices[i];
     const serialized = `// locales/${slice.relPath}\n\nexport default ${serializeToTypeScript(slice.obj)};\n`;

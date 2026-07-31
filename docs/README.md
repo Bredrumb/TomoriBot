@@ -86,6 +86,7 @@ Per-task guides:
 - [`contributing/adding-new-provider.md`](./contributing/adding-new-provider)
 - [`contributing/adding-locale.md`](./contributing/adding-locale)
 - [`contributing/adding-persona-preset.md`](./contributing/adding-persona-preset)
+- [`contributing/comment-policy.md`](./contributing/comment-policy) — durable comments and the advisory policy audit
 - [`contributing/raw-sql-boundary.md`](./contributing/raw-sql-boundary) — keeping raw SQL in the repository layer
 - [`contributing/docs-authoring.md`](./contributing/docs-authoring) — docs routes, frontmatter, sidebar, cards, and asset conventions
 

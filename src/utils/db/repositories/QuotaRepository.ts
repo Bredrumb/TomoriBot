@@ -1,5 +1,5 @@
 /**
- * QuotaRepository — manages all quota tables for text, image, and video generation.
+ * QuotaRepository: manages all quota tables for text, image, and video generation.
  *
  * Owns tables:
  *   text_quota_configs, text_quotas, text_serverwide_quotas
@@ -9,7 +9,7 @@
  * This repository is not exportable (quota counters are transient; configs are
  * server-specific operational settings, not portable persona state).
  *
- * Export contract: toExportShape returns null — IRepository is implemented as a
+ * Export contract: toExportShape returns null: IRepository is implemented as a
  * no-op stub to satisfy the interface and future pipeline composition.
  */
 import type { SQL } from "bun";
@@ -38,8 +38,6 @@ import {
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
-
-// ── TEXT QUOTA ──────────────────────────────────────────────────────────────
 
 /**
  * Fetch or create the text quota config for a server.
@@ -296,8 +294,6 @@ export async function resetServerwideTextQuotaPool(serverId: number): Promise<vo
   `;
 }
 
-// ── IMAGE QUOTA ─────────────────────────────────────────────────────────────
-
 /**
  * Fetch or create the image quota config for a server.
  * Creates a default (disabled, unlimited) row if none exists.
@@ -537,8 +533,6 @@ export async function resetServerwideImageQuotaPool(serverId: number): Promise<v
   `;
 }
 
-// ── VIDEO QUOTA ─────────────────────────────────────────────────────────────
-
 /**
  * Fetch or create the video quota config for a server.
  * Creates a default (disabled, unlimited) row if none exists.
@@ -764,10 +758,8 @@ export async function resetServerwideVideoQuotaPool(serverId: number): Promise<v
   `;
 }
 
-// ── IRepository stub ────────────────────────────────────────────────────────
-
 /**
- * QuotaRepository class — wraps the module-level functions and satisfies IRepository.
+ * QuotaRepository class: wraps the module-level functions and satisfies IRepository.
  * Quota state is transient and server-specific; toExportShape returns null.
  */
 export class QuotaRepository implements IRepository<null> {
@@ -780,5 +772,5 @@ export class QuotaRepository implements IRepository<null> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const quotaRepository = new QuotaRepository();

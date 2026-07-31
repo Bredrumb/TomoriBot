@@ -98,9 +98,9 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.accumulatedReasoningContent = "";
     this.pendingThinkBlockThoughtText = "";
     this.reasoningContentSpillGuard.reset();
-    // 1. Build a persona-label matcher used as a fallback `</think>` closer.
+    // Build a persona-label matcher used as a fallback `</think>` closer.
     //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
-    //    (half/full-width colon). Required at a line boundary to keep false positives low —
+    //    (half/full-width colon). Required at a line boundary to keep false positives low because
     //    mid-sentence mentions like "as Nerine would" won't trigger.
     const personaName = context.tomoriState.persona_nickname?.trim();
     const personaSpeakerLabelRegex = personaName
@@ -378,7 +378,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           if (!response.ok) {
             const responseErrorText = await response.text();
             // A message that names a droppable request param is sufficient evidence on
-            // its own — retry even when the generic status/wording classifier misses.
+            // its own, so retry even when the generic status/wording classifier misses.
             // `degradeOn502` stays off: a direct provider's 502 is an outage, not a
             // parameter incompatibility, and should fail fast into key/model fallback.
             const queuedTargeted = queueTargetedAttempt(i, attempt.body, responseErrorText);

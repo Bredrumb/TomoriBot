@@ -91,9 +91,7 @@ export async function transcribeViaOpenAIAdapter(
       const errorBody = (await response.json()) as { error?: string | { message?: string } };
       const msg = typeof errorBody.error === "string" ? errorBody.error : (errorBody.error?.message ?? null);
       if (msg) errorDetails += `: ${msg}`;
-    } catch {
-      // Ignore JSON parse failures on error responses.
-    }
+    } catch {}
     log.warn(`[OpenAISTT] Transcription endpoint returned error: ${errorDetails}`);
     return { success: false, errorKind: "request_failed", details: errorDetails };
   }

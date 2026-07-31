@@ -1,5 +1,3 @@
-// locales/en-US/commands/donate.ts
-
 export default {
   donate: {
     kofi: {

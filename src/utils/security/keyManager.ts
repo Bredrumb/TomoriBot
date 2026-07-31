@@ -39,7 +39,6 @@ class CryptoKeyManager {
     const versions = this.getAvailableVersions();
 
     if (process.env.CRYPTO_SECRET_CURRENT) {
-      // Determine current version: explicit override or auto-detect highest
       this.currentVersion = Number.parseInt(process.env.CRYPTO_SECRET_CURRENT, 10);
       log.info(`Using explicit current version: V${this.currentVersion}`);
     } else {
@@ -71,7 +70,7 @@ class CryptoKeyManager {
    */
   private loadKeysFromEnv(): void {
     log.section(`Loading Keys from Environment`);
-    // 1. Load all CRYPTO_SECRET_V* variables
+    // Load all CRYPTO_SECRET_V* variables
     for (const [key, value] of Object.entries(process.env)) {
       const match = key.match(/^CRYPTO_SECRET_V(\d+)$/);
       if (match && value) {
@@ -81,13 +80,13 @@ class CryptoKeyManager {
       }
     }
 
-    // 2. Backward compatibility: CRYPTO_SECRET maps to V1
+    // Backward compatibility: CRYPTO_SECRET maps to V1
     if (!this.keys.has(1) && process.env.CRYPTO_SECRET) {
       this.keys.set(1, process.env.CRYPTO_SECRET);
       log.info("Using CRYPTO_SECRET as version 1 (backward compatibility mode)");
     }
 
-    // 3. Validation: At least one key must be available
+    // Validation: At least one key must be available
     if (this.keys.size === 0) {
       throw new Error(
         "No encryption keys found in environment! " +
@@ -98,7 +97,6 @@ class CryptoKeyManager {
 
   /**
    * Get the current active encryption key for new encryptions
-   * @returns The encryption key string for the current version
    * @throws Error if current version key is not available
    */
   getCurrentKey(): string {
@@ -111,7 +109,6 @@ class CryptoKeyManager {
 
   /**
    * Get the current active key version number
-   * @returns The version number (e.g., 1, 2, 3)
    */
   getCurrentVersion(): number {
     return this.currentVersion;
@@ -119,8 +116,6 @@ class CryptoKeyManager {
 
   /**
    * Get a specific encryption key version for decryption
-   * @param version - The key version number to retrieve
-   * @returns The encryption key string for the specified version
    * @throws Error if the version doesn't exist
    */
   getKey(version: number): string {
@@ -140,8 +135,6 @@ class CryptoKeyManager {
 
   /**
    * Check if a specific key version exists in the environment
-   * @param version - The key version number to check
-   * @returns True if the version exists, false otherwise
    */
   hasVersion(version: number): boolean {
     return this.keys.has(version);
@@ -149,7 +142,6 @@ class CryptoKeyManager {
 
   /**
    * Get all available key version numbers sorted in ascending order
-   * @returns Array of version numbers (e.g., [1, 2, 3])
    */
   getAvailableVersions(): number[] {
     return Array.from(this.keys.keys()).sort((a, b) => a - b);
@@ -157,7 +149,6 @@ class CryptoKeyManager {
 
   /**
    * Check if key rotation is possible (multiple versions loaded)
-   * @returns True if rotation is available, false if only one version exists
    */
   canRotate(): boolean {
     return this.keys.size > 1;
@@ -176,5 +167,4 @@ class CryptoKeyManager {
   }
 }
 
-// Singleton instance - initialized once on module load
 export const keyManager = new CryptoKeyManager();

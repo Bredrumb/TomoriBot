@@ -13,7 +13,7 @@ import { afterAll } from "bun:test";
  * The fix is to always spread a hoisted `import * as real` namespace and
  * override only what the file controls. Object spread alone is not enough when
  * an export is a CLASS INSTANCE or a class used for its statics, because those
- * members live on the prototype and are not own enumerable properties — a
+ * members live on the prototype and are not own enumerable properties, so a
  * spread would silently reproduce the same partial-mock bug one level down.
  * {@link overrideMembers} covers those cases.
  */
@@ -165,16 +165,16 @@ export function overrideMembers<TReal extends object, TOverrides extends object>
   real: TReal,
   overrides: TOverrides,
 ): TReal & TOverrides {
-  // 1. A class (used for its statics, and possibly constructed elsewhere):
-  //    subclassing inherits the constructor plus every non-enumerable static,
-  //    and `Object.assign` shadows only the listed ones.
+  // Subclassing a class inherits the constructor plus every non-enumerable
+  // static, which a spread would drop; `Object.assign` then shadows only the
+  // listed statics.
   if (typeof real === "function") {
     class Overridden extends (real as unknown as new (...args: never[]) => unknown) {}
     return Object.assign(Overridden, overrides) as unknown as TReal & TOverrides;
   }
 
-  // 2. Anything else (class instance, plain object, namespace): put the real
-  //    value on the prototype chain so unlisted members still resolve to it,
-  //    then install the overrides as own properties that shadow it.
+  // For a class instance, plain object, or namespace, putting the real value on
+  // the prototype chain keeps unlisted members resolvable; the overrides land as
+  // own properties that shadow it.
   return Object.assign(Object.create(real) as TReal, overrides) as TReal & TOverrides;
 }

@@ -1,5 +1,3 @@
-// locales/ja/commands/teach.ts
-
 export default {
   teach: {
     sampledialogue: {

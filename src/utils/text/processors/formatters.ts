@@ -3,8 +3,6 @@ import { escapeRegExp } from "./regexUtils";
 
 /**
  * Gets the day name for a given date
- * @param date - Date object to get day name from
- * @returns The name of the day (e.g., "Monday")
  */
 function getDayOfWeek(date: Date): string {
   const dayOfWeek = new Date(date).getDay();
@@ -41,13 +39,10 @@ export function getCurrentTime(): string {
   let mid = "AM";
 
   if (hour === 0) {
-    // Midnight case
     hour = 12;
   } else if (hour === 12) {
-    // Noon case
     mid = "PM";
   } else if (hour > 12) {
-    // Afternoon/Evening case
     hour = hour % 12;
     mid = "PM";
   }
@@ -62,7 +57,6 @@ export function getCurrentTime(): string {
  * @param options - Text formatting options
  * @param options.capitalizeFirst - Capitalize the first letter.
  * @param options.addPeriod - Add a period if one isn't present at the end.
- * @returns Formatted text with requested transformations
  */
 export function formatText(
   text: string,
@@ -94,7 +88,6 @@ export function formatText(
  * Detects all URLs regardless of surrounding context (angle brackets, markdown, raw)
  * and replaces them with placeholders to protect from chunking and humanization
  * @param text - Text that may contain URLs
- * @returns Object with text containing placeholders and array of original URLs
  */
 function detectAndProtectURLs(text: string): {
   protectedText: string;
@@ -131,12 +124,10 @@ function detectAndProtectURLs(text: string): {
  * Restore URLs from placeholders back to their original form
  * @param text - Text containing URL placeholders
  * @param urls - Array of original URLs
- * @returns Text with URLs restored
  */
 function restoreURLsFromPlaceholders(text: string, urls: string[]): string {
   let restoredText = text;
 
-  // Restore in reverse order to avoid index issues
   for (let i = urls.length - 1; i >= 0; i--) {
     const placeholder = `__URL_${i}__`;
     restoredText = restoredText.replace(new RegExp(escapeRegExp(placeholder), "g"), urls[i]);
@@ -180,55 +171,43 @@ const INTERNET_EXPRESSIONS = new Set([
  * - Maintains code blocks and inline code unchanged
  * - Preserves standalone "I" pronoun
  *
- * @param text - Full text that may include code blocks
- * @returns Humanized text with simplified punctuation and preserved code blocks
  */
 export function humanizeString(text: string): string {
-  // 1. First, protect all URLs from any transformations
+  // First, protect all URLs from any transformations
   const { protectedText: urlProtectedText, urls } = detectAndProtectURLs(text);
 
-  // 2. Store code blocks and replace with placeholders
   const codeBlocks: string[] = [];
   const inlineCode: string[] = [];
   const senderStrings: string[] = [];
 
-  // 3. Replace code blocks (```) with placeholders
   let processedText = urlProtectedText.replace(/```[\s\S]*?```/g, (match) => {
     codeBlocks.push(match);
     return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
   });
 
-  // 3. Replace inline code (`) with placeholders
-  // Look for inline code that contains alphanumeric characters or common code symbols
   processedText = processedText.replace(/`[\w\s()[\]{}.,:;=+\-*/<>!?#$%^&|~\\]+`/g, (match) => {
     inlineCode.push(match);
     return `__INLINE_CODE_${inlineCode.length - 1}__`;
   });
 
-  // 4. Replace sender strings with placeholders
   processedText = processedText.replace(/((?:\([\w\s]+\)|[\w\s]+):)/g, (match) => {
     senderStrings.push(match);
     return `__SENDER_${senderStrings.length - 1}__`;
   });
 
-  // 5. Apply lowercase transformation to text outside code blocks,
+  // Apply lowercase transformation to text outside code blocks,
   //    now including hyphenated words like "E-ew" or "D-don't" as single words
   processedText = processedText.replace(/\b([A-Za-z][A-Za-z'-]*)\b/g, (word) => {
-    // 5.1 Check for all-uppercase acronyms (allow hyphens in acronyms if needed)
     const isAcronym = /^[A-Z](?:[A-Z'-]*[A-Z])?$/.test(word);
-    // 5.2 Check for known internet expressions (lowercased set)
     const isInternet = INTERNET_EXPRESSIONS.has(word.toLowerCase());
-    // 5.3 Preserve standalone single letters (e.g., "I", "B", "F" except "A" eg. "A book")
     const isSingleLetter = word.length === 1 && word !== "A";
     // If it's an acronym, internet expression, or single letter, leave it;
     // otherwise lowercase the whole hyphenated or single word.
     return isAcronym || isInternet || isSingleLetter ? word : word.toLowerCase();
   });
 
-  // 6. Remove commas and semicolons but keep question marks and exclamation points
   processedText = processedText.replace(/[;,]/g, "");
 
-  // 7. Restore placeholders in reverse order to avoid index issues
   for (let i = senderStrings.length - 1; i >= 0; i--) {
     processedText = processedText.replace(`__SENDER_${i}__`, senderStrings[i]);
   }
@@ -241,14 +220,12 @@ export function humanizeString(text: string): string {
     processedText = processedText.replace(`__CODE_BLOCK_${i}__`, codeBlocks[i]);
   }
 
-  // Last step: restore all protected URLs
   return restoreURLsFromPlaceholders(processedText, urls);
 }
 
 /**
  * Formats a boolean value into a user-friendly string ("Enabled" or "Disabled").
  * @param value - The boolean value to format.
- * @returns "Enabled" if true, "Disabled" if false.
  */
 export function formatBoolean(value: boolean): string {
   return value ? "`Enabled`" : "`Disabled`";
@@ -269,7 +246,6 @@ export function formatBooleanLocalized(value: boolean, locale: string): string {
 
 /**
  * Formats time remaining in a human-readable format
- * @param milliseconds - Time remaining in milliseconds
  * @returns Formatted string like "2 days, 3 hours, 15 minutes" or "45 minutes"
  */
 export function formatTimeRemaining(milliseconds: number): string {

@@ -32,7 +32,6 @@ export { CrossChannelMessageTool } from "./crossChannelMessageTool";
 export { CreateThreadTool } from "./createThreadTool";
 export { UpdateTaskTool } from "./updateTaskTool";
 
-// Re-export common types for convenience
 export type {
   Tool,
   ToolContext,

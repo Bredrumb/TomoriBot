@@ -731,11 +731,11 @@ function checkRuntimeStateExportExclusions(schemaSql: string): void {
  * where column growth is justified by their access pattern.
  *
  * Exemptions:
- *   server_capabilities_configs — uniform boolean cluster iterated by
+ *   server_capabilities_configs: uniform boolean cluster iterated by
  *     PERMISSION_DEFINITIONS array; growth is structurally uniform.
- *   saved_provider_configs — atomic snapshot table; all columns are written
+ *   saved_provider_configs: atomic snapshot table; all columns are written
  *     together as a unit by /server save-provider.
- *   server_chat_configs — aggregate /config + /model parameter surface;
+ *   server_chat_configs: aggregate /config + /model parameter surface;
  *     each column maps to exactly one command option knob.
  */
 async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void> {
@@ -766,7 +766,6 @@ async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void>
         continue;
       }
 
-      // End of CREATE TABLE body
       if (trimmed === ");") {
         if (!EXEMPT_TABLES.has(currentTable) && columnCount > COLUMN_THRESHOLD) {
           console.warn(
@@ -780,7 +779,6 @@ async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void>
       }
 
       if (!trimmed || trimmed.startsWith("--")) continue;
-      // Skip SQL constraint-level lines (not column definitions)
       if (/^(CONSTRAINT|PRIMARY\s+KEY|UNIQUE\b|CHECK\s*\(|FOREIGN\s+KEY)/i.test(trimmed)) continue;
 
       columnCount++;

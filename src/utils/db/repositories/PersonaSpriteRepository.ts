@@ -56,13 +56,13 @@ export class PersonaSpriteRepository {
    */
   async listForPersona(personaId: number): Promise<PersonaSpriteRow[]> {
     try {
-      // 1. Live preset pointers resolve the shared official sprite set.
+      // Live preset pointers resolve the shared official sprite set.
       const pointer = await this.resolvePointerPreset(personaId);
       if (pointer) {
         return await this.listPresetSpritesForPointer(personaId, pointer.lineageId, pointer.language);
       }
 
-      // 2. Otherwise read the persona's own sprite rows.
+      // Otherwise read the persona's own sprite rows.
       const rows = await sql<PersonaSpriteRow[]>`
         SELECT sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
         FROM persona_sprites
@@ -145,8 +145,8 @@ export class PersonaSpriteRepository {
    * A plain `GROUP BY persona_id` over `persona_sprites` would be wrong: a live
    * preset-pointer persona owns **zero** `persona_sprites` rows yet still has
    * sprites through the shared preset set. This query reproduces
-   * {@link listForPersona}'s branch order — pointer resolution first, own rows
-   * otherwise — and treats a persona as eligible when:
+   * {@link listForPersona}'s branch order: pointer resolution first, own rows
+   * otherwise; and treats a persona as eligible when:
    *   - it is not a live pointer and owns at least one `persona_sprites` row
    *     (real rows always carry a numeric `sprite_id`, reproducing the caller's
    *     `typeof sprite.sprite_id === "number"` narrowing); or

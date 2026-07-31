@@ -1,5 +1,5 @@
 /**
- * ConfigRepository — manages the 13 split server config tables and preset tables.
+ * ConfigRepository: manages the 13 split server config tables and preset tables.
  *
  * All config reads and writes route through typed split-table methods.
  * The legacy `tomori_configs` god table was dropped by migration 008 (Task F2).
@@ -59,8 +59,6 @@ const JSONB_CONFIG_COLUMNS = new Set([
 function toPostgresTextArrayLiteral(values: readonly unknown[]): string {
   return `{${values.map((value) => `"${String(value).replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
 }
-
-// ── config table row shapes ───────────────────────────────────────────
 
 /** Row shape for server_capabilities_configs (Phase 6). */
 export type ServerCapabilitiesConfigsRow = {
@@ -124,8 +122,6 @@ export type ConfigExportShape = {
 };
 
 export class ConfigRepository implements IRepository<ConfigExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
   /**
    * Loads NAI sampling presets available for a given NAI model target.
    *
@@ -270,7 +266,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   /**
    * Loads full preset rows for a given locale.
    *
-   * @param locale - Locale code
    */
   async loadPresetRowsByLocale(locale: string): Promise<TomoriPresetRow[] | null> {
     try {
@@ -386,7 +381,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   /**
    * Loads model-selection and BYOK columns from the split config tables for a server.
    * Used by credentialResolver to resolve provider for each capability without
-   * bypassing the TomoriState cache — this is an intentional fresh DB read.
+   * bypassing the TomoriState cache (this is an intentional fresh DB read).
    *
    * @param serverId - Internal server DB ID
    */
@@ -403,7 +398,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     | "user_byok_mode"
   > | null> {
     try {
-      // 1. Join the three split tables that own capability-selection columns.
+      // Join the three split tables that own capability-selection columns.
       //    server_model_configs anchors (always present post-E0 backfill);
       //    the other two are LEFT JOINs for migration-window safety.
       const [row] = await sql`
@@ -446,8 +441,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Applies a NovelAI preset's sampling parameters to a server's config.
    * Writes through typed split-table methods. Because these writes are not
@@ -468,7 +461,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     const llm_top_p = typeof params.top_p === "number" ? params.top_p : 1.0;
     const llm_min_p = typeof params.min_p === "number" ? params.min_p : 0.05;
 
-    // 1. Write sampling params across their owning split tables in parallel.
+    // Write sampling params across their owning split tables in parallel.
     const [modelOk, chatOk, naiOk] = await Promise.all([
       this.updateModelConfig(serverId, { llm_temperature }),
       this.updateChatConfig(serverId, { llm_top_p, llm_top_k, llm_min_p }),
@@ -498,7 +491,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       const normalizedMax = Math.max(maxThreshold, normalizedMin);
 
       if (normalizedMin <= 0 || normalizedMax <= 0) {
-        // 1. Always-reply mode — reset counters to 0 in the runtime table.
         const [runtimeRow] = await sql`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
           VALUES (${personaId}, 0, 0)
@@ -511,7 +503,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         return parsed.success ? parsed.data : null;
       }
 
-      // 2. Threshold mode — read current state, compute next, write back atomically.
+      // Threshold mode; read current state, compute next, write back atomically.
       const updatedRuntime = await sql.transaction(async (tx) => {
         const [currentRuntime] = await tx`
           SELECT *
@@ -613,7 +605,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   ): Promise<PersonaAutochRuntimeStateRow | null> {
     try {
       const result = await sql.transaction(async (tx) => {
-        // 1. Update the shared range on server_auto_trigger_configs.
         const [configRow] = await tx`
           UPDATE server_auto_trigger_configs
           SET autoch_threshold = ${threshold},
@@ -626,7 +617,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
         }
 
-        // 2. Reset the persona's runtime cycle (upsert handles first-time rows).
         const [runtimeRow] = await tx`
           INSERT INTO persona_autoch_runtime_state (persona_id, autoch_counter, autoch_next_target)
           VALUES (${personaId}, 0, ${nextTarget})
@@ -719,8 +709,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     if (ok) invalidateTomoriStateCache(serverDiscId);
     return ok;
   }
-
-  // ── split table partial updates ──────────────────────────────────
 
   async updateModelConfig(serverId: number, patch: Partial<ServerModelConfigRow>): Promise<boolean> {
     return this.executeUpdate("server_model_configs", serverId, patch);
@@ -825,7 +813,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           throw new Error(`server_auto_trigger_configs row not found for server_id ${serverId}`);
         }
 
-        // 1. Update direct columns on server_auto_trigger_configs (if any provided).
         if (hasColumns) {
           const setParts: string[] = [];
           const values: SqlParameterArray = [];
@@ -839,7 +826,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
           );
         }
 
-        // 2. Replace junction rows atomically (DELETE + INSERT to handle removals).
+        // Replace junction rows atomically (DELETE + INSERT to handle removals).
         if (hasOverrides) {
           await tx`DELETE FROM server_auto_trigger_persona_overrides WHERE server_id = ${serverId}`;
           for (const override of overrides) {
@@ -919,8 +906,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       sql`DELETE FROM server_memory_configs WHERE server_id = ${serverId}`,
     ]);
   }
-
-  // ── reads for split tables (used where TomoriState cache is unavailable) ──
 
   async getChatConfig(serverId: number): Promise<ServerChatConfigRow | null> {
     try {
@@ -1013,8 +998,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     values.push(value as never);
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Reads capabilities, NAI imagegen, NSFW, speech, and BYOK configs for the given server.
    * Returns null if the server has no config row (i.e., not yet set up).
@@ -1069,8 +1052,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       return false;
     }
   }
-
-  // ── config table reads ───────────────────────────────────────────
 
   private async resolveServerId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
@@ -1154,8 +1135,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       return null;
     }
   }
-
-  // ── config table upserts (new tables) ────────────────────────────
 
   private async sqlUpsertCapabilitiesConfigs(serverId: number, row: ServerCapabilitiesConfigsRow): Promise<void> {
     await sql`
@@ -1300,7 +1279,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async setFallbackModelRefRows(serverId: number, refs: FallbackModelRef[]): Promise<boolean> {
     try {
       const legacyIds = refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
-      // 1. Write refs to server_chat_configs and sync legacy integer-ID list in server_model_configs in parallel.
+      // Write refs to server_chat_configs and sync legacy integer-ID list in server_model_configs in parallel.
       const [refsOk, idsOk] = await Promise.all([
         this.updateChatConfig(serverId, { fallback_model_refs: refs }),
         this.updateModelConfig(serverId, { fallback_llm_ids: legacyIds }),
@@ -1321,5 +1300,5 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const configRepository = new ConfigRepository();

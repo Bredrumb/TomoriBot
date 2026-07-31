@@ -1,5 +1,3 @@
-// locales/en-US/commands/st-preset.ts
-
 export default {
   "st-preset": {
     description: `Manage SillyTavern presets. Use /help st-preset.`,

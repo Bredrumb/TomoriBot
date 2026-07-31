@@ -25,7 +25,7 @@ const DISCORD_MESSAGE_CONTENT_LIMIT = 2000;
 /**
  * Reads the button's active window from the environment.
  *
- * Defaults to two hours so it matches `MARKDOWN_TABLE_CACHE_TTL_MINUTES`' own default — a
+ * Defaults to two hours so it matches `MARKDOWN_TABLE_CACHE_TTL_MINUTES`' own default, so a
  * live button whose cache entry already expired would only ever return the expired notice.
  *
  * @returns Collector lifetime in milliseconds
@@ -66,7 +66,7 @@ function buildFencedMarkdown(markdown: string): string {
  * Sends the raw table markdown back to whoever pressed the button, visible only to them.
  *
  * Tables wider than a Discord message go out as a `.md` attachment rather than being
- * truncated — a half table is useless for the copy/paste the button exists to enable.
+ * truncated, so a half table is useless for the copy/paste the button exists to enable.
  *
  * @param interaction - The button press to respond to
  * @param locale - Viewer locale for the expired notice
@@ -107,7 +107,6 @@ async function replyWithMarkdownSource(
  * Webhook-authored messages cannot be edited with the bot token, so the send path's webhook
  * is reused when the table was delivered under a persona identity.
  *
- * @param message - The message carrying the button
  * @param locale - Viewer locale for the (disabled) button label
  * @param webhook - Webhook that authored the message, when there was one
  * @param threadId - Thread the message lives in, when applicable

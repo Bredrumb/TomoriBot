@@ -34,10 +34,7 @@ interface OpenrouterPresetGenerationOptions {
 /**
  * Generate preset data from user prompts using OpenRouter structured output
  *
- * @param apiKey - Decrypted OpenRouter API key
- * @param params - Generation parameters
  * @param _locale - User's locale for error messages
- * @param options - OpenRouter-specific options (model, tools, temperature)
  * @returns Promise<PresetGenerationResult> - Generated preset or error
  */
 export async function generatePresetFromPromptOpenrouter(

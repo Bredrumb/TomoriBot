@@ -348,7 +348,6 @@ export class AnthropicProvider
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      // Reload tools with streaming context for context-aware availability
       if (streamingContext && tomoriState.llm.has_tools) {
         log.info("AnthropicProvider: Reloading tools with streaming context for context-aware availability");
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);

@@ -191,10 +191,10 @@ export async function resolveDiscordBlockTarget(input: string, context: ToolCont
  * @returns A `[System: ...]` notice string for the simplified history.
  */
 export function formatBlockedUserNoticeContent(displayName: string, expiresAt: Date, now: Date = new Date()): string {
-  // 1. Round remaining time up to whole hours, flooring at 1 so a block that is
+  // Round remaining time up to whole hours, flooring at 1 so a block that is
   //    minutes from expiry still reads as "1 more hour" rather than "0".
   const hoursRemaining = Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 3_600_000));
-  // 2. Pluralize the unit so the notice reads naturally for the persona.
+  // Pluralize the unit so the notice reads naturally for the persona.
   const hourLabel = hoursRemaining === 1 ? "hour" : "hours";
   return `[System: ${displayName} sent a message but is currently blocked by you for ${hoursRemaining} more ${hourLabel}. Use \`unblock_user\` to unblock if needed]`;
 }

@@ -1,0 +1,123 @@
+import { describe, expect, it } from "bun:test";
+import { inspectCommentPolicySource } from "./checkCommentPolicy";
+
+describe("comment policy", () => {
+  it("finds authored prose dashes without matching strings or regexes", () => {
+    const source = [
+      'const prose = "Keep — string";',
+      "const matcher = /[—–]/u;",
+      "const value = 1; // Keep rationale — callers depend on it",
+      "",
+    ].join("\n");
+
+    const findings = inspectCommentPolicySource(source);
+
+    expect(findings.map((finding) => finding.rule)).toEqual(["prose-dash"]);
+  });
+
+  it("parses TSX without treating rendered text as a comment", () => {
+    const source = [
+      "const View = () => (",
+      '  <section title="Keep — rendered text">',
+      "    {/* Keep rationale — callers depend on this boundary */}",
+      "  </section>",
+      ");",
+    ].join("\n");
+
+    const findings = inspectCommentPolicySource(source, "fixture.tsx");
+
+    expect(findings.map((finding) => finding.rule)).toEqual(["prose-dash"]);
+  });
+
+  it("finds numbered narration but leaves JSDoc ordered lists alone", () => {
+    const source = [
+      "// 1. Parse the value",
+      "const value = parseValue();",
+      "/**",
+      " * Resolution order:",
+      " * 1. Cache",
+      " * 2. Database",
+      " */",
+      "export function read(): string {",
+      '  return "ok";',
+      "}",
+      "",
+    ].join("\n");
+
+    const findings = inspectCommentPolicySource(source);
+
+    expect(findings.map((finding) => finding.rule)).toEqual(["numbered-narration"]);
+  });
+
+  it("finds compound, sub-indexed, and parenthesized narration", () => {
+    const source = [
+      "// 11a.2. Capture the avatar",
+      "// 13.5 Check the fallback",
+      "// 2) Process the result",
+      "const value = true;",
+      "",
+    ].join("\n");
+
+    const findings = inspectCommentPolicySource(source);
+
+    expect(findings.filter((finding) => finding.rule === "numbered-narration")).toHaveLength(3);
+  });
+
+  it("finds prompt-style rule scaffolding", () => {
+    const findings = inspectCommentPolicySource("// Rule 20: Constants at the top\nconst value = 1;\n");
+
+    expect(findings.map((finding) => finding.rule)).toEqual(["rule-scaffolding"]);
+  });
+
+  it("reports obvious narration during audits", () => {
+    const findings = inspectCommentPolicySource(
+      "// Parse and validate composite-key format\nconst value = parseKey();\n",
+      "fixture.ts",
+      { auditNarration: true },
+    );
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        rule: "obvious-narration",
+        severity: "warning",
+      }),
+    ]);
+  });
+
+  it("promotes new narration to an error", () => {
+    const changedLines = new Map([["fixture.ts", new Set([1])]]);
+    const findings = inspectCommentPolicySource(
+      "// Build the payload\nconst payload = buildPayload();\n",
+      "fixture.ts",
+      { changedLines },
+    );
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        rule: "obvious-narration",
+        severity: "error",
+      }),
+    ]);
+  });
+
+  it("does not flag action-headed rationale", () => {
+    const findings = inspectCommentPolicySource(
+      "// Set env vars before lazy imports so module constants see them.\nconst value = true;\n",
+      "fixture.ts",
+      { auditNarration: true },
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it("reports section banners only when narration auditing is active", () => {
+    const source = "// ---------- Helpers ----------\nconst value = true;\n";
+
+    expect(inspectCommentPolicySource(source)).toEqual([]);
+    expect(
+      inspectCommentPolicySource(source, "fixture.ts", {
+        auditNarration: true,
+      }).map((finding) => finding.rule),
+    ).toEqual(["obvious-narration"]);
+  });
+});

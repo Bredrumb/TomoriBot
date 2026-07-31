@@ -2,9 +2,9 @@
  * Migration rollback pairing + numbering-uniqueness check.
  *
  * Verifies two invariants over src/db/migrations/:
- *   1. Every up-migration (NNN_description.sql) has a corresponding rollback
+ *   - Every up-migration (NNN_description.sql) has a corresponding rollback
  *      file (NNN_description.down.sql).
- *   2. No two up-migrations share the same NNN prefix. Two open PRs can each
+ *   - No two up-migrations share the same NNN prefix. Two open PRs can each
  *      pick the next free number off `main` and merge without a git conflict
  *      (different descriptions), silently landing two NNN_* files. This gate
  *      turns that into a loud failure for whichever PR merges second, whose
@@ -32,7 +32,6 @@ async function checkMigrationPairing(): Promise<void> {
     process.exit(1);
   }
 
-  // Collect up-migration stems and rollback stems separately
   const upMigrations = new Set<string>();
   const downMigrations = new Set<string>();
   const unrecognised: string[] = [];
@@ -52,7 +51,7 @@ async function checkMigrationPairing(): Promise<void> {
 
   let ok = true;
 
-  // 1. Every up-migration must have a paired .down.sql
+  // Every up-migration must have a paired .down.sql
   for (const stem of [...upMigrations].sort()) {
     if (!downMigrations.has(stem)) {
       console.error(`[ERROR] Missing rollback file: ${stem}.down.sql`);
@@ -60,16 +59,15 @@ async function checkMigrationPairing(): Promise<void> {
     }
   }
 
-  // 2. Warn about orphaned .down.sql files (down without an up)
   for (const stem of [...downMigrations].sort()) {
     if (!upMigrations.has(stem)) {
       console.warn(`[WARN]  Orphaned rollback file has no matching up-migration: ${stem}.down.sql`);
     }
   }
 
-  // 3. Uniqueness: no two up-migrations may share an NNN prefix.
+  // Uniqueness: no two up-migrations may share an NNN prefix.
   //    A duplicate number means the runner has to tie-break two migrations
-  //    that were each authored as "the next one" — an ordering hazard and a
+  //    that were each authored as "the next one": an ordering hazard and a
   //    review-clarity hazard. Group stems by their 3-digit prefix and fail on
   //    any group with more than one member.
   const byNumber = new Map<string, string[]>();
@@ -87,7 +85,6 @@ async function checkMigrationPairing(): Promise<void> {
     }
   }
 
-  // 4. Warn about files that don't match the naming convention
   for (const file of unrecognised) {
     console.warn(`[WARN]  File does not match NNN_description.sql convention: ${file}`);
   }

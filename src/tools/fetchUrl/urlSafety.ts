@@ -40,22 +40,21 @@ function isProductionRuntime(): boolean {
 /**
  * Whether `fetch_url` may reach private/internal network addresses.
  *
- * 1. Outside production the SSRF blocklist auto-relaxes so local
+ * - Outside production the SSRF blocklist auto-relaxes so local
  *    development can fetch localhost/private endpoints (and admit the
  *    Crawl4AI engine) with zero configuration.
- * 2. In production the blocklist stays enforced unless an operator
+ * - In production the blocklist stays enforced unless an operator
  *    explicitly opts in with `FETCH_URL_ALLOW_PRIVATE_NETWORK`, matching
  *    the production-gated model of `validateRemoteMcpUrl`.
  *
  * @returns True when private-network fetch targets are permitted.
  */
 export function isPrivateNetworkFetchAllowed(): boolean {
-  // 1. Development/local runtimes are trusted; skip the blocklist with no setup.
+  // Development/local runtimes are trusted; skip the blocklist with no setup.
   if (!isProductionRuntime()) {
     return true;
   }
 
-  // 2. Production stays locked unless an operator explicitly opts in.
   const raw = process.env[PRIVATE_NETWORK_ENV]?.trim().toLowerCase();
   return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
 }
@@ -212,9 +211,9 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
   const hostname = normalizeHostname(parsedUrl.hostname);
   const allowPrivateNetwork = isPrivateNetworkFetchAllowed();
 
-  // 1. Resolve the target. This runs even when the private-network guard is
+  // Resolve the target. This runs even when the private-network guard is
   //    relaxed, because the always-on cloud-metadata denylist below must see
-  //    the resolved addresses — and for the Crawl4AI engine (which dispatches
+  //    the resolved addresses; and for the Crawl4AI engine (which dispatches
   //    out-of-process, bypassing gate 2) this is the only SSRF check.
   let resolvedAddresses: ResolvedFetchAddress[];
   try {
@@ -244,8 +243,8 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
     };
   }
 
-  // 2. Always-on floor: cloud-metadata / link-local addresses are blocked
-  //    unconditionally — the private-network opt-in and dev auto-relax cannot
+  // Always-on floor: cloud-metadata / link-local addresses are blocked
+  //    unconditionally, so the private-network opt-in and dev auto-relax cannot
   //    reach them, since they are the primary SSRF credential-theft target.
   const metadataAddress = resolvedAddresses.find((entry) => isCloudMetadataAddress(entry.address));
   if (metadataAddress) {
@@ -260,7 +259,7 @@ export async function validateFetchUrlTarget(url: string): Promise<FetchUrlSafet
     };
   }
 
-  // 3. Development or explicit production opt-in: skip the general blocklist.
+  // Development or explicit production opt-in: skip the general blocklist.
   if (allowPrivateNetwork) {
     return { allowed: true };
   }

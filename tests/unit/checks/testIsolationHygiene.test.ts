@@ -12,14 +12,14 @@ import {
  * `bun test` process per lane and runs the lanes concurrently, which is only
  * safe while two rules hold:
  *
- *   1. Nothing under `tests/unit/` touches the fixture database, because the
+ *   - Nothing under `tests/unit/` touches the fixture database, because the
  *      unit lanes run CONCURRENTLY with the serial DB lane.
- *   2. No file that shares a process mutates process-wide state without undoing
+ *   - No file that shares a process mutates process-wide state without undoing
  *      it, because Bun does not reset such state between files.
  *
  * Both rules used to hold for free: the old runner gave every file its own
  * process, so nothing could leak and nothing could race. Batching traded that
- * blanket guarantee for speed, and this test is what replaces it — a contributor
+ * blanket guarantee for speed, and this test is what replaces it: a contributor
  * (or agent) who has never read the lane docs gets a red gate with instructions
  * instead of corrupting an unrelated file's results.
  *
@@ -58,7 +58,7 @@ describe("test isolation hygiene", () => {
       .map(([file]) => file);
 
     // A DB test under tests/unit/ joins the unit lane, which runs at the same time
-    // as the DB lane — both would hit the same disposable database and its fixed-id
+    // as the DB lane, so both would hit the same disposable database and its fixed-id
     // fixtures. Move it to tests/regression/db/, where files run serially.
     expect(offenders).toEqual([]);
   });
@@ -70,7 +70,7 @@ describe("test isolation hygiene", () => {
       .map(([file, unrestored]) => `${file} -> ${unrestored.join(", ")}`);
 
     // These persist for the life of the process, so an unrestored mutation silently
-    // changes behaviour for every other file batched alongside this one — and the
+    // changes behaviour for every other file batched alongside this one and the
     // failure surfaces in THAT file, not this one. Restore it in afterEach/afterAll.
     expect(offenders).toEqual([]);
   });
@@ -78,7 +78,7 @@ describe("test isolation hygiene", () => {
 
 describe("testIsolation detectors", () => {
   // Markers are assembled from fragments so this file never contains a literal
-  // occurrence — the scanners above read test sources, and a bare marker here
+  // occurrence: the scanners above read test sources, and a bare marker here
   // would make the suite flag its own fixtures.
   const MOCK_CALL = `mock${"."}module("@/x", () => ({}))`;
   const SCOPED_MOCK_CALL = `createScopedModuleMocker(mock, { "@/x": realX })`;
@@ -131,7 +131,7 @@ describe("testIsolation detectors", () => {
 
   it("exempts files that already run in their own process", () => {
     // Mock users get a private process, so nothing they mutate can reach another
-    // file — this is why tests/unit/chat/toolLoop.test.ts may set process.env at
+    // file: this is why tests/unit/chat/toolLoop.test.ts may set process.env at
     // module scope without restoring it.
     const source = `${MOCK_CALL}\nprocess.env.BOT_MAX_ITERATIONS = "10";`;
     expect(findUnrestoredMutations(source)).toEqual([]);

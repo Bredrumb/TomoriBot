@@ -178,7 +178,7 @@ describe("generic leading speaker label parser (opening-label leak guard)", () =
   });
 
   it("still parses prose-shaped openings, leaving known-name filtering to the caller", () => {
-    // "Note:" IS label-shaped — the segment processor only fires when the name matches a
+    // "Note:" IS label-shaped: the segment processor only fires when the name matches a
     // known conversation participant, which "Note" never will.
     const result = parseLeadingGenericSpeakerLabel("Note: remember to hydrate");
 

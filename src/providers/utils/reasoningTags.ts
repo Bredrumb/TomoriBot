@@ -5,8 +5,8 @@
  * Several independent guardrails strip or capture these tags (the streaming
  * `ThinkBlockContentStripper`, the Discord-layer `bufferManager`, and the final
  * `cleanLLMOutput` sweep). Historically each one hardcoded the literal
- * `<think>` / `</think>`, so a vendor that emits a *namespaced* variant — e.g.
- * MiniMax's `<mm:think>…</mm:think>` — slipped past all of them at once.
+ * `<think>` / `</think>`, so a vendor that emits a *namespaced* variant: e.g.
+ * MiniMax's `<mm:think>…</mm:think>` slipped past all of them at once.
  *
  * Centralizing the tag definition here means a new vendor namespace is a
  * one-line change (the `NAMESPACE` pattern below) that every guardrail inherits
@@ -64,7 +64,7 @@ export interface TrailingReasoningTagPrefix {
 const MAX_TRAILING_PARTIAL_LEN = 64;
 
 function execFrom(pattern: string, text: string, from: number): ReasoningTagMatch | null {
-  // 1. Fresh regex per call keeps `lastIndex` state local (reentrancy-safe).
+  // Fresh regex per call keeps `lastIndex` state local (reentrancy-safe).
   const re = new RegExp(pattern, "gi");
   re.lastIndex = Math.max(0, from);
   const match = re.exec(text);
@@ -103,7 +103,7 @@ function isThinkWordPrefix(s: string): boolean {
  * still-forming namespace.
  */
 export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningTagPrefix | null {
-  // 1. Isolate a trailing `<` (optional `/`) followed only by tag-interior chars.
+  // Isolate a trailing `<` (optional `/`) followed only by tag-interior chars.
   const match = /<\/?[A-Za-z0-9_.:-]*$/.exec(text);
   if (!match) {
     return null;
@@ -114,11 +114,9 @@ export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningT
     return null;
   }
 
-  // 2. Split off the optional leading slash and inspect the remaining run.
   const hasSlash = candidate[1] === "/";
   const run = candidate.slice(hasSlash ? 2 : 1);
 
-  // 3. Confirm the run can still complete into a real think tag.
   const colonIdx = run.lastIndexOf(":");
   const plausible =
     colonIdx === -1
@@ -128,7 +126,6 @@ export function findTrailingReasoningTagPrefix(text: string): TrailingReasoningT
     return null;
   }
 
-  // 4. Classify: explicit slash or bare `<` is a close; otherwise an open.
   const kind: ReasoningTagPartialKind = hasSlash || run.length === 0 ? "close" : "open";
   return { index: match.index, kind };
 }

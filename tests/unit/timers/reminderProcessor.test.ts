@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
 
-// 1. Capture the real modules BEFORE any `mock.module` runs. Static imports are
-//    hoisted and evaluated first, so these namespaces hold the genuine exports.
-//    Spreading them keeps every mock full-surface: `mock.module` is process-global
-//    and never restored, so a partial factory would break unrelated test files
-//    loaded later in a monolithic `bun test`.
+// Static imports are hoisted and evaluated before any `mock.module` runs, so
+// these namespaces hold the genuine exports. Spreading them keeps every mock
+// full-surface: `mock.module` is process-global and never restored, so a partial
+// factory would break unrelated test files loaded later in a monolithic
+// `bun test`.
 import * as realMatrix from "@/utils/bridges/matrix";
 import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
 import * as realRepositories from "@/utils/db/repositories";
@@ -24,8 +24,8 @@ const tomoriChatMock = mock(async () => "run");
 const suppressNextSelfReplyMock = mock(() => {});
 const ensureDiscordUserMentionMock = mock(async () => {});
 
-// 2. Every factory spreads the real surface first, then overrides only the
-//    exports this file actually needs to control.
+// Every factory spreads the real surface first, then overrides only the exports
+// this file actually needs to control.
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories": realRepositories,
   "@/events/messageCreate/tomoriChat": realTomoriChat,
@@ -38,8 +38,8 @@ const scopedMock = createScopedModuleMocker(mock, {
 
 scopedMock.module("@/utils/db/repositories", () => ({
   ...realRepositories,
-  // Repositories are class instances — delegate through the prototype so the
-  // methods this file does not stub stay available to later test files.
+  // Repositories are class instances, so delegate through the prototype to keep
+  // the methods this file does not stub available to later test files.
   serverScheduleRepository: overrideMembers(realRepositories.serverScheduleRepository, {
     getDueReminders: getDueRemindersMock,
     rescheduleReminder: rescheduleReminderMock,

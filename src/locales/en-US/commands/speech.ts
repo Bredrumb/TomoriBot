@@ -1,5 +1,3 @@
-// locales/en-US/commands/speech.ts
-
 export default {
   speech: {
     description: `Manage speech voices and samples.`,

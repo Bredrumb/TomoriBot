@@ -279,7 +279,6 @@ async function streamOnce(
     return await Promise.race([
       streamPromise,
       new Promise<never>((_, reject) => {
-        // Register the kill callback with the lock entry so external callers can trigger it.
         killStream = (reason: Error) => {
           abortController.abort();
           reject(reason);
@@ -289,7 +288,7 @@ async function streamOnce(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
-      // A pending stop request (e.g. /bot kill) makes this a terminal stop — no fallback runs, so
+      // A pending stop request (e.g. /bot kill) makes this a terminal stop; no fallback runs, so
       // no superseded-message cleanup will consume in-flight sends. Return immediately; settling
       // here would just make the kill wait out the abandoned stream for no benefit.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
@@ -300,7 +299,7 @@ async function streamOnce(
       // (bounded) for it to actually settle so any Discord send it had already dispatched is recorded
       // in `deliveredMessageRefs` BEFORE the fallback path's superseded-message cleanup runs. Without
       // this, a late straggler would land after cleanup and be misattributed to the surviving
-      // fallback attempt — leaving the exact orphaned partial message this feature exists to remove.
+      // fallback attempt; leaving the exact orphaned partial message this feature exists to remove.
       await settleAbandonedStream(streamPromise);
 
       if (!params.context.streamingContext.suppressUserErrors) {
@@ -415,7 +414,7 @@ async function executeToolCall(
     abortSignal: turnAbortSignal,
   };
 
-  // 1. Deliberate-tool-mode allowlist enforcement. When mode is active and
+  // Deliberate-tool-mode allowlist enforcement. When mode is active and
   // the model attempts a tool that wasn't exposed for this turn, short-circuit
   // with a synthetic failure response (visible to the model) so it can adapt.
   const allowedNames = params.context.streamingContext.deliberateToolAllowedNames;
@@ -425,7 +424,6 @@ async function executeToolCall(
 
   const startedAt = Date.now();
 
-  // Build a promise that resolves immediately if /bot kill fires (turn abort signal).
   const killPromise: Promise<ToolResult> | null = turnAbortSignal
     ? new Promise<ToolResult>((resolve) => {
         if (turnAbortSignal.aborted) {
@@ -465,7 +463,7 @@ async function executeToolCall(
         ...(killPromise ? [killPromise] : []),
       ]);
 
-  // If /bot kill fired, exit the turn immediately — don't feed the failed result back to the model.
+  // If /bot kill fired, exit the turn immediately; don't feed the failed result back to the model.
   if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
     return { kind: "abort", status: "stopped_by_user" };
   }
@@ -490,7 +488,7 @@ async function executeToolCall(
     if (serverId && userId) {
       const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
       // userId is carried on the context (resolved once at turn planning), so no
-      // per-tool-call DB lookup — recordStat just buffers in memory.
+      // per-tool-call DB lookup: recordStat just buffers in memory.
       try {
         statRepository.recordStat({
           serverId,
@@ -528,7 +526,7 @@ async function executeToolCall(
     await emitFailedToolCallThoughtLog(toolContext, functionName, functionCall.args ?? {}, toolResult);
   }
 
-  // 2. When deliberate-tool-mode admitted the tool via a specific trigger,
+  // When deliberate-tool-mode admitted the tool via a specific trigger,
   // post a hidden notice (thought-log only) explaining why it fired.
   const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
   if (params.context.deliberateToolModeActive && deliberateToolTriggerMatch && !isBlockedByDeliberateAllowlist) {

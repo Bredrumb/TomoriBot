@@ -179,10 +179,8 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
   });
 
   it("assembles a function_call with correct name and args on finishReason tool_calls", () => {
-    // Fresh adapter — accumulator starts empty
     const adapter = new OpenrouterStreamAdapter();
 
-    // Single-chunk tool call: both the delta and the finish reason arrive together
     const result = adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -207,14 +205,12 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
     expect(result.type).toBe("function_call");
     expect(result.functionCall?.name).toBe("search_web");
     expect(result.functionCall?.args).toEqual({ query: "TomoriBot changelog" });
-    // Visible content must not leak into a function_call chunk
     expect(result.content).toBeUndefined();
   });
 
   it("accumulates split tool-call chunks and resolves on the finish chunk", () => {
     const adapter = new OpenrouterStreamAdapter();
 
-    // 1. First chunk: name arrives
     adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -230,7 +226,6 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       }),
     );
 
-    // 2. Second chunk: arguments fragment arrives
     adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -242,7 +237,6 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       }),
     );
 
-    // 3. Terminal chunk: finishReason signals the call is complete
     const result = adapter.processChunk(
       makeOpenrouterChunk({
         choices: [{ index: 0, finishReason: "tool_calls", delta: {} }],

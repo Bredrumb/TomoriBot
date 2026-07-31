@@ -3,8 +3,8 @@
  * their `persona_*` equivalents across the `src/` tree, following migration 016.
  *
  * Excluded files (intentional preservations):
- *   - src/types/preset/presetExport.ts  — `tomori_nickname` is an external PNG metadata key
- *   - src/types/db/schema.ts            — already updated; `tomori_config_id` is vestigial (callers need removal, not rename)
+ *   - src/types/preset/presetExport.ts: `tomori_nickname` is an external PNG metadata key
+ *   - src/types/db/schema.ts: already updated; `tomori_config_id` is vestigial (callers need removal, not rename)
  *
  * Run: bun run scripts/rename_tomori_fields.ts [--dry-run]
  */

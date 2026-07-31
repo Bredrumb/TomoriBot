@@ -1,5 +1,3 @@
-// locales/en-US/commands/capabilities.ts
-
 export default {
   capabilities: {
     description: `Manage tool use and specific features.`,

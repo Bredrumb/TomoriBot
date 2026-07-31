@@ -17,27 +17,20 @@ import { getMemoryLimits, validateSampleDialogue } from "@/utils/misc/memoryLimi
 
 import { dedupeSampleDialoguePairs, parseSampleDialogueBatch, readTxtUpload } from "@/utils/teach/batchUploadUtils";
 
-// Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
-// Rule 20: Constants (Modal IDs, Input IDs)
 const MODAL_CUSTOM_ID = "teach_sampledialogue_add_modal";
 const PERSONA_SELECT_ID = "persona_select";
 const USER_INPUT_ID = "user_input";
 const BOT_INPUT_ID = "bot_input";
 const SAMPLE_DIALOGUE_FILE_UPLOAD_ID = "sampledialogue_file_upload";
 
-// Rule 21: Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.persona.sample-dialogue.add.description"));
 
 /**
- * Rule 1: JSDoc comment for exported function
+ * JSDoc comment for exported function
  * Adds a sample dialogue pair to Tomori's memory for the server.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -45,7 +38,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a valid channel context (Rule 17)
+  // Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -61,10 +54,10 @@ export async function execute(
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // 2. Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
+    // Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
-    // 3. Check blacklisting only for guild contexts
+    // Check blacklisting only for guild contexts
     // Users with Manage Server permission can bypass blacklist (they can unblacklist themselves anyway)
     if (interaction.guild) {
       const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
@@ -79,10 +72,8 @@ export async function execute(
       }
     }
 
-    // 4. Load server's Tomori state (Rule 17)
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
 
-    // 5. Check if Tomori is set up and if sample dialogue teaching is enabled
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -93,7 +84,6 @@ export async function execute(
       return;
     }
 
-    // 6. Resolve target persona options
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.persona_id !== undefined)
@@ -115,7 +105,7 @@ export async function execute(
       return;
     }
 
-    // 7. Check if sample dialogue teaching is enabled and if user has bypass permissions
+    // Check if sample dialogue teaching is enabled and if user has bypass permissions
     // Access config directly from tomoriState
     if (!tomoriState.config.sampledialogue_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
@@ -127,7 +117,7 @@ export async function execute(
       return;
     }
 
-    // 8. Prompt user with persona selector + dialogue inputs
+    // Prompt user with persona selector + dialogue inputs
     // NOTE: Ensure locale keys resolve to strings <= 45 chars for labels!
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
@@ -170,7 +160,6 @@ export async function execute(
       ],
     });
 
-    // 10. Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Sample dialogue add modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
@@ -179,7 +168,6 @@ export async function execute(
     // biome-ignore lint/style/noNonNullAssertion: Modal submit guarantees interaction exists
     modalSubmitInteraction = modalResult.interaction!;
 
-    // Resolve selected persona from modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submit + required=true guarantees value
     const selectedPersonaId = modalResult.values![PERSONA_SELECT_ID];
     selectedPersona = allPersonas.find((persona) => persona.persona_id?.toString() === selectedPersonaId) ?? null;
@@ -268,7 +256,7 @@ export async function execute(
 
     const dedupedDialogues = dedupeSampleDialoguePairs(pendingDialogues);
 
-    // 11. Validate sample dialogue content lengths (server-side validation, modal maxLength can be bypassed)
+    // Validate sample dialogue content lengths (server-side validation, modal maxLength can be bypassed)
     for (const dialogue of dedupedDialogues) {
       const userInputValidation = validateSampleDialogue(dialogue.userInput);
       if (!userInputValidation.isValid) {
@@ -324,7 +312,6 @@ export async function execute(
       return;
     }
 
-    // 12. Check sample dialogue limit after persona resolution
     const dialogueLimitCheck = await personaRepository.checkSampleDialogueLimit(selectedPersona.persona_id);
     const currentCount = dialogueLimitCheck.currentCount ?? currentUserDialogues.length;
     const maxAllowed = dialogueLimitCheck.maxAllowed ?? memoryLimits.maxSampleDialogues;
@@ -356,7 +343,7 @@ export async function execute(
       return;
     }
 
-    // 13. Update target persona row in the database using paired atomic array operations
+    // Update target persona row in the database using paired atomic array operations
     const added = await personaRepository.addSampleDialoguePair(
       selectedPersona.persona_id,
       dialoguesToAdd.map((dialogue) => dialogue.userInput),
@@ -364,7 +351,6 @@ export async function execute(
     );
 
     if (!added) {
-      // Rule 22: Log error with context (Access IDs directly)
       const context: ErrorContext = {
         userId: userData.user_id,
         serverId: tomoriState.server_id, // Direct access
@@ -386,10 +372,9 @@ export async function execute(
       return;
     }
 
-    // 14. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // 15. Success! Confirm addition (Rule 12, 19)
     const firstDialogue = dialoguesToAdd[0] ?? {
       userInput: "",
       botInput: "",
@@ -421,7 +406,6 @@ export async function execute(
       flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
-    // Rule 22: Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,

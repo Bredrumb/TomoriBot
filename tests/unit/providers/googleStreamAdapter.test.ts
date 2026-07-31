@@ -193,7 +193,7 @@ describe("GoogleStreamAdapter.handleProviderError", () => {
 
   it("classifies RESOURCE_EXHAUSTED message as rate_limit when no JSON code present", () => {
     const adapter = new GoogleStreamAdapter();
-    // Plain error message without JSON structure — triggers fallback message-content classification.
+    // Plain error message without JSON structure, so triggers fallback message-content classification.
     // Must not include "API key" since that branch fires first in the default case.
     const error = new Error("RESOURCE_EXHAUSTED: quota exceeded for this project");
     const result = adapter.handleProviderError(error);

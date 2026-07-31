@@ -1,5 +1,5 @@
 /**
- * PersonalMemoryRepository — manages the `personal_memories` table.
+ * PersonalMemoryRepository: manages the `personal_memories` table.
  *
  * Personal memories are long-term facts Tomori learns about a specific user,
  * scoped to a persona lineage (or lineage 0 for global cross-persona memories).
@@ -21,8 +21,6 @@ export type PersonalMemoryExportShape = {
 };
 
 export class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
   /**
    * Loads personal memories for a user scoped to a persona lineage.
    * When includeGlobalMemories is true (default), lineage-0 memories are also included.
@@ -102,8 +100,6 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
       return new Set();
     }
   }
-
-  // ── writes ─────────────────────────────────────────────────────────────────
 
   async edit(personalMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {
     try {
@@ -334,8 +330,6 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     }
   }
 
-  // ── limit checks ───────────────────────────────────────────────────────────
-
   /**
    * Check if a user has reached their personal memory limit.
    *
@@ -388,8 +382,6 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Personal memory export is handled by ImportExportRepository.
    * Stub satisfies IRepository contract pending Phase 6 #16.7.
@@ -409,5 +401,5 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const personalMemoryRepository = new PersonalMemoryRepository();

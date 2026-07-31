@@ -97,25 +97,19 @@ export class BannerFilteringStdioClientTransport implements Transport {
 
       try {
         processToClose.stdin?.end();
-      } catch {
-        // Ignore shutdown races.
-      }
+      } catch {}
 
       await Promise.race([closePromise, new Promise<void>((resolve) => setTimeout(resolve, 2000).unref())]);
       if (processToClose.exitCode === null) {
         try {
           processToClose.kill("SIGTERM");
-        } catch {
-          // Ignore shutdown races.
-        }
+        } catch {}
         await Promise.race([closePromise, new Promise<void>((resolve) => setTimeout(resolve, 2000).unref())]);
       }
       if (processToClose.exitCode === null) {
         try {
           processToClose.kill("SIGKILL");
-        } catch {
-          // Ignore shutdown races.
-        }
+        } catch {}
       }
     }
 

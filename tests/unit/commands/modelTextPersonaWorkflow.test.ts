@@ -246,7 +246,7 @@ const scopedMock = createScopedModuleMocker(mock, {
 
 scopedMock.module("@/utils/discord/ui/personaWorkflow", () => ({
   ...realPersonaWorkflow,
-  // Overridden so an accidental entry fails loudly — the persona scope never enters
+  // Overridden so an accidental entry fails loudly: the persona scope never enters
   // the anchor private workflow (that path is exercised by modelTextGlobalPersistence.test.ts).
   beginAnchorPrivateWorkflow: async () => {
     throw new Error("beginAnchorPrivateWorkflow is not used by the persona scope");

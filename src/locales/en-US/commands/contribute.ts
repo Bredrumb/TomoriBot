@@ -1,5 +1,3 @@
-// locales/en-US/commands/contribute.ts
-
 export default {
   contribute: {
     github: {

@@ -18,10 +18,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /help features command
  * Displays TomoriBot's capabilities and features
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -30,7 +26,6 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // Use replySummaryEmbed to show structured help info
     await replySummaryEmbed(
       interaction,
       locale,
@@ -67,7 +62,6 @@ export async function execute(
       MessageFlags.Ephemeral,
     );
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
@@ -78,7 +72,6 @@ export async function execute(
     };
     await log.error("Error executing /help features command", error as Error, context);
 
-    // Inform user of error (ephemeral)
     const errorMessage = localizer(locale, "general.errors.unknown_error_description");
     try {
       if (interaction.replied || interaction.deferred) {
@@ -93,7 +86,6 @@ export async function execute(
         });
       }
     } catch (replyError) {
-      // Log if even the error reply fails
       log.error("Failed to send error reply for /help features", replyError, context);
     }
   }

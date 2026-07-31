@@ -4,9 +4,9 @@
  * Verifies that command execute() functions follow the Discord acknowledgement
  * rules documented in docs/subsystems/command-system.md:
  *
- *   Contract 1 — Modal commands: showModal() fires without a preceding deferReply().
- *   Contract 2 — Async commands: deferReply() is the first call; editReply() follows.
- *   Contract 3 — Guard paths: a single reply() is the only acknowledgement;
+ *   Contract 1: Modal commands: showModal() fires without a preceding deferReply().
+ *   Contract 2: Async commands: deferReply() is the first call; editReply() follows.
+ *   Contract 3: Guard paths: a single reply() is the only acknowledgement;
  *                no interaction is acknowledged twice.
  *
  * All tests use the fake interaction harness from tests/helpers/fakeInteraction.ts
@@ -81,7 +81,7 @@ scopedMock.module("@/utils/text/localizer", () => ({
 }));
 
 /**
- * interactionCore mock — the single source that all UI barrels re-export from.
+ * interactionCore mock: the single source that all UI barrels re-export from.
  * Mocking here ensures ui/modals, ui/embeds, ui/buttons, etc. all see the same
  * stub without creating duplicate-binding conflicts in the barrel chain.
  *
@@ -92,7 +92,7 @@ scopedMock.module("@/utils/text/localizer", () => ({
  */
 scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   ...realInteractionCore,
-  // ── used directly by commands under test ────────────────────────────────
+  // Used directly by commands under test.
   replyInfoEmbed: async (
     interaction: {
       deferred: boolean;
@@ -128,7 +128,6 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
     return { outcome: "timeout" as const };
   },
   safeSelectOptionText: (text: string) => text,
-  // ── stubs for exports not exercised by these tests ────────────────────
   replySummaryEmbed: async () => undefined,
   replyComponentsV2Status: async () => undefined,
   updateButtonComponentsV2Status: async () => undefined,
@@ -148,7 +147,7 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   replyPaginatedStatusPages: async () => undefined,
 }));
 
-/** Fake Tomori state returned by cache lookups — has the fields /nsfw jailbreaks reads. */
+/** Fake Tomori state returned by cache lookups: has the fields /nsfw jailbreaks reads. */
 const fakeTomoriState = {
   server_id: 1,
   persona_id: 1,
@@ -171,13 +170,13 @@ scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
 /**
  * Repositories mock. Bun's mock registry is global across files and the last
  * mock.module call for a path wins, so this must not rely on another file's
- * factory — it spreads the real barrel and delegates through each repository
+ * factory. It spreads the real barrel and delegates through each repository
  * instance's prototype, overriding only the methods these commands drive.
  *
  * Commands under test:
- *   /nsfw jailbreaks  — imports configRepository (never calls it in our paths)
- *   /tool ping        — no repository imports
- *   /tool comment     — no repository imports
+ *   /nsfw jailbreaks : imports configRepository (never calls it in our paths)
+ *   /tool ping       : no repository imports
+ *   /tool comment    : no repository imports
  */
 scopedMock.module("@/utils/db/repositories", () => ({
   ...realRepositories,
@@ -202,8 +201,6 @@ scopedMock.module("@/utils/db/repositories", () => ({
   }),
 }));
 
-// ─── Shared test helpers ───────────────────────────────────────────────────────
-
 /** Minimal UserRow that satisfies the execute() signature. */
 function makeUserData(): UserRow {
   return {
@@ -213,7 +210,7 @@ function makeUserData(): UserRow {
   } as unknown as UserRow;
 }
 
-/** Empty Client stub — commands that don't use the client still receive one. */
+/** Empty Client stub: commands that don't use the client still receive one. */
 function makeClient(): Client {
   return {} as unknown as Client;
 }
@@ -230,7 +227,7 @@ function makeFakeGuildChannel(): object {
   };
 }
 
-// ─── Contract 1: Modal command — /nsfw jailbreaks ─────────────────────────────
+// ─── Contract 1: Modal command: /nsfw jailbreaks ─────────────────────────────
 //
 // Pattern 3 (command-system.md): the first interaction acknowledgement must be
 // showModal(). No deferReply() should appear before or instead of the modal.
@@ -301,13 +298,13 @@ describe("Contract 1: modal command /nsfw jailbreaks", () => {
     const { execute } = await import("@/commands/nsfw/jailbreaks");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
-    // reply() and deferReply() are mutually exclusive — only showModal() is expected
+    // reply() and deferReply() are mutually exclusive only showModal() is expected
     expect(callMethods(calls)).not.toContain("reply");
     expect(callMethods(calls)).not.toContain("deferReply");
   });
 });
 
-// ─── Contract 2: Async defer command — /tool ping ─────────────────────────────
+// ─── Contract 2: Async defer command: /tool ping ─────────────────────────────
 //
 // Pattern 2 (command-system.md): deferReply() must be the very first call.
 // All async work (fetchReply, latency measurement) happens after the deferral.
@@ -347,7 +344,7 @@ describe("Contract 2: async defer command /tool ping", () => {
   });
 });
 
-// ─── Contract 3: Guard-path no-double-ack — /tool comment ─────────────────────
+// ─── Contract 3: Guard-path no-double-ack: /tool comment ─────────────────────
 //
 // Pattern 1 / Pattern 5 (command-system.md): fast validation paths that exit
 // early must use a single reply(). The normal async path must defer first and
@@ -367,7 +364,7 @@ describe("Contract 3: /tool comment acknowledgement ordering", () => {
     const methods = callMethods(calls);
     // Exactly one acknowledgement: reply() from replyInfoEmbed
     expect(methods).toEqual(["reply"]);
-    // Never deferred — the guard fires before any async work
+    // Never deferred: the guard fires before any async work
     expect(methods).not.toContain("deferReply");
   });
 
@@ -415,13 +412,13 @@ describe("Contract 3: /tool comment acknowledgement ordering", () => {
 
     const methods = callMethods(calls);
 
-    // 1. Defer is first (before any async work like channel.send)
+    // Defer is first (before any async work like channel.send)
     expect(methods[0]).toBe("deferReply");
 
-    // 2. editReply appears as the final acknowledgement (via replyInfoEmbed after defer)
+    // editReply appears as the final acknowledgement (via replyInfoEmbed after defer)
     expect(methods).toContain("editReply");
 
-    // 3. reply() must not appear — using editReply after deferReply is the correct pattern
+    // reply() must not appear: using editReply after deferReply is the correct pattern
     expect(methods).not.toContain("reply");
   });
 

@@ -230,7 +230,7 @@ export async function execute(
       return;
     }
 
-    // 1. Enforce the per-persona sprite cap BEFORE reserving avatar quota.
+    // Enforce the per-persona sprite cap BEFORE reserving avatar quota.
     //    Avatar quota is a shared, guild-level (server-wide) budget, so a
     //    rejected-over-limit add must not consume one of its daily slots.
     const existingSprites = await personaSpriteRepository.listForPersona(personaId);

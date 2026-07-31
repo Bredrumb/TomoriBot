@@ -40,7 +40,6 @@ function serializeToTS(value: unknown, depth = 0): string {
     const entries = Object.entries(value as Record<string, unknown>);
     if (entries.length === 0) return "{}";
     const lines = entries.map(([k, v]) => {
-      // Quote the key only when it is not a valid bare identifier (e.g. "st-preset").
       const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k) ? k : `"${k}"`;
       return `${childIndent}${key}: ${serializeToTS(v, depth + 1)}`;
     });

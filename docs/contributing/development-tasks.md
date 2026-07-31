@@ -20,6 +20,7 @@ Each guide below is self-contained with steps, notes, and a quality gate.
 | Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/) |
 | Add a persona preset | [`adding-persona-preset.md`](/contributing/adding-persona-preset/) |
 | Add or move docs pages | [`docs-authoring.md`](/contributing/docs-authoring/) |
+| Write or review code comments | [`comment-policy.md`](/contributing/comment-policy/) |
 
 ## Development Checklist
 
@@ -46,6 +47,8 @@ These rules apply to all TomoriBot source code regardless of task type.
 
 - Use 2 spaces for indentation (Biome project setting).
 - Use double quotes for strings.
+- Write comments that explain rationale, constraints, or non-obvious behavior. See the
+  [`comment policy`](./comment-policy).
 - Run `bun run lint` after edits.
 
 ### TypeScript and Validation

@@ -1,5 +1,3 @@
-// locales/en-US/commands/help.ts
-
 export default {
   help: {
     "personal-provider": {

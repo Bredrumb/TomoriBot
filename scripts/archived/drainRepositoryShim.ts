@@ -19,9 +19,7 @@ import { join, relative } from "node:path";
 const DRY_RUN = process.argv.includes("--dry-run");
 const SRC_DIR = join(import.meta.dir, "../../src");
 
-// ── Mapping: free function name → repo instance var + method name ─────────────
 const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
-  // llmModelRepo
   getLlmsByIds: { repoVar: "llmModelRepo", methodName: "getLlmsByIds" },
   loadAvailableLlms: { repoVar: "llmModelRepo", methodName: "loadAvailableLlms" },
   loadAvailableModelsForProvider: { repoVar: "llmModelRepo", methodName: "loadAvailableModelsForProvider" },
@@ -57,7 +55,6 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   loadSmartestModel: { repoVar: "llmModelRepo", methodName: "loadSmartestModel" },
   loadUniqueProviders: { repoVar: "llmModelRepo", methodName: "loadUniqueProviders" },
 
-  // llmProviderRepo
   loadSavedProviderConfigs: { repoVar: "llmProviderRepo", methodName: "loadSavedProviderConfigs" },
   loadSavedProviderConfig: { repoVar: "llmProviderRepo", methodName: "loadSavedProviderConfig" },
   loadUserSavedProviderConfigs: { repoVar: "llmProviderRepo", methodName: "loadUserSavedProviderConfigs" },
@@ -144,7 +141,6 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
     methodName: "deleteOpenRouterVideoModelRegistration",
   },
 
-  // llmOverrideRepo
   getChannelLlmOverride: { repoVar: "llmOverrideRepo", methodName: "getChannelLlmOverride" },
   getAllChannelLlmOverridesForServer: { repoVar: "llmOverrideRepo", methodName: "getAllChannelLlmOverridesForServer" },
   loadPersonaLlmOverridesForServer: { repoVar: "llmOverrideRepo", methodName: "loadPersonaLlmOverridesForServer" },
@@ -164,13 +160,11 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   restoreOverridesFromSnapshot: { repoVar: "llmOverrideRepo", methodName: "restoreOverridesFromSnapshot" },
   cleanupDeadChannelOverrides: { repoVar: "llmOverrideRepo", methodName: "cleanupDeadChannelOverrides" },
 
-  // personaRepository
   loadTomoriState: { repoVar: "personaRepository", methodName: "loadState" },
   loadAllPersonasForServer: { repoVar: "personaRepository", methodName: "loadAllForServer" },
   loadPersonaConfigRow: { repoVar: "personaRepository", methodName: "loadPersonaConfig" },
   updateTomori: { repoVar: "personaRepository", methodName: "update" },
 
-  // userRepository
   loadUserRow: { repoVar: "userRepository", methodName: "loadByDiscordId" },
   loadUserRowsByNormalizedNickname: { repoVar: "userRepository", methodName: "findByNormalizedNickname" },
   isBlacklisted: { repoVar: "userRepository", methodName: "isBlacklisted" },
@@ -184,7 +178,6 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   toggleCrossServerShortTermMemoryOptIn: { repoVar: "userRepository", methodName: "toggleCrossServerShmOptIn" },
   updateUser: { repoVar: "userRepository", methodName: "update" },
 
-  // configRepository
   loadNaiPresetsForModel: { repoVar: "configRepository", methodName: "loadNaiPresets" },
   loadPresetOptions: { repoVar: "configRepository", methodName: "loadPresetOptions" },
   loadPresetOptionsByLocale: { repoVar: "configRepository", methodName: "loadPresetOptionsByLocale" },
@@ -195,12 +188,10 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   updateTomoriConfig: { repoVar: "configRepository", methodName: "update" },
   applyNaiPreset: { repoVar: "configRepository", methodName: "applyNaiPreset" },
 
-  // serverRepository
   loadServerEmojis: { repoVar: "serverRepository", methodName: "loadEmojis" },
   loadServerStickers: { repoVar: "serverRepository", methodName: "loadStickers" },
   setupServer: { repoVar: "serverRepository", methodName: "setup" },
 
-  // serverScheduleRepository
   getDueReminders: { repoVar: "serverScheduleRepository", methodName: "getDueReminders" },
   getNextReminderTime: { repoVar: "serverScheduleRepository", methodName: "getNextReminderTime" },
   getReminderById: { repoVar: "serverScheduleRepository", methodName: "getReminderById" },
@@ -223,17 +214,13 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   deleteRandomTrigger: { repoVar: "serverScheduleRepository", methodName: "deleteTrigger" },
   rescheduleRandomTrigger: { repoVar: "serverScheduleRepository", methodName: "rescheduleTrigger" },
 
-  // toolRepository
   getBraveApiKeyStatus: { repoVar: "toolRepository", methodName: "getBraveApiKeyStatus" },
 
-  // personalMemoryRepository
   loadPersonalMemoriesForUserLineage: { repoVar: "personalMemoryRepository", methodName: "loadForUserLineage" },
   addPersonalMemoryByTomori: { repoVar: "personalMemoryRepository", methodName: "add" },
 
-  // serverMemoryRepository
   addServerMemoryByTomori: { repoVar: "serverMemoryRepository", methodName: "add" },
 
-  // exportRepository
   exportPersonalData: { repoVar: "exportRepository", methodName: "exportPersonalData" },
   exportServerData: { repoVar: "exportRepository", methodName: "exportServerData" },
   exportPersonaPersonalMemories: { repoVar: "exportRepository", methodName: "exportPersonaPersonalMemories" },
@@ -243,7 +230,6 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   exportServerConfig: { repoVar: "exportRepository", methodName: "exportServerConfig" },
   exportPersonalityData: { repoVar: "exportRepository", methodName: "exportPersonalityData" },
 
-  // importRepository
   importPersonalMemories: { repoVar: "importRepository", methodName: "importPersonalMemories" },
   importPersonalSettings: { repoVar: "importRepository", methodName: "importPersonalSettings" },
   importServerConfig: { repoVar: "importRepository", methodName: "importServerConfig" },
@@ -253,10 +239,9 @@ const FREE_FUNC_MAP: Record<string, { repoVar: string; methodName: string }> = {
   validateImportFile: { repoVar: "importRepository", methodName: "validateImportFile" },
 };
 
-// Types that remain in index.ts — only need import path kept as-is
+// Types that remain in index.ts: only need import path kept as-is
 const KNOWN_TYPES = new Set(["OpenRouterModelScope", "ImportValidationResult", "ImportFileType"]);
 
-// Repo instance names exported by index.ts (already valid value imports)
 const REPO_INSTANCES = new Set([
   "configRepository",
   "cooldownRepository",
@@ -279,7 +264,6 @@ const REPO_INSTANCES = new Set([
   "shortTermMemoryRepository",
 ]);
 
-// ── File walking ──────────────────────────────────────────────────────────────
 
 function walkTs(dir: string): string[] {
   const results: string[] = [];
@@ -294,7 +278,6 @@ function walkTs(dir: string): string[] {
   return results;
 }
 
-// ── Import block extraction and rewriting ────────────────────────────────────
 
 /**
  * Matches a full import block from "@/utils/db/repositories":
@@ -326,7 +309,6 @@ function parseToken(raw: string): { name: string; isType: boolean } {
  * Returns the modified source string.
  */
 function rewriteImports(source: string): string {
-  // 1. Collect all blocks to replace, tracking what repo vars we'll need.
   const repoVarsNeeded = new Set<string>();
   const typeNamesKept = new Set<string>();
   const repoInstancesKept = new Set<string>();
@@ -348,7 +330,6 @@ function rewriteImports(source: string): string {
 
   if (matches.length === 0) return source;
 
-  // Gather what repo vars are needed and what types/instances survive.
   for (const { names } of matches) {
     for (const rawName of names) {
       const { name, isType } = parseToken(rawName);
@@ -364,7 +345,6 @@ function rewriteImports(source: string): string {
     }
   }
 
-  // Build the replacement import block.
   const allValueImports = new Set([...repoVarsNeeded, ...repoInstancesKept]);
 
   let replacement = "";
@@ -393,7 +373,6 @@ function rewriteImports(source: string): string {
     blk = IMPORT_RE.exec(source);
   }
 
-  // Replace from last to first
   let out = source;
   for (let i = allBlocks.length - 1; i >= 0; i--) {
     const { index, length } = allBlocks[i];
@@ -401,11 +380,10 @@ function rewriteImports(source: string): string {
     out = out.slice(0, index) + sub + out.slice(index + length);
   }
 
-  // 2. Remove any stale direct-path imports of repo instances
+  // Remove any stale direct-path imports of repo instances
   // (e.g. `import { personaRepository } from "@/utils/db/repositories/PersonaRepository"`)
   // that are now covered by the consolidated import.
   for (const repoVar of repoVarsNeeded) {
-    // Match: import { <repoVar> } from "@/utils/db/repositories/<AnyFile>"
     const directRe = new RegExp(
       `import\\s+\\{\\s*${repoVar}\\s*\\}\\s+from\\s+"@\\/utils\\/db\\/repositories\\/[^"]+";?\\n?`,
       "g",
@@ -416,7 +394,6 @@ function rewriteImports(source: string): string {
   return out;
 }
 
-// ── Call-site rewriting ───────────────────────────────────────────────────────
 
 /**
  * Replaces all call sites for the free functions listed in `fileFuncs`.
@@ -439,7 +416,6 @@ function rewriteCallSites(source: string, fileFuncs: Set<string>): string {
   return out;
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
 
 const files = walkTs(SRC_DIR);
 let changed = 0;
@@ -452,7 +428,6 @@ for (const filePath of files) {
     continue;
   }
 
-  // Extract the names of free functions imported from the shim in this file
   const fileFuncs = new Set<string>();
   IMPORT_RE.lastIndex = 0;
   let m = IMPORT_RE.exec(source);
@@ -468,7 +443,7 @@ for (const filePath of files) {
 
   if (fileFuncs.size === 0) {
     skipped++;
-    continue; // Only imports repo instances or types — nothing to drain
+    continue; // Only imports repo instances or types: nothing to drain
   }
 
   let updated = source;

@@ -27,9 +27,6 @@ if (mode !== "--backup" && mode !== "--restore") {
   process.exit(1);
 }
 
-// ---------------------------------------------------------------------------
-// Shared helper: build DATABASE_URL from .env vars
-// ---------------------------------------------------------------------------
 
 async function runExternalCommand(
   command: string,
@@ -73,17 +70,11 @@ function resolveDatabaseUrl(): string {
   return `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
-// ---------------------------------------------------------------------------
-// --backup mode
-// ---------------------------------------------------------------------------
 
 async function runBackup(): Promise<void> {
   await runDataBackup({ backupType: "manual" });
 }
 
-// ---------------------------------------------------------------------------
-// --restore mode
-// ---------------------------------------------------------------------------
 
 /**
  * Restores a TomoriBot install from a transfer bundle created by --backup.
@@ -100,14 +91,13 @@ async function runBackup(): Promise<void> {
 async function runRestore(bundlePath: string): Promise<void> {
   log.section("♻️ TRANSFER RESTORE");
 
-  // 1. Resolve and pin the target before restoring config from the source bundle.
+  // Resolve and pin the target before restoring config from the source bundle.
   // The bundled config may contain source-machine POSTGRES_* values, but both the
   // preflight query and psql must continue targeting the database selected when
   // this process started (including values injected by runWithSecrets.ts).
   const targetDatabaseUrl = resolveDatabaseUrl();
   process.env.DATABASE_URL = targetDatabaseUrl;
 
-  // 2. Validate bundle directory
   const bundleDir = resolve(bundlePath);
   if (!existsSync(bundleDir)) {
     log.error(`Bundle directory not found: ${bundleDir}`);
@@ -130,7 +120,6 @@ async function runRestore(bundlePath: string): Promise<void> {
     }
   }
 
-  // 2. Show bundle manifest
   const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
     createdAt: string;
     botVersion: string;
@@ -139,7 +128,6 @@ async function runRestore(bundlePath: string): Promise<void> {
   log.info(`Bot version:    ${manifest.botVersion}`);
   log.info(`Bundle path:    ${bundleDir}`);
 
-  // 3. Check whether the target database already has tables
   const existingTables = await sql<{ tablename: string }[]>`
 		SELECT tablename FROM pg_tables WHERE schemaname = 'public'
 	`;
@@ -178,7 +166,6 @@ async function runRestore(bundlePath: string): Promise<void> {
     log.info("Proceeding with forced restore into non-empty database...");
   }
 
-  // 4. Warn about remaining side effects and ask for final confirmation
   log.section("⚠️ WARNING — Read before continuing");
   log.info("Restoring will:");
   log.info("  1. Overwrite your local .env with the bundled config.env.");
@@ -206,11 +193,9 @@ async function runRestore(bundlePath: string): Promise<void> {
     process.exit(0);
   }
 
-  // 4. Restore .env
   const localEnvPath = resolveEnvPath();
   const envAlreadyExists = existsSync(localEnvPath);
   if (envAlreadyExists) {
-    // Back up existing .env before overwriting
     const backupEnvPath = `${localEnvPath}.bak`;
     copyFileSync(localEnvPath, backupEnvPath);
     log.info(`Existing environment file backed up to: ${backupEnvPath}`);
@@ -218,7 +203,6 @@ async function runRestore(bundlePath: string): Promise<void> {
   copyFileSync(envBackupPath, localEnvPath);
   log.success(".env restored from bundle.");
 
-  // 5. Restore database
   log.info("Restoring database from dump (running psql)...");
   try {
     const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
@@ -248,9 +232,6 @@ async function runRestore(bundlePath: string): Promise<void> {
   log.info("  3. Start the bot with `bun run dev` or `bun run start`.");
 }
 
-// ---------------------------------------------------------------------------
-// --latest helper: resolve the most recent bundle in backups/
-// ---------------------------------------------------------------------------
 
 /**
  * Scans the backups/ directory and returns the path of the most recently
@@ -267,7 +248,6 @@ function resolveLatestBundle(): string {
     process.exit(1);
   }
 
-  // Filter to only backup_* subdirectories and sort descending by name
   const bundles = readdirSync(backupsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.startsWith("backup_"))
     .map((entry) => entry.name)
@@ -284,16 +264,12 @@ function resolveLatestBundle(): string {
   return latest;
 }
 
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
 
 let entryPromise: Promise<void>;
 
 if (mode === "--backup") {
   entryPromise = runBackup();
 } else {
-  // --restore mode: accept either --latest or --from <dir>
   const useLatest = args.includes("--latest");
   const fromIndex = args.indexOf("--from");
 

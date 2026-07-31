@@ -106,7 +106,7 @@ export async function sendFallbackModelUsageNotice({
     const buttonRow = createFallbackDetailsButton(context.locale);
     const disabledButtonRow = createFallbackDetailsButton(context.locale, true);
 
-    // Resolve thread ID — webhooks targeting a parent channel need it to post into a thread.
+    // Resolve thread ID: webhooks targeting a parent channel need it to post into a thread.
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
@@ -115,13 +115,13 @@ export async function sendFallbackModelUsageNotice({
     let noticeMessage: Message;
 
     // Post as whoever actually delivered the last message so the button groups with it rather
-    // than splitting off under a different author. The recorded username is reused verbatim —
+    // than splitting off under a different author. The recorded username is reused verbatim:
     // it may be the decorated `Persona (sprite)` form chosen by the group-break alternation,
     // and rebuilding the persona's default identity here would produce a different name and
     // cause the split. A null identity means the last delivery was an ordinary bot message, so
     // the notice goes out as the bot too.
     // The main persona has no pre-resolved `context.webhook` (it normally replies as the bot),
-    // so when a sprite put it on the webhook path the webhook is resolved lazily here — the
+    // so when a sprite put it on the webhook path the webhook is resolved lazily here: the
     // lookup is cached, so this costs nothing on the common path.
     const deliveredIdentity = getChannelDeliveredWebhookIdentity(context.channel.id);
     const noticeWebhook = deliveredIdentity

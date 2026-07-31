@@ -133,7 +133,6 @@ describe("buildReunionNote", () => {
   });
 
   it("never welcomes a non-triggerer as a first-timer, but still acknowledges their return", () => {
-    // A bystander with no history is a stranger, not someone to introduce yourself to.
     expect(
       buildReunionNote({
         lastPreviousDayAt: null,
@@ -146,7 +145,6 @@ describe("buildReunionNote", () => {
       }),
     ).toBeNull();
 
-    // A bystander with a real gap gets the "around again" phrasing, not "talking to you".
     const note = buildReunionNote({
       lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
       todayCount: 0,
@@ -227,7 +225,6 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
     const depthTargetIndex = contextItems.findIndex((item) => item.messageId === "three");
     expect(noteIndex).toBe(depthTargetIndex - 1);
 
-    // Several returning people collapse into one wrapped block, not a stack of them.
     const noteText = itemText(contextItems[noteIndex]);
     expect(noteText).toBe("[System: Alice is talking to you for the very first time!\nBob is around again.]");
     expect(contextItems.filter((item) => itemText(item).startsWith("[System: Alice"))).toHaveLength(1);

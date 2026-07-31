@@ -1,5 +1,5 @@
 // locales/en-US/commands.ts
-// Assembler — edit the individual files in commands/ instead.
+// Assembler: edit the individual files in commands/ instead.
 
 import speech from "./commands/speech";
 import choices from "./commands/choices";

@@ -1,5 +1,5 @@
 /**
- * Neutral entry point for the **anchor one-message workflow** engine — the
+ * Neutral entry point for the **anchor one-message workflow** engine: the
  * persona-agnostic controller that renders a whole picker → selector → modal → result
  * flow on a single ephemeral message edited in place.
  *
@@ -10,7 +10,7 @@
  *
  * **Keep it that way.** The persona specialization (`createSelectionPhase`,
  * `normalizeSelectedPersona`, `runPersonaPickerWorkflow`) calls about ten intentionally
- * private engine helpers — `noticePayload`, `awaitWorkflowButton`, `createModalPhase`,
+ * private engine helpers: `noticePayload`, `awaitWorkflowButton`, `createModalPhase`,
  * `openModalWithBridge`, the `AnchorMessageController` class, the `logWorkflow*` family.
  * Moving the generic half into this file would mean exporting every one of them just so a
  * sibling module could reach it, while `scripts/checks/lib/personaWorkflowBoundary.ts` exists
@@ -44,14 +44,14 @@ export type {
  * Neutral names for the engine's generic types.
  *
  * The underlying types still carry the `PersonaWorkflow*` prefix from when the engine was
- * persona-only. Renaming them outright is not worth it — most occurrences are in persona
+ * persona-only. Renaming them outright is not worth it, so most occurrences are in persona
  * commands, where the persona-flavoured name is the correct one.
  *
  * **New non-persona callers should prefer these names.** The `PersonaWorkflow*` exports
  * above stay for existing callers and are not deprecated.
  *
  * These are **type-only** aliases on purpose. Re-exporting a runtime value here would add an
- * import edge that every consumer — including unit tests that stub `personaWorkflow` — has to
+ * import edge that every consumer: including unit tests that stub `personaWorkflow`: has to
  * satisfy. Code needing `PersonaWorkflowUpdateError` as a value imports it from
  * `personaWorkflow.ts` directly.
  */

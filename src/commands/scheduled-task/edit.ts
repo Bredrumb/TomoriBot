@@ -294,7 +294,6 @@ export async function execute(
     const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
     const state = tomoriState;
 
-    // 1. Load all reminders for this server, tagged with their owning persona name
     const reminders = await serverScheduleRepository.loadReminderSelections(
       tomoriState.server_id,
       hasManagePermission ? undefined : userData.user_id,
@@ -310,7 +309,7 @@ export async function execute(
       return;
     }
 
-    // 2. Build select options — persona_id NULL means the main persona owns the reminder
+    // Build select options: persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder, index) => {
       const personaName = reminder.persona_nickname ?? state.persona_nickname;
       const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
@@ -359,7 +358,6 @@ export async function execute(
       };
     });
 
-    // 3. Prompt user to pick a reminder
     const selectModalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: SELECT_MODAL_CUSTOM_ID,
       modalTitleKey: "commands.scheduled-task.edit.select_modal_title",
@@ -397,9 +395,9 @@ export async function execute(
       return;
     }
 
-    // 4. Confirm which reminder will be edited.
+    // Confirm which reminder will be edited.
     // Pass selectModalInteraction directly (unacknowledged) so the confirmation becomes
-    // the one ephemeral message for this whole flow — success will update it in-place.
+    // the one ephemeral message for this whole flow, so success will update it in-place.
     const confirmationResult = await promptWithUnacknowledgedConfirmation(selectModalInteraction, locale, {
       embedTitleKey: "commands.scheduled-task.edit.confirm_title",
       embedDescriptionKey: "commands.scheduled-task.edit.confirm_description",
@@ -416,7 +414,6 @@ export async function execute(
       return;
     }
 
-    // 5. Open the edit modal pre-filled with current values (times in server timezone)
     const reminderForInvoker =
       selectedReminder.self_reminder !== true && selectedReminder.user_discord_id === userData.user_disc_id;
     const editModalResult = await promptWithRawModal(confirmationResult.interaction, locale, {
@@ -474,7 +471,6 @@ export async function execute(
       return;
     }
 
-    // 6. Validate all edited fields before saving
     const editedPurpose = editModalResult.values?.[PURPOSE_INPUT_ID]?.trim() ?? "";
     const editedTimeInput = editModalResult.values?.[TIME_INPUT_ID]?.trim() ?? "";
     const editedIntervalInput = editModalResult.values?.[INTERVAL_INPUT_ID]?.trim() ?? "";
@@ -529,7 +525,6 @@ export async function execute(
       return;
     }
 
-    // 7. Save and update the confirmation message in-place with the result
     const editSucceeded = await performReminderEdit(
       selectedReminder,
       editedPurpose,

@@ -3,7 +3,7 @@
  *
  * Thin wrapper around GoogleToolAdapter. Vertex uses the same Gemini API
  * wire format, so tool conversion, MCP delegation, and result handling
- * are identical — only the provider name differs.
+ * are identical: only the provider name differs.
  */
 
 import type { Tool, MCPCapableToolAdapter, ToolContext, ToolResult } from "../../types/tool/interfaces";
@@ -34,7 +34,6 @@ export class VertexToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Get the provider name this adapter supports
-   * @returns Provider identifier
    */
   getProviderName(): string {
     return "vertex";
@@ -42,8 +41,6 @@ export class VertexToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Convert a generic tool to Vertex/Gemini function declaration format
-   * @param tool - The generic tool to convert
-   * @returns Gemini-specific function declaration
    */
   convertTool(tool: Tool): Record<string, unknown> {
     return this.googleAdapter.convertTool(tool);
@@ -51,7 +48,6 @@ export class VertexToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Convert tool result to Vertex/Gemini-specific format
-   * @param result - The generic tool result
    * @returns Gemini-specific result format
    */
   convertResult(result: ToolResult): Record<string, unknown> {
@@ -60,10 +56,8 @@ export class VertexToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Get all available tools (built-in + MCP) in Vertex/Gemini format
-   * @param builtInTools - Array of built-in tools
    * @param serverId - Optional Discord server ID for server-specific tool selection
    * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   * @returns Combined tools configuration
    */
   async getAllToolsInProviderFormat(
     builtInTools: Tool[],
@@ -75,7 +69,6 @@ export class VertexToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Check if a function name belongs to an MCP tool
-   * @param functionName - Name of the function to check
    * @returns True if this is an MCP tool function
    */
   async isMCPFunction(functionName: string): Promise<boolean> {
@@ -84,10 +77,6 @@ export class VertexToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Execute an MCP tool function
-   * @param functionName - Name of the MCP function to execute
-   * @param args - Arguments for the function
-   * @param context - Tool execution context
-   * @returns Enhanced typed tool result
    */
   async executeMCPFunction(
     functionName: string,

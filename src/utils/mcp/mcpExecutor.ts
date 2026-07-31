@@ -47,7 +47,6 @@ function trimFetchPageTracker(): void {
  * Shared by both the global MCP executor and guild MCP manager so that
  * custom fetch tools (url_fetcher server type) get the same UX.
  *
- * @param context    - Tool execution context (channel, locale, etc.)
  * @param url        - The URL being fetched (used for display and dedup tracking)
  * @param label      - Log label for the caller (e.g. "MCPExecutor", "GuildMcpManager")
  * @param startIndex - Character offset passed to the fetch server (shown when > 0)
@@ -67,7 +66,6 @@ export async function sendFetchProgressNotice(
   fetchPageTracker.set(channelId, { url, page });
   trimFetchPageTracker();
 
-  // Build the description: base URL line + optional offset line when reading a continuation
   const baseDescription = localizer(context.locale, "tools.fetch.reading_description", {
     url: url || "the requested page",
   });
@@ -96,8 +94,6 @@ export async function sendFetchProgressNotice(
 /**
  * Validates fetch URL size before downloading
  * Performs HEAD request to check Content-Length header
- * @param url - URL to validate
- * @returns Validation result with size information
  */
 export async function validateFetchSize(url: string): Promise<{ allowed: boolean; reason?: string; sizeMB?: number }> {
   try {
@@ -116,7 +112,6 @@ export async function validateFetchSize(url: string): Promise<{ allowed: boolean
     const contentLengthHeader = headResponse.headers.get("content-length");
 
     if (!contentLengthHeader) {
-      // If no Content-Length header, allow but log warning
       log.warn(`No Content-Length header for URL: ${url}. Proceeding with fetch but size is unknown.`);
       return { allowed: true };
     }
@@ -124,7 +119,6 @@ export async function validateFetchSize(url: string): Promise<{ allowed: boolean
     const contentLengthBytes = Number.parseInt(contentLengthHeader, 10);
     const contentLengthMB = contentLengthBytes / (1024 * 1024);
 
-    // Check if size exceeds limit
     if (contentLengthMB > maxSizeMB) {
       log.warn(`Fetch size validation failed: ${contentLengthMB.toFixed(2)} MB > ${maxSizeMB} MB for URL: ${url}`);
       return {
@@ -134,11 +128,9 @@ export async function validateFetchSize(url: string): Promise<{ allowed: boolean
       };
     }
 
-    // Size is acceptable
     log.info(`Fetch size validated: ${contentLengthMB.toFixed(2)} MB (limit: ${maxSizeMB} MB)`);
     return { allowed: true, sizeMB: contentLengthMB };
   } catch (error) {
-    // If HEAD request fails, allow fetch to proceed (might be a server issue, not size issue)
     log.warn(`HEAD request failed for URL: ${url}. Proceeding with fetch.`, {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -175,7 +167,6 @@ class MCPHandlerRegistry {
    * Initialize the default MCP server handlers
    */
   private initializeDefaultHandlers(): void {
-    // Register built-in handlers
     this.registerHandler(getBraveSearchHandler());
     this.registerHandler(getFetchHandler());
     this.registerHandler(getDuckDuckGoHandler());
@@ -187,7 +178,6 @@ class MCPHandlerRegistry {
 
   /**
    * Register a new MCP server behavior handler
-   * @param handler - The handler to register
    */
   public registerHandler(handler: MCPServerBehaviorHandler): void {
     this.handlers.set(handler.serverName, handler);
@@ -196,7 +186,6 @@ class MCPHandlerRegistry {
 
   /**
    * Get handler for a specific server
-   * @param serverName - Name of the MCP server
    * @returns The handler or null if not found
    */
   public getHandler(serverName: string): MCPServerBehaviorHandler | null {
@@ -205,7 +194,6 @@ class MCPHandlerRegistry {
 
   /**
    * Find handler that supports a specific function
-   * @param functionName - Name of the function to find handler for
    * @returns The handler that supports the function or null
    */
   public findHandlerForFunction(functionName: string): MCPServerBehaviorHandler | null {
@@ -253,14 +241,12 @@ export class MCPExecutor {
 
   /**
    * Apply business rules for MCP function parameters
-   * @param functionName - Name of the MCP function
    * @param args - Original arguments
    * @returns Modified arguments with business rules applied
    */
   private applyBusinessRules(functionName: string, args: Record<string, unknown>): Record<string, unknown> {
     const modifiedArgs = { ...args };
 
-    // Apply business rules based on function name
     switch (functionName) {
       case "brave_web_search":
         modifiedArgs.count = 20; // Always 20 for optimal performance
@@ -288,7 +274,6 @@ export class MCPExecutor {
         modifiedArgs.safesearch = "off"; // Always off (business requirement)
         break;
 
-      // DuckDuckGo Search functions
       case "web-search":
         modifiedArgs.numResults = Math.min(Number(modifiedArgs.numResults) || 12, 20); // Default 12, max 20
         modifiedArgs.page = 1; // Always start from first page
@@ -299,13 +284,10 @@ export class MCPExecutor {
         break;
 
       case "fetch-url": {
-        // Get dynamic character limit based on current memory status
         const dynamicCharLimit = memoryGuard.getFetchCharLimit();
 
-        // Apply dynamic limit with AI's request as a suggested value
         modifiedArgs.maxLength = Math.min(Number(modifiedArgs.maxLength) || dynamicCharLimit, dynamicCharLimit);
 
-        // Log if memory pressure is reducing the limit
         const memoryStatus = memoryGuard.getStatus();
         if (memoryStatus !== "safe") {
           log.warn(`Fetch character limit reduced to ${dynamicCharLimit} due to ${memoryStatus} memory status`);
@@ -316,9 +298,7 @@ export class MCPExecutor {
         break;
       }
 
-      // Add more function-specific rules as needed
       default:
-        // No modifications for other functions
         break;
     }
 
@@ -327,7 +307,6 @@ export class MCPExecutor {
 
   /**
    * Check if a function name belongs to an MCP tool
-   * @param functionName - Name of the function to check
    * @returns Promise<boolean> - True if this is an MCP tool function
    */
   public async isMCPFunction(functionName: string): Promise<boolean> {
@@ -359,10 +338,6 @@ export class MCPExecutor {
 
   /**
    * Execute an MCP function with provider-agnostic result processing
-   * @param functionName - Name of the MCP function to execute
-   * @param args - Arguments for the function
-   * @param context - Tool execution context for Discord operations
-   * @returns Promise<TypedMCPToolResult> - Standardized tool result
    */
   public async executeMCPFunction(
     functionName: string,
@@ -377,13 +352,11 @@ export class MCPExecutor {
         throw new MCPExecutionError("MCP manager not ready", functionName, "unknown");
       }
 
-      // Find the appropriate behavior handler for this function
       const handler = this.handlerRegistry.findHandlerForFunction(functionName);
       if (!handler) {
         log.warn(`No behavior handler found for function '${functionName}', using default processing`);
       }
 
-      // Create MCP execution context
       const mcpContext: MCPExecutionContext = context
         ? {
             ...context, // Spread the tool context if it exists
@@ -394,7 +367,6 @@ export class MCPExecutor {
             serverName: handler?.serverName || "unknown",
           }
         : ({
-            // Create minimal context if none provided
             functionName,
             originalArgs: { ...args },
             modifiedArgs: { ...args },
@@ -402,7 +374,6 @@ export class MCPExecutor {
             serverName: handler?.serverName || "unknown",
           } as unknown as MCPExecutionContext);
 
-      // Apply business rules for parameters before sending to MCP server
       mcpContext.modifiedArgs = this.applyBusinessRules(functionName, args);
 
       if (functionName === "fetch" && context?.channel && context.locale) {
@@ -410,7 +381,6 @@ export class MCPExecutor {
         await sendFetchProgressNotice(context, String(mcpContext.modifiedArgs.url || ""), "MCPExecutor", startIndex);
       }
 
-      // Find and execute the MCP function
       const mcpTools = mcpManager.getMCPTools();
       for (const mcpTool of mcpTools) {
         try {
@@ -418,10 +388,8 @@ export class MCPExecutor {
           const mcpFunctionNames = geminiTool.functionDeclarations?.map((f) => f.name) || [];
 
           if (mcpFunctionNames.includes(functionName)) {
-            // Execute the MCP function
             log.info(`Executing MCP function: ${functionName}`);
 
-            // Validate fetch URL size before executing (HEAD request check)
             if ((functionName === "fetch-url" || functionName === "fetch") && mcpContext.modifiedArgs.url) {
               const fetchValidation = await validateFetchSize(mcpContext.modifiedArgs.url as string);
 
@@ -436,11 +404,9 @@ export class MCPExecutor {
 
             const mcpResult = await mcpTool.callTool([{ name: functionName, args: mcpContext.modifiedArgs }]);
 
-            // Process the result
             if (mcpResult && mcpResult.length > 0) {
               const firstResult = mcpResult[0];
 
-              // Use behavior handler for processing if available
               if (handler) {
                 const processedResult = await handler.processResult(
                   functionName,
@@ -449,7 +415,6 @@ export class MCPExecutor {
                   mcpContext.modifiedArgs,
                 );
 
-                // Cast to TypedMCPToolResult and ensure execution time is set correctly
                 const typedResult = processedResult as TypedMCPToolResult;
                 if (typedResult.data) {
                   typedResult.data.executionTime = Date.now() - executionStartTime;
@@ -457,7 +422,6 @@ export class MCPExecutor {
                 return typedResult;
               }
 
-              // Default processing if no handler
               return this.processDefaultMCPResult(functionName, firstResult, mcpContext);
             } else {
               throw new MCPExecutionError(
@@ -476,7 +440,6 @@ export class MCPExecutor {
         }
       }
 
-      // Function not found in any server
       throw new MCPFunctionNotFoundError(functionName);
     } catch (error) {
       const executionTime = Date.now() - executionStartTime;
@@ -486,7 +449,6 @@ export class MCPExecutor {
         error instanceof MCPFunctionNotFoundError ||
         error instanceof MCPServerNotFoundError
       ) {
-        // Re-throw custom MCP errors as typed results
         return {
           success: false,
           message: error.message,
@@ -521,9 +483,7 @@ export class MCPExecutor {
 
   /**
    * Default MCP result processing when no specific handler is available
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
-   * @param context - Execution context
    * @returns TypedMCPToolResult - Default processed result
    */
   private processDefaultMCPResult(
@@ -532,7 +492,6 @@ export class MCPExecutor {
     context: MCPExecutionContext,
   ): TypedMCPToolResult {
     try {
-      // Handle different MCP result formats
       if (mcpResult.text) {
         return {
           success: true,
@@ -631,7 +590,6 @@ export class MCPExecutor {
 
   /**
    * Get execution statistics for monitoring
-   * @returns Basic MCP system status
    */
   public getMCPStatus(): {
     isReady: boolean;

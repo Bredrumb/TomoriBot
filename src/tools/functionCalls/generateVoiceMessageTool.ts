@@ -198,7 +198,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
 
       if (!webhook.token) return undefined;
 
-      // Build multipart form — Discord requires payload_json + binary file part
+      // Build multipart form: Discord requires payload_json + binary file part
       const form = new FormData();
 
       const payloadJson: Record<string, unknown> = {
@@ -214,9 +214,8 @@ export class GenerateVoiceMessageTool extends BaseTool {
         allowed_mentions: { parse: [] },
       };
 
-      // Username and avatar override for persona identity
       if (username) payloadJson.username = username;
-      // data: URIs cannot be used as avatar_url — only HTTP(S) URLs are accepted
+      // data: URIs cannot be used as avatar_url, so only HTTP(S) URLs are accepted
       if (avatarUrl && !avatarUrl.startsWith("data:image/")) {
         payloadJson.avatar_url = avatarUrl;
       }
@@ -261,7 +260,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
     try {
       const { channel, audioBuffer, mimeType, filename, voiceMeta } = options;
 
-      // Build multipart form — same payload_json structure as the webhook path
+      // Build multipart form: same payload_json structure as the webhook path
       const form = new FormData();
 
       const payloadJson: Record<string, unknown> = {
@@ -430,8 +429,8 @@ export class GenerateVoiceMessageTool extends BaseTool {
     const voiceSampleId = context.tomoriState.speech_voice_sample_id ?? null;
     const voiceId = context.tomoriState.speech_voice_id?.trim() ?? "";
 
-    // 1. Try the new custom-endpoint credential path (Phase 4.1+).
-    // 2. Fall back to the legacy opt_api_keys entry for backward compatibility
+    // Try the new custom-endpoint credential path (Phase 4.1+).
+    // Fall back to the legacy opt_api_keys entry for backward compatibility
     //    during the transition window before seed backfill migration has run.
     const speechEndpoint = await resolveActiveSpeechEndpoint(context.tomoriState.server_id);
     const activeEndpointIsVoiceDesign = isVoiceDesignEndpoint(speechEndpoint?.endpoint);
@@ -537,7 +536,6 @@ export class GenerateVoiceMessageTool extends BaseTool {
       };
     }
 
-    // --- TTS clone path ---
     if (voiceSampleId && speechEndpoint?.endpoint.api_style === "tts-clone") {
       const cloneResult = await synthesizeSpeechViaTtsClone({
         endpoint: speechEndpoint.endpoint,
@@ -601,7 +599,6 @@ export class GenerateVoiceMessageTool extends BaseTool {
       return { success: true, message: "Voice message generated and sent to Discord.", endTurn: true };
     }
 
-    // --- ElevenLabs path ---
     if (!voiceId) {
       return {
         success: false,
@@ -636,7 +633,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
     const attachmentName = this.buildAttachmentName(title, synthesisResult.extension ?? "mp3");
     const threadId = this.resolveThreadId(context);
     const captionText = synthesisResult.cleanedCaptionText ?? "";
-    // Strip MIME parameters — Discord rejects waveform/duration_secs for non-bare types.
+    // Strip MIME parameters, so Discord rejects waveform/duration_secs for non-bare types.
     const mimeType = (synthesisResult.contentType ?? "audio/mpeg").split(";")[0].trim();
     const voiceMeta = await generateVoiceMessageMetadata(synthesisResult.audioBuffer, mimeType);
 

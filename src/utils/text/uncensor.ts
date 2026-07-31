@@ -151,7 +151,6 @@ function obfuscateWord(word: string): string {
   return result;
 }
 
-// Legacy code to use if aggressive middle dot deletion does not work
 /*
 function deobfuscateSensitiveWords(text: string, wordSet: Set<string>): string {
 	const dotPattern = escapeRegExp(OBFUSCATION_DOT);

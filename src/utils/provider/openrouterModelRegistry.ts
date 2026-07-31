@@ -251,7 +251,7 @@ export async function registerOpenRouterModelForScope(
 
   switch (capability) {
     case "text": {
-      // Only text models appear in OpenRouter's LLM catalog — validate before upserting
+      // Only text models appear in OpenRouter's LLM catalog, so validate before upserting
       if (!(await modelExistsInOpenRouterCatalog(normalizedModelName))) {
         return { status: "invalid_model" };
       }

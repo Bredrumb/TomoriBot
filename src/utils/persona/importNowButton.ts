@@ -6,7 +6,7 @@
  * press "Import Now" to import the freshly generated persona as an alter without
  * re-uploading the image via `/persona import`. Because the message is public,
  * the manager-only restriction is enforced on click (not by visibility), and the
- * button is driven by a per-message collector — matching the established pattern
+ * button is driven by a per-message collector; matching the established pattern
  * in `expandableEmbedNotice.ts` (this codebase has no global button router).
  */
 
@@ -37,7 +37,7 @@ export const IMPORT_NOW_CUSTOM_ID = "persona_import_now";
 /**
  * Collector lifetime for the Import Now button. Capped under Discord's 15-minute
  * interaction-token window so the timeout teardown can still edit the original
- * reply. Configurable via env (CLAUDE.md rule 6).
+ * reply. Configurable via env.
  */
 const IMPORT_NOW_BUTTON_TIMEOUT_MS = (() => {
   const parsed = Number.parseInt(process.env.PERSONA_IMPORT_NOW_BUTTON_TIMEOUT_MS ?? "", 10);
@@ -52,8 +52,6 @@ type ImportNowButtonState = "active" | "done" | "expired";
  * Builds the Import Now button config for a given state. The label is a locale
  * key resolved later by {@link buildPersonaResultContainer}, so no locale is needed here.
  *
- * @param state - "active" (clickable), "done" (imported, disabled), or "expired" (timed out, disabled).
- * @returns A {@link PersonaResultButtonOptions} for {@link buildPersonaResultContainer}.
  */
 export function importNowButton(state: ImportNowButtonState): PersonaResultButtonOptions {
   if (state === "done") {
@@ -99,7 +97,6 @@ export interface ImportNowCollectorParams {
 /**
  * Maps an {@link importAlterPreset} failure reason to a localized error embed.
  *
- * @param locale - Locale for the error strings.
  * @param result - The failed import result.
  * @returns An EmbedBuilder describing the failure.
  */
@@ -142,10 +139,9 @@ function buildImportErrorEmbed(
  *
  * On click: enforces ManageGuild, then runs the shared {@link importAlterPreset}
  * core (always as an alter, identity preserved), disables the button on success,
- * and replies ephemerally with the outcome. The button is one-shot — a successful
+ * and replies ephemerally with the outcome. The button is one-shot: a successful
  * import stops the collector; a failure re-arms it for another attempt.
  *
- * @param params - {@link ImportNowCollectorParams} message, import inputs, and re-render layout.
  */
 export function attachImportNowCollector(params: ImportNowCollectorParams): void {
   const {
@@ -170,7 +166,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
   });
 
   collector.on("collect", async (interaction: ButtonInteraction) => {
-    // 1. Manager-only gate. The message is public, so the restriction must be
+    // Manager-only gate. The message is public, so the restriction must be
     //    enforced here rather than relying on who can see the button.
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!hasPermission) {
@@ -188,7 +184,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // 2. One-shot guard: ignore clicks once an import is in flight or succeeded.
     if (consumed) {
       await interaction
         .reply({
@@ -205,7 +200,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
     }
     consumed = true;
 
-    // 3. Acknowledge the click; the import (DB + storage) may exceed the 3s window.
+    // Acknowledge the click; the import (DB + storage) may exceed the 3s window.
     try {
       await interaction.deferUpdate();
     } catch (error) {
@@ -214,7 +209,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // 4. Run the shared alter-import core (always alter, identity preserved).
+    // Run the shared alter-import core (always alter, identity preserved).
     const result = await importAlterPreset({
       client,
       guild,
@@ -225,7 +220,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
     });
 
     if (!result.ok) {
-      // 4a. Re-arm the button so the manager can retry after fixing the cause.
       consumed = false;
       await interaction
         .followUp({ embeds: [buildImportErrorEmbed(locale, result)], flags: MessageFlags.Ephemeral })
@@ -233,7 +227,6 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       return;
     }
 
-    // 4b. Disable the button on the public message to reflect the completed import.
     try {
       await interaction.editReply({
         components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("done") }),
@@ -243,7 +236,7 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
       log.warn("Import Now: failed to disable button after import", error as Error);
     }
 
-    // 4c. Confirm privately to the manager who imported.
+    // Confirm privately to the manager who imported.
     await interaction
       .followUp({
         embeds: [

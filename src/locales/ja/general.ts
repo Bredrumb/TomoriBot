@@ -1,5 +1,3 @@
-// locales/ja/general.ts
-
 export default {
   general: {
     yes: `はい`,

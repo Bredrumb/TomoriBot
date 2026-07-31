@@ -54,7 +54,7 @@ describe("channel delivery continuity — last delivered identity", () => {
 
   /**
    * Reverting to an ordinary bot message must clear the identity. Otherwise a sticker sent
-   * afterwards would be posted under a persona name that nothing adjacent is using — grouping
+   * afterwards would be posted under a persona name that nothing adjacent is using, so grouping
    * with nothing and looking like a stray impostor message.
    */
   it("clears the identity once an ordinary bot message is delivered", () => {
@@ -73,7 +73,7 @@ describe("channel delivery continuity — last delivered identity", () => {
   });
 
   it("keeps the sprite alternation and the delivered identity independent within a channel", () => {
-    // Priming the alternation must not fabricate an identity — only a real send does that.
+    // Priming the alternation must not fabricate an identity: only a real send does that.
     advanceChannelSpriteGroupParity(CHANNEL, "mad");
     expect(getChannelDeliveredWebhookIdentity(CHANNEL)).toBeNull();
 

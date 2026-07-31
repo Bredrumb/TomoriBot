@@ -9,9 +9,8 @@ import eventHandler from "@/handlers/eventHandler";
  * and the event handler (which registers all Discord event listeners).
  *
  * Exits the process on critical failures (tool registry). All other failures
- * are non-critical — the bot degrades gracefully without them.
+ * are non-critical, so the bot degrades gracefully without them.
  *
- * @param client - The Discord.js Client instance
  */
 export async function initLoaders(client: Client): Promise<void> {
   log.section("Initializing Tool Registry...");

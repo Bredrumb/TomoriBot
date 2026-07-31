@@ -9,7 +9,7 @@ import { log } from "@/utils/misc/logger";
  * Read cache for the message → sprite-label mapping.
  *
  * Entries are immutable once written (a sent message's sprite never changes),
- * so this cache never needs invalidation — the TTL exists only to bound memory.
+ * so this cache never needs invalidation : the TTL exists only to bound memory.
  * Negative results are cached too: most persona webhook messages are plain
  * (non-sprite) sends, and caching the miss avoids re-querying them every turn.
  */
@@ -103,7 +103,6 @@ export async function getPersonaSpriteMessageRecord(messageDiscId: string): Prom
 
   const rows = await personaSpriteMessageRepository.getByMessageIds([messageDiscId]);
   if (!rows) {
-    // Transient DB error: degrade to a plain label this turn without caching.
     return null;
   }
 

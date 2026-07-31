@@ -25,7 +25,7 @@ export interface SearxngSearchParams {
   q: string;
   /** One or more comma-separated categories (e.g. "general"). */
   categories?: SearxngCategory | string;
-  /** Output format — we only ever request `json`. */
+  /** Output format: we only ever request `json`. */
   format?: "json";
   /** Two-letter language code or `all` (default). */
   language?: string;
@@ -103,7 +103,7 @@ export interface SearxngRequestConfig {
 }
 
 /**
- * Wrapped result returned by service helpers — mirrors the `ApiResult<T>` shape
+ * Wrapped result returned by service helpers : mirrors the `ApiResult<T>` shape
  * used in `braveSearchService.ts` so the upper layer can treat both providers
  * uniformly.
  */

@@ -343,7 +343,6 @@ export async function execute(
         userId: userData.user_id,
         lineageId: tomoriState.persona_lineage_id ?? 0,
         metric: "image_generated",
-        // Key by the resolved NAI model codename for a per-model breakdown.
         metricKey: resolvedModel.codename,
       });
     }

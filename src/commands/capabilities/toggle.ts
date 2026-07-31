@@ -7,7 +7,6 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { configRepository } from "@/utils/db/repositories";
 
-// Configure the subcommand — no options, running the command flips the toggle
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("toggle").setDescription(localizer("en-US", "commands.capabilities.toggle.description"));
 
@@ -15,10 +14,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Toggles the server-wide tool-use master switch.
  * When disabled, has_tools is artificially forced to false for all models in
  * the pipeline, preventing any function/tool calls regardless of model capability.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -49,7 +44,6 @@ export async function execute(
       return;
     }
 
-    // Flip the current value
     const isEnabled = !(tomoriState.config.tool_use_enabled ?? true);
 
     const updated = await configRepository.updateCapabilitiesConfig(tomoriState.server_id, {

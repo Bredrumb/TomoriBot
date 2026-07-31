@@ -94,7 +94,7 @@ export async function execute(
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "embedding");
     const idRoot = "model_embedding";
 
-    // 1. Open the anchor message with the right initial control for the provider count.
+    // Open the anchor message with the right initial control for the provider count.
     const activeEmbeddingModel = tomoriState.config.embedding_model_id
       ? await llmModelRepo.loadEmbeddingModelById(tomoriState.config.embedding_model_id)
       : null;
@@ -117,13 +117,13 @@ export async function execute(
     anchorMessage = phase.message;
     if (savedProviders.length === 0) return;
 
-    // 2. Resolve the provider and the unacknowledged button the modal opens from.
+    // Resolve the provider and the unacknowledged button the modal opens from.
     const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
     if (!opener) return;
     const selectedProvider = opener.provider;
     const isCustom = isCustomProvider(selectedProvider);
 
-    // 3. Load this provider's embedding models (custom + regular share the list).
+    // Load this provider's embedding models (custom + regular share the list).
     const availableModels = (
       (await llmModelRepo.loadAvailableEmbeddingModels(selectedProvider, false, {
         kind: "server",
@@ -148,7 +148,7 @@ export async function execute(
       return;
     }
 
-    // 4. Acquire the selected model. A custom provider with a single registered model
+    // Acquire the selected model. A custom provider with a single registered model
     //    activates directly (no modal); otherwise a string-select modal is shown in place.
     let work: PersonaWorkflowInPlacePhase;
     let chosenModel: EmbeddingModelChoice | null;
@@ -315,9 +315,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

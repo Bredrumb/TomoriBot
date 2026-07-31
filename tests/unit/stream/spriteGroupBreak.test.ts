@@ -35,7 +35,7 @@ const decoratedFor = (sprite: string) => `${CLEAN} (${sprite})`;
 
 describe("StreamSegmentProcessor sprite group-break naming", () => {
   // Continuity is module-level and channel-scoped, so it deliberately outlives any one
-  // stream — which means tests must clear it explicitly rather than rely on fresh state.
+  // stream which means tests must clear it explicitly rather than rely on fresh state.
   beforeEach(() => {
     clearAllChannelDeliveryContinuity();
   });
@@ -51,13 +51,13 @@ describe("StreamSegmentProcessor sprite group-break naming", () => {
   it("alternates clean/decorated so adjacent different sprites never share a username", () => {
     const resolve = makeResolver();
 
-    // 1. First sprite stays clean.
+    // First sprite stays clean.
     expect(resolve(cleanIdentity, decoratedFor("imagining"), "imagining", CHANNEL).username).toBe(CLEAN);
-    // 2. Sprite change collides with the previous clean name → decorated fallback.
+    // Sprite change collides with the previous clean name → decorated fallback.
     expect(resolve(cleanIdentity, decoratedFor("mad"), "mad", CHANNEL).username).toBe(decoratedFor("mad"));
-    // 3. Another change flips back to clean (still distinct from the prior decorated name).
+    // Another change flips back to clean (still distinct from the prior decorated name).
     expect(resolve(cleanIdentity, decoratedFor("imagining"), "imagining", CHANNEL).username).toBe(CLEAN);
-    // 4. And back to decorated.
+    // And back to decorated.
     expect(resolve(cleanIdentity, decoratedFor("mad"), "mad", CHANNEL).username).toBe(decoratedFor("mad"));
   });
 
@@ -92,14 +92,14 @@ describe("StreamSegmentProcessor sprite group-break naming", () => {
   /**
    * Regression: the alternation used to live in StreamState, which is rebuilt for every SDK
    * call. A queued turn therefore saw its first sprite as "the channel's first" and kept the
-   * clean name — colliding with the previous turn's final sprite, which Discord then grouped
+   * clean name, so colliding with the previous turn's final sprite, which Discord then grouped
    * under one avatar. A separate resolver instance stands in for the new turn's stream.
    */
   it("carries the alternation across turn boundaries in the same channel", () => {
     const firstTurn = makeResolver();
     expect(firstTurn(cleanIdentity, decoratedFor("mad"), "mad", CHANNEL).username).toBe(CLEAN);
 
-    // New turn, new processor/stream — but the same channel, so a sprite CHANGE must still
+    // New turn, new processor/stream, but the same channel, so a sprite CHANGE must still
     // break the group rather than restart on the clean name.
     const queuedTurn = makeResolver();
     expect(queuedTurn(cleanIdentity, decoratedFor("shy"), "shy", CHANNEL).username).toBe(decoratedFor("shy"));

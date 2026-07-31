@@ -16,7 +16,7 @@ import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallbac
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-/** Module-level lock set keyed by channelId — prevents double-invocation. */
+/** Module-level lock set keyed by channelId, so prevents double-invocation. */
 const activeDeleteLocks = new Set<string>();
 
 /**
@@ -34,8 +34,7 @@ interface DeleteTurnStatus {
 
 /**
  * Resolves the parent text channel that owns the webhook for the given channel.
- * Threads cannot own webhooks — the parent channel is used instead.
- * @param channel - The channel to resolve the webhook host for
+ * Threads cannot own webhooks, so the parent channel is used instead.
  * @returns The BaseGuildTextChannel that owns webhooks, or null if unavailable
  */
 function resolveWebhookHostChannel(channel: Message["channel"]): BaseGuildTextChannel | null {
@@ -51,7 +50,6 @@ function resolveWebhookHostChannel(channel: Message["channel"]): BaseGuildTextCh
  * Resolves the thread ID for webhook message deletion.
  * When deleting webhook messages inside a thread, the thread ID must be passed
  * as the second argument to `webhook.deleteMessage()`.
- * @param channel - The channel to check for thread context
  * @returns The thread ID if in a thread, otherwise undefined
  */
 function resolveWebhookThreadId(channel: Message["channel"]): string | undefined {
@@ -60,8 +58,6 @@ function resolveWebhookThreadId(channel: Message["channel"]): string | undefined
 
 /**
  * Configures the 'turn' subcommand under the 'delete' group.
- * @param subcommand - SlashCommandSubcommandBuilder
- * @returns Configured builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -94,10 +90,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * - With `select_persona`, the persona workflow edits that reply, then
  *   update-defers the selected button and keeps the anchor message in place.
  *
- * @param client - Discord client instance
- * @param interaction - ChatInputCommandInteraction
- * @param _userData - User row from database (unused)
- * @param locale - User's locale string
  */
 export async function execute(
   client: Client,
@@ -105,7 +97,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Validate guild + channel presence
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -125,7 +116,6 @@ export async function execute(
   // before those reads so the optional persona picker can safely edit this reply.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // 2. Load main persona state — needed for permission check and config values
   const tomoriState = await getCachedMainPersona(guildId);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -136,8 +126,8 @@ export async function execute(
     return;
   }
 
-  // 3. Permission check: requires ManageGuild OR use in a designated RP channel.
-  //    When the command is run inside a thread, channelId is the thread's own ID —
+  // Permission check: requires ManageGuild OR use in a designated RP channel.
+  //    When the command is run inside a thread, channelId is the thread's own ID:
   //    not the parent channel's ID. Check both so threads inherit their parent's RP status.
   const hasManageGuild = interaction.memberPermissions?.has("ManageGuild") ?? false;
   const parentChannelId = channel.isThread() ? channel.parentId : null;
@@ -153,7 +143,7 @@ export async function execute(
     return;
   }
 
-  // 3.5. Check bot's MANAGE_MESSAGES permission — determines whether direct
+  // Check bot's MANAGE_MESSAGES permission: determines whether direct
   //      deletion methods (bulkDelete, msg.delete) will work. The command
   //      proceeds regardless, but uses webhook-based deletion as fallback.
   const botMember = interaction.guild.members.me;
@@ -162,7 +152,7 @@ export async function execute(
     botHasManageMessages = Boolean(channel.permissionsFor(botMember)?.has("ManageMessages"));
   }
 
-  // 4. Race-condition lock check — prevents double-invocation for the same channel
+  // Race-condition lock check, so prevents double-invocation for the same channel
   if (activeDeleteLocks.has(channelId)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.delete.turn.already_running_title",
@@ -172,23 +162,21 @@ export async function execute(
     return;
   }
 
-  // 5. Acquire lock before any async work
+  // Acquire lock before any async work
   activeDeleteLocks.add(channelId);
 
   let personaWorkflowStarted = false;
 
   try {
-    // 6. Load all personas for selection and persona-turn detection.
     const allPersonas = await getCachedAllPersonas(guildId);
 
     const performDeletion = async (
       initialPersona: TomoriState | null,
       updateStatus: (status: DeleteTurnStatus) => Promise<void>,
     ): Promise<void> => {
-      // Target persona tracking — null means auto-detect from message history
+      // Target persona tracking: null means auto-detect from message history
       let resolvedPersona = initialPersona;
 
-      // 8. Fetch recent messages from the channel
       const fetchLimit = normalizeMessageFetchLimit(tomoriState.config.message_fetch_limit);
       const fetched = await channel.messages.fetch({ limit: fetchLimit });
 
@@ -196,7 +184,6 @@ export async function execute(
       // so index 0 = oldest and the last index = newest
       const messages: Message[] = [...fetched.values()].reverse();
 
-      // 9. Walk newest-to-oldest to find the last contiguous persona block
       const detectedTurn = findLastPersonaTurnBlock({
         messages,
         allPersonas,
@@ -206,7 +193,6 @@ export async function execute(
       const blockMessages = detectedTurn.blockMessages;
       resolvedPersona = detectedTurn.resolvedPersona;
 
-      // 10. No persona block found in recent history
       if (blockMessages.length === 0) {
         await updateStatus({
           titleKey: "commands.tool.delete.turn.no_persona_found_title",
@@ -219,7 +205,6 @@ export async function execute(
       const displayName = resolvedPersona?.persona_nickname ?? detectedTurn.targetPersonaKey ?? "Unknown";
       const totalCount = blockMessages.length;
 
-      // 11. Inform user that deletion is in progress
       await updateStatus({
         titleKey: "commands.tool.delete.turn.deleting_title",
         descriptionKey: "commands.tool.delete.turn.deleting_description",
@@ -230,7 +215,6 @@ export async function execute(
         color: ColorCode.INFO,
       });
 
-      // 12. Partition messages into webhook vs direct, then apply deletion strategy
       const now = Date.now();
       const webhookMessages: Message[] = [];
       const directBotMessages: Message[] = [];
@@ -246,7 +230,7 @@ export async function execute(
       let deletedCount = 0;
       let failedCount = 0;
 
-      // 12a. Delete webhook messages via webhook API (no MANAGE_MESSAGES needed)
+      // Delete webhook messages via webhook API (no MANAGE_MESSAGES needed)
       if (webhookMessages.length > 0) {
         const hostChannel = resolveWebhookHostChannel(channel);
         const threadId = resolveWebhookThreadId(channel);
@@ -262,22 +246,19 @@ export async function execute(
           messagesByWebhook.set(msg.webhookId, group);
         }
 
-        // Resolve each webhook once, then delete all its messages
         for (const [webhookId, messages] of messagesByWebhook) {
           const webhook = hostChannel ? await resolveManagedWebhookForChannel(hostChannel, webhookId) : null;
 
           for (const msg of messages) {
             try {
               if (webhook) {
-                // Webhook API deletion — no channel permission required
+                // Webhook API deletion: no channel permission required
                 await webhook.deleteMessage(msg.id, threadId);
                 deletedCount++;
               } else if (botHasManageMessages) {
-                // Fallback: webhook not resolvable, try direct delete with bot permission
                 await msg.delete();
                 deletedCount++;
               } else {
-                // No webhook and no permission — skip with warning
                 log.warn(
                   `[deleteTurn] Cannot delete webhook messageId=${msg.id}: webhook not resolvable and bot lacks MANAGE_MESSAGES`,
                 );
@@ -285,7 +266,6 @@ export async function execute(
               }
             } catch (delError) {
               log.warn(`[deleteTurn] Webhook deletion failed for messageId=${msg.id}`, delError);
-              // If webhook deletion threw, try direct delete as last resort
               if (botHasManageMessages) {
                 try {
                   await msg.delete();
@@ -302,7 +282,7 @@ export async function execute(
         }
       }
 
-      // 12b. Delete direct bot messages (requires MANAGE_MESSAGES)
+      // Delete direct bot messages (requires MANAGE_MESSAGES)
       if (directBotMessages.length > 0) {
         if (botHasManageMessages) {
           // Partition by age for bulk delete optimization
@@ -341,7 +321,6 @@ export async function execute(
               }
             }
           } else {
-            // Single recent message OR thread channel — delete individually
             for (const id of recentIds) {
               try {
                 const msg = fetched.get(id);
@@ -367,7 +346,7 @@ export async function execute(
             }
           }
         } else {
-          // Bot lacks MANAGE_MESSAGES — cannot delete direct bot messages at all
+          // Bot lacks MANAGE_MESSAGES, so cannot delete direct bot messages at all
           failedCount += directBotMessages.length;
           log.warn(
             `[deleteTurn] Bot lacks MANAGE_MESSAGES in channelId=${channelId}; skipping ${directBotMessages.length} direct bot messages`,
@@ -375,7 +354,6 @@ export async function execute(
         }
       }
 
-      // 13. Build reply embed — includes new zero-deletion error branch
       const embedValues: Record<string, string> = {
         persona_name: displayName,
         count: String(deletedCount),
@@ -388,7 +366,6 @@ export async function execute(
       let embedColor: ColorCode;
 
       if (deletedCount === 0 && failedCount > 0) {
-        // Complete failure — show actionable bot permission error or generic failure
         titleKey = "commands.tool.delete.turn.bot_no_delete_title";
         descKey = !botHasManageMessages
           ? "commands.tool.delete.turn.bot_no_delete_description"
@@ -421,10 +398,8 @@ export async function execute(
         `[deleteTurn] Deleted ${deletedCount}/${totalCount} messages (${failedCount} failed) from persona="${displayName}" in channelId=${channelId}`,
       );
 
-      // 14. Regenerate (fire-and-forget) — re-trigger the persona after deletion
       if (regenerate && resolvedPersona && deletedCount === totalCount) {
         try {
-          // Fetch the most recent remaining message to use as the trigger context
           const remaining = await channel.messages.fetch({ limit: 1 });
           let lastMessage: Message | undefined = remaining.first();
 
@@ -438,7 +413,7 @@ export async function execute(
             // Prevent the self-reply suppression guard from blocking this trigger
             suppressNextSelfReply(channel.id);
 
-            // Fire-and-forget — do not await so the command interaction resolves
+            // Fire-and-forget, so do not await so the command interaction resolves
             void tomoriChat({
               client,
               message: lastMessage,
@@ -557,10 +532,10 @@ export async function execute(
         ],
       });
     } catch {
-      // Interaction may have already expired — nothing we can do
+      // Interaction may have already expired, so nothing we can do
     }
   } finally {
-    // 15. Always release the channel lock regardless of outcome
+    // Always release the channel lock regardless of outcome
     activeDeleteLocks.delete(channelId);
   }
 }

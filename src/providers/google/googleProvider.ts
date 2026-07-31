@@ -74,7 +74,6 @@ import { buildStreamContext } from "@/utils/provider/streamContext";
 async function getDefaultGoogleModel(): Promise<string> {
   const providerName = "google";
 
-  // 1. Try to get default from cache (fastest, no DB query)
   if (isLLMCacheReady()) {
     const cachedDefault = getCachedDefaultLLM(providerName);
     if (cachedDefault) {
@@ -83,7 +82,6 @@ async function getDefaultGoogleModel(): Promise<string> {
     }
   }
 
-  // 2. Cache not ready or no default found - query database for is_default model
   try {
     const dbDefault = await llmModelRepo.loadDefaultModel(providerName);
     if (dbDefault) {
@@ -96,7 +94,6 @@ async function getDefaultGoogleModel(): Promise<string> {
     });
   }
 
-  // 3. Fallback to first non-deprecated model from database
   try {
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(providerName);
     if (availableModels && availableModels.length > 0) {
@@ -108,7 +105,6 @@ async function getDefaultGoogleModel(): Promise<string> {
     log.error(`Failed to load available models for ${providerName}`, error as Error);
   }
 
-  // 4. No models found - throw error
   throw new Error(`No default model found for provider: ${providerName}. Please configure models in the database.`);
 }
 
@@ -144,7 +140,6 @@ function extractGoogleEmbeddings(response: unknown): number[][] {
   return extracted;
 }
 
-// Google-specific configuration extending the base ProviderConfig
 export interface GoogleProviderConfig extends ProviderConfig {
   safetySettings: Array<{
     category: string;
@@ -243,13 +238,11 @@ export class GoogleProvider
 
   /**
    * Validate a Google API key through the authenticated models endpoint
-   * @param apiKey - The API key to validate
    * @returns Promise<ApiKeyValidationResult> - Validation result with detailed error info if failed
    */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     if (!apiKey || apiKey.trim().length < 10) {
       log.warn("API key is too short or empty");
-      // Create a generic error for empty/short keys
       const googleAdapter = new GoogleStreamAdapter();
       const error = new Error("API key is too short or empty");
       const providerError = googleAdapter.handleProviderError(error);
@@ -259,7 +252,6 @@ export class GoogleProvider
     try {
       log.info("Validating Google API key...");
 
-      // Initialize the Google AI client with the provided API key
       const genAI = new GoogleGenAI({ apiKey });
 
       await validateGoogleModelsEndpoint(genAI);
@@ -267,14 +259,12 @@ export class GoogleProvider
       log.success("Google API key validation successful via models endpoint");
       return { valid: true };
     } catch (error) {
-      // Use GoogleStreamAdapter to parse and format the error
       const googleAdapter = new GoogleStreamAdapter();
       const providerError = googleAdapter.handleProviderError(error);
 
       const isUserError = providerError.type === "api_error";
 
       if (!isUserError) {
-        // Log the specific error during validation failure
         await log.error("API key validation failed", error, {
           errorType: "APIKeyValidationError",
           metadata: {
@@ -348,16 +338,13 @@ export class GoogleProvider
   /**
    * Get available tools/functions based on Tomori's configuration
    * Uses the enhanced tool adapter that handles both built-in and MCP tools
-   * @param tomoriState - The current Tomori state with configuration
    * @param streamingContext - Optional streaming context for context-aware tool availability
-   * @returns Promise<Array<Record<string, unknown>>> - Array of tool configurations
    */
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
   ): Promise<Array<Record<string, unknown>>> {
     try {
-      // Get built-in tools from the registry
       const toolStateForContext: ToolStateForContext = {
         server_id: tomoriState.server_id.toString(),
         activePersonaHasElevenlabsVoice: Boolean(
@@ -391,15 +378,12 @@ export class GoogleProvider
         },
       };
 
-      // Use context-aware tool availability when streaming context is provided
-      // Use centralized tool filtering (built-in + MCP with feature flags)
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
         totalCount,
       } = await getAvailableToolsWithMCP("google", toolStateForContext);
 
-      // Apply streaming context filtering if available
       let finalBuiltInTools = availableBuiltInTools;
       let finalMcpFunctionNames = availableMcpFunctionNames;
       if (streamingContext) {
@@ -407,16 +391,13 @@ export class GoogleProvider
         const minimalContext = {
           streamContext: streamingContext,
           provider: "google" as const,
-          // Add minimal required fields to satisfy ToolContext interface - these are not used by YouTube tool's context check
           channel: {} as BaseGuildTextChannel,
           client: {} as Client,
           tomoriState: tomoriState,
           locale: "en-US", // Default locale
         };
 
-        // Apply additional streaming-aware filtering for tools that support it
         finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          // Use context-aware availability check if available, otherwise keep the tool
           const isContextAvailable =
             "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
               ? tool.isAvailableForContext("google", minimalContext)
@@ -468,8 +449,6 @@ export class GoogleProvider
 
   /**
    * Convert provider-specific configuration from TomoriState
-   * @param tomoriState - The current Tomori state
-   * @param apiKey - The decrypted API key
    * @returns Promise<GoogleProviderConfig> - Provider-specific configuration object
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<GoogleProviderConfig> {
@@ -607,10 +586,8 @@ export class GoogleProvider
     log.info(`GoogleProvider: Starting modular streaming for server ${tomoriState.server_id}, model ${config.model}`);
 
     try {
-      // Convert the generic config to Google-specific streaming config
       const googleConfig = config as GoogleProviderConfig;
 
-      // Ensure safetySettings exists, provide default if not
       const safetySettings = googleConfig.safetySettings || [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -626,7 +603,6 @@ export class GoogleProvider
 
       const streamConfig: GoogleStreamConfig = {
         ...googleConfig,
-        // Add Discord streaming constants
         maxMessageLength: DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
         flushBufferSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
         flushBufferSizeCodeBlock: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_CODE_BLOCK,
@@ -636,12 +612,10 @@ export class GoogleProvider
         minVisibleTypingDurationMs: DISCORD_STREAMING_CONSTANTS.MIN_VISIBLE_TYPING_DURATION_MS,
         humanizerDegree: tomoriState.config.humanizer_degree,
         emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
-        // Convert safety settings to Google format
         safetySettings: safetySettings.map((setting) => ({
           category: setting.category as HarmCategory,
           threshold: setting.threshold as HarmBlockThreshold,
         })),
-        // Command-specific overrides from streaming context
         forceReason: streamingContext?.forceReason,
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
@@ -656,8 +630,6 @@ export class GoogleProvider
         log.info(`GoogleProvider: Applied thinking config for model ${config.model}`);
       }
 
-      // Override tools with context-aware tools when streaming context is provided,
-      // but only for models that support function calling.
       if (streamingContext && tomoriState.llm.has_tools) {
         log.info("GoogleProvider: Reloading tools with streaming context for context-aware availability");
         const contextAwareTools = await this.getTools(tomoriState, streamingContext);
@@ -666,7 +638,6 @@ export class GoogleProvider
         log.info("GoogleProvider: Skipping context-aware tool reload - model doesn't support tools");
       }
 
-      // Create streaming context via the shared builder (owns all common copy-through fields)
       const streamContext: StreamContext = buildStreamContext({
         provider: "google",
         channel,
@@ -686,11 +657,9 @@ export class GoogleProvider
         prefixStrippingName,
       });
 
-      // Create the modular streaming components
       const orchestrator = new StreamOrchestrator();
       const googleAdapter = new GoogleStreamAdapter();
 
-      // Execute streaming with the modular architecture
       log.info("GoogleProvider: Delegating to StreamOrchestrator with GoogleStreamAdapter");
       const result = await orchestrator.streamToDiscord(googleAdapter, streamConfig, streamContext);
 

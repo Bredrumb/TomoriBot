@@ -47,7 +47,6 @@ export type MemoryValidationError =
 
 /**
  * Load memory limits from environment variables with sensible defaults
- * @returns MemoryLimits configuration object
  */
 export function getMemoryLimits(): MemoryLimits {
   const maxPersonalMemories = parsePositiveIntegerEnv("MAX_PERSONAL_MEMORIES", 25);
@@ -122,8 +121,6 @@ function parseNonNegativeIntegerEnv(name: string, defaultValue: number): number 
 
 /**
  * Validate memory content length
- * @param content - The memory content to validate
- * @returns MemoryValidationResult indicating if content length is valid
  */
 export function validateMemoryContent(content: string): MemoryValidationResult {
   const limits = getMemoryLimits();
@@ -142,8 +139,6 @@ export function validateMemoryContent(content: string): MemoryValidationResult {
 /**
  * Validate attribute content length.
  * Attributes use a higher limit (default 2000) than regular memories (default 1000).
- * @param content - The attribute content to validate
- * @returns MemoryValidationResult indicating if content length is valid
  */
 export function validateAttribute(content: string): MemoryValidationResult {
   const limits = getMemoryLimits();
@@ -162,8 +157,6 @@ export function validateAttribute(content: string): MemoryValidationResult {
 /**
  * Validate sample dialogue content length.
  * Sample dialogues use a higher limit (default 2000) than regular memories (default 1000).
- * @param content - The sample dialogue content to validate
- * @returns MemoryValidationResult indicating if content length is valid
  */
 export function validateSampleDialogue(content: string): MemoryValidationResult {
   const limits = getMemoryLimits();
@@ -188,10 +181,8 @@ export function validateAttributeAndDialogue(content: string): MemoryValidationR
 
 /**
  * Helper function to get user-friendly error message for memory validation errors
- * @param error - The memory validation error type
  * @param maxAllowed - Optional maximum allowed value for context
  * @param currentCount - Optional current count for context
- * @returns User-friendly error message
  */
 export function getMemoryLimitErrorMessage(
   error: MemoryValidationError,

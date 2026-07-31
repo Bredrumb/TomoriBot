@@ -49,7 +49,7 @@ interface AssignCall {
   userId: number;
   provider: string;
   capability: string;
-  /** The row the updater produced from a pristine baseline — i.e. what would be written. */
+  /** The row the updater produced from a pristine baseline i.e. what would be written. */
   result: CapabilityRow;
 }
 
@@ -386,7 +386,7 @@ describe("personal provider model-* anchor workflow", () => {
 
       await runSubcommand(subcommand.module);
 
-      // 1. The write targets the selected provider, this capability, and only its column.
+      // The write targets the selected provider, this capability, and only its column.
       expect(assignCalls).toHaveLength(1);
       expect(assignCalls[0]).toMatchObject({
         userId: 4,
@@ -395,7 +395,7 @@ describe("personal provider model-* anchor workflow", () => {
       });
       expect(assignCalls[0]?.result).toMatchObject(subcommand.expectedWrite);
 
-      // 2. The terminal lands on the one anchor message, never as a fresh reply.
+      // The terminal lands on the one anchor message, never as a fresh reply.
       expect(infoReplies).toHaveLength(0);
       expect(replacements).toContainEqual(
         expect.objectContaining({
@@ -404,7 +404,7 @@ describe("personal provider model-* anchor workflow", () => {
           descriptionVars: { provider: "provider-a", model: subcommand.expectedModelName },
         }),
       );
-      // 3. The success notice is rendered only after the write returns.
+      // The success notice is rendered only after the write returns.
       expect(chronology.indexOf("repo.assign")).toBeLessThan(chronology.lastIndexOf("message.replace"));
     });
 
@@ -427,7 +427,7 @@ describe("personal provider model-* anchor workflow", () => {
       await runSubcommand(subcommand.module);
 
       // The notice is the workflow's INITIAL payload, so the user never sees a picker
-      // flash before the terminal — and nothing downstream runs.
+      // flash before the terminal and nothing downstream runs.
       expect(initialPayloads).toEqual([
         expect.objectContaining({ titleKey: "commands.personal.provider.no_saved_title" }),
       ]);

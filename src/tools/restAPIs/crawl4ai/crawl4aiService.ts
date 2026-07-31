@@ -213,7 +213,7 @@ export async function crawl4aiMarkdown(
 
 /**
  * Fetch a URL via /crawl with browser-level cookie injection.
- * Used when CRAWL4AI_COOKIES_JSON is set — /md does not support cookies.
+ * Used when CRAWL4AI_COOKIES_JSON is set, so /md does not support cookies.
  * Returns a normalised Crawl4aiMarkdownResponse so callers stay uniform.
  */
 export async function crawl4aiCrawlWithCookies(
@@ -238,7 +238,7 @@ export async function crawl4aiCrawlWithCookies(
       signal: controller.signal,
       body: JSON.stringify({
         urls: [request.url],
-        // Playwright requires path alongside domain — default to "/" when omitted.
+        // Playwright requires path alongside domain, so default to "/" when omitted.
         browser_config: { cookies: cookies.map((c) => ({ path: "/", ...c })) },
       } satisfies import("./types").Crawl4aiCrawlRequest),
     });

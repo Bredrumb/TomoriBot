@@ -1,5 +1,5 @@
 /**
- * /memory document view — Browse a stored document chunk-by-chunk with edit/delete.
+ * /memory document view: Browse a stored document chunk-by-chunk with edit/delete.
  *
  * Scopes:
  * - persona:    Documents scoped to a specific persona (persona picker shown first)
@@ -85,7 +85,7 @@ interface ChunkRow {
 
 /**
  * Chunks longer than the Discord modal Paragraph input cap can't safely round-trip
- * through the edit flow — the prefill would be truncated and an unchanged submit
+ * through the edit flow, so the prefill would be truncated and an unchanged submit
  * would overwrite the chunk with the truncated prefix. Callers gate the Edit
  * button and footer hint on this.
  */
@@ -309,7 +309,7 @@ type RegenResult = RegenSuccess | RegenError;
 /**
  * Resolves credentials + embedding model and generates a single embedding for the
  * edited chunk content. Uses the user's current embedding capability rather than
- * the chunk's original model — switching models mid-document is the user's call.
+ * the chunk's original model; switching models mid-document is the user's call.
  */
 async function regenChunkEmbedding(params: {
   content: string;

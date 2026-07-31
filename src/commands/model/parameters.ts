@@ -142,7 +142,6 @@ export async function execute(
   }
 
   try {
-    // 1. Validate thinking_level before showing the picker, to surface errors immediately
     const nextThinkingLevel = interaction.options.getString("thinking_level");
     if (nextThinkingLevel && !isThinkingLevelValue(nextThinkingLevel)) {
       await replyInfoEmbed(interaction, locale, {
@@ -154,7 +153,6 @@ export async function execute(
       return;
     }
 
-    // 2. Require at least one sampler value before showing the picker
     const nextMaxOutputTokens = interaction.options.getInteger("max_output_tokens");
     const hasAnyChange =
       interaction.options.getNumber("temperature") !== null ||
@@ -176,7 +174,7 @@ export async function execute(
       return;
     }
 
-    // 3. Load all saved text providers and present the picker
+    // Load all saved text providers and present the picker
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "text");
     const providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
       descriptionKey: "commands.model.parameters.picker_description",
@@ -192,21 +190,20 @@ export async function execute(
     const selectedProvider = providerSelection.provider;
     const responseInteraction = providerSelection.interaction;
 
-    // Helper: update the picker message or issue a fresh reply depending on whether a picker was shown
     const replyWithResult = async (options: Parameters<typeof replyInfoEmbed>[2]) => {
       if (providerSelection.pickerInteraction) {
-        // A button was clicked — update the picker message in-place (this also acknowledges the button)
+        // A button was clicked, so update the picker message in-place (this also acknowledges the button)
         await (responseInteraction as ButtonInteraction).update({
           embeds: [createStandardEmbed(locale, options)],
           components: [],
         });
       } else {
-        // Single provider was auto-selected — no picker message exists, reply normally
+        // Single provider was auto-selected, so no picker message exists, reply normally
         await replyInfoEmbed(interaction, locale, { ...options, flags: MessageFlags.Ephemeral });
       }
     };
 
-    // 4. Retrieve the saved config from the already-loaded list (avoids a second DB round-trip)
+    // Retrieve the saved config from the already-loaded list (avoids a second DB round-trip)
     const savedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
     if (!savedConfig) {
       await replyWithResult({
@@ -217,7 +214,6 @@ export async function execute(
       return;
     }
 
-    // 5. Build the updated config by overlaying only the options the user explicitly passed
     const samplerPatch = buildModelParametersSamplerPatch(
       {
         temperature: interaction.options.getNumber("temperature"),
@@ -233,7 +229,6 @@ export async function execute(
     );
     const nextConfig = { ...savedConfig, ...samplerPatch };
 
-    // 6. Collect display labels for the success message
     const changedSettings: Array<{ label: string; value: string }> = [];
     if (interaction.options.getNumber("temperature") !== null) {
       changedSettings.push({
@@ -284,7 +279,6 @@ export async function execute(
       });
     }
 
-    // 7. Persist the updated sampler config
     const upserted = await llmProviderRepo.upsertSavedProviderConfig(tomoriState.server_id, nextConfig, {
       serverDiscId: serverId,
     });
@@ -297,7 +291,7 @@ export async function execute(
       return;
     }
 
-    // 8. Mirror sampler values into split config tables when this is the currently active provider,
+    // Mirror sampler values into split config tables when this is the currently active provider,
     //    so in-flight requests immediately reflect the new settings without a config switch.
     if (selectedProvider === tomoriState.llm.llm_provider.toLowerCase()) {
       await Promise.all([

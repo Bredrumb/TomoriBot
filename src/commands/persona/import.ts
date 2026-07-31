@@ -96,7 +96,6 @@ function parseCommaSeparatedTriggers(input: string): string[] {
 /**
  * Helper function to localize error messages from utility functions
  * Handles both simple locale keys and keys with pipe-separated variables
- * @param locale - User's locale
  * @param errorString - Error string (locale key or key|var1|var2...)
  * @returns Localized error message
  */
@@ -105,11 +104,9 @@ function localizeError(locale: string, errorString: string): string {
   const key = parts[0];
 
   if (parts.length === 1) {
-    // Simple locale key without variables
     return localizer(locale, key);
   }
 
-  // Handle keys with variables
   if (key === "commands.persona.import.error_invalid_attribute") {
     return localizer(locale, key, { details: parts[1] });
   }
@@ -220,10 +217,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'import' command
  * Imports TomoriBot's personality from an uploaded PNG or JSON file
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   client: Client,
@@ -232,7 +225,6 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // 1. Get import type (main or alter)
     const importType = interaction.options.getString("type", true);
     const additionalTriggersInput = interaction.options.getString("triggers");
     const identityMode =
@@ -256,7 +248,7 @@ export async function execute(
       return;
     }
 
-    // 2. Check permissions (ManageGuild required for import in guilds only)
+    // Check permissions (ManageGuild required for import in guilds only)
     if (interaction.guild) {
       const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
@@ -275,10 +267,8 @@ export async function execute(
       }
     }
 
-    // 3. Get uploaded file attachment
     const attachment = interaction.options.getAttachment("file", true);
 
-    // 5. Validate file type and size
     const normalizedAttachmentName = attachment.name.toLowerCase();
     const isPngImport = normalizedAttachmentName.endsWith(".png");
     const isJsonImport = normalizedAttachmentName.endsWith(".json");
@@ -311,10 +301,10 @@ export async function execute(
       return;
     }
 
-    // 6. Defer reply while we process (ephemeral so all errors are private)
+    // Defer reply while we process (ephemeral so all errors are private)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 6.25. Reserve import operation quota (atomic check+increment for DDoS protection)
+    // Reserve import operation quota (atomic check+increment for DDoS protection)
     const quotaReserve = reserveImportQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
@@ -334,7 +324,6 @@ export async function execute(
       return;
     }
 
-    // 6.5. Memory guard check (defense-in-depth)
     const memCheck = memoryGuard.checkMemory();
     if (memCheck.status === "critical") {
       await interaction.editReply({
@@ -348,7 +337,6 @@ export async function execute(
       return;
     }
 
-    // 7. Download the import file with timeout
     let importFileBuffer: Buffer;
 
     try {
@@ -364,7 +352,6 @@ export async function execute(
 
       importFileBuffer = response.buffer;
     } catch (error) {
-      // Handle timeout vs other errors
       if (error instanceof Error && error.name === "AbortError") {
         log.warn("Persona import download timed out");
         await interaction.editReply({
@@ -377,7 +364,6 @@ export async function execute(
         return;
       }
 
-      // Other download errors
       log.error("Failed to download attachment:", error as Error);
       await interaction.editReply({
         embeds: [
@@ -390,7 +376,6 @@ export async function execute(
       return;
     }
 
-    // 8. Parse supported import file
     let resolvedImport: ResolvedImportFile | null = null;
 
     if (isPngImport) {
@@ -612,12 +597,10 @@ export async function execute(
     }
     const presetData = mergedPresetValidation.data;
 
-    // 11. Branch logic based on import type
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const isDM = !interaction.guild;
 
     if (importType === "main") {
-      // Main persona import: replace existing main persona
       const importResult = await presetRepository.importPresetData(serverDiscId, presetData, identityMode);
 
       if (!importResult.success) {
@@ -639,7 +622,7 @@ export async function execute(
       // Invalidate cache so next message gets fresh persona/config
       invalidateTomoriStateCache(serverDiscId);
 
-      // 12. Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
+      // Try to set TomoriBot's server-specific avatar and nickname (guild-only, non-fatal if fails)
       let avatarUpdateSucceeded = false;
       let avatarUpdateRateLimited = false;
       let avatarUpdateFailed = false;
@@ -650,10 +633,8 @@ export async function execute(
       if (!isDM) {
         const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
 
-        // Get the imported nickname for the bot
         const importedNickname = importResult.itemsImported?.nickname;
 
-        // Update nickname separately so avatar rate limits don't block it
         if (importedNickname) {
           try {
             const nicknameResponse = await fetch(endpoint, {
@@ -727,7 +708,6 @@ export async function execute(
         }
       }
 
-      // 13. Send success message with import summary
       const itemsImported = importResult.itemsImported;
 
       if (!itemsImported) {
@@ -743,7 +723,6 @@ export async function execute(
         return;
       }
 
-      // Build success embed with DM-aware messaging
       const descriptionLines = [
         localizer(locale, "commands.persona.import.success_description", {
           nickname: itemsImported.nickname,
@@ -783,7 +762,6 @@ export async function execute(
             : ColorCode.SUCCESS,
         );
 
-      // Build footer: always include refresh reminder; in DM, prepend avatar skip note
       const footerParts: string[] = [];
       if (isDM) {
         footerParts.push(localizer(locale, "commands.persona.import.avatar_update_skipped_dm"));
@@ -791,7 +769,6 @@ export async function execute(
       footerParts.push(localizer(locale, "commands.persona.import.refresh_reminder"));
       successEmbed.setFooter({ text: footerParts.join(" • ") });
 
-      // Send public message to channel with avatar (for URL extraction)
       if (!interaction.channel || !("send" in interaction.channel)) {
         log.error("No channel available for persona import success message");
         await interaction.editReply({
@@ -865,7 +842,6 @@ export async function execute(
         avatarImageBuffer,
       });
 
-      // 11a. Map any failure reason to its localized error embed.
       if (!alterResult.ok) {
         const errorEmbed = new EmbedBuilder().setColor(ColorCode.ERROR);
         switch (alterResult.reason) {
@@ -904,8 +880,6 @@ export async function execute(
         return;
       }
 
-      // 11b. Build the public success embed (warn-colored when triggers are
-      //      missing or the main persona avatar had to be inherited).
       const alterEmbedColor =
         alterResult.hasNoTriggers || alterResult.usedMainAvatarFallback ? ColorCode.WARN : ColorCode.SUCCESS;
       const alterDescriptionParts = [
@@ -934,7 +908,7 @@ export async function execute(
         alterSuccessEmbed.setThumbnail(alterResult.fallbackAvatarDisplayUrl);
       }
 
-      // 11c. Post the public confirmation in-channel, attaching the avatar image
+      // Post the public confirmation in-channel, attaching the avatar image
       //      when one was supplied. The persona already exists, so a missing
       //      channel only skips the public notice (the invoker still gets one).
       if (interaction.channel && "send" in interaction.channel) {
@@ -958,7 +932,7 @@ export async function execute(
         }
       }
 
-      // 11d. Send the ephemeral confirmation to the invoking user.
+      // Send the ephemeral confirmation to the invoking user.
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()
@@ -979,7 +953,6 @@ export async function execute(
       metadata: { commandName: "preset import" },
     });
 
-    // If we haven't replied yet, reply with error
     if (!interaction.replied && !interaction.deferred) {
       await replyInfoEmbed(
         interaction,

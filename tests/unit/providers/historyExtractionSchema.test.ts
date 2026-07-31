@@ -8,7 +8,7 @@ import {
  * Regression guard for collapsed history-extraction entries.
  *
  * `HistoryMemoryEntry` has exactly one required field, and models routinely emit the field's
- * value directly instead of wrapping it — Gemini via OpenRouter returned
+ * value directly instead of wrapping it: Gemini via OpenRouter returned
  * `memories: ["fact", ...]`, which failed validation for every element and aborted the whole
  * import. The collapsed form is unambiguous, so the schema repairs it.
  */
@@ -29,7 +29,7 @@ describe("history extraction schema", () => {
       memories: [restatement, `${restatement} Again.`],
     });
 
-    // 1. Both elements normalize to the object form the consumer expects.
+    // Both elements normalize to the object form the consumer expects.
     expect(parsed.memories.map((entry) => entry.lossless_restatement)).toEqual([restatement, `${restatement} Again.`]);
   });
 
@@ -43,7 +43,7 @@ describe("history extraction schema", () => {
   });
 
   test("keeps short facts, which are still valid extractions", () => {
-    // 2. There is no arbitrary lower bound: "I like Kim" is a real fact.
+    // There is no arbitrary lower bound: "I like Kim" is a real fact.
     const parsed = HistoryExtractionResultSchema.parse({ memories: ["I like Kim"] });
 
     expect(parsed.memories).toHaveLength(1);
@@ -56,7 +56,7 @@ describe("history extraction schema", () => {
       memories: [restatement, 42, "", "   ", { lossless_restatement: "" }, "I like Kim"],
     });
 
-    // 3. Both valid facts survive; the four unusable entries are counted, not fatal.
+    // Both valid facts survive; the four unusable entries are counted, not fatal.
     expect(parsed.memories.map((entry) => entry.lossless_restatement)).toEqual([restatement, "I like Kim"]);
     expect(parsed.discarded).toBe(4);
   });
@@ -68,7 +68,7 @@ describe("history extraction schema", () => {
   });
 
   test("still rejects a response whose memories field is not an array", () => {
-    // 4. The envelope itself stays strict; only per-entry failures are tolerated.
+    // The envelope itself stays strict; only per-entry failures are tolerated.
     expect(() => HistoryExtractionResultSchema.parse({ memories: "not-an-array" })).toThrow();
     expect(() => HistoryExtractionResultSchema.parse({})).toThrow();
   });
@@ -78,7 +78,7 @@ describe("history extraction schema", () => {
       properties: { memories: { items: { type: string; required: string[] } } };
     };
 
-    // 3. Coercion is a safety net; the schema sent to the model must stay strict.
+    // Coercion is a safety net; the schema sent to the model must stay strict.
     expect(schema.properties.memories.items.type).toBe("object");
     expect(schema.properties.memories.items.required).toContain("lossless_restatement");
   });

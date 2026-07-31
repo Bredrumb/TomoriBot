@@ -1,13 +1,13 @@
 /**
  * Preset main-avatar fan-out reconciler.
  *
- * Main persona avatars are the bot's Discord guild member avatar — Discord-owned
+ * Main persona avatars are the bot's Discord guild member avatar: Discord-owned
  * state that cannot be live-resolved per message (unlike alter avatars/sprites).
  * So when a default preset's avatar art changes in the catalog, the only way to
  * fan it out to every server whose main persona is still an unforked pointer is
  * to PATCH each guild's member avatar once.
  *
- * This is a throttled, best-effort, resumable BACKGROUND reconciler — never a
+ * This is a throttled, best-effort, resumable BACKGROUND reconciler; never a
  * startup burst and never blocking boot. Every PATCH is gated on a real byte
  * change via the hash columns (persona_presets.preset_avatar_hash vs
  * personas.applied_avatar_hash), which makes the run naturally idempotent and
@@ -27,7 +27,7 @@ import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";
 /**
  * Parses a non-negative-integer env var, falling back to a default when unset or
  * malformed. Keeps the throttle knobs configurable without hardcoding limits.
- * (0 is allowed — it is the documented "unlimited" sentinel for MAX_PER_RUN.)
+ * (0 is allowed: it is the documented "unlimited" sentinel for MAX_PER_RUN.)
  */
 function readIntEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
@@ -106,7 +106,6 @@ async function patchGuildAvatar(guildDiscId: string, avatarDataUri: string): Pro
  * one image), PATCHes the guild avatar, and stamps applied_avatar_hash on
  * success so the persona is skipped next time.
  *
- * @param client - The ready Discord client
  */
 export async function reconcilePresetMainAvatars(client: Client): Promise<void> {
   // Operational kill switch. Default-on; an operator can disable the fan-out
@@ -131,7 +130,7 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
 
   log.info(`[Preset Avatar Fanout] ${targets.length} main persona(s) pending guild-avatar sync`);
 
-  // Cache the avatar PNG (as a data URI) per shared URL — most servers point at
+  // Cache the avatar PNG (as a data URI) per shared URL, because most servers point at
   // the same handful of preset images, so this downloads each at most once.
   const dataUriByUrl = new Map<string, string | null>();
   let applied = 0;
@@ -144,13 +143,13 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
       break;
     }
 
-    // 1. Only touch guilds the bot is actually in (and that are cached).
+    // Only touch guilds the bot is actually in (and that are cached).
     const guild = client.guilds.cache.get(target.server_disc_id);
     if (!guild) {
       continue;
     }
 
-    // 2. Resolve the shared avatar bytes to a PNG data URI (cached per URL).
+    // Resolve the shared avatar bytes to a PNG data URI (cached per URL).
     let avatarDataUri = dataUriByUrl.get(target.preset_avatar_shared_url);
     if (avatarDataUri === undefined) {
       const buffer = await loadStoredPersonaAvatarBuffer(target.preset_avatar_shared_url);
@@ -164,13 +163,13 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
       continue;
     }
 
-    // 3. Pace each PATCH to stay under the bot-wide global rate limit.
+    // Pace each PATCH to stay under the bot-wide global rate limit.
     if (processed > 0) {
       await sleep(DELAY_MS);
     }
     processed++;
 
-    // 4. Prevent race condition: check if the user customized the avatar (materializing the pointer)
+    // Prevent race condition: check if the user customized the avatar (materializing the pointer)
     // while this server was waiting in the reconciler queue.
     try {
       const isPointer = await personaRepository.isPersonaPointer(target.persona_id);
@@ -190,7 +189,6 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
 
     const result = await patchGuildAvatar(target.server_disc_id, avatarDataUri);
     if (result === "ok") {
-      // 4. Stamp the applied hash so this persona is skipped until the art changes again.
       try {
         await personaRepository.stampPointerAvatarHash(target.persona_id, target.preset_avatar_hash);
         applied++;
@@ -202,7 +200,6 @@ export async function reconcilePresetMainAvatars(client: Client): Promise<void> 
         );
       }
     } else if (result === "rate_limited") {
-      // Leave applied_avatar_hash unchanged so this persona is retried next boot.
       rateLimited++;
       log.warn(`[Preset Avatar Fanout] Guild ${target.server_disc_id} rate limited; deferring to next boot`);
     }

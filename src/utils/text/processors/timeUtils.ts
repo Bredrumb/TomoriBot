@@ -6,18 +6,15 @@ import { formatTimeRemaining } from "./formatters";
  * @returns Date object if valid, null if invalid format
  */
 export function parseReminderTime(timeString: string): Date | null {
-  // Validate format: YYYY-MM-DD_HH:MM
   const timePattern = /^\d{4}-\d{2}-\d{2}_\d{2}:\d{2}$/;
   if (!timePattern.test(timeString)) {
     return null;
   }
 
-  // Split date and time parts
   const [datePart, timePart] = timeString.split("_");
   const [year, month, day] = datePart.split("-").map(Number);
   const [hour, minute] = timePart.split(":").map(Number);
 
-  // Basic validation
   if (
     year < 2024 ||
     year > 2100 ||
@@ -33,10 +30,8 @@ export function parseReminderTime(timeString: string): Date | null {
     return null;
   }
 
-  // Create UTC date (reminder times are stored in UTC)
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
 
-  // Verify the date is valid (handles invalid dates like February 30th)
   if (
     date.getUTCFullYear() !== year ||
     date.getUTCMonth() !== month - 1 ||
@@ -53,7 +48,6 @@ export function parseReminderTime(timeString: string): Date | null {
 /**
  * Validates that a timestamp is in the future (compared to UTC now)
  * @param timestamp - Date to validate
- * @returns True if the date is in the future, false otherwise
  */
 export function validateFutureTime(timestamp: Date): boolean {
   const now = new Date();

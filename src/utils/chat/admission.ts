@@ -493,9 +493,7 @@ async function resolveAdmissionChannelScope(
       if (referenceMessage && referenceMessage.author.id === client.user?.id) {
         shouldShowError = true;
       }
-    } catch {
-      // Unsupported-channel admission should stay quiet if the reference cannot be fetched.
-    }
+    } catch {}
   }
 
   if (shouldShowError && "send" in channel && message.author.id !== client.user?.id) {

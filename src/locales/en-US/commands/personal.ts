@@ -1,5 +1,3 @@
-// locales/en-US/commands/personal.ts
-
 export default {
   personal: {
     description: `Manage your personal settings`,

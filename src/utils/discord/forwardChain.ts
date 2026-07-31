@@ -4,7 +4,7 @@
  * Discord's `message_snapshots` payload is deliberately NON-recursive: a snapshot
  * carries only attachments/components/content/embeds/flags/mentions/stickers/type,
  * so it can never report that it was itself a forward. Forwarding an already
- * forwarded message therefore hands the bot an EMPTY snapshot — no text, no media —
+ * forwarded message therefore hands the bot an EMPTY snapshot (no text, no media)
  * and every downstream media walk silently finds nothing.
  *
  * The wrapper message's own `reference` survives that flattening, though, and points
@@ -38,7 +38,6 @@ export interface ResolvedForwardChain {
  * embeds, stickers, or components can only be a forward wrapper whose own snapshot layer
  * was flattened away. That makes emptiness a reliable nested-forward signal.
  *
- * @param snapshot - Forwarded message snapshot to inspect
  * @returns True when the snapshot carries no recoverable payload
  */
 export function isEmptyForwardSnapshot(snapshot: MessageSnapshot): boolean {
@@ -55,7 +54,7 @@ export function isEmptyForwardSnapshot(snapshot: MessageSnapshot): boolean {
  * Fetch the message a forward reference points at, tolerating every access failure.
  *
  * The origin can sit in a channel the bot cannot read (another guild, a DM, revoked
- * permissions) or may have been deleted, so this never throws — an unreachable origin
+ * permissions) or may have been deleted, so this never throws; an unreachable origin
  * degrades to an explicit "unresolved" chain rather than failing the whole context build.
  *
  * @param message - Message whose client and reference drive the lookup
@@ -66,7 +65,7 @@ export function isEmptyForwardSnapshot(snapshot: MessageSnapshot): boolean {
 async function fetchForwardOrigin(message: Message, channelId: string, messageId: string): Promise<Message | null> {
   try {
     const channel = message.client.channels.cache.get(channelId) ?? (await message.client.channels.fetch(channelId));
-    // 1. PartialGroupDMChannel is text-based but exposes no message manager.
+    // PartialGroupDMChannel is text-based but exposes no message manager.
     if (!channel?.isTextBased() || !("messages" in channel)) {
       return null;
     }
@@ -83,14 +82,14 @@ async function fetchForwardOrigin(message: Message, channelId: string, messageId
  * Walk a message's forward chain until snapshots with real content are found.
  *
  * Returns immediately for non-forwards and for ordinary single forwards (the common
- * case, costing zero extra fetches). Only an empty snapshot — the nested-forward
- * signature — triggers a re-fetch of the intermediate wrapper.
+ * case, costing zero extra fetches). Only an empty snapshot: the nested-forward
+ * signature: triggers a re-fetch of the intermediate wrapper.
  *
  * @param message - Message received in the current channel (the outermost forward)
  * @returns Resolved snapshots plus how far the walk had to go, and whether it gave up
  */
 export async function resolveForwardChain(message: Message): Promise<ResolvedForwardChain> {
-  // 1. Snapshots exist only on forwards, so anything without them has nothing to resolve.
+  // Snapshots exist only on forwards, so anything without them has nothing to resolve.
   if (message.messageSnapshots.size === 0) {
     return { snapshots: [], extraHops: 0, unresolved: false };
   }
@@ -99,7 +98,7 @@ export async function resolveForwardChain(message: Message): Promise<ResolvedFor
   let reference = message.reference;
   let extraHops = 0;
 
-  // 2. An empty snapshot means the thing forwarded was itself a forward. The wrapper's
+  // An empty snapshot means the thing forwarded was itself a forward. The wrapper's
   //    reference still points at that intermediate message, whose own snapshots hold
   //    the next level down, so chase it until content appears or the budget runs out.
   while (snapshots.every(isEmptyForwardSnapshot)) {

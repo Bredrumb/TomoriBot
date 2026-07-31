@@ -120,7 +120,6 @@ export class SafeHttpFetchEngine implements FetchEngine {
         success: true,
         message: summary,
         data: {
-          // The main tool loop serializes data, not message, into provider history.
           summary,
           source: "http",
           functionName: "fetch_url",

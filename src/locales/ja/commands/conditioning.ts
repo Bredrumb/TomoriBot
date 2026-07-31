@@ -1,5 +1,3 @@
-// locales/ja/commands/conditioning.ts
-
 export default {
   conditioning: {
     description: `ご褒美・おしおきの条件付け記憶を管理します。`,

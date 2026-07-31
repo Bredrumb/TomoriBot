@@ -34,14 +34,13 @@
 import { config } from "dotenv";
 import { sql } from "bun";
 
-// 1. Load .env before importing keyManager — ES module imports are hoisted
+// Load .env before importing keyManager because ES module imports are hoisted
 //    above runtime code, so keyManager would read an empty process.env if
 //    we imported it statically at the top of this file.
 config();
 
 const { keyManager } = await import("@/utils/security/keyManager");
 
-// 2. Populate the key manager's internal map from process.env (now loaded)
 keyManager.initialize();
 
 /**
@@ -54,7 +53,6 @@ function getPostgresUrl(): string {
     return process.env.POSTGRES_URL;
   }
 
-  // Otherwise, build URL from components
   const host = process.env.POSTGRES_HOST || "localhost";
   const port = process.env.POSTGRES_PORT || "5432";
   const user = process.env.POSTGRES_USER || "postgres";
@@ -85,7 +83,6 @@ interface TableVersionStats {
 async function auditKeyVersions() {
   console.log("\n=== TomoriBot Key Version Audit ===\n");
 
-  // 1. Get available key versions from environment
   const availableVersions = keyManager.getAvailableVersions();
   const currentVersion = keyManager.getCurrentVersion();
 
@@ -94,10 +91,8 @@ async function auditKeyVersions() {
   console.log(`   Available Versions: ${availableVersions.map((v) => `V${v}`).join(", ")}`);
   console.log();
 
-  // 2. Get key version usage from both tables
   const tables: TableVersionStats[] = [];
 
-  // Check opt_api_keys table
   try {
     const optApiKeysStats = (await sql`
 			SELECT key_version, COUNT(*) as count
@@ -117,7 +112,6 @@ async function auditKeyVersions() {
     console.log("⚠️  Could not query opt_api_keys table:", error);
   }
 
-  // 3. Display database usage
   if (tables.length === 0 || tables.every((t) => t.total === 0)) {
     console.log("ℹ️  No encrypted data found in database");
     console.log();
@@ -148,7 +142,7 @@ async function auditKeyVersions() {
 
     console.log();
 
-    // 4. Identify missing keys (data exists but key not in env)
+    // Identify missing keys (data exists but key not in env)
     const missingKeys = Array.from(versionsInUse).filter((v) => !keyManager.hasVersion(v));
     if (missingKeys.length > 0) {
       console.log("⚠️  CRITICAL WARNINGS:");
@@ -164,7 +158,7 @@ async function auditKeyVersions() {
       console.log();
     }
 
-    // 5. Identify unused keys (key in env but no data using it)
+    // Identify unused keys (key in env but no data using it)
     const unusedKeys = availableVersions.filter((v) => !versionsInUse.has(v));
     if (unusedKeys.length > 0) {
       console.log("✅ Safe to Remove:");
@@ -178,7 +172,6 @@ async function auditKeyVersions() {
       console.log();
     }
 
-    // 6. Rotation progress (if multiple versions in use)
     if (versionsInUse.size > 1) {
       const oldVersions = Array.from(versionsInUse).filter((v) => v !== currentVersion);
       let oldKeyCount = 0;
@@ -203,7 +196,6 @@ async function auditKeyVersions() {
       console.log();
     }
 
-    // 7. Recommendations
     console.log("💡 Recommendations:");
 
     if (missingKeys.length > 0) {

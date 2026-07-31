@@ -195,7 +195,7 @@ export async function replaceProviderPickerWithInfo(
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
 
-  // editReply() uses the interaction token — the only valid way to update an ephemeral message
+  // editReply() uses the interaction token: the only valid way to update an ephemeral message
   await selection.pickerInteraction.editReply({
     embeds: [createStandardEmbed(locale, options)],
     components: [],

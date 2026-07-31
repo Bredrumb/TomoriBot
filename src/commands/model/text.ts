@@ -207,14 +207,14 @@ export async function execute(
   const personaWorkflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   try {
-    // 1. Channel scope: anchor one-message flow — provider picker → model picker →
+    // Channel scope: anchor one-message flow; provider picker → model picker →
     //    channel override → terminal result, all edited in place on one ephemeral message.
     if (scope === "channel") {
       const currentChannelModel =
         (await llmOverrideRepo.getChannelLlmOverride(tomoriState.server_id, interaction.channelId)) ?? tomoriState.llm;
       const idRoot = "model_text_channel";
 
-      // 1a. Open the anchor message with the correct initial control for the
+      // Open the anchor message with the correct initial control for the
       //     number of saved providers (none → error, one → open button, many → picker).
       const initialPayload =
         savedProviders.length === 0
@@ -237,7 +237,7 @@ export async function execute(
       anchorMessage = phase.message;
       if (savedProviders.length === 0) return;
 
-      // 1b. Resolve the provider and the unacknowledged button the modal opens from.
+      // Resolve the provider and the unacknowledged button the modal opens from.
       const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
       if (!opener) return;
 
@@ -257,7 +257,7 @@ export async function execute(
         return;
       }
 
-      // 1c. Open the model modal (>25 routes through the anchor range selector).
+      // Open the model modal (>25 routes through the anchor range selector).
       const modalPhase = await openModelModal(
         phase,
         opener.button,
@@ -267,7 +267,7 @@ export async function execute(
       );
       if (!modalPhase) return;
 
-      // 1d. Acknowledge within 3s, then write and render the terminal on the one message.
+      // Acknowledge within 3s, then write and render the terminal on the one message.
       const work = await modalPhase.beginInPlaceWork();
       const selectedChannelModel =
         availableModels.find((m) => m.llm_codename === modalPhase.values[MODEL_SELECT_ID]) ?? null;
@@ -322,7 +322,7 @@ export async function execute(
       return;
     }
 
-    // 2. Persona scope: persona picker → provider picker → model picker → persona override
+    // Persona scope: persona picker → provider picker → model picker → persona override
     if (scope === "persona") {
       const allPersonas = await getCachedAllPersonas(serverId);
       if (!allPersonas.length) {
@@ -571,7 +571,7 @@ export async function execute(
       return;
     }
 
-    // 3. Global scope: anchor one-message flow — provider picker → (custom capability
+    // Global scope: anchor one-message flow; provider picker → (custom capability
     //    activation | model picker) → mirror write → terminal result, all on one message.
     const idRoot = "model_text_global";
     const initialPayload =
@@ -600,7 +600,7 @@ export async function execute(
     const selectedProvider = opener.provider;
     const selectedSavedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
 
-    // 3a. Custom provider: pick among the label's registered text models, then activate the choice.
+    // Custom provider: pick among the label's registered text models, then activate the choice.
     if (isCustomProvider(selectedProvider)) {
       const customAvailableModels = selectedSavedConfig
         ? await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
@@ -686,7 +686,6 @@ export async function execute(
           fallback_llm_ids: fallbackLlmIds,
           llm_temperature: selectedSavedConfig.llm_temperature ?? tomoriState.config.llm_temperature ?? 1.0,
           llm_disabled_params: disabledParams,
-          // custom_* mirrors are resolved at runtime from the custom_endpoints table; null them here
           custom_model_name: null,
           custom_endpoint_url: null,
           custom_num_ctx: null,
@@ -757,7 +756,7 @@ export async function execute(
       return;
     }
 
-    // 3b. Regular provider: model picker on the anchor message.
+    // Regular provider: model picker on the anchor message.
     const availableModels = await llmModelRepo.loadAvailableModelsForProvider(selectedProvider, false, {
       kind: "server",
       ownerId: tomoriState.server_id,
@@ -906,7 +905,6 @@ export async function execute(
       return;
     }
 
-    // Auto-apply default NAI sampling preset when switching to Kayra or Erato
     const naiDefaultPresets: Record<string, { name: string; target: "kayra" | "erato" }> = {
       "kayra-v1": { name: "Carefree-Kayra", target: "kayra" },
       "llama-3-erato-v1": { name: "Erato-Shosetsu", target: "erato" },
@@ -1018,9 +1016,7 @@ export async function execute(
           }),
         );
         return;
-      } catch {
-        // Fall through to a fresh reply below.
-      }
+      } catch {}
     }
 
     await replyInfoEmbed(interaction, locale, {

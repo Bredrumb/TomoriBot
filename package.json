@@ -34,6 +34,7 @@
     "check-media-size": "bun run scripts/checks/checkMediaSize.ts",
     "check-runtime-imports": "bun run scripts/checks/checkRuntimeImports.ts",
     "check-mock-module-surfaces": "bun run scripts/checks/checkMockModuleSurface.ts",
+    "audit-comments": "bun run scripts/checks/checkCommentPolicy.ts --audit",
     "compress-media": "bun run scripts/devtools/compressMedia.ts",
     "audit-keys": "bun run scripts/devtools/auditKeyVersions.ts",
     "audit-sql": "bun run scripts/checks/audit_sql.ts",

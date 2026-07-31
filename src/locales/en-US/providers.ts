@@ -1,5 +1,3 @@
-// locales/en-US/providers.ts
-
 export default {
   genai: {
     generic_error_title: `Generation Error`,

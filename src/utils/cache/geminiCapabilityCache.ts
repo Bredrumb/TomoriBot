@@ -7,7 +7,7 @@ import type { ModelTokenLimits } from "./openrouterCapabilityCache";
  * maxCompletionTokens = what googleProvider.ts actually requests (maxOutputTokens: 8192).
  *
  * When a model is not present in this map, getGeminiTokenLimits() returns undefined
- * and truncation is silently skipped — a safe fallback for future or unknown models.
+ * and truncation is silently skipped , so a safe fallback for future or unknown models.
  */
 const GEMINI_TOKEN_LIMITS: Readonly<Record<string, ModelTokenLimits>> = {
   "gemini-2.0-flash": { contextLength: 1_048_576, maxCompletionTokens: 8192 },
@@ -53,7 +53,7 @@ const GEMINI_TOKEN_LIMITS: Readonly<Record<string, ModelTokenLimits>> = {
 /**
  * Gets the token limits for a known Google Gemini model.
  *
- * Uses a compile-time constant map — no async initialization required.
+ * Uses a compile-time constant map : no async initialization required.
  * Returns undefined for models not in the map so truncation is skipped safely.
  *
  * @param modelCodename - Model codename (e.g., "gemini-2.5-flash")

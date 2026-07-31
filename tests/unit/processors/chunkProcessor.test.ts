@@ -10,7 +10,7 @@ import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor
 describe("createSentenceSplitRegex", () => {
   let regex: RegExp;
 
-  // Rebuild the regex before each test — the regex has state via lastIndex when
+  // Rebuild the regex before each test: the regex has state via lastIndex when
   // used with exec(), so a fresh instance avoids cross-test interference.
   const getRegex = () => createSentenceSplitRegex();
 
@@ -39,7 +39,6 @@ describe("createSentenceSplitRegex", () => {
     it("does not split 'Dr. Smith'", () => {
       regex = getRegex();
       const parts = "Dr. Smith visited".split(regex).filter((s) => s !== undefined);
-      // All parts joined should equal the original (no meaningful split occurred)
       expect(parts.join("")).toBe("Dr. Smith visited");
     });
 
@@ -93,13 +92,12 @@ describe("createSentenceSplitRegex", () => {
   describe("acronym trailing-period behavior (known limitation)", () => {
     // The lookbehind guards mid-sequence dots (e.g. the dot between U and S in U.S.)
     // but the character immediately before the *final* trailing period is always a letter,
-    // not a dot — so the acronym guard does not fire on the trailing dot.
+    // not a dot so the acronym guard does not fire on the trailing dot.
     // "U.S. is large" → the period after S IS matched and consumed by the split.
     it("splits trailing period of 'U.S.' (lookbehind does not cover the final dot)", () => {
       regex = getRegex();
       const text = "The U.S. is large";
       const parts = text.split(regex).filter((s) => s !== undefined);
-      // Period is consumed: parts join WITHOUT the trailing dot
       expect(parts.join("")).toBe("The U.S is large");
     });
   });

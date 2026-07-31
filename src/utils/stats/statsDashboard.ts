@@ -1,9 +1,9 @@
 /**
  * Shared building blocks for the `/stats` commands (Phase 2 presentation layer).
  * Lives under utils/ (not commands/) because it is a helper module, not a loadable
- * command file — the command loader only scans commands/ for configureSubcommand/execute.
+ * command file: the command loader only scans commands/ for configureSubcommand/execute.
  *
- * - Timeframe → window resolution (daily-bucket floor; see plans/stat-tracking.md §4).
+ * - Timeframe → window resolution (daily-bucket floor).
  * - Per-view tab builders (personal / persona / server) that turn StatRepository
  *   reads into localized dashboard "tabs".
  * - A public, invoker-controlled tabbed dashboard renderer built on Components V2:
@@ -50,15 +50,13 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
 
-// ── Timeframe ─────────────────────────────────────────────────────────────────
-
 /** Selectable time windows. `all_time` omits the bucket floor entirely. */
 export type Timeframe = "today" | "week" | "month" | "year" | "all_time";
 
 /** The choice values offered by the `timeframe` slash option, in display order. */
 export const TIMEFRAME_VALUES: Timeframe[] = ["today", "week", "month", "year", "all_time"];
 
-/** Default timeframe when the (optional) slash option is omitted — all-time. */
+/** Default timeframe when the (optional) slash option is omitted: all-time. */
 export const DEFAULT_TIMEFRAME: Timeframe = "all_time";
 
 /** Scope choice for the personal view: current server vs. across all servers. */
@@ -72,7 +70,7 @@ const DASHBOARD_TIMEOUT_MS = (() => {
 
 /**
  * Resolves a timeframe to a `bucket >= from` floor (YYYY-MM-DD, UTC), or undefined
- * for all-time. "today" is the current UTC day only — the daily bucket grain cannot
+ * for all-time. "today" is the current UTC day only: the daily bucket grain cannot
  * express a rolling 24h, so the option is labelled "Today" rather than "24 hours".
  */
 export function resolveWindowFrom(timeframe: Timeframe): string | undefined {
@@ -94,8 +92,6 @@ export function resolveWindowFrom(timeframe: Timeframe): string | undefined {
   }
   return floor.toISOString().split("T")[0];
 }
-
-// ── Small formatting helpers ───────────────────────────────────────────────────
 
 /** Locale-grouped integer (e.g. 12,345). */
 function fmtInt(n: number): string {
@@ -200,8 +196,6 @@ function formatPeakWeekday(locale: string, byWeekday: Record<number, number>): s
   return names[peak] ?? String(peak);
 }
 
-// ── Field / page model ──────────────────────────────────────────────────────────
-
 /**
  * One dashboard field. Inline scalars are merged into a compact block; non-inline
  * fields (ranked lists) get their own labelled section; separators flush the scalar
@@ -250,12 +244,10 @@ function page(titleKey: string, subtitle: string, fields: StatField[]): StatsTab
   return { titleKey, subtitle, footerKey: FOOTER_KEY, fields };
 }
 
-// ── Components V2 rendering ───────────────────────────────────────────────────────
-
 /**
  * Builds the rows of named tab buttons (≤5 per row); the active tab is disabled.
  * When `disableAll` is set (post-timeout paint), every button is disabled so the
- * card freezes in place — buttons stay visible but unpressable instead of vanishing.
+ * card freezes in place, so buttons stay visible but unpressable instead of vanishing.
  */
 function buildTabButtonRows(
   interactionId: string,
@@ -286,7 +278,7 @@ function buildTabButtonRows(
 /**
  * Renders one tab as a Components V2 container: an H3 title, the subtitle, a divider,
  * the stat fields (consecutive inline scalars merged into one block; ranked lists each
- * in their own labelled block), a muted footer, and — when `withButtons` — the tab
+ * in their own labelled block), a muted footer, and (when `withButtons`) the tab
  * button rows inside the same card.
  */
 function buildTabContainer(
@@ -298,9 +290,6 @@ function buildTabContainer(
 ): TopLevelComponentData[] {
   const components: ComponentInContainerData[] = [];
 
-  // 1. Title (H3) + subtitle line. When an icon URL is supplied, both lines live inside
-  //    a Section whose Thumbnail accessory pins the icon to the card's top-right corner;
-  //    otherwise they render as plain stacked text displays.
   const titleText = `### ${localizer(locale, tabPage.titleKey)}`;
   if (iconUrl) {
     components.push({
@@ -317,7 +306,7 @@ function buildTabContainer(
   }
   components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
 
-  // 2. Fields. Merge consecutive inline scalars into a single text block (one line
+  // Fields. Merge consecutive inline scalars into a single text block (one line
   //    each, "**Name:** value"); flush it when a non-inline list field appears.
   let scalarBuffer: string[] = [];
   const flushScalars = () => {
@@ -344,13 +333,11 @@ function buildTabContainer(
   }
   flushScalars();
 
-  // 3. Muted footer, set off by a divider.
   if (tabPage.footerKey) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     components.push({ type: ComponentType.TextDisplay, content: `-# ${localizer(locale, tabPage.footerKey)}` });
   }
 
-  // 4. Tab buttons live inside the card (omitted on the final, post-timeout paint).
   if (withButtons) {
     for (const row of buttonRows) components.push(row);
   }
@@ -406,7 +393,6 @@ export function buildStatsDashboardPayload(
  *
  * @param interaction - The acknowledged (publicly deferred) slash or button interaction.
  * @param invokerId   - Discord id allowed to operate the tab buttons.
- * @param locale      - Active locale.
  * @param tabs        - The tabs to render (first is shown initially).
  * @param iconUrl     - Optional avatar/icon URL pinned to the card's top-right corner
  *                      (user avatar for /personal, persona avatar for /persona, server
@@ -455,7 +441,7 @@ export async function renderStatsDashboardWithReply(
     buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
   );
 
-  // 1. Persistent collector — no listening gap between clicks, so fast switches queue
+  // Persistent collector, so no listening gap between clicks, so fast switches queue
   //    instead of being dropped into a dead window.
   const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
@@ -468,7 +454,7 @@ export async function renderStatsDashboardWithReply(
     const nextIndex = tabs.findIndex((t) => t.id === tabId);
     if (nextIndex >= 0) activeIndex = nextIndex;
     try {
-      // 2. Acknowledge + repaint. Wrapped so a stale token (e.g. a duplicate click whose
+      // Acknowledge + repaint. Wrapped so a stale token (e.g. a duplicate click whose
       //    interaction Discord no longer recognizes) never escapes to the command handler.
       await button.update(
         buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
@@ -478,7 +464,7 @@ export async function renderStatsDashboardWithReply(
     }
   });
 
-  // 3. Wait for the collector to end (timeout), then disable (but keep) the buttons so
+  // Wait for the collector to end (timeout), then disable (but keep) the buttons so
   //    the last viewed tab stays put with greyed-out, unpressable tabs.
   await new Promise<void>((resolve) => collector.once("end", () => resolve()));
 
@@ -490,8 +476,6 @@ export async function renderStatsDashboardWithReply(
     log.warn("renderStatsDashboard: failed to disable dashboard buttons after timeout", error as Error);
   }
 }
-
-// ── Per-view tab builders ───────────────────────────────────────────────────────
 
 /**
  * Builds the personal (`/stats personal`) dashboard tabs for one user.
@@ -519,7 +503,6 @@ export async function buildPersonalTabs(args: {
   const names = await resolvePersonaNames(args.guildId);
   const scope = { userId, serverId: scopeServerId, from };
 
-  // 1. Always-available reads (all bucketed / windowable).
   const [
     messages,
     commands,
@@ -552,13 +535,11 @@ export async function buildPersonalTabs(args: {
     statRepository.getEmotionBreakdown({ userId, serverId: scopeServerId, from, limit: 5 }),
   ]);
 
-  // 2. Span metrics — meaningless for a single day, so skipped entirely on "today".
   const streak = isToday ? null : await statRepository.getStreak({ userId, serverId: scopeServerId });
   const histogram = isToday
     ? null
     : await statRepository.getActivityHistogram({ userId, serverId: scopeServerId, from });
 
-  // 3. All-time-only reads (memories + conditioning are not daily-bucketed).
   let memoriesSaved = 0;
   let memoryByPersona: PersonaAffinityEntry[] = [];
   let conditioningByPersona: ConditioningPersonaEntry[] = [];
@@ -583,7 +564,6 @@ export async function buildPersonalTabs(args: {
   const unitMemories = localizer(locale, "commands.stats.units.memories_saved");
   const unitReplies = localizer(locale, "commands.stats.units.replies_received");
 
-  // Overview shows just the persona name; the Personas tab keeps the loyalty %.
   const favoritePersonaName =
     favorite === null ? localizer(locale, "commands.stats.empty") : lineageLabel(locale, names, favorite.lineageId);
   const favoritePersonaText =
@@ -591,7 +571,6 @@ export async function buildPersonalTabs(args: {
       ? localizer(locale, "commands.stats.empty")
       : `${lineageLabel(locale, names, favorite.lineageId)} (${favorite.loyaltyPct.toFixed(0)}%)`;
 
-  // Most rewarded / punished personas (all-time, sorted by the respective count).
   const mostRewarded = [...conditioningByPersona]
     .filter((c) => c.rewards > 0)
     .sort((a, b) => b.rewards - a.rewards)
@@ -603,24 +582,19 @@ export async function buildPersonalTabs(args: {
     .slice(0, 5)
     .map((c) => ({ label: lineageLabel(locale, names, c.lineageId), count: c.punishments }));
 
-  // Top model by cost is the best available proxy for "favorite" without an extra read.
   const favoriteModel = modelCost[0]
     ? prettifyModelCodename(modelCost[0].model)
     : localizer(locale, "commands.stats.empty");
 
-  // ── Overview (the most interesting stats, duped freely into detail tabs). ──
-  // Group 1: trigger count + persona identity + favorite model.
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages_personal", fmtInt(messages)),
     statField("commands.stats.fields.favorite_persona_short", favoritePersonaName),
     statField("commands.stats.fields.favorite_model", favoriteModel),
-    // Group 2: token volume + estimated cost.
     sepField(),
     statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
     statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
-  // Group 3: activity patterns — meaningless for a single day.
   if (!isToday) {
     const hasActivity = streak !== null || histogram !== null;
     if (hasActivity) {
@@ -648,7 +622,6 @@ export async function buildPersonalTabs(args: {
       }
     }
   }
-  // Group 4: all-time-only aggregates (memories + conditioning are not daily-bucketed).
   if (isAllTime) {
     overviewFields.push(
       sepField(),
@@ -657,7 +630,6 @@ export async function buildPersonalTabs(args: {
       statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
     );
   }
-  // Group 5: generation counts + commands. Windowed via stat_counters — always visible.
   overviewFields.push(
     sepField(),
     statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
@@ -665,7 +637,6 @@ export async function buildPersonalTabs(args: {
   );
   overviewFields.push(statField("commands.stats.fields.commands", fmtInt(commands)));
 
-  // ── Personas tab. ──
   const personaFields: StatField[] = [
     statField("commands.stats.fields.favorite_persona", favoritePersonaText, false),
     statField(
@@ -790,7 +761,6 @@ export async function buildPersonaTabs(args: {
   const isAllTime = timeframe === "all_time";
   const scope = { serverId, lineageId, from };
 
-  // 1. Always-available reads (windowable).
   const [messages, topUsers, modelCost, tokens, cost, emoji, stickers, sprites, emotions] = await Promise.all([
     statRepository.getMetricTotal({ metric: "message_sent", ...scope }),
     statRepository.getTopUsers({ serverId, lineageId, from, limit: 5 }),
@@ -803,7 +773,6 @@ export async function buildPersonaTabs(args: {
     statRepository.getEmotionBreakdown({ serverId, lineageId, from, limit: 5 }),
   ]);
 
-  // 2. All-time-only reads (conditioning + memories are not daily-bucketed).
   let conditioning = { rewards: 0, punishments: 0 };
   let personalMemoryCount = 0;
   let serverMemoryCount = 0;
@@ -813,10 +782,9 @@ export async function buildPersonaTabs(args: {
   if (isAllTime) {
     [conditioning, personalMemoryCount, serverMemoryCount, rewardedBy, punishedBy, remembered] = await Promise.all([
       statRepository.getConditioningTotals({ serverId, lineageId }),
-      // People this persona has personal memories about (global per lineage — personal
+      // People this persona has personal memories about (global per lineage: personal
       // memories carry no server_id).
       statRepository.getPersonaMemoryCount({ lineageId }),
-      // Shared facts this persona knows about THIS server.
       statRepository.getServerMemoryCount({ serverId, lineageId }),
       statRepository.getConditioningTopUsers({ serverId, lineageId, type: "reward", limit: 5 }),
       statRepository.getConditioningTopUsers({ serverId, lineageId, type: "punish", limit: 5 }),
@@ -833,7 +801,6 @@ export async function buildPersonaTabs(args: {
   //    rewards/punishments; raw token volume lives in the Models tab). ──
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages_persona", fmtInt(messages)),
-    // Token/cost group separated from the reply count above.
     sepField(),
     statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
     statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
@@ -842,7 +809,6 @@ export async function buildPersonaTabs(args: {
   if (isAllTime) {
     overviewFields.push(
       sepField(),
-      // Use *_created keys here — these are memories the persona authored, not owned.
       statField("commands.stats.fields.personal_memories_created", fmtInt(personalMemoryCount)),
       statField("commands.stats.fields.server_memories_created", fmtInt(serverMemoryCount)),
       statField("commands.stats.fields.rewards_received", fmtInt(conditioning.rewards)),
@@ -850,7 +816,6 @@ export async function buildPersonaTabs(args: {
     );
   }
 
-  // ── People tab. ──
   const peopleFields: StatField[] = [
     statField(
       "commands.stats.fields.most_talked_to_people",
@@ -966,7 +931,6 @@ export async function buildServerTabs(args: {
   const names = await resolvePersonaNames(args.guildId);
   const scope = { serverId, from };
 
-  // 1. Always-available reads (windowable).
   const [
     messages,
     commands,
@@ -999,7 +963,6 @@ export async function buildServerTabs(args: {
     statRepository.getGenerationTotals({ serverId, from }),
   ]);
 
-  // 2. All-time-only reads (conditioning + memories are not daily-bucketed).
   let conditioning = { rewards: 0, punishments: 0 };
   let memorableMembers: TopUserEntry[] = [];
   let serverMemoryCount = 0;
@@ -1009,7 +972,7 @@ export async function buildServerTabs(args: {
       statRepository.getConditioningTotals({ serverId }),
       statRepository.getTopUsersByMemory({ serverId, limit: 5 }),
       // Server-scoped shared facts (exact) vs. members' personal memories (approximate,
-      // cross-server) — kept as separate rows since they are different kinds of memory.
+      // cross-server); kept as separate rows since they are different kinds of memory.
       statRepository.getServerMemoryCount({ serverId }),
       statRepository.getMemberMemoryCount({ serverId }),
     ]);
@@ -1019,7 +982,6 @@ export async function buildServerTabs(args: {
   const unitReceived = localizer(locale, "commands.stats.units.messages_received");
   const unitMemories = localizer(locale, "commands.stats.units.memories_saved");
 
-  // Derived scalars for overview: top persona + top model by cost.
   const mostPopularPersonaName = popularPersonas[0]
     ? lineageLabel(locale, names, popularPersonas[0].lineageId)
     : localizer(locale, "commands.stats.empty");
@@ -1034,13 +996,11 @@ export async function buildServerTabs(args: {
     statField("commands.stats.fields.messages", fmtInt(messages)),
     statField("commands.stats.fields.most_popular_persona", mostPopularPersonaName),
     statField("commands.stats.fields.most_popular_model", mostPopularModel),
-    // Group 2: token volume + estimated cost.
     sepField(),
     statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
     statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
-  // Group 3: all-time-only aggregates (memories + conditioning not daily-bucketed).
   if (isAllTime) {
     overviewFields.push(
       sepField(),
@@ -1050,7 +1010,6 @@ export async function buildServerTabs(args: {
       statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
     );
   }
-  // Group 4: generation counts + commands. Windowed via stat_counters — always visible.
   overviewFields.push(
     sepField(),
     statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
@@ -1058,7 +1017,6 @@ export async function buildServerTabs(args: {
     statField("commands.stats.fields.commands", fmtInt(commands)),
   );
 
-  // ── Leaderboard tab. ──
   const leaderboardFields: StatField[] = [
     statField(
       "commands.stats.fields.most_talkative_members",

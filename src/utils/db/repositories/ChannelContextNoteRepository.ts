@@ -1,5 +1,5 @@
 /**
- * ChannelContextNoteRepository — manages per-channel context note entries.
+ * ChannelContextNoteRepository: manages per-channel context note entries.
  *
  * Covered table: channel_context_notes.
  *
@@ -43,7 +43,6 @@ export class ChannelContextNoteRepository {
    *
    * @param serverId      - Internal server DB ID
    * @param channelDiscId - Discord snowflake ID of the channel
-   * @param note          - The context note text
    * @param depth         - Injection depth (0 = closest to reply, max 100)
    */
   async setChannelContextNote(serverId: number, channelDiscId: string, note: string, depth: number): Promise<boolean> {

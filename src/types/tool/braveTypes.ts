@@ -4,10 +4,6 @@
  * Supports Web, Image, Video, and News search endpoints
  */
 
-// =============================================
-// Common Types
-// =============================================
-
 /**
  * Query information present in all search types
  */
@@ -61,10 +57,6 @@ export interface Extra {
   /** Additional metadata about the search */
   [key: string]: unknown;
 }
-
-// =============================================
-// Web Search Types
-// =============================================
 
 /**
  * Web search result
@@ -136,10 +128,6 @@ export interface WebSearchApiResponse {
   extra?: Extra;
 }
 
-// =============================================
-// Image Search Types
-// =============================================
-
 /**
  * Image properties
  */
@@ -191,10 +179,6 @@ export interface ImageSearchApiResponse {
   /** Extra information about the search */
   extra: Extra;
 }
-
-// =============================================
-// Video Search Types
-// =============================================
 
 /**
  * Profile information for video authors
@@ -270,10 +254,6 @@ export interface VideoSearchApiResponse {
   extra: Extra;
 }
 
-// =============================================
-// News Search Types
-// =============================================
-
 /**
  * News search result
  */
@@ -313,10 +293,6 @@ export interface NewsSearchApiResponse {
   /** News search results */
   results: NewsResult[];
 }
-
-// =============================================
-// API Parameter Types
-// =============================================
 
 /**
  * Common search parameters
@@ -406,10 +382,6 @@ export interface NewsSearchParams extends BaseSearchParams {
   goggles?: string[];
 }
 
-// =============================================
-// Error Types
-// =============================================
-
 /**
  * Brave API error response
  */
@@ -421,10 +393,6 @@ export interface BraveApiError {
   /** HTTP status code */
   status?: number;
 }
-
-// =============================================
-// Union Types for API Responses
-// =============================================
 
 /**
  * All possible Brave Search API responses

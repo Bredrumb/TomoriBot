@@ -355,7 +355,6 @@ type ForwardedMessageSnapshot = {
  * forward still yields the original's text and attachments instead of an empty block.
  *
  * @param args - Wrapper message, in-progress context content, and media collectors
- * @returns Context content plus the message IDs whose media was registered
  */
 export async function buildForwardContext(args: {
   message: Message;

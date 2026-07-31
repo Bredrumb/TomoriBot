@@ -10,10 +10,10 @@
  * display name and avatar without any text prefix.
  *
  * Exit conditions (checked first to minimize overhead):
- *   1. Matrix bridge not configured → immediate return
- *   2. Message not from a guild
- *   3. Message is NOT from TomoriBot itself (checked via isSelfTriggerMessage)
- *   4. Channel has no linked Matrix room
+ *   - Matrix bridge not configured → immediate return
+ *   - Message not from a guild
+ *   - Message is NOT from TomoriBot itself (checked via isSelfTriggerMessage)
+ *   - Channel has no linked Matrix room
  */
 
 import type { Client, Embed, Message } from "discord.js";
@@ -32,8 +32,6 @@ import type { TomoriState } from "@/types/db/schema";
 import { resolvePersonaAvatarPublicUrl } from "@/utils/storage/avatarStorage";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 
-// ─── Embed relay helpers ────────────────────────────────────────────────────
-
 const DEFAULT_MATRIX_EMBED_CHUNK_MAX_CHARS = 3500;
 
 function getMatrixEmbedChunkMaxChars(): number {
@@ -51,7 +49,6 @@ const MATRIX_EMBED_CHUNK_MAX_CHARS = getMatrixEmbedChunkMaxChars();
  * Removes **bold**, *italic*, __underline__, ~~strikethrough~~, and `code` spans.
  *
  * @param text - Raw Discord markdown string
- * @returns Plain text with inline formatting removed
  */
 function stripDiscordMarkdown(text: string): string {
   return text
@@ -181,12 +178,12 @@ function escapeHtml(text: string): string {
  *
  * Handles two mention formats that appear in TomoriBot's Discord messages:
  *
- *   `<@userId>` / `<@!userId>` — Discord snowflake mentions (already resolved by Discord.js
+ *   `<@userId>` / `<@!userId>`: Discord snowflake mentions (already resolved by Discord.js
  *     before matrixRelay.ts sees the message). The guild member's display name is used to
  *     look up a corresponding Matrix ID; if found, rendered as a Matrix mention anchor.
  *     If the user is Discord-only, rendered as plain display name.
  *
- *   `@{name}` — TomoriBot's internal mention format injected by contextBuilder.ts.
+ *   `@{name}`: TomoriBot's internal mention format injected by contextBuilder.ts.
  *     Resolved the same way as above using the display name directly.
  *
  * Resolution rules (same for both formats):
@@ -194,8 +191,6 @@ function escapeHtml(text: string): string {
  *   - Discord/unknown user → display name only (no ping, no anchor tag)
  *
  * @param text    - Raw Discord message content (may contain `<@id>` and/or `@{name}` patterns)
- * @param message - The Discord Message object (provides resolved mention users + guild context)
- * @returns Object with `body` (plain text), `formattedBody` (HTML, or undefined if no Matrix
  *          mentions were resolved), and `mentionedIds` (Matrix user IDs for MSC3952 `m.mentions`)
  */
 function resolveDiscordTextForMatrix(
@@ -221,7 +216,6 @@ function resolveDiscordTextForMatrix(
   let lastIndex = 0;
 
   for (const match of text.matchAll(pattern)) {
-    // 1. Append the literal text between the previous match and this one
     const literal = text.slice(lastIndex, match.index);
     bodyParts.push(literal);
     htmlParts.push(escapeHtml(literal));
@@ -230,7 +224,6 @@ function resolveDiscordTextForMatrix(
     const [, snowflake, internalName] = match;
 
     if (snowflake) {
-      // Discord snowflake mention — resolve via message.mentions.users
       const user = message.mentions.users.get(snowflake);
       const displayName =
         message.guild?.members.cache.get(snowflake)?.displayName ?? user?.displayName ?? user?.username ?? snowflake;
@@ -242,12 +235,11 @@ function resolveDiscordTextForMatrix(
         bodyParts.push(matrixId);
         htmlParts.push(`<a href="https://matrix.to/#/${matrixId}">${escapeHtml(displayName)}</a>`);
       } else {
-        // Discord-only user — strip <@id>, keep their display name
+        // Discord-only user, so strip <@id>, keep their display name
         bodyParts.push(displayName);
         htmlParts.push(escapeHtml(displayName));
       }
     } else if (internalName) {
-      // @{name} internal format — resolve by display name directly
       const matrixId = getMatrixIdForDisplayName(internalName);
 
       if (matrixId) {
@@ -256,14 +248,13 @@ function resolveDiscordTextForMatrix(
         bodyParts.push(matrixId);
         htmlParts.push(`<a href="https://matrix.to/#/${matrixId}">${escapeHtml(internalName)}</a>`);
       } else {
-        // Discord-only or unknown user — strip @{} wrapper, keep name
+        // Discord-only or unknown user, so strip @{} wrapper, keep name
         bodyParts.push(internalName);
         htmlParts.push(escapeHtml(internalName));
       }
     }
   }
 
-  // 2. Append any trailing literal text after the last match
   const tail = text.slice(lastIndex);
   bodyParts.push(tail);
   htmlParts.push(escapeHtml(tail));
@@ -295,32 +286,28 @@ function embedToMatrixTextChunks(embed: Embed): string[] {
  * Handler function auto-discovered and invoked by eventHandler.ts on each messageCreate event.
  * Relays TomoriBot's responses to the linked Matrix room (if any).
  *
- * @param client  - The Discord.js client
- * @param message - The incoming Discord message
  */
 const handler = async (client: Client, message: Message): Promise<void> => {
-  // 1. Fast exit: skip if Matrix bridge is not configured (common case)
+  // Fast exit: skip if Matrix bridge is not configured (common case)
   if (!isMatrixConfigured()) return;
 
-  // 2. Only process guild messages (Matrix bridge is server-scoped)
+  // Only process guild messages (Matrix bridge is server-scoped)
   if (!message.guild) return;
 
-  // 3. Only relay messages that originate from TomoriBot itself
+  // Only relay messages that originate from TomoriBot itself
   //    (main persona bot account OR alter persona webhook messages)
   const allPersonas: TomoriState[] = await getCachedAllPersonas(message.guild.id);
   if (!isSelfTriggerMessage(message, allPersonas)) return;
 
-  // 4. Check if this channel has a linked Matrix room (cached DB lookup)
   const roomId = await getLinkedMatrixRoom(message.channelId);
   if (!roomId) return;
 
-  // 5. Identify which persona sent this message and retrieve its avatar URL.
+  // Identify which persona sent this message and retrieve its avatar URL.
   //    The persona's virtual Matrix user will be provisioned with this identity.
   let persona: TomoriState | undefined;
   let avatarUrl: string | null;
 
   if (message.author.id === client.user?.id) {
-    // Main bot account — find the main (non-alter) persona
     persona = allPersonas.find((p) => !p.is_alter);
 
     // The main persona sends as the bot account, not a webhook, so webhook_avatar_url
@@ -334,13 +321,12 @@ const handler = async (client: Client, message: Message): Promise<void> => {
         extension: "png",
       }) ?? message.author.displayAvatarURL({ size: 256, extension: "png" });
   } else {
-    // Alter persona webhook — match by username (case-insensitive)
     const personaByNickname = new Map(allPersonas.map((p) => [normalizeRenderModifierName(p.persona_nickname), p]));
     persona =
       resolveRenderModifierSourcePersona(message.author.username, personaByNickname)?.persona ??
       personaByNickname.get(normalizeRenderModifierName(message.author.username));
 
-    // Warn if no persona matched — the fallback uses the webhook username as the
+    // Warn if no persona matched, because the fallback uses the webhook username as the
     // virtual user localpart, which may create an orphaned Matrix user
     if (!persona) {
       log.warn(
@@ -352,11 +338,10 @@ const handler = async (client: Client, message: Message): Promise<void> => {
     avatarUrl = resolvePersonaAvatarPublicUrl(persona?.webhook_avatar_url) ?? null;
   }
 
-  // Fall back to username if no matching persona is found
   const personaName = persona?.persona_nickname ?? message.author.username;
 
-  // 6. Relay the text content (skip if empty after trim)
-  //    Identity is conveyed by the virtual Matrix user — no bold prefix needed.
+  // Relay the text content (skip if empty after trim)
+  //    Identity is conveyed by the virtual Matrix user, so no bold prefix needed.
   //    @{name} placeholders are transformed to proper Matrix mention links so
   //    Matrix clients highlight and notify the mentioned user (MSC3952).
   const rawText = message.content.trim();
@@ -376,12 +361,12 @@ const handler = async (client: Client, message: Message): Promise<void> => {
     }
   }
 
-  // 7. Relay each file attachment as a Matrix media event
+  // Relay each file attachment as a Matrix media event
   //    Uses proxyURL for stability (Discord CDN proxy avoids expiry issues)
   const mediaTimeoutMs = Number.parseInt(process.env.MATRIX_MEDIA_TIMEOUT_MS || "15000", 10);
 
   for (const attachment of message.attachments.values()) {
-    // 7a. Skip attachments that exceed the configured size limit (shared constant
+    // Skip attachments that exceed the configured size limit (shared constant
     //    with matrixManager.ts so both sides enforce the same threshold)
     if (attachment.size > MATRIX_MAX_ATTACHMENT_BYTES) {
       log.warn(
@@ -392,7 +377,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
     }
 
     try {
-      // 7b. Fetch the file from Discord's proxy CDN (timeout prevents stalls)
+      // Fetch the file from Discord's proxy CDN (timeout prevents stalls)
       const response = await fetch(attachment.proxyURL, {
         signal: AbortSignal.timeout(mediaTimeoutMs),
       });
@@ -405,7 +390,6 @@ const handler = async (client: Client, message: Message): Promise<void> => {
       const mimeType = attachment.contentType ?? "application/octet-stream";
       const filename = attachment.name ?? "attachment";
 
-      // 7c. Upload to Matrix and send as a media event under the persona's virtual user
       await sendAttachmentToMatrixRoom(
         roomId,
         arrayBuffer,
@@ -420,7 +404,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
     }
   }
 
-  // 8. Relay all embeds by serializing visible content (title/description/fields/urls)
+  // Relay all embeds by serializing visible content (title/description/fields/urls)
   //    into plain text Matrix messages. This avoids per-embed whitelists and prevents
   //    silent drops when new embed shapes are introduced.
   for (const embed of message.embeds) {

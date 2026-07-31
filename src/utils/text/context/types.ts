@@ -67,7 +67,7 @@ export interface BuildContextParams {
   channelDesc: string | null;
   channelName: string;
   channelId: string;
-  /** Parent channel ID when `channelId` is a thread — used for private/RP channel inheritance. */
+  /** Parent channel ID when `channelId` is a thread: used for private/RP channel inheritance. */
   parentChannelId?: string | null;
   client: Client;
   triggererName: string;
@@ -96,7 +96,7 @@ export interface BuildContextParams {
    */
   channelContextNote?: { note: string; depth: number } | null;
   /**
-   * Precomputed persona-reunion note bodies (raw text — the dialogue-history
+   * Precomputed persona-reunion note bodies (raw text: the dialogue-history
    * stage wraps them in `[System: ...]`). One entry per returning person the
    * chat pipeline resolved: the triggerer and/or others present in the window.
    */
@@ -123,10 +123,10 @@ export interface BuildContextParams {
   /**
    * When `true`, skips the `DEFAULT_SYSTEM_PROMPT` fallback in the humanizer block.
    * Set by the routing wrapper when a SillyTavern preset is active and no custom
-   * `/sysprompt` has been configured — the preset fully controls the system prompt.
+   * `/sysprompt` has been configured, so the preset fully controls the system prompt.
    */
   suppressDefaultSystemPrompt?: boolean;
-  /** Opaque message ID map — caller creates, context builder populates. */
+  /** Opaque message ID map: caller creates, context builder populates. */
   messageIdMap?: MessageIdMap;
 }
 

@@ -8,7 +8,7 @@ let cachedResult: boolean | null = null;
  * Checks whether the pgvector extension is available in the connected PostgreSQL server.
  *
  * Queries `pg_available_extensions` rather than `pg_extension` so that the check
- * succeeds even if `CREATE EXTENSION vector` hasn't been run yet — the RAG schema
+ * succeeds even if `CREATE EXTENSION vector` hasn't been run yet, so the RAG schema
  * will handle that via `CREATE EXTENSION IF NOT EXISTS`.
  *
  * The result is cached after the first call.

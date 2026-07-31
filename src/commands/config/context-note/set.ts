@@ -8,7 +8,7 @@
  * - channel: Bound to a specific Discord channel (channel option on the slash command)
  * - global:  Server-wide fallback used when neither the active persona nor the channel has a note
  *
- * Persona and channel notes are additive — both are injected when set.
+ * Persona and channel notes are additive; both are injected when set.
  * Submitting a blank note clears (removes) the stored value.
  */
 
@@ -41,8 +41,6 @@ const CONTEXT_NOTE_DEPTH_MAX = 100;
  * Configure the /config context-note set subcommand metadata.
  * The commandLoader auto-localizes descriptions, option descriptions, and choice labels
  * from the keys at commands.config.context-note.set.* in the locale files.
- * @param subcommand - Builder provided by commandLoader
- * @returns Configured builder
  */
 export const configureSubcommand = (subcommand: import("discord.js").SlashCommandSubcommandBuilder) =>
   subcommand
@@ -83,10 +81,6 @@ export const configureSubcommand = (subcommand: import("discord.js").SlashComman
 
 /**
  * Execute /config context-note set.
- * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
- * @param _userData - User row (unused)
- * @param locale - User's locale for localization
  */
 export async function execute(
   _client: Client,
@@ -94,7 +88,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Channel guard
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -112,7 +105,6 @@ export async function execute(
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
 
-  // 2. Resolve server identity and fetch cached state
   const serverId = interaction.guildId ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
 
@@ -256,13 +248,12 @@ export async function execute(
     return;
   }
 
-  // 4. Declare interaction handles outside try-catch for fallback error replies
+  // Declare interaction handles outside try-catch for fallback error replies
   const modalHost = interaction;
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   let selectedChannelDiscId: string | null = null;
 
   try {
-    // 5b. Channel scope: read the native channel option from the slash command
     if (scope === "channel") {
       const channelOption = interaction.options.getChannel("channel");
       if (!channelOption) {
@@ -277,7 +268,6 @@ export async function execute(
       selectedChannelDiscId = channelOption.id;
     }
 
-    // 6. Load existing values for pre-fill
     let existingNote: string | null | undefined;
     let existingDepth: number;
 
@@ -290,7 +280,6 @@ export async function execute(
       existingDepth = tomoriState.config.context_note_depth ?? 0;
     }
 
-    // 7. Show modal with note text + depth fields, pre-filled with existing values
     const modalResult = await promptWithRawModal(
       modalHost,
       locale,
@@ -326,7 +315,6 @@ export async function execute(
       return;
     }
 
-    // 8. Assign (not declare) after successful submit
     modalSubmitInteraction = modalResult.interaction;
 
     if (!modalSubmitInteraction) {
@@ -334,7 +322,6 @@ export async function execute(
       return;
     }
 
-    // 9. Parse and validate the submitted values
     const rawNote = (modalResult.values?.context_note_text ?? "").trim();
     const rawDepth = (modalResult.values?.context_note_depth ?? "0").trim();
     const parsedDepth = Number.parseInt(rawDepth, 10);
@@ -349,12 +336,11 @@ export async function execute(
       return;
     }
 
-    // 10. Blank text = remove the note (NULL + reset depth to 0)
+    // Blank text = remove the note (NULL + reset depth to 0)
     const noteToStore = rawNote || null;
     const depthToStore = rawNote ? parsedDepth : 0;
     const isRemoving = !rawNote;
 
-    // 11. Persist to the appropriate table
     let persisted: boolean;
 
     if (scope === "channel" && selectedChannelDiscId && tomoriState.server_id) {
@@ -379,12 +365,11 @@ export async function execute(
       throw new Error("Failed to persist context note");
     }
 
-    // 12. Invalidate tomori state cache AFTER the successful write (persona/global scopes)
+    // Invalidate tomori state cache AFTER the successful write (persona/global scopes)
     if (scope === "global") {
       invalidateTomoriStateCache(serverId);
     }
 
-    // 13. Reply with scoped success message
     const scopeLabel =
       scope === "channel" && selectedChannelDiscId
         ? `<#${selectedChannelDiscId}>`
@@ -417,7 +402,7 @@ export async function execute(
   } catch (error) {
     log.error("Failed to set context note:", error as Error);
 
-    // 14. Use the most specific available interaction for the error reply
+    // Use the most specific available interaction for the error reply
     const replyTarget = modalSubmitInteraction ?? modalHost;
 
     await replyInfoEmbed(replyTarget, locale, {
