@@ -46,6 +46,60 @@ Also avoid:
 Numbered JSDoc lists remain valid when they describe a genuinely ordered public contract.
 Ordinary line comments should not carry step numbers.
 
+## JSDoc tags
+
+JSDoc predates TypeScript, where `@param {string} name` was the only way to state a type.
+The signature carries that now, so a tag that repeats the parameter name or its type adds
+nothing and goes stale independently of the code.
+
+Remove tags that restate the signature:
+
+```ts
+/**
+ * Extract image URLs from a Brave image search response.
+ * @param response - Image search API response   // the type already says this
+ * @returns Promise<string[]>                    // so does the return type
+ */
+```
+
+Keep tags that carry what the type cannot:
+
+```ts
+/**
+ * @param modes - Empty when the provider reports no capabilities
+ * @returns Comma-joined list, or empty string when no modes are supported
+ * @throws {NvidiaImageModelUnavailableError} When the codename has no registered spec
+ */
+```
+
+Units, ranges, valid values, nullability the type does not encode, failure behavior,
+ordering and lifecycle guarantees, side effects, and cancellation or idempotency
+expectations all earn a tag.
+
+A partial tag list is the expected result, not an oversight. Documenting one parameter and
+leaving two undocumented means those two were self-explanatory. Do not "complete" a block by
+adding tags that restate the signature, and do not delete a documented tag because its
+neighbours have none.
+
+The same rule applies to the summary line above the tags. `Build system prompt for LLM` over
+`buildSystemPrompt()` is the identifier in English, so the block goes. Keep it when it
+defines a word the name leaves ambiguous:
+
+```ts
+/**
+ * Finds the most active text channel that's accessible to the bot
+ */
+export async function findBestChannel(guild: Guild, client: Client): Promise<TextChannel | null>
+```
+
+`findBestChannel` never says what "best" measures. The summary names the ranking metric and
+the filter, so it stays.
+
+`checkCommentPolicy.ts` enforces the exact tag case as `jsdoc-restatement`, comparing only
+after normalization and never on substrings. Summary echoes are heuristic and surface under
+`obvious-narration`: a warning during a full audit, an error once the line is in your diff.
+Judgment cases stay with review.
+
 ## Maintainer audit
 
 ```bash

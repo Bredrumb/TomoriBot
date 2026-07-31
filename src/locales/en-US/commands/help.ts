@@ -513,7 +513,7 @@ Use {helpCustomModels} for the full command guide, supported endpoint types, and
 4. Copy this API key into {configSetup} or {configApikeySet}`,
       nvidia_important_title: `Important Notes:`,
       nvidia_important_description: `- Text and embeddings use NVIDIA's hosted \`integrate.api.nvidia.com\` surface
-- Native image generation uses NVIDIA's hosted \`ai.api.nvidia.com\` Stability endpoint`,
+- Native image generation uses NVIDIA's hosted \`ai.api.nvidia.com\` FLUX endpoint`,
       nvidia_footer: `After setting up this provider, you may change text, embedding, and image models with {configModel}, {configModelEmbedding}, and {configModelImage}`,
       zai_title: `Setting Up Z.ai API Key`,
       zai_description: `Z.ai provides access to the GLM family through a general API and a separate coding endpoint.

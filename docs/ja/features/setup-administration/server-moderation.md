@@ -45,7 +45,7 @@ TomoriBotは、`/server`コマンドを通じて、サーバー内でのトモ�
 
 ## 歓迎の挨拶
 
-`/server welcome-channel set`は、選択したチャンネルで新しいメンバーに対する自動の挨拶を設定します。サーバーのオンボーディングが完了するよう、デフォルトでは挨拶まで3分間待機します。インスタンスの運用者は`WELCOME_DELAY_MS`でこの猶予時間を調整できます。`/server welcome-channel remove`を使用すると挨拶が停止します。
+`/server welcome-channel set`は、選択したチャンネルで新しいメンバーに対する自動の挨拶を設定します。サーバーのオンボーディングが完了するよう、デフォルトでは挨拶まで1分間待機します。インスタンスの運用者は`WELCOME_DELAY_MS`でこの猶予時間を調整できます。`/server welcome-channel remove`を使用すると挨拶が停止します。
 
 ## 表現（Expressions）
 

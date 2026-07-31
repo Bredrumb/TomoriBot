@@ -2006,10 +2006,19 @@ export const imageSections: ModelSection<ImageInput>[] = [
     rows: [
       {
         provider: "nvidia",
-        codename: "stabilityai/stable-diffusion-3-medium",
+        codename: "black-forest-labs/flux.1-dev",
         isDefault: true,
-        desc: "NVIDIA-hosted Stable Diffusion 3 Medium image generation model",
-        ja: "NVIDIAホストのStable Diffusion 3 Medium画像生成モデル",
+        isFree: true,
+        desc: "NVIDIA-hosted FLUX.1-dev image generation model",
+        ja: "NVIDIAホストのFLUX.1-dev画像生成モデル",
+      },
+      {
+        // NVIDIA retired the hosted endpoint on 2026-04-15; every request now 404s.
+        provider: "nvidia",
+        codename: "stabilityai/stable-diffusion-3-medium",
+        isDeprecated: true,
+        desc: "Retired by NVIDIA (not selectable)",
+        ja: "NVIDIAにより提供終了（選択不可）",
       },
     ],
   },

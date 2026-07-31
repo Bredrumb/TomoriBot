@@ -325,6 +325,11 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 
 ### Provider snapshot model storage
 
+- `saved_provider_configs.diffusion_model_id` and `nai_diffusion_model_id` follow the same refresh rule
+  as the text model: `shouldRefreshSavedDiffusionModel` replaces a missing, deprecated, or cross-provider
+  reference with the provider's current default while preserving a deliberate, still-active choice. Both
+  columns index `image_diffusion_models`, so both are checked. The rule only runs when a provider config is
+  rebuilt (credential set/update, provider switch), not on every generation.
 - `saved_provider_configs.video_model_id` mirrors the last saved video model for that provider so capability-specific cleanup and future migrations can reason about prior selections; Phase 1 provider switching does not automatically restore video model slots.
 - `saved_provider_configs.provider` and `user_saved_provider_configs.provider` may now hold internal custom provider IDs (`custom:s<server_id>:<label>` / `custom:u<user_id>:<label>`) so labeled custom endpoints can coexist side-by-side without colliding with each other or with classic providers.
 - Phase 6 Step #16 audited `saved_provider_configs` for runtime telemetry analogous to key-rotation counters/errors. None was found: `consecutive_failures` does not exist on this table, and the remaining fields are credentials or provider/model/sampler snapshots. No runtime-state split is pending for saved provider configs.

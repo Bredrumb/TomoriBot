@@ -1,10 +1,10 @@
-export const DEFAULT_WELCOME_DELAY_MS = 3 * 60 * 1000;
+export const DEFAULT_WELCOME_DELAY_MS = 1 * 60 * 1000;
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 /**
  * Resolve the onboarding grace period before an automated welcome greeting.
- * Invalid values fall back to three minutes; zero disables the delay.
+ * Invalid values fall back to one minute; zero disables the delay.
  *
  * @param rawValue - WELCOME_DELAY_MS environment value
  * @returns Valid delay in milliseconds

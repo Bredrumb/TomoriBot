@@ -62,10 +62,6 @@ interface ApiResult<T> {
   statusCode?: number;
 }
 
-/**
- * Extract image URLs from Brave Image Search API response
- * @param response - Image search API response
- */
 export function extractImageUrls(response: ImageSearchApiResponse): string[] {
   const imageUrls: string[] = [];
 

@@ -71,12 +71,33 @@ const RATIONALE_PATTERN = new RegExp(
   String.raw`\b(?:${RATIONALE_SIGNALS.join("|")})\b|[:(]`,
   "i",
 );
+const SUMMARY_STOPWORDS = new Set([
+  "all",
+  "and",
+  "any",
+  "are",
+  "for",
+  "from",
+  "given",
+  "his",
+  "into",
+  "its",
+  "not",
+  "specific",
+  "the",
+  "their",
+  "this",
+  "was",
+  "with",
+]);
+const SUMMARY_ADDED_WORD_LIMIT = 2;
 const SECTION_DIVIDER_PATTERN =
   /^\/\/\s*(?:[-=─]{3,}|[-=─]{2,}\s*[^-=─]+\s*[-=─]{2,})\s*$/;
 const LICENSE_HEADER_PATTERN =
   /\bCopyright(?:\s+\(c\))?|\bSPDX-License-Identifier\s*:|\bLicensed under the\b|\bPermission is hereby granted\b/i;
 
 export type CommentPolicyRule =
+  | "jsdoc-restatement"
   | "numbered-narration"
   | "obvious-narration"
   | "prose-dash"
@@ -163,19 +184,20 @@ export async function checkCommentPolicy(
     const file = normalizePath(relative(repoRoot, absolutePath));
     const source = await Bun.file(absolutePath).text();
     assertParseable(source, file);
-    const lines = collectCommentLines(source, file);
+    const fileFindings = [
+      ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
+      ...collectJsDocFindings(source, file, options),
+    ];
 
-    for (const line of lines) {
-      for (const finding of inspectCommentLine(line, options)) {
-        const exception = exceptions.find(
-          (entry) => exceptionKey(entry) === findingKey(finding),
-        );
-        if (exception) {
-          usedExceptionKeys.add(exceptionKey(exception));
-          continue;
-        }
-        findings.push(finding);
+    for (const finding of fileFindings) {
+      const exception = exceptions.find(
+        (entry) => exceptionKey(entry) === findingKey(finding),
+      );
+      if (exception) {
+        usedExceptionKeys.add(exceptionKey(exception));
+        continue;
       }
+      findings.push(finding);
     }
   }
 
@@ -218,9 +240,10 @@ export function inspectCommentPolicySource(
   options: Pick<CommentPolicyOptions, "auditNarration" | "changedLines"> = {},
 ): CommentPolicyFinding[] {
   assertParseable(source, file);
-  return collectCommentLines(source, file).flatMap((line) =>
-    inspectCommentLine(line, options),
-  );
+  return [
+    ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
+    ...collectJsDocFindings(source, file, options),
+  ];
 }
 
 async function loadExceptions(path: string): Promise<CommentPolicyException[]> {
@@ -257,7 +280,8 @@ function isCommentPolicyException(
     typeof entry.file === "string" &&
     typeof entry.reason === "string" &&
     typeof entry.text === "string" &&
-    (entry.rule === "numbered-narration" ||
+    (entry.rule === "jsdoc-restatement" ||
+      entry.rule === "numbered-narration" ||
       entry.rule === "prose-dash" ||
       entry.rule === "rule-scaffolding")
   );
@@ -328,6 +352,168 @@ function inspectCommentLine(
   }
 
   return findings;
+}
+
+/**
+ * Flags `@param`/`@returns` text that only repeats the identifier or the TypeScript
+ * type beside it.
+ *
+ * This class needs its own pass because the line rules cannot see it: the tag text
+ * carries no dash, no ordinal, and no action head, so it reads as ordinary prose.
+ * It is also the highest-recurrence policy miss, since JSDoc predates TypeScript and
+ * a complete `@param` list per parameter is the dominant convention in the corpus
+ * models learn from.
+ *
+ * Matching is exact after normalization, never substring: a description that merely
+ * contains the type name usually goes on to add units, nullability, or failure
+ * behavior, and those are the tags the policy keeps.
+ */
+function collectJsDocFindings(
+  source: string,
+  file: string,
+  options: Pick<CommentPolicyOptions, "auditNarration" | "changedLines">,
+): CommentPolicyFinding[] {
+  const scriptKind = file.toLowerCase().endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, scriptKind);
+  const sourceLines = source.split(/\r?\n/);
+  const findings: CommentPolicyFinding[] = [];
+
+  const record = (tag: ts.JSDocTag, message: string): void => {
+    const line = sourceFile.getLineAndCharacterOfPosition(tag.getStart(sourceFile)).line;
+    findings.push({
+      file,
+      line: line + 1,
+      message,
+      rule: "jsdoc-restatement",
+      severity: "error",
+      text: (sourceLines[line] ?? "").trim(),
+    });
+  };
+
+  const recordSummaryEcho = (block: ts.JSDoc, summary: string): void => {
+    const start = sourceFile.getLineAndCharacterOfPosition(block.getStart(sourceFile)).line;
+    const end = sourceFile.getLineAndCharacterOfPosition(block.getEnd()).line;
+    let line = start;
+    for (let index = start; index <= end; index++) {
+      if (stripJsDocDecoration(sourceLines[index] ?? "")) {
+        line = index;
+        break;
+      }
+    }
+
+    const changed = options.changedLines?.get(file)?.has(line + 1);
+    if (!options.auditNarration && !changed) {
+      return;
+    }
+
+    findings.push({
+      file,
+      line: line + 1,
+      message: `This summary restates "${summary}" back from the identifier; add rationale or remove the block.`,
+      rule: "obvious-narration",
+      severity: changed ? "error" : "warning",
+      text: (sourceLines[line] ?? "").trim(),
+    });
+  };
+
+  const visit = (node: ts.Node): void => {
+    const documented = node as ts.Node & { jsDoc?: ts.JSDoc[]; name?: ts.Node };
+    const block = documented.jsDoc?.[0];
+    if (ts.isFunctionLike(node) && block && documented.name) {
+      const identifier = documented.name.getText(sourceFile);
+      const summary = (ts.getTextOfJSDocComment(block.comment) ?? "").split(/\r?\n/)[0]?.trim() ?? "";
+      if (summary && !RATIONALE_PATTERN.test(summary) && echoesIdentifier(identifier, summary)) {
+        recordSummaryEcho(block, identifier);
+      }
+    }
+
+    if (ts.isFunctionLike(node)) {
+      for (const tag of ts.getAllJSDocTags(node, ts.isJSDocParameterTag)) {
+        const described = normalizeJsDocPhrase(ts.getTextOfJSDocComment(tag.comment));
+        if (!described) {
+          continue;
+        }
+
+        const parameterName = tag.name.getText(sourceFile);
+        const declared = node.parameters.find(
+          (parameter) => parameter.name.getText(sourceFile) === parameterName,
+        );
+        const declaredType = declared?.type ? normalizeJsDocPhrase(declared.type.getText(sourceFile)) : "";
+
+        if (described === normalizeJsDocPhrase(parameterName)) {
+          record(tag, `@param ${parameterName} only restates the parameter name; drop the tag.`);
+        } else if (declaredType && described === declaredType) {
+          record(tag, `@param ${parameterName} only restates its TypeScript type; drop the tag.`);
+        }
+      }
+
+      for (const tag of ts.getAllJSDocTags(node, ts.isJSDocReturnTag)) {
+        const described = normalizeJsDocPhrase(ts.getTextOfJSDocComment(tag.comment));
+        const returnType = node.type ? normalizeJsDocPhrase(node.type.getText(sourceFile)) : "";
+        if (described && returnType && described === returnType) {
+          record(tag, "@returns only restates the return type; drop the tag.");
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+
+  visit(sourceFile);
+  return findings;
+}
+
+/**
+ * True when the summary repeats every meaningful word of the identifier and adds none of
+ * its own signal, which is the JSDoc form of translating a name into English.
+ *
+ * Stemming is crude on purpose: `Count`/`Counts`/`Counting` must collapse together, and a
+ * real stemmer would buy nothing at warning severity.
+ */
+function echoesIdentifier(identifier: string, summary: string): boolean {
+  const tokens = splitIdentifierWords(identifier);
+  if (tokens.length < 2) {
+    return false;
+  }
+
+  const words = summary
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 2 && !SUMMARY_STOPWORDS.has(word))
+    .map(stemWord);
+  if (!tokens.every((token) => words.includes(token))) {
+    return false;
+  }
+
+  // A summary that echoes the name AND carries several words of its own is usually
+  // documenting a side effect or an ordering guarantee, which the policy keeps.
+  const added = words.filter((word) => !tokens.includes(word));
+  return new Set(added).size <= SUMMARY_ADDED_WORD_LIMIT;
+}
+
+function splitIdentifierWords(identifier: string): string[] {
+  return identifier
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word.length > 2)
+    .map(stemWord);
+}
+
+function stemWord(word: string): string {
+  return word.replace(/(?:es|s|ing|ed)$/, "");
+}
+
+/** Removes JSDoc framing so a line yields its prose, or an empty string when it has none. */
+function stripJsDocDecoration(line: string): string {
+  return line.replace(/^\s*\/?\*+\/?/, "").replace(/\*\/\s*$/, "").trim();
+}
+
+/** Reduces tag text to comparable form: leading article dropped, then letters and digits only. */
+function normalizeJsDocPhrase(value: string | undefined): string {
+  return (value ?? "")
+    .replace(/^\s*(?:the|a|an)\s+/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function isNarrationCandidate(comment: CommentLine): boolean {

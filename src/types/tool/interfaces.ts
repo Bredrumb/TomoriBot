@@ -530,10 +530,6 @@ export interface MCPManagerInterface {
    */
   isFunctionAvailable(functionName: string): Promise<boolean>;
 
-  /**
-   * Get the server name that provides a specific function
-   * @returns Promise<string | null>
-   */
   getServerForFunction(functionName: string): Promise<string | null>;
 
   /**

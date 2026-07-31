@@ -113,7 +113,7 @@ services. Not every feature is available on every provider.
 | **Google** | ✅ | ✅ | – | – |
 | **OpenRouter** | ✅ | ✅ | – | – |
 | **NovelAI** | ✅ | ✅ | ✅ | Can combine with other providers |
-| **NVIDIA** | ✅ | ✅ | – | – |
+| **NVIDIA** | ✅ | – | – | Text-to-image only; reference images are ignored |
 | **Z.ai** | ✅ | – | – | – |
 
 ### Video Generation

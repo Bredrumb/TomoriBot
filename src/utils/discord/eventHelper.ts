@@ -19,7 +19,6 @@ export async function getChannelActivity(channel: TextChannel): Promise<number> 
 
 /**
  * Finds the most active text channel that's accessible to the bot
- * @returns Promise<TextChannel | null>
  */
 export async function findBestChannel(guild: Guild, client: Client): Promise<TextChannel | null> {
   try {

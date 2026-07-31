@@ -1,5 +1,6 @@
 import type {
   CustomEndpointCapability,
+  DiffusionModelRow,
   LlmRow,
   SavedProviderConfigRow,
   SavedProviderConfigUpsert,
@@ -45,6 +46,24 @@ export function shouldRefreshSavedTextModel(
   model: Pick<LlmRow, "llm_provider" | "is_deprecated"> | null,
 ): boolean {
   return model === null || model.is_deprecated || model.llm_provider.toLowerCase() !== provider.toLowerCase();
+}
+
+/**
+ * Decide whether a saved image-model selection must fall back to the provider default.
+ *
+ * Mirrors {@link shouldRefreshSavedTextModel} for `image_diffusion_models`, which backs both the
+ * `diffusion_model_id` and `nai_diffusion_model_id` selections. Without this, a server stays
+ * pointed at a codename the provider has retired and every generation fails.
+ *
+ * @param provider - Provider owning the saved configuration
+ * @param model - Diffusion model currently referenced by the saved configuration
+ * @returns Whether the caller should load and store the current provider default
+ */
+export function shouldRefreshSavedDiffusionModel(
+  provider: string,
+  model: Pick<DiffusionModelRow, "provider" | "is_deprecated"> | null,
+): boolean {
+  return model === null || model.is_deprecated || model.provider.toLowerCase() !== provider.toLowerCase();
 }
 
 export function buildSavedProviderSnapshotFromTomoriState(tomoriState: TomoriState): SavedProviderConfigUpsert {
@@ -110,6 +129,37 @@ export async function loadProviderDefaultSelectionIds(provider: string): Promise
   };
 }
 
+/**
+ * Resolve which of the two saved image-model selections are unusable.
+ *
+ * Both `diffusion_model_id` and `nai_diffusion_model_id` index `image_diffusion_models`, so both
+ * carry the same retirement exposure and are checked against their own provider default.
+ *
+ * @param provider - Normalized provider owning the saved configuration
+ * @param existingConfig - Saved configuration being rebuilt, or null for a fresh one
+ * @returns Whether each selection should be replaced with the provider default
+ */
+async function resolveDiffusionRefreshFlags(
+  provider: string,
+  existingConfig: {
+    diffusion_model_id?: number | null;
+    nai_diffusion_model_id?: number | null;
+  } | null,
+): Promise<{ refreshDiffusionModel: boolean; refreshNaiDiffusionModel: boolean }> {
+  const diffusionModelId = existingConfig?.diffusion_model_id ?? null;
+  const naiDiffusionModelId = existingConfig?.nai_diffusion_model_id ?? null;
+
+  const [diffusionModel, naiDiffusionModel] = await Promise.all([
+    diffusionModelId ? llmModelRepo.loadDiffusionModelById(diffusionModelId) : null,
+    naiDiffusionModelId ? llmModelRepo.loadDiffusionModelById(naiDiffusionModelId) : null,
+  ]);
+
+  return {
+    refreshDiffusionModel: shouldRefreshSavedDiffusionModel(provider, diffusionModel),
+    refreshNaiDiffusionModel: shouldRefreshSavedDiffusionModel(provider, naiDiffusionModel),
+  };
+}
+
 export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
   serverId: number;
   provider: string;
@@ -124,8 +174,14 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
   const candidateLlmId = params.llmId ?? existingConfig?.llm_id ?? null;
   const candidateLlm = candidateLlmId ? await llmModelRepo.loadById(candidateLlmId) : null;
   const refreshTextModel = shouldRefreshSavedTextModel(normalizedProvider, candidateLlm);
+  const { refreshDiffusionModel, refreshNaiDiffusionModel } = await resolveDiffusionRefreshFlags(
+    normalizedProvider,
+    existingConfig,
+  );
   const defaults =
-    !existingConfig || refreshTextModel ? await loadProviderDefaultSelectionIds(normalizedProvider) : null;
+    !existingConfig || refreshTextModel || refreshDiffusionModel || refreshNaiDiffusionModel
+      ? await loadProviderDefaultSelectionIds(normalizedProvider)
+      : null;
 
   return {
     server_id: params.serverId,
@@ -133,9 +189,13 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
     api_key: params.apiKey,
     key_version: params.keyVersion,
     llm_id: refreshTextModel ? (defaults?.llm_id ?? null) : candidateLlmId,
-    diffusion_model_id: existingConfig?.diffusion_model_id ?? defaults?.diffusion_model_id ?? null,
+    diffusion_model_id: refreshDiffusionModel
+      ? (defaults?.diffusion_model_id ?? null)
+      : (existingConfig?.diffusion_model_id ?? null),
     embedding_model_id: existingConfig?.embedding_model_id ?? defaults?.embedding_model_id ?? null,
-    nai_diffusion_model_id: existingConfig?.nai_diffusion_model_id ?? defaults?.nai_diffusion_model_id ?? null,
+    nai_diffusion_model_id: refreshNaiDiffusionModel
+      ? (defaults?.nai_diffusion_model_id ?? null)
+      : (existingConfig?.nai_diffusion_model_id ?? null),
     video_model_id: existingConfig?.video_model_id ?? defaults?.video_model_id ?? null,
     vision_llm_id: existingConfig?.vision_llm_id ?? defaults?.vision_llm_id ?? null,
     nai_preset_name: existingConfig?.nai_preset_name ?? null,
@@ -167,8 +227,14 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
   const candidateLlmId = params.llmId ?? existingConfig?.llm_id ?? null;
   const candidateLlm = candidateLlmId ? await llmModelRepo.loadById(candidateLlmId) : null;
   const refreshTextModel = shouldRefreshSavedTextModel(normalizedProvider, candidateLlm);
+  const { refreshDiffusionModel, refreshNaiDiffusionModel } = await resolveDiffusionRefreshFlags(
+    normalizedProvider,
+    existingConfig,
+  );
   const defaults =
-    !existingConfig || refreshTextModel ? await loadProviderDefaultSelectionIds(normalizedProvider) : null;
+    !existingConfig || refreshTextModel || refreshDiffusionModel || refreshNaiDiffusionModel
+      ? await loadProviderDefaultSelectionIds(normalizedProvider)
+      : null;
 
   return {
     user_id: params.userId,
@@ -176,9 +242,13 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     api_key: params.apiKey,
     key_version: params.keyVersion,
     llm_id: refreshTextModel ? (defaults?.llm_id ?? null) : candidateLlmId,
-    diffusion_model_id: existingConfig?.diffusion_model_id ?? defaults?.diffusion_model_id ?? null,
+    diffusion_model_id: refreshDiffusionModel
+      ? (defaults?.diffusion_model_id ?? null)
+      : (existingConfig?.diffusion_model_id ?? null),
     embedding_model_id: existingConfig?.embedding_model_id ?? defaults?.embedding_model_id ?? null,
-    nai_diffusion_model_id: existingConfig?.nai_diffusion_model_id ?? defaults?.nai_diffusion_model_id ?? null,
+    nai_diffusion_model_id: refreshNaiDiffusionModel
+      ? (defaults?.nai_diffusion_model_id ?? null)
+      : (existingConfig?.nai_diffusion_model_id ?? null),
     video_model_id: existingConfig?.video_model_id ?? defaults?.video_model_id ?? null,
     vision_llm_id: existingConfig?.vision_llm_id ?? defaults?.vision_llm_id ?? null,
     nai_preset_name: existingConfig?.nai_preset_name ?? null,

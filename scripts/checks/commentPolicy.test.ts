@@ -120,4 +120,76 @@ describe("comment policy", () => {
       }).map((finding) => finding.rule),
     ).toEqual(["obvious-narration"]);
   });
+
+  it("finds JSDoc tags that only repeat the identifier or its type", () => {
+    const source = [
+      "/**",
+      " * Resolve one request.",
+      " * @param request - Provider native image generation request",
+      " */",
+      "export function resolve(request: ProviderNativeImageGenerationRequest): void {}",
+      "/**",
+      " * Find a server.",
+      " * @returns Promise<string | null>",
+      " */",
+      "export function find(name: string): Promise<string | null> {",
+      "  return Promise.resolve(name);",
+      "}",
+      "",
+    ].join("\n");
+
+    expect(inspectCommentPolicySource(source).map((finding) => finding.rule)).toEqual([
+      "jsdoc-restatement",
+      "jsdoc-restatement",
+    ]);
+  });
+
+  it("reports a JSDoc summary that echoes the identifier only while auditing", () => {
+    const source = [
+      "/**",
+      " * Build system prompt for LLM",
+      " */",
+      "export function buildSystemPrompt(): string {",
+      '  return "";',
+      "}",
+      "",
+    ].join("\n");
+
+    expect(inspectCommentPolicySource(source)).toEqual([]);
+    expect(
+      inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true }).map(
+        (finding) => finding.rule,
+      ),
+    ).toEqual(["obvious-narration"]);
+  });
+
+  it("keeps a JSDoc summary that documents a side effect beyond the identifier", () => {
+    const source = [
+      "/**",
+      " * Connect to a single guild MCP server and register it in the shared pool.",
+      " */",
+      "export function connectGuildMcpServer(): void {}",
+      "",
+    ].join("\n");
+
+    expect(
+      inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true }),
+    ).toEqual([]);
+  });
+
+  it("keeps JSDoc tags that add what the type cannot express", () => {
+    const source = [
+      "/**",
+      " * Join supported modes.",
+      " * @param modes - Empty when the provider reports no capabilities",
+      " * @returns Comma-joined list, or empty string when no modes are supported",
+      " */",
+      "export function joinModes(modes: string[]): string {",
+      '  return modes.join(",");',
+      "}",
+      "",
+    ].join("\n");
+
+    expect(inspectCommentPolicySource(source)).toEqual([]);
+  });
 });
