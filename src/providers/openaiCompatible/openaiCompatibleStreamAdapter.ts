@@ -134,6 +134,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       currentTurnModelParts: context.currentTurnModelParts,
       functionInteractionHistory: context.functionInteractionHistory,
       seesImages: openAICompatibleConfig.seesImages ?? false,
+      requiresReasoningContentReplay: this.options.requiresReasoningContentReplay,
       supportsSystemRole,
     });
 
@@ -270,7 +271,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
 
       const fetchImpl = this.options.providerName === "custom" ? fetchUserRemoteUrl : fetch;
       const attempts = buildDegradationAttempts(requestBody, {
-        mandatoryKeys: new Set(["model", "messages", "stream"]),
+        mandatoryKeys: new Set(["model", "messages", "stream", ...(this.options.mandatoryBodyKeys ?? [])]),
         stripImages: (attemptMessages) =>
           Array.isArray(attemptMessages)
             ? stripImageBlocksWithNotice(attemptMessages as Array<Record<string, unknown>>)

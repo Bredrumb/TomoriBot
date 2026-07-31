@@ -377,16 +377,23 @@ export default defineConfig({
           attrs: { rel: "icon", type: "image/x-icon", href: "/favicon.ico", sizes: "any" },
         },
         {
+          // Browsers that support SVG favicons (Chrome, Firefox) prefer this over the
+          // PNG/ICO fallbacks below, so it must come first in document order.
+          tag: "link",
+          attrs: { rel: "icon", type: "image/svg+xml", href: "/tomoricon.svg" },
+        },
+        {
           tag: "link",
           attrs: { rel: "icon", type: "image/png", href: "/tomoricon.png" },
         },
         {
+          // iOS ignores SVG apple-touch-icons, so this must stay a raster PNG.
           tag: "link",
           attrs: { rel: "apple-touch-icon", href: "/tomoricon.png" },
         },
       ],
       customCss: ["/src/styles/custom.css"],
-      // SiteTitle override renders /tomoricon.png directly as a plain <img> in the nav header.
+      // SiteTitle override renders /tomoricon.svg directly as a plain <img> in the nav header.
       // The standard `logo` config can't reference public/ files because it generates a Vite
       // import that expects an Astro image object { src, width, height }, not a URL string.
       components: {

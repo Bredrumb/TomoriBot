@@ -489,6 +489,9 @@ async function executeToolCall(
       const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
       // userId is carried on the context (resolved once at turn planning), so no
       // per-tool-call DB lookup: recordStat just buffers in memory.
+      // The per-sticker `sticker_used` breakdown is deliberately NOT recorded here:
+      // selection only queues a sticker, and the send happens post-turn. It is recorded
+      // on confirmed delivery in postTurnEffects.recordStickerDelivery instead.
       try {
         statRepository.recordStat({
           serverId,
@@ -497,24 +500,6 @@ async function executeToolCall(
           metric: "tool_used",
           metricKey: functionName,
         });
-
-        // Per-sticker breakdown: when the sticker tool resolves a sticker, also
-        // record `sticker_used` keyed by the canonical resolved name (from the tool
-        // result, not the model's fuzzy input). tool_used already counts the call;
-        // this adds the "favorite sticker" dimension that mirrors emoji_used. The
-        // tool name must match StickerTool.name.
-        if (functionName === "select_sticker_for_response") {
-          const stickerData = toolResult.data as { status?: string; sticker_name?: string } | undefined;
-          if (stickerData?.status === "sticker_selected_successfully" && stickerData.sticker_name) {
-            statRepository.recordStat({
-              serverId,
-              userId,
-              lineageId,
-              metric: "sticker_used",
-              metricKey: stickerData.sticker_name,
-            });
-          }
-        }
       } catch (statError) {
         log.warn(`Failed to record tool_used stat for ${functionName}: ${statError}`);
       }

@@ -29,6 +29,13 @@ interface BuildOpenAICompatibleMessagesOptions {
   }>;
   seesImages?: boolean;
   /**
+   * When `true`, every replayed assistant tool-call turn carries a `reasoning_content` key,
+   * falling back to an empty string when nothing was captured. Distinct from the adapter's
+   * capture-side flag: only DeepSeek has been shown to require the key's presence and to accept
+   * an empty value, so other reasoning-capable endpoints keep the capture-only behavior.
+   */
+  requiresReasoningContentReplay?: boolean;
+  /**
    * When `false`, the assembled system instruction is injected as the first
    * `"user"` turn instead of a `"system"` role message.  Use this for
    * endpoints (e.g. Chatmock → Codex CLI) that silently drop system turns.
@@ -191,11 +198,19 @@ export async function buildOpenAICompatibleMessages(
           },
         ],
       };
-      if (interaction.functionCall.deepseekReasoningContent) {
-        assistantMessage.reasoning_content = interaction.functionCall.deepseekReasoningContent;
+      // DeepSeek thinking mode rejects a replayed tool-call turn that omits `reasoning_content`
+      // but accepts an empty string, so the key must be present even when nothing was captured.
+      // A turn can legitimately carry none: a degraded retry that drops `thinking` (guarded by
+      // mandatoryBodyKeys) still calls tools, and that reply has no reasoning to capture.
+      const capturedReasoning = interaction.functionCall.deepseekReasoningContent;
+      if (options.requiresReasoningContentReplay) {
+        assistantMessage.reasoning_content = capturedReasoning ?? "";
         log.info(
-          `${options.adapterName}: Preserving DeepSeek reasoning_content for tool '${interaction.functionCall.name}'`,
+          `${options.adapterName}: Replaying ${capturedReasoning?.length ?? 0} chars of reasoning_content for tool '${interaction.functionCall.name}'`,
         );
+      } else if (capturedReasoning) {
+        assistantMessage.reasoning_content = capturedReasoning;
+        log.info(`${options.adapterName}: Preserving reasoning_content for tool '${interaction.functionCall.name}'`);
       }
 
       messages.push(assistantMessage);

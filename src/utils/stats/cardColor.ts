@@ -13,12 +13,17 @@
  *   avatar, used to tint each persona/member bar on the Server Leaderboard.
  * - `loadTomoriconDataUri`: shared monochrome-stamp tinting used by every card.
  */
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sharp from "sharp";
 import { log } from "@/utils/misc/logger";
 import { DEFAULT_PERSONAL_CARD_PALETTE, type PersonalCardPalette } from "@/utils/stats/statsInfographic";
 
-const TOMORICON_MONO_DARK_PATH = resolve("assets/img/tomoricon-mono-dark.png");
+const TOMORICON_MONO_DARK_SVG_PATH = resolve("assets/img/icons/tomoricon-mono-dark.svg");
+// The stamp is authored with a single fill="#000000" on its wrapping <g>; retinting
+// only needs to replace that one attribute value before rasterizing.
+const tomoriconSvgTemplate = readFileSync(TOMORICON_MONO_DARK_SVG_PATH, "utf-8");
+const TOMORICON_RASTER_SIZE = 1142;
 const tomoriconDataUriByColor = new Map<string, string | null>();
 
 function parseHexColor(color: string): { red: number; green: number; blue: number } {
@@ -52,20 +57,11 @@ export async function loadTomoriconDataUri(color: string): Promise<string | null
   if (cached !== undefined) return cached;
   try {
     const { red, green, blue } = parseHexColor(color);
-    const { data, info } = await sharp(TOMORICON_MONO_DARK_PATH)
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    const tintedPixels = Buffer.alloc(data.length);
-    for (let index = 0; index < data.length; index += info.channels) {
-      tintedPixels[index] = red;
-      tintedPixels[index + 1] = green;
-      tintedPixels[index + 2] = blue;
-      tintedPixels[index + 3] = data[index + 3];
-    }
-    const tintedIcon = await sharp(tintedPixels, {
-      raw: { width: info.width, height: info.height, channels: info.channels },
-    })
+    const component = (value: number) => value.toString(16).padStart(2, "0");
+    const normalizedColor = `#${component(red)}${component(green)}${component(blue)}`;
+    const tintedSvg = tomoriconSvgTemplate.replace('fill="#000000"', `fill="${normalizedColor}"`);
+    const tintedIcon = await sharp(Buffer.from(tintedSvg))
+      .resize(TOMORICON_RASTER_SIZE, TOMORICON_RASTER_SIZE)
       .png()
       .toBuffer();
     const dataUri = `data:image/png;base64,${tintedIcon.toString("base64")}`;

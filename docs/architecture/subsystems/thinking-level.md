@@ -165,6 +165,40 @@ Additional behavior:
 - when DeepSeek thinking is active, Tomori removes incompatible sampling fields
 - Tomori does not currently expose a numeric DeepSeek reasoning budget because no verified stable budget field is wired here
 
+#### reasoning_content round-trip (thinking mode)
+
+With `thinking: { type: "enabled" }` on `deepseek-chat`, DeepSeek rejects any replayed assistant
+tool-call turn that omits `reasoning_content`:
+
+```
+HTTP 400: The `reasoning_content` in the thinking mode must be passed back to the API.
+```
+
+Verified endpoint behavior:
+
+| Shape | Result |
+| --- | --- |
+| tool-call turn with `reasoning_content` (any string) | accepted |
+| tool-call turn with `reasoning_content: ""` | accepted |
+| tool-call turn with the key omitted | 400 |
+| plain history assistant turns without the key | accepted |
+
+The validator checks presence, not content. `deepseek-reasoner` and non-thinking `deepseek-chat`
+do not enforce it.
+
+Tomori therefore always emits the key on tool-call turns for DeepSeek
+(`requiresReasoningContentReplay`), falling back to an empty string when the reply carried no
+reasoning. Two protections back this up:
+
+- `mandatoryBodyKeys: ["thinking"]` keeps the parameter-degradation ladder from generating a
+  `probe_drop_thinking` rung. That rung kept `tools` while dropping `thinking`, so its reply had no
+  reasoning to capture, and the next request in the same tool loop ran at full strength and could
+  not replay the turn it had just stored.
+- the empty-string fallback keeps the request legal even if some other path leaves the capture empty.
+
+Other reasoning-capable OpenAI-compatible endpoints keep capture-only behavior: they receive
+`reasoning_content` only when the stream actually produced it.
+
 ### Z.ai / Z.ai Coding
 
 Tomori maps `thinking_level` to Z.ai's documented thinking enable/disable flag.

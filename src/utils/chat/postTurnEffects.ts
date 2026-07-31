@@ -21,9 +21,9 @@ import { recordReunionPresence } from "@/utils/chat/reunionPresence";
 
 /**
  * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`).
- * Only resolved tags appear in the final persona text (cleanLLMOutput converts a
- * successful `:name:` shortcode into this form), so counting these is exactly the
- * "successful server-emoji resolve" signal the stat plan calls for. Capture 1 = name.
+ * Only resolved tags survive into delivered text (cleanLLMOutput converts a successful
+ * `:name:` shortcode into this form and drops the ones it cannot resolve), so counting
+ * these is exactly the "successful server-emoji resolve" signal. Capture 1 = name.
  */
 const RESOLVED_CUSTOM_EMOJI_RE = /<a?:([A-Za-z0-9_~]+):\d+>/g;
 
@@ -83,7 +83,10 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
     }
   }
 
-  if (stickerSent) return;
+  if (stickerSent) {
+    recordStickerDelivery(context, sticker.name);
+    return;
+  }
 
   try {
     if (context.isFromQueue) {
@@ -95,6 +98,7 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
       await context.channel.send({ stickers: [sticker.id] });
     }
     log.info(`Sent selected sticker '${sticker.name}' after stream.`);
+    recordStickerDelivery(context, sticker.name);
   } catch (error) {
     log.error("Failed to send selected sticker after stream:", error, {
       serverId: context.tomoriState.server_id,
@@ -105,11 +109,44 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
 }
 
 /**
+ * Records `sticker_used` for a sticker Discord actually accepted, keyed by the canonical
+ * resolved name (matching `server_stickers.sticker_name`, which getEmotionBreakdown joins on).
+ *
+ * Counting at tool-selection time instead would credit stickers the delivery path dropped:
+ * a turn that never reached "completed", or a webhook send that failed and took the native
+ * fallback down with it. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
+ */
+function recordStickerDelivery(context: ChatTurnContext, stickerName: string): void {
+  if (context.isDMChannel) return;
+  const serverId = context.tomoriState.server_id;
+  const userId = context.triggererUserId;
+  if (!serverId || !userId) return;
+
+  try {
+    statRepository.recordStat({
+      serverId,
+      userId,
+      lineageId: context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0,
+      metric: "sticker_used",
+      metricKey: stickerName,
+    });
+  } catch (error) {
+    log.warn(`Failed to record sticker_used stat for '${stickerName}'`, error);
+  }
+}
+
+/**
  * Records per-turn usage stats at the single post-turn chokepoint:
  * message_sent, active_hour, model_used, tokens_in/tokens_out (estimated),
  * user_impersonation_triggered, emoji_used, sprite_shown, and sprite_emotion
  * (non-identity sprites only). Only counts turns that actually produced a persona
  * response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
+ *
+ * Expression metrics (emoji_used, sprite_shown, sprite_emotion) are delivery-gated:
+ * they count only what Discord accepted, never what the model merely produced. Text
+ * the output cleaner stripped, `<details>` scene metadata, and an abandoned attempt's
+ * purged messages therefore score nothing. `sticker_used` follows the same rule from
+ * its own delivery site (see recordStickerDelivery).
  *
  * Tokens prefer REAL provider usage when available: the orchestrator normalizes
  * each provider's reported usage onto `StreamResult.usage`, and these are summed
@@ -153,38 +190,46 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "active_hour", metricKey: hour });
 
     // Per responding persona: one message exchanged (drives favorite-persona
-    //    affinity), plus that persona's emoji usage and output-token volume: all
-    //    persona-scoped, so keyed to the response's own lineage.
+    //    affinity), plus that persona's output-token volume: both persona-scoped,
+    //    so keyed to the response's own lineage.
     const lineages = new Set<number>();
     let estimatedOutputTokens = 0;
     for (const response of result.personaResponses) {
-      const lineageId = response.personaLineageId ?? primaryLineage;
-      lineages.add(lineageId);
+      lineages.add(response.personaLineageId ?? primaryLineage);
 
       // Output token volume (character-estimated) for this response: used
       //     only as the fallback when the provider reported no real usage (5).
       if (response.text) estimatedOutputTokens += charsToTokensText(response.text.length);
-
-      // Successful custom-emoji uses in the final text, one increment per
-      //     occurrence. Pre-aggregated per name so repeats collapse to one UPSERT.
-      const emojiCounts = new Map<string, number>();
-      for (const match of response.text.matchAll(RESOLVED_CUSTOM_EMOJI_RE)) {
-        const name = match[1];
-        emojiCounts.set(name, (emojiCounts.get(name) ?? 0) + 1);
-      }
-      for (const [name, count] of emojiCounts) {
-        statRepository.recordStat({
-          serverId,
-          userId,
-          lineageId,
-          metric: "emoji_used",
-          metricKey: name,
-          delta: count,
-        });
-      }
     }
     for (const lineageId of lineages) {
       statRepository.recordStat({ serverId, userId, lineageId, metric: "message_sent" });
+    }
+
+    // Custom-emoji uses that actually reached Discord, one increment per occurrence,
+    //    pre-aggregated per name so repeats collapse to one UPSERT. Counted off each
+    //    stream segment's accumulatedText (appended only after Discord accepts a send)
+    //    rather than personaResponses[].text, which is the short-term-memory payload:
+    //    that string carries the `[Scene Metadata]` block drained out of `<details>`,
+    //    so emoji the model wrote there would score despite never surfacing in chat.
+    //    Reading the segments also recovers text delivered before a tool call, since
+    //    stream state is fresh per streamOnce and only the last segment reaches the
+    //    response.
+    const emojiCounts = new Map<string, number>();
+    for (const stream of result.streamResults) {
+      for (const match of (stream.accumulatedText ?? "").matchAll(RESOLVED_CUSTOM_EMOJI_RE)) {
+        const name = match[1];
+        emojiCounts.set(name, (emojiCounts.get(name) ?? 0) + 1);
+      }
+    }
+    for (const [name, count] of emojiCounts) {
+      statRepository.recordStat({
+        serverId,
+        userId,
+        lineageId: primaryLineage,
+        metric: "emoji_used",
+        metricKey: name,
+        delta: count,
+      });
     }
     // One text_generated increment per completed turn (persona-scoped to the answering persona).
     statRepository.recordStat({ serverId, userId, lineageId: primaryLineage, metric: "text_generated" });

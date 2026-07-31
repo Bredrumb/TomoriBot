@@ -177,3 +177,47 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
     expect(messages[1]?.content).toBe(JSON.stringify(functionResponse));
   });
 });
+
+describe("buildOpenAICompatibleMessages — reasoning_content replay", () => {
+  const functionResponse = { functionResponse: { name: "get_weather", response: { result: "ok" } } };
+
+  async function buildToolReplay(
+    deepseekReasoningContent: string | undefined,
+    requiresReasoningContentReplay: boolean,
+  ): Promise<Array<Record<string, unknown>>> {
+    return await buildOpenAICompatibleMessages({
+      adapterName: "TestAdapter",
+      contextItems: [],
+      currentTurnModelParts: [],
+      functionInteractionHistory: [
+        {
+          functionCall: { name: "get_weather", args: {}, deepseekReasoningContent },
+          functionResponse,
+        },
+      ],
+      seesImages: false,
+      requiresReasoningContentReplay,
+    });
+  }
+
+  it("emits an empty reasoning_content when replay is required but nothing was captured", async () => {
+    // DeepSeek 400s on an omitted key but accepts "", and a degraded retry that dropped
+    // `thinking` produces a tool call with no reasoning to capture.
+    const messages = await buildToolReplay(undefined, true);
+
+    expect(messages[0]).toHaveProperty("reasoning_content");
+    expect(messages[0]?.reasoning_content).toBe("");
+  });
+
+  it("replays captured reasoning verbatim when replay is required", async () => {
+    const messages = await buildToolReplay("thought about the weather", true);
+
+    expect(messages[0]?.reasoning_content).toBe("thought about the weather");
+  });
+
+  it("omits reasoning_content entirely for endpoints that do not require the replay", async () => {
+    const messages = await buildToolReplay(undefined, false);
+
+    expect(messages[0]).not.toHaveProperty("reasoning_content");
+  });
+});

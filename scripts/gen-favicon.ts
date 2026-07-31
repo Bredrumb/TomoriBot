@@ -1,20 +1,22 @@
 /**
- * Generates a multi-size ICO file and an optimized 256x256 PNG from assets/img/original.png.
+ * Generates a multi-size ICO file and an optimized 256x256 PNG from assets/img/icons/tomoricon.png.
  *
  * ICO layout: 16x16, 32x32, 48x48, 256x256 (each stored as a compressed embedded PNG
  * inside the ICO container (supported by all modern browsers and Google's faviconV2 service).
  *
  * Output:
- *   assets/img/tomoricon.ico: replaces the bloated single-size ICO
+ *   assets/img/icons/tomoricon.ico: replaces the bloated single-size ICO
  *   apps/docs/public/favicon.ico: copy served by the docs site
  *   apps/docs/public/tomoricon.png: optimized 256x256 PNG for docs
+ *   apps/docs/public/tomoricon.svg: copy of the vector mark for the SVG favicon/nav icon
  */
 
 import sharp from "sharp";
-import { writeFileSync } from "node:fs";
+import { copyFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const SOURCE = resolve(import.meta.dir, "../assets/img/tomoricon.png");
+const SOURCE = resolve(import.meta.dir, "../assets/img/icons/tomoricon.png");
+const SOURCE_SVG = resolve(import.meta.dir, "../assets/img/icons/tomoricon.svg");
 const SIZES = [16, 32, 48, 256];
 
 const layers: Buffer[] = await Promise.all(
@@ -63,7 +65,7 @@ const png256 = await sharp(SOURCE)
   .toBuffer();
 
 const outputs: [string, Buffer][] = [
-  ["assets/img/tomoricon.ico", ico],
+  ["assets/img/icons/tomoricon.ico", ico],
   ["apps/docs/public/favicon.ico", ico],
   ["apps/docs/public/tomoricon.png", png256],
 ];
@@ -74,3 +76,7 @@ for (const [rel, buf] of outputs) {
   writeFileSync(dest, buf);
   console.log(`wrote ${rel} — ${(buf.length / 1024).toFixed(1)} KB`);
 }
+
+const svgDest = resolve(root, "apps/docs/public/tomoricon.svg");
+copyFileSync(SOURCE_SVG, svgDest);
+console.log("wrote apps/docs/public/tomoricon.svg");

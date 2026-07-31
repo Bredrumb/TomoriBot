@@ -5,7 +5,7 @@
 <div align="center">
 
   <a href="https://github.com/Bredrumb/TomoriBot">
-    <img src="assets/img/tomoricon.png" alt="Logo" width="80" height="80">
+    <img src="assets/img/icons/tomoricon.svg" alt="Logo" width="80" height="80">
   </a>
 
 <h3 align="center">TomoriBot</h3>

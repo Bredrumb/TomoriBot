@@ -140,8 +140,20 @@ Schedules a `setImmediate` callback:
 ### 8. `recordUsageStats`
 
 Starts fire-and-forget recording for completed persona responses: turn/model,
-token, impersonation, emoji, and sprite metrics. Sticker-use statistics remain
-at successful tool selection, matching the tool-dispatch timing.
+token, impersonation, emoji, and sprite metrics.
+
+Expression metrics are **delivery-gated**: they count what Discord accepted, not
+what the model produced. `emoji_used` is therefore scanned from each stream
+segment's `StreamResult.accumulatedText` (appended only inside the post-send
+`recordSuccessfulSend` block) rather than from `personaResponses[].text`, which
+is the short-term-memory payload and carries the `[Scene Metadata]` block drained
+out of `<details>` (content that never reaches the channel). Scanning the
+segments also picks up text delivered *before* a tool call, which the response
+text drops because stream state is fresh per `streamOnce`.
+
+`sticker_used` follows the same rule from its own delivery site: it is recorded
+in `recordStickerDelivery`, called by `sendSelectedSticker` once a webhook or
+native send succeeds, not at tool-selection time.
 
 ## Invariants
 
