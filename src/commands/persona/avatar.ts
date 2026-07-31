@@ -12,7 +12,7 @@ import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
 import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { safeDownload } from "../../utils/security/safeDownload";
+import { safeDownload, type SafeDownloadResult } from "../../utils/security/safeDownload";
 import { memoryGuard, PERSONA_LIMITS, reserveAvatarQuota } from "../../utils/security/rateLimiter";
 import { personaRepository } from "@/utils/db/repositories";
 import { convertToPNG } from "../../utils/image/imageProcessor";
@@ -94,7 +94,7 @@ function validateImage(attachment: AvatarAttachment): {
 async function downloadAttachmentBuffer(attachment: AvatarAttachment): Promise<{
   success: boolean;
   buffer?: Buffer;
-  error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
+  error?: SafeDownloadResult["error"];
   details?: string;
 }> {
   const downloadResult = await safeDownload(attachment.url, {

@@ -16,7 +16,7 @@ import type { SelectOption } from "@/types/discord/modal";
 import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import {
   buildCapabilityEditModalComponents,
   parseCapabilityModalFields,
@@ -455,8 +455,8 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
     // Validate the new endpoint URL if it changed.
     if (endpointUrl !== existingEndpoint.endpoint_url) {
       const urlValidation = strictRemoteValidation
-        ? await validateRemoteMcpUrl(endpointUrl, { strict: true })
-        : await validateRemoteMcpUrl(endpointUrl);
+        ? await validateRemoteUrl(endpointUrl, { strict: true })
+        : await validateRemoteUrl(endpointUrl);
       if (!urlValidation.valid) {
         await selectInteraction.editReply({
           embeds: [],

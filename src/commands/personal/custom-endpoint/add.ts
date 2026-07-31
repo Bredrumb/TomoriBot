@@ -6,7 +6,7 @@ import { llmProviderRepo } from "@/utils/db/repositories";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import {
   buildCapabilityAddModalComponents,
   capabilityNeedsAddModal,
@@ -175,7 +175,7 @@ export async function execute(
 
   // Production always enforces the blocklist. Self-hosters can opt out via ALLOW_PERSONAL_LOCAL_ENDPOINTS=true.
   const strict = process.env.RUN_ENV === "production" || process.env.ALLOW_PERSONAL_LOCAL_ENDPOINTS !== "true";
-  const urlValidation = await validateRemoteMcpUrl(endpointUrl, { strict });
+  const urlValidation = await validateRemoteUrl(endpointUrl, { strict });
   if (!urlValidation.valid) {
     const isLocalBlock =
       urlValidation.failureCode === "PRODUCTION_LOCALHOST_FORBIDDEN" ||

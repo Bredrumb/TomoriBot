@@ -1,8 +1,20 @@
+/**
+ * The single SSRF gate for user-supplied URLs.
+ *
+ * Guards guild MCP servers, guild and personal custom endpoints, and every
+ * `safeDownload()` caller through `fetchUserRemoteUrl()`. `fetch_url` runs its own
+ * parallel guard in `src/tools/fetchUrl/urlSafety.ts` because the Crawl4AI engine
+ * dispatches out-of-process; the two are kept deliberately in lockstep on the same
+ * `RUN_ENV` production signal and the same always-on cloud-metadata denylist.
+ *
+ * Add new user-URL entry points here rather than writing a third guard.
+ */
+
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { isCloudMetadataAddress } from "@/utils/security/cloudMetadata";
 
-export type McpUrlValidationFailureCode =
+export type RemoteUrlValidationFailureCode =
   | "INVALID_FORMAT"
   | "INVALID_PROTOCOL"
   | "REMOTE_HTTP_FORBIDDEN"
@@ -11,19 +23,23 @@ export type McpUrlValidationFailureCode =
   | "DNS_RESOLUTION_FAILED"
   | "PRODUCTION_BLOCKED_ADDRESS";
 
-interface ResolvedMcpAddress {
+interface ResolvedRemoteAddress {
   address: string;
   family: number;
   blockedInProduction: boolean;
   reason: string;
 }
 
-export interface McpUrlValidationResult {
+export interface RemoteUrlValidationResult {
   valid: boolean;
   hostname?: string;
   resolvedAddresses?: string[];
-  failureCode?: McpUrlValidationFailureCode;
+  failureCode?: RemoteUrlValidationFailureCode;
   blockedAddress?: string;
+  /** Diagnostic text for logs and thrown errors only. This gate backs MCP config,
+   *  custom endpoints, `fetch_url`, and every `safeDownload`, so it cannot know what
+   *  the caller was doing: keep this caller-neutral and put user-facing remediation
+   *  in the caller, keyed off `failureCode`. */
   details?: string;
 }
 
@@ -158,7 +174,7 @@ function classifyIpv6Address(address: string): {
   return { blockedInProduction: false, reason: "a public IPv6 address" };
 }
 
-function classifyResolvedAddress(address: string): ResolvedMcpAddress {
+function classifyResolvedAddress(address: string): ResolvedRemoteAddress {
   const normalizedAddress = normalizeResolvedAddress(address);
   const family = isIP(normalizedAddress);
 
@@ -188,7 +204,7 @@ function classifyResolvedAddress(address: string): ResolvedMcpAddress {
   };
 }
 
-async function resolveHostnameAddresses(hostname: string): Promise<ResolvedMcpAddress[]> {
+async function resolveHostnameAddresses(hostname: string): Promise<ResolvedRemoteAddress[]> {
   const literalFamily = isIP(hostname);
   if (literalFamily === 4 || literalFamily === 6) {
     return [classifyResolvedAddress(hostname)];
@@ -199,7 +215,7 @@ async function resolveHostnameAddresses(hostname: string): Promise<ResolvedMcpAd
     verbatim: true,
   });
 
-  const addresses = new Map<string, ResolvedMcpAddress>();
+  const addresses = new Map<string, ResolvedRemoteAddress>();
   for (const entry of resolved) {
     const classified = classifyResolvedAddress(entry.address);
     addresses.set(classified.address, classified);
@@ -210,17 +226,17 @@ async function resolveHostnameAddresses(hostname: string): Promise<ResolvedMcpAd
 
 function buildBlockedAddressDetails(
   hostname: string,
-  blockedAddress: ResolvedMcpAddress,
-  allAddresses: ResolvedMcpAddress[],
+  blockedAddress: ResolvedRemoteAddress,
+  allAddresses: ResolvedRemoteAddress[],
 ): string {
   const resolvedList = allAddresses.map((entry) => entry.address).join(", ");
   return (
     `Resolved address '${blockedAddress.address}' for '${hostname}' is ${blockedAddress.reason}. ` +
-    `Production only allows publicly routable MCP hosts. Resolved addresses: ${resolvedList}`
+    `Production only allows publicly routable hosts. Resolved addresses: ${resolvedList}`
   );
 }
 
-export interface ValidateRemoteMcpUrlOptions {
+export interface ValidateRemoteUrlOptions {
   /** Always enforce the private/link-local/loopback blocklist, regardless of RUN_ENV.
    *  Use for user-scoped (personal) endpoints where the operator cannot vet the target. */
   strict?: boolean;
@@ -231,10 +247,10 @@ export interface ValidateRemoteMcpUrlOptions {
   allowPrivateNetwork?: boolean;
 }
 
-export async function validateRemoteMcpUrl(
+export async function validateRemoteUrl(
   url: string,
-  options?: ValidateRemoteMcpUrlOptions,
-): Promise<McpUrlValidationResult> {
+  options?: ValidateRemoteUrlOptions,
+): Promise<RemoteUrlValidationResult> {
   const isProduction = isProductionRuntime();
   // strict always enforces; otherwise enforce in production unless the caller
   // explicitly opts into private-network targets (fetch_url alignment).
@@ -268,7 +284,7 @@ export async function validateRemoteMcpUrl(
       valid: false,
       failureCode: "PRODUCTION_HTTPS_REQUIRED",
       hostname,
-      details: "Production requires HTTPS. Use a publicly hosted MCP server with TLS.",
+      details: "Production requires HTTPS. The target host must be reachable over TLS.",
     };
   }
 
@@ -277,7 +293,7 @@ export async function validateRemoteMcpUrl(
       valid: false,
       failureCode: "REMOTE_HTTP_FORBIDDEN",
       hostname,
-      details: "HTTP is only allowed for localhost in development. Use HTTPS for remote servers.",
+      details: "HTTP is only allowed for localhost in development. Use HTTPS for remote hosts.",
     };
   }
 
@@ -290,7 +306,7 @@ export async function validateRemoteMcpUrl(
     };
   }
 
-  let resolvedAddresses: ResolvedMcpAddress[];
+  let resolvedAddresses: ResolvedRemoteAddress[];
   try {
     resolvedAddresses = await resolveHostnameAddresses(hostname);
   } catch (error) {

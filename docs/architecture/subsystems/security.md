@@ -170,14 +170,14 @@ Protections in place:
 ## User-Supplied Remote URL Protections
 
 Primary files:
-- `src/utils/mcp/mcpUrlSecurity.ts`
+- `src/utils/security/remoteUrlSecurity.ts`
 - `src/utils/security/userRemoteFetch.ts`
 - `src/utils/mcp/guildMcpManager.ts`
 - `src/utils/provider/customEndpointService.ts`
 - `src/providers/custom/`
 
 Current runtime protections for guild MCP servers and custom endpoints:
-- URL preflight validation still enforces the existing protocol/host policy from `validateRemoteMcpUrl()`.
+- URL preflight validation still enforces the existing protocol/host policy from `validateRemoteUrl()`.
 - Actual HTTP requests no longer trust that preflight alone; each request revalidates the target URL immediately before sending.
 - The real connection is pinned to the just-validated DNS result via a per-request dispatcher, so the request does not perform a second untrusted DNS lookup.
 - Custom endpoint redirects are handled hop-by-hop with revalidation on every `Location` target and a bounded redirect depth (`USER_REMOTE_FETCH_MAX_REDIRECTS`, default `3`).
@@ -186,6 +186,17 @@ Current runtime protections for guild MCP servers and custom endpoints:
 Key takeaway: TomoriBot no longer relies on a validation-only DNS check for user-supplied remote endpoints; the validated address is now the address actually used for the request.
 
 The same URL-validation path is also used by `safeDownload()` for user/media downloads. Discord attachment imports, workflow JSON uploads, image/GIF/video context expansion, avatar/character-reference reloads, and provider-returned media downloads get bounded size checks, timeout enforcement, redirect revalidation, and production SSRF blocking before bytes are read into memory.
+
+### Refusals versus transport failures
+
+A URL the gate rejects never reaches the network, so it is reported separately from a real connection failure:
+
+- `fetchUserRemoteUrl()` throws `RemoteUrlPolicyError` (not a bare `Error`) for every deliberate refusal: preflight validation, per-hop redirect revalidation, a forbidden or over-deep redirect chain, a missing `Location` header, and an unpinnable address. It carries the `hostname` and a `failureCode`.
+- `safeDownload()` maps that to `error: "blocked_by_policy"` and logs it at **warn** with `errorType: "download_blocked_by_policy"`, instead of the **error**-level `download_network_error` used for genuine transport faults.
+
+This matters for log-based alerting: user-supplied content routinely contains URLs that policy declines (a plain-HTTP image CDN, a shortener redirecting to a private address). Those are expected outcomes, not incidents, and they no longer land in the error-level stream or the `error_logs` table.
+
+Because `validateRemoteUrl()` backs MCP config, custom endpoints, `fetch_url`, and every `safeDownload()` caller, its `details` string is caller-neutral diagnostic text. User-facing remediation belongs in the caller, keyed off `failureCode`.
 
 ## Runtime Guardrails and Anti-Abuse Controls
 

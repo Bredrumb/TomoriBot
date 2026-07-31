@@ -29,7 +29,7 @@ import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCac
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
 import { sendFetchProgressNotice } from "@/utils/mcp/mcpExecutor";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 
@@ -560,7 +560,7 @@ class GuildMcpManager {
     serverLabel?: string,
   ): Promise<MCPClient> {
     const label = serverLabel ?? url;
-    const urlValidation = await validateRemoteMcpUrl(url);
+    const urlValidation = await validateRemoteUrl(url);
     if (!urlValidation.valid) {
       throw new Error(urlValidation.details ?? `Guild MCP URL failed runtime validation for '${label}'.`);
     }

@@ -4,7 +4,34 @@ import type {
   RequestInit as UndiciRequestInit,
   Response as UndiciResponse,
 } from "undici/index.js";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { type RemoteUrlValidationFailureCode, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
+
+export type RemoteUrlPolicyFailureCode =
+  | RemoteUrlValidationFailureCode
+  | "REDIRECT_FORBIDDEN"
+  | "REDIRECT_LIMIT_EXCEEDED"
+  | "REDIRECT_LOCATION_MISSING"
+  | "ADDRESS_NOT_PINNABLE";
+
+/**
+ * A user-supplied URL was refused by the SSRF gate, either before the first
+ * request or at a redirect hop.
+ *
+ * Thrown instead of a bare Error so callers can tell a deliberate refusal from a
+ * transport failure: no socket was opened, so these must not be reported as
+ * network errors, retried, or alerted on as connectivity problems.
+ */
+export class RemoteUrlPolicyError extends Error {
+  readonly failureCode: RemoteUrlPolicyFailureCode | undefined;
+  readonly hostname: string;
+
+  constructor(message: string, hostname: string, failureCode?: RemoteUrlPolicyFailureCode) {
+    super(message);
+    this.name = "RemoteUrlPolicyError";
+    this.hostname = hostname;
+    this.failureCode = failureCode;
+  }
+}
 
 export interface PinnedFetchRequest {
   url: URL;
@@ -139,9 +166,13 @@ export async function resolveValidatedUserRedirect(
   allowPrivateNetwork = false,
 ): Promise<URL> {
   const nextUrl = new URL(location, currentUrl);
-  const validation = await validateRemoteMcpUrl(nextUrl.toString(), { strict, allowPrivateNetwork });
+  const validation = await validateRemoteUrl(nextUrl.toString(), { strict, allowPrivateNetwork });
   if (!validation.valid) {
-    throw new Error(validation.details ?? `Remote redirect validation failed for '${nextUrl.hostname}'.`);
+    throw new RemoteUrlPolicyError(
+      validation.details ?? `Remote redirect validation failed for '${nextUrl.hostname}'.`,
+      nextUrl.hostname,
+      validation.failureCode,
+    );
   }
   return nextUrl;
 }
@@ -154,9 +185,13 @@ async function fetchUserRemoteUrlInternal(
   allowPrivateNetwork: boolean,
 ): Promise<Response> {
   const { url, requestInit } = await normalizeRequestInput(input, init);
-  const validation = await validateRemoteMcpUrl(url.toString(), { strict, allowPrivateNetwork });
+  const validation = await validateRemoteUrl(url.toString(), { strict, allowPrivateNetwork });
   if (!validation.valid) {
-    throw new Error(validation.details ?? `Remote URL validation failed for '${url.hostname}'.`);
+    throw new RemoteUrlPolicyError(
+      validation.details ?? `Remote URL validation failed for '${url.hostname}'.`,
+      url.hostname,
+      validation.failureCode,
+    );
   }
 
   const redirectPolicy = requestInit.redirect ?? "follow";
@@ -166,7 +201,11 @@ async function fetchUserRemoteUrlInternal(
   if (isIP(url.hostname) === 0) {
     const pinnedAddress = validation.resolvedAddresses?.find((address) => isIP(address) !== 0);
     if (!pinnedAddress) {
-      throw new Error(`Remote URL validation did not return a pinnable address for '${url.hostname}'.`);
+      throw new RemoteUrlPolicyError(
+        `Remote URL validation did not return a pinnable address for '${url.hostname}'.`,
+        url.hostname,
+        "ADDRESS_NOT_PINNABLE",
+      );
     }
     ({ url: fetchUrl, init: fetchInit } = createPinnedFetchRequest(url, requestInit, pinnedAddress));
   }
@@ -186,16 +225,28 @@ async function fetchUserRemoteUrlInternal(
   await response.body?.cancel();
 
   if (redirectPolicy === "error") {
-    throw new Error(`Redirects are not allowed for user-supplied URL '${url.toString()}'.`);
+    throw new RemoteUrlPolicyError(
+      `Redirects are not allowed for user-supplied URL '${url.toString()}'.`,
+      url.hostname,
+      "REDIRECT_FORBIDDEN",
+    );
   }
 
   if (redirectCount >= USER_REMOTE_FETCH_MAX_REDIRECTS) {
-    throw new Error(`Too many redirects while fetching '${url.toString()}'.`);
+    throw new RemoteUrlPolicyError(
+      `Too many redirects while fetching '${url.toString()}'.`,
+      url.hostname,
+      "REDIRECT_LIMIT_EXCEEDED",
+    );
   }
 
   const location = response.headers.get("location");
   if (!location) {
-    throw new Error(`Redirect response from '${url.toString()}' did not include a Location header.`);
+    throw new RemoteUrlPolicyError(
+      `Redirect response from '${url.toString()}' did not include a Location header.`,
+      url.hostname,
+      "REDIRECT_LOCATION_MISSING",
+    );
   }
 
   const nextUrl = await resolveValidatedUserRedirect(url, location, strict, allowPrivateNetwork);

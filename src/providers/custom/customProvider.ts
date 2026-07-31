@@ -5,7 +5,7 @@
  * endpoint such as Ollama, KoboldCPP, vLLM, LocalAI, or OpenRouter proxies.
  *
  * Available in all environments. In production, endpoint URLs are validated via
- * validateRemoteMcpUrl() which blocks localhost, private IPs, and non-HTTPS URLs.
+ * validateRemoteUrl() which blocks localhost, private IPs, and non-HTTPS URLs.
  *
  * Key differences from OpenRouter:
  * - Uses the server model config custom endpoint URL

@@ -29,8 +29,8 @@ export interface FetchUrlSafetyResult {
 /**
  * Whether the current process is a production deployment.
  *
- * Mirrors the production signal in `mcpUrlSecurity.ts`
- * (`validateRemoteMcpUrl`), which guards the same SSRF domain, so both
+ * Mirrors the production signal in `remoteUrlSecurity.ts`
+ * (`validateRemoteUrl`), which guards the same SSRF domain, so both
  * fetch guards stay in lockstep on a single environment variable.
  */
 function isProductionRuntime(): boolean {
@@ -45,7 +45,7 @@ function isProductionRuntime(): boolean {
  *    Crawl4AI engine) with zero configuration.
  * - In production the blocklist stays enforced unless an operator
  *    explicitly opts in with `FETCH_URL_ALLOW_PRIVATE_NETWORK`, matching
- *    the production-gated model of `validateRemoteMcpUrl`.
+ *    the production-gated model of `validateRemoteUrl`.
  *
  * @returns True when private-network fetch targets are permitted.
  */

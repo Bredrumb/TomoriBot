@@ -62,7 +62,7 @@ checks or pass `--staged` or `--base <ref>` to focus the narration heuristic on 
 lines. Its focused self-test is also manual:
 
 ```bash
-bun test scripts/checks/commentPolicy.test.ts
+bun test ./scripts/checks/commentPolicy.test.ts
 ```
 
 ## Exceptions

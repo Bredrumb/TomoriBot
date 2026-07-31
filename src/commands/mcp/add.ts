@@ -14,7 +14,7 @@ import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { RadioGroupOption } from "@/types/discord/modal";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
-import { type McpUrlValidationResult, validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { type RemoteUrlValidationResult, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 
 const MODAL_CUSTOM_ID = "config_mcp_add_modal";
 const NAME_INPUT_ID = "mcp_server_name";
@@ -170,7 +170,7 @@ export async function execute(
     }
 
     // Validate URL format + security
-    const urlValidation = await validateRemoteMcpUrl(url);
+    const urlValidation = await validateRemoteUrl(url);
     if (!urlValidation.valid) {
       const validationMessage = getUrlValidationMessage(locale, urlValidation);
       await replyInfoEmbed(replyInteraction, locale, {
@@ -278,7 +278,7 @@ export async function execute(
 
 function getUrlValidationMessage(
   _locale: string,
-  validation: McpUrlValidationResult,
+  validation: RemoteUrlValidationResult,
 ): {
   descriptionKey: string;
   descriptionVars?: Record<string, string>;

@@ -11,7 +11,7 @@ import type { Message } from "discord.js";
 import { log } from "../misc/logger";
 import type { ToolContext } from "../../types/tool/interfaces";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
-import { safeDownload } from "@/utils/security/safeDownload";
+import { safeDownload, type SafeDownloadOptions, type SafeDownloadResult } from "@/utils/security/safeDownload";
 import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 import { appendComponentMediaFromMessage } from "@/utils/chat/contextMedia";
 import { resolveForwardChain } from "@/utils/discord/forwardChain";
@@ -23,8 +23,9 @@ export interface ImageUrlInfo {
   mimeType: string;
   /** Human-readable source label for logging (e.g. "attachment: photo.png") */
   source: string;
-  /** Discord proxy URL when known: used to dedupe the same media discovered via
-   *  multiple paths (e.g. a Components V2 attachment also listed as a candidate). */
+  /** Discord proxy URL when known. Dedupes the same media discovered via multiple
+   *  paths (e.g. a Components V2 attachment also listed as a candidate), and acts
+   *  as the HTTPS fallback source in {@link downloadDiscoveredImage}. */
   proxyUrl?: string;
 }
 
@@ -104,6 +105,59 @@ function extractCustomEmojis(content: string): ImageUrlInfo[] {
   return emojiUrls;
 }
 
+/**
+ * Order the sources to try when downloading one discovered image.
+ *
+ * Discord mirrors embed and attachment media at an HTTPS `proxyURL`. That mirror is
+ * the only reachable source when the origin is plain HTTP, because the SSRF gate
+ * refuses `http://` remote hosts outright, and third-party bot CDNs still serve
+ * embeds over HTTP. An HTTPS origin is tried first: the proxy re-encodes and can
+ * serve a stale or absent copy.
+ */
+function buildImageDownloadCandidates(info: ImageUrlInfo): string[] {
+  if (!info.proxyUrl || info.proxyUrl === info.url) {
+    return [info.url];
+  }
+
+  return info.url.startsWith("http://") ? [info.proxyUrl, info.url] : [info.url, info.proxyUrl];
+}
+
+/**
+ * Download one discovered image, falling back to its Discord proxy mirror.
+ *
+ * @param info - Discovered image, whose `proxyUrl` supplies the fallback source
+ * @param options - Forwarded to {@link safeDownload} for every attempt
+ * @returns The first successful download, else the last failure encountered
+ */
+export async function downloadDiscoveredImage(
+  info: ImageUrlInfo,
+  options: SafeDownloadOptions,
+): Promise<SafeDownloadResult> {
+  const candidates = buildImageDownloadCandidates(info);
+  let lastResult: SafeDownloadResult = {
+    success: false,
+    error: "invalid_response",
+    details: "No download candidates available",
+  };
+
+  for (const candidate of candidates) {
+    const result = await safeDownload(candidate, options);
+    if (result.success) {
+      return result;
+    }
+
+    lastResult = result;
+
+    // Both mirrors carry the same bytes under the same deadline, so an oversized
+    // or timed-out first attempt cannot be rescued by trying the second.
+    if (result.error === "size_exceeded" || result.error === "timeout") {
+      break;
+    }
+  }
+
+  return lastResult;
+}
+
 /** The subset of Message fields an image can live in: satisfied by both a full
  *  Message and a forwarded MessageSnapshot. */
 type MessageImageSource = Pick<Message, "attachments" | "embeds" | "stickers" | "content" | "components">;
@@ -137,6 +191,7 @@ function collectImageUrlsFromSource(
     if (embed.image?.url) {
       addImageUrl({
         url: embed.image.url,
+        proxyUrl: embed.image.proxyURL,
         mimeType: "image/jpeg", // Embeds don't provide explicit MIME type
         source: `${labelPrefix}embed.image: ${embed.url || "unknown"}`,
       });
@@ -145,6 +200,7 @@ function collectImageUrlsFromSource(
     if (embed.thumbnail?.url) {
       addImageUrl({
         url: embed.thumbnail.url,
+        proxyUrl: embed.thumbnail.proxyURL,
         mimeType: "image/jpeg",
         source: `${labelPrefix}embed.thumbnail: ${embed.url || "unknown"}`,
       });
@@ -317,7 +373,7 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
 
   for (const imageInfo of imageUrls) {
     try {
-      const imageResponse = await safeDownload(imageInfo.url, {
+      const imageResponse = await downloadDiscoveredImage(imageInfo, {
         maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
         timeoutMs: 15_000,
         externalSignal: context.abortSignal,

@@ -20,9 +20,8 @@ import {
 } from "@/providers/zai/zaiShared";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
-import { safeDownload } from "@/utils/security/safeDownload";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
-import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
+import { downloadDiscoveredImage, resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 
 /**
  * Provider-to-chat-completions-URL mapping for OpenAI-compatible providers.
@@ -371,7 +370,7 @@ export class AnalyzeImageTool extends BaseTool {
 
     for (const imageInfo of imageUrls) {
       try {
-        const imageResponse = await safeDownload(imageInfo.url, {
+        const imageResponse = await downloadDiscoveredImage(imageInfo, {
           maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
           timeoutMs: 15_000,
           externalSignal: signal,

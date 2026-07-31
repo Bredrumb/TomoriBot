@@ -128,7 +128,7 @@ jobs:
                authorization/permission bypass, path traversal, unsafe deserialization, ReDoS, and
                unvalidated user input reaching a sink. TomoriBot-specific must-checks:
                - User-supplied remote URLs (guild MCP servers, custom endpoints) and ALL media/attachment
-                 downloads must go through the validated, DNS-pinned fetch path (validateRemoteMcpUrl,
+                 downloads must go through the validated, DNS-pinned fetch path (validateRemoteUrl,
                  src/utils/security/userRemoteFetch.ts, safeDownload) with hop-by-hop redirect revalidation
                  and bounded size/timeout. Never fetch a user-controlled URL directly — that is an SSRF
                  hole. Flag any new fetch/axios/undici call on a user URL that bypasses these helpers.

@@ -5,7 +5,7 @@
  */
 
 import { log } from "@/utils/misc/logger";
-import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 
 /**
  * Options for safe download operation
@@ -60,9 +60,13 @@ export interface SafeDownloadResult {
   contentType?: string;
 
   /**
-   * Error type if download failed
+   * Error type if download failed.
+   *
+   * `blocked_by_policy` means the SSRF gate refused the URL and no request was
+   * ever sent, so it is never a transport problem and must not be retried against
+   * the same URL.
    */
-  error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
+  error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response" | "blocked_by_policy";
 
   /**
    * Additional error details for logging/debugging
@@ -252,6 +256,27 @@ export async function safeDownload(url: string, options: SafeDownloadOptions): P
         success: false,
         error: "timeout",
         details: `Download timed out after ${timeoutMs}ms`,
+      };
+    }
+
+    if (error instanceof RemoteUrlPolicyError) {
+      // Logged at warn, not error: an unreachable-by-policy URL (a plain-HTTP
+      // image host, a redirect to a private address) is an expected outcome of
+      // user-supplied content, not an incident.
+      log.warn("Download blocked by URL policy", {
+        errorType: "download_blocked_by_policy",
+        metadata: {
+          url,
+          hostname: error.hostname,
+          failureCode: error.failureCode ?? "UNKNOWN",
+          error: error.message,
+        },
+      });
+
+      return {
+        success: false,
+        error: "blocked_by_policy",
+        details: error.message,
       };
     }
 

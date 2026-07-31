@@ -6,7 +6,7 @@ import { llmProviderRepo } from "@/utils/db/repositories";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import {
   buildCapabilityAddModalComponents,
   capabilityNeedsAddModal,
@@ -182,7 +182,7 @@ export async function execute(
     return;
   }
 
-  const urlValidation = await validateRemoteMcpUrl(endpointUrl);
+  const urlValidation = await validateRemoteUrl(endpointUrl);
   if (!urlValidation.valid) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.custom_endpoint_unreachable_title",

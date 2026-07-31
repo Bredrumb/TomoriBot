@@ -114,6 +114,9 @@ embed shown alongside an error/info embed (e.g. by `stream/errorUi.ts` and `ui/i
 - `keyRotation.ts`: rotation workflows
 - `rateLimiter.ts`: upload quota cleanup scheduler
 - `safeDownload.ts`: constrained external content download
+- `remoteUrlSecurity.ts`: the single SSRF gate for user-supplied URLs (protocol/host policy, DNS resolution, blocklists)
+- `userRemoteFetch.ts`: DNS-pinned fetch with per-hop redirect revalidation, built on `remoteUrlSecurity.ts`
+- `cloudMetadata.ts`: always-on cloud instance-metadata / link-local denylist
 
 ### `utils/quota`
 
@@ -130,7 +133,8 @@ embed shown alongside an error/info embed (e.g. by `stream/errorUi.ts` and `ui/i
 - `mcpManager.ts`: MCP lifecycle
 - `mcpExecutor.ts`: MCP execution abstraction
 - `mcpConfig.ts`: MCP config loading
-- `mcpUrlSecurity.ts`: guild MCP URL parsing, DNS/IP validation, and SSRF hardening
+
+Guild MCP URL validation lives in `utils/security/remoteUrlSecurity.ts`, which guards every user-supplied URL rather than MCP alone.
 
 ### `utils/bridges`
 
