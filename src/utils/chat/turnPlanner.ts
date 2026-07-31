@@ -151,8 +151,8 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     isManuallyTriggered: incoming.isManuallyTriggered,
     isSelfMessage,
     isAutochatOverride,
-    guildDiscId: guild?.id ?? message.author.id,
-    fallbackUserDiscId: message.author.id,
+    guildDiscId: serverDiscId,
+    fallbackUserDiscId: userDiscId,
     message,
     memberRoleDiscIds: incoming.manualTriggerInvoker?.member
       ? incoming.manualTriggerInvoker.member.roles.cache.map((role) => role.id)
@@ -698,7 +698,7 @@ async function enforceTurnGuards(
 
   if (!incoming.isStopResponse && !incoming.isPersonaJob && !isSelfMessage && textCredentialSource !== "personal") {
     const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
-      serverDiscId: message.guild?.id ?? message.author.id,
+      serverDiscId,
       userDiscId: admission.cooldownUserDiscId ?? userDiscId,
       channelId: message.channelId,
       cooldownType: tomoriState.config.cooldown_type ?? CooldownType.OFF,
@@ -715,7 +715,7 @@ async function enforceTurnGuards(
     if (rejectedByCooldown) return false;
 
     await setMessageTriggerCooldownForAdmission({
-      serverDiscId: message.guild?.id ?? message.author.id,
+      serverDiscId,
       userDiscId: admission.cooldownUserDiscId ?? userDiscId,
       channelId: message.channelId,
       cooldownType: tomoriState.config.cooldown_type ?? CooldownType.OFF,

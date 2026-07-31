@@ -24,6 +24,14 @@ const REMINDER_DELIVERY_RETRY_DELAY_MS = parseIntegerEnvFlag(
   1_000,
 );
 
+/**
+ * Cap on unacknowledged delivery retries before a reminder is surfaced via the plain
+ * fallback embed and dropped. Without a cap, any failure that also writes to the channel
+ * becomes an unbounded loop: the retry's own output changes the channel's last message,
+ * which is the very input the next retry reads back.
+ */
+const REMINDER_DELIVERY_MAX_RETRIES = parseIntegerEnvFlag(process.env.REMINDER_DELIVERY_MAX_RETRIES, 5, 1);
+
 function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
   if (typeof value !== "string") return defaultValue;
   const parsed = Number.parseInt(value, 10);
@@ -49,6 +57,7 @@ function isReminderDeliverySuccessful(result: GenerationTurnResult): boolean {
 export class ReminderProcessor {
   private readonly client: Client;
   private readonly activeReminderIds = new Set<number>();
+  private readonly deliveryRetryCounts = new Map<number, number>();
 
   constructor(client: Client) {
     this.client = client;
@@ -262,6 +271,10 @@ export class ReminderProcessor {
   }): Promise<void> {
     const { reminder, channel, afterMessageId, reminderStartTime, isSelfReminder } = args;
 
+    if (reminder.reminder_id) {
+      this.deliveryRetryCounts.delete(reminder.reminder_id);
+    }
+
     if (!isSelfReminder && isBridgeUserId(reminder.user_discord_id)) {
       await sendMatrixReminderMention(channel, reminder, afterMessageId, reminderStartTime, this.client.user?.id ?? "");
     } else if (!isSelfReminder) {
@@ -296,11 +309,22 @@ export class ReminderProcessor {
       return;
     }
 
+    const attempts = (this.deliveryRetryCounts.get(reminder.reminder_id) ?? 0) + 1;
+    if (attempts > REMINDER_DELIVERY_MAX_RETRIES) {
+      this.deliveryRetryCounts.delete(reminder.reminder_id);
+      log.error(
+        `Reminder ${reminder.reminder_id} exhausted ${REMINDER_DELIVERY_MAX_RETRIES} delivery retries (last reason: ${reason}); falling back to a plain reminder embed.`,
+      );
+      await this.handleReminderExecutionFailure(reminder, `retry_limit_exhausted:${reason}`);
+      return;
+    }
+    this.deliveryRetryCounts.set(reminder.reminder_id, attempts);
+
     const retryTime = new Date(Date.now() + REMINDER_DELIVERY_RETRY_DELAY_MS);
     const rescheduled = await serverScheduleRepository.rescheduleReminder(reminder.reminder_id, retryTime);
     if (rescheduled) {
       log.warn(
-        `Reminder ${reminder.reminder_id} delivery was not acknowledged (${reason}); retrying at ${retryTime.toISOString()}.`,
+        `Reminder ${reminder.reminder_id} delivery was not acknowledged (${reason}); retry ${attempts}/${REMINDER_DELIVERY_MAX_RETRIES} at ${retryTime.toISOString()}.`,
       );
     } else {
       log.error(`Failed to defer reminder ${reminder.reminder_id} after unacknowledged delivery (${reason}).`);
@@ -392,6 +416,7 @@ export class ReminderProcessor {
   private async handleReminderExecutionFailure(reminder: ReminderRow, errorReason: string): Promise<void> {
     try {
       if (reminder.reminder_id) {
+        this.deliveryRetryCounts.delete(reminder.reminder_id);
         await serverScheduleRepository.deleteReminderById(reminder.reminder_id);
       }
 

@@ -1,7 +1,24 @@
 import { describe, expect, it, mock } from "bun:test";
 import type { Message } from "discord.js";
-import { shouldBlockReplyToOtherBot } from "@/utils/chat/admission";
+import { DMChannel } from "discord.js";
+import { resolveAdmissionChannelScope, shouldBlockReplyToOtherBot } from "@/utils/chat/admission";
 import type { ChatIncoming } from "@/utils/chat/types";
+
+// Object.create skips the discord.js constructor (which demands a live client and a full
+// API payload) while still satisfying the `instanceof DMChannel` branch under test.
+function makeDmIncoming(args: { authorDiscId: string; recipientDiscId: string }): ChatIncoming {
+  const channel = Object.assign(Object.create(DMChannel.prototype), {
+    id: "dm-channel",
+    type: 1,
+    recipientId: args.recipientDiscId,
+  });
+
+  return {
+    client: { user: { id: "tomori-bot" } },
+    message: { channel, guild: null, author: { id: args.authorDiscId } },
+    isManuallyTriggered: true,
+  } as unknown as ChatIncoming;
+}
 
 function makeReplyIncoming(cachedReference: Message, fetchedReference: Message) {
   const fetch = mock(async () => fetchedReference);
@@ -70,5 +87,35 @@ describe("shouldBlockReplyToOtherBot", () => {
     });
 
     expect(reason).toBeNull();
+  });
+});
+
+describe("resolveAdmissionChannelScope DM server key", () => {
+  it("keys a DM to its recipient even when the trigger message was authored by the bot", async () => {
+    // Reminder and boomerang turns pass the channel's last message as their trigger, so a
+    // bot-authored trigger must not resolve the DM to the bot's own (unconfigured) id.
+    const incoming = makeDmIncoming({ authorDiscId: "tomori-bot", recipientDiscId: "human-user" });
+
+    const scope = await resolveAdmissionChannelScope(incoming, "tomori-bot");
+
+    expect(scope?.serverDiscId).toBe("human-user");
+    expect(scope?.isDMChannel).toBe(true);
+  });
+
+  it("keys a DM to its recipient for ordinary user-authored messages", async () => {
+    const incoming = makeDmIncoming({ authorDiscId: "human-user", recipientDiscId: "human-user" });
+
+    const scope = await resolveAdmissionChannelScope(incoming, "human-user");
+
+    expect(scope?.serverDiscId).toBe("human-user");
+  });
+
+  it("falls back to the resolved user when the channel has no recipient id", async () => {
+    const incoming = makeDmIncoming({ authorDiscId: "human-user", recipientDiscId: "human-user" });
+    (incoming.message.channel as unknown as { recipientId: string | null }).recipientId = null;
+
+    const scope = await resolveAdmissionChannelScope(incoming, "human-user");
+
+    expect(scope?.serverDiscId).toBe("human-user");
   });
 });

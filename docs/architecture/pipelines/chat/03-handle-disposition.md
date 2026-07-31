@@ -21,6 +21,13 @@ externally — notably the reminder processor (`src/timers/reminderProcessor.ts`
 treat it as in-flight (queued), or leave it for the next reconcile cycle
 (ignore/blocked/error). The Discord `messageCreate` handler discards the value.
 
+Reminder redelivery is capped at `REMINDER_DELIVERY_MAX_RETRIES` (default 5)
+attempts spaced `REMINDER_DELIVERY_RETRY_DELAY_MS` apart; on exhaustion the
+reminder is surfaced through the plain fallback embed and dropped. The cap
+exists because a retry whose failure path also writes to the channel forms a
+feedback loop: the failure output becomes the channel's newest message, which
+is the same message the next attempt reads back as its trigger.
+
 ## Input
 
 `NonRunnableChatAdmission` (from stage 02, when `disposition !== "run"`).

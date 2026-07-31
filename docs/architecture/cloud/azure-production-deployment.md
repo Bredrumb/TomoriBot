@@ -185,6 +185,51 @@ turns a dead-path hang into a fast, retryable failure. Defaults are production-s
 an incident. This was fixed at the client layer deliberately, so the private endpoint stays removed
 and the free-tier cost target holds.
 
+### Read-only production data inspection
+
+Host lockdown removes every inbound NSG allow rule, so `ssh` cannot reach the VM and the PostgreSQL
+firewall does not admit an operator workstation. Ad-hoc production queries therefore run **inside the
+bot container, driven through VM Run Command**. This is the supported path for incident triage; do
+not reopen SSH or widen the database firewall for it.
+
+Credentials are not in the container environment: Compose mounts them as a JSON secret file at
+`SECRET_FILE=/run/secrets/tomoribot.json`, so `docker exec … env` shows empty `POSTGRES_*`. Read them
+from that file. The container root filesystem is read-only, so `docker cp` fails; pass the script on
+stdin instead. Write the query as a local file, base64 it to survive Run Command's shell quoting, and
+decode it into the host's `/tmp`:
+
+```bash
+# probe.js — uses Bun.SQL directly; the app's own client.ts is not importable via `bun -e`
+cat > probe.js <<'EOF'
+const s = await Bun.file(process.env.SECRET_FILE).json();
+const sql = new Bun.SQL({
+  hostname: s.POSTGRES_HOST, port: Number(s.POSTGRES_PORT || 5432),
+  username: s.POSTGRES_USER, password: s.POSTGRES_PASSWORD,
+  database: s.POSTGRES_DB, tls: { rejectUnauthorized: true },
+});
+console.log(JSON.stringify(await sql`SELECT ...`, null, 2));
+await sql.end();
+EOF
+
+B64=$(base64 -w0 probe.js)
+printf 'echo %s | base64 -d > /tmp/probe.js\ndocker exec -i tomoribot-azure-tomoribot-1 bun -e "$(cat /tmp/probe.js)"\n' "$B64" > run.sh
+
+az vm run-command invoke -g tomoribot-rg -n tomoribot-vm \
+  --command-id RunShellScript --scripts @run.sh \
+  --query "value[0].message" -o tsv
+```
+
+Notes that save a round trip:
+
+- `tls: { rejectUnauthorized: true }` is required; a bare `tls: true` fails with
+  `ERR_POSTGRES_CONNECTION_CLOSED`.
+- `az` lives at `C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin` and may need adding to `PATH`
+  inside a tool shell.
+- The same wrapper reaches the Discord REST API using `s.DISCORD_TOKEN`, which is how a
+  `channel_disc_id` or bot-authored message is resolved to a real channel or user during triage.
+- Keep these scripts read-only. Route writes through a migration or an explicitly confirmed
+  one-off, never through casual triage.
+
 ## Container and host operations
 
 The Compose service runs as `1001:1001` with a read-only root filesystem, all Linux capabilities

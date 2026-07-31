@@ -122,6 +122,7 @@ function makeClient() {
   const channel = {
     id: "channel_001",
     isTextBased: () => true,
+    send: mock(async () => ({ id: "fallback_001" })),
     messages: {
       fetch: mock(async () => ({
         first: () => message,
@@ -218,6 +219,97 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     await onQueueDiscard?.("channel_queue_cleared");
 
     expect(rescheduleReminderMock).toHaveBeenCalledTimes(1);
+    expect(deleteReminderByIdMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ReminderProcessor delivery retry cap", () => {
+  beforeEach(() => {
+    getDueRemindersMock.mockImplementation(async () => []);
+    rescheduleReminderMock.mockImplementation(async (_reminderId: number, nextReminderTime: Date) => ({
+      reminder_id: _reminderId,
+      reminder_time: nextReminderTime,
+    }));
+    deleteReminderByIdMock.mockImplementation(async () => true);
+    suppressNextSelfReplyMock.mockClear();
+    ensureDiscordUserMentionMock.mockClear();
+  });
+
+  afterEach(() => {
+    getDueRemindersMock.mockClear();
+    rescheduleReminderMock.mockClear();
+    deleteReminderByIdMock.mockClear();
+    tomoriChatMock.mockClear();
+  });
+
+  function alwaysFailDelivery() {
+    tomoriChatMock.mockImplementation(async (input) => {
+      await input.onGenerationResult?.({
+        status: "stopped_by_user",
+        streamResults: [],
+        personaResponses: [],
+      });
+      return "run";
+    });
+  }
+
+  function alwaysSucceedDelivery() {
+    tomoriChatMock.mockImplementation(async (input) => {
+      await input.onGenerationResult?.({
+        status: "completed",
+        streamResults: [],
+        personaResponses: [{ personaName: "Tomori", text: "Reminder!", personaId: 1 }],
+      });
+      return "run";
+    });
+  }
+
+  it("stops retrying after the cap and falls back to a plain embed", async () => {
+    const reminder = makeReminder();
+    getDueRemindersMock.mockImplementation(async () => [reminder]);
+    alwaysFailDelivery();
+
+    const client = makeClient();
+    const channel = await client.channels.fetch();
+    // The counter lives on the instance, so the loop must reuse one processor.
+    const processor = new ReminderProcessor(client as never);
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await processor.processDueReminders();
+    }
+
+    expect(rescheduleReminderMock).toHaveBeenCalledTimes(5);
+    expect(deleteReminderByIdMock).not.toHaveBeenCalled();
+    expect(channel.send).not.toHaveBeenCalled();
+
+    await processor.processDueReminders();
+
+    expect(rescheduleReminderMock).toHaveBeenCalledTimes(5);
+    expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
+    expect(channel.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets the retry budget once a delivery is acknowledged", async () => {
+    // Recurring so an acknowledged delivery reschedules rather than deleting, which
+    // keeps deleteReminderById unambiguous evidence that the cap fired.
+    const reminder = makeReminder({ repetition_interval_hours: 24 });
+    getDueRemindersMock.mockImplementation(async () => [reminder]);
+    const processor = new ReminderProcessor(makeClient() as never);
+
+    alwaysFailDelivery();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await processor.processDueReminders();
+    }
+
+    alwaysSucceedDelivery();
+    await processor.processDueReminders();
+
+    alwaysFailDelivery();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await processor.processDueReminders();
+    }
+
+    // Six failures total: without the reset the cap would have fired on the last one.
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
   });
 });

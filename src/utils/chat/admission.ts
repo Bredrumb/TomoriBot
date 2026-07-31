@@ -183,7 +183,14 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
 
   const chainOriginUserDiscId =
     !incoming.isManuallyTriggered && isLikelySelfMessage ? getSelfReplyChainOriginUser(channel.id) : null;
-  const userDiscId = incoming.manualTriggerInvoker?.userDiscId ?? chainOriginUserDiscId ?? message.author.id;
+  // System-initiated turns (reminders, boomerangs) pass whatever message was last in the
+  // channel as their trigger, which in a DM is frequently one of Tomori's own. Falling back
+  // to the author there would resolve the DM owner (and thus the DM's server key) to the
+  // bot itself, so prefer the channel's recipient whenever the author is the client user.
+  const dmOwnerDiscId = channel instanceof DMChannel ? (channel.recipientId ?? null) : null;
+  const authorFallbackDiscId =
+    dmOwnerDiscId && message.author.id === client.user?.id ? dmOwnerDiscId : message.author.id;
+  const userDiscId = incoming.manualTriggerInvoker?.userDiscId ?? chainOriginUserDiscId ?? authorFallbackDiscId;
   const matrixRelayUserId = isMatrixRelay ? extractBridgeUserId(message.author.username) : undefined;
   const cooldownUserDiscId = matrixRelayUserId ?? userDiscId;
 
@@ -433,7 +440,7 @@ function createNaturalStopPatterns(): RegExp[] {
 
 const NATURAL_STOP_PATTERNS = createNaturalStopPatterns();
 
-async function resolveAdmissionChannelScope(
+export async function resolveAdmissionChannelScope(
   incoming: ChatIncoming,
   userDiscId: string,
 ): Promise<{
@@ -462,10 +469,15 @@ async function resolveAdmissionChannelScope(
   }
 
   if (channel instanceof DMChannel) {
+    // A DM's synthetic server key is its human recipient, which is a property of the
+    // channel and not of whoever authored the trigger message. Guilds get this for free
+    // via guild.id; DMs must not fall back to the author or a bot-authored trigger
+    // message would key the lookup to the bot and report the DM as unconfigured.
+    const serverDiscId = channel.recipientId ?? userDiscId;
     log.info(`Processing DM from user ${userDiscId} in channel ${channel.id}`);
     return {
       guild: null,
-      serverDiscId: userDiscId,
+      serverDiscId,
       isDMChannel: true,
       isThreadChannel: false,
       isManuallyTriggered: true,
