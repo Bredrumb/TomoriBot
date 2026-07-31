@@ -17,7 +17,7 @@ import type { CustomEndpointRow, VoiceSampleRow } from "@/types/db/schema";
 import { customEndpointSchema, voiceSampleSchema } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
-import type { IRepository } from "./IRepository";
+import type {} from "./IRepository";
 
 /**
  * Raw credential row returned by loadEndpointCredentials.
@@ -205,20 +205,3 @@ export async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: nu
       AND pvc.speech_voice_sample_id = ${sampleId}
   `;
 }
-
-/**
- * SpeechRepository class satisfies IRepository; export shape is null because
- * voice samples reference server-local files that are not portably exportable.
- */
-export class SpeechRepository implements IRepository<null> {
-  async toExportShape(_ownerId: string | number): Promise<null> {
-    return null;
-  }
-
-  async fromExportShape(_ownerId: string | number, _data: null): Promise<boolean> {
-    return true;
-  }
-}
-
-/** Singleton instance: import this in callers. */
-export const speechRepository = new SpeechRepository();

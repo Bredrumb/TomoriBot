@@ -33,7 +33,7 @@ export async function getVideoQuotaConfig(serverId: number): Promise<VideoQuotaC
  * Check if user can generate a video based on daily quota.
  * Returns remaining quota and whether generation is allowed.
  */
-export async function checkUserDailyVideoQuota(
+async function checkUserDailyVideoQuota(
   serverId: number,
   userDiscId: string,
   config: VideoQuotaConfigRow,
@@ -75,7 +75,7 @@ export async function checkUserDailyVideoQuota(
 /**
  * Check if server has remaining server-wide video quota.
  */
-export async function checkServerwideVideoQuota(
+async function checkServerwideVideoQuota(
   serverId: number,
   config: VideoQuotaConfigRow,
 ): Promise<VideoQuotaCheckResult> {

@@ -15,12 +15,12 @@ import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
 /** Portable personal memory export shape (expanded in Phase 6 #16.7). */
-export type PersonalMemoryExportShape = {
+type PersonalMemoryExportShape = {
   user_disc_id: string;
   memories: Array<{ content: string; tags: string[]; persona_lineage_id: number }>;
 };
 
-export class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape> {
+class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape> {
   /**
    * Loads personal memories for a user scoped to a persona lineage.
    * When includeGlobalMemories is true (default), lineage-0 memories are also included.

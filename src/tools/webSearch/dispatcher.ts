@@ -31,24 +31,6 @@ const ENGINE_CHAIN: readonly WebSearchEngine[] = [
 ];
 
 /**
- * Resolve the first engine in the chain that is currently available AND
- * supports the requested category. Returns null if none qualify.
- *
- * Exposed so other layers (debug, future provider-side hint extraction) can
- * peek at the active engine without actually executing a search.
- */
-export async function getActiveWebSearchEngine(
-  context: ToolContext,
-  category: SearchCategory = "text",
-): Promise<WebSearchEngine | null> {
-  for (const engine of ENGINE_CHAIN) {
-    if (!engine.supportsCategory(category)) continue;
-    if (await engine.available(context)) return engine;
-  }
-  return null;
-}
-
-/**
  * Execute a web search, walking the chain until one engine returns a
  * `success: true` result. Engines that are unavailable or that fail are
  * skipped silently and the next chain member is tried.

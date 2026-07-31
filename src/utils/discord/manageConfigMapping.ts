@@ -11,7 +11,7 @@ type BooleanColumn<T> = {
 type ServerCapabilitiesBooleanColumn = BooleanColumn<ServerCapabilitiesConfigRow>;
 type ServerMemberPermissionsBooleanColumn = BooleanColumn<ServerMemberPermissionsConfigRow>;
 
-export type CapabilitiesManageCapabilityColumn = Extract<
+type CapabilitiesManageCapabilityColumn = Extract<
   ServerCapabilitiesBooleanColumn,
   | "emoji_usage_enabled"
   | "sticker_usage_enabled"
@@ -25,7 +25,7 @@ export type CapabilitiesManageCapabilityColumn = Extract<
   | "time_awareness_enabled"
 >;
 
-export type CapabilitiesManageMemberPermissionColumn = Extract<
+type CapabilitiesManageMemberPermissionColumn = Extract<
   ServerMemberPermissionsBooleanColumn,
   "self_teaching_enabled" | "personal_memories_enabled"
 >;
@@ -60,7 +60,7 @@ export type CapabilitiesManagePermissionDefinition =
       dbColumn: CapabilitiesManageCapabilityColumn;
     });
 
-export type CapabilitiesManageConfigChange =
+type CapabilitiesManageConfigChange =
   | {
       value: string;
       table: "memberPermissions";
@@ -85,7 +85,7 @@ export interface CapabilitiesManageConfigWritePlan {
   changes: CapabilitiesManageConfigChange[];
 }
 
-export const CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS: readonly CapabilitiesManagePermissionDefinition[] = [
+const CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS: readonly CapabilitiesManagePermissionDefinition[] = [
   {
     value: "selfteaching",
     table: "memberPermissions",

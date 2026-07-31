@@ -7,7 +7,7 @@
 /**
  * Query information present in all search types
  */
-export interface Query {
+interface Query {
   /** The original query that was requested */
   original: string;
   /** The altered query by the spellchecker (if any) */
@@ -23,7 +23,7 @@ export interface Query {
 /**
  * Thumbnail information
  */
-export interface Thumbnail {
+interface Thumbnail {
   /** The served URL of the thumbnail */
   src: string;
   /** The original URL of the thumbnail (optional) */
@@ -37,7 +37,7 @@ export interface Thumbnail {
 /**
  * Meta URL information
  */
-export interface MetaUrl {
+interface MetaUrl {
   /** The protocol scheme extracted from the URL */
   scheme?: string;
   /** The network location part extracted from the URL */
@@ -53,7 +53,7 @@ export interface MetaUrl {
 /**
  * Extra information about search results
  */
-export interface Extra {
+interface Extra {
   /** Additional metadata about the search */
   [key: string]: unknown;
 }
@@ -88,7 +88,7 @@ export interface WebResult {
 /**
  * Web search results container
  */
-export interface Search {
+interface Search {
   /** The type of web search results */
   type: "search";
   /** Web search results */
@@ -100,7 +100,7 @@ export interface Search {
 /**
  * News results container
  */
-export interface News {
+interface News {
   /** News results */
   results: NewsResult[];
 }
@@ -108,7 +108,7 @@ export interface News {
 /**
  * Videos results container
  */
-export interface Videos {
+interface Videos {
   /** Video results */
   results: VideoResult[];
 }
@@ -131,7 +131,7 @@ export interface WebSearchApiResponse {
 /**
  * Image properties
  */
-export interface ImageProperties {
+interface ImageProperties {
   /** The image URL */
   url?: string;
   /** Lower resolution placeholder image URL */
@@ -183,7 +183,7 @@ export interface ImageSearchApiResponse {
 /**
  * Profile information for video authors
  */
-export interface Profile {
+interface Profile {
   /** The name of the profile */
   name: string;
   /** The long name of the profile */
@@ -197,7 +197,7 @@ export interface Profile {
 /**
  * Video metadata
  */
-export interface VideoData {
+interface VideoData {
   /** A time string representing the duration of the video */
   duration?: string;
   /** The number of views of the video */
@@ -297,7 +297,7 @@ export interface NewsSearchApiResponse {
 /**
  * Common search parameters
  */
-export interface BaseSearchParams {
+interface BaseSearchParams {
   /** The user's search query term (required) */
   q: string;
   /** The search query country (2 character country code) */
@@ -383,18 +383,6 @@ export interface NewsSearchParams extends BaseSearchParams {
 }
 
 /**
- * Brave API error response
- */
-export interface BraveApiError {
-  /** Error message */
-  message: string;
-  /** Error code */
-  code?: string;
-  /** HTTP status code */
-  status?: number;
-}
-
-/**
  * All possible Brave Search API responses
  */
 export type BraveSearchResponse =
@@ -402,8 +390,3 @@ export type BraveSearchResponse =
   | ImageSearchApiResponse
   | VideoSearchApiResponse
   | NewsSearchApiResponse;
-
-/**
- * All possible search result types
- */
-export type BraveSearchResult = WebResult | ImageResult | VideoResult | NewsResult;

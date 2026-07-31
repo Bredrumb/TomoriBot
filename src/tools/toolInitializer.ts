@@ -132,28 +132,3 @@ async function discoverAndRegisterTools(filePath: string, source: string): Promi
 
   return discoveredCount;
 }
-
-export function getInitializationStatus(): {
-  isInitialized: boolean;
-  toolCount: number;
-  toolsByCategory: Record<string, number>;
-  availableTools: string[];
-} {
-  const stats = ToolRegistry.getStats();
-  const allTools = ToolRegistry.getAllTools();
-
-  return {
-    isInitialized: stats.totalTools > 0,
-    toolCount: stats.totalTools,
-    toolsByCategory: stats.toolsByCategory,
-    availableTools: allTools.map((tool) => tool.name),
-  };
-}
-
-/**
- * Reinitialize tools (useful for development/testing)
- */
-export async function reinitializeTools(): Promise<void> {
-  log.info("Reinitializing tool registry...");
-  await initializeTools();
-}

@@ -6,7 +6,6 @@
  */
 
 import { HumanizerDegree } from "../db/schema";
-import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 /**
@@ -64,7 +63,7 @@ export interface SpriteShownEntry {
   isIdentity: boolean;
 }
 
-export interface StreamRenderModifierState {
+interface StreamRenderModifierState {
   identity: {
     username?: string;
     avatarUrl?: string;
@@ -139,16 +138,6 @@ export interface StreamState {
 }
 
 /**
- * Result of processing a text segment for Discord sending
- */
-export interface ProcessedSegment {
-  chunks: string[];
-  wasHumanized: boolean;
-  originalLength: number;
-  processedLength: number;
-}
-
-/**
  * Configuration for text processing and humanization
  */
 export interface TextProcessingConfig {
@@ -196,17 +185,6 @@ export interface StreamMetrics {
 }
 
 /**
- * Buffer management configuration
- */
-export interface BufferManagementConfig {
-  regularFlushSize: number;
-  codeBlockFlushSize: number;
-  enablePunctuationFlush: boolean;
-  enableCodeBlockDetection: boolean;
-  sentenceBoundaryRegex: RegExp;
-}
-
-/**
  * Stream chunk processing result
  */
 export interface ChunkProcessingResult {
@@ -215,75 +193,6 @@ export interface ChunkProcessingResult {
   updatedBuffer: string;
   newCodeBlockState: boolean | undefined;
   breakType?: "newline" | "period" | "code_open" | "code_close" | "overflow";
-}
-
-/**
- * Function call execution context
- */
-export interface FunctionCallContext {
-  functionName: string;
-  arguments: Record<string, unknown>;
-  executionStartTime: number;
-  toolResult?: unknown;
-  error?: Error;
-}
-
-/**
- * Stream error categorization
- */
-export enum StreamErrorType {
-  PROVIDER_API_ERROR = "provider_api_error",
-  DISCORD_API_ERROR = "discord_api_error",
-  TIMEOUT_ERROR = "timeout_error",
-  FUNCTION_CALL_ERROR = "function_call_error",
-  BUFFER_OVERFLOW = "buffer_overflow",
-  CONTENT_BLOCKED = "content_blocked",
-  RATE_LIMITED = "rate_limited",
-  UNKNOWN_ERROR = "unknown_error",
-}
-
-/**
- * Comprehensive stream error information
- */
-export interface StreamError {
-  type: StreamErrorType;
-  message: string;
-  code?: string;
-  retryable: boolean;
-  context?: {
-    provider?: string;
-    channelId?: string;
-    serverId?: string;
-    functionName?: string;
-    chunkIndex?: number;
-  };
-  originalError?: unknown;
-  timestamp: number;
-}
-
-/**
- * Stream status tracking
- */
-export enum StreamStatus {
-  INITIALIZING = "initializing",
-  STREAMING = "streaming",
-  FUNCTION_CALLING = "function_calling",
-  COMPLETED = "completed",
-  ERROR = "error",
-  TIMEOUT = "timeout",
-  CANCELLED = "cancelled",
-}
-
-/**
- * Comprehensive stream result with detailed information
- */
-export interface DetailedStreamResult {
-  status: StreamStatus;
-  data?: unknown;
-  error?: StreamError;
-  metrics: StreamMetrics;
-  functionCalls: FunctionCallContext[];
-  warnings: string[];
 }
 
 export function createDefaultStreamState(): StreamState {
@@ -327,20 +236,6 @@ export function createDefaultStreamMetrics(): StreamMetrics {
     functionCalls: 0,
     errors: 0,
     timeouts: 0,
-  };
-}
-
-/**
- * Helper function to create buffer management configuration
- */
-export function createBufferManagementConfig(customConfig?: Partial<BufferManagementConfig>): BufferManagementConfig {
-  return {
-    regularFlushSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
-    codeBlockFlushSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_CODE_BLOCK,
-    enablePunctuationFlush: true,
-    enableCodeBlockDetection: true,
-    sentenceBoundaryRegex: createSentenceSplitRegex(),
-    ...customConfig,
   };
 }
 

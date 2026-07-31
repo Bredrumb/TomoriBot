@@ -16,7 +16,7 @@ export interface MatrixLinkStatusRow {
   channel_disc_id: string;
 }
 
-export async function resolveChannelMention(client: Client, id: string, locale: string): Promise<string> {
+async function resolveChannelMention(client: Client, id: string, locale: string): Promise<string> {
   try {
     const channel = await client.channels.fetch(id);
     return channel instanceof TextChannel ? channel.toString() : `<#${id}>`;

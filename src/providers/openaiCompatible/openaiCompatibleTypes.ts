@@ -45,7 +45,7 @@ export interface OpenAICompatibleAccumulatedToolCall {
   functionArguments: string;
 }
 
-export interface OpenAICompatibleParameterSchema extends Record<string, unknown> {
+interface OpenAICompatibleParameterSchema extends Record<string, unknown> {
   type: ToolParameterType;
   description?: string;
   enum?: string[];
@@ -79,13 +79,13 @@ export interface OpenAICompatibleStreamConfig extends StreamConfig {
   logitBias?: Record<string, number>;
 }
 
-export interface OpenAICompatibleRequestMutationArgs {
+interface OpenAICompatibleRequestMutationArgs {
   requestBody: Record<string, unknown>;
   config: OpenAICompatibleStreamConfig;
   context: StreamContext;
 }
 
-export interface OpenAICompatibleHeaderMutationArgs {
+interface OpenAICompatibleHeaderMutationArgs {
   headers: Record<string, string>;
   config: OpenAICompatibleStreamConfig;
   context: StreamContext;

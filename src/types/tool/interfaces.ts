@@ -16,7 +16,7 @@ import type {
   AnyThreadChannel,
   Webhook,
 } from "discord.js";
-import type { MCPServerResponse, EnhancedMCPServerConfig, TypedMCPToolResult, MCPExecutionContext } from "./mcpTypes";
+import type { TypedMCPToolResult } from "./mcpTypes";
 import type { FunctionResponseImageMetadata } from "../provider/interfaces";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 
@@ -32,24 +32,24 @@ interface ToolParameterSchemaBase {
   enum?: string[];
 }
 
-export interface ToolStringParameterSchema extends ToolParameterSchemaBase {
+interface ToolStringParameterSchema extends ToolParameterSchemaBase {
   type: "string";
 }
 
-export interface ToolNumberParameterSchema extends ToolParameterSchemaBase {
+interface ToolNumberParameterSchema extends ToolParameterSchemaBase {
   type: "number";
 }
 
-export interface ToolBooleanParameterSchema extends ToolParameterSchemaBase {
+interface ToolBooleanParameterSchema extends ToolParameterSchemaBase {
   type: "boolean";
 }
 
-export interface ToolArrayParameterSchema extends ToolParameterSchemaBase {
+interface ToolArrayParameterSchema extends ToolParameterSchemaBase {
   type: "array";
   items: ToolParameterPropertySchema;
 }
 
-export interface ToolObjectParameterSchema extends ToolParameterSchemaBase {
+interface ToolObjectParameterSchema extends ToolParameterSchemaBase {
   type: "object";
   properties: Record<string, ToolParameterPropertySchema>;
   required?: string[];
@@ -201,12 +201,7 @@ export type ToolCategory = "discord" | "search" | "memory" | "utility" | "mcp";
 /**
  * Model capability flags that tools may require to be exposed.
  */
-export type ToolModelCapabilityKey =
-  | "has_tools"
-  | "sees_images"
-  | "sees_videos"
-  | "sees_youtube"
-  | "supports_structoutput";
+type ToolModelCapabilityKey = "has_tools" | "sees_images" | "sees_videos" | "sees_youtube" | "supports_structoutput";
 
 export type ToolModelCapabilityRequirements = Partial<Pick<LlmRow, ToolModelCapabilityKey>>;
 
@@ -381,7 +376,7 @@ export abstract class BaseTool implements Tool {
 /**
  * Tool adapter interface for converting between generic tools and provider-specific formats
  */
-export interface ToolAdapter {
+interface ToolAdapter {
   /**
    * Convert a generic tool to provider-specific format
    */
@@ -428,109 +423,6 @@ export interface MCPCapableToolAdapter extends ToolAdapter {
     args: Record<string, unknown>,
     context?: ToolContext,
   ): Promise<TypedMCPToolResult>;
-}
-
-/**
- * MCP tool execution context
- * Additional context specific to MCP tool execution
- */
-export interface MCPToolContext extends ToolContext {
-  mcpServerName?: string;
-  mcpFunctionName: string;
-
-  providerMcpData?: Record<string, unknown>;
-}
-
-/**
- * MCP tool result with additional metadata
- * Extends ToolResult with MCP-specific information
- * @deprecated Use TypedMCPToolResult from mcpTypes.ts for better type safety
- */
-export interface MCPToolResult extends ToolResult {
-  source: "mcp";
-  functionName: string;
-  serverName?: string;
-
-  rawResult?: MCPServerResponse;
-
-  executionTime?: number;
-  providerFormat?: Record<string, unknown>;
-}
-
-/**
- * MCP server configuration interface
- * Provider-agnostic configuration for MCP servers
- * @deprecated Use EnhancedMCPServerConfig from mcpTypes.ts for better type safety
- */
-export interface MCPServerConfig {
-  name: string;
-  displayName: string;
-  command: string;
-  args: string[];
-  env?: Record<string, string>;
-  requiresApiKey?: boolean;
-  apiKeyEnvVar?: string;
-  timeout?: number;
-}
-
-/**
- * MCP manager interface for provider-agnostic MCP management
- * Defines the contract for managing MCP servers regardless of LLM provider
- */
-export interface MCPManagerInterface {
-  /**
-   * Initialize all available MCP servers during application startup
-   */
-  initializeMCPServers(): Promise<void>;
-
-  /**
-   * Check if MCP manager is ready (initialization completed)
-   */
-  isReady(): boolean;
-
-  /**
-   */
-  getConnectedServerCount(): number;
-
-  /**
-   */
-  getConnectionStatus(): Record<string, boolean>;
-
-  /**
-   * Get MCP tools available for a specific provider
-   * @param provider - Provider name (google, openai, anthropic, etc.)
-   */
-  getMCPToolsForProvider(provider: string): Promise<unknown[]>;
-
-  /**
-   * Execute an MCP function with provider-agnostic result
-   * @param context - Optional execution context for Discord operations
-   */
-  executeMCPFunction(
-    functionName: string,
-    args: Record<string, unknown>,
-    context?: MCPExecutionContext,
-  ): Promise<TypedMCPToolResult>;
-
-  /**
-   * Get available MCP function names across all connected servers
-   */
-  getAvailableMCPFunctions(): Promise<string[]>;
-
-  /**
-   */
-  getServerConfigurations(): Promise<EnhancedMCPServerConfig[]>;
-
-  /**
-   */
-  isFunctionAvailable(functionName: string): Promise<boolean>;
-
-  getServerForFunction(functionName: string): Promise<string | null>;
-
-  /**
-   * Cleanup all MCP connections (for graceful shutdown)
-   */
-  cleanup(): Promise<void>;
 }
 
 /**

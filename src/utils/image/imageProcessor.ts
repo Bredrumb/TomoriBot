@@ -6,7 +6,7 @@
 
 // sharp v0.35 moved to ESM-style types, so `Metadata` is a named type export
 //    rather than a member of a merged `sharp` namespace.
-import sharp, { type Metadata } from "sharp";
+import sharp from "sharp";
 import { log } from "../misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -227,30 +227,6 @@ export async function centerCropToSquare(buffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Resize an image to a specific width while maintaining aspect ratio
- *
- * @param targetWidth - Desired width in pixels
- * @returns Promise<Buffer> - Resized PNG buffer
- */
-export async function resizeImage(buffer: Buffer, targetWidth: number): Promise<Buffer> {
-  try {
-    const resizedBuffer = await sharp(buffer)
-      .resize({
-        width: targetWidth,
-        fit: "contain", // Maintain aspect ratio
-      })
-      .png()
-      .toBuffer();
-
-    log.info(`Image resized to ${targetWidth}px width`);
-    return resizedBuffer;
-  } catch (error) {
-    log.error("Failed to resize image:", error);
-    throw new Error(`Image resize failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-  }
-}
-
-/**
  * Normalize a NovelAI character/director reference image onto one of the
  * accepted canvases using black padding.
  *
@@ -304,19 +280,5 @@ export async function convertToPNG(buffer: Buffer): Promise<Buffer> {
   } catch (error) {
     log.error("Failed to convert image to PNG:", error);
     throw new Error(`Image conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-  }
-}
-
-/**
- *
- * @returns Promise<Metadata> - Image metadata
- */
-export async function getImageMetadata(buffer: Buffer): Promise<Metadata> {
-  try {
-    const metadata = await sharp(buffer).metadata();
-    return metadata;
-  } catch (error) {
-    log.error("Failed to read image metadata:", error);
-    throw new Error(`Image metadata read failed: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
 }

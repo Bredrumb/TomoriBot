@@ -23,7 +23,7 @@ import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
 /** Row shape for server_trigger_behavior_configs (Phase 6). */
-export type ServerTriggerBehaviorConfigsRow = {
+type ServerTriggerBehaviorConfigsRow = {
   always_reply_enabled: boolean;
   deliberate_trigger_mode: boolean;
   cooldown_type: number;
@@ -31,14 +31,14 @@ export type ServerTriggerBehaviorConfigsRow = {
 };
 
 /** Row shape for server_auto_trigger_configs (Phase 6, post-013 migration). */
-export type ServerAutoTriggerConfigsRow = {
+type ServerAutoTriggerConfigsRow = {
   autoch_disc_ids: string[];
   autoch_threshold: number;
   autoch_threshold_max: number;
 };
 
 /** Composite export shape for ServerScheduleRepository's Phase 6 tables. */
-export type ServerScheduleExportShape = {
+type ServerScheduleExportShape = {
   trigger_behavior: ServerTriggerBehaviorConfigsRow | null;
   auto_trigger: ServerAutoTriggerConfigsRow | null;
 };
@@ -57,13 +57,13 @@ export type ReminderSelectionRow = {
   persona_nickname: string | null;
 };
 
-export type ReminderMutationActor = {
+type ReminderMutationActor = {
   requester_user_id?: number;
   requester_discord_id?: string;
   requester_bridge_user_id?: string;
 };
 
-export type ReminderScopedMutationResult =
+type ReminderScopedMutationResult =
   | {
       status: "updated" | "deleted";
       reminder: ReminderRow;
@@ -86,7 +86,7 @@ interface RandomTriggerData {
   failureThreshold: number | null;
 }
 
-export class ServerScheduleRepository implements IRepository<ServerScheduleExportShape> {
+class ServerScheduleRepository implements IRepository<ServerScheduleExportShape> {
   /** Returns all reminders that are due to fire now. */
   async getDueReminders(): Promise<ReminderRow[] | null> {
     return this.sqlGetDueReminders();

@@ -1,7 +1,7 @@
 import { log } from "@/utils/misc/logger";
 
 /** Result from a single poll attempt */
-export interface PollResult<T> {
+interface PollResult<T> {
   done: boolean;
   result?: T;
   error?: string;

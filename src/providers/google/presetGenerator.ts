@@ -18,7 +18,7 @@ export type {
 /**
  * Additional context for character search
  */
-export interface CharacterSearchContext {
+interface CharacterSearchContext {
   description?: string; // Character description from user
   speechExamples?: string; // How the character should speak
   additionalInstructions?: string; // Extra instructions
@@ -27,7 +27,7 @@ export interface CharacterSearchContext {
 /**
  * Result of character information search
  */
-export interface CharacterSearchResult {
+interface CharacterSearchResult {
   characterInfo?: string; // Found character information
   error?: string; // Error message if search failed
   errorType?:
@@ -176,7 +176,7 @@ export function sanitizeSampleDialogueText(dialogue: string): string {
  * @param locale - User's locale for error messages
  * @param context - Optional additional context for search
  */
-export async function searchCharacterInfo(
+async function searchCharacterInfo(
   apiKey: string,
   characterName: string,
   locale: string,

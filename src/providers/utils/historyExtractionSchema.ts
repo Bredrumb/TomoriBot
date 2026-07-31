@@ -14,7 +14,7 @@ import { z } from "zod";
  * : observed with Gemini via OpenRouter returning `memories: ["fact", ...]`. The collapsed
  * form is unambiguous, so it is repaired here rather than failing the whole window.
  */
-export const HistoryMemoryEntrySchema = z.preprocess(
+const HistoryMemoryEntrySchema = z.preprocess(
   (value) => (typeof value === "string" ? { lossless_restatement: value } : value),
   z.object({
     /**
@@ -58,9 +58,6 @@ export const HistoryExtractionResultSchema = z
 
     return { memories, discarded };
   });
-
-/** Type for the complete extraction batch result */
-export type HistoryExtractionResult = z.infer<typeof HistoryExtractionResultSchema>;
 
 /**
  * Builds the JSON schema object for structured output providers.

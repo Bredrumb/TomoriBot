@@ -40,7 +40,7 @@ export interface ResolvedForwardChain {
  *
  * @returns True when the snapshot carries no recoverable payload
  */
-export function isEmptyForwardSnapshot(snapshot: MessageSnapshot): boolean {
+function isEmptyForwardSnapshot(snapshot: MessageSnapshot): boolean {
   return (
     !snapshot.content?.trim() &&
     snapshot.attachments.size === 0 &&

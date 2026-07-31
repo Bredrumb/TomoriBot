@@ -49,7 +49,7 @@ const SPECIALIZED_STOP_STRING_RULES: readonly SpecializedStopStringRule[] = [
  * Newline prefix is intentional so an initial "Tomori:" at the very beginning
  * of a response is not blocked.
  */
-export function buildPersonaSpeakerStopString(personaName?: string | null): string | null {
+function buildPersonaSpeakerStopString(personaName?: string | null): string | null {
   if (!personaName) return null;
 
   const normalizedName = personaName
@@ -95,7 +95,7 @@ function matchesSpecializedStopRule(
   return true;
 }
 
-export function getUniversalStopStrings(): string[] | undefined {
+function getUniversalStopStrings(): string[] | undefined {
   const universalStops: string[] = [];
 
   for (const stop of UNIVERSAL_STOP_STRINGS) {
@@ -105,7 +105,7 @@ export function getUniversalStopStrings(): string[] | undefined {
   return universalStops.length > 0 ? universalStops : undefined;
 }
 
-export function getSpecializedStopStrings(providerName?: string | null, model?: string | null): string[] | undefined {
+function getSpecializedStopStrings(providerName?: string | null, model?: string | null): string[] | undefined {
   const matchedStops: string[] = [];
 
   for (const rule of SPECIALIZED_STOP_STRING_RULES) {

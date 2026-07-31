@@ -61,9 +61,7 @@ function makeProvider(): StreamProvider {
         },
       };
     },
-    extractFunctionCall() {
-      return null;
-    },
+
     handleProviderError(error) {
       return {
         type: "model_error",

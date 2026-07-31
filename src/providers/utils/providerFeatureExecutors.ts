@@ -2,7 +2,6 @@ import type {
   GeneratePresetParams,
   PresetGenerationResult,
   CompactConversationResult,
-  CompactRoleplayResult,
   ProviderCompactSummaryRequest as ProviderCapabilityCompactSummaryRequest,
   ProviderPresetGenerationRequest as ProviderCapabilityPresetGenerationRequest,
   StructuredOutputResult,
@@ -96,19 +95,6 @@ export async function generateConversationSummaryForProvider(
   }
 
   return await capability.generateConversationSummary(request);
-}
-
-export async function generateRoleplaySummaryForProvider(
-  request: ProviderCompactSummaryRequest,
-): Promise<CompactRoleplayResult> {
-  const capability = await resolveConversationCompactionCapability(request.providerName);
-  if (!capability) {
-    return {
-      error: `Roleplay compaction is not implemented for provider ${request.providerName}.`,
-    };
-  }
-
-  return await capability.generateRoleplaySummary(request);
 }
 
 export async function callExpressionInitializationForProvider(

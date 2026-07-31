@@ -11,7 +11,7 @@ import {
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { log } from "@/utils/misc/logger";
 
-export type DataBackupType = "manual" | "automatic";
+type DataBackupType = "manual" | "automatic";
 
 export interface DataBackupOptions {
   backupType?: DataBackupType;
@@ -24,7 +24,7 @@ export interface DataBackupResult {
   manifest: DataBackupManifest;
 }
 
-export interface DataBackupManifest {
+interface DataBackupManifest {
   createdAt: string;
   botVersion: string;
   backupType: DataBackupType;
@@ -143,7 +143,7 @@ function logPgDumpFailureGuidance(error: unknown): void {
   log.info("pg_dump is installed, but PostgreSQL rejected or failed the dump request. Check the pg_dump output above.");
 }
 
-export function resolveEnvPath(): string {
+function resolveEnvPath(): string {
   return process.env.TOMORI_ENV_FILE ? resolve(process.env.TOMORI_ENV_FILE) : join(process.cwd(), ".env");
 }
 

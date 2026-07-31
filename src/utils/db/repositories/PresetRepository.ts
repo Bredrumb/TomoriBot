@@ -50,7 +50,7 @@ type ContentSection = {
   content: string;
 };
 
-export type SillyTavernConversionResult =
+type SillyTavernConversionResult =
   | {
       success: true;
       data: PresetExportData;
@@ -110,7 +110,7 @@ function normalizeNullableText(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export class PresetRepository {
+class PresetRepository {
   private asObject(value: unknown): JsonObject | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return null;

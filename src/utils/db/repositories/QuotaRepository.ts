@@ -37,7 +37,7 @@ import {
 } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
-import type { IRepository } from "./IRepository";
+import type {} from "./IRepository";
 
 /**
  * Fetch or create the text quota config for a server.
@@ -169,22 +169,6 @@ export async function incrementTextQuota(serverId: number, userDiscId: string): 
     });
   } catch (error) {
     log.error(`QuotaRepository.incrementTextQuota: failed for server ${serverId}`, error);
-  }
-}
-
-/**
- * Delete text quota records older than 7 days via the DB cleanup function.
- * @returns Number of rows deleted
- */
-export async function cleanupOldTextQuotas(): Promise<number> {
-  try {
-    const [result] = await sql<{ cleanup_old_text_quotas: number }[]>`
-      SELECT cleanup_old_text_quotas() AS cleanup_old_text_quotas
-    `;
-    return result?.cleanup_old_text_quotas ?? 0;
-  } catch (error) {
-    log.error("QuotaRepository.cleanupOldTextQuotas: failed", error);
-    return 0;
   }
 }
 
@@ -411,22 +395,6 @@ export async function incrementImageQuota(serverId: number, userDiscId: string):
     });
   } catch (error) {
     log.error(`QuotaRepository.incrementImageQuota: failed for server ${serverId}`, error);
-  }
-}
-
-/**
- * Delete image quota records older than 7 days via the DB cleanup function.
- * @returns Number of rows deleted
- */
-export async function cleanupOldImageQuotas(): Promise<number> {
-  try {
-    const [result] = await sql<{ cleanup_old_image_quotas: number }[]>`
-      SELECT cleanup_old_image_quotas() AS cleanup_old_image_quotas
-    `;
-    return result?.cleanup_old_image_quotas ?? 0;
-  } catch (error) {
-    log.error("QuotaRepository.cleanupOldImageQuotas: failed", error);
-    return 0;
   }
 }
 
@@ -755,20 +723,3 @@ export async function resetServerwideVideoQuotaPool(serverId: number): Promise<v
       quota_period_end   = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
   `;
 }
-
-/**
- * QuotaRepository class: wraps the module-level functions and satisfies IRepository.
- * Quota state is transient and server-specific; toExportShape returns null.
- */
-export class QuotaRepository implements IRepository<null> {
-  async toExportShape(_ownerId: string | number): Promise<null> {
-    return null;
-  }
-
-  async fromExportShape(_ownerId: string | number, _data: null): Promise<boolean> {
-    return true;
-  }
-}
-
-/** Singleton instance: import this in callers. */
-export const quotaRepository = new QuotaRepository();

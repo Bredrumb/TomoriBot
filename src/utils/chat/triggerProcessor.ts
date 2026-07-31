@@ -12,7 +12,7 @@ const NEVER_MATCH_REGEX = /a^/i;
  * Creates a regex that matches a trigger word with "screaming" support.
  * Allows repeated letters, e.g. "Lilja" matches "Liiiljaaaa".
  */
-export function createScreamingRegex(trigger: string): RegExp {
+function createScreamingRegex(trigger: string): RegExp {
   const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
   if (!normalizedTrigger) {
     return NEVER_MATCH_REGEX;

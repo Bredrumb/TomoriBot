@@ -9,7 +9,7 @@ import { log } from "../misc/logger";
  * Feature flag requirements for built-in tools
  * Key: tool name, Value: required feature flag
  */
-export const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
+const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
   select_sticker_for_response: "sticker_usage",
 
   create_long_term_memory: "self_teaching",
@@ -37,7 +37,7 @@ export const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
  * Feature flag requirements for MCP tools
  * Key: MCP function name, Value: required feature flag
  */
-export const MCP_TOOL_FEATURE_FLAGS: Record<string, string> = {
+const MCP_TOOL_FEATURE_FLAGS: Record<string, string> = {
   "web-search": "web_search",
   "felo-search": "web_search",
   fetch: "web_search",
@@ -57,38 +57,20 @@ export const MCP_TOOL_FEATURE_FLAGS: Record<string, string> = {
  * All feature flag mappings combined
  * Used for comprehensive tool filtering
  */
-export const ALL_TOOL_FEATURE_FLAGS = {
+const ALL_TOOL_FEATURE_FLAGS = {
   ...BUILTIN_TOOL_FEATURE_FLAGS,
   ...MCP_TOOL_FEATURE_FLAGS,
 };
 
-export function getRequiredFeatureFlag(toolName: string): string | undefined {
+function getRequiredFeatureFlag(toolName: string): string | undefined {
   return ALL_TOOL_FEATURE_FLAGS[toolName];
-}
-
-/**
- * Check if a tool requires a specific feature flag
- * @param featureFlag - Feature flag to check against
- */
-export function toolRequiresFeatureFlag(toolName: string, featureFlag: string): boolean {
-  return ALL_TOOL_FEATURE_FLAGS[toolName] === featureFlag;
-}
-
-/**
- * Get all tools that require a specific feature flag
- * @param featureFlag - Feature flag to check
- */
-export function getToolsRequiringFeatureFlag(featureFlag: string): string[] {
-  return Object.entries(ALL_TOOL_FEATURE_FLAGS)
-    .filter(([_, requiredFlag]) => requiredFlag === featureFlag)
-    .map(([toolName]) => toolName);
 }
 
 /**
  * Check if a tool should be filtered out based on feature flag state
  * @param featureFlags - Object mapping feature flag names to their enabled state
  */
-export function shouldFilterTool(toolName: string, featureFlags: Record<string, boolean>): boolean {
+function shouldFilterTool(toolName: string, featureFlags: Record<string, boolean>): boolean {
   const requiredFlag = getRequiredFeatureFlag(toolName);
 
   // If no feature flag is required, don't filter

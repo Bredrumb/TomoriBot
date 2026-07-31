@@ -13,7 +13,7 @@ interface ResolvedFetchAddress extends AddressClassification {
   address: string;
 }
 
-export type FetchUrlSafetyFailureCode =
+type FetchUrlSafetyFailureCode =
   | "INVALID_FORMAT"
   | "INVALID_PROTOCOL"
   | "DNS_RESOLUTION_FAILED"

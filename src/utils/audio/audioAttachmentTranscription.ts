@@ -7,7 +7,7 @@ import { resolveActiveTranscriptionEndpoint } from "@/utils/provider/speechEndpo
 
 const AUDIO_EXTENSION_REGEX = /\.(aac|flac|m4a|mp3|mp4|mpeg|mpga|oga|ogg|opus|wav|webm)$/i;
 
-export type AudioAttachmentFailureReason =
+type AudioAttachmentFailureReason =
   | "no_endpoint"
   | "missing_api_key"
   | "download_failed"

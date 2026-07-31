@@ -365,7 +365,7 @@ function processTrim(text: string): { result: string; isEmpty: boolean } {
  * @param text - Resolved node content
  * @returns True if HTML tags are detected
  */
-export function detectHtmlContent(text: string): boolean {
+function detectHtmlContent(text: string): boolean {
   return HTML_TAG_REGEX.test(text);
 }
 

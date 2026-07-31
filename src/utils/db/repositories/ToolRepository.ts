@@ -16,12 +16,12 @@ import { invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache
 import type { IRepository } from "./IRepository";
 
 /** Portable tool config export shape (expanded in Phase 6 #16.7). */
-export type ToolExportShape = {
+type ToolExportShape = {
   server_disc_id: string;
   mcp_servers: Array<{ name: string; url: string; server_type: string }>;
 };
 
-export class ToolRepository implements IRepository<ToolExportShape> {
+class ToolRepository implements IRepository<ToolExportShape> {
   /**
    *
    */

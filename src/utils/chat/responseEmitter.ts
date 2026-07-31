@@ -31,7 +31,7 @@ function shouldSendWebhookError(channelId: string): boolean {
   return true;
 }
 
-export async function sendWebhookErrorEmbed(
+async function sendWebhookErrorEmbed(
   channel: BaseGuildTextChannel | AnyThreadChannel,
   locale: string,
   reason: WebhookCreateErrorReason,

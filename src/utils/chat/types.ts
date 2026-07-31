@@ -128,7 +128,7 @@ export interface ChatIncoming {
 
 export type ChatAdmissionDisposition = "run" | "ignore" | "queued" | "blocked" | "error";
 
-export interface ChatAdmissionBase {
+interface ChatAdmissionBase {
   incoming: ChatIncoming;
   disposition: ChatAdmissionDisposition;
   locale: string;
@@ -280,7 +280,7 @@ export interface ChatResponseSink {
   finalize(result: GenerationTurnResult): Promise<void>;
 }
 
-export interface ChatPersonaResponse {
+interface ChatPersonaResponse {
   text: string;
   personaName: string;
   personaId?: number;

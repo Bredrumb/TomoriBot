@@ -17,7 +17,7 @@ import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import type { IRepository } from "./IRepository";
 
 /** Export shape for a single user's portable settings. */
-export type UserExportShape = PersonalSettingsExportData;
+type UserExportShape = PersonalSettingsExportData;
 
 const USER_PERSONALIZATION_FIELD_NAMES = [
   "shortterm_cache_crossserver_opt_in",
@@ -77,7 +77,7 @@ export function isEligibleContextReferenceUser(user: UserRow, evidence: ContextR
   );
 }
 
-export class UserRepository implements IRepository<UserExportShape> {
+class UserRepository implements IRepository<UserExportShape> {
   /**
    *
    * @returns UserRow or null if not found

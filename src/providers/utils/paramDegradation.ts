@@ -9,7 +9,7 @@
  */
 
 /** Preferred order for probing request parameters that a backend may reject. */
-export const PARAM_DROP_PRIORITY = [
+const PARAM_DROP_PRIORITY = [
   "top_p",
   "top_k",
   "min_p",
@@ -48,7 +48,7 @@ export interface DegradableErrorInput {
 }
 
 /** Provider hook for recognizing additional errors without forking the shared logic. */
-export type ExtraDegradationClassifier = (error: DegradableErrorInput) => boolean;
+type ExtraDegradationClassifier = (error: DegradableErrorInput) => boolean;
 
 export interface ClassifyDegradableErrorOptions extends DegradableErrorInput {
   extraClassifiers?: readonly ExtraDegradationClassifier[];

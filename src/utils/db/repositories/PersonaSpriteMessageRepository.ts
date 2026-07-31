@@ -17,7 +17,7 @@ export type PersonaSpriteMessageRecordInput = {
  * Missing rows degrade gracefully: context rebuilding falls back to the plain
  * persona name, never an error.
  */
-export class PersonaSpriteMessageRepository {
+class PersonaSpriteMessageRepository {
   /**
    * Records that a webhook message was delivered with a sprite label.
    *

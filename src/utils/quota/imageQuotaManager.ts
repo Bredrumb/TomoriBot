@@ -1,11 +1,9 @@
 import { log } from "@/utils/misc/logger";
 import type { ImageQuotaConfigRow } from "@/types/db/schema";
 import {
-  cleanupOldImageQuotas as repositoryCleanupOldImageQuotas,
   getOrCreateImageConfig,
   incrementImageQuota as repositoryIncrementImageQuota,
   resetServerwideImagePeriod,
-  resetServerwideImageQuotaPool,
   touchServerwideImageQuota,
   touchUserImageQuota,
 } from "@/utils/db/repositories/QuotaRepository";
@@ -33,7 +31,7 @@ export async function getQuotaConfig(serverId: number): Promise<ImageQuotaConfig
  * Check if user can generate an image based on daily quota
  * Returns remaining quota and whether generation is allowed
  */
-export async function checkUserDailyQuota(
+async function checkUserDailyQuota(
   serverId: number,
   userDiscId: string,
   config: ImageQuotaConfigRow,
@@ -76,7 +74,7 @@ export async function checkUserDailyQuota(
  * Check if server has remaining server-wide quota
  * Returns remaining quota and whether generation is allowed
  */
-export async function checkServerwideQuota(serverId: number, config: ImageQuotaConfigRow): Promise<QuotaCheckResult> {
+async function checkServerwideQuota(serverId: number, config: ImageQuotaConfigRow): Promise<QuotaCheckResult> {
   // If serverwide quota is 0 (unlimited), allow
   if (config.serverwide_quota === 0) {
     return { allowed: true };
@@ -162,38 +160,5 @@ export async function incrementImageQuota(serverId: number, userDiscId: string):
     log.info("Incremented image quotas");
   } catch (error) {
     log.error("Failed to increment image quota", error);
-  }
-}
-
-/**
- * Clean up old user quota records (older than 7 days)
- * Should be called periodically (e.g., on startup or via cron)
- */
-export async function cleanupOldImageQuotas(): Promise<number> {
-  try {
-    const deletedCount = await repositoryCleanupOldImageQuotas();
-
-    if (deletedCount > 0) {
-      log.info("Cleaned up old image quota records");
-    }
-
-    return deletedCount;
-  } catch (error) {
-    log.error("Failed to cleanup old image quotas", error);
-    return 0;
-  }
-}
-
-/**
- * Manually reset server-wide quota (admin override)
- * Creates new quota period starting now
- */
-export async function resetServerwideQuota(serverId: number): Promise<void> {
-  try {
-    await resetServerwideImageQuotaPool(serverId);
-    log.info("Manually reset serverwide quota");
-  } catch (error) {
-    log.error("Failed to reset serverwide quota", error);
-    throw error;
   }
 }

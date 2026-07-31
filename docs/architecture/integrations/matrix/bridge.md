@@ -131,12 +131,9 @@ src/utils/bridges/
   index.ts              ← Generic bridge utilities barrel
 
 src/utils/bridges/matrix/
-  runtime.ts            ← Compatibility barrel for Matrix runtime exports
-  appserviceImplementation.ts ← Compatibility barrel for split Matrix modules
   client.ts             ← Appservice boot and setup notices
   media.ts              ← Matrix media upload/download and outbound sends
   state.ts              ← Session-scoped Matrix bridge state and caches
-  matrixManager.ts      ← Thin public coordinator barrel
   events.ts             ← Matrix inbound event handling and Matrix command handling
   stateSync.ts          ← Reply tracking, pending reply channels, reminder mention surface
   userMapping.ts        ← Display-name/Matrix-ID maps and persona intent surface
@@ -187,7 +184,7 @@ TomoriBot sends AI response to Discord channel
 
 Two separate guards prevent message echo loops:
 
-**Matrix → Discord direction:** `onEvent` in `matrixManager.ts` filters out any event where `sender === botUserId` OR `sender` starts with `@_tomori_` and ends with `:${serverName}`. The domain suffix check prevents a remote user named `@_tomori_*:evil.org` from bypassing the guard.
+**Matrix → Discord direction:** `onEvent` in `client.ts` filters out any event where `sender === botUserId` OR `sender` starts with `@_tomori_` and ends with `:${serverName}`. The domain suffix check prevents a remote user named `@_tomori_*:evil.org` from bypassing the guard.
 
 **Discord → Matrix direction:** `matrixRelay.ts` only relays messages where `isSelfTriggerMessage()` returns true — i.e., messages from TomoriBot's own bot account or alter persona webhooks. Regular user messages and Matrix relay webhooks are never relayed back.
 
@@ -209,7 +206,7 @@ These functions are format-agnostic by design. The `[BridgeName|userId] DisplayN
 
 ### `src/utils/bridges/matrix/` — Matrix Appservice
 
-The public Matrix surface is grouped by responsibility. `matrixManager.ts`, `runtime.ts`, and `appserviceImplementation.ts` are compatibility barrels; implementation lives in the responsibility modules:
+The public Matrix surface is grouped by responsibility and exported through `index.ts`:
 
 - **`client.ts`**: Appservice initialization (`initializeMatrixClient`) plus Matrix setup notices.
 - **`events.ts`**: Matrix inbound event handling, Matrix `/kill`, Matrix `/refresh`, and Matrix-to-Discord relay.
@@ -300,7 +297,7 @@ TomoriBot's AI uses the `@{displayName}` placeholder format for mentioning users
 
 The `m.mentions` field tells the homeserver to notify the mentioned user even if the client doesn't parse HTML — a more reliable notification mechanism than content-based detection.
 
-The display name → Matrix ID mapping is maintained in a session-scoped `matrixDisplayNameToId` map in `matrixManager.ts`, populated whenever a Matrix user sends a message in a linked channel.
+The display name → Matrix ID mapping is maintained in a session-scoped `matrixDisplayNameToId` map in `state.ts`, populated through `userMapping.ts` whenever a Matrix user sends a message in a linked channel.
 
 ---
 
@@ -340,9 +337,9 @@ Matrix clients prepend a fallback block-quote when replying to a message:
 actual reply text
 ```
 
-`matrixManager.ts` strips this fallback block before relaying to Discord, so TomoriBot only sees the actual reply text.
+`stateSync.ts` strips this fallback block before `events.ts` relays the message to Discord, so TomoriBot only sees the actual reply text.
 
-When a Matrix user replies to a TomoriBot persona message, a `[System: user is replying to PersonaName's message "..."]` annotation is appended to the relayed Discord message body when the original message text is available. Reply triggering itself is handled by `pendingMatrixReplyChannels` in `matrixManager.ts`/`tomoriChat.ts`, since Discord webhooks cannot carry native reply references.
+When a Matrix user replies to a TomoriBot persona message, a `[System: user is replying to PersonaName's message "..."]` annotation is appended to the relayed Discord message body when the original message text is available. Reply triggering itself is handled by `pendingMatrixReplyChannels` in `stateSync.ts`/`tomoriChat.ts`, since Discord webhooks cannot carry native reply references.
 
 The bot tracks sent Matrix event IDs → persona name in a bounded in-memory map (`sentEventPersonas`, capped at 500 entries). For replies to messages sent in a previous session (not in the map), it falls back to fetching the original event from the homeserver to check whether the sender was a `@_tomori_*` virtual user.
 
@@ -363,7 +360,7 @@ Matrix user IDs are stored as-is in the `user_discord_id` TEXT column of the `re
 
 ## LLM Defensive Checks
 
-LLMs occasionally mangle Matrix user IDs. `resolveBridgeUserId()` in `matrixManager.ts` consolidates all recovery logic:
+LLMs occasionally mangle Matrix user IDs. `resolveBridgeUserId()` in `userMapping.ts` consolidates all recovery logic:
 
 | Failure mode | Example | Recovery |
 |---|---|---|

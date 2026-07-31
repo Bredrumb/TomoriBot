@@ -106,13 +106,13 @@ export interface CompactRoleplayResult {
   error?: string;
 }
 
-export interface ProviderLiveTokenCountRequest {
+interface ProviderLiveTokenCountRequest {
   apiKey: string;
   tomoriState: TomoriState;
   contextItems: StructuredContextItem[];
 }
 
-export interface ProviderLiveTokenCountResult {
+interface ProviderLiveTokenCountResult {
   providerLabel: string;
   model: string;
   inputTokens: number;
@@ -120,12 +120,12 @@ export interface ProviderLiveTokenCountResult {
   outputPricePerMillion: number;
 }
 
-export interface ProviderNativeImageReference {
+interface ProviderNativeImageReference {
   mimeType: string;
   data: string;
 }
 
-export type ImageGenerationRequest = {
+type ImageGenerationRequest = {
   prompt: string;
   negativePrompt?: string | null;
   referenceImageDataUrl?: string | null;
@@ -192,7 +192,7 @@ export interface SupportsNativeImageGeneration {
 }
 
 /** Reference image input for image-to-video generation */
-export interface ProviderNativeVideoReference {
+interface ProviderNativeVideoReference {
   mimeType: string;
   data: string; // Base64-encoded image data (used when url is not available)
   url?: string; // Original source URL ; preferred over base64 for remote APIs to avoid body size limits

@@ -154,16 +154,6 @@ export interface RawStreamChunk {
 }
 
 /**
- * Configuration for stream buffer management
- */
-export interface BufferConfig {
-  maxSize: number;
-  flushOnPunctuation: boolean;
-  codeBlockHandling: boolean;
-  punctuationPattern?: RegExp;
-}
-
-/**
  * Interface that provider-specific stream adapters must implement
  * This separates provider API logic from universal Discord logic
  */
@@ -179,13 +169,6 @@ export interface StreamProvider {
    * @param chunk - Raw chunk from the provider's streaming API
    */
   processChunk(chunk: RawStreamChunk): ProcessedChunk;
-
-  /**
-   * Extract function call information from a raw chunk if present
-   * @param chunk - Raw chunk from the provider's streaming API
-   * @returns Function call data or null if no function call
-   */
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null;
 
   /**
    * Convert provider-specific errors into normalized ProviderError format
@@ -235,8 +218,6 @@ export abstract class BaseStreamAdapter implements StreamProvider {
   abstract startStream(config: StreamConfig, context: StreamContext): AsyncGenerator<RawStreamChunk, void, unknown>;
 
   abstract processChunk(chunk: RawStreamChunk): ProcessedChunk;
-
-  abstract extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null;
 
   abstract handleProviderError(error: unknown): ProviderError;
 
@@ -309,18 +290,4 @@ export interface StreamOrchestrator {
    * @param config - Streaming configuration
    */
   streamToDiscord(provider: StreamProvider, config: StreamConfig, context: StreamContext): Promise<StreamResult>;
-}
-
-/**
- * Interface for creating provider-specific configurations
- * This allows each provider to convert TomoriState into their specific config format
- */
-export interface StreamConfigFactory {
-  /**
-   * Create a streaming configuration for a specific provider
-   * @param tomoriState - Current Tomori state with settings
-   * @param apiKey - Decrypted API key for the provider
-   * @param provider - Provider name for configuration customization
-   */
-  createStreamConfig(tomoriState: TomoriState, apiKey: string, provider: string): StreamConfig;
 }

@@ -128,10 +128,10 @@ export interface SystemPromptInput {
 
 export type NaiModelTarget = "kayra" | "erato";
 
-export type NaiPhraseRepPen = "off" | "light" | "medium" | "aggressive" | "very_aggressive";
+type NaiPhraseRepPen = "off" | "light" | "medium" | "aggressive" | "very_aggressive";
 
 /** NovelAI sampling parameter JSON stored in `nai_presets.parameters`. */
-export interface NaiSamplingParameters {
+interface NaiSamplingParameters {
   order?: number[];
   temperature?: number;
   max_length?: number;

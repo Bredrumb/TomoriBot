@@ -8,7 +8,7 @@ const OPENAI_STT_TIMEOUT_MS =
     ? Number.parseInt(process.env.OPENAI_STT_TIMEOUT_MS ?? "", 10)
     : 60_000;
 
-export type OpenAITranscriptionErrorKind = "request_failed" | "timeout" | "empty_transcript" | "invalid_response";
+type OpenAITranscriptionErrorKind = "request_failed" | "timeout" | "empty_transcript" | "invalid_response";
 
 export interface OpenAITranscriptionResult {
   success: boolean;

@@ -19,11 +19,11 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { log } from "@/utils/misc/logger";
 
 /** Current archive format version. Bump when the manifest shape changes. */
-export const SPRITE_ARCHIVE_VERSION = 1;
+const SPRITE_ARCHIVE_VERSION = 1;
 /** Discriminator stored in the manifest so unrelated zips are rejected early. */
-export const SPRITE_ARCHIVE_EXPORT_TYPE = "persona_sprites";
+const SPRITE_ARCHIVE_EXPORT_TYPE = "persona_sprites";
 /** Canonical manifest filename inside the archive. */
-export const SPRITE_ARCHIVE_MANIFEST_NAME = "manifest.json";
+const SPRITE_ARCHIVE_MANIFEST_NAME = "manifest.json";
 /** Folder (inside the zip) that holds the sprite images. */
 const SPRITE_ARCHIVE_IMAGE_DIR = "sprites";
 
@@ -32,7 +32,7 @@ const SPRITE_ARCHIVE_IMAGE_DIR = "sprites";
  * subset of `PersonaSpriteRow` (storage references and DB ids are intentionally
  * excluded because they are meaningless on another server).
  */
-export const spriteArchiveEntrySchema = z.object({
+const spriteArchiveEntrySchema = z.object({
   sprite_name: z.string().min(1).max(64),
   sprite_key: z.string().min(1).max(64),
   usage_instructions: z.string().max(1000).default(""),
@@ -40,10 +40,10 @@ export const spriteArchiveEntrySchema = z.object({
   file: z.string().min(1).max(256),
 });
 
-export type SpriteArchiveEntry = z.infer<typeof spriteArchiveEntrySchema>;
+type SpriteArchiveEntry = z.infer<typeof spriteArchiveEntrySchema>;
 
 /** Full `manifest.json` schema. */
-export const spriteArchiveManifestSchema = z.object({
+const spriteArchiveManifestSchema = z.object({
   export_type: z.literal(SPRITE_ARCHIVE_EXPORT_TYPE),
   version: z.number().int().positive(),
   exported_at: z.string().optional(),
@@ -58,7 +58,7 @@ export const spriteArchiveManifestSchema = z.object({
   sprites: z.array(spriteArchiveEntrySchema),
 });
 
-export type SpriteArchiveManifest = z.infer<typeof spriteArchiveManifestSchema>;
+type SpriteArchiveManifest = z.infer<typeof spriteArchiveManifestSchema>;
 
 /** A built archive's bytes plus the metadata callers need for the reply. */
 export type BuiltSpriteArchive = {
@@ -83,7 +83,7 @@ export type SpriteArchiveReadLimits = {
 };
 
 /** A validated, parsed archive ready for import. */
-export type SpriteArchiveReadEntry = {
+type SpriteArchiveReadEntry = {
   meta: SpriteArchiveEntry;
   pngBuffer: Buffer;
 };

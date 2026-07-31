@@ -141,7 +141,7 @@ class HealthTracker {
 /**
  * Health status result structure
  */
-export interface HealthStatus {
+interface HealthStatus {
   /**
    * Whether the bot is considered healthy
    */

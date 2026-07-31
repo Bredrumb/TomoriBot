@@ -4,7 +4,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { userRepository } from "@/utils/db/repositories";
 import { isBridgeUserId } from "@/utils/bridges";
 
-export type ResolvedUserTarget = {
+type ResolvedUserTarget = {
   status: "resolved";
   targetId: string;
   displayLabel: string;
@@ -12,7 +12,7 @@ export type ResolvedUserTarget = {
   source: "legacy_id" | "conversation" | "guild_display_name" | "db_nickname" | "global_name" | "username";
 };
 
-export type AmbiguousUserTarget = {
+type AmbiguousUserTarget = {
   status: "ambiguous";
   input: string;
   candidates: Array<{
@@ -22,14 +22,14 @@ export type AmbiguousUserTarget = {
   }>;
 };
 
-export type NotFoundUserTarget = {
+type NotFoundUserTarget = {
   status: "not_found";
   input: string;
 };
 
 export type UserTargetResolution = ResolvedUserTarget | AmbiguousUserTarget | NotFoundUserTarget;
 
-export type ResolvedChannelTarget = {
+type ResolvedChannelTarget = {
   status: "resolved";
   channel: GuildTextBasedChannel;
   displayLabel: string;
@@ -42,7 +42,7 @@ export type ResolvedChannelTarget = {
     | "normalized_name";
 };
 
-export type AmbiguousChannelTarget = {
+type AmbiguousChannelTarget = {
   status: "ambiguous";
   input: string;
   candidates: Array<{
@@ -54,7 +54,7 @@ export type AmbiguousChannelTarget = {
   totalCount: number;
 };
 
-export type NotFoundChannelTarget = {
+type NotFoundChannelTarget = {
   status: "not_found";
   input: string;
 };
@@ -94,7 +94,7 @@ function stripEmoji(text: string): string {
     .trim();
 }
 
-export function normalizeChannelTargetInput(value: string): string {
+function normalizeChannelTargetInput(value: string): string {
   return normalizeLookupValue(stripEmoji(unwrapInlineCodeDelimiters(value)), "#");
 }
 

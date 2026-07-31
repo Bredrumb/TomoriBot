@@ -46,14 +46,14 @@ import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords }
 import type { IRepository } from "./IRepository";
 
 /** Row shape for persona_context_note_configs (Phase 6). */
-export type PersonaContextNoteConfigsRow = {
+type PersonaContextNoteConfigsRow = {
   persona_id: number;
   context_note: string | null;
   context_note_depth: number;
 };
 
 /** Row shape for persona_voice_configs (Phase 6). */
-export type PersonaVoiceConfigsRow = {
+type PersonaVoiceConfigsRow = {
   persona_id: number;
   speech_voice_sample_id: number | null;
   speech_voice_id: string | null;
@@ -62,14 +62,14 @@ export type PersonaVoiceConfigsRow = {
 };
 
 /** Row shape for persona_imagegen_configs (Phase 6). */
-export type PersonaImagegenConfigsRow = {
+type PersonaImagegenConfigsRow = {
   persona_id: number;
   physical_appearance_tags: string[];
   nai_char_ref_url: string | null;
 };
 
 /** Row shape for persona_textgen_configs (Phase 6). */
-export type PersonaTextgenConfigsRow = {
+type PersonaTextgenConfigsRow = {
   persona_id: number;
   nai_attg_author: string | null;
   nai_attg_title: string | null;
@@ -84,7 +84,7 @@ type PersonaScopedConfigFields = Omit<PersonaContextNoteConfigsRow, "persona_id"
   Omit<PersonaTextgenConfigsRow, "persona_id">;
 
 /** Per-persona config bundle (Stage A). */
-export type PersonaConfigBundle = {
+type PersonaConfigBundle = {
   persona_id: number;
   persona_nickname: string;
   persona_lineage_id: number | null;
@@ -98,7 +98,7 @@ export type PersonaConfigBundle = {
  * Export shape for PersonaRepository.
  * Contains all personas and their Phase 6 config bundles for a server.
  */
-export type PersonaExportShape = {
+type PersonaExportShape = {
   personas: PersonaConfigBundle[];
 };
 
@@ -188,7 +188,7 @@ export type UnsyncedMainPointer = {
   preset_avatar_hash: string;
 };
 
-export class PersonaRepository implements IRepository<PersonaExportShape> {
+class PersonaRepository implements IRepository<PersonaExportShape> {
   private static readonly FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
     (process.env.FALLBACK_DEBUG_ENABLED ?? "").trim().toLowerCase(),
   );

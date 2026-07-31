@@ -13,7 +13,7 @@ import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
-export class McpRepository implements IRepository<null> {
+class McpRepository implements IRepository<null> {
   /**
    * Load all MCP server configs registered for a guild (enabled and disabled).
    * Callers that need only enabled entries should filter in-memory.

@@ -48,7 +48,7 @@ Records which refactor phases produced real responsibility-owned modules and whi
 | #7 Tool registry split | `src/tools/toolRegistry.ts`, 514 lines | `src/tools/availability.ts`, 387 lines | Real partial split | Tool registry vs. availability |
 | #8 Discord UI helpers | `src/utils/discord/interactionHelper.ts`, 1 line; owned modules under `src/utils/discord/ui/` | `src/utils/discord/ui/interactionCore.ts` retains shared Discord UI internals after legacy-file deletion | Legacy file eliminated | Discord UI flows |
 | #8 Webhook helpers | `src/utils/discord/webhookManager.ts`, 1 line; owned modules under `src/utils/discord/webhook/` | `src/utils/discord/webhook/webhookCore.ts` retains shared webhook internals after legacy-file deletion | Legacy file eliminated | Webhook lifecycle, identity, dispatch, fallback |
-| #9 Matrix bridge | `matrixManager.ts`, 9 lines; public responsibility files mostly thin | `src/utils/bridges/matrix/runtime.ts`, 1,405 lines | Facade-only split | Matrix client, events, rooms, state sync, user mapping, media |
+| #9 Matrix bridge | Responsibility modules under `src/utils/bridges/matrix/`; obsolete compatibility barrels deleted | Legacy `runtime.ts`, `matrixManager.ts`, and `appserviceImplementation.ts` removed | Complete | Matrix client, events, rooms, state sync, user mapping, media |
 | #10 Context builder | `contextBuilder.ts`, 5 lines; owned modules under `src/utils/text/context/` are all <600 lines | Deleted `context/core/builderImplementation.ts` | Complete | Context assembly pipeline |
 | #11 Stream orchestrator | `streamOrchestrator.ts`, 1 line; owned modules under `src/utils/discord/stream/` are all <600 lines | Deleted `stream/core/orchestratorImplementation.ts` | Complete | Stream state machine, stop registry, buffer flushing, segment processing, message delivery, UI updates, and thought logs |
 | #12b / #12c / 5.5d Chat | `tomoriChat.ts`, ~145 lines; stage modules under `src/utils/chat/` | Deleted `turnRunner.ts`; chat implementation lives in `admission.ts`, `admissionQueue.ts`, `channelQueue.ts`, `turnPlanner.ts`, `contextPipeline.ts`, `contextAnnotations.ts`, `contextEmbeds.ts`, `contextMedia.ts`, `generationTurn.ts`, `toolLoop.ts`, `responseEmitter.ts`, `postTurnEffects.ts`, and small queue/identity helpers | Complete | Chat admission, queueing, turn planning, context, provider turn, tool loop, response, post-turn effects |
@@ -190,7 +190,6 @@ src/utils/db/
     ├── ImportRepository.ts            # split from ImportExportRepository
     ├── PersonalMemoryRepository.ts    # + checkPersonalMemoryLimit
     ├── ServerMemoryRepository.ts      # + checkServerMemoryLimit
-    ├── ShortTermMemoryRepository.ts
     ├── ConditioningMemoryRepository.ts # + conditioningDb
     ├── WhitelistRepository.ts         # also absorbed whitelist delegation from ServerRepository
     ├── PresetRepository.ts
@@ -201,6 +200,7 @@ Outside `src/utils/db/`:
 ```
 src/utils/persona/personaAccess.ts     # moved from db/personaAccess.ts (pure functional, no DB access)
 src/utils/misc/memoryLimits.ts         # env-loading half of db/memoryLimits.ts
+src/utils/cache/shortTermMemoryCache.ts # short-term memory data access; obsolete repository wrapper removed
 ```
 
 **SQL inlining:** All `*ReadSql.ts` / `*WriteSql.ts` siblings were dissolved into their repository as `private` methods and deleted. The public/private boundary is enforced by TypeScript's `private` keyword, not by folder convention.
@@ -214,7 +214,7 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 | `RagRepository` | 137 | 0 | **137** | |
 | `ToolRepository` | 156 | 23 | **179** | +~110 from guildMcpDb fold |
 | `ConditioningMemoryRepository` | 119 | 0 | **119** | +~130 from conditioningDb fold |
-| `ShortTermMemoryRepository` | 147 | 213 | **360** | |
+| `ShortTermMemoryRepository` (retired) | 147 | 213 | **360** | Wrapper later removed; cache module owns this path directly |
 | `PersonalMemoryRepository` | 175 | 0 | **175** | |
 | `ServerMemoryRepository` | 138 | 0 | **138** | |
 | `PersonaRepository` | 91 | 717 | **808** | |

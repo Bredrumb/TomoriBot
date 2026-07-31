@@ -20,7 +20,7 @@ type PersonaWhitelistStatus = Pick<
   "hasActivePersonaWhitelist" | "restrictedPersonaIds" | "whitelistedPersonaIds"
 >;
 
-export class WhitelistRepository {
+class WhitelistRepository {
   private normalizeTomoriIds(rows: Array<{ persona_id: number | string | bigint }>): number[] {
     return rows
       .map((row) => {

@@ -72,8 +72,3 @@ export function invalidatePersonaUserBlockCache(serverId: number, personaId: num
     }
   }
 }
-
-export function clearPersonaUserBlockCache(): void {
-  personaCache.clear();
-  userCache.clear();
-}

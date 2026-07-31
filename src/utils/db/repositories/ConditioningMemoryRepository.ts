@@ -25,7 +25,7 @@ import {
 import type { IRepository } from "./IRepository";
 
 /** Portable conditioning export shape (expanded in Phase 6 #16.7). */
-export type ConditioningExportShape = {
+type ConditioningExportShape = {
   persona_lineage_id: number;
   groups: ConditioningGroup[];
 };
@@ -54,7 +54,7 @@ export type ConditioningGroup = {
   conditioningIds: number[];
 };
 
-export class ConditioningMemoryRepository implements IRepository<ConditioningExportShape> {
+class ConditioningMemoryRepository implements IRepository<ConditioningExportShape> {
   /**
    * Loads aggregated conditioning groups for a persona lineage.
    * Groups cluster related events so the prompt assembly can summarize them.

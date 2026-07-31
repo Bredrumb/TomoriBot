@@ -65,16 +65,6 @@ Skip what wouldn't stick with you. Don't restate what you already remember — t
 Each extracted memory should still stand on its own (someone reading just that one line should grasp what happened), but the voice and what you choose to record are entirely yours.`;
 
 /**
- * Returns the default system prompt for the given extraction mode.
- * For in_character mode, callers must substitute {persona_nickname} themselves
- * before display (or pass through composeInCharacterSystemPrompt).
- */
-export function getDefaultExtractionSystemPrompt(mode: ExtractionPromptMode): string {
-  if (mode === "in_character") return EXTRACTION_IN_CHARACTER_SYSTEM_PROMPT;
-  return mode === "roleplay" ? EXTRACTION_ROLEPLAY_SYSTEM_PROMPT : EXTRACTION_CONVERSATION_SYSTEM_PROMPT;
-}
-
-/**
  * Substitutes {persona_nickname} in the in-character framing template.
  * Used before displaying the modal so the user sees the persona's name baked in.
  */

@@ -222,7 +222,7 @@ export function buildNoProvidersPayload(
  * notice in place and returns null; the returned button is left unacknowledged so the
  * caller can open a modal on it via {@link AnchorPrivateWorkflowPhase.useButton}.
  */
-export async function awaitAnchorButton(
+async function awaitAnchorButton(
   phase: AnchorPrivateWorkflowPhase,
   userId: string,
   prefix: string,

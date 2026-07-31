@@ -33,15 +33,15 @@ import type { OpenRouterModelScope } from "./LlmModelRepository";
 import type { IRepository } from "./IRepository";
 
 /** Export shape for server-scoped provider configuration. */
-export type LlmProviderExportShape = {
+type LlmProviderExportShape = {
   savedProviderConfigs: SavedProviderConfigRow[];
 };
 
-export type LlmProviderCacheOptions = {
+type LlmProviderCacheOptions = {
   serverDiscId?: string;
 };
 
-export type ChannelLlmCacheOptions = LlmProviderCacheOptions & {
+type ChannelLlmCacheOptions = LlmProviderCacheOptions & {
   channelDiscId?: string;
 };
 
@@ -52,7 +52,7 @@ export type ChannelLlmCacheOptions = LlmProviderCacheOptions & {
  * openrouter_model_registrations, openrouter_embedding_model_registrations,
  * openrouter_image_model_registrations, openrouter_video_model_registrations.
  */
-export class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
+class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   private async scopedLlmRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
     if (scope.kind === "server") {
       return includeDeprecated

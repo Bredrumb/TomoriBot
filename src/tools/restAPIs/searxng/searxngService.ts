@@ -93,13 +93,6 @@ export async function isSearxngAvailable(force = false): Promise<boolean> {
   }
 }
 
-/**
- * Invalidate the cached health-probe result. Useful for tests.
- */
-export function resetSearxngHealthCache(): void {
-  healthcheckCache = null;
-}
-
 async function makeSearxngRequest(
   params: SearxngSearchParams,
   config: SearxngRequestConfig = {},

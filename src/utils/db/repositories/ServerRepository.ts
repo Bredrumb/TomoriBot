@@ -32,9 +32,9 @@ import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
 export const MANAGED_WEBHOOK_KIND_SHARED_CHANNEL = "shared_channel" as const;
-export type ManagedWebhookKind = typeof MANAGED_WEBHOOK_KIND_SHARED_CHANNEL;
+type ManagedWebhookKind = typeof MANAGED_WEBHOOK_KIND_SHARED_CHANNEL;
 
-export type ManagedDiscordWebhookRow = {
+type ManagedDiscordWebhookRow = {
   managed_webhook_id: number;
   guild_disc_id: string;
   kind: ManagedWebhookKind;
@@ -47,7 +47,7 @@ export type ManagedDiscordWebhookRow = {
 };
 
 /** Sync freshness for a server's emoji or sticker set (lazy-sync cache input). */
-export interface ServerAssetSyncStatus {
+interface ServerAssetSyncStatus {
   /** Most recent `updated_at` across the rows, or null when none exist. */
   lastUpdated: Date | null;
   /** Number of synced rows for the server. */
@@ -74,7 +74,7 @@ interface SyncItemConfig<TDiscord, TDatabase> {
 }
 
 /** Row shape for server_chat_configs (Phase 6). */
-export type ServerChatConfigsRow = {
+type ServerChatConfigsRow = {
   humanizer_degree: number;
   message_fetch_limit: number;
   send_message_limit: number;
@@ -99,12 +99,12 @@ export type ServerChatConfigsRow = {
 };
 
 /** Row shape for server_notice_embeds_configs (Phase 6). */
-export type ServerNoticeEmbedsConfigsRow = {
+type ServerNoticeEmbedsConfigsRow = {
   tool_notice_hidden_keys: string[];
 };
 
 /** Row shape for server_member_permissions_configs (Phase 6). */
-export type ServerMemberPermissionsConfigsRow = {
+type ServerMemberPermissionsConfigsRow = {
   server_memteaching_enabled: boolean;
   attribute_memteaching_enabled: boolean;
   sampledialogue_memteaching_enabled: boolean;
@@ -115,7 +115,7 @@ export type ServerMemberPermissionsConfigsRow = {
 };
 
 /** Row shape for server_channel_scope_configs (Phase 6). */
-export type ServerChannelScopeConfigsRow = {
+type ServerChannelScopeConfigsRow = {
   rp_channel_ids: string[];
   private_channel_ids: string[];
   crosschannel_blocklist_ids: string[];
@@ -124,7 +124,7 @@ export type ServerChannelScopeConfigsRow = {
 };
 
 /** Row shape for server_welcome_configs (Phase 6). */
-export type ServerWelcomeConfigsRow = {
+type ServerWelcomeConfigsRow = {
   welcome_channel_disc_id: string | null;
   welcome_prompt: string | null;
   welcome_persona_id: number | null;
@@ -134,7 +134,7 @@ export type ServerWelcomeConfigsRow = {
  * Composite export shape for ServerRepository's Phase 6 config tables.
  * Replaces the old server_disc_id-only stub.
  */
-export type ServerExportShape = {
+type ServerExportShape = {
   server_disc_id: string;
   chat: ServerChatConfigsRow | null;
   notice_embeds: ServerNoticeEmbedsConfigsRow | null;
@@ -143,7 +143,7 @@ export type ServerExportShape = {
   welcome: ServerWelcomeConfigsRow | null;
 };
 
-export class ServerRepository implements IRepository<ServerExportShape> {
+class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Atomically sets up a new server: creates server, tomori, config, and emoji rows.
    *

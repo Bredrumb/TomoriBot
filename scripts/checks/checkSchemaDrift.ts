@@ -207,8 +207,13 @@ function extractObjectKeysFromBody(body: string): Set<string> {
   return keys;
 }
 
+function findConstDeclarationIndex(content: string, name: string, initializerPattern = ""): number {
+  const declaration = new RegExp(`(?:export\\s+)?const\\s+${name}\\s*=\\s*${initializerPattern}`).exec(content);
+  return declaration?.index ?? -1;
+}
+
 function extractDirectZodObjectKeys(content: string, exportName: string): Set<string> | null {
-  const declarationIndex = content.indexOf(`export const ${exportName} = z.object(`);
+  const declarationIndex = findConstDeclarationIndex(content, exportName, "z\\.object\\(");
   if (declarationIndex === -1) return null;
 
   const openIndex = content.indexOf("{", declarationIndex);
@@ -227,7 +232,7 @@ function extractDirectZodObjectKeys(content: string, exportName: string): Set<st
 }
 
 function extractComposedZodObjectKeys(content: string, exportName: string, seen: Set<string>): Set<string> | null {
-  const declarationIndex = content.indexOf(`export const ${exportName} =`);
+  const declarationIndex = findConstDeclarationIndex(content, exportName);
   if (declarationIndex === -1) return null;
 
   const statementEnd = findStatementEnd(content, declarationIndex);
@@ -290,7 +295,7 @@ function extractZodObjectKeys(content: string, exportName: string, seen = new Se
   const composedKeys = extractComposedZodObjectKeys(content, exportName, seen);
   if (composedKeys) return composedKeys;
 
-  addIssue("zod-schema", `Could not find exported Zod object ${exportName}`);
+  addIssue("zod-schema", `Could not find Zod object ${exportName}`);
   return new Set();
 }
 

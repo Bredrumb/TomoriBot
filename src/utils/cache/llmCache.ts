@@ -62,21 +62,6 @@ export function getCachedLLM(llmId: number): LlmRow | undefined {
 }
 
 /**
- * Gets all cached LLM configurations
- */
-export function getAllCachedLLMs(): LlmRow[] {
-  return Array.from(llmCache.values());
-}
-
-/**
- * @param provider - Provider name (e.g., "google", "openai", "anthropic")
- */
-export function getCachedLLMsByProvider(provider: string): LlmRow[] {
-  const normalizedProvider = provider.toLowerCase();
-  return Array.from(llmCache.values()).filter((llm) => llm.llm_provider.toLowerCase() === normalizedProvider);
-}
-
-/**
  * Gets the default LLM configuration for a provider
  * @param provider - Provider name (e.g., "google", "openai", "anthropic")
  * @returns Default LLM configuration or undefined
@@ -85,29 +70,6 @@ export function getCachedDefaultLLM(provider: string): LlmRow | undefined {
   const normalizedProvider = provider.toLowerCase();
   return Array.from(llmCache.values()).find(
     (llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_default,
-  );
-}
-
-/**
- * Gets the smartest (most capable) LLM configuration for a provider
- * @param provider - Provider name (e.g., "google", "openai", "anthropic")
- * @returns Smartest LLM configuration or undefined
- */
-export function getCachedSmartestLLM(provider: string): LlmRow | undefined {
-  const normalizedProvider = provider.toLowerCase();
-  return Array.from(llmCache.values()).find(
-    (llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_smartest,
-  );
-}
-
-/**
- * Gets all reasoning-capable LLM configurations for a provider
- * @param provider - Provider name (e.g., "google", "openai", "anthropic")
- */
-export function getCachedReasoningLLMs(provider: string): LlmRow[] {
-  const normalizedProvider = provider.toLowerCase();
-  return Array.from(llmCache.values()).filter(
-    (llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_reasoning,
   );
 }
 

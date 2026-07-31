@@ -1,12 +1,5 @@
 import { ButtonStyle } from "discord.js";
-import type {
-  ButtonInteraction,
-  ColorResolvable,
-  APIEmbedField,
-  EmbedField,
-  EmbedBuilder,
-  MessageFlags,
-} from "discord.js";
+import type { ButtonInteraction, ColorResolvable, EmbedBuilder, MessageFlags } from "discord.js";
 
 /**
  * Options for creating a standard info/status embed.
@@ -90,20 +83,6 @@ export const TRANSLATOR_STYLES = {
   [TranslationProvider.GOOGLE]: ButtonStyle.Danger,
   [TranslationProvider.BING]: ButtonStyle.Success,
 } as const satisfies Record<TranslationProvider, ButtonStyle>;
-
-/**
- * Helper type for accessing translator properties
- */
-export type Provider = keyof typeof TRANSLATOR_COLORS;
-
-/**
- * Field pair for summary embeds
- */
-export interface SummaryField {
-  nameKey: string;
-  value: string | number | APIEmbedField | EmbedField;
-  vars?: Record<string, string | number>;
-}
 
 export interface SummaryEmbedOptions extends StandardEmbedOptions {
   docsPath?: string;

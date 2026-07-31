@@ -13,30 +13,6 @@ export const MEDIA_IMAGE_MESSAGE_LIMIT = (() => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 3;
 })();
 
-export function buildMediaDescription(msg: SimplifiedMessageForContext): string {
-  const imageCount = msg.imageAttachments.length;
-  const videoCount = msg.videoAttachments.length;
-  const hasGif = msg.imageAttachments.some((att) => att.mimeType?.includes("gif"));
-
-  const mediaParts: string[] = [];
-
-  if (imageCount > 0) {
-    if (hasGif && imageCount === 1) {
-      mediaParts.push("1 GIF");
-    } else if (hasGif) {
-      mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""} (including GIF)`);
-    } else {
-      mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""}`);
-    }
-  }
-
-  if (videoCount > 0) {
-    mediaParts.push(`${videoCount} video${videoCount > 1 ? "s" : ""}`);
-  }
-
-  return mediaParts.join(" and ");
-}
-
 export function buildMediaAttributionText(msg: SimplifiedMessageForContext, authorName: string): string {
   const imageCount = msg.imageAttachments.length;
   const videoCount = msg.videoAttachments.length;
@@ -151,7 +127,7 @@ export function getLastImageOccurrenceIndices(
 
 const UTC_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-export function formatRelativeTime(diffMs: number): string {
+function formatRelativeTime(diffMs: number): string {
   const seconds = Math.floor(diffMs / 1000);
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);

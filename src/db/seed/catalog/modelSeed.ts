@@ -290,7 +290,7 @@ const PRICING_PENDING_CODENAMES = new Set<string>(["gemini-3.5-pro"]);
  * Pure and exported so the invariant can be unit-tested with crafted rows.
  * @returns A list of violation messages (empty when valid).
  */
-export function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
+function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
     if (!METERED_FIRST_PARTY_PROVIDERS.has(row.provider)) continue;
@@ -322,8 +322,6 @@ export function validateModels(): string[] {
   errors.push(...collectMeteredPriceViolations(rowsOf(llmSpec)));
   return errors;
 }
-
-export const validateCatalog = validateModels;
 
 function renderStatement<T extends RowLike>(spec: TableSpec<T>): string {
   const values = rowsOf(spec)

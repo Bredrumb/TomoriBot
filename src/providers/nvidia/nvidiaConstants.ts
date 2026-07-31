@@ -10,8 +10,6 @@ export const NVIDIA_IMAGE_GENERATION_BASE_URL = "https://ai.api.nvidia.com/v1/ge
 
 export const NVIDIA_DEFAULT_TEXT_MODEL = "meta/llama-3.3-70b-instruct";
 export const NVIDIA_DEFAULT_EMBEDDING_MODEL = "nv-embed-v1";
-export const NVIDIA_DEFAULT_IMAGE_MODEL = "black-forest-labs/flux.1-dev";
-
 export const NVIDIA_STRUCTURED_OUTPUT_MODELS = new Set([
   "deepseek-ai/deepseek-v3.2",
   "qwen/qwen3.5-397b-a17b",

@@ -9,9 +9,9 @@ import { log } from "@/utils/misc/logger";
 import type {
   Crawl4aiApiResult,
   Crawl4aiCookie,
+  Crawl4aiCrawlRequest,
   Crawl4aiCrawlResponse,
   Crawl4aiFilterMode,
-  Crawl4aiHealthResponse,
   Crawl4aiMarkdownRequest,
   Crawl4aiMarkdownResponse,
   Crawl4aiRequestConfig,
@@ -148,10 +148,6 @@ export async function isCrawl4aiAvailable(force = false): Promise<boolean> {
   }
 }
 
-export function resetCrawl4aiHealthCache(): void {
-  healthcheckCache = null;
-}
-
 export async function crawl4aiMarkdown(
   request: Crawl4aiMarkdownRequest,
   config: Crawl4aiRequestConfig = {},
@@ -240,7 +236,7 @@ export async function crawl4aiCrawlWithCookies(
         urls: [request.url],
         // Playwright requires path alongside domain, so default to "/" when omitted.
         browser_config: { cookies: cookies.map((c) => ({ path: "/", ...c })) },
-      } satisfies import("./types").Crawl4aiCrawlRequest),
+      } satisfies Crawl4aiCrawlRequest),
     });
 
     if (!response.ok) {
@@ -295,35 +291,6 @@ export async function crawl4aiCrawlWithCookies(
       return { success: false, error: "Request timed out", statusCode: 408 };
     }
     log.warn(`${SERVICE_NAME} /crawl request error:`, error as Error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-export async function getCrawl4aiHealth(
-  config: Crawl4aiRequestConfig = {},
-): Promise<Crawl4aiApiResult<Crawl4aiHealthResponse>> {
-  const baseUrl = config.baseUrl ?? getCrawl4aiBaseUrl();
-  if (!baseUrl) {
-    return { success: false, error: "CRAWL4AI_BASE_URL is not configured", statusCode: 503 };
-  }
-
-  const timeoutMs = config.timeoutMs ?? HEALTHCHECK_TIMEOUT_MS;
-  const { controller, timeoutId } = createAbortController(timeoutMs, config.signal);
-
-  try {
-    const response = await fetch(`${baseUrl}/health`, {
-      method: "GET",
-      signal: controller.signal,
-      headers: buildHeaders(),
-    });
-    const data = (await response.json().catch(() => ({}))) as Crawl4aiHealthResponse;
-    return { success: response.ok, data, statusCode: response.status };
-  } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

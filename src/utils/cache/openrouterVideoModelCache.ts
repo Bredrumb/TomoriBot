@@ -3,7 +3,7 @@ import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAt
 
 const OPENROUTER_VIDEO_MODELS_URL = "https://openrouter.ai/api/v1/videos/models";
 
-export type OpenRouterFrameType = "first_frame" | "last_frame";
+type OpenRouterFrameType = "first_frame" | "last_frame";
 
 export interface OpenRouterVideoModelCapabilities {
   id: string;
@@ -109,12 +109,6 @@ export async function initializeOpenRouterVideoModelCache(): Promise<void> {
   await refreshOpenRouterVideoModelCache();
 }
 
-export function getOpenRouterVideoModelCapabilities(
-  modelCodename: string,
-): OpenRouterVideoModelCapabilities | undefined {
-  return videoModelCache.get(modelCodename.trim().toLowerCase());
-}
-
 export async function getOrFetchOpenRouterVideoModelCapabilities(
   modelCodename: string,
 ): Promise<OpenRouterVideoModelCapabilities | undefined> {
@@ -129,9 +123,4 @@ export async function getOrFetchOpenRouterVideoModelCapabilities(
   }
 
   return videoModelCache.get(normalizedCodename);
-}
-
-export function clearOpenRouterVideoModelCache(): void {
-  videoModelCache.clear();
-  cacheReady = false;
 }

@@ -1,13 +1,4 @@
 /**
- * Words and patterns that can trigger a bot response
- */
-export interface TriggerConfig {
-  autoThreshold: number;
-  words: string[];
-  regexPatterns?: RegExp[];
-}
-
-/**
  * A segment of context for the LLM conversation
  */
 export type ContextPart =
@@ -35,7 +26,7 @@ export interface ConversationUserReference {
   mentionable: boolean; // True only when this target can be converted into a Discord mention
 }
 
-export interface ContextItemSender {
+interface ContextItemSender {
   name: string;
   type: "user" | "persona";
 }
@@ -78,22 +69,6 @@ export type StructuredContextItem = {
   conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
   personaMentionMap?: Map<string, string>; // Hidden metadata for preserving known persona @trigger text
 };
-
-/**
- * Full context assembly options
- */
-export interface ContextOptions {
-  preambles: string[];
-  serverMemories: string[];
-  userMemories: Record<string, string[]>;
-  sampleDialogs: string[];
-  messageHistory: Array<{
-    author: string;
-    content: string;
-    timestamp: Date;
-  }>;
-  variables: Record<string, string>;
-}
 
 /**
  * Per-request snapshot of data used throughout context building.

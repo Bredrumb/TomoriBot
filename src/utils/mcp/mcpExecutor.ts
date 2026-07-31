@@ -602,26 +602,3 @@ export class MCPExecutor {
 export function getMCPExecutor(): MCPExecutor {
   return MCPExecutor.getInstance();
 }
-
-export function getMCPHandlerRegistry(): MCPHandlerRegistry {
-  return MCPHandlerRegistry.getInstance();
-}
-
-/**
- * Export convenience functions for common MCP operations
- */
-export async function isMCPFunction(functionName: string): Promise<boolean> {
-  return getMCPExecutor().isMCPFunction(functionName);
-}
-
-export async function executeMCPFunction(
-  functionName: string,
-  args: Record<string, unknown>,
-  context?: ToolContext,
-): Promise<TypedMCPToolResult> {
-  return getMCPExecutor().executeMCPFunction(functionName, args, context);
-}
-
-export async function getAvailableMCPFunctions(): Promise<string[]> {
-  return getMCPExecutor().getAvailableMCPFunctions();
-}

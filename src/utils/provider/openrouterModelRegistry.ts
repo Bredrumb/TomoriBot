@@ -2,8 +2,6 @@ import type { DiffusionModelRow, EmbeddingModelRow, LlmRow, VideoGenerationModel
 import { getOrFetchOpenRouterCapabilities } from "@/utils/cache/openrouterCapabilityCache";
 import { getOrFetchOpenRouterVideoModelCapabilities } from "@/utils/cache/openrouterVideoModelCache";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
-
-import { log } from "@/utils/misc/logger";
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
 
 export type OpenRouterModelRegistryScope =
@@ -556,12 +554,4 @@ export async function loadRegisteredOpenRouterModelsForScope(
   return [...textModels, ...embeddingModels, ...imageModels, ...videoModels].sort(
     (a, b) => capabilityOrder[a.capability] - capabilityOrder[b.capability] || a.codename.localeCompare(b.codename),
   );
-}
-
-export function formatScopedOpenRouterCommand(scope: OpenRouterModelRegistryScope, action: "add" | "remove"): string {
-  return scope.kind === "server" ? `/openrouter model ${action}` : `/personal openrouter-model ${action}`;
-}
-
-export async function logOpenRouterRegistryError(context: string, error: unknown): Promise<void> {
-  await log.error(context, error as Error);
 }

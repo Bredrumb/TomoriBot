@@ -11,7 +11,9 @@ This document summarizes the current PostgreSQL schema used by TomoriBot.
 
 ## Data Access Boundary
 
-The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repository classes implement the shared `IRepository<TExport>` contract:
+The Phase 2 data-access layer lives under `src/utils/db/repositories/`. Most domains expose repository
+instances that implement the shared `IRepository<TExport>` contract. Quota and speech expose module-level
+functions because callers use only their focused operations:
 
 | Repository | Domain |
 |---|---|
@@ -36,18 +38,26 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repositor
 | `ServerMemoryRepository` | Server-wide shared memories |
 | `ServerRepository` | Server identity: setup, emojis/stickers, webhooks, blacklist |
 | `ServerScheduleRepository` | Reminder + random-trigger scheduling |
-| `ShortTermMemoryRepository` | Short-term per-channel/user conversation memory |
 | `SpeechRepository` | Speech (TTS/STT) server configuration |
 | `StatRepository` | Buffered usage-stat counters + read/aggregation (`stat_counters`) |
 | `ToolRepository` | Tool configurations and API key status |
 | `UserRepository` | User registration, privacy, personalization, spotlight |
 | `WhitelistRepository` | Channel, persona, and role whitelist rules |
 
-Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports repository instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
+Application code imports shared repository instances from `src/utils/db/repositories/index.ts`. Focused
+quota and speech callers import their operations directly from the owning module. Short-term conversation
+memory is owned directly by `src/utils/cache/shortTermMemoryCache.ts`; its unused repository wrapper was
+removed. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have
+also been removed.
 
 ### SQL convention
 
-All SQL is inlined as `private` methods directly on the owning Repository class. Separate `*ReadSql.ts` / `*WriteSql.ts` sibling files are forbidden — `checkRefactorIntegrity.ts` will flag any surviving SQL sibling at gate time. If inlining SQL pushes a Repository file past ~1,000 lines, that signals the domain is too broad: **split the Repository itself** (e.g. `LlmRepository` → `LlmModelRepository` + `LlmProviderRepository` + `LlmOverrideRepository`) rather than externalising SQL. Size is the signal; the split must follow a coherent domain boundary.
+SQL stays in its owning repository module, either in `private` class methods or focused module-level
+functions. Separate `*ReadSql.ts` / `*WriteSql.ts` sibling files are forbidden —
+`checkRefactorIntegrity.ts` will flag any surviving SQL sibling at gate time. If inlining SQL pushes a
+Repository file past ~1,000 lines, that signals the domain is too broad: **split the Repository itself**
+(e.g. `LlmRepository` → `LlmModelRepository` + `LlmProviderRepository` + `LlmOverrideRepository`) rather
+than externalising SQL. Size is the signal; the split must follow a coherent domain boundary.
 
 ## Main Tables (Current)
 

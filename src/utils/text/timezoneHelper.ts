@@ -204,20 +204,6 @@ export function parseTimeWithOffset(timeStr: string, offsetHours: number): Date 
 }
 
 /**
- * @param hours - Number of hours to add (can be negative)
- * @returns New Date object with hours added
- *
- * @example
- * ```ts
- * const now = new Date();
- * const later = addHoursToDate(now, 5);  // 5 hours from now
- * ```
- */
-export function addHoursToDate(date: Date, hours: number): Date {
-  return new Date(date.getTime() + hours * MILLISECONDS_PER_HOUR);
-}
-
-/**
  * Gets a descriptive phrase about the current time of day based on the hour
  * @param offsetHours - The UTC offset in hours to apply
  *

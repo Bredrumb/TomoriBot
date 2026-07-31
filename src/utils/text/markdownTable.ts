@@ -355,9 +355,3 @@ export function findMarkdownTableBlockAt(text: string, index: number): { start: 
 
   return null;
 }
-
-export function isRenderedMarkdownTableAttachmentName(name: string | null | undefined): boolean {
-  if (!name) return false;
-  const normalized = name.toLowerCase();
-  return normalized.startsWith(MARKDOWN_TABLE_ATTACHMENT_PREFIX) && normalized.endsWith(".png");
-}

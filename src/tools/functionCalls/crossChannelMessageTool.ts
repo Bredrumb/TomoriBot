@@ -505,7 +505,7 @@ export class CrossChannelMessageTool extends BaseTool {
       log.warn(`Cross-channel tool: Failed to fetch last message from #${targetChannel.name}:`, fetchError);
     }
 
-    // Seed a braille blank if channel is empty (same pattern as reminderTimer)
+    // A placeholder message provides the anchor that later updates require.
     if (!lastMessage && "send" in targetChannel) {
       try {
         lastMessage = await targetChannel.send({

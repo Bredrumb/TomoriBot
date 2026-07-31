@@ -7,8 +7,8 @@ function readIntEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-export const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 7);
-export const TIME_AWARENESS_GRACE_TRIGGERS = readIntEnv("TIME_AWARENESS_GRACE_TRIGGERS", 3);
+const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 7);
+const TIME_AWARENESS_GRACE_TRIGGERS = readIntEnv("TIME_AWARENESS_GRACE_TRIGGERS", 3);
 
 /**
  * How many messages deep the reunion note is injected. Depth 1 (the original

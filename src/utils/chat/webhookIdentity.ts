@@ -66,11 +66,11 @@ export function getCachedImpersonatedUserIdForWebhook(webhookId: string | null |
   return cachedRelay.userId;
 }
 
-export function normalizeIdentityName(value?: string | null): string {
+function normalizeIdentityName(value?: string | null): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-export function normalizeAvatarUrlForMatch(value?: string | null): string | null {
+function normalizeAvatarUrlForMatch(value?: string | null): string | null {
   if (!value) {
     return null;
   }

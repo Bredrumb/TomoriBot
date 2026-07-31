@@ -1,11 +1,9 @@
 import { log } from "@/utils/misc/logger";
 import type { TextQuotaConfigRow } from "@/types/db/schema";
 import {
-  cleanupOldTextQuotas as repositoryCleanupOldTextQuotas,
   getOrCreateTextConfig,
   incrementTextQuota as repositoryIncrementTextQuota,
   resetServerwideTextPeriod,
-  resetServerwideTextQuotaPool,
   touchServerwideTextQuota,
   touchUserTextQuota,
 } from "@/utils/db/repositories/QuotaRepository";
@@ -33,7 +31,7 @@ export async function getTextQuotaConfig(serverId: number): Promise<TextQuotaCon
  * Check if user can trigger text generation based on daily quota
  * Returns remaining quota and whether trigger is allowed
  */
-export async function checkUserDailyTextQuota(
+async function checkUserDailyTextQuota(
   serverId: number,
   userDiscId: string,
   config: TextQuotaConfigRow,
@@ -76,10 +74,7 @@ export async function checkUserDailyTextQuota(
  * Check if server has remaining server-wide text quota
  * Returns remaining quota and whether trigger is allowed
  */
-export async function checkServerwideTextQuota(
-  serverId: number,
-  config: TextQuotaConfigRow,
-): Promise<TextQuotaCheckResult> {
+async function checkServerwideTextQuota(serverId: number, config: TextQuotaConfigRow): Promise<TextQuotaCheckResult> {
   // If serverwide quota is 0 (unlimited), allow
   if (config.serverwide_quota === 0) {
     return { allowed: true };
@@ -167,38 +162,5 @@ export async function incrementTextQuota(serverId: number, userDiscId: string): 
     log.info("Incremented text quotas");
   } catch (error) {
     log.error("Failed to increment text quota", error);
-  }
-}
-
-/**
- * Clean up old user text quota records (older than 7 days)
- * Should be called periodically (e.g., on startup or via cron)
- */
-export async function cleanupOldTextQuotas(): Promise<number> {
-  try {
-    const deletedCount = await repositoryCleanupOldTextQuotas();
-
-    if (deletedCount > 0) {
-      log.info("Cleaned up old text quota records");
-    }
-
-    return deletedCount;
-  } catch (error) {
-    log.error("Failed to cleanup old text quotas", error);
-    return 0;
-  }
-}
-
-/**
- * Manually reset server-wide text quota (admin override)
- * Creates new quota period starting now
- */
-export async function resetTextServerwideQuota(serverId: number): Promise<void> {
-  try {
-    await resetServerwideTextQuotaPool(serverId);
-    log.info("Manually reset text serverwide quota");
-  } catch (error) {
-    log.error("Failed to reset text serverwide quota", error);
-    throw error;
   }
 }

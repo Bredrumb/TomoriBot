@@ -16,10 +16,10 @@
 import type { StructuredContextItem } from "@/types/misc/context";
 
 /** Approximate characters per token for natural-language prose. */
-export const CHARS_PER_TOKEN_TEXT = 4;
+const CHARS_PER_TOKEN_TEXT = 4;
 
 /** Approximate characters per token for JSON-ish strings (tool/function schemas). */
-export const CHARS_PER_TOKEN_JSON = 3.5;
+const CHARS_PER_TOKEN_JSON = 3.5;
 
 /**
  * Normalized, provider-agnostic token usage for a single provider response.

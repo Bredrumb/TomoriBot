@@ -11,7 +11,7 @@ import { type ChannelPromptOverride, invalidateChannelPromptCache } from "@/util
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
-export class ChannelPromptRepository {
+class ChannelPromptRepository {
   /**
    * Returns the per-channel system prompt override, or null if none is set.
    *

@@ -36,7 +36,7 @@ export interface MCPServerResponse {
  * MCP content item structure
  * Represents individual content items in MCP responses
  */
-export interface MCPContentItem {
+interface MCPContentItem {
   type: "text" | "image" | "audio" | "video";
   text?: string;
   image_url?: string;
@@ -50,7 +50,7 @@ export interface MCPContentItem {
 /**
  * Brave Search specific result interfaces
  */
-export interface BraveSearchWebResult {
+interface BraveSearchWebResult {
   title: string;
   url: string;
   snippet: string;
@@ -59,7 +59,7 @@ export interface BraveSearchWebResult {
   language?: string;
 }
 
-export interface BraveSearchImageData {
+interface BraveSearchImageData {
   image_url: string;
   title?: string;
   source?: string;
@@ -68,30 +68,12 @@ export interface BraveSearchImageData {
   height?: number;
 }
 
-export interface BraveSearchVideoData {
+interface BraveSearchVideoData {
   video_url: string;
   title?: string;
   thumbnail_url?: string;
   duration?: string;
   source?: string;
-}
-
-export interface BraveSearchNewsData {
-  title: string;
-  url: string;
-  snippet: string;
-  published_date?: string;
-  source?: string;
-  thumbnail_url?: string;
-}
-
-export interface BraveSearchLocalData {
-  name: string;
-  address?: string;
-  phone?: string;
-  website?: string;
-  rating?: number;
-  reviews?: number;
 }
 
 /**
@@ -116,25 +98,6 @@ export interface BraveVideoSearchResponse extends MCPServerResponse {
   query?: string;
   safesearch?: string;
   count?: number;
-}
-
-export interface BraveNewsSearchResponse extends MCPServerResponse {
-  news_results?: BraveSearchNewsData[];
-  query?: string;
-  safesearch?: string;
-  count?: number;
-}
-
-export interface BraveLocalSearchResponse extends MCPServerResponse {
-  local_results?: BraveSearchLocalData[];
-  query?: string;
-  location?: string;
-}
-
-export interface BraveSummarizerResponse extends MCPServerResponse {
-  summary?: string;
-  source_url?: string;
-  title?: string;
 }
 
 /**
@@ -168,81 +131,6 @@ export interface DuckDuckGoWebSearchResponse extends MCPServerResponse {
   page?: number;
   numResults?: number;
 }
-
-/**
- * Felo AI Search response structure (felo-search tool)
- */
-export interface FeloAISearchResponse extends MCPServerResponse {
-  ai_response?: string;
-  query?: string;
-  stream?: boolean;
-  sources?: Array<{
-    title?: string;
-    url?: string;
-    snippet?: string;
-  }>;
-}
-
-/**
- * URL Content Fetch response structure (fetch-url tool)
- */
-export interface URLContentResponse extends MCPServerResponse {
-  url?: string;
-  page_content?: string;
-  title?: string;
-  extracted_text?: string;
-  main_content?: string;
-  links?: Array<{
-    text: string;
-    url: string;
-  }>;
-  images?: Array<{
-    alt: string;
-    src: string;
-  }>;
-  content_length?: number;
-  truncated?: boolean;
-  maxLength?: number;
-  extractMainContent?: boolean;
-  includeLinks?: boolean;
-  includeImages?: boolean;
-  excludeTags?: string[];
-}
-
-/**
- * URL Metadata response structure (url-metadata tool)
- */
-export interface URLMetadataResponse extends MCPServerResponse {
-  url?: string;
-  title?: string;
-  description?: string;
-  keywords?: string[];
-  author?: string;
-  published_date?: string;
-  og_title?: string;
-  og_description?: string;
-  og_image?: string;
-  og_url?: string;
-  twitter_title?: string;
-  twitter_description?: string;
-  twitter_image?: string;
-  canonical_url?: string;
-  favicon?: string;
-  images?: Array<{
-    url: string;
-    alt?: string;
-    width?: number;
-    height?: number;
-  }>;
-  language?: string;
-  charset?: string;
-}
-
-/**
- * Legacy DuckDuckGo Search response (for backward compatibility)
- * @deprecated Use DuckDuckGoWebSearchResponse instead
- */
-export interface DuckDuckGoSearchResponse extends DuckDuckGoWebSearchResponse {}
 
 /**
  * MCP function execution context
@@ -285,20 +173,6 @@ export interface MCPServerBehaviorHandler {
    * @returns True if this handler supports the function
    */
   supportsFunction(functionName: string): boolean;
-}
-
-/**
- * MCP execution statistics for monitoring
- */
-export interface MCPExecutionStats {
-  functionName: string;
-  serverName: string;
-  executionTime: number;
-  success: boolean;
-  overridesApplied: number;
-  timestamp: Date;
-  userId?: string;
-  guildId?: string;
 }
 
 /**

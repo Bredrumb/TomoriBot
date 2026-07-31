@@ -258,7 +258,7 @@ const CHATMOCK_PORT = process.env.CHATMOCK_PORT ?? "8000";
  * This is intentionally narrow because other common local tools use different ports
  * (Ollama: 11434, KoboldCPP: 5001, LM Studio: 1234).
  */
-export function isChatmockEndpoint(apiUrl: string): boolean {
+function isChatmockEndpoint(apiUrl: string): boolean {
   try {
     const { hostname, port } = new URL(apiUrl);
     const isLoopback = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";

@@ -22,12 +22,12 @@ import { detectRagAvailability, isRagAvailable } from "@/utils/db/ragAvailabilit
 import type { IRepository } from "./IRepository";
 
 /** Portable RAG export shape (expanded in Phase 6 #16.7). */
-export type RagExportShape = {
+type RagExportShape = {
   server_disc_id: string;
   document_count: number;
 };
 
-export class RagRepository implements IRepository<RagExportShape> {
+class RagRepository implements IRepository<RagExportShape> {
   /**
    * Returns true if pgvector is available in the current database.
    * Reads the in-process flag set during startup: no DB round-trip.

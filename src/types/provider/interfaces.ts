@@ -26,11 +26,11 @@ export type ProviderApiFamily = "google-genai" | "openrouter" | "novelai" | "ope
 /** LLM generation parameters that providers may support via DB config. */
 export type SupportedParam = SupportedParamValue;
 
-export type ImageGenerationStyle = "chat-completion" | "nai-pipeline" | "none";
+type ImageGenerationStyle = "chat-completion" | "nai-pipeline" | "none";
 
-export type VideoGenerationStyle = "chat-completion" | "none";
+type VideoGenerationStyle = "chat-completion" | "none";
 
-export interface ProviderFeatureSupport {
+interface ProviderFeatureSupport {
   imageGeneration: ImageGenerationStyle;
   videoGeneration: VideoGenerationStyle;
   embeddings: boolean;
@@ -67,7 +67,7 @@ export type StreamStopReason =
   | "flush_limit"
   | "unknown";
 
-export type ThoughtLogKind = "summary" | "raw";
+type ThoughtLogKind = "summary" | "raw";
 
 export interface ThoughtLogEntry {
   kind: ThoughtLogKind;

@@ -42,7 +42,7 @@ This is a current map of shared utility modules under `src/utils/`.
 - `sqlSecurity.ts`: query parameterisation helpers
 - `sqlSplitter.ts`: SQL file parsing utilities
 - `ragAvailability.ts`: pgvector / RAG feature detection
-- `repositories/`: 23 domain-owned Repository classes + `index.ts` (instance + type re-exports only). All SQL is inlined as `private` methods on each Repository class — no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. `ErrorLogRepository` is a thin shim used by `logger.ts` to insert into `error_logs` without creating a circular import. See `docs/architecture/subsystems/database-schema.md` for the full repository table and SQL convention.
+- `repositories/`: 28 domain-owned repository modules + `index.ts` (shared instance + type re-exports only). SQL remains in its owning module; no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. `ErrorLogRepository` is a thin shim used by `logger.ts` to insert into `error_logs` without creating a circular import. See `docs/architecture/subsystems/database-schema.md` for the full repository table and SQL convention.
 
 ### `utils/discord`
 
@@ -144,7 +144,7 @@ Guild MCP URL validation lives in `utils/security/remoteUrlSecurity.ts`, which g
 - `matrix/stateSync.ts`: Matrix link cache, typing state, reminder mention surface
 - `matrix/userMapping.ts`: Matrix display-name/ID maps and persona intent surface
 - `matrix/rooms.ts`: Matrix room join/config/encryption helpers
-- `matrix/matrixManager.ts`: thin Matrix public coordinator barrel
+- `matrix/index.ts`: public Matrix exports grouped from the responsibility modules
 
 New code should use `utils/bridges` for generic bridge helpers and `utils/bridges/matrix` for Matrix runtime operations.
 

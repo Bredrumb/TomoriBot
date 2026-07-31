@@ -23,23 +23,12 @@
 export {
   beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
-  isCollectorTimeoutError,
-  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS,
-  MIGRATED_ANCHOR_CALLERS,
-  PRE_ANCHOR_PRIMITIVES,
 } from "./personaWorkflow";
 
 export type {
-  AnchorPrivateWorkflowPhase,
-  PersonaWorkflowComponentsV2Payload,
   PersonaWorkflowInPlacePhase,
   PersonaWorkflowMessageController,
-  PersonaWorkflowModalPhase,
-  PersonaWorkflowModalResult,
-  PersonaWorkflowNestedButtonPhase,
-  PersonaWorkflowUpdateError,
 } from "./personaWorkflow";
-
 /**
  * Neutral names for the engine's generic types.
  *
@@ -55,12 +44,3 @@ export type {
  * satisfy. Code needing `PersonaWorkflowUpdateError` as a value imports it from
  * `personaWorkflow.ts` directly.
  */
-export type {
-  PersonaWorkflowComponentsV2Payload as AnchorMessagePayload,
-  PersonaWorkflowInPlacePhase as AnchorInPlacePhase,
-  PersonaWorkflowMessageController as AnchorMessageController,
-  PersonaWorkflowModalPhase as AnchorModalPhase,
-  PersonaWorkflowModalResult as AnchorModalResult,
-  PersonaWorkflowNestedButtonPhase as AnchorNestedButtonPhase,
-  PersonaWorkflowUpdateError as AnchorWorkflowUpdateError,
-} from "./personaWorkflow";

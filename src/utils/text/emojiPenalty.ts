@@ -58,7 +58,7 @@ function extractTextFromContextItem(item: StructuredContextItem): string {
  * @param config - Optional threshold configuration (loads from env if not provided)
  * @returns True if emoji usage exceeds threshold, false otherwise
  */
-export function shouldApplyEmojiPenalty(contextItems: StructuredContextItem[], config?: EmojiPenaltyConfig): boolean {
+function shouldApplyEmojiPenalty(contextItems: StructuredContextItem[], config?: EmojiPenaltyConfig): boolean {
   const penaltyConfig = config ?? loadEmojiPenaltyConfig();
 
   if (!penaltyConfig.enabled) {
@@ -108,23 +108,6 @@ function buildEmojiPenaltyText(speakerLabel?: string | null): string {
     : "You have been using emojis too frequently in recent messages. Respond to this message without using any emojis to maintain natural conversation flow.";
 }
 
-export function generateEmojiPenaltyMessage(speakerLabel?: string | null): StructuredContextItem {
-  // Create a natural-sounding reminder message
-  // It appears as a user message to be close to generation point
-  const penaltyText = `[System: ${buildEmojiPenaltyText(speakerLabel)}]`;
-
-  return {
-    role: "user",
-    parts: [
-      {
-        type: "text",
-        text: penaltyText,
-      },
-    ],
-    metadataTag: ContextItemTag.DIALOGUE_HISTORY, // Tag as dialogue to keep it close to generation
-  };
-}
-
 export function getEmojiPenaltyDirective(
   contextItems: StructuredContextItem[],
   speakerLabel?: string | null,
@@ -134,25 +117,6 @@ export function getEmojiPenaltyDirective(
   }
 
   return buildEmojiPenaltyText(speakerLabel);
-}
-
-/**
- * Main function to check and apply emoji penalty if needed
- * Call this after building context but before sending to LLM
- * @param botName - The bot's current nickname
- * @returns Modified context array with penalty message if threshold exceeded, otherwise unchanged
- */
-export function applyEmojiPenaltyIfNeeded(
-  contextItems: StructuredContextItem[],
-  speakerLabel?: string | null,
-): StructuredContextItem[] {
-  if (!shouldApplyEmojiPenalty(contextItems)) {
-    return contextItems;
-  }
-
-  const penaltyMessage = generateEmojiPenaltyMessage(speakerLabel);
-
-  return [...contextItems, penaltyMessage];
 }
 
 /**
@@ -185,10 +149,7 @@ function loadUniqueEmojiConfig(): UniqueEmojiConfig {
  * @param config - Optional configuration (loads from env if not provided)
  * @returns Set of custom emoji strings used in recent messages (e.g., ":tomori:", ":pepehands:")
  */
-export function getRecentlyUsedCustomEmojis(
-  contextItems: StructuredContextItem[],
-  config?: UniqueEmojiConfig,
-): Set<string> {
+function getRecentlyUsedCustomEmojis(contextItems: StructuredContextItem[], config?: UniqueEmojiConfig): Set<string> {
   const uniqueConfig = config ?? loadUniqueEmojiConfig();
 
   if (!uniqueConfig.enabled) {

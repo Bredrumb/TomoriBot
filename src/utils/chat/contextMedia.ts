@@ -312,11 +312,11 @@ export function appendComponentMediaFromMessage(
   return { imageCount, videoCount };
 }
 
-export function formatAttachmentSystemHint(filename: string, messageId: string): string {
+function formatAttachmentSystemHint(filename: string, messageId: string): string {
   return `[System: A file named \`${filename}\` is attached (message ID: ${messageId}). Use \`read_file\` with this message ID to read its contents, only if needed.]`;
 }
 
-export function formatAudioAttachmentHint(filename: string): string {
+function formatAudioAttachmentHint(filename: string): string {
   return `[System: An audio file named \`${filename}\` was sent here but was not transcribed.]`;
 }
 

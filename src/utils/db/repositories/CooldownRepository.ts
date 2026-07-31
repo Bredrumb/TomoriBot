@@ -17,7 +17,7 @@ import type { WhitelistBlockReason } from "@/types/misc/channelWhitelist";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { log } from "@/utils/misc/logger";
 
-export interface CooldownCheckResult {
+interface CooldownCheckResult {
   isOnCooldown: boolean;
   remainingSeconds: number;
   cooldownType: CooldownType;
@@ -27,13 +27,13 @@ export interface CooldownCheckResult {
   whitelistBlockReason?: WhitelistBlockReason;
 }
 
-export interface CooldownsCleanupResult {
+interface CooldownsCleanupResult {
   success: boolean;
   deletedCount: number;
   error?: string;
 }
 
-export class CooldownRepository {
+class CooldownRepository {
   /**
    * Checks whether a slash-command category cooldown is active for a user.
    *

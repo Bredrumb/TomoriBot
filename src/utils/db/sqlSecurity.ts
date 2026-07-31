@@ -112,31 +112,3 @@ export function validatePersonaConfigFields(fields: string[]): void {
     }
   }
 }
-
-/**
- * Get all allowed field names for User table (for documentation/debugging purposes)
- */
-export function getAllowedUserFields(): readonly string[] {
-  return Array.from(ALLOWED_USER_FIELDS);
-}
-
-/**
- * Get all allowed field names for Tomori table (for documentation/debugging purposes)
- */
-export function getAllowedTomoriFields(): readonly string[] {
-  return Array.from(ALLOWED_TOMORI_FIELDS);
-}
-
-/**
- * Get all allowed field names for TomoriConfig table (for documentation/debugging purposes)
- */
-export function getAllowedTomoriConfigFields(): readonly string[] {
-  return Array.from(ALLOWED_TOMORI_CONFIG_FIELDS);
-}
-
-/**
- * Get all allowed field names for PersonaConfig table (for documentation/debugging purposes)
- */
-export function getAllowedPersonaConfigFields(): readonly string[] {
-  return Array.from(ALLOWED_PERSONA_CONFIG_FIELDS);
-}

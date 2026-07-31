@@ -32,7 +32,7 @@ import { localizer } from "@/utils/text/localizer";
 import type { PresetExportData } from "@/types/preset/presetExport";
 
 /** Custom ID for the Import Now button (unique across the app). */
-export const IMPORT_NOW_CUSTOM_ID = "persona_import_now";
+const IMPORT_NOW_CUSTOM_ID = "persona_import_now";
 
 /**
  * Collector lifetime for the Import Now button. Capped under Discord's 15-minute

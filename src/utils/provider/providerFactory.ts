@@ -5,7 +5,7 @@
  */
 
 import { log } from "../misc/logger";
-import type { LLMProvider, ProviderInfo } from "../../types/provider/interfaces";
+import type { LLMProvider } from "../../types/provider/interfaces";
 import type { TomoriState } from "../../types/db/schema";
 import * as path from "node:path";
 import { Glob } from "bun";
@@ -233,71 +233,15 @@ export namespace ProviderFactory {
 
   /**
    */
-  export async function getAvailableProviders(): Promise<Array<{ name: string; info: ProviderInfo }>> {
-    await discoverProviders();
-
-    const availableProviders: Array<{ name: string; info: ProviderInfo }> = [];
-
-    // Try to load each registered provider
-    for (const providerName of providerRegistry.keys()) {
-      try {
-        const provider = await getProviderInstance(providerName);
-        availableProviders.push({
-          name: providerName,
-          info: provider.getInfo(),
-        });
-      } catch (error) {
-        log.warn(`Provider ${providerName} not available: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    return availableProviders;
-  }
-
   /**
    * Check if a provider type is supported (including aliases)
    */
-  export async function isProviderSupported(providerName: string): Promise<boolean> {
-    await discoverProviders();
-
-    const normalizedName = normalizeProviderName(providerName);
-
-    if (providerRegistry.has(normalizedName)) {
-      return true;
-    }
-
-    // Check if it's an alias by trying to load all providers
-    for (const [registeredName] of providerRegistry.entries()) {
-      try {
-        const provider = await getProviderInstance(registeredName);
-        const info = provider.getInfo();
-
-        if (info.aliases?.some((alias) => alias.toLowerCase().trim() === normalizedName)) {
-          return true;
-        }
-      } catch (_error) {}
-    }
-
-    return false;
-  }
-
   /**
    * Clear all cached provider instances (useful for testing or reloading)
    */
-  export function clearCache(): void {
-    providerInstances.clear();
-    log.info("Cleared provider instance cache");
-  }
-
   /**
    * Reset discovery state (useful for testing)
    */
-  export function resetDiscovery(): void {
-    providerRegistry.clear();
-    providerInstances.clear();
-    discoveryComplete = false;
-    log.info("Reset provider discovery state");
-  }
 }
 
 /**

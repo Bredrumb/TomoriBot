@@ -1,25 +1,3 @@
-/**
- * Single source of truth for the *shape* of reasoning ("think") tags that leak
- * into model output.
- *
- * Several independent guardrails strip or capture these tags (the streaming
- * `ThinkBlockContentStripper`, the Discord-layer `bufferManager`, and the final
- * `cleanLLMOutput` sweep). Historically each one hardcoded the literal
- * `<think>` / `</think>`, so a vendor that emits a *namespaced* variant: e.g.
- * MiniMax's `<mm:think>…</mm:think>` slipped past all of them at once.
- *
- * Centralizing the tag definition here means a new vendor namespace is a
- * one-line change (the `NAMESPACE` pattern below) that every guardrail inherits
- * automatically, instead of a scatter patch across files.
- *
- * Recognized forms (case-insensitive):
- *   - `<think>` / `</think>`            (conventional)
- *   - `<mm:think>` / `</mm:think>`      (namespaced, e.g. MiniMax)
- *   - `<ns:think>` / `</ns:think>`      (any `[A-Za-z][\w.-]*:` namespace)
- */
-
-/** The canonical literal tags, for code paths that need exact strings. */
-export const THINK_OPEN_TAG = "<think>";
 export const THINK_CLOSE_TAG = "</think>";
 
 /**
@@ -46,7 +24,7 @@ export interface ReasoningTagMatch {
 }
 
 /** The two kinds of trailing partial a chunk boundary can split. */
-export type ReasoningTagPartialKind = "open" | "close";
+type ReasoningTagPartialKind = "open" | "close";
 
 /** A trailing partial think tag awaiting more streamed input to complete. */
 export interface TrailingReasoningTagPrefix {

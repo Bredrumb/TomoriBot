@@ -44,15 +44,6 @@ export function isRefreshMarkerEmbed(embed: Embed): boolean {
 }
 
 /**
- * Checks whether any embed in an array is a refresh marker.
- *
- * @returns True if at least one embed is a refresh/reset marker
- */
-export function messageContainsRefreshMarker(embeds: Embed[]): boolean {
-  return embeds.some(isRefreshMarkerEmbed);
-}
-
-/**
  * Classifies a refresh marker embed as either a plain reset (`/refresh`) or a
  * compact-refresh (`/compact_refresh`). The distinction matters when slicing
  * history: plain resets drop the marker itself, compact-refreshes keep it
@@ -61,7 +52,7 @@ export function messageContainsRefreshMarker(embeds: Embed[]): boolean {
  * @returns "compact_refresh" if the embed is a compact-summary refresh marker,
  *          "reset" if it's a plain `/refresh` marker, null otherwise
  */
-export function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_refresh" | null {
+function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_refresh" | null {
   const title = embed.title;
   if (!title) return null;
 

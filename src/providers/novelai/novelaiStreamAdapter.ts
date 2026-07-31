@@ -2046,14 +2046,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Extract function call from raw NovelAI chunk
-   * Tool calls are parsed from the text stream in processChunk for GLM-4.6
-   */
-  extractFunctionCall(_chunk: RawStreamChunk): FunctionCall | null {
-    return null;
-  }
-
-  /**
    * Handle NovelAI-specific errors
    */
   handleProviderError(error: unknown): ProviderError {

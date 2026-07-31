@@ -38,7 +38,7 @@ export function validateSystemPrompts(): string[] {
   return errors;
 }
 
-export function buildSystemPromptSeedStatements(): string[] {
+function buildSystemPromptSeedStatements(): string[] {
   const currentPresets = rowsOf();
 
   if (currentPresets.length === 0) {

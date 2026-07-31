@@ -15,7 +15,7 @@ import { localizer, getSupportedLocales, getLocaleSubKeys } from "@/utils/text/l
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 
 /** Target embed classifications recognized by the chat pipeline. */
-export type TargetEmbedType =
+type TargetEmbedType =
   | "memory_learning"
   | "reset"
   | "reminder_set"
@@ -137,7 +137,7 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
   return { isTarget: false, type: null };
 }
 
-export type LinkPreviewImageInfo = {
+type LinkPreviewImageInfo = {
   url: string;
   proxyUrl: string;
   mimeType: string | null;

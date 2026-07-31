@@ -61,7 +61,7 @@ function isCachedReplyToKnownPersona(message: Message, client: Client, allPerson
   );
 }
 
-export function hasDirectChatSignal(args: {
+function hasDirectChatSignal(args: {
   client: Client;
   message: Message;
   allPersonas: readonly TomoriState[];

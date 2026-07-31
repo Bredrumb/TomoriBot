@@ -5,7 +5,7 @@
 
 import profaneWords from "profane-words";
 
-export const UNICODE_SPACE = "⠀"; // U+2800 braille pattern blank
+const UNICODE_SPACE = "⠀"; // U+2800 braille pattern blank
 const OBFUSCATION_DOT = "·"; // U+00B7 middle dot
 
 const DEFAULT_SENSITIVE_WORDS = [

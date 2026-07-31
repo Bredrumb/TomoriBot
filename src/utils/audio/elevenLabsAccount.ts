@@ -6,11 +6,7 @@ import {
 
 export { ELEVENLABS_SERVICE_NAME };
 
-export type ElevenLabsAccountValidationErrorKind =
-  | "missing_api_key"
-  | "timeout"
-  | "request_failed"
-  | "invalid_response";
+type ElevenLabsAccountValidationErrorKind = "missing_api_key" | "timeout" | "request_failed" | "invalid_response";
 
 export interface ElevenLabsAccountValidationResult {
   success: boolean;

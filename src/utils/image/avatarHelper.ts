@@ -4,7 +4,6 @@
  */
 
 import type { Client, Guild } from "discord.js";
-import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { TomoriPresetRow } from "../../types/db/schema";
@@ -112,7 +111,7 @@ export async function getServerAvatar(guild: Guild | null, client: Client): Prom
 /**
  * Checks if a buffer contains a valid PNG file
  */
-export function isPNGFormat(buffer: Buffer): boolean {
+function isPNGFormat(buffer: Buffer): boolean {
   if (buffer.length < PNG_SIGNATURE.length) {
     return false;
   }
@@ -199,7 +198,7 @@ const presetAvatarCache = new Map<number, string | null>();
 
 type PresetAvatarInput = Pick<TomoriPresetRow, "persona_preset_id" | "persona_preset_name" | "preset_avatar_path">;
 
-export function decodeBase64DataUri(dataUri: string): Buffer | null {
+function decodeBase64DataUri(dataUri: string): Buffer | null {
   const base64Marker = "base64,";
   const markerIndex = dataUri.indexOf(base64Marker);
   if (markerIndex === -1) {
@@ -216,10 +215,6 @@ export function decodeBase64DataUri(dataUri: string): Buffer | null {
   } catch {
     return null;
   }
-}
-
-export function hashAvatarBuffer(buffer: Buffer): string {
-  return createHash("sha256").update(buffer).digest("hex");
 }
 
 export async function getPresetAvatarBuffer(preset: PresetAvatarInput): Promise<Buffer | null> {
@@ -242,11 +237,6 @@ export async function getPresetAvatarBuffer(preset: PresetAvatarInput): Promise<
     log.warn(`Failed to load preset avatar "${presetAvatarPath}" for preset ${preset.persona_preset_id}`, error);
     return null;
   }
-}
-
-export async function getPresetAvatarHash(preset: PresetAvatarInput): Promise<string | null> {
-  const avatarBuffer = await getPresetAvatarBuffer(preset);
-  return avatarBuffer ? hashAvatarBuffer(avatarBuffer) : null;
 }
 
 /**

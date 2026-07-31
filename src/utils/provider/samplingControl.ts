@@ -26,8 +26,8 @@ export interface AnthropicSamplingSelection {
   logLevel?: "info" | "warn";
 }
 
-export const ANTHROPIC_TEMPERATURE_DEFAULT = 1.0;
-export const ANTHROPIC_TOP_P_DEFAULT = 0.95;
+const ANTHROPIC_TEMPERATURE_DEFAULT = 1.0;
+const ANTHROPIC_TOP_P_DEFAULT = 0.95;
 
 export function isParamDisabled(disabledParams: readonly string[] | null | undefined, param: SupportedParam): boolean {
   return disabledParams?.includes(param) ?? false;
@@ -39,7 +39,7 @@ export function getActiveTemperature(
   return isParamDisabled(config.llm_disabled_params, "temperature") ? undefined : config.llm_temperature;
 }
 
-export function isActiveSamplingParam(config: SamplingConfigSource, param: SupportedParam): boolean {
+function isActiveSamplingParam(config: SamplingConfigSource, param: SupportedParam): boolean {
   switch (param) {
     case "temperature":
       return getActiveTemperature(config) !== undefined;

@@ -67,16 +67,6 @@ function buildEngineChain(): FetchEngine[] {
   return parseFetchUrlEngineOrder().map((name) => createEngine(name));
 }
 
-export async function getActiveFetchUrlEngine(context: ToolContext): Promise<FetchEngine | null> {
-  for (const engine of buildEngineChain()) {
-    if (await engine.available(context)) {
-      return engine;
-    }
-  }
-
-  return null;
-}
-
 export async function executeFetchUrlWithFallback(
   url: string,
   opts: FetchOpts,

@@ -1,4 +1,4 @@
-import { spawn, type IOType } from "node:child_process";
+import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { PassThrough, type Stream } from "node:stream";
 import { getDefaultEnvironment, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -179,4 +179,4 @@ function isBannerLine(line: string): boolean {
   return !trimmed.startsWith("{") && !trimmed.startsWith("[") && /[╔╗╚╝║═]/.test(line);
 }
 
-export type { IOType, StdioServerParameters };
+export type { StdioServerParameters };

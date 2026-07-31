@@ -715,24 +715,6 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     });
   }
 
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null {
-    const openAIChunk = chunk.data as OpenAICompatibleStreamChunk;
-    const choice = openAIChunk.choices?.[0];
-    if (!choice?.delta?.tool_calls || choice.delta.tool_calls.length === 0) {
-      return null;
-    }
-
-    const toolCall = choice.delta.tool_calls[0];
-    if (!toolCall.function) {
-      return null;
-    }
-
-    return {
-      name: toolCall.function.name || "",
-      args: toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {},
-    };
-  }
-
   handleProviderError(error: unknown): ProviderError {
     log.error(`${this.options.adapterName}: Provider error`, error as Error);
     return normalizeOpenAICompatibleProviderError(error, {

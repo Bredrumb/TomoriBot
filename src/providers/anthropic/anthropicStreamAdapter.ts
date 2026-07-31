@@ -589,16 +589,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Called after the stream ends to get the final function call if stop_reason is tool_use.
-   */
-  extractFunctionCall(_chunk: RawStreamChunk): FunctionCall | null {
-    // Function calls are emitted directly via processChunk during content_block_stop,
-    // so we return null here. The StreamOrchestrator handles function calls from
-    // processChunk output rather than from this method.
-    return null;
-  }
-
-  /**
    * Convert provider-specific errors into normalized ProviderError format
    */
   handleProviderError(error: unknown): ProviderError {

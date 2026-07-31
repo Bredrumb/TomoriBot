@@ -398,31 +398,3 @@ export async function extractImagesFromMessage(messageId: string, context: ToolC
 
   return results;
 }
-
-/**
- * Fetch an image from a URL and return it as a raw Buffer.
- * Useful for tools that need the buffer directly (e.g. for sharp processing).
- * @throws Error if the fetch fails
- */
-export async function fetchImageAsBuffer(imageUrl: string): Promise<Buffer> {
-  const response = await safeDownload(imageUrl, {
-    maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
-    timeoutMs: 15_000,
-  });
-  if (!response.success || !response.buffer) {
-    throw new Error(`Failed to fetch image: ${response.details ?? response.error ?? "unknown error"}`);
-  }
-
-  return response.buffer;
-}
-
-/**
- * Fetch an image from a URL and return it as a base64-encoded string.
- * Convenience wrapper over fetchImageAsBuffer for tools that need base64 directly.
- * @returns Base64-encoded image data (no data-URI prefix)
- * @throws Error if the fetch fails
- */
-export async function fetchImageAsBase64(imageUrl: string): Promise<string> {
-  const buffer = await fetchImageAsBuffer(imageUrl);
-  return buffer.toString("base64");
-}

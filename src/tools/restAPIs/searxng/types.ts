@@ -45,7 +45,7 @@ export interface SearxngSearchParams {
  *  - science/it/files/music: usually `title`, `url`, `content`, plus
  *    engine-specific metadata
  */
-export interface SearxngResult {
+interface SearxngResult {
   /** Title of the result. */
   title?: string;
   /** Canonical URL of the result. */

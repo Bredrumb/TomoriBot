@@ -150,7 +150,7 @@ function buildNoticeComponents(
  * @param config - Notice-specific locale keys, button custom ID, threshold, and collector timeout.
  * @param webhookContext - Optional persona webhook identity, identical to `sendStandardEmbed`.
  */
-export async function sendEmbedWithExpand(
+async function sendEmbedWithExpand(
   channel: SupportedChannel,
   locale: string,
   embedOptions: StandardEmbedOptions,

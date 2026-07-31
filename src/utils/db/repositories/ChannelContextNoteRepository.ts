@@ -10,7 +10,7 @@ import { invalidateChannelContextNoteCache, type ChannelContextNote } from "@/ut
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
-export class ChannelContextNoteRepository {
+class ChannelContextNoteRepository {
   /**
    * Returns the per-channel context note, or null if none is set.
    *

@@ -32,7 +32,7 @@ function normalizeProviderName(providerName: string): string | null {
  * Owns tables: llms, embedding_models, image_diffusion_models, video_generation_models.
  * Read-only; model catalog is global seed data, not exportable per-server state.
  */
-export class LlmModelRepository {
+class LlmModelRepository {
   /**
    * Returns all non-deprecated LLMs, or all LLMs when includeDeprecated is true.
    *

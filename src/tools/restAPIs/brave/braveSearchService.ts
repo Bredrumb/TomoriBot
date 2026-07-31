@@ -4,7 +4,6 @@
  * Supports Web, Image, Video, and News search with server-specific API keys
  */
 
-import { AttachmentBuilder, type BaseGuildTextChannel } from "discord.js";
 import { log } from "../../../utils/misc/logger";
 import { getOptApiKey } from "../../../utils/security/crypto";
 import type {
@@ -82,126 +81,6 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
 
   log.info(`Extracted ${imageUrls.length} image URLs from Brave Search response`);
   return imageUrls;
-}
-
-/**
- * @param imageUrls - Array of image URLs to send
- * @param channel - Discord channel to send images to
- * @param query - Search query for context
- */
-export async function sendImagesToDiscord(
-  imageUrls: string[],
-  channel: BaseGuildTextChannel,
-  query: string,
-): Promise<{
-  success: boolean;
-  sentCount: number;
-  failedUrls: string[];
-  error?: string;
-}> {
-  if (imageUrls.length === 0) {
-    return {
-      success: false,
-      sentCount: 0,
-      failedUrls: [],
-      error: "No image URLs provided",
-    };
-  }
-
-  try {
-    const attachments: AttachmentBuilder[] = [];
-    const failedUrls: string[] = [];
-
-    // Create Discord attachments from image URLs
-    for (let i = 0; i < imageUrls.length; i++) {
-      try {
-        const imageUrl = imageUrls[i];
-        const attachment = new AttachmentBuilder(imageUrl, {
-          name: `${query.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_image_${i + 1}.jpg`,
-        });
-        attachments.push(attachment);
-        log.info(`Prepared Discord attachment for image: ${imageUrl}`);
-      } catch (attachmentError) {
-        failedUrls.push(imageUrls[i]);
-        log.warn(`Failed to create attachment for URL: ${imageUrls[i]}`, attachmentError as Error);
-      }
-    }
-
-    // Send attachments to Discord channel
-    if (attachments.length > 0) {
-      await channel.send({
-        files: attachments,
-      });
-
-      log.success(`Sent ${attachments.length} image attachments to Discord`);
-      return {
-        success: true,
-        sentCount: attachments.length,
-        failedUrls,
-      };
-    } else {
-      return {
-        success: false,
-        sentCount: 0,
-        failedUrls,
-        error: "No valid attachments could be created",
-      };
-    }
-  } catch (error) {
-    log.error("Failed to send image attachments to Discord:", error as Error);
-    return {
-      success: false,
-      sentCount: 0,
-      failedUrls: imageUrls,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Clean image search result by removing image data to reduce token usage
- * @param response - Original image search response
- */
-export function cleanImageSearchResult(response: ImageSearchApiResponse): Partial<ImageSearchApiResponse> {
-  try {
-    return {
-      type: response.type,
-      query: response.query,
-      results: response.results.map((result) => ({
-        ...result,
-        // Remove image URLs to prevent duplicate processing
-        properties: result.properties
-          ? {
-              ...result.properties,
-              url: undefined,
-              placeholder: undefined,
-            }
-          : undefined,
-        thumbnail: result.thumbnail
-          ? {
-              ...result.thumbnail,
-              src: "[Image sent to Discord]",
-              original: undefined,
-            }
-          : undefined,
-      })),
-      extra: {
-        ...response.extra,
-        summary: "Image search completed - images have been sent to Discord channel",
-      },
-    };
-  } catch (error) {
-    log.warn("Failed to clean image search result:", error as Error);
-    return {
-      type: "images",
-      query: response.query,
-      results: [],
-      extra: {
-        summary: "Image search completed - images have been sent to Discord channel",
-        imageDataRemoved: true,
-      },
-    };
-  }
 }
 
 /**
@@ -476,27 +355,6 @@ export async function braveNewsSearch(
 export async function isBraveSearchAvailable(serverId?: number): Promise<boolean> {
   const apiKey = await getBraveApiKey(serverId);
   return apiKey !== null;
-}
-
-/**
- * Test Brave API connectivity
- * @param serverId - Discord server ID (optional)
- */
-export async function testBraveApiConnection(serverId?: number): Promise<{ success: boolean; error?: string }> {
-  try {
-    const result = await braveWebSearch({ q: "test" }, { serverId, timeout: 5000 });
-
-    if (result.success) {
-      return { success: true };
-    } else {
-      return { success: false, error: result.error };
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
 }
 
 /**

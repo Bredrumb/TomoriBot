@@ -70,13 +70,6 @@ export interface NovelAIGenerationRequest {
 }
 
 /**
- * NovelAI generation response (non-streaming)
- */
-export interface NovelAIGenerationResponse {
-  output: string;
-}
-
-/**
  * NovelAI SSE stream chunk
  */
 export interface NovelAIStreamChunk {
@@ -90,7 +83,7 @@ export interface NovelAIStreamChunk {
 /**
  * OpenAI-compatible completion request (for glm-4-6 and other newer models)
  */
-export interface OpenAICompletionRequest {
+interface OpenAICompletionRequest {
   model: string;
   prompt: string | string[];
   max_tokens?: number;
@@ -109,7 +102,7 @@ export interface OpenAICompletionRequest {
 /**
  * OpenAI-compatible SSE chunk
  */
-export interface OpenAIStreamChunk {
+interface OpenAIStreamChunk {
   id: string;
   object: "text_completion";
   created: number;
@@ -131,21 +124,11 @@ export interface ApiRequestConfig {
 }
 
 /**
- * API result wrapper
- */
-export interface ApiResult<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  statusCode?: number;
-}
-
-/**
  * Get default parameters for kayra-v1 model
  * Based on reference implementation with sensible defaults for roleplay
  */
 // Use https://novelai.net/tokenizer to find stop sequences
-export function getKayraParameters(): NovelAIParameters {
+function getKayraParameters(): NovelAIParameters {
   return {
     max_length: 150, // Increased from reference for longer responses
     min_length: 10,
@@ -173,7 +156,7 @@ export function getKayraParameters(): NovelAIParameters {
  * Get default parameters for glm-4-6 model
  * Based on reference implementation optimized for latest model
  */
-export function getGlmParameters(): NovelAIParameters {
+function getGlmParameters(): NovelAIParameters {
   return {
     max_length: 4096, // Request full token budget; API may cap lower but let's test the actual limit
     min_length: 1,
@@ -200,7 +183,7 @@ export function getGlmParameters(): NovelAIParameters {
  * Now a direct passthrough: temperature is used as-is across all providers.
  *
  */
-export function convertTemperatureToNovelAI(temperature: number, _model: string): number {
+function convertTemperatureToNovelAI(temperature: number, _model: string): number {
   return temperature;
 }
 
@@ -697,7 +680,7 @@ const NOVELAI_ACCOUNT_API_BASE_URL = "https://text.novelai.net";
  * Shape of the perks object returned by GET /user/subscription.
  * Only contextTokens is used here; other perks are preserved for completeness.
  */
-export interface NovelAISubscriptionPerks {
+interface NovelAISubscriptionPerks {
   maxPriorityActions: number;
   startPriority: number;
   /** Maximum context size in tokens for this subscription tier */

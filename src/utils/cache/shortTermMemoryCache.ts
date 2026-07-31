@@ -478,17 +478,6 @@ export function getShortTermMemoryForServerChannel(
 }
 
 /**
- * Backwards-compatible alias for user-scoped channel lookup
- */
-export function getShortTermMemoryForChannel(
-  userId: string,
-  channelId: string,
-  personaId?: number | null,
-): ShortTermMemoryEntry | undefined {
-  return getShortTermMemoryForUserChannel(userId, channelId, personaId);
-}
-
-/**
  * Update the summary for short-term memory entries (used by update_short_term_memory tool)
  *
  * @param userId - Discord user ID
@@ -553,45 +542,6 @@ export function updateShortTermMemorySummary(
       error,
       {
         errorType: "CACHE_UPDATE_ERROR",
-        metadata: { userDiscId: userId, channelId },
-      },
-    );
-  }
-}
-
-/**
- * Invalidate (remove) a specific short-term memory entry
- *
- * @param userId - Discord user ID
- * @param channelId - Discord channel ID
- * @param personaId - Optional persona ID for persona-scoped memory
- */
-export function invalidateShortTermMemory(
-  userId: string,
-  channelId: string,
-  personaId?: number | null,
-  serverId?: string,
-): void {
-  try {
-    let clearedCount = 0;
-
-    if (cache.delete(getUserCacheKey(userId, channelId, personaId))) {
-      clearedCount++;
-    }
-
-    if (serverId && serverId !== "DM" && cache.delete(getServerCacheKey(serverId, channelId, personaId))) {
-      clearedCount++;
-    }
-
-    if (clearedCount > 0) {
-      stats.invalidations += clearedCount;
-    }
-  } catch (error) {
-    log.error(
-      `[shortTermMemoryCache] Failed to invalidate short-term memory - userId=${userId}, channelId=${channelId}`,
-      error,
-      {
-        errorType: "CACHE_INVALIDATION_ERROR",
         metadata: { userDiscId: userId, channelId },
       },
     );

@@ -19,16 +19,11 @@ const FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
 );
 
 /** Cache invalidation options for override writes. */
-export type LlmOverrideCacheOptions = {
+type LlmOverrideCacheOptions = {
   serverDiscId?: string;
 };
 
-/** Extends LlmOverrideCacheOptions with optional per-channel invalidation. */
-export type ChannelLlmOverrideCacheOptions = LlmOverrideCacheOptions & {
-  channelDiscId?: string;
-};
-
-export class LlmOverrideRepository {
+class LlmOverrideRepository {
   /**
    * Returns the LLM assigned as a channel-level override, or null if none is set.
    * Resolves the llm_id via the LLM cache before falling back to a direct DB query.

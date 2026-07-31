@@ -14,7 +14,7 @@ import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
 /** Custom id carried by every rendered-table "Show Markdown" button. */
-export const SHOW_MARKDOWN_BUTTON_ID = "markdown_table_show_source";
+const SHOW_MARKDOWN_BUTTON_ID = "markdown_table_show_source";
 
 const DEFAULT_SHOW_MARKDOWN_BUTTON_TIMEOUT_MS = 7_200_000;
 

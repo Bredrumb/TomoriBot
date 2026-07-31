@@ -808,25 +808,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Extract function call from raw Google chunk
-   */
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null {
-    const googleChunk = chunk.data as GoogleStreamChunk;
-
-    const functionCalls = this.extractFunctionCallsFromChunk(googleChunk);
-    if (functionCalls.length > 0) {
-      const functionCall = this.convertGoogleFunctionCall(functionCalls[0]);
-      const thoughtSignature = this.extractThoughtSignature(googleChunk);
-      if (thoughtSignature) {
-        functionCall.thoughtSignature = thoughtSignature;
-      }
-      return functionCall;
-    }
-
-    return null;
-  }
-
-  /**
    * Handle Google-specific errors using official error codes and localized messages
    */
   handleProviderError(error: unknown): ProviderError {

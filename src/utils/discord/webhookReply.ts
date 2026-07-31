@@ -30,7 +30,7 @@ export function getReplyContextAuthorName(message: Message, botUserId?: string, 
   return message.member?.displayName ?? message.author.globalName ?? stripBridgePrefix(message.author.username);
 }
 
-export function buildReplyContextEmbed(
+function buildReplyContextEmbed(
   targetMessage: Message,
   locale: string,
   botUserId?: string,

@@ -3,7 +3,7 @@ import { invalidatePersonaSpriteCache } from "@/utils/cache/personaSpriteCacheSt
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 
-export type PersonaSpriteUpsertInput = {
+type PersonaSpriteUpsertInput = {
   personaId: number;
   spriteName: string;
   spriteKey: string;
@@ -12,13 +12,13 @@ export type PersonaSpriteUpsertInput = {
   isIdentity: boolean;
 };
 
-export type PersonaSpriteUpsertResult = {
+type PersonaSpriteUpsertResult = {
   sprite: PersonaSpriteRow;
   previousAvatarUrl: string | null;
   replaced: boolean;
 };
 
-export type PersonaSpriteMetadataUpdateInput = {
+type PersonaSpriteMetadataUpdateInput = {
   // The sprite is identified by its CURRENT lookup key (stable across a
   // pointer→materialized fork, unlike sprite_id which is reassigned on copy).
   currentSpriteKey: string;
@@ -39,12 +39,12 @@ type PersonaSpriteUpdateRow = PersonaSpriteRow & {
   previous_avatar_url: string | null;
 };
 
-export type PersonaSpriteMetadataUpdateResult = {
+type PersonaSpriteMetadataUpdateResult = {
   sprite: PersonaSpriteRow;
   previousAvatarUrl: string | null;
 };
 
-export class PersonaSpriteRepository {
+class PersonaSpriteRepository {
   /**
    * Resolves a persona's sprites. For a live preset pointer, the sprites are
    * resolved from the shared `preset_sprites` table (so every server's pointer

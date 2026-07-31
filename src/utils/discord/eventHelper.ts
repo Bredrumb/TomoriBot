@@ -5,7 +5,7 @@ import { log } from "../misc/logger";
  * Analyzes recent messages in a channel to determine activity level
  * @returns Promise<number> Number of non-bot messages in last 24h
  */
-export async function getChannelActivity(channel: TextChannel): Promise<number> {
+async function getChannelActivity(channel: TextChannel): Promise<number> {
   try {
     const messages = await channel.messages.fetch({ limit: 50 });
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;

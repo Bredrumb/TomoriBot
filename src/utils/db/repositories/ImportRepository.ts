@@ -26,7 +26,7 @@ import { invalidateUserCache } from "@/utils/cache/userCache";
 import { configRepository } from "@/utils/db/repositories/ConfigRepository";
 import type { ServerChatConfigRow, ServerNoticeEmbedsConfigRow } from "@/types/db/schema";
 
-export type ImportFileType =
+type ImportFileType =
   | "personal_memories"
   | "server_memories"
   | "personal_settings"
@@ -35,7 +35,7 @@ export type ImportFileType =
   | "personal"
   | "server";
 
-export interface ImportValidationResult {
+interface ImportValidationResult {
   valid: boolean;
   type?: ImportFileType;
   data?:
@@ -58,7 +58,7 @@ export interface ImportValidationResult {
  * Composite methods (importPersonalData, importServerData) call private
  * SQL sub-methods directly to avoid double cache invalidation.
  */
-export class ImportRepository {
+class ImportRepository {
   /** Upserts a user row by Discord ID and returns the internal user_id. */
   private async ensureUserId(userDiscId: string): Promise<number | null> {
     const upserted = await sql.begin(async (tx) => {

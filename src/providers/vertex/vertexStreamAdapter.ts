@@ -809,25 +809,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   * Extract function call from raw Vertex chunk
-   */
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null {
-    const vertexChunk = chunk.data as VertexStreamChunk;
-
-    const functionCalls = this.extractFunctionCallsFromChunk(vertexChunk);
-    if (functionCalls.length > 0) {
-      const functionCall = this.convertGoogleFunctionCall(functionCalls[0]);
-      const thoughtSignature = this.extractThoughtSignature(vertexChunk);
-      if (thoughtSignature) {
-        functionCall.thoughtSignature = thoughtSignature;
-      }
-      return functionCall;
-    }
-
-    return null;
-  }
-
   handleProviderError(error: unknown): ProviderError {
     const errorMessage = error instanceof Error ? error.message : String(error);
 

@@ -17,7 +17,7 @@ import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
 /** Row shape for server_memory_configs (Phase 6). */
-export type ServerMemoryConfigsRow = {
+type ServerMemoryConfigsRow = {
   memory_tagging_enabled: boolean;
 };
 
@@ -26,13 +26,13 @@ export type ServerMemoryConfigsRow = {
  * Includes the Phase 6 server_memory_configs table in addition to
  * the existing memories array (expanded in Phase 6 #16.7).
  */
-export type ServerMemoryExportShape = {
+type ServerMemoryExportShape = {
   server_disc_id: string;
   memory_configs: ServerMemoryConfigsRow | null;
   memories: Array<{ content: string; tags: string[] }>;
 };
 
-export class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
+class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   /**
    * Returns the count of documents in the documents table for a server.
    *

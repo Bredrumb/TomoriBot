@@ -2,87 +2,6 @@ import { localizer } from "@/utils/text/localizer";
 import { escapeRegExp } from "./regexUtils";
 
 /**
- * Gets the day name for a given date
- */
-function getDayOfWeek(date: Date): string {
-  const dayOfWeek = new Date(date).getDay();
-  return Number.isNaN(dayOfWeek)
-    ? ""
-    : ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dayOfWeek];
-}
-
-/**
- * @returns Current time in format "Month Day, Year | Hour:Minutes AM/PM | Weekday"
- */
-export function getCurrentTime(): string {
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-  const date = new Date();
-  const weekday = getDayOfWeek(date);
-  const day = date.getDate();
-  const year = date.getFullYear();
-  let hour = date.getHours();
-  const minutes = date.getMinutes().toString().padStart(2, "0");
-  let mid = "AM";
-
-  if (hour === 0) {
-    hour = 12;
-  } else if (hour === 12) {
-    mid = "PM";
-  } else if (hour > 12) {
-    hour = hour % 12;
-    mid = "PM";
-  }
-
-  const month = monthNames[date.getMonth()];
-  return `${month} ${day}, ${year} | ${hour}:${minutes} ${mid} | ${weekday}`;
-}
-
-/**
- * Helper to format basic input text to be more "AI"
- * @param text - Raw input text
- * @param options - Text formatting options
- * @param options.capitalizeFirst - Capitalize the first letter.
- * @param options.addPeriod - Add a period if one isn't present at the end.
- */
-export function formatText(
-  text: string,
-  options: {
-    capitalizeFirst?: boolean;
-    addPeriod?: boolean;
-  } = {},
-): string {
-  let result = text.trim();
-
-  if (options.capitalizeFirst && result.length > 0) {
-    const firstChar = result.charAt(0);
-    if (/[a-zA-Z]/.test(firstChar)) {
-      result = firstChar.toUpperCase() + result.slice(1);
-    }
-  }
-
-  if (options.addPeriod && result.length > 0) {
-    if (!/[.,:!?]$/.test(result)) {
-      result = `${result}.`;
-    }
-  }
-
-  return result;
-}
-
-/**
  * Universal URL detection and protection function
  * Detects all URLs regardless of surrounding context (angle brackets, markdown, raw)
  * and replaces them with placeholders to protect from chunking and humanization
@@ -220,14 +139,6 @@ export function humanizeString(text: string): string {
   }
 
   return restoreURLsFromPlaceholders(processedText, urls);
-}
-
-/**
- * Formats a boolean value into a user-friendly string ("Enabled" or "Disabled").
- * @param value - The boolean value to format.
- */
-export function formatBoolean(value: boolean): string {
-  return value ? "`Enabled`" : "`Disabled`";
 }
 
 /**

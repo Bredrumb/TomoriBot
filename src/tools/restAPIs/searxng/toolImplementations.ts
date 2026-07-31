@@ -128,18 +128,6 @@ export async function searxng_category_search(
   }
 }
 
-export async function searxng_web_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
-  return await searxng_category_search(args, "general", context);
-}
-
-export async function searxng_video_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
-  return await searxng_category_search(args, "videos", context);
-}
-
-export async function searxng_news_search(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
-  return await searxng_category_search(args, "news", context);
-}
-
 /**
  * Compress an image to fit Discord's per-attachment size limit. Returns the
  * compressed buffer on success.

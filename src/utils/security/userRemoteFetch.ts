@@ -1,9 +1,4 @@
 import { isIP } from "node:net";
-import type {
-  RequestInfo as UndiciRequestInfo,
-  RequestInit as UndiciRequestInit,
-  Response as UndiciResponse,
-} from "undici/index.js";
 import { type RemoteUrlValidationFailureCode, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 
 export type RemoteUrlPolicyFailureCode =
@@ -282,12 +277,3 @@ export async function fetchUserRemoteUrl(
     options?.allowPrivateNetwork === true,
   );
 }
-
-export const fetchUserRemoteUrlUndici: typeof import("undici/index.js").fetch = async (
-  input: UndiciRequestInfo,
-  init?: UndiciRequestInit,
-): Promise<UndiciResponse> =>
-  (await fetchUserRemoteUrl(
-    input as unknown as RequestInfo | URL,
-    init as unknown as RequestInit,
-  )) as unknown as UndiciResponse;

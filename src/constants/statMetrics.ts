@@ -44,7 +44,7 @@
  *                         privacy-safe, and answers "paid API vs local TTS" for cost.
  *   - (all others)      → "" (scalar event counter)
  */
-export const STAT_METRICS = [
+const STAT_METRICS = [
   "message_sent",
   "presence_seen",
   "command_used",
@@ -76,8 +76,3 @@ export type StatMetric = (typeof STAT_METRICS)[number];
  * metrics carry the active persona's lineage id.
  */
 export const PERSONA_AGNOSTIC_METRICS = new Set<StatMetric>(["command_used"]);
-
-/** Type guard for a raw string against the metric catalog. */
-export function isStatMetric(value: string): value is StatMetric {
-  return STAT_METRICS.includes(value as StatMetric);
-}

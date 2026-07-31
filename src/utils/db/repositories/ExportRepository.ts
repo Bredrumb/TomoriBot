@@ -29,7 +29,7 @@ import {
  * schema validation. Export operations are read-only; no cache
  * invalidation is performed here.
  */
-export class ExportRepository {
+class ExportRepository {
   /**
    * Sanitizes a string for safe JSON serialization.
    * Removes control characters (except newlines and tabs) that could break JSON.

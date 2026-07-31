@@ -66,7 +66,7 @@ function toErrorStack(err: unknown): string | null {
  * Intentionally does NOT import `logger.ts`: this file sits between the
  * logger and the DB client, breaking the circular dependency.
  */
-export class ErrorLogRepository {
+class ErrorLogRepository {
   /**
    * Inserts a structured error record into the `error_logs` table.
    * Throws on query failure so the logger can fall back to `console.error`.

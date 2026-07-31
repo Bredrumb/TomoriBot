@@ -201,34 +201,3 @@ export async function callAnthropicStructuredJSON<T>(
     };
   }
 }
-
-/**
- * Uses the same forced tool use pattern as callAnthropicStructuredJSON.
- *
- * For expression initialization, the schema is provided by the expression system
- * and passed through the request. Since ProviderStructuredJsonRequest doesn't carry
- * the response schema directly, callers should use callAnthropicStructuredJSON
- * with an explicit schema. This helper provides a generic passthrough for
- * expression initialization where the schema is defined by the caller.
- */
-export async function callAnthropicStructuredOutput(
-  request: ProviderStructuredJsonRequest,
-  responseSchema?: Record<string, unknown>,
-): Promise<StructuredOutputResult<unknown>> {
-  const schema = responseSchema ?? {
-    type: "object",
-    additionalProperties: true,
-  };
-
-  const passthroughSchema = {
-    parse: (data: unknown) => data,
-    safeParse: (data: unknown) => ({ success: true as const, data }),
-  } as unknown as z.ZodType<unknown>;
-
-  return await callAnthropicStructuredJSON(
-    request,
-    schema,
-    passthroughSchema,
-    request.schemaName ?? "expression_output",
-  );
-}

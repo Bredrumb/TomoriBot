@@ -1974,27 +1974,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Extract function call from raw OpenRouter chunk
-   */
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null {
-    const openrouterChunk = chunk.data as OpenrouterStreamChunk;
-
-    const choice = openrouterChunk.choices?.[0];
-    const toolCalls = choice?.delta?.toolCalls ?? choice?.delta?.tool_calls;
-    if (toolCalls && toolCalls.length > 0) {
-      const toolCall = toolCalls[0];
-      if (toolCall.function) {
-        return {
-          name: toolCall.function.name || "",
-          args: toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {},
-        };
-      }
-    }
-
-    return null;
-  }
-
-  /**
    * Map a resolved error code and message to a ProviderError type and retryable flag.
    * Used by both handleProviderError (thrown exceptions) and processChunk (SSE-injected errors)
    * so both paths stay in sync.

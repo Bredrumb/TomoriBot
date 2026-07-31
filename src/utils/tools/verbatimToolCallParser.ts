@@ -303,7 +303,7 @@ export class VerbatimToolCallParser {
   }
 }
 
-export function buildToolSpecMap(tools: Array<Record<string, unknown>>): Map<string, VerbatimToolSpec> {
+function buildToolSpecMap(tools: Array<Record<string, unknown>>): Map<string, VerbatimToolSpec> {
   const specs = new Map<string, VerbatimToolSpec>();
 
   for (const tool of tools) {

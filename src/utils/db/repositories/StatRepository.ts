@@ -104,7 +104,7 @@ function windowFloor(from?: Date | string): string {
 }
 
 /** Optional time window: rows with `bucket >= from` (omit for all-time). */
-export interface StatWindow {
+interface StatWindow {
   from?: Date | string;
 }
 
@@ -115,7 +115,7 @@ export interface PersonaAffinityEntry {
 }
 
 /** Favorite persona plus loyalty (top persona share of all messages). */
-export interface FavoritePersona {
+interface FavoritePersona {
   lineageId: number;
   count: number;
   totalCount: number;
@@ -124,19 +124,19 @@ export interface FavoritePersona {
 }
 
 /** One command's usage count. */
-export interface CommandUsageEntry {
+interface CommandUsageEntry {
   command: string;
   count: number;
 }
 
 /** One model's usage count (model_used): favorite/diversity reads. */
-export interface ModelUsageEntry {
+interface ModelUsageEntry {
   model: string;
   count: number;
 }
 
 /** One metric_key's summed count (emoji/sticker/sprite/tool/command breakdowns). */
-export interface MetricKeyEntry {
+interface MetricKeyEntry {
   key: string;
   count: number;
 }
@@ -150,7 +150,7 @@ export interface ModelCostEntry {
 }
 
 /** Per-persona estimated token + cost rollup for a single user's ranked card. */
-export interface PersonaTokenCostEntry {
+interface PersonaTokenCostEntry {
   lineageId: number;
   inputTokens: number;
   outputTokens: number;
@@ -171,13 +171,13 @@ export interface TopUserEntry {
 }
 
 /** Estimated input/output token totals for a scope (see tokens_in / tokens_out). */
-export interface TokenTotals {
+interface TokenTotals {
   inputTokens: number;
   outputTokens: number;
 }
 
 /** Hour-of-day (0-23) and weekday (0=Sun-6=Sat) activity histograms. */
-export interface ActivityHistogram {
+interface ActivityHistogram {
   byHour: Record<number, number>;
   byWeekday: Record<number, number>;
 }
@@ -190,10 +190,10 @@ export interface ActivityHistogram {
  * joint distribution, so a timezone shift must rotate the (weekday, hour) pair
  * together (see getActivityHeatmap).
  */
-export type ActivityHeatmap = Record<number, Record<number, number>>;
+type ActivityHeatmap = Record<number, Record<number, number>>;
 
 /** Streak info derived from distinct active bucket dates. */
-export interface StreakInfo {
+interface StreakInfo {
   currentStreak: number;
   longestStreak: number;
   /** Most recent active day (YYYY-MM-DD) or null when never active. */
@@ -201,7 +201,7 @@ export interface StreakInfo {
 }
 
 /** Previous-day activity plus today's persisted grace counter for one persona lineage. */
-export interface UserPersonaReunionInfo {
+interface UserPersonaReunionInfo {
   lastPreviousDayAt: Date | null;
   todayCount: number;
 }
@@ -223,7 +223,7 @@ export interface GenerationTotals {
 }
 
 /** Read-existing reward/punishment totals (conditioning_history). */
-export interface ConditioningTotals {
+interface ConditioningTotals {
   rewards: number;
   punishments: number;
 }
@@ -235,7 +235,7 @@ export interface ConditioningPersonaEntry {
   punishments: number;
 }
 
-export class StatRepository implements IRepository<null> {
+class StatRepository implements IRepository<null> {
   /** Accumulated, not-yet-flushed deltas keyed by the table PK tuple. */
   private buffer = new Map<string, StatBufferEntry>();
   /** Interval handle for the periodic flush (unref'd so it never blocks exit). */

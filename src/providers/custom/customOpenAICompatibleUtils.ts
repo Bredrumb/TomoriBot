@@ -5,7 +5,7 @@ import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 
-export type CustomContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+type CustomContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
 export type CustomMessage =
   | { role: "system"; content: string }
@@ -37,7 +37,7 @@ export function buildCustomHeaders(apiKey: string): Record<string, string> {
   return headers;
 }
 
-export async function buildCustomUserContent(
+async function buildCustomUserContent(
   userPrompt: string,
   images?: ProviderImageInput[],
 ): Promise<string | CustomContentPart[]> {
@@ -174,7 +174,7 @@ export function extractCustomResponseText(messageContent: unknown): string {
     .trim();
 }
 
-export function buildExampleJsonFromSchema(schema: unknown): unknown {
+function buildExampleJsonFromSchema(schema: unknown): unknown {
   if (!schema || typeof schema !== "object") {
     return {};
   }
