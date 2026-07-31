@@ -26,6 +26,7 @@ import { generatePresetFromPromptOpenrouter } from "./presetGenerator";
 import type { ProviderError, StreamContext } from "../../types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "../../types/stream/types";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "../../tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
 import type { StreamingContext, ToolContext } from "../../types/tool/interfaces";
 import type { TomoriState } from "../../types/db/schema";
 import type { StructuredContextItem } from "../../types/misc/context";
@@ -485,32 +486,14 @@ export class OpenrouterProvider
         totalCount,
       } = await getAvailableToolsWithMCP("openrouter", toolStateForContext);
 
-      let finalBuiltInTools = availableBuiltInTools;
+      let finalBuiltInTools = applyStreamContextAvailability({
+        providerLabel: "OpenRouter provider",
+        provider: "openrouter",
+        builtInTools: availableBuiltInTools,
+        streamContext: streamingContext,
+        tomoriState,
+      });
       let finalMcpFunctionNames = availableMcpFunctionNames;
-      if (streamingContext) {
-        // Create a minimal ToolContext for context-aware availability checking
-        const minimalContext = {
-          streamContext: streamingContext,
-          provider: "openrouter" as const,
-          channel: {} as BaseGuildTextChannel,
-          client: {} as Client,
-          tomoriState: tomoriState,
-          locale: "en-US", // Default locale
-        };
-
-        finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          const isContextAvailable =
-            "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-              ? tool.isAvailableForContext("openrouter", minimalContext)
-              : true;
-
-          return isContextAvailable;
-        });
-
-        log.info(
-          `Applied streaming context filtering: ${availableBuiltInTools.length} → ${finalBuiltInTools.length} built-in tools`,
-        );
-      }
 
       ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
         providerLabel: "OpenRouter provider",

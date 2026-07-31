@@ -99,6 +99,10 @@ export function buildRevealedMessageMetadataTailDirective(): string {
   return (
     "Recent message metadata has been revealed in the visible conversation turns. " +
     "Each annotated message now includes a `ref_N` handle and sent timestamp. " +
+    // The system prompt still documents `reveal_message_metadata` (macros expand
+    // once at context-build time, before the reveal), so without this line the
+    // model re-requests a reveal it has already been given.
+    "That reveal is already complete, so do not call `reveal_message_metadata` again for the rest of this turn: use the `ref_N` handles shown above. " +
     "`manage_message` can pin any recent message if Discord permissions allow it, and can edit or delete recent messages you or another character owns. " +
     "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it; replies targeting a known persona message use that persona identity when possible."
   );

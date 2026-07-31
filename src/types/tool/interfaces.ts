@@ -256,6 +256,14 @@ export interface Tool {
 
   isAvailableFor(provider: string): boolean;
 
+  /**
+   * Availability that depends on live turn state (per-turn dedup flags, active
+   * model capabilities, configured server slots). A `false` here means "not
+   * right now", never "this provider cannot", so callers must report the two
+   * rejections differently to the model.
+   */
+  isAvailableForContext?(provider: string, context: ToolContext): boolean;
+
   assembleForContext?(context: ToolAssemblyContext): Tool | null | Promise<Tool | null>;
 
   requiredModelCapabilities?: ToolModelCapabilityRequirements;

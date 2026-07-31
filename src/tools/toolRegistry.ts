@@ -351,20 +351,32 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       return errorResult;
     }
 
-    // Check if tool is available for this provider
-    // Use context-aware availability check if available, otherwise fall back to basic check
-    const isToolAvailable =
-      "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-        ? tool.isAvailableForContext(context.provider, context)
-        : tool.isAvailableFor(context.provider);
-
-    if (!isToolAvailable) {
+    // Static provider support and live turn availability must stay separate:
+    // `error` is fed back to the model, and reporting a per-turn rejection
+    // ("already ran this turn") as a provider capability gap teaches the persona
+    // it cannot do something it can.
+    if (!tool.isAvailableFor(context.provider)) {
       const errorResult: ToolResult = {
         success: false,
         error: `Tool '${toolName}' is not available for provider '${context.provider}'`,
       };
 
       log.error(`Tool execution failed - provider not supported: ${toolName} for provider ${context.provider}`);
+
+      return errorResult;
+    }
+
+    if (tool.isAvailableForContext?.(context.provider, context) === false) {
+      const errorResult: ToolResult = {
+        success: false,
+        error:
+          `Tool '${toolName}' is not available for the current turn. It has either already run this turn, or the active model or server configuration does not support it. ` +
+          "Do not call it again for the rest of this turn; work with the context you already have.",
+      };
+
+      log.warn(
+        `Tool execution rejected - unavailable in current turn context: ${toolName} for provider ${context.provider}`,
+      );
 
       return errorResult;
     }
