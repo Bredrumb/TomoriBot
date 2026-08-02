@@ -967,9 +967,6 @@ class LlmModelRepository {
   }
 
   /**
-   * Upsert a scoped OpenRouter embedding model into the embedding_models catalog.
-   *
-   * @param modelCodename - OpenRouter model codename
    * @returns The upserted embedding_model_id, or null on failure
    */
   async upsertScopedEmbeddingModel(modelCodename: string): Promise<number | null> {

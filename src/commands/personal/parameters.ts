@@ -166,9 +166,8 @@ export async function execute(
       return;
     }
 
-    // Load all saved personal text providers and present the picker.
-    //    UserSavedProviderConfigRow shares the `provider` field that promptForSavedProvider reads,
-    //    so the cast is safe, because the picker only uses that field to build button labels.
+    // The picker reads only the shared `provider` field, so adapting
+    // UserSavedProviderConfigRow here cannot expose its different model fields.
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "text");
     const providerSelection = await promptForSavedProvider(
       interaction,

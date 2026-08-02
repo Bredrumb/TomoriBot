@@ -451,7 +451,6 @@ class StatRepository implements IRepository<null> {
     return STAT_TRACKING_ENABLED;
   }
 
-  // ── Read / aggregation layer (§6) ──────────────────────────────────────────
   // NOTE: reads hit the DB directly (no read cache in Phase 1). Dashboard and
   // infographic entry points await flush() before these reads, so user-facing
   // snapshots include every successfully buffered increment. All windowing is

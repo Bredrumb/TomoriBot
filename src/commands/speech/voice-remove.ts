@@ -74,7 +74,8 @@ export async function execute(
       return;
     }
 
-    // Build select options using index as value to avoid truncation issues.
+    // Row indexes keep select values bounded even when user-provided sample names
+    // approach Discord's component limits.
     const sampleSelectOptions: SelectOption[] = sampleRows.map((s, index) => ({
       label: safeSelectOptionText(s.name),
       value: index.toString(),

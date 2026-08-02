@@ -473,9 +473,6 @@ async function loadMergedLocale(localeName: string): Promise<Record<string, unkn
   return merged;
 }
 
-/**
- * Checks modal title lengths across all locales
- */
 async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Promise<ModalTitleViolation[]> {
   const violations: ModalTitleViolation[] = [];
 
@@ -515,9 +512,6 @@ async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Pro
   return violations;
 }
 
-/**
- * Checks modal description lengths across all locales
- */
 async function checkModalDescriptionLengths(
   localeKeys: Map<string, Set<string>>,
 ): Promise<ModalDescriptionViolation[]> {
@@ -754,9 +748,6 @@ async function checkModalComponentUsageLengths(
   return violations;
 }
 
-/**
- * Checks command description lengths across all locales
- */
 async function checkCommandDescriptionLengths(
   localeKeys: Map<string, Set<string>>,
 ): Promise<CommandDescriptionViolation[]> {
@@ -1398,7 +1389,6 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   const subKeyMatches = await extractGetLocaleSubKeysUsage(availableKeys);
   for (const key of subKeyMatches) referencedKeys.add(key);
 
-  // Add keys derived from filesystem-based commandLoader patterns
   const expectedMetadataKeys = await extractExpectedCommandMetadataKeys();
   for (const { key, file, strict } of expectedMetadataKeys) {
     const resolvedKey = resolveLocalizationKey(key, availableKeys);

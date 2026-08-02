@@ -118,7 +118,6 @@ let cacheReady = false;
  * @returns True if model supports function calling
  */
 function detectToolSupport(model: OpenRouterModel): boolean {
-  // Check if supported_parameters exists and is an array
   if (model.supported_parameters && Array.isArray(model.supported_parameters)) {
     if (model.supported_parameters.includes("tools")) {
       return true;
@@ -153,11 +152,9 @@ function detectToolSupport(model: OpenRouterModel): boolean {
  * @returns True if model supports image inputs
  */
 function detectImageSupport(model: OpenRouterModel): boolean {
-  // Get modality string and convert to lowercase for comparison
   const modality = model.architecture?.modality?.toLowerCase();
 
-  // Check for image capability indicators
-  // OpenRouter uses "text+image->text" notation , so check for "image" as the primary signal,
+  // OpenRouter uses "text+image->text" notation, so check for "image" as the primary signal,
   // plus "vision" and "multimodal" for forward compatibility with any future API format changes
   return modality?.includes("image") || modality?.includes("vision") || modality?.includes("multimodal") || false;
 }
@@ -173,11 +170,9 @@ function detectImageSupport(model: OpenRouterModel): boolean {
  * @returns True if model supports video inputs
  */
 function detectVideoSupport(model: OpenRouterModel): boolean {
-  // Check modality field for video indicator
   const modality = model.architecture?.modality?.toLowerCase();
   const hasVideoModality = modality?.includes("video") || false;
 
-  // Check supported_parameters for explicit video parameter
   const hasVideoParam = model.supported_parameters?.includes("video") || false;
 
   return hasVideoModality || hasVideoParam;
@@ -194,7 +189,6 @@ function detectVideoSupport(model: OpenRouterModel): boolean {
  * @returns True if model supports structured output
  */
 function detectStructuredOutputSupport(model: OpenRouterModel): boolean {
-  // Check if response_format parameter is supported
   return (
     model.supported_parameters?.includes("response_format") ||
     model.supported_parameters?.includes("structured_outputs") ||
@@ -484,7 +478,6 @@ export async function testAccountSettingModel(apiKey: string): Promise<
       const { value } = await reader.read();
       const chunk = decoder.decode(value);
 
-      // Parse the first SSE chunk to extract model
       // Format: data: {"id":"...", "model":"actual-model-name", ...}
       const lines = chunk.split("\n");
       for (const line of lines) {
@@ -570,7 +563,6 @@ export async function getOrFetchOpenRouterCapabilities(modelCodename: string): P
   try {
     log.info(`Fetching capabilities on-demand for model: ${modelCodename}`);
 
-    // Fetch specific model from OpenRouter API
     const response = await fetch(`https://openrouter.ai/api/v1/models/${encodeURIComponent(modelCodename)}`, {
       headers: {
         "Content-Type": "application/json",

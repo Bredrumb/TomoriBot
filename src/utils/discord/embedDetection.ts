@@ -23,19 +23,15 @@ export function isRefreshMarkerEmbed(embed: Embed): boolean {
   if (!title) return false;
 
   for (const supportedLocale of getSupportedLocales()) {
-    // Check for conversation reset title
     const resetTitle = localizer(supportedLocale, "commands.tool.refresh.title");
     if (title === resetTitle) return true;
 
-    // Check for compact summary refreshed title
     const compactSummaryRefreshed = localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed");
     if (title === compactSummaryRefreshed) return true;
 
-    // Check for compact roleplay scene refreshed title
     const compactSceneRefreshed = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed");
     if (title === compactSceneRefreshed) return true;
 
-    // Check for compact manual entry refreshed title
     const compactManualRefreshed = localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed");
     if (title === compactManualRefreshed) return true;
   }

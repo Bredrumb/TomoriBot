@@ -115,7 +115,6 @@ Positive values use a shared fixed or random range.
       return;
     }
 
-    // Load the Tomori state for this server - let helper functions manage interaction state
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -138,7 +137,8 @@ Positive values use a shared fixed or random range.
       return;
     }
 
-    // Update config and reset the shared cycle atomically via repository.
+    // Persist the range and its newly rolled target together so no reader can
+    // observe updated thresholds with a target from the previous cycle.
     const updatedRuntime = await configRepository.setAutoChatThreshold(
       tomoriState.server_id,
       tomoriState.persona_id,

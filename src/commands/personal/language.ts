@@ -74,7 +74,6 @@ export async function execute(
       return;
     }
 
-    // Check if this is the same as the current language preference - let helper functions manage interaction state
     const currentLanguage = userData.language_pref ?? DEFAULT_LANGUAGE;
     if (languageValue === currentLanguage) {
       await replyInfoEmbed(interaction, locale, {
@@ -126,7 +125,6 @@ export async function execute(
     await log.error(`Error executing /config language for user ${userData.user_disc_id}`, error as Error, context);
 
     // Inform user of unknown error
-    // Check if the interaction has already been replied to or deferred
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content: localizer(locale, "general.errors.unknown_error_description"),

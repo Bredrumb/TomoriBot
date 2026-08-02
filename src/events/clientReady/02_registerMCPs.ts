@@ -72,8 +72,6 @@ export default async (): Promise<void> => {
 
     const mcpManager = getMCPManager();
 
-    // Initialize all configured MCP servers
-    // This will attempt to connect to Brave Search (if API key available) and Fetch servers
     await mcpManager.initializeMCPServers();
 
     const connectedCount = mcpManager.getConnectedServerCount();

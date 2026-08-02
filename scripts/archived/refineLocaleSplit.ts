@@ -164,7 +164,6 @@ async function moveToolActivityKeys(locale: string): Promise<void> {
 async function updateCallSites(): Promise<void> {
   console.log("\n  Updating call-site references in src/…");
 
-  // Build find→replace pairs for all quote styles the localizer key might appear in
   const replacements: Array<[string, string]> = [];
   for (const key of TOOL_ACTIVITY_KEYS) {
     for (const q of ['"', "'", "`"]) {

@@ -593,7 +593,7 @@ async function main() {
       "Run `bun install --frozen-lockfile`, then `bun run check-runtime-imports`. Confirm bun.lock resolves gaxios to uuid@9.",
     Knip: "Run `bun run knip` and remove unused files, dependencies, or exports, or update scripts/knip.json for intentional entry points.",
     "Comment Audit":
-      "Run `bun run audit-comments` and review the reported policy violations or narration candidates.",
+      "Run `bun run audit-comments` and review each finding against docs/contributing/comment-policy.md before editing.",
     "Dependency Audit":
       "Update the parent dependency or run `bun update <package-name>` specifically. Only use a global override when the replacement stays within every dependent package's declared version range.",
     "SQL Audit":

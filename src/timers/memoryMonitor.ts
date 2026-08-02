@@ -57,7 +57,6 @@ export class MemoryMonitor {
       log.error("Error during initial memory check on monitor start:", error);
     });
 
-    // Set up interval for regular checks
     this.intervalId = setInterval(() => {
       this.checkMemoryStatus().catch((error) => {
         log.error("Error during scheduled memory check:", error);

@@ -86,7 +86,6 @@ export async function generateConversationSummaryNvidia(
       stream: false,
     };
 
-    // Send the request
     const response = await fetch(NVIDIA_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {

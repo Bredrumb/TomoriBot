@@ -62,7 +62,6 @@ class HealthTracker {
       };
     }
 
-    // Check if Discord client is ready
     const isClientReady = this.client.isReady();
     if (!isClientReady) {
       return {

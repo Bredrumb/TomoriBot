@@ -95,7 +95,6 @@ export async function selectApiKey(
   const provider = tomoriState.llm.llm_provider.toLowerCase();
 
   try {
-    // Query all rotation keys for this server and provider, joining runtime telemetry
     const rotationKeys = await sql`
       SELECT
         akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,

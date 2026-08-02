@@ -104,7 +104,6 @@ export class PeekProfilePictureTool extends BaseTool {
       return false;
     }
 
-    // Check if model has vision capabilities OR a dedicated vision model is configured.
     // A non-vision primary model with a vision_llm set will redirect analysis to
     // the vision model instead of using an enhanced context restart.
     const hasVision = context.tomoriState.llm.sees_images;
@@ -227,8 +226,6 @@ export class PeekProfilePictureTool extends BaseTool {
           ? `[System: This message contains profile picture and profile banner content from a previous avatar analysis request you made for ${targetTypeLabel}: ${userDisplayText}]`
           : `[System: This message contains profile picture content from a previous avatar analysis request you made for ${targetTypeLabel}: ${userDisplayText}]`;
 
-      // Create artificial user message containing the profile picture Part
-      // This will be added to the context for the restart
       // Special marker 'enhancedContext: true' indicates this should be processed by provider
       const imageContextItem: StructuredContextItem = {
         role: "user",
@@ -259,7 +256,6 @@ export class PeekProfilePictureTool extends BaseTool {
         ],
       };
 
-      // Return completely clean response following BraveSearchHandler pattern
       // Store image data externally and return clean text only
       // This prevents rate limit issues while still triggering enhanced context restart
 
@@ -564,7 +560,6 @@ export class PeekProfilePictureTool extends BaseTool {
         return avatarUrl.slice(markerIndex + "base64,".length).trim();
       }
 
-      // Fetch the image from Discord CDN with bounded download checks
       const response = await safeDownload(avatarUrl, {
         maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
         timeoutMs: 15_000,
@@ -587,11 +582,7 @@ export class PeekProfilePictureTool extends BaseTool {
     }
   }
 
-  /**
-   * Get and remove a pending enhanced context item
-   * Used by tomoriChat during restart processing
-   * @returns Enhanced context item if found, undefined otherwise
-   */
+  /** Removes the item after retrieval so a restart cannot replay stale image context. */
   static getPendingEnhancedContext(pendingContextKey: string): StructuredContextItem | undefined {
     const contextItem = PeekProfilePictureTool.pendingEnhancedContextItems.get(pendingContextKey);
     if (contextItem) {
@@ -600,10 +591,6 @@ export class PeekProfilePictureTool extends BaseTool {
     return contextItem;
   }
 
-  /**
-   * Check if a user has pending enhanced context
-   * @returns True if user has pending enhanced context
-   */
   static hasPendingEnhancedContext(pendingContextKey: string): boolean {
     return PeekProfilePictureTool.pendingEnhancedContextItems.has(pendingContextKey);
   }

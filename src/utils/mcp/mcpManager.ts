@@ -83,7 +83,6 @@ export class MCPManager {
 
     const serverConfigs = this.getServerConfigurations();
 
-    // Initialize each server concurrently with individual error handling
     const initPromises = serverConfigs.map((config) =>
       this.initializeServer(config).catch((error) => {
         log.error(`Failed to initialize MCP server '${config.displayName}':`, error as Error);
@@ -106,8 +105,6 @@ export class MCPManager {
     }
   }
 
-  /**
-   */
   private getServerConfigurations(): MCPServerConfig[] {
     const configManager = getMCPConfigManager();
     const enhancedConfigs = configManager.getConfigurationsByPriority(false); // Get all configs
@@ -128,8 +125,8 @@ export class MCPManager {
         version: "1.0.0",
       });
 
-      // Create transport with environment variables
-      // Set NO_COLOR to suppress ANSI color codes which can interfere with filtering
+      // Banner filtering expects plain text, so suppress ANSI sequences at the
+      // child process instead of teaching the filter every terminal escape form.
       const transport = new BannerFilteringStdioClientTransport({
         command,
         args,
@@ -137,8 +134,8 @@ export class MCPManager {
           Object.entries({
             ...process.env,
             ...env,
-            NO_COLOR: "1", // Disable color output
-            FORCE_COLOR: "0", // Explicitly disable color
+            NO_COLOR: "1",
+            FORCE_COLOR: "0",
           }).filter(([, value]) => value !== undefined),
         ) as Record<string, string>,
         stderr: "ignore", // Ignore stderr to suppress advertisement output
@@ -252,8 +249,6 @@ export class MCPManager {
     return this.mcpClients.size;
   }
 
-  /**
-   */
   getEnhancedServerConfigurations(): EnhancedMCPServerConfig[] {
     const configManager = getMCPConfigManager();
     return configManager.getConfigurationsByPriority(true); // Get only enabled configs

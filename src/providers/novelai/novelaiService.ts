@@ -124,7 +124,6 @@ export interface ApiRequestConfig {
 }
 
 /**
- * Get default parameters for kayra-v1 model
  * Based on reference implementation with sensible defaults for roleplay
  */
 // Use https://novelai.net/tokenizer to find stop sequences
@@ -153,7 +152,6 @@ function getKayraParameters(): NovelAIParameters {
 }
 
 /**
- * Get default parameters for glm-4-6 model
  * Based on reference implementation optimized for latest model
  */
 function getGlmParameters(): NovelAIParameters {

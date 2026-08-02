@@ -452,7 +452,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       };
     }
 
-    // Validate the new endpoint URL if it changed.
     if (endpointUrl !== existingEndpoint.endpoint_url) {
       const urlValidation = strictRemoteValidation
         ? await validateRemoteUrl(endpointUrl, { strict: true })

@@ -27,7 +27,6 @@ export async function execute(
     log.info(`[refreshCommand] Cleared short-term memories for channel - channelId=${interaction.channel.id}`);
   }
 
-  // Send an embed that includes the keyword "refresh" in the description
   // This keyword is detected by the tomoriChat handler to reset context.
   // Let helper functions manage interaction state
   await replyInfoEmbed(

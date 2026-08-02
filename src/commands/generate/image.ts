@@ -70,7 +70,6 @@ async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ m
     throw new Error(`Invalid image type: ${attachment.content_type}`);
   }
 
-  // Fetch image from Discord CDN with bounded download checks
   const downloadResult = await safeDownload(attachment.url, {
     maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
     timeoutMs: 10_000,

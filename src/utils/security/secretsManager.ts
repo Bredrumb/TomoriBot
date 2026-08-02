@@ -161,7 +161,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Validate required fields
     validateRequiredSecrets(secrets);
 
     return secrets;
@@ -181,7 +180,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 
       const rawSecrets = JSON.parse(fileContent);
 
-      // Build TomoriSecrets object from the parsed JSON
       const secrets: TomoriSecrets = {
         DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
         POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
@@ -237,7 +235,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // Validate required fields
       validateRequiredSecrets(secrets);
 
       log.info("Successfully loaded secrets from mounted JSON secret file");
@@ -264,24 +261,20 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   log.info(`Fetching secrets from AWS Secrets Manager (production mode, region: ${awsRegion})`);
 
   try {
-    // Create AWS Secrets Manager client with configurable region
     const client = new SecretsManagerClient({ region: awsRegion });
 
-    // Fetch secret value
     const command = new GetSecretValueCommand({
       SecretId: "tomoribot/production",
     });
 
     const response = await client.send(command);
 
-    // Parse SecretString as JSON
     if (!response.SecretString) {
       throw new Error("AWS Secrets Manager returned empty SecretString. Ensure the secret contains a JSON object.");
     }
 
     const rawSecrets = JSON.parse(response.SecretString);
 
-    // Build TomoriSecrets object
     const secrets: TomoriSecrets = {
       DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
       POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
@@ -337,7 +330,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Validate required fields
     validateRequiredSecrets(secrets);
 
     log.info("Successfully loaded secrets from AWS Secrets Manager");

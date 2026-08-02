@@ -576,8 +576,8 @@ export async function registerCustomEndpoint(
     return null;
   }
 
-  // Add registrations become the active model for their capability. Edit registrations keep the
-  //    existing active slot unless that provider did not have one yet.
+  // New registrations become active immediately. Edits preserve the existing
+  // active slot unless the provider did not have one yet.
   const currentActive = existingConfig ? getCapabilityModelId(existingConfig, input.capability) : null;
   const activeId = shouldActivateNewRegistration ? modelId : (currentActive ?? modelId);
   const currentVision = existingConfig?.vision_llm_id ?? null;
@@ -757,7 +757,6 @@ export async function removeCustomEndpointRegistration(params: {
     await clearServerScopedLiveReferences(params.scope, params.capability, params.modelRefId, siblingModelId);
   }
 
-  // Delete the synthetic model row this endpoint owned.
   if (params.modelRefId != null) {
     await llmModelRepo.deleteSyntheticCustomCapabilityModelById(params.modelRefId, params.capability);
   }

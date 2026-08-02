@@ -895,7 +895,6 @@ export class GenerateImageTool extends BaseTool {
       )}`,
     );
 
-    // Call OpenRouter API
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -1569,14 +1568,12 @@ export class GenerateImageTool extends BaseTool {
         };
       }
 
-      // Convert base64 to buffer and send to Discord
       const imageBuffer = Buffer.from(generatedImageData, "base64");
       const attachmentFilename = `generated_${Date.now()}.png`;
       const attachment = new AttachmentBuilder(imageBuffer, {
         name: attachmentFilename,
       });
 
-      // Send image to Discord channel and capture the sent message for metadata
       const sentMessage = await this.sendGeneratedImage(
         context,
         attachment,
@@ -1630,7 +1627,6 @@ export class GenerateImageTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
-      // Handle specific Google API errors
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Localize errors, but fall back to readable defaults if the localizer

@@ -91,7 +91,6 @@ export class YouTubeVideoTool extends BaseTool {
       return false;
     }
 
-    // Check for YouTube processing disable flag in context
     if (context?.streamContext?.disableYouTubeProcessing) {
       log.info("YouTubeVideoTool: Temporarily disabled during enhanced context restart");
       return false;
@@ -106,7 +105,6 @@ export class YouTubeVideoTool extends BaseTool {
    * @returns Promise resolving to tool result with processed video data
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Check if YouTube processing is temporarily disabled during enhanced context restart
     if (context.streamContext?.disableYouTubeProcessing) {
       log.info(
         "YouTubeVideoTool: Execution blocked - YouTube processing temporarily disabled during enhanced context restart",
@@ -151,7 +149,6 @@ export class YouTubeVideoTool extends BaseTool {
     );
 
     try {
-      // Validate YouTube URL using existing patterns
       const videoId = this.extractVideoId(youtubeUrl);
       if (!videoId) {
         return {
@@ -174,8 +171,6 @@ export class YouTubeVideoTool extends BaseTool {
 
       log.success(`YouTube video validated for enhanced context restart: ${youtubeUrl} (ID: ${videoId})`);
 
-      // Create artificial user message containing the YouTube video Part
-      // This will be added to the context for the restart
       // Special marker 'enhancedContext: true' indicates this should be processed by googleStreamAdapter
       const videoContextItem: StructuredContextItem = {
         role: "user",

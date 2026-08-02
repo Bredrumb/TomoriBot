@@ -129,7 +129,6 @@ export async function formatWhitelistPersonaEntries(
 }
 
 /**
- * Formats the list of random triggers as a numbered list.
  * Each entry shows channel, persona name, timer interval, and trigger probability.
  * @returns Formatted random trigger list string, or localized "None" if empty
  */

@@ -28,10 +28,8 @@ const layers: Buffer[] = await Promise.all(
   ),
 );
 
-// Build the ICO container.
-//    ICO header  (6 bytes): reserved(2) + type=1(2) + count(2)
-//    Per-image directory entry (16 bytes each): w(1)+h(1)+colors(1)+reserved(1)+planes(2)+bitcount(2)+size(4)+offset(4)
-//    Image data: raw PNG bytes for each layer
+// ICO readers require a 6-byte header, one 16-byte directory entry per layer,
+// then the raw PNG layer data at the offsets recorded below.
 const count = SIZES.length;
 const headerSize = 6;
 const directorySize = 16 * count;

@@ -62,7 +62,6 @@ export namespace ProviderFactory {
         const providerPath = path.join(providersPath, dir, providerFileName);
 
         try {
-          // Check if the provider file exists
           const file = Bun.file(providerPath);
           const exists = await file.exists();
 
@@ -118,7 +117,6 @@ export namespace ProviderFactory {
       }
     }
 
-    // Check if this is a registered canonical provider name
     if (providerRegistry.has(normalizedName)) {
       const ProviderClassLoader = providerRegistry.get(normalizedName);
       if (!ProviderClassLoader) {
@@ -145,7 +143,6 @@ export namespace ProviderFactory {
       return provider;
     }
 
-    // Check if this might be an alias - try loading all providers to check aliases
     // This is less efficient but handles the case where an alias is used before the provider is loaded
     for (const [registeredName, loader] of providerRegistry.entries()) {
       try {
@@ -196,7 +193,6 @@ export namespace ProviderFactory {
     // Get the provider instance (handles aliases automatically)
     const provider = await getProviderInstance(providerName);
 
-    // Validate that the configured model is supported by the provider
     // Skip validation if supportedModels is empty (indicates provider accepts any model, e.g., OpenRouter)
     const providerInfo = provider.getInfo();
     if (
@@ -230,18 +226,6 @@ export namespace ProviderFactory {
   export async function getProviderByName(providerName: string): Promise<LLMProvider> {
     return getProviderInstance(providerName);
   }
-
-  /**
-   */
-  /**
-   * Check if a provider type is supported (including aliases)
-   */
-  /**
-   * Clear all cached provider instances (useful for testing or reloading)
-   */
-  /**
-   * Reset discovery state (useful for testing)
-   */
 }
 
 /**

@@ -51,7 +51,6 @@ async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry
   const now = Date.now();
   const cachedEntry = cache.get(userDiscId);
 
-  // Check if cache is still fresh
   if (cachedEntry) {
     const cacheAge = now - cachedEntry.cachedAt;
     if (cacheAge < USER_CACHE_DURATION_MS) {
@@ -66,7 +65,6 @@ async function getOrCreateCacheEntry(userDiscId: string): Promise<UserCacheEntry
   cacheMisses++;
 
   try {
-    // Load user row and privacy level in parallel
     const [userRow, privacyLevel] = await Promise.all([
       userRepository.loadByDiscordId(userDiscId),
       userRepository.getPrivacyLevel(userDiscId),

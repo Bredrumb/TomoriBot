@@ -7,7 +7,6 @@ import { resolvePythonExe } from "../lib/pyenv";
 
 config();
 
-// ---------------------------------------------------------------------------
 // scripts/devtools/launch.ts
 //
 //   bun run launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts]
@@ -20,7 +19,6 @@ config();
 //   from their pre-built venv and given a configurable startup delay.
 //
 //   Press Ctrl+C to stop everything.
-// ---------------------------------------------------------------------------
 
 const ROOT = process.cwd();
 

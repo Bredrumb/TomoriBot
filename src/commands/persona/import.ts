@@ -804,7 +804,6 @@ export async function execute(
         });
       }
 
-      // Send ephemeral confirmation to user
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()
@@ -932,7 +931,6 @@ export async function execute(
         }
       }
 
-      // Send the ephemeral confirmation to the invoking user.
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()

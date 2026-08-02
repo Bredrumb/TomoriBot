@@ -261,7 +261,6 @@ export async function execute(
       userData.user_id ?? null,
     );
 
-    // Validate provider and model capabilities
     const providerName = tomoriState.llm.llm_provider.toLowerCase();
     const effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
 
@@ -293,7 +292,6 @@ export async function execute(
       return;
     }
 
-    // Get API key and decrypt
     if (!tomoriState.config.api_key) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.generate.no_api_key_title",
@@ -570,7 +568,6 @@ export async function execute(
         log.info("Extracted Tomori preset data from uploaded image");
       }
 
-      // Try SillyTavern card format if no native preset was found
       if (!extractedPresetContext) {
         const stMetadata = extractSillyTavernMetadataFromPNG(imageBuffer);
         if (stMetadata) {
@@ -582,7 +579,6 @@ export async function execute(
         }
       }
 
-      // Validate that model supports image vision; fall back to vision_llm if configured
       // If card/preset data was extracted, vision is optional because the data serves as text context
       if (!tomoriState.llm.sees_images) {
         const visionLlm = tomoriState.vision_llm;

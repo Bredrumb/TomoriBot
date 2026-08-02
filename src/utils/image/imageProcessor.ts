@@ -11,7 +11,6 @@ import { log } from "../misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 
-// ── LLM context image optimization thresholds ────────────────────────
 // Images exceeding these limits are downscaled before being sent to providers
 // to prevent stream timeouts (especially on slower models like Qwen via OpenRouter).
 

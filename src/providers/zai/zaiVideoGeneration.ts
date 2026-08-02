@@ -150,7 +150,6 @@ export async function generateZaiNativeVideo(
     duration: normalizedOptions.duration,
   };
 
-  // Add reference image for image-to-video if provided
   if (request.referenceImages && request.referenceImages.length > 0) {
     const ref = request.referenceImages[0];
     body.image_url = [`data:${ref.mimeType};base64,${ref.data}`];

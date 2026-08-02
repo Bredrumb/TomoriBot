@@ -591,7 +591,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
           dedupedPresetTriggers.length > 0 ? dedupedPresetTriggers : getBaseTriggerWords(validConfig.locale);
         const presetPersonaPrompt = presetRows[0]?.persona_preset_desc?.trim() || null;
 
-        // Create or update server record with DM support
         const [server] = await tx`
           INSERT INTO servers (server_disc_id, is_dm_channel, registration_locale)
           VALUES (${validConfig.serverId}, ${isDMChannel}, ${validConfig.registrationLocale})
@@ -600,7 +599,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
           RETURNING *
         `;
 
-        // Create Tomori instance with the selected official preset.
         const [tomori] = await tx`
           INSERT INTO personas (
             server_id,
@@ -689,7 +687,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
         await tx`INSERT INTO server_speech_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_memory_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
 
-        // Initialize persona-scoped config for the main persona.
         await tx`
           INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
           VALUES (${tomori.persona_id}, ${triggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
@@ -852,7 +849,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
 
   private async sqlLoadServerStickers(serverDiscId: string): Promise<ServerStickerRow[] | null> {
     try {
-      // Get the internal server_id from server_disc_id
       const [server] = await sql`
         SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
       `;
@@ -864,7 +860,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
       // biome-ignore lint/style/noNonNullAssertion: server check guarantees server_id (Rule 8)
       const serverId = server.server_id!;
 
-      // Fetch all stickers for that server_id
       const stickersData = await sql`
         SELECT sticker_id, server_id, sticker_disc_id, sticker_name, sticker_desc, emotion_key, format_type, is_global, created_at, updated_at
         FROM server_stickers
@@ -880,7 +875,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
         return [];
       }
 
-      // Validate each sticker row
       const validatedStickers: ServerStickerRow[] = [];
       for (const sticker of stickersData) {
         const parsed = serverStickerSchema.safeParse(sticker);
@@ -902,7 +896,6 @@ class ServerRepository implements IRepository<ServerExportShape> {
 
   private async sqlGetBlacklistedMemberIds(serverId: number): Promise<string[]> {
     try {
-      // Query personalization_blacklist table for blacklisted members
       const result = await sql`
         SELECT user_disc_id FROM personalization_blacklist
         WHERE server_id = ${serverId}

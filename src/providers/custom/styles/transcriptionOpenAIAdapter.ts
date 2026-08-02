@@ -43,7 +43,6 @@ export async function transcribeViaOpenAIAdapter(
   const languageHint = (endpoint.extra_config.language as string | undefined) ?? null;
   const endpointUrl = endpoint.endpoint_url.replace(/\/+$/, "");
 
-  // Build multipart form per the OpenAI transcriptions spec.
   const form = new FormData();
   form.append(
     "file",

@@ -380,9 +380,8 @@ function rewriteImports(source: string): string {
     out = out.slice(0, index) + sub + out.slice(index + length);
   }
 
-  // Remove any stale direct-path imports of repo instances
-  // (e.g. `import { personaRepository } from "@/utils/db/repositories/PersonaRepository"`)
-  // that are now covered by the consolidated import.
+  // The consolidated import supersedes stale direct repository imports such as
+  // `import { personaRepository } from "@/utils/db/repositories/PersonaRepository"`.
   for (const repoVar of repoVarsNeeded) {
     const directRe = new RegExp(
       `import\\s+\\{\\s*${repoVar}\\s*\\}\\s+from\\s+"@\\/utils\\/db\\/repositories\\/[^"]+";?\\n?`,

@@ -49,7 +49,6 @@ export async function execute(
   let modalResult: ModalResult | null = null;
 
   try {
-    // Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     // Check blacklisting only for guild contexts
@@ -100,7 +99,6 @@ export async function execute(
       return;
     }
 
-    // Check if attribute teaching is enabled and if user has bypass permissions
     if (!tomoriState.config.attribute_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.attribute.teaching_disabled_title", // New locale key needed

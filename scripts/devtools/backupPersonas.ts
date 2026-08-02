@@ -12,7 +12,6 @@ function resolveBackupsRoot(): string {
   return process.env.TOMORI_BACKUP_DIR ? resolve(process.env.TOMORI_BACKUP_DIR) : join(process.cwd(), "backups");
 }
 
-// ---------------------------------------------------------------------------
 // scripts/devtools/backupPersonas.ts
 //   bun run backup:personas  → export ALL personas across all servers
 //
@@ -22,7 +21,6 @@ function resolveBackupsRoot(): string {
 //   `.meta.json` sidecar carrying extras (webhook avatar URL, trigger words,
 //   server memories) that /persona import does not consume. Organized into
 //   per-server subdirectories.
-// ---------------------------------------------------------------------------
 
 
 interface ServerRow {

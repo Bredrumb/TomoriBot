@@ -959,8 +959,6 @@ async function measureGoogleInputTokens(
 }
 
 /**
- * Measure exact input tokens for Vertex AI.
- *
  * Mirrors {@link measureGoogleInputTokens} because Vertex shares the Gemini wire
  * format and tokenizer. The only differences:
  *   - The client is built from the stored composite key ("{project}::{location}")

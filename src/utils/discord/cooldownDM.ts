@@ -23,14 +23,12 @@ export async function sendCooldownDM(
   ephemeralFlags?: MessageFlags.SuppressEmbeds | MessageFlags.Ephemeral | MessageFlags.SuppressNotifications,
 ): Promise<void> {
   try {
-    // Build the cooldown embed
     const cooldownEmbed = new EmbedBuilder()
       .setTitle(localizer(locale, titleKey))
       .setDescription(localizer(locale, descriptionKey, descriptionVars))
       .setColor(ColorCode.WARN)
       .setTimestamp();
 
-    // Add footer if provided
     if (footerKey) {
       cooldownEmbed.setFooter({ text: localizer(locale, footerKey) });
     }

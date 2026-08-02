@@ -413,7 +413,6 @@ export async function execute(
     ? invokingMember.displayAvatarURL({ size: 64, extension: "png", forceStatic: true })
     : interaction.user.displayAvatarURL({ size: 64, extension: "png", forceStatic: true });
 
-  // Send the "Scene generating..." status embed as the command-execution confirmation.
   await modalInteraction.reply({
     embeds: [
       new EmbedBuilder()

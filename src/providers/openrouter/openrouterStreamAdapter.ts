@@ -568,7 +568,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         }
       }
 
-      // Add OpenRouter-specific sampling parameters if provided
       if (openrouterConfig.topP !== undefined) {
         if (this.isOpenRouterParamSupported(supportedParameters, "top_p")) {
           requestBody.top_p = openrouterConfig.topP;
@@ -1598,7 +1597,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         this.toolCallAccumulator.clear();
         this.reasoningDetailsAccumulator = [];
 
-        // Return as "done" instead of "error" to end the stream gracefully
         // This preserves any text the model generated before the malformed tool call
         // and avoids showing a scary error message to the user
         return {
@@ -1776,7 +1774,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         }
       }
 
-      // Create the function call with optional Gemini-specific fields
       const functionCall: FunctionCall = {
         name: accumulated.functionName,
         args: parsedArgs,
@@ -1923,7 +1920,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
 
       // Don't return yet - continue accumulating until finish_reason
-      // Return empty text to signal chunk was processed but not ready to act on
       return {
         type: "text",
         content: "",
@@ -2024,7 +2020,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Try to parse OpenRouter API error structure
     let errorCode: string | undefined;
     let extractedMessage: string | undefined;
 
@@ -2159,7 +2154,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       return localizer(locale, "genai.openrouter.429_free_models_message");
     }
 
-    // Get OpenRouter-specific message based on error code and type
     let openrouterMessage = error.userMessage;
 
     if (!openrouterMessage) {
@@ -2259,7 +2253,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         // CRITICAL: ALL user/model items go to dialogue (unless in SYSTEM_INSTRUCTION_TAGS)
         // This handles DIALOGUE_HISTORY, DIALOGUE_SAMPLE, and new tags like KNOWLEDGE_USERS_IN_CONVERSATION
 
-        // Convert to OpenAI message format
         const role = item.role === "user" ? "user" : "assistant";
         // Collects resolved image parts from assistant turns for injection into a synthetic
         // user turn, since OpenRouter only permits image content on user-role messages.
@@ -2550,7 +2543,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         // Generate a tool call ID since our generic FunctionCall doesn't have one
         const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-        // Build assistant message with tool call
         // CRITICAL: Must include thought_signature and reasoning_details if present (required for Gemini models)
         const toolCallObject: Record<string, unknown> = {
           id: toolCallId,
@@ -2619,7 +2611,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
         messages.push(assistantMessage);
 
-        // Add tool response
         messages.push({
           role: "tool",
           tool_call_id: toolCallId,

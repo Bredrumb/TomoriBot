@@ -391,8 +391,6 @@ export class GenerateImageNaiTool extends BaseTool {
   }
 
   /**
-   * Resolve a Google API key for Gemini segmentation.
-   *
    * @returns Decrypted Google API key, or null if unavailable
    */
   private async resolveGoogleApiKey(context: ToolContext): Promise<string | null> {
@@ -1148,15 +1146,12 @@ export class GenerateImageNaiTool extends BaseTool {
       let imageBuffer: Buffer;
 
       if (isInpaintMode) {
-        // ── Inpainting flow ──────────────────────────────────────────
-        // Extract source image from referenced Discord message
         log.info(`[NAI] Inpaint mode: extracting image from message ${messageId}, target="${editTarget}"`);
 
         const extractedImages = await extractImagesFromMessage(messageId, context);
 
         const sourceImage = extractedImages[0];
 
-        // Resolve Google API key for Gemini segmentation
         const googleApiKey = await this.resolveGoogleApiKey(context);
         if (!googleApiKey) {
           return {
@@ -1165,7 +1160,6 @@ export class GenerateImageNaiTool extends BaseTool {
           };
         }
 
-        // Call Gemini segmentation to generate the inpainting mask
         log.info(`[NAI] Calling Gemini segmentation for target: "${editTarget}"`);
 
         const segResult = await segmentImage(
@@ -1213,7 +1207,6 @@ export class GenerateImageNaiTool extends BaseTool {
           }
         }
 
-        // Generate inpainted image via NovelAI infill endpoint
         const inpaintModel = this.getInpaintingModelCodename(baseModelCodename);
 
         imageBuffer = await this.generateInpaintImage(
@@ -1230,8 +1223,6 @@ export class GenerateImageNaiTool extends BaseTool {
 
         log.success(`[NAI] Inpainting complete with model "${inpaintModel}"`);
       } else {
-        // ── Standard generation flow ─────────────────────────────────
-        // Generate image normally
         imageBuffer = await generateNovelAiImage({
           apiKey,
           model: baseModelCodename,
@@ -1244,7 +1235,6 @@ export class GenerateImageNaiTool extends BaseTool {
         });
       }
 
-      // Send image to Discord
       const filePrefix = isInpaintMode ? "nai_inpainted" : "nai_generated";
       const attachmentFilename = `${filePrefix}_${Date.now()}.png`;
       const attachment = new AttachmentBuilder(imageBuffer, {

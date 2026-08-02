@@ -70,7 +70,6 @@ class CryptoKeyManager {
    */
   private loadKeysFromEnv(): void {
     log.section(`Loading Keys from Environment`);
-    // Load all CRYPTO_SECRET_V* variables
     for (const [key, value] of Object.entries(process.env)) {
       const match = key.match(/^CRYPTO_SECRET_V(\d+)$/);
       if (match && value) {

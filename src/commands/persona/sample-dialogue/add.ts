@@ -54,7 +54,6 @@ export async function execute(
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // Check if user has Manage Server permission - used for blacklist and teaching restriction bypass
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
 
     // Check blacklisting only for guild contexts
@@ -105,8 +104,6 @@ export async function execute(
       return;
     }
 
-    // Check if sample dialogue teaching is enabled and if user has bypass permissions
-    // Access config directly from tomoriState
     if (!tomoriState.config.sampledialogue_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.sampledialogue.teaching_disabled_title",
@@ -343,7 +340,6 @@ export async function execute(
       return;
     }
 
-    // Update target persona row in the database using paired atomic array operations
     const added = await personaRepository.addSampleDialoguePair(
       selectedPersona.persona_id,
       dialoguesToAdd.map((dialogue) => dialogue.userInput),

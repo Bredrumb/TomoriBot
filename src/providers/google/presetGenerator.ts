@@ -67,10 +67,8 @@ function createGoogleErrorMessage(
   rawMessage: string,
   locale: string,
 ): string {
-  // Try to extract Google's actual error message from nested JSON
   let googleMessage: string | undefined;
 
-  // Check if rawMessage contains nested JSON error structure
   try {
     if (rawMessage.includes('{"error":')) {
       const jsonMatch = rawMessage.match(/\{.*\}/s);
@@ -78,7 +76,6 @@ function createGoogleErrorMessage(
         const parsedError = JSON.parse(jsonMatch[0]);
         const errorObj = parsedError.error || parsedError;
 
-        // Check for double-nested JSON
         if (errorObj?.message && typeof errorObj.message === "string") {
           try {
             const nestedError = JSON.parse(errorObj.message);
@@ -290,7 +287,6 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
     } catch (apiError: unknown) {
       const errorMessage = getErrorMessage(apiError);
 
-      // Try to extract error code from Google API error
       let errorCode: number | undefined;
       try {
         if (errorMessage.includes('{"error":')) {
@@ -725,7 +721,6 @@ ${params.existingPresetContext.trim()}`;
       } catch (apiError: unknown) {
         const errorMessage = getErrorMessage(apiError);
 
-        // Try to extract error code from Google API error
         let errorCode: number | undefined;
         try {
           if (errorMessage.includes('{"error":')) {

@@ -100,6 +100,27 @@ after normalization and never on substrings. Summary echoes are heuristic and su
 `obvious-narration`: a warning during a full audit, an error once the line is in your diff.
 Judgment cases stay with review.
 
+## Treat findings as review prompts
+
+The audit is a heuristic reviewer, not a deletion checklist. A zero-warning result is useful
+only when the remaining code still explains its non-obvious constraints. Do not make the
+counter reach zero by deleting rationale, truncating a multi-line explanation, adding broad
+exceptions, or leaving an empty JSDoc block.
+
+For every finding:
+
+1. Read the complete comment or JSDoc block and the code it describes.
+2. Remove the comment only when the code already expresses everything it says.
+3. Rewrite the block when it mixes narration with rationale, keeping the constraint,
+   compatibility behavior, security boundary, or ordering requirement.
+4. Re-read the surrounding paragraph after editing. Remove vacated divider lines and JSDoc
+   gaps, and make sure no continuation became a sentence fragment.
+5. Review the final diff as prose before running the audit again.
+
+`orphaned-comment` catches provable partial-cleanup damage such as an indented continuation
+without an opening line, a bare divider remnant, or a completely empty JSDoc block. It cannot
+decide whether deleted context was valuable, so human diff review remains required.
+
 ## Maintainer audit
 
 ```bash
@@ -113,7 +134,8 @@ of unrelated work. It remains separate from the normal test runner.
 
 Maintainers can invoke `scripts/checks/checkCommentPolicy.ts` directly for deterministic
 checks or pass `--staged` or `--base <ref>` to focus the narration heuristic on changed
-lines. Its focused self-test is also manual:
+lines. The command prints this policy guide before its findings so contributors have the
+editing criteria beside the report. Its focused self-test is also manual:
 
 ```bash
 bun test ./scripts/checks/commentPolicy.test.ts

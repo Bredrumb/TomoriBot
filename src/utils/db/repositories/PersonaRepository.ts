@@ -2413,7 +2413,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async loadTomoriState(serverDiscId: string): Promise<TomoriState | null> {
     try {
-      // Load main persona row using server Discord ID
       const tomoriRows = await sql`
         SELECT
           t.*,
@@ -2493,7 +2492,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // Load persona-scoped trigger words + optional persona prompt
       const personaConfigRows = await sql`
         SELECT *
         FROM persona_configs
@@ -2510,7 +2508,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // Load server memories scoped by persona lineage.
       const rawLineageId = tomoriData.persona_lineage_id;
       const parsedPersonaLineageId =
         typeof rawLineageId === "bigint"
@@ -2559,7 +2556,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
       `;
 
-      // Validate rotation keys
       const rotationKeys: ApiKeyRotationRow[] = [];
       for (const row of rotationKeysRows) {
         const parsed = apiKeyRotationSchema.safeParse(row);
@@ -2571,7 +2567,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // Load active NAI preset if one is configured for this server
       let naiPreset: NaiPresetRow | undefined;
       const presetName = configData.nai_preset_name;
       if (presetName) {
@@ -3222,7 +3217,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       // Join the SET parts
       const setClause = setParts.join(", ");
 
-      // Add the personaId as the last parameter for the WHERE clause
       const finalPlaceholderIndex = values.length + 1;
       values.push(personaId);
 
@@ -3251,7 +3245,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         return null;
       }
 
-      // Validate the returned data for type safety
       const updatedTomori = tomoriSchema.safeParse(result[0]);
       if (!updatedTomori.success) {
         const context: ErrorContext = {

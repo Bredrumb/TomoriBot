@@ -87,7 +87,6 @@ function unwrapInlineCodeDelimiters(value: string): string {
 }
 
 function stripEmoji(text: string): string {
-  // Remove emoji characters and variation selectors
   return text
     .replace(/[\p{Emoji}]/gu, "") // Unicode emoji
     .replace(/\uFE0E|\uFE0F|\u200D|\u200C/g, "") // Variation selectors and zero-width joiners

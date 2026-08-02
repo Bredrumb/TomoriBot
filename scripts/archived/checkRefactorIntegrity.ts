@@ -237,7 +237,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
     }
   }
 
-  // ── Phase 5.5e check: surviving SQL siblings ──────────────────────────────
   // Any *ReadSql.ts or *WriteSql.ts file anywhere under src/utils/db/ is a
   // regression: all SQL must be inlined as private methods on the owning
   // Repository class. These sibling files were deleted in Phase 5.5e Stage C.
@@ -254,7 +253,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
     }
   }
 
-  // ── Phase 5.5e check: cohabiting siblings ─────────────────────────────────
   // In src/utils/db/repositories/, every file must be a Repository class,
   // the index barrel, or the IRepository interface. Any other .ts file at
   // that depth is a domain file that leaked into the repository layer.

@@ -105,7 +105,6 @@ export class MCPConfigManager {
     const requiredEnvVars = Array.isArray(rawConfig.requiredEnvVars) ? rawConfig.requiredEnvVars : [];
     const optionalEnvVars = Array.isArray(rawConfig.optionalEnvVars) ? rawConfig.optionalEnvVars : [];
 
-    // Create enhanced configuration with defaults and proper type casting
     const enhancedConfig: EnhancedMCPServerConfig = {
       name: typeof rawConfig.name === "string" ? rawConfig.name : serverName,
       displayName: typeof rawConfig.displayName === "string" ? rawConfig.displayName : serverName,

@@ -168,7 +168,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
     });
   });
 
-  // ── LlmRepository: result parity ─────────────────────────────────────────
   // Each test asserts that the repository returns the same data as the direct
   // repository SQL call, proving delegation is correct rather than silent no-ops.
 

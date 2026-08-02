@@ -161,8 +161,8 @@ async function sendEmbedWithExpand(
   const truncationThreshold = config.truncationThreshold ?? DEFAULT_TRUNCATION_THRESHOLD;
   const shouldAttachExpandButton = fullContent.length > truncationThreshold;
 
-  // Build the complete CV2 tree up front. Teardown reuses the same renderer
-  //    with only the button disabled, keeping the message in one mode.
+  // Teardown reuses the complete Components V2 tree with only the button
+  // disabled, keeping the message in one rendering mode.
   const activeComponents = buildNoticeComponents(locale, embedOptions, config, shouldAttachExpandButton);
   const disabledComponents = shouldAttachExpandButton
     ? buildNoticeComponents(locale, embedOptions, config, true, true)

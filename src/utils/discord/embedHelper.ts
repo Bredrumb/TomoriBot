@@ -217,7 +217,6 @@ export function createSummaryEmbed(locale: string, options: SummaryEmbedOptions)
           // Truncate value to Discord's maximum field value length (1024 chars)
           const value = truncateFieldValue(rawValue);
 
-          // Return the structured APIEmbedField object
           return {
             name,
             value,
@@ -298,7 +297,6 @@ const TRANSLATION_TIMEOUT = 90000;
 export async function sendTranslationEmbed(message: Message, options: TranslationEmbedOptions): Promise<void> {
   const { translations, initialProvider = TranslationProvider.GOOGLE, timeout = TRANSLATION_TIMEOUT } = options;
 
-  // Create buttons for each provider with their brand colors
   const createButtons = (activeProvider: Provider) => {
     const buttons = Object.values(TranslationProvider).map((provider) => {
       return new ButtonBuilder()
@@ -310,18 +308,15 @@ export async function sendTranslationEmbed(message: Message, options: Translatio
     return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
   };
 
-  // Create embed with initial translation
   const embed = new EmbedBuilder()
     .setColor(TRANSLATOR_COLORS[initialProvider])
     .setDescription(translations[initialProvider]);
 
-  // Send initial message
   const sentMessage = await message.reply({
     embeds: [embed],
     components: [createButtons(initialProvider)],
   });
 
-  // Set up collector
   const collector = sentMessage.createMessageComponentCollector({
     componentType: ComponentType.Button,
     time: timeout,

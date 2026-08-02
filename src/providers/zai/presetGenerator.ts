@@ -147,7 +147,6 @@ export async function generatePresetFromPromptZai(
       };
     }
 
-    // Handle tool calls
     const toolCalls = message.tool_calls ?? [];
     if (toolCalls.length > 0) {
       if (!toolsEnabled || !toolContext) {

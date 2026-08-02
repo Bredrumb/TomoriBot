@@ -177,8 +177,8 @@ export class VertexProvider
       return { valid: false, error: providerError };
     }
 
-    // Exercise ADC, project/location configuration, and Vertex endpoint access
-    // without coupling setup to the current default model.
+    // Validate project, location, credentials, and endpoint access without
+    // coupling setup to whichever model is currently selected.
     try {
       log.info("Validating Vertex AI configuration...");
 

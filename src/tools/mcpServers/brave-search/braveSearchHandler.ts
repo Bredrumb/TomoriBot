@@ -55,17 +55,14 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
     args: Record<string, unknown>,
   ): Promise<TypedMCPToolResult> {
     try {
-      // Handle Brave Image Search with automatic Discord attachment sending
       if (functionName === "brave_image_search") {
         return await this.processBraveImageSearch(mcpResult, context, args);
       }
 
-      // Handle Brave Web Search with fetch capability reminder
       if (functionName === "brave_web_search") {
         return await this.processBraveWebSearch(mcpResult, args);
       }
 
-      // Handle other Brave Search functions with standard processing
       return this.processStandardBraveResult(functionName, mcpResult, context, args);
     } catch (error) {
       log.error(`Failed to process ${functionName} result:`, error as Error);
@@ -111,7 +108,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
       }
 
       if (imageUrls.length > 0) {
-        // Create Discord attachments from image URLs
         const attachments: AttachmentBuilder[] = [];
         let sentMessageId: string | undefined;
         let sentAttachments: Array<import("discord.js").Attachment> | undefined;
@@ -187,7 +183,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
         const queryTerm = args.query || "images";
         const completionMessage = `Found and sent ${attachments.length} ${queryTerm} images directly to Discord (message ID: ${sentMessageId ?? "unknown"}). The images are now displayed for the user.`;
 
-        // Build image metadata for LLM visibility
         const imageMetadata = {
           imageUrls: sentAttachments
             ? sentAttachments.map((att) => ({
@@ -284,7 +279,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
       const foundUrls = originalText.match(urlPattern) || [];
       const urlCount = foundUrls.length;
 
-      // Create an enhanced response that includes fetch capability reminder
       const fetchReminder =
         urlCount > 0
           ? `\n\n[AGENT REMINDER] You have access to the "fetch_url" function call to retrieve and analyze the full content of any of these ${urlCount} web URLs. If any given information snippet is not enough, use the function to retrieve more details about a specific webpage, use fetch_url(url="[URL]") to get the complete page content for deeper analysis.`
@@ -406,7 +400,6 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
     try {
       const cleanedResult = JSON.parse(JSON.stringify(mcpResult));
 
-      // Remove image data from various possible locations
       const contentArrays = [
         cleanedResult.functionResponse?.response?.content,
         cleanedResult.content,
@@ -429,10 +422,7 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
                 };
               }
             } catch {}
-          }
-
-          // Remove image objects entirely
-          else if (item && item.type === "image") {
+          } else if (item && item.type === "image") {
             contentArray.splice(i, 1);
           }
         }

@@ -214,7 +214,6 @@ export class ReminderTool extends BaseTool {
     const personaNickname =
       context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
-    // Validate reminder purpose
     if (typeof reminderPurposeArg !== "string" || !reminderPurposeArg.trim()) {
       return {
         success: false,
@@ -500,7 +499,6 @@ export class ReminderTool extends BaseTool {
         }
       }
 
-      // Create the reminder in the database
       const dbResult = await serverScheduleRepository.addReminder({
         server_id: tomoriState.server_id,
         channel_disc_id: resolvedChannelId,
@@ -522,7 +520,6 @@ export class ReminderTool extends BaseTool {
         const timeRemainingMs = finalReminderTime.getTime() - Date.now();
         const timeRemainingStr = formatTimeRemaining(timeRemainingMs);
 
-        // Send confirmation notice to the channel
         // Format the reminder time in the server's configured timezone
         const timeFormatOptions: Intl.DateTimeFormatOptions = {
           year: "numeric",
@@ -561,9 +558,8 @@ export class ReminderTool extends BaseTool {
             }
           : baseDescriptionVars;
 
-        // Send the confirmation notice. The expand helper attaches a "Show Full Task"
-        // button when the full purpose exceeds the 200-char truncation threshold,
-        // letting users read the entire purpose ephemerally without channel clutter.
+        // Long purposes receive an expansion button so the full text remains
+        // available ephemerally without adding channel clutter.
         await sendTaskEmbedWithExpand(
           context.channel,
           context.locale,

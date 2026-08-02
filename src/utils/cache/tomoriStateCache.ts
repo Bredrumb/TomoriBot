@@ -60,7 +60,6 @@ const STARTUP_GRACE_PERIOD_MS = (Number(process.env.STARTUP_GRACE_PERIOD_MINUTES
  *          startup grace period, or null if this is genuinely "not set up"
  */
 export function getLastDbError(serverDiscId: string): { message: string; timestamp: number } | null {
-  // Check for a real DB error recorded by getCachedAllPersonas
   const entry = lastDbError.get(serverDiscId);
   if (entry) {
     if (Date.now() - entry.timestamp > DB_ERROR_STALENESS_MS) {
@@ -176,7 +175,6 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
  * @returns Main TomoriState or null if not found
  */
 export async function getCachedMainPersona(serverDiscId: string): Promise<TomoriState | null> {
-  // Check in-memory cache first for quick lookup
   const cachedEntry = cache.get(serverDiscId);
   if (cachedEntry) {
     const cacheAge = Date.now() - cachedEntry.cachedAt;

@@ -562,7 +562,6 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
   try {
     const channelId = channel.id;
 
-    // Check in-memory cache
     const cachedWebhook = webhookCache.get(channelId);
     if (cachedWebhook) {
       // Verify cached webhook still has a valid token (not deleted)
@@ -600,7 +599,6 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
       return { webhook: restoredWebhook };
     }
 
-    // Fetch existing webhook by name
     log.info(`[Webhook Manager] Cache MISS for channel ${channelId}, fetching webhooks`);
     const webhooks = await channel.fetchWebhooks();
     let webhook = webhooks.find((wh) => wh.name === WEBHOOK_NAME);
@@ -613,7 +611,6 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
       webhook = undefined;
     }
 
-    // Create new webhook if none exists or token missing
     if (!webhook) {
       log.info(`[Webhook Manager] No webhook found for channel ${channelId}, creating new one`);
       webhook = await channel.createWebhook({

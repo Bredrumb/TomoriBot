@@ -453,9 +453,6 @@ function getWhitelistChannelSummary(
   return entry.cooldown_type === CooldownType.OFF ? cooldownTypeName : `${cooldownTypeName}, ${entry.cooldown_length}s`;
 }
 
-/**
- * Get localized name for a cooldown type
- */
 function getCooldownTypeName(cooldownType: CooldownType, locale: string): string {
   const key = getCooldownTypeKey(cooldownType);
   return localizer(locale, `commands.config.cooldown.type.choice_${key}`);

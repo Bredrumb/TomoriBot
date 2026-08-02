@@ -44,8 +44,6 @@ async function buildUserParts(userPrompt: string, images?: Array<{ url: string; 
 }
 
 /**
- * Generate a conversation summary using Google Gemini.
- *
  * @param client - Optional pre-built GoogleGenAI client (used by Vertex provider)
  */
 export async function generateConversationSummaryGoogle(

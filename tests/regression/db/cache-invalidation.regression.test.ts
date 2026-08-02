@@ -98,7 +98,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     expect(fresh?.config.message_fetch_limit).toBe(42);
   });
 
-  // ── regression probe: do not remove ─────────────────────────────────────
   // To verify the harness catches a cache invalidation regression:
   // Remove the `invalidateUserCache(userDiscId)` call from `UserRepository.register`
   // Run this test: it should fail because getCachedUserRow returns stale data

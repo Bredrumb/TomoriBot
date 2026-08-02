@@ -255,9 +255,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlGetRandomTriggerByPersonaAndChannel(serverId, channelDiscId, personaId);
   }
 
-  /**
-   *
-   */
   async insertTrigger(data: RandomTriggerData): Promise<RandomTriggerRow | null> {
     return this.sqlInsertRandomTrigger(data);
   }
@@ -483,7 +480,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
               ORDER BY reminder_time ASC
             `;
       } else {
-        // Get all pending reminders for user across all servers
         reminderData = await sql`
           SELECT * FROM reminders
           WHERE user_discord_id = ${userDiscordId}
@@ -501,7 +497,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
         return [];
       }
 
-      // Validate each reminder row
       const validatedReminders: ReminderRow[] = [];
       for (const reminder of reminderData) {
         const parsed = reminderSchema.safeParse(reminder);
@@ -966,7 +961,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
       if (!rows.length) return [];
 
-      // Validate and return each row
       const validated: RandomTriggerRow[] = [];
       for (const row of rows) {
         const parsed = randomTriggerSchema.safeParse(row);
@@ -1011,7 +1005,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlGetServerRandomTriggers(serverId: number): Promise<RandomTriggerRow[]> {
     try {
-      // Fetch all triggers for this server ordered by creation date
       const rows = await sql`
         SELECT * FROM random_triggers
         WHERE server_id = ${serverId}
@@ -1020,7 +1013,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
       if (!rows.length) return [];
 
-      // Validate and return
       const validated: RandomTriggerRow[] = [];
       for (const row of rows) {
         const parsed = randomTriggerSchema.safeParse(row);
@@ -1068,7 +1060,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
       if (!row) return null;
 
-      // Validate and return
       const parsed = randomTriggerSchema.safeParse(row);
       if (!parsed.success) {
         log.warn(`Invalid random trigger row for persona ${personaId} in channel ${channelDiscId}:`, parsed.error);
@@ -1123,7 +1114,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
         return null;
       }
 
-      // Validate with schema
       const parsed = randomTriggerSchema.safeParse(row);
       if (!parsed.success) {
         log.error("sqlInsertRandomTrigger: schema validation failed:", parsed.error);
@@ -1146,7 +1136,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
   private async sqlUpsertRandomTrigger(triggerId: number, data: RandomTriggerData): Promise<RandomTriggerRow | null> {
     try {
-      // Update the trigger and reschedule the next roll from now
       const [row] = await sql`
         UPDATE random_triggers SET
           timer_hours             = ${data.timerHours},
@@ -1167,7 +1156,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
         return null;
       }
 
-      // Validate with schema
       const parsed = randomTriggerSchema.safeParse(row);
       if (!parsed.success) {
         log.error("sqlUpsertRandomTrigger: schema validation failed:", parsed.error);

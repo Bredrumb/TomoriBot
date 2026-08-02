@@ -152,7 +152,6 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // Send "Reading document..." embed indicator
       await sendToolProgressNotice(
         context,
         "document_reading",
@@ -229,7 +228,6 @@ export class ReadFileTool extends BaseTool {
         );
       }
 
-      // Build contextual header + document text for the LLM
       const documentContent = [
         `[Document "${docAttachment.name}" sent by ${authorName}${truncationNote}]`,
         result.text,

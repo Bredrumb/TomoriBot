@@ -409,7 +409,6 @@ export async function execute(
         continue;
       }
 
-      // Validate the response; an invalid shape is also a retryable no-progress batch
       const validationResult = ExpressionBatchResultSchema.safeParse(result.data);
 
       if (!validationResult.success) {

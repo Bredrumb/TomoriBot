@@ -192,4 +192,42 @@ describe("comment policy", () => {
 
     expect(inspectCommentPolicySource(source)).toEqual([]);
   });
+
+  it("finds a continuation left without its opening comment", () => {
+    const findings = inspectCommentPolicySource(
+      "const value = true;\n//    because the deleted opener carried the subject.\n",
+    );
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        rule: "orphaned-comment",
+        severity: "error",
+      }),
+    ]);
+  });
+
+  it("allows an indented continuation when its opening line remains", () => {
+    const source = [
+      "// Keep the first line because it supplies the subject,",
+      "//    and indent the continuation to make wrapping visible.",
+      "const value = true;",
+      "",
+    ].join("\n");
+
+    expect(inspectCommentPolicySource(source)).toEqual([]);
+  });
+
+  it("finds empty boundary comments but allows paragraph separators", () => {
+    const orphaned = inspectCommentPolicySource("const value = true;\n//\n// Rationale remains.\n");
+    expect(orphaned.map((finding) => finding.rule)).toEqual(["orphaned-comment"]);
+
+    const paragraphBreak = "// First rationale paragraph.\n//\n// Second rationale paragraph.\nconst value = true;\n";
+    expect(inspectCommentPolicySource(paragraphBreak)).toEqual([]);
+  });
+
+  it("finds empty JSDoc left after partial cleanup", () => {
+    const findings = inspectCommentPolicySource("/**\n *\n */\nexport function value(): void {}\n");
+
+    expect(findings.map((finding) => finding.rule)).toEqual(["orphaned-comment"]);
+  });
 });

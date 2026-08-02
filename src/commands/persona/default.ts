@@ -226,7 +226,6 @@ export async function execute(
       return;
     }
 
-    // Create preset options for the select menu using full descriptions
     const presetSelectOptions: SelectOption[] = presets.map((preset: TomoriPresetRow) => ({
       label: safeSelectOptionText(preset.persona_preset_name),
       value: safeSelectOptionText(preset.persona_preset_name),

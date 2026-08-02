@@ -137,10 +137,8 @@ export async function execute(
     const mention = parseEmojiMention(rawInput);
     const colonStripped = (mention?.name ?? rawInput).replace(/^:+|:+$/g, "");
 
-    // Load synced emojis/stickers from the DB. These are kept current by the
-    //    guildEmojisUpdate / guildStickersUpdate event handlers, so a fast read is
-    //    sufficient; important because we must open the modal within the 3s ack
-    //    window and a deferred interaction cannot show a modal.
+    // Emoji and sticker update events keep these rows current, so a fast DB read
+    // is sufficient and preserves the three-second modal acknowledgement window.
     const [emojis, stickers] = await Promise.all([
       serverRepository.loadEmojis(tomoriState.server_id),
       serverRepository.loadStickersByInternalId(tomoriState.server_id),

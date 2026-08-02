@@ -50,7 +50,6 @@ export async function generateZaiNativeImage(
     );
   }
 
-  // Send generation request to Z.ai
   const response = await fetch(request.endpointUrl || ZAI_GENERAL_IMAGES_GENERATIONS_URL, {
     method: "POST",
     headers: {

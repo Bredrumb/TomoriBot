@@ -448,7 +448,6 @@ export class CreateThreadTool extends BaseTool {
         });
       }
 
-      // Fetch the messages now in the new thread for boomerang context
       let threadMessages: PendingBoomerang["targetChannelMessages"] = [];
       try {
         const fetched = await thread.messages.fetch({ limit: 10 });

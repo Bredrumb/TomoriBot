@@ -58,7 +58,6 @@ export function isValidUtcOffset(value: unknown): value is number {
  * ```
  */
 export function formatUTCOffset(offset: number): string {
-  // Handle the special case of UTC+0
   if (offset === 0) {
     return "UTC+0";
   }

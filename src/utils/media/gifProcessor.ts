@@ -147,7 +147,6 @@ async function extractFramesInternal(
     gifBuffer = gifSource;
   }
 
-  // Parse and decompress the GIF
   // parseGIF expects ArrayBuffer, convert Buffer to ArrayBuffer
   const uint8Array = new Uint8Array(gifBuffer);
   const gif = parseGIF(uint8Array.buffer);
@@ -234,7 +233,6 @@ async function processFrame(
   totalSourceFrames: number,
   config: Required<GifProcessorConfig>,
 ): Promise<ProcessedGifFrame> {
-  // Convert RGBA pixel data to raw buffer
   // gifuct-js provides patch as Uint8ClampedArray with RGBA pixel data
   const { patch, dims } = frameData;
   const frameBuffer = Buffer.from(patch.buffer);

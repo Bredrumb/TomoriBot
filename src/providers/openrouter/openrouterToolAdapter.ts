@@ -224,7 +224,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
                 if (declarations.length > 0) {
                   // Wrap each MCP function in OpenAI tool format
                   for (const declaration of declarations) {
-                    // Convert MCP schema format to OpenAI format
                     // MCP uses "parametersJsonSchema", OpenAI uses "parameters"
                     const openAIDeclaration: Record<string, unknown> = {
                       ...declaration,
@@ -274,7 +273,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
                 );
 
                 for (const declaration of declarations) {
-                  // Convert MCP schema format to OpenAI format
                   const openAIDeclaration: Record<string, unknown> = {
                     ...declaration,
                   };
@@ -362,7 +360,6 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
     } catch (error) {
       log.error(`Failed to execute MCP function ${functionName}`, error as Error);
 
-      // Return typed error result matching TypedMCPToolResult structure
       return {
         success: false,
         message: `Failed to execute MCP function: ${error instanceof Error ? error.message : String(error)}`,

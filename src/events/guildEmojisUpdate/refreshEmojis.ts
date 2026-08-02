@@ -32,7 +32,6 @@ const handleGuildEmojisUpdate: EventFunction = async (_client: Client, ...args: 
       return; // Server not setup, nothing to refresh
     }
 
-    // Fetch the current complete list of emojis from Discord API
     // CRITICAL: Must fetch() to ensure cache is complete - cache may be incomplete on startup
     await guild.emojis.fetch();
     const currentEmojis = Array.from(guild.emojis.cache.values());

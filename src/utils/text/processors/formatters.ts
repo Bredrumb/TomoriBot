@@ -19,12 +19,10 @@ function detectAndProtectURLs(text: string): {
   const urlRegex = /(https?|ftps?):\/\/[^\s<>[\](){}'"]+/g;
 
   const protectedText = text.replace(urlRegex, (match) => {
-    // Handle trailing punctuation that's likely not part of the URL
     // Common sentence endings: period, comma, semicolon at the very end
     let url = match;
     let trailingPunct = "";
 
-    // Check if URL ends with punctuation that should be excluded
     const trailingPunctRegex = /[.,;]$/;
     if (trailingPunctRegex.test(url)) {
       trailingPunct = url.slice(-1);
@@ -113,8 +111,8 @@ export function humanizeString(text: string): string {
     return `__SENDER_${senderStrings.length - 1}__`;
   });
 
-  // Apply lowercase transformation to text outside code blocks,
-  //    now including hyphenated words like "E-ew" or "D-don't" as single words
+  // Treat hyphenated forms such as "E-ew" or "D-don't" as one word so the
+  // humanizer preserves their internal punctuation.
   processedText = processedText.replace(/\b([A-Za-z][A-Za-z'-]*)\b/g, (word) => {
     const isAcronym = /^[A-Z](?:[A-Z'-]*[A-Z])?$/.test(word);
     const isInternet = INTERNET_EXPRESSIONS.has(word.toLowerCase());

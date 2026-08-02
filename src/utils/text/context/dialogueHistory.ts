@@ -66,7 +66,6 @@ export async function appendDialogueHistoryContext(params: {
     mediaWindowCutoff,
   );
 
-  // Build the ordered list of active context notes.
   // Persona and channel notes are additive (both injected when set).
   // Global note is a fallback used only when neither persona nor channel has one.
   const personaNoteText = params.tomoriState?.context_note?.trim() || null;

@@ -17,7 +17,6 @@ import { resolveContextAuthorLabel } from "@/utils/discord/contextAuthorLabel";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { convertMentions } from "@/utils/text/contextBuilder";
 
-// ─── Boomerang Mechanism ─────────────────────────────────────────────
 // Stores pending boomerang data keyed by source channel ID.
 // After tomoriChat() completes in the target channel, the source channel
 // consumes this data to trigger a separate follow-up generation.
@@ -60,7 +59,6 @@ export interface PendingBoomerang {
 const pendingBoomerangs = new Map<string, PendingBoomerang>();
 
 /**
- * Store a pending boomerang for a given source channel.
  * Exposed so other tools (e.g. create_thread) can register boomerangs
  * without duplicating the map or the consume/build logic.
  */

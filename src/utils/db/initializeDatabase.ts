@@ -289,9 +289,8 @@ async function runPreSchemaPersonaRenameBridge(client: SQL, migrationPath: strin
     state.has_persona_presets,
   );
 
-  // Apply the idempotent rename migration. This covers the legitimate forward
-  //    case (legacy table present, renamed table absent) and is a no-op once the
-  //    collisions above are cleared.
+  // The idempotent migration handles the normal forward rename and becomes a
+  // no-op after the collision cases above have been resolved.
   await executeSqlFile(client, migrationPath);
   log.success("Pre-schema legacy persona rename bridge applied");
 }

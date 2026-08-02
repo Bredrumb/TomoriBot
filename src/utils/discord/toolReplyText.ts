@@ -29,8 +29,8 @@ import { cleanLLMOutput } from "@/utils/text/processors/llmOutputProcessor";
 export async function cleanToolReplyText(content: string, context: ToolContext): Promise<string> {
   const contextItems = context.contextItems ?? [];
 
-  // Build the static handle→user-ID lookup from the same conversation context the stream
-  //    path uses, so tool replies resolve @mentions identically to normal replies.
+  // Reuse the stream path's conversation-derived lookup so tool replies resolve
+  // @mentions identically to normal replies.
   const { mentionMap, mentionIdSet, personaMentionMap } = buildMentionLookup(contextItems);
 
   const filtered = filterDuplicateCustomEmojis(content, contextItems);

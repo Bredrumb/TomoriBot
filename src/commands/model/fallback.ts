@@ -218,7 +218,6 @@ export async function execute(
   let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
-    // Load saved providers and open the anchor message with the right initial control
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "text");
     const initialPayload =
       savedProviders.length === 0
@@ -248,7 +247,6 @@ export async function execute(
     // one and hands back the range button in its place.
     let modalButton: ButtonInteraction = opener.button;
 
-    // Load model options for the selected provider
     let availableModels: LlmRow[] = [];
     let availableEndpoints: CustomEndpointRow[] = [];
     let allModelOptions: SelectOption[];
@@ -360,7 +358,6 @@ export async function execute(
     const work = await modalPhase.beginInPlaceWork();
     const values = modalPhase.values;
 
-    // Build fast lookup maps for the current provider's options and existing chain
     const resolvedModelMap = new Map<number, LlmRow>();
     for (const m of availableModels) {
       if (m.llm_id !== undefined) resolvedModelMap.set(m.llm_id, m);

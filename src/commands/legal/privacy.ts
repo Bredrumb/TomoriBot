@@ -20,7 +20,6 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Build GitHub URL dynamically based on user's locale
   // Since language_pref only contains officially supported locales,
   // we can directly use it without availability checks
   const githubUrl = `https://github.com/Bredrumb/TomoriBot/blob/main/legal/${locale}/privacy-policy.md`;

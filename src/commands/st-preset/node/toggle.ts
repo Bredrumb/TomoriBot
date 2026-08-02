@@ -120,8 +120,7 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
       };
     });
 
-    // Build a dynamic label like "Nodes 1-10" or "Nodes 51-60"
-    // (pageOffset converts page-relative indices to overall node numbers)
+    // Labels use document-wide positions rather than restarting numbering on each page.
     const rangeStart = pageOffset + i + 1;
     const rangeEnd = pageOffset + i + chunk.length;
     const dynamicLabel = `Nodes ${rangeStart}–${rangeEnd}`;

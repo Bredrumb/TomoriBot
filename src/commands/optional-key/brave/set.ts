@@ -51,7 +51,6 @@ export async function execute(
   let tomoriState: TomoriState | null = null; // For error context
 
   try {
-    // Get the API key from options
     apiKey = interaction.options.getString("key", true);
 
     if (!apiKey || apiKey.length < 10) {
@@ -73,7 +72,6 @@ export async function execute(
       return;
     }
 
-    // Validate the API key by performing a test search with consistent timing
     try {
       const validationResult = await Promise.race([
         braveWebSearch({ q: "test" }, { apiKey: apiKey, timeout: 5000 }),

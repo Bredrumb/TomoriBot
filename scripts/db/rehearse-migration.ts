@@ -36,8 +36,8 @@ if (process.env.RUN_ENV === "production") {
   process.exit(1);
 }
 
-// Build DATABASE_URL from individual POSTGRES_* vars if not explicitly set,
-//    mirroring scripts/db/migrate.ts so the script works standalone.
+// Mirror the production migration URL fallback so this script also works with
+// standalone POSTGRES_* settings.
 if (!process.env.DATABASE_URL) {
   const host = process.env.POSTGRES_HOST || "localhost";
   const port = process.env.POSTGRES_PORT || "5432";

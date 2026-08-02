@@ -484,7 +484,6 @@ export async function promptWithConfirmation(
     }
   }
 
-  // Create Button Collector Filter
   const buttonCollectorFilter = (i: ButtonInteraction) => {
     i.deferUpdate().catch((e) => log.warn("Failed to defer update on button filter:", e));
     return i.user.id === interaction.user.id;
@@ -700,7 +699,6 @@ export async function promptWithModal(
 ): Promise<ModalResult> {
   const { modalTitleKey, modalCustomId, components } = options;
 
-  // Create Modal
   const modal = new ModalBuilder().setCustomId(modalCustomId).setTitle(localizer(locale, modalTitleKey));
 
   // Create Modal Components (Text Inputs Only - String Selects Not Yet Supported)
@@ -735,7 +733,6 @@ export async function promptWithModal(
       return new ActionRowBuilder<TextInputBuilder>().addComponents(textInput);
     } else if (isModalSelectField(component)) {
       // String selects in modals are not yet supported by Discord.js
-      // Convert to a text input with localized placeholder
       const fallbackInput = new TextInputBuilder()
         .setCustomId(component.customId)
         .setLabel(localizer(locale, component.labelKey))
@@ -782,7 +779,6 @@ export async function promptWithModal(
       if (isModalInputField(component)) {
         values[component.customId] = submitted.fields.getTextInputValue(component.customId);
       } else if (isModalSelectField(component)) {
-        // Get selected values from string select
         const field = submitted.fields.getField(component.customId);
         if (field && "value" in field) {
           values[component.customId] = field.value;
@@ -2114,7 +2110,6 @@ export async function replyPaginatedChoices(
         ...selectionRows.map((row) => row as ActionRowBuilder<MessageActionRowComponentBuilder>),
       ];
 
-      // Create the embed
       const embed = createStandardEmbed(locale, {
         titleKey: options.titleKey,
         titleVars: options.titleVars,
@@ -2868,7 +2863,6 @@ export async function promptWithRawModal(
       },
     };
 
-    // Send raw API response using Discord's REST API directly
     const restEndpoint = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback`;
 
     const response = await fetch(restEndpoint, {
@@ -2974,7 +2968,6 @@ export async function promptWithRawModal(
           }
         } else if (isModalFileUploadField(component)) {
           try {
-            // Get stored resolved attachments from WebSocket interception
             const storedAttachments = modalResolvedAttachments.get(submitted.id);
             const storedFileUploadValues = modalFileUploadValues.get(submitted.id);
 
@@ -3145,7 +3138,6 @@ export async function promptWithPaginatedModal(
   const ITEMS_PER_PAGE = MODAL_OPTIONS_PER_PAGE;
   const totalPages = Math.ceil(optionCount / ITEMS_PER_PAGE);
 
-  // Create page selection embed
   const pageSelectEmbed = createStandardEmbed(locale, {
     titleKey: "general.pagination.select_page_title",
     descriptionKey: "general.pagination.select_page_description",
@@ -3161,10 +3153,8 @@ export async function promptWithPaginatedModal(
     pageButtons.push(new ButtonBuilder().setCustomId(`page_${i}`).setLabel(i.toString()).setStyle(ButtonStyle.Primary));
   }
 
-  // Add page buttons to action row
   const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...pageButtons);
 
-  // Send page selection message.
   // Always resolve to a Message (not InteractionResponse) so that
   // awaitMessageComponent works reliably on ephemeral messages.
   let pageSelectMessage: Message;
@@ -3202,7 +3192,6 @@ export async function promptWithPaginatedModal(
     const startIndex = (selectedPage - 1) * ITEMS_PER_PAGE;
     const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, optionCount);
 
-    // Create new modal options with paginated items via the shared slicer
     const paginatedModalOptions = sliceModalOptions(options, selectComponent, startIndex, endIndex);
 
     // Show modal with selected page items

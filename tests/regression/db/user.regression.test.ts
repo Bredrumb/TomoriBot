@@ -72,7 +72,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
     expect(updated?.user_nickname).toBe("_rt_renamed");
   });
 
-  // ── regression guard ─────────────────────────────────────────────────────
   // Deliberately skip this test in normal runs; enable it manually to verify the
   // harness detects regressions. To prove it works: add "WHERE 1=0" to the
   // loadUserRow SELECT and confirm this test fails.

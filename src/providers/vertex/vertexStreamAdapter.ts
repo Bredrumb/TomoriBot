@@ -743,7 +743,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       return { type: "error", error };
     }
 
-    // Check for thought signatures and thought summaries
     const metadata: Record<string, unknown> = {};
     // Attach the latest captured token usage so the orchestrator can record it.
     if (this.pendingUsage) {
@@ -768,7 +767,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       log.info(`VertexStreamAdapter: Received ${partThoughts.length} thought part(s)`);
     }
 
-    // Check for function calls
     const functionCalls = this.extractFunctionCallsFromChunk(vertexChunk);
     if (functionCalls.length > 0) {
       const functionCall = this.convertGoogleFunctionCall(functionCalls[0]);
@@ -827,7 +825,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Parse Google/Vertex API error structure
     let googleApiError: {
       code?: number;
       message?: string;
@@ -958,11 +955,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     return providerError;
   }
 
-  /**
-   * Create Vertex-specific error description for embedding
-   */
   createErrorDescription(error: ProviderError, locale: string): string | null {
-    // Check for Vertex-specific errors first
     if (error.code === "vertex_config_error") {
       return `Vertex Configuration Error: ${error.userMessage ?? error.message}`;
     }

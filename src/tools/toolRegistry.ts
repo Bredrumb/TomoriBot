@@ -196,13 +196,11 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     const resolvedToolName = resolveBuiltInToolAlias(toolName);
     const resolvedArgs = resolveOpaqueIds(args, context.messageIdMap);
 
-    // Check global MCP first
     const isMcp = await this.isMCPFunction(resolvedToolName, context.provider);
     if (isMcp) {
       return this.executeMCPFunction(resolvedToolName, resolvedArgs, context, startTime);
     }
 
-    // Check guild MCP
     const serverId = context.tomoriState?.server_id;
     if (serverId) {
       try {
@@ -436,8 +434,6 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     }
   }
 
-  /**
-   */
   getExecutionHistory(limit = 100): ToolExecutionEvent[] {
     return this.executionHistory.slice(-limit).reverse(); // Most recent first
   }

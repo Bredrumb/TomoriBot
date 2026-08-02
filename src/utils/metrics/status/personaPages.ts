@@ -330,7 +330,6 @@ export async function showPersonaStatus(
               ? selectedPersona.physical_appearance_tags.join(", ")
               : localizer(locale, "commands.choices.none");
 
-          //     Shows the persona-specific LLM if set, otherwise "Server default"
           const personaModelValue = selectedPersona.persona_llm
             ? formatLlmDisplayLabel(
                 selectedPersona.persona_llm,

@@ -145,7 +145,6 @@ export class IncreaseMediaContextTool extends BaseTool {
       `IncreaseMediaContextTool: Validated request to expand media window by ${extendBy} messages. Signaling context restart.`,
     );
 
-    // Return restart signal for tomoriChat.ts to handle
     // tomoriChat.ts will call buildContext() again with mediaContextWindow parameter
     return {
       success: true,

@@ -4,6 +4,7 @@ import * as ts from "typescript";
 
 const DEFAULT_PATHS = ["src", "scripts", "tests", "apps"];
 const DEFAULT_EXCEPTIONS_PATH = "scripts/checks/comment-policy-exceptions.json";
+const POLICY_DOC_PATH = "docs/contributing/comment-policy.md";
 const DASH_PATTERN = /—|–| -- /;
 const NUMBERED_PREFIX_PATTERNS = [
   String.raw`\d+[a-z]?(?:\.\d+[a-z]?)*(?:-\d+[a-z]?)*\.`,
@@ -97,6 +98,7 @@ const LICENSE_HEADER_PATTERN =
   /\bCopyright(?:\s+\(c\))?|\bSPDX-License-Identifier\s*:|\bLicensed under the\b|\bPermission is hereby granted\b/i;
 
 export type CommentPolicyRule =
+  | "orphaned-comment"
   | "jsdoc-restatement"
   | "numbered-narration"
   | "obvious-narration"
@@ -186,6 +188,7 @@ export async function checkCommentPolicy(
     assertParseable(source, file);
     const fileFindings = [
       ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
+      ...collectStructuralCommentFindings(source, file),
       ...collectJsDocFindings(source, file, options),
     ];
 
@@ -242,6 +245,7 @@ export function inspectCommentPolicySource(
   assertParseable(source, file);
   return [
     ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
+    ...collectStructuralCommentFindings(source, file),
     ...collectJsDocFindings(source, file, options),
   ];
 }
@@ -281,10 +285,62 @@ function isCommentPolicyException(
     typeof entry.reason === "string" &&
     typeof entry.text === "string" &&
     (entry.rule === "jsdoc-restatement" ||
+      entry.rule === "orphaned-comment" ||
       entry.rule === "numbered-narration" ||
       entry.rule === "prose-dash" ||
       entry.rule === "rule-scaffolding")
   );
+}
+
+/** Finds objective damage left by deleting only part of a comment block. */
+function collectStructuralCommentFindings(source: string, file: string): CommentPolicyFinding[] {
+  const sourceLines = source.split(/\r?\n/);
+  const findings: CommentPolicyFinding[] = [];
+  const record = (line: number, message: string, text: string): void => {
+    findings.push({
+      file,
+      line,
+      message,
+      rule: "orphaned-comment",
+      severity: "error",
+      text: text.trim(),
+    });
+  };
+
+  for (let index = 0; index < sourceLines.length; index++) {
+    const line = sourceLines[index] ?? "";
+    const previousIsLineComment = index > 0 && /^\s*\/\//.test(sourceLines[index - 1] ?? "");
+    const nextIsLineComment = index + 1 < sourceLines.length && /^\s*\/\//.test(sourceLines[index + 1] ?? "");
+
+    if (/^\s*\/\/[ \t]{2,}\S/.test(line) && !previousIsLineComment) {
+      record(
+        index + 1,
+        "This looks like a continuation whose opening line was removed; restore, rewrite, or normalize the paragraph.",
+        line,
+      );
+    }
+
+    if (/^\s*\/\/\s*$/.test(line) && !(previousIsLineComment && nextIsLineComment)) {
+      record(index + 1, "Remove the empty comment left at the boundary of a deleted section banner.", line);
+    }
+  }
+
+  for (const token of collectCommentTokens(source, file)) {
+    if (token.kind !== "block" || !token.text.startsWith("/**")) {
+      continue;
+    }
+    const content = token.text
+      .replace(/^\/\*\*/, "")
+      .replace(/\*\/$/, "")
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*\*\s?/, "").trim())
+      .filter(Boolean);
+    if (content.length === 0) {
+      record(token.line, "Remove the empty JSDoc block left after deleting its summary or tags.", token.text);
+    }
+  }
+
+  return findings;
 }
 
 function inspectCommentLine(
@@ -891,6 +947,8 @@ async function main(): Promise<void> {
     paths,
     repoRoot,
   });
+
+  console.log(`Comment policy guide: ${POLICY_DOC_PATH}`);
 
   for (const finding of result.findings) {
     const label = finding.severity === "error" ? "ERROR" : "WARN";

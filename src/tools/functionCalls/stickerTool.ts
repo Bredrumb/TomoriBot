@@ -159,7 +159,6 @@ export class StickerTool extends BaseTool {
       };
     }
 
-    // Check if this is a DM channel - stickers are not available in DMs
     if (!("guild" in context.channel)) {
       return {
         success: false,
@@ -418,18 +417,12 @@ export class StickerTool extends BaseTool {
     }
   }
 
-  /**
-   * Get available stickers for context building
-   * This helper method can be used to provide sticker options to the LLM
-   * @returns Array of available sticker information
-   */
   static getAvailableStickers(context: ToolContext): Array<{
     id: string;
     name: string;
     description: string;
   }> {
     try {
-      // Return empty array for DM channels - no stickers available
       if (!("guild" in context.channel)) {
         return [];
       }

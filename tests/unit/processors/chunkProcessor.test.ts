@@ -1,8 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
 
-// ─── createSentenceSplitRegex ────────────────────────────────────────────────
-//
 // The regex is a negative-lookbehind split: it matches sentence-ending periods
 // that do NOT follow abbreviations, numbers, or acronyms. Tests verify both
 // the "splits here" and "does NOT split here" cases, which are equally load-bearing.

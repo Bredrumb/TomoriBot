@@ -305,7 +305,6 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     messageIdMap,
   };
 
-  // Get provider and create config.
   let provider: Awaited<ReturnType<typeof getProviderForTomori>>;
   try {
     provider = await getProviderForTomori(tomoriState);

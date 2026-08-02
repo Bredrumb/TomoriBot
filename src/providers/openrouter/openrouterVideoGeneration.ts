@@ -12,12 +12,9 @@ import {
   resolveOpenRouterPollingUrl,
 } from "@/providers/openrouter/openrouterVideoRequest";
 
-// ─── External HTTP helpers ──────────────────────────────────────────────────────
-//
 // Bun's BoringSSL stack produces a non-standard TLS/HTTP fingerprint that Cloudflare
 // identifies and serves cached HTML to, rather than routing to the API origin.
 // Both fetch() and Bun's node:https shim share this same fingerprint.
-//
 // We bypass this by spawning an external process for HTTP requests:
 //   - Windows: PowerShell 7 (pwsh) with Invoke-WebRequest: uses .NET's Schannel TLS
 //     and proper HTTP/2 negotiation, confirmed to bypass Cloudflare.
@@ -122,7 +119,6 @@ async function pwshHttpRequest(
 }
 
 /**
- * HTTP request via curl subprocess.
  * Used on Linux where curl has HTTP/2 support (via nghttp2) and produces a standard
  * TLS fingerprint that Cloudflare allows through.
  *

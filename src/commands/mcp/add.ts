@@ -69,7 +69,6 @@ export async function execute(
   }
 
   try {
-    // Build server type radio group options for tool deduplication
     const serverTypeOptions: RadioGroupOption[] = [
       {
         label: localizer(locale, "commands.mcp.add.none_option"),
@@ -169,7 +168,6 @@ export async function execute(
       return;
     }
 
-    // Validate URL format + security
     const urlValidation = await validateRemoteUrl(url);
     if (!urlValidation.valid) {
       const validationMessage = getUrlValidationMessage(locale, urlValidation);

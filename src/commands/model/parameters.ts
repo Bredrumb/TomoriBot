@@ -174,7 +174,6 @@ export async function execute(
       return;
     }
 
-    // Load all saved text providers and present the picker
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "text");
     const providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, {
       descriptionKey: "commands.model.parameters.picker_description",

@@ -123,7 +123,6 @@ export async function execute(
       return;
     }
 
-    // Apply all changed permissions to the database in a single update
     const updated = await configRepository[writePlan.method](tomoriState.server_id, writePlan.patch);
 
     if (!updated) {

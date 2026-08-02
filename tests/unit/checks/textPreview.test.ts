@@ -67,8 +67,8 @@ describe("text-preview scanner — fenced placeholder (rule 2)", () => {
   });
 
   it("skips keys whose consumer cannot be located", () => {
-    // Call sites that build key names dynamically are unresolvable by a static
-    // scan; flagging them would be a guaranteed false positive.
+    // Dynamic key construction is invisible to this static scan, so treating a
+    // missing consumer as unsafe would be a guaranteed false positive.
     expect(scanFencedPlaceholderUsage("a.b", fenced, new Map())).toHaveLength(0);
   });
 

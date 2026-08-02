@@ -11,7 +11,6 @@ const noopExecute: CommandExecuteFunction = async () => {};
 
 describe("getCommandCatalogEntries", () => {
   it("maps root / flat / grouped commands to the space-joined stat_counters.metric_key format", () => {
-    // Build an execution map covering all three command shapes the loader produces.
     const executionMap: CommandExecutionMap = new Map([
       // Root command: single sentinel key → path is just the command name.
       ["update", new Map([[ROOT_COMMAND_EXECUTION_KEY, noopExecute]])],

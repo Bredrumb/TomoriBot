@@ -158,7 +158,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const imageToolCapabilities =
         config.imagegen_enabled && hasStandardImageSlot ? await resolveImageToolCapabilities(toolAssemblyState) : null;
 
-      // Build dynamic capabilities markdown with model information
       let capabilitiesContent = "# Your Chat Capabilities\n\n";
       capabilitiesContent += `The current model powering you is **${displayModelName}** (${llm.llm_provider})`;
       if (llm.llm_description && provider !== "custom") {
@@ -467,7 +466,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
       capabilitiesContent += "---\n\n";
       capabilitiesContent += "## Why Some Features May Be Unavailable\n\n";
 
-      // Check API key status for detailed explanations
       const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(context.tomoriState.server_id);
 
       const unavailableReasons: string[] = [];
@@ -541,7 +539,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         );
       }
 
-      // Check for missing API keys
       if (!braveApiKeySet) {
         unavailableReasons.push(
           "**Brave Search API Key Not Set**: Using DuckDuckGo MCP as fallback for web search (if available). For optimal search results, configure Brave API key using `/config brave_apikey`.",
@@ -556,7 +553,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         capabilitiesContent += "✅ All features are available and properly configured!\n\n";
       }
 
-      // Add model switching information
       capabilitiesContent += "**Need different capabilities?** Tell the user they can switch models using:\n";
       capabilitiesContent += "- `/model` - Switch to a different model with the current provider\n";
       capabilitiesContent += "- `/config api-key` - Switch to a different LLM provider entirely\n\n";
@@ -605,7 +601,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
       const serverId = context.tomoriState.server_id;
       const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
 
-      // Check API key status
       const braveApiKeySet = await toolRepository.getBraveApiKeyStatus(serverId);
       const mainApiKeySet = !!config.api_key;
 
@@ -932,7 +927,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       const disabledReasons: string[] = [];
 
-      // Check for model limitations
       const modelLimitations: string[] = [];
       if (!llm.sees_images) modelLimitations.push("image vision");
       if (!llm.sees_videos) modelLimitations.push("video vision");
@@ -960,7 +954,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
         disabledReasons.push(`**Server Configuration**: Admin has disabled ${disabledFeatures.join(", ")}`);
       }
 
-      // Check for missing API keys
       const missingKeys: string[] = [];
       if (!mainApiKeySet) missingKeys.push("LLM API key");
       if (!braveApiKeySet) missingKeys.push("Brave API key (using DuckDuckGo fallback)");
@@ -1069,7 +1062,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       const categoryDirs = await getAllFiles(commandsPath, true);
 
-      // Build markdown documentation
       let commandsMarkdown = "# Your Slash Commands\n\n";
       commandsMarkdown +=
         "Here are all available slash commands organized by category. Commands may use the format `/{category} {subcommand}` or `/{category} {group} {subcommand}`.\n\n";
@@ -1150,7 +1142,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
 
       log.success(`Successfully generated slash command documentation: ${totalCommands} commands`);
 
-      // Return the generated markdown
       // Note: Put content in both message and data.summary for maximum compatibility
       // GoogleToolAdapter looks for data.summary/data.message when converting results
       return {

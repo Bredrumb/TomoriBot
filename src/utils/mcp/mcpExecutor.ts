@@ -43,7 +43,6 @@ function trimFetchPageTracker(): void {
 }
 
 /**
- * Sends a fetch-specific progress notice with pagination tracking.
  * Shared by both the global MCP executor and guild MCP manager so that
  * custom fetch tools (url_fetcher server type) get the same UX.
  *

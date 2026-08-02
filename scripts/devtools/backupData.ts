@@ -7,12 +7,10 @@ import { join, resolve } from "node:path";
 
 config();
 
-// ---------------------------------------------------------------------------
 // scripts/devtools/backupData.ts
 //   bun run backup                            → create a bundle in backups/
 //   bun run restore-backup --latest           → restore from the newest bundle
 //   bun run restore-backup --from <dir>       → restore from a specific bundle
-// ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
 const mode = args[0];

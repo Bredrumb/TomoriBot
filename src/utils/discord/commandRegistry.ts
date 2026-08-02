@@ -86,7 +86,6 @@ class CommandRegistry {
    * getCommandMention("teach", "memory", "personal");
    */
   getCommandMention(commandName: string, subcommandOrGroup?: string, subcommand?: string): string {
-    // Build the command string based on parameters
     let commandString: string;
 
     if (subcommandOrGroup && subcommand) {
@@ -100,7 +99,6 @@ class CommandRegistry {
       commandString = `/${commandName}`;
     }
 
-    // Return as inline code for clear formatting
     return `\`${commandString}\``;
   }
 

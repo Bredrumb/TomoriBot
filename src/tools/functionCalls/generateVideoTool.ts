@@ -605,7 +605,6 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      // Check Discord file size limit
       if (videoData.length > DISCORD_FILE_SIZE_LIMIT) {
         const sizeMB = (videoData.length / (1024 * 1024)).toFixed(1);
         log.warn(`Generated video exceeds Discord file size limit: ${sizeMB}MB > 25MB`);

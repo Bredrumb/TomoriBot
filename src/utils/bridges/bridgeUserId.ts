@@ -37,7 +37,6 @@ export function stripBridgePrefix(username: string): string {
 }
 
 /**
- * Extracts the bridge user ID from a bridge webhook username.
  * Bridge webhook usernames follow the format: "[BridgeName|userId] DisplayName"
  * This function returns the userId portion from inside the brackets.
  *

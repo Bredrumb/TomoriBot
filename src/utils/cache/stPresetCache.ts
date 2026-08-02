@@ -53,7 +53,6 @@ export async function getCachedActivePreset(serverId: number): Promise<CachedPre
   const now = Date.now();
   const entry = cache.get(serverId);
 
-  // Check cache freshness
   if (entry) {
     const cacheAge = now - entry.cachedAt;
     if (cacheAge < CACHE_DURATION_MS) {

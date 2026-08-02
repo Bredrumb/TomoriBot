@@ -185,7 +185,7 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   const sourceFiles = (await Array.fromAsync(new Glob("src/**/*.ts").scan(TEXT_PREVIEW_REPO_ROOT))).filter(
     (file) => !file.replaceAll("\\", "/").includes("src/locales/"),
   );
-  //    Read concurrently rather than awaiting ~850 files one at a time.
+  // Read concurrently because serializing roughly 850 file reads dominates this audit.
   const sources = new Map<string, string>(
     await Promise.all(
       sourceFiles.map(

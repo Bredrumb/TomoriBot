@@ -128,7 +128,6 @@ export async function execute(
     }
     const personaId = personaToRemove.persona_id;
 
-    // Delete selected persona from database.
     // For non-alter duplicate-tagged rows, ensure at least one main persona remains.
     if (!personaToRemove.is_alter) {
       const mainCount = await personaRepository.countMainPersonasForServer(personaToRemove.server_id);

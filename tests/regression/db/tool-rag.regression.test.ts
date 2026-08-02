@@ -23,7 +23,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Tool — regression", () => {
     await cleanupFixtures(testSql);
   });
 
-  // ── brave API key status ──────────────────────────────────────────────────
   // getBraveApiKeyStatus is representative of the ToolRepository read path.
 
   it("getBraveApiKeyStatus reflects brave-search key rows", async () => {
@@ -41,7 +40,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Tool — regression", () => {
     expect(hasInsertedKey).toBe(true);
   });
 
-  // ── guild MCP config ──────────────────────────────────────────────────────
   // guildMcpDb.ts reads from mcp_server_configs; no config means empty result.
 
   it("guild MCP config read returns inserted config rows", async () => {
@@ -84,7 +82,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("RAG — regression", () => {
     await setupTestDb();
   });
 
-  // ── RAG availability ──────────────────────────────────────────────────────
   // detectRagAvailability probes for the pgvector extension; the expected value
   // depends on the local Postgres image, so compare it to the same catalog query.
 

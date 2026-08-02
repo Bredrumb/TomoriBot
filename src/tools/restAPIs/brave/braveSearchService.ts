@@ -34,7 +34,6 @@ const REQUEST_TIMEOUT = 15000; // 15 seconds
  */
 const BRAVE_LANGUAGE_CODE_MAP: Record<string, string> = {
   ja: "jp", // Japanese: ISO 639-1 "ja" → Brave "jp"
-  // Add more mappings here if Brave uses other non-standard codes
 };
 
 /**
@@ -69,7 +68,6 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
   }
 
   for (const result of response.results) {
-    // Try to get the actual image URL from properties first
     if (result.properties?.url) {
       imageUrls.push(result.properties.url);
     }
@@ -97,7 +95,6 @@ export function addFetchCapabilityReminder(originalResult: string): {
     const foundUrls = originalResult.match(urlPattern) || [];
     const urlCount = foundUrls.length;
 
-    // Create an enhanced response that includes fetch capability reminder
     const fetchReminder =
       urlCount > 0
         ? `\n\n[AGENT REMINDER] You have access to the "fetch_url" function call to retrieve and analyze the full content of any of these ${urlCount} web URLs. If any given information snippet is not enough, use the function to retrieve more details about a specific webpage, use fetch_url(url="[URL]") to get the complete page content for deeper analysis.`
@@ -128,7 +125,6 @@ export function addFetchCapabilityReminder(originalResult: string): {
  * @returns API key or null if not available
  */
 async function getBraveApiKey(serverId?: number): Promise<string | null> {
-  // Try to get server-specific API key first
   if (serverId) {
     try {
       const serverApiKey = await getOptApiKey(serverId, SERVICE_NAME);
@@ -164,7 +160,6 @@ async function makeBraveApiRequest<T>(
   const { serverId, timeout = REQUEST_TIMEOUT, signal: externalSignal } = config;
 
   try {
-    // Get API key
     const apiKey = config.apiKey || (await getBraveApiKey(serverId));
     if (!apiKey) {
       return {

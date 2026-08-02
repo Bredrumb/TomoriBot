@@ -22,9 +22,6 @@ type ToolExportShape = {
 };
 
 class ToolRepository implements IRepository<ToolExportShape> {
-  /**
-   *
-   */
   async loadMcpServers(serverId: number): Promise<GuildMcpServerRow[]> {
     return this.sqlLoadGuildMcpServers(serverId);
   }

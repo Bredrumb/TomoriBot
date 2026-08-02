@@ -79,7 +79,6 @@ export async function execute(
   let modalSubmitInteraction: ModalSubmitInteraction | null = null;
 
   try {
-    // Load server's Tomori state to check personalization setting
     // We need this even though we're updating the users table
     // Use user ID for DM context, guild ID for server context
     const serverId = interaction.guild?.id ?? interaction.user.id;

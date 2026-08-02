@@ -27,7 +27,6 @@ import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
 import * as realLogger from "@/utils/misc/logger";
 import * as realLocalizer from "@/utils/text/localizer";
 
-// ─── Module mocks ──────────────────────────────────────────────────────────────
 // All mock.module() calls are hoisted by bun before static imports are resolved.
 // They must appear before the first dynamic import() of any command module.
 //
@@ -227,8 +226,6 @@ function makeFakeGuildChannel(): object {
   };
 }
 
-// ─── Contract 1: Modal command: /nsfw jailbreaks ─────────────────────────────
-//
 // Pattern 3 (command-system.md): the first interaction acknowledgement must be
 // showModal(). No deferReply() should appear before or instead of the modal.
 
@@ -304,8 +301,6 @@ describe("Contract 1: modal command /nsfw jailbreaks", () => {
   });
 });
 
-// ─── Contract 2: Async defer command: /tool ping ─────────────────────────────
-//
 // Pattern 2 (command-system.md): deferReply() must be the very first call.
 // All async work (fetchReply, latency measurement) happens after the deferral.
 // The final response goes through editReply(), not reply().

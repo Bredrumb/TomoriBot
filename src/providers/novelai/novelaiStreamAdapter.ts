@@ -381,7 +381,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     log.section("NovelAI Full Prompt");
     log.info(prompt);
 
-    // Get generation parameters for the model, passing DB sampling overrides.
     // Neutral values (topK=0, topP=1.0, minP=0.0) preserve the model preset defaults.
     // Non-schema NAI preset fields (order, TFS, phrase_rep_pen, etc.) are extracted
     // from the active preset and merged before DB schema overrides are applied.
@@ -753,7 +752,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         this.hasEmittedVisibleText = false;
         if (cleanBefore) {
           // Emit clean text directly (skip speaker detection since we're stopping).
-          // Set the flag for consistency with downstream logic.
           this.hasEmittedVisibleText = true;
           return { type: "text", content: cleanBefore };
         }
@@ -2104,10 +2102,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  /**
-   */
   createErrorDescription(error: ProviderError, locale: string): string | null {
-    // Get NovelAI-specific message based on error code
     const errorCode = error.code;
     let messageKey: string;
 
@@ -2456,7 +2451,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Build the prompt using GLM 4.6 chat template
     // Thinking directive: <think></think> seeds the expected format when thinking is enabled;
     // /nothink explicitly disables internal reasoning when thinking is turned off.
     const thinkDirective = getNovelAiThinkingDirective(options?.thinkingLevel, options?.forceReason);
@@ -2529,8 +2523,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     return promptParts.join("\n");
   }
 
-  /**
-   */
   private logSanitizedRequest(request: NovelAIGenerationRequest, promptLength: number): void {
     log.section("NovelAIStreamAdapter: Request Details");
 

@@ -395,8 +395,6 @@ interface ToolAdapter {
    */
   convertResult(result: ToolResult): Record<string, unknown>;
 
-  /**
-   */
   getProviderName(): string;
 }
 
@@ -451,8 +449,6 @@ export interface ToolExecutionEvent {
  * Tool registry interface for managing all available tools
  */
 export interface ToolRegistryInterface {
-  /**
-   */
   registerTool(tool: Tool): void;
 
   /**

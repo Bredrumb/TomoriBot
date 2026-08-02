@@ -73,7 +73,8 @@ function validateImage(attachment: AvatarAttachment): {
     };
   }
 
-  // Check file extension as backup validation
+  // Discord metadata is caller-controlled, so the filename extension provides a
+  // second format check before the file reaches image decoding.
   const allowedExtensions = [".png", ".jpg", ".jpeg", ".gif"];
   const fileExtension = filename?.toLowerCase().split(".").pop();
   if (!fileExtension || !allowedExtensions.includes(`.${fileExtension}`)) {
@@ -458,7 +459,6 @@ export async function execute(
       }
       const avatarDataUri = `data:image/png;base64,${pngBuffer.toString("base64")}`;
 
-      // Update guild avatar for main persona via Discord API with timeout protection
       const updateResult = await updateGuildAvatar(interaction.guild.id, avatarDataUri);
 
       if (updateResult.success) {

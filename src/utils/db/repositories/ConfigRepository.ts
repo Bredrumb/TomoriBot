@@ -263,9 +263,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  /**
-   *
-   */
   async loadPresetRowsByLocale(locale: string): Promise<TomoriPresetRow[] | null> {
     try {
       let presets = await sql`

@@ -51,7 +51,6 @@ export async function execute(
       return;
     }
 
-    // Check if there's a Brave Search API key to remove
     const hasKey = await hasOptApiKey(tomoriState.server_id, "brave-search");
     if (!hasKey) {
       await replyInfoEmbed(interaction, locale, {
@@ -63,7 +62,6 @@ export async function execute(
       return;
     }
 
-    // Delete the API key from the optional API keys table
     const isDeleted = await deleteOptApiKey(tomoriState.server_id, "brave-search");
 
     if (!isDeleted) {

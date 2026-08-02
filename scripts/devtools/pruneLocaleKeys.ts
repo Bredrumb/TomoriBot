@@ -227,7 +227,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // Remove empty parent objects left behind by deletions
   for (const i of modifiedSlices) {
     pruneEmptyObjects(slices[i].obj);
   }

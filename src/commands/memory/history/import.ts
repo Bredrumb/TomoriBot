@@ -1450,11 +1450,8 @@ export async function execute(
       return;
     }
 
-    // ====================================================================
-    // SCOPE: AUTOMATIC
-    // Detect personas from webhook authors, create per-persona documents
-    // before extraction starts so chunks are written incrementally.
-    // ====================================================================
+    // Automatic scope creates per-persona documents before extraction so each
+    // webhook author's chunks can be written incrementally.
     const autoPromptModalResult = await promptForExtractionSystem(interaction, locale, promptMode);
     if (!autoPromptModalResult) return;
     modalSubmitInteraction = autoPromptModalResult.submitInteraction;

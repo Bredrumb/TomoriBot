@@ -94,7 +94,6 @@ export class ProcessGifTool extends BaseTool {
       return false;
     }
 
-    // Check for GIF processing disable flag during enhanced context restart
     if (context?.streamContext?.disableGifProcessing) {
       log.info("ProcessGifTool: Temporarily disabled during enhanced context restart");
       return false;
@@ -237,7 +236,6 @@ export class ProcessGifTool extends BaseTool {
 
       log.success(`ProcessGifTool: Extracted ${processedFrames.length} keyframes in ${processingTime}ms`);
 
-      // Create StructuredContextItem with processed frames
       // Include both standard ContextPart fields AND inlineData for Gemini provider
       type GifFramePart =
         | { type: "text"; text: string }
@@ -250,7 +248,6 @@ export class ProcessGifTool extends BaseTool {
 
       const frameParts: GifFramePart[] = [];
 
-      // Add initial text label for the GIF
       frameParts.push({
         type: "text",
         text: `[System: Animated GIF from message ${messageId}; ${processedFrames.length} keyframes extracted from ${processedFrames[0].totalFrames} total frames.]`,
@@ -263,7 +260,6 @@ export class ProcessGifTool extends BaseTool {
           text: `Frame ${frame.frameNumber + 1}/${processedFrames.length} (original frame ${frame.originalFrameIndex + 1}/${frame.totalFrames}):`,
         });
 
-        // Add frame image data with both standard fields and inlineData
         frameParts.push({
           type: "image",
           uri: `data:${frame.mimeType};base64,${frame.data}`,
@@ -348,7 +344,6 @@ export class ProcessGifTool extends BaseTool {
   }
 
   /**
-   * Check if a message has pending enhanced context
    * @returns True if message has pending enhanced context
    */
   static hasPendingEnhancedContext(messageId: string): boolean {

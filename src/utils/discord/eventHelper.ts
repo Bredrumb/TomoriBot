@@ -22,7 +22,6 @@ async function getChannelActivity(channel: TextChannel): Promise<number> {
  */
 export async function findBestChannel(guild: Guild, client: Client): Promise<TextChannel | null> {
   try {
-    // Get all text channels we can send messages in
     const textChannels = guild.channels.cache
       .filter(
         (ch): ch is TextChannel =>

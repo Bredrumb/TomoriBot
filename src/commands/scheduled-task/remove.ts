@@ -26,8 +26,6 @@ import { isBridgeUserId } from "@/utils/bridges";
 const MODAL_CUSTOM_ID = "scheduled_task_remove_modal";
 const REMINDER_SELECT_ID = "reminder_select";
 
-/**
- */
 async function performReminderRemoval(
   reminderToRemove: { reminder_id: number; reminder_purpose: string },
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
@@ -69,8 +67,6 @@ async function performReminderRemoval(
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.scheduled-task.remove.description"));
 
-/**
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,

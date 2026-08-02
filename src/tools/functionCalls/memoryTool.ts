@@ -309,7 +309,6 @@ export class MemoryTool extends BaseTool {
             tomoriState?.config.personal_memories_enabled,
           );
 
-          // Send a notification notice to the channel.
           // The expand helper attaches a "Show Full Memory" button when the
           // processed content exceeds 200 chars (the embed truncation threshold),
           // letting users read the full memory ephemerally without channel clutter.

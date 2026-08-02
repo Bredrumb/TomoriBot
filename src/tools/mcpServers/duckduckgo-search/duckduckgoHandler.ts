@@ -57,7 +57,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
     args: Record<string, unknown>,
   ): Promise<TypedMCPToolResult> {
     try {
-      // Handle DuckDuckGo web search with fetch capability reminder
       if (functionName === "web-search") {
         return await this.processWebSearch(mcpResult, args, context);
       }
@@ -336,7 +335,6 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
   }
 
   /**
-   * Process Felo AI search results.
    * This remains available to the handler even when providers do not expose the
    * raw MCP function directly.
    */

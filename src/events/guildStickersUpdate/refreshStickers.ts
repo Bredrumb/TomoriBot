@@ -30,7 +30,6 @@ const handleGuildStickersUpdate: EventFunction = async (_client: Client, ...args
       return; // Server not setup, nothing to refresh
     }
 
-    // Fetch the current complete list of stickers from Discord API
     // CRITICAL: Must fetch() to ensure cache is complete - cache may be incomplete on startup
     await guild.stickers.fetch();
     const currentStickers = Array.from(guild.stickers.cache.values());

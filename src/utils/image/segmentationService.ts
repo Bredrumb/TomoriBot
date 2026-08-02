@@ -453,7 +453,6 @@ export async function segmentImage(
 
   log.info(`Starting segmentation for "${editTarget}" on ${metadata.width}x${metadata.height} image`);
 
-  // Call Gemini segmentation API
   const segments = await callGeminiSegmentation(imageBase64, imageMimeType, editTarget, apiKey);
 
   const maskBuffer = await buildBoundingBoxMask(segments, metadata.width, metadata.height, isV4);

@@ -62,7 +62,6 @@ class WhitelistRepository {
 
       const serverId = serverRow.server_id as number;
 
-      // Check if any channel whitelist entries exist for this server
       const [countRow] = await sql`SELECT COUNT(*) as count FROM channel_whitelist WHERE server_id = ${serverId}`;
       const hasActiveChannelWhitelist = Number.parseInt(countRow?.count as string, 10) > 0;
 
@@ -107,7 +106,6 @@ class WhitelistRepository {
         });
       }
 
-      // Load role whitelist and persona restriction metadata in parallel
       const [roleRows, restrictedPersonaRows] = await Promise.all([
         sql<Array<{ role_disc_id: string }>>`
           SELECT role_disc_id FROM role_whitelist WHERE server_id = ${serverId}

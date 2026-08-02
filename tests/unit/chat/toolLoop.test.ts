@@ -36,9 +36,7 @@ let isFollowUpRequest = false;
 let clearStopRequestCalls = 0;
 let standardEmbedCalls: Array<{ titleKey?: string; descriptionKey?: string }> = [];
 
-// --------------------------------------------------------------------------
 // Module mocks: all must appear before the first lazy import of toolLoop.ts
-// --------------------------------------------------------------------------
 
 // The real `ColorCode` enum comes through the spread, so its values stay the hex
 // STRINGS other modules rely on at load time (e.g. contextEmbeds.ts calls
@@ -540,9 +538,7 @@ describe("runToolLoop — contract tests", () => {
     expect(capturedHistories[1]).toHaveLength(0); // no history entry for the restart call
   });
 
-  // -------------------------------------------------------------------------
   // Pre-tool text preservation (post-tool-call amnesia regression)
-  // -------------------------------------------------------------------------
 
   it("pre-tool text is preserved in the history entry passed to the follow-up provider call", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");

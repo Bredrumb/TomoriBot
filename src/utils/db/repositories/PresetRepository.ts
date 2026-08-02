@@ -515,8 +515,8 @@ class PresetRepository {
     try {
       // Use a transaction to ensure atomicity (preset + all nodes or nothing)
       const result = await sql.begin(async (tx) => {
-        // Remove any existing preset with the same name for this server.
-        //    The FK cascade on st_preset_nodes deletes old nodes automatically.
+        // Deleting the old preset first is safe because its nodes are covered by
+        // the st_preset_nodes foreign-key cascade.
         await tx`
           DELETE FROM st_presets
           WHERE server_id = ${serverId} AND preset_name = ${presetName}
@@ -766,7 +766,6 @@ class PresetRepository {
    */
   async exportPresetData(serverDiscId: string, targetPersonaId?: number): Promise<ExportResult> {
     try {
-      // Get internal server ID
       const serverRows = await sql`
         SELECT server_id
         FROM servers
@@ -842,7 +841,6 @@ class PresetRepository {
             ? Number(lineageIdRaw)
             : lineageIdRaw;
 
-      // Load trigger words + persona prompt from persona-scoped config first
       let triggerWords: string[] | null = null;
       let personaPrompt: string | null = null;
       const personaConfigRows = await sql`
@@ -912,7 +910,6 @@ class PresetRepository {
         },
       };
 
-      // Validate export data structure
       const validated = presetExportSchema.safeParse(exportData);
       if (!validated.success) {
         log.error(`Preset export validation failed for server ${serverDiscId}:`, validated.error);
@@ -953,7 +950,6 @@ class PresetRepository {
       const validatedImportData = importValidation.data;
       const matchingOfficialPreset = await this.findMatchingOfficialPresetForImport(validatedImportData);
 
-      // Validate persona-scoped config fields for SQL security.
       try {
         validatePersonaConfigFields(["trigger_words", "persona_prompt"]);
       } catch (error) {
@@ -1052,7 +1048,6 @@ class PresetRepository {
         .join(",")}}`;
       const shouldUseImportedLineage = identityMode === "preserve" && importedLineageId !== null;
 
-      // Update personas table with personality data and lineage behavior.
       try {
         await sql`
           UPDATE personas
@@ -1110,7 +1105,6 @@ class PresetRepository {
         return { success: false, error: "commands.persona.import.error_import_failed" };
       }
 
-      // Update persona-scoped trigger words + optional persona prompt
       const importedPersonaPrompt =
         typeof validatedImportData.persona_prompt === "string" ? validatedImportData.persona_prompt : null;
 
@@ -1182,7 +1176,6 @@ class PresetRepository {
    * @returns Validation result with parsed data or error message
    */
   validatePresetFile(jsonData: unknown): ValidationResult {
-    // Check if data is an object
     if (typeof jsonData !== "object" || jsonData === null) {
       return { valid: false, error: "commands.persona.import.error_not_json" };
     }
@@ -1196,13 +1189,11 @@ class PresetRepository {
       };
     }
 
-    // Check type field
     const type = (jsonData as { type?: string }).type;
     if (type !== "preset") {
       return { valid: false, error: `commands.persona.import.error_invalid_type|${type}` };
     }
 
-    // Validate with Zod schema
     const validated = presetExportSchema.safeParse(jsonData);
     if (!validated.success) {
       log.error("Preset import validation failed:", validated.error);

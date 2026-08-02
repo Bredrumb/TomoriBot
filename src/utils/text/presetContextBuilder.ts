@@ -387,7 +387,6 @@ export async function reassembleWithPreset(
         );
       }
 
-      // Handle special markers that share the SYSTEM_HUMANIZER_RULES tag.
       // The native builder puts system prompt + persona prompt under this single tag.
       // `main` takes only the first item (system prompt), `charDescription` takes the rest (persona).
       if (node.identifier === "main") {

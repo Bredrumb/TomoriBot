@@ -242,7 +242,6 @@ export class OpenrouterProvider
         return { valid: false, error: providerError };
       }
 
-      // Parse the response to ensure it contains valid user data
       const data = await response.json();
 
       if (!data || typeof data !== "object") {
@@ -725,7 +724,6 @@ export class OpenrouterProvider
     );
 
     try {
-      // Convert the generic config to OpenRouter-specific streaming config
       const openrouterConfig = config as OpenrouterProviderConfig;
 
       const streamConfig: OpenrouterStreamConfig = {
@@ -755,7 +753,6 @@ export class OpenrouterProvider
         log.info(`Context-aware tools loaded: ${contextAwareTools.length} tools`);
       }
 
-      // Create streaming context
       const streamContext: StreamContext = buildStreamContext({
         provider: "openrouter",
         channel,

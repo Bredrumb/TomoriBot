@@ -564,11 +564,6 @@ class CooldownRepository {
     }
   }
 
-  /**
-   * Gets the locale key for the cooldown type footer text.
-   *
-   * @returns The locale key for the footer text
-   */
   getCooldownTypeFooterKey(cooldownType: CooldownType): string {
     switch (cooldownType) {
       case CooldownType.PER_USER:

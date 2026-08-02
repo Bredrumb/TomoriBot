@@ -87,8 +87,6 @@ const GENERIC_MACRO_REGEX = /\{\{([^{}]+)\}\}/g;
 const HTML_TAG_REGEX =
   /<(?:div|span|style|br|p|h[1-6]|table|tr|td|th|ul|ol|li|details|summary|img|a|strong|em|b|i|u|s|pre|code)\b[^>]*>/i;
 
-// ─── Preset Compatibility Patches ────────────────────────────────────────
-//
 // Additional placeholder conventions found in real ST presets that fall
 // outside the official ST macro spec. Some presets rely on ST's regex
 // post-processing to resolve these, since we don't implement the regex

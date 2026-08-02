@@ -168,7 +168,6 @@ export async function brave_web_search(
 
     const formattedResults = formatBraveSearchResults(result.data, "web");
 
-    // Add fetch capability reminder for agentic AI behavior
     const enhancedResults = addFetchCapabilityReminder(formattedResults);
 
     log.info(`Enhanced web search response with fetch capability reminder - Found ${enhancedResults.urlsFound} URLs`);
@@ -355,9 +354,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
             },
           });
 
-          // Check if URL is accessible and is actually an image
           if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
-            // Check content size - reject tiny placeholders, compress if >8MB
             const contentLength = response.headers.get("content-length");
             const discordLimit = BRAVE_IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
 
@@ -583,7 +580,6 @@ export async function brave_image_search(args: Record<string, unknown>, context?
             completionMessage += ` (Note: ${failedUrls.length} image URLs were inaccessible and were filtered out.)`;
           }
 
-          // Build image metadata for LLM visibility
           const imageMetadata = {
             imageUrls: sentAttachments.map((att, index) => ({
               url: att.url,

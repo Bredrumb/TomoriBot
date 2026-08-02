@@ -415,7 +415,6 @@ async function createAttempt(
     ? await ProviderFactory.getProviderByName(forcedProviderName)
     : await getProviderForTomori(effectiveState);
 
-  // Try the rotation pool first; fall back to the server's own encrypted key.
   const rotationSelection = await selectApiKey(effectiveState);
   const apiKey = rotationSelection ? rotationSelection.apiKey : await resolveApiKey(effectiveState);
   const rotationKeyId = rotationSelection?.rotationKeyId ?? null;

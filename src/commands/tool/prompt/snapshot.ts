@@ -333,7 +333,6 @@ export async function execute(
     const format = interaction.options.getString("format") ?? "text";
     const fetchTools = interaction.options.getBoolean("fetch_tools") ?? false;
 
-    // Load all server personas for the select modal
     const personas = await getCachedAllPersonas(interaction.guild.id);
     if (personas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -477,7 +476,6 @@ export async function execute(
           })
         : null;
 
-    // Build persona nickname index for webhook attribution
     const personaByNickname = new Map<string, TomoriState>();
     for (const p of personas) {
       if (!p.persona_nickname) continue;
@@ -486,7 +484,6 @@ export async function execute(
     }
     const mainPersona = personas.find((p) => !p.is_alter) ?? tomoriState;
 
-    // Convert Discord messages to simplified context format
     type SimpleMsg = {
       id: string;
       authorId: string;
@@ -662,9 +659,8 @@ export async function execute(
         }
       }
 
-      //   c) Components V2 notices (memory_learning, reminder_set) carry no embeds at
-      //      all, so their text lives in the component tree, so they are reconstructed
-      //      and classified here to keep the snapshot identical to live chat context.
+      // Components V2 notices carry no embeds, so reconstruct their text from the
+      // component tree to keep snapshots identical to live chat context.
       const cv2Notice = extractNoticeTextFromComponents(message.components);
       if (cv2Notice?.title && cv2Notice.description) {
         const noticeCheck = checkTargetEmbedTitle(cv2Notice.title);
@@ -834,8 +830,8 @@ export async function execute(
       }
     }
 
-    // Build per-provider sampling/request-config block
-    //      Shown in DM for BOTH formats and baked into JSON file top-level
+    // Both output formats show the request config in the DM, while JSON also
+    // stores it at the top level for machine-readable inspection.
     const requestConfig = buildRequestConfig(answeringState, providerName, modelName);
 
     let fileContent: string;

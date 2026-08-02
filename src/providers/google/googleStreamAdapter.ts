@@ -775,7 +775,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Check for text content.
     // Prefer the pre-processed `text` field over re-extracting from candidates:
     // - normalizeGoogleStreamChunk() sets it to the authoritative extracted text.
     // - deduplicateChunkTextAgainstRecentStream() may zero it to "" to suppress duplicates.
@@ -932,7 +931,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
-   * Create Google-specific error description for embedding
    * Formats errors as "Error Code {code}: {Google message}"
    */
   createErrorDescription(error: ProviderError, locale: string): string | null {
@@ -1331,8 +1329,6 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
     ].includes(finishReason);
   }
 
-  /**
-   */
   private logSanitizedRequest(requestConfig: GenerateContentConfig, contents: Content[]): void {
     log.section("GoogleStreamAdapter: Request Details");
 

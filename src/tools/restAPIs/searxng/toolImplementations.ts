@@ -249,7 +249,6 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       });
     }
 
-    // Validate URLs in parallel with overall 3s ceiling.
     type ValidationResult = { url: string; valid: boolean; reason?: string; compressedBuffer?: Buffer };
     const partial = new Map<string, ValidationResult>();
     const wrapped: Promise<ValidationResult>[] = imageUrls.map(async (url) => {
@@ -323,7 +322,6 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       compressionFlags.push(Boolean(buf));
     }
 
-    // Send attachments through the webhook persona if available.
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id

@@ -67,11 +67,9 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
   const initialLocale = interaction.locale ?? interaction.guildLocale ?? "en-US";
 
   try {
-    // Load command data on first run if cache is empty.
-    //    loadCommandData() is single-flight: if startup registration is still
-    //    loading, this awaits that same shared evaluation instead of racing a
-    //    second concurrent load (which previously caused command modules to be
-    //    skipped via a Temporal Dead Zone error, leaving the bot "dead").
+    // loadCommandData() is single-flight, so an interaction arriving during
+    // startup awaits the shared load instead of racing it and triggering module
+    // Temporal Dead Zone failures.
     if (!executionMap || !cooldownMap) {
       log.info("Initializing command execution maps...");
       const loadedData = await loadCommandData();

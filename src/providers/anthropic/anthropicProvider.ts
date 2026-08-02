@@ -280,9 +280,6 @@ export class AnthropicProvider
     return config;
   }
 
-  /**
-   * Stream a response from Anthropic to Discord.
-   */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,

@@ -62,7 +62,6 @@ export async function isSearxngAvailable(force = false): Promise<boolean> {
   const baseUrl = getSearxngBaseUrl();
   if (!baseUrl) return false;
 
-  // Return cached probe result if still fresh.
   const now = Date.now();
   if (!force && healthcheckCache && healthcheckCache.expiresAt > now) {
     return healthcheckCache.available;
@@ -219,9 +218,6 @@ export function formatSearxngResults(response: SearxngResponse, category: Searxn
   return formatted;
 }
 
-/**
- * Extract image URLs from a SearXNG `images` response.
- */
 export function extractSearxngImageUrls(response: SearxngResponse): string[] {
   const urls: string[] = [];
   for (const r of response.results ?? []) {

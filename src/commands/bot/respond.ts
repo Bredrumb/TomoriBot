@@ -92,7 +92,6 @@ export async function execute(
   }
 
   // Get the guild channel (we know it exists from check above, but need type narrowing)
-  // Check both regular channels and threads
   const guildChannel = interaction.guild.channels.cache.get(interaction.channel.id) ?? interaction.channel;
 
   if (!("permissionsFor" in guildChannel)) {
@@ -401,7 +400,6 @@ export async function execute(
       embeds: [successEmbed],
     });
 
-    // Create a "passport" message that will trigger tomoriChat
     // We need to ensure this message will pass the trigger checks
     // NOTE: tomoriChat has built-in logic (lines 2004-2040) that injects a
     // "[Continue your last message]" prompt when isManuallyTriggered=true

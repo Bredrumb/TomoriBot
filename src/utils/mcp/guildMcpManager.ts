@@ -98,8 +98,6 @@ class GuildMcpManager {
     return GuildMcpManager.instance;
   }
 
-  // ─── Public API ────────────────────────────────────────────────────
-
   /**
    * Get all guild MCP CallableTools for a server.
    * Connects lazily to any enabled servers that aren't yet in the pool.
@@ -226,7 +224,6 @@ class GuildMcpManager {
 
       conn.lastUsedAt = Date.now();
 
-      // Send a user-facing embed to show the MCP tool is being invoked
       if (context?.channel && context.locale) {
         try {
           if (functionName === "fetch") {
@@ -265,7 +262,6 @@ class GuildMcpManager {
         ),
       ]);
 
-      // Process the result using default MCP processing
       if (mcpResult && Array.isArray(mcpResult) && mcpResult.length > 0) {
         const firstResult = mcpResult[0] as MCPServerResponse;
         return this.processDefaultResult(functionName, firstResult, conn.name, executionStartTime, context);
@@ -458,8 +454,6 @@ class GuildMcpManager {
       serverBreakdown,
     };
   }
-
-  // ─── Private Helpers ───────────────────────────────────────────────
 
   /**
    * Connect to a single guild MCP server and add it to the pool.

@@ -115,7 +115,6 @@ export function formatMessagesForExtraction(
   const lines: string[] = [];
   const detectedTomoriIds = new Set<number>();
 
-  // Build a lowercase nickname → personaId map for persona detection
   const nicknameToTomoriId = new Map<string, number>();
   for (const persona of serverPersonas) {
     if (persona.persona_id !== undefined) {
@@ -132,7 +131,6 @@ export function formatMessagesForExtraction(
     // Skip system messages
     if (SKIPPED_MESSAGE_TYPES.has(msg.type)) continue;
 
-    // Build message content
     let content = msg.content ? resolveMentions(msg.content, msg) : "";
     const cachedRenderedTable = getCachedRenderedMarkdownTable(msg.id);
     if (cachedRenderedTable) {
@@ -186,7 +184,6 @@ export function formatMessagesForExtraction(
     const rawAuthorName = msg.member?.displayName ?? msg.author?.username ?? "Unknown";
     const authorName = stripBridgePrefix(rawAuthorName);
 
-    // Build formatted line
     lines.push(`[${timestamp}] ${authorName}: ${content}`);
 
     // Persona detection: match webhook-authored messages by name.

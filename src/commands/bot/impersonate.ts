@@ -498,7 +498,6 @@ async function handleUserImpersonation(
       return;
     }
 
-    // Get the latest message in the channel to use as a "passport"
     // Same pattern as /bot respond - no placeholder message needed
     const messages = await channel.messages.fetch({ limit: 1 });
     const latestMessage = messages.first();
