@@ -8,6 +8,7 @@ import {
   normalizeOpenAICompatibleProviderError,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { streamOpenAICompatibleSseChunks } from "@/providers/openaiCompatible/openaiCompatibleSse";
+import { logRawProviderError } from "@/utils/provider/providerErrorLogging";
 import type {
   OpenAICompatibleAccumulatedToolCall,
   OpenAICompatibleStreamAdapterOptions,
@@ -716,7 +717,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
   }
 
   handleProviderError(error: unknown): ProviderError {
-    log.error(`${this.options.adapterName}: Provider error`, error as Error);
+    logRawProviderError(this.options.adapterName, error);
     return normalizeOpenAICompatibleProviderError(error, {
       errorMessagePrefix: this.options.errorMessagePrefix,
     });

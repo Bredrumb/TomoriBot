@@ -10,7 +10,7 @@ import { PrivacyLevel as PrivacyLevelValue, userSchema } from "@/types/db/schema
 import type { PersonalSettingsExportData } from "@/types/db/dataExport";
 import { personalSettingsExportDataSchema } from "@/types/db/dataExport";
 import { getCachedUserRow, invalidateUserCache, invalidateUserBlacklistCache } from "@/utils/cache/userCache";
-import { sql, withCachedPlanRetry } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { validateUserFields } from "@/utils/db/sqlSecurity";
 import { log } from "@/utils/misc/logger";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
@@ -83,8 +83,8 @@ class UserRepository implements IRepository<UserExportShape> {
    * @returns UserRow or null if not found
    */
   async loadByDiscordId(userDiscId: string): Promise<UserRow | null> {
-    return await withCachedPlanRetry(async () => {
-      try {
+    try {
+      return await withTransientDbRetry(async () => {
         const rows = await sql`
           SELECT
             u.user_id,
@@ -113,11 +113,11 @@ class UserRepository implements IRepository<UserExportShape> {
         }
 
         return this.parseUserRow(rows[0], `ID ${userDiscId}`);
-      } catch (error) {
-        log.error(`Error loading user row for ID ${userDiscId}:`, error);
-        return null;
-      }
-    }, `load user row for ID ${userDiscId}`);
+      }, `load user row for ID ${userDiscId}`);
+    } catch (error) {
+      log.error(`Error loading user row for ID ${userDiscId}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -127,15 +127,14 @@ class UserRepository implements IRepository<UserExportShape> {
    * @returns Array of matching UserRow objects
    */
   async findByNormalizedNickname(normalizedNickname: string): Promise<UserRow[]> {
-    return (
-      (await withCachedPlanRetry(async () => {
-        try {
-          const nickname = normalizedNickname.trim().toLowerCase().replace(/\s+/g, " ");
-          if (!nickname) {
-            return [];
-          }
+    try {
+      return await withTransientDbRetry(async () => {
+        const nickname = normalizedNickname.trim().toLowerCase().replace(/\s+/g, " ");
+        if (!nickname) {
+          return [];
+        }
 
-          const rows = await sql`
+        const rows = await sql`
             SELECT
               u.user_id,
               u.user_disc_id,
@@ -157,19 +156,18 @@ class UserRepository implements IRepository<UserExportShape> {
             WHERE regexp_replace(lower(trim(u.user_nickname)), '[[:space:]]+', ' ', 'g') = ${nickname}
           `;
 
-          const parsedUsers: UserRow[] = [];
-          for (const row of rows) {
-            const parsedUser = this.parseUserRow(row, `nickname "${normalizedNickname}"`);
-            if (parsedUser) parsedUsers.push(parsedUser);
-          }
-
-          return parsedUsers;
-        } catch (error) {
-          log.error(`Error loading user rows for nickname "${normalizedNickname}":`, error);
-          return [];
+        const parsedUsers: UserRow[] = [];
+        for (const row of rows) {
+          const parsedUser = this.parseUserRow(row, `nickname "${normalizedNickname}"`);
+          if (parsedUser) parsedUsers.push(parsedUser);
         }
-      }, `load user rows for nickname ${normalizedNickname}`)) ?? []
-    );
+
+        return parsedUsers;
+      }, `load user rows for nickname ${normalizedNickname}`);
+    } catch (error) {
+      log.error(`Error loading user rows for nickname "${normalizedNickname}":`, error);
+      return [];
+    }
   }
 
   /**
@@ -183,12 +181,11 @@ class UserRepository implements IRepository<UserExportShape> {
     candidateDiscordIds: string[];
     normalizedHistoryText: string;
   }): Promise<UserRow[]> {
-    return (
-      (await withCachedPlanRetry(async () => {
-        try {
-          const candidateDiscordIds = Array.from(new Set(params.candidateDiscordIds));
-          const normalizedHistoryText = params.normalizedHistoryText.trim().toLowerCase().replace(/\s+/g, " ");
-          const rows = await sql`
+    try {
+      return await withTransientDbRetry(async () => {
+        const candidateDiscordIds = Array.from(new Set(params.candidateDiscordIds));
+        const normalizedHistoryText = params.normalizedHistoryText.trim().toLowerCase().replace(/\s+/g, " ");
+        const rows = await sql`
             WITH context_reference_candidates AS (
               SELECT
                 u.user_id,
@@ -244,27 +241,26 @@ class UserRepository implements IRepository<UserExportShape> {
             )
           `;
 
-          const parsedUsers: UserRow[] = [];
-          for (const row of rows) {
-            const parsedUser = this.parseUserRow(row, `context reference candidate ${row.user_disc_id}`);
-            if (
-              parsedUser &&
-              isEligibleContextReferenceUser(parsedUser, {
-                hasServerActivity: row.has_server_activity === true,
-                hasPersonalMemories: row.has_personal_memories === true,
-                hasPendingTasks: row.has_pending_tasks === true,
-              })
-            ) {
-              parsedUsers.push(parsedUser);
-            }
+        const parsedUsers: UserRow[] = [];
+        for (const row of rows) {
+          const parsedUser = this.parseUserRow(row, `context reference candidate ${row.user_disc_id}`);
+          if (
+            parsedUser &&
+            isEligibleContextReferenceUser(parsedUser, {
+              hasServerActivity: row.has_server_activity === true,
+              hasPersonalMemories: row.has_personal_memories === true,
+              hasPendingTasks: row.has_pending_tasks === true,
+            })
+          ) {
+            parsedUsers.push(parsedUser);
           }
-          return parsedUsers;
-        } catch (error) {
-          log.error("Error loading eligible context reference candidates:", error);
-          return [];
         }
-      }, `load eligible context reference candidates for server ${params.serverDiscId}`)) ?? []
-    );
+        return parsedUsers;
+      }, `load eligible context reference candidates for server ${params.serverDiscId}`);
+    } catch (error) {
+      log.error("Error loading eligible context reference candidates:", error);
+      return [];
+    }
   }
 
   /**

@@ -17,7 +17,7 @@ import {
   type ReminderRow,
   reminderSchema,
 } from "@/types/db/schema";
-import { sql, withCachedPlanRetry } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { emitScheduledWorkNudge } from "@/timers/scheduledWorkSignals";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
@@ -295,8 +295,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
   }
 
   private async sqlGetDueReminders(): Promise<ReminderRow[] | null> {
-    return await withCachedPlanRetry(async () => {
-      try {
+    try {
+      return await withTransientDbRetry(async () => {
         const reminderData = await sql`
           SELECT * FROM reminders
           WHERE reminder_time <= CURRENT_TIMESTAMP
@@ -326,16 +326,16 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
         log.info(`Found ${validatedReminders.length} due reminders`);
         return validatedReminders;
-      } catch (error) {
-        log.error("Error loading due reminders from database:", error);
-        return null;
-      }
-    }, "load due reminders");
+      }, "load due reminders");
+    } catch (error) {
+      log.error("Error loading due reminders from database:", error);
+      return null;
+    }
   }
 
   private async sqlGetNextReminderTime(): Promise<Date | null> {
-    return await withCachedPlanRetry(async () => {
-      try {
+    try {
+      return await withTransientDbRetry(async () => {
         const [result] = await sql<{ next_reminder_time: Date | string | null }[]>`
           SELECT reminder_time AS next_reminder_time
           FROM reminders
@@ -354,11 +354,11 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
 
         const parsedReminderTime = new Date(nextReminderTime);
         return Number.isNaN(parsedReminderTime.getTime()) ? null : parsedReminderTime;
-      } catch (error) {
-        log.error("Error loading next reminder time from database:", error);
-        return null;
-      }
-    }, "load next reminder time");
+      }, "load next reminder time");
+    } catch (error) {
+      log.error("Error loading next reminder time from database:", error);
+      return null;
+    }
   }
 
   private async sqlGetReminderById(reminderId: number): Promise<ReminderRow | null> {

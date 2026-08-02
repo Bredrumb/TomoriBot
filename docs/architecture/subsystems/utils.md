@@ -161,8 +161,41 @@ New code should use `utils/bridges` for generic bridge helpers and `utils/bridge
 ### `utils/misc`
 
 - `logger.ts`: structured logging facade
+- `errorContextStore.ts`: ambient error identity (see below)
 - `ioHelper.ts`: filesystem traversal helpers
 - `healthTracker.ts`: runtime health signals used by `/health`
+
+#### Ambient error context
+
+`log.error()` and `log.warn()` accept an optional `ErrorContext`, but most call sites are far from
+the code that knows which server or user they belong to. Threading that identity through every
+signature is impractical, so `errorContextStore.ts` carries it out of band using an
+`AsyncLocalStorage` scope.
+
+The four entry points that begin a unit of work open a scope:
+
+| Entry point | Opened in | `source` |
+|---|---|---|
+| Message chat turn | `events/messageCreate/tomoriChat.ts` | `chat` |
+| Slash command | `events/interactionCreate/handleCommands.ts` | `command` |
+| Scheduled reminder/task | `timers/reminderProcessor.ts` | `reminder` |
+| Random trigger | `timers/randomTriggerProcessor.ts` | `random_trigger` |
+
+Everything reached from inside a scope, at any await depth, logs with that identity attached. A
+provider adapter deep in a stream needs no plumbing to produce an attributable error record.
+
+- `runWithErrorContext(identity, fn)` opens a scope. Nested scopes inherit and override.
+- `enrichErrorContext(patch)` upgrades the active scope once more IDs are known. Entry points seed
+  Discord snowflakes; database row IDs are added after admission or user lookup resolves them.
+- `resolveErrorContext(explicit)` is called by the logger. An explicit context wins per field, so a
+  call site that names its own IDs stays authoritative.
+
+Typed `ErrorContext` fields (`serverId`, `userId`, `personaId`) are database row IDs. Discord
+snowflakes travel in `metadata` (`serverDiscId`, `userDiscId`, `channelDiscId`) alongside `source`
+and `sourceDetail`, which identify the unit of work.
+
+Timers and event handlers started *outside* a scope are unaffected, so background work that belongs
+to no server stays unattributed rather than inheriting a stale identity.
 
 ## Usage Guidance
 

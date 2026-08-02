@@ -1085,6 +1085,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
+  /**
+   * Must stay idempotent (upsert-only, no counters or append-style writes). Its callers wrap
+   * the enclosing transaction in `withTransientDbRetry`, which replays the whole reconcile
+   * when Bun's pool retires the connection mid-sync.
+   */
   private async syncItemsToDatabase<TDiscord, TDatabase extends Record<string, unknown>>(
     tx: TransactionSql,
     serverId: number,

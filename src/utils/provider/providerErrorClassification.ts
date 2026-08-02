@@ -43,6 +43,34 @@ const CREDIT_AFFORDABILITY_ERROR_PATTERNS: RegExp[] = [
   /\binsufficient\s+credits\b/i,
 ];
 
+// The account has no spendable balance at all, so no request of any size can succeed.
+// Distinct from the affordability ceiling above: there, a smaller max_tokens still fits
+// the remaining credit. Example (DeepSeek 402): "Insufficient Balance". Matching these
+// against the affordability patterns would hand the user a `reduce_output_tokens` tip
+// that cannot possibly work.
+const ACCOUNT_BALANCE_EXHAUSTED_PATTERNS: RegExp[] = [
+  /\binsufficient\s+balance\b/i,
+  /\bbalance\s+is\s+insufficient\b/i,
+  /\bno\s+resource\s+package\b/i,
+  /\bplease\s+recharge\b/i,
+  /\binsufficient_user_quota\b/i,
+  /\bexceeded\s+your\s+current\s+quota\b/i,
+  /\bbilling\s+hard\s+limit\s+has\s+been\s+reached\b/i,
+];
+
+/**
+ * Detects an exhausted account balance (the provider will reject every request until a
+ * human adds funds). Distinct from a credit-affordability ceiling: trimming the request
+ * cannot help, so the only useful advice is to top up or switch providers.
+ * @param error - The normalized provider error.
+ * @returns True when any collected message signals a zero or negative balance.
+ */
+export function isAccountBalanceExhaustedError(error: ProviderError): boolean {
+  return collectProviderErrorMessages(error).some((message) =>
+    matchesAnyPattern(message, ACCOUNT_BALANCE_EXHAUSTED_PATTERNS),
+  );
+}
+
 /**
  * Detects a hard context-window overflow (input + reserved output exceeds the
  * model's maximum context length). Distinct from a credit ceiling: here,

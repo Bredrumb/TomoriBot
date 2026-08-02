@@ -30,6 +30,27 @@ async function runCheck(name: string, command: string[], fatal: boolean = true):
   return { name, exitCode, fatal };
 }
 
+async function runWarningCheck(
+  name: string,
+  command: string[],
+  outputHasWarnings: (output: string) => boolean = () => false,
+  summarizeWarnings?: (output: string) => string,
+): Promise<ResultItem> {
+  console.log(`> Running ${name}...`);
+  const proc = spawn(command, { stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+  const exitCode = await proc.exited;
+  const output = stdout + stderr;
+  const isWarning = exitCode !== 0 || outputHasWarnings(output);
+  const summary = exitCode === 0 && isWarning ? summarizeWarnings?.(output) : undefined;
+
+  if (isWarning && !summary) {
+    console.log(output);
+  }
+
+  return { name, exitCode, fatal: false, isWarning, summary };
+}
+
 const WORD_DISPLAY_OVERRIDES: Record<string, string> = {
   ai: "AI",
   api: "API",
@@ -447,7 +468,8 @@ const CATEGORIES = {
     (r.name.includes("Type Check") ||
       r.name.includes("Linting") ||
       r.name.includes("Runtime Imports") ||
-      r.name.includes("SQL Audit")),
+      r.name.includes("SQL Audit") ||
+      r.name.includes("Knip")),
   // Assets and seed data rather than source code: these fail on *content*
   // (an oversized PNG, a malformed catalog entry), not on how code is written.
   CONTENT: (r: ResultItem) =>
@@ -459,7 +481,8 @@ const CATEGORIES = {
     isNamedCheck(r) &&
     (r.name.includes("Schema Drift") || r.name.includes("Lifecycle") || r.name.includes("Migration Files")),
   LOCALES: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Localization"),
-  DOCS: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Command Reference"),
+  DOCUMENTATION: (r: ResultItem) =>
+    isNamedCheck(r) && (r.name.includes("Command Reference") || r.name.includes("Comment Audit")),
 };
 
 async function main() {
@@ -474,6 +497,8 @@ async function main() {
     typeCheckResult,
     lintResult,
     runtimeImportsResult,
+    knipResult,
+    commentAuditResult,
     auditResult,
     sqlAuditResult,
     mediaSizeResult,
@@ -488,6 +513,16 @@ async function main() {
     runCheck("Type Check (bun run check)", ["bun", "run", "check"], true),
     runLint(),
     runCheck("Runtime Imports (bun run check-runtime-imports)", ["bun", "run", "check-runtime-imports"], true),
+    runWarningCheck("Knip (bun run knip)", ["bun", "run", "knip"]),
+    runWarningCheck(
+      "Comment Audit (bun run audit-comments)",
+      ["bun", "run", "audit-comments"],
+      (output) => /^WARN /m.test(output),
+      (output) => {
+        const warningCount = output.match(/^WARN /gm)?.length ?? 0;
+        return `(${warningCount} warning${warningCount === 1 ? "" : "s"})`;
+      },
+    ),
     runAudit(),
     runCheck("SQL Audit (bun run audit-sql)", ["bun", "run", "audit-sql"], true),
     runCheck("Media Size (bun run check-media-size)", ["bun", "run", "check-media-size"], true),
@@ -526,6 +561,8 @@ async function main() {
     typeCheckResult,
     lintResult,
     runtimeImportsResult,
+    knipResult,
+    commentAuditResult,
     auditResult,
     sqlAuditResult,
     mediaSizeResult,
@@ -554,6 +591,9 @@ async function main() {
     "Linting (bun run lint)": "Review the warning or commit the auto-fixed files.",
     "Runtime Imports":
       "Run `bun install --frozen-lockfile`, then `bun run check-runtime-imports`. Confirm bun.lock resolves gaxios to uuid@9.",
+    Knip: "Run `bun run knip` and remove unused files, dependencies, or exports, or update scripts/knip.json for intentional entry points.",
+    "Comment Audit":
+      "Run `bun run audit-comments` and review the reported policy violations or narration candidates.",
     "Dependency Audit":
       "Update the parent dependency or run `bun update <package-name>` specifically. Only use a global override when the replacement stays within every dependent package's declared version range.",
     "SQL Audit":
@@ -633,7 +673,7 @@ async function main() {
 
   printSection("\nLocalization", results.filter((r) => CATEGORIES.LOCALES(r)));
 
-  printSection("\nDocs", results.filter((r) => CATEGORIES.DOCS(r)));
+  printSection("\nDocumentation", results.filter((r) => CATEGORIES.DOCUMENTATION(r)));
 
   // Safety net: a check whose name matches no predicate still gates the exit code
   // but would otherwise never be printed, leaving a ❌ run with nothing to explain

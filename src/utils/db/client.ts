@@ -232,44 +232,102 @@ export const sql = new Proxy(
 ) as SQL;
 
 /**
- * Executes a database query with automatic retry on cached plan errors.
+ * Codes Bun raises when the pool retires a connection out from under a live query.
  *
- * When PostgreSQL prepared statements become stale after schema changes,
- * this wrapper detects the error, resets the connection (clearing the cache),
- * and retries the query once.
+ * Bun's pool (through 1.3.14) fires its `idleTimeout`/`maxLifetime` timers without
+ * draining first: it marks the connection failed and rejects every queued and in-flight
+ * query on it, even though the query and the server are both healthy
+ * (oven-sh/bun#30646, still open). Re-issuing succeeds because the pool has already
+ * discarded the dead socket, so `resetDatabaseConnection` must NOT run on this path;
+ * that would throw away the rest of a healthy pool to fix a connection already gone.
+ */
+const RETIRED_CONNECTION_ERROR_CODES = new Set([
+  "ERR_POSTGRES_LIFETIME_TIMEOUT",
+  "ERR_POSTGRES_IDLE_TIMEOUT",
+  "ERR_POSTGRES_CONNECTION_CLOSED",
+]);
+
+function isRetiredConnectionError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return false;
+  }
+  const { code } = error as { code?: unknown };
+  return typeof code === "string" && RETIRED_CONNECTION_ERROR_CODES.has(code);
+}
+
+interface TransientRetryOptions {
+  /** Total attempts including the first, so 1 disables retrying. */
+  attempts: number;
+  delayMs: number;
+}
+
+function resolveTransientRetryOptions(): TransientRetryOptions {
+  return {
+    attempts: parseIntegerEnvFlag(process.env.POSTGRES_TRANSIENT_RETRY_ATTEMPTS, 2, 1),
+    // A retired socket is replaced on the pool's next tick; retrying in the same tick
+    // can land on the still-closing connection.
+    delayMs: parseIntegerEnvFlag(process.env.POSTGRES_TRANSIENT_RETRY_DELAY_MS, 100, 0),
+  };
+}
+
+/**
+ * Executes a database operation, retrying the transient failures that are the client's
+ * own doing rather than a real query fault: a stale prepared-statement plan after a
+ * schema change, and a connection the pool retired mid-query.
  *
- * @param queryFn - Async function that executes the database query
+ * `queryFn` may run more than once, so it must be safe to replay. Reads always qualify.
+ * A write qualifies only if it is idempotent (an `ON CONFLICT DO UPDATE` reconcile) or
+ * runs inside a transaction, since a socket that dies mid-transaction makes the server
+ * roll back. A non-idempotent write must not use this helper: if the socket dies in the
+ * window between `COMMIT` being sent and its acknowledgement arriving, the replay
+ * double-applies.
+ *
+ * Rethrows once retries are exhausted rather than returning a sentinel, so a caller whose
+ * next line assumes the write landed (a "sync completed" log, a cache invalidation) cannot
+ * run on a failed operation.
+ *
  * @param operationName - Descriptive name for logging (e.g., "load user", "load reminders")
- * @returns Query result or null on failure
  *
  * @example
  * ```typescript
- * const reminders = await withCachedPlanRetry(
+ * const reminders = await withTransientDbRetry(
  *   async () => await sql`SELECT * FROM reminders WHERE due_at <= NOW()`,
  *   "load due reminders"
  * );
  * ```
  */
-export async function withCachedPlanRetry<T>(queryFn: () => Promise<T>, operationName: string): Promise<T | null> {
-  try {
-    return await queryFn();
-  } catch (error) {
-    // Check if this is a cached plan error
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const isCachedPlanError = errorMessage.includes("cached plan must not change result type");
+export async function withTransientDbRetry<T>(queryFn: () => Promise<T>, operationName: string): Promise<T> {
+  const { attempts, delayMs } = resolveTransientRetryOptions();
 
-    if (isCachedPlanError) {
-      log.warn(`Cached plan error during "${operationName}", resetting connection and retrying`);
-      resetDatabaseConnection();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await queryFn();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isCachedPlanError = errorMessage.includes("cached plan must not change result type");
+      const isRetiredConnection = isRetiredConnectionError(error);
 
-      try {
-        return await queryFn();
-      } catch (retryError) {
-        await log.error(`Retry failed for "${operationName}"`, retryError);
-        return null;
+      if (!isCachedPlanError && !isRetiredConnection) {
+        throw error;
+      }
+
+      if (attempt >= attempts) {
+        await log.error(`Exhausted ${attempt} attempt(s) for "${operationName}"`, error);
+        throw error;
+      }
+
+      if (isCachedPlanError) {
+        log.warn(`Cached plan error during "${operationName}", resetting connection and retrying`);
+        resetDatabaseConnection();
+        continue;
+      }
+
+      log.warn(
+        `Pool retired the connection during "${operationName}" (attempt ${attempt}/${attempts}), retrying on a fresh connection`,
+      );
+      if (delayMs > 0) {
+        await Bun.sleep(delayMs);
       }
     }
-
-    throw error;
   }
 }

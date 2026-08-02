@@ -4,6 +4,7 @@ import { createTipEmbed, sendStandardEmbed, truncateForEmbedDescription } from "
 import { ColorCode, log } from "@/utils/misc/logger";
 import {
   getProviderErrorDetail,
+  isAccountBalanceExhaustedError,
   isContextLengthError,
   isCreditAffordabilityError,
   isProviderModelError,
@@ -117,8 +118,9 @@ export class StreamErrorUi {
     tipKeys: string[];
     color: ColorResolvable;
   } {
-    // Detect OpenRouter and whether a fallback chain already exists: both gate conditional tips.
-    const isOpenRouter = provider.getProviderInfo().name === "openrouter";
+    // Detect the provider and whether a fallback chain already exists: both gate conditional tips.
+    const providerName = provider.getProviderInfo().name;
+    const isOpenRouter = providerName === "openrouter";
     const hasFallbackModels = (context.tomoriState.fallback_llms?.length ?? 0) > 0;
     const modelFallbackTip = hasFallbackModels ? [] : ["genai.tips.model_fallback"];
 
@@ -152,6 +154,22 @@ export class StreamErrorUi {
       return {
         titleKey: "genai.stream.model_error_title",
         tipKeys: ["genai.tips.choose_supported_model", ...(isOpenRouter ? ["genai.tips.openrouter_models"] : [])],
+        color: ColorCode.ERROR,
+      };
+    }
+
+    // Exhausted account balance (e.g. DeepSeek 402 "Insufficient Balance"): checked before the
+    //    affordability branch because an empty wallet is the stricter condition, and before the
+    //    generic api_error default, whose `verify_api_key` tip misdiagnoses a perfectly valid key.
+    if (isAccountBalanceExhaustedError(providerError)) {
+      return {
+        titleKey: "genai.stream.balance_exhausted_title",
+        tipKeys: [
+          "genai.tips.top_up_provider_balance",
+          ...(providerName === "deepseek" ? ["genai.tips.deepseek_top_up"] : []),
+          ...(isOpenRouter ? ["genai.tips.openrouter_add_credits"] : []),
+          "genai.tips.switch_model_provider",
+        ],
         color: ColorCode.ERROR,
       };
     }

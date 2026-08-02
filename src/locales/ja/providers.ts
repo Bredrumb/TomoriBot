@@ -68,6 +68,7 @@ export default {
       provider_overloaded_title: `🔴 プロバイダーの過負荷`,
       context_length_title: `🔴 このモデルにはメッセージが長すぎます`,
       credit_limit_title: `🔴 プロバイダーのクレジットが不足しています`,
+      balance_exhausted_title: `🔴 プロバイダーアカウントの残高がありません`,
       flush_limit_title: `🟡️ 応答の長さ制限に達しました`,
       flush_limit_description: `この応答はメッセージの最大長制限に達したため停止されました。必要に応じて \`/bot respond\` を使用して手動で応答を続けることができます。`,
       inactivity_timeout_title: `🟡️ 応答がタイムアウトしました`,
@@ -90,6 +91,8 @@ export default {
       reduce_context_length: `メッセージを短くするか、\`/tool refresh\` でコンテキストをクリアしてみてください。`,
       reduce_output_tokens: `\`/model parameters\`（出力トークン）で応答の長さの上限を下げると、会話履歴のための余裕を増やせます。`,
       openrouter_add_credits: `[OpenRouterクレジット](https://openrouter.ai/settings/credits)でクレジットを追加するか、\`/model parameters\`（出力トークン）で応答の長さを下げてください。`,
+      top_up_provider_balance: `APIキー自体は有効ですが、そのアカウントの残高が不足しています。プロバイダーのサイトで残高を追加してから、もう一度お試しください。メッセージを短くしたり応答の長さを下げたりしても解決しません。`,
+      deepseek_top_up: `[DeepSeekのチャージページ](https://platform.deepseek.com/top_up)で残高を追加してください。`,
       adjust_parameters: `\`/config parameters\` を使用し、**Temperature** または **Top P** のどちらか一方のみが送信されるように調整してください。`,
       switch_model_provider: `\`/model\` を使用して、別のモデルやプロバイダーに切り替えてください。`,
       support_server: `[公式サポートサーバー](https://discord.gg/bjCfHm9QsB)でサポートを受けられます。`,
@@ -154,12 +157,17 @@ export default {
       unknown_default_message: `Anthropicとの通信中に予期しないエラーが発生しました。`,
     },
     custom: {
+      "402_default_message": `このエンドポイントのアカウント残高が不足しています`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     deepseek: {
+      "402_default_message": `DeepSeekアカウントの残高が不足しています`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     zai: {
+      // Z.aiは課金拒否を429で返すため、レート制限と混同されないようフォーマッタが再分類します。
+      "429_balance_default_message": `Z.aiアカウントの残高が不足しています`,
+      "429_plan_access_default_message": `Z.aiのサブスクリプションプランではこのモデルを利用できません`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     nvidia: {

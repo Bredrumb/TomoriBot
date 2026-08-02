@@ -1,5 +1,6 @@
 import type { ErrorContext } from "@/types/db/schema";
 import { buildErrorLogPayload, errorLogRepository } from "@/utils/db/repositories/ErrorLogRepository";
+import { resolveErrorContext } from "@/utils/misc/errorContextStore";
 import pino from "pino";
 
 /**
@@ -244,12 +245,13 @@ export const log = {
    * Logs warning messages with optional error details (hidden in production).
    * @param err - Optional error object to include.
    */
-  warn: (msg: string, err?: unknown) => {
+  warn: (msg: string, err?: unknown, context?: ErrorContext) => {
     const coloredMsg = shouldHideLogs ? msg : `${colors.yellow}${msg}${colors.reset}`;
+    const resolvedContext = resolveErrorContext(context);
     if (err) {
-      pinoLogger.warn({ err: toLoggableError(err) }, coloredMsg);
+      pinoLogger.warn({ err: toLoggableError(err), context: sanitizeLogPayload(resolvedContext) }, coloredMsg);
     } else {
-      pinoLogger.warn(coloredMsg);
+      pinoLogger.warn({ context: sanitizeLogPayload(resolvedContext) }, coloredMsg);
     }
   },
 
@@ -293,14 +295,15 @@ export const log = {
    */
   error: async (msg: string, err?: unknown, context?: ErrorContext): Promise<void> => {
     const coloredMsg = shouldHideLogs ? msg : `${colors.red}${msg}${colors.reset}`;
+    const resolvedContext = resolveErrorContext(context);
 
     if (err) {
       pinoLogger.error(
-        { err: toLoggableError(err), context: sanitizeLogPayload(context) },
+        { err: toLoggableError(err), context: sanitizeLogPayload(resolvedContext) },
         sanitizeLogString(coloredMsg),
       );
     } else {
-      pinoLogger.error({ context: sanitizeLogPayload(context) }, sanitizeLogString(coloredMsg));
+      pinoLogger.error({ context: sanitizeLogPayload(resolvedContext) }, sanitizeLogString(coloredMsg));
     }
 
     // Skip database logging when disabled (relying on CloudWatch instead)
@@ -308,7 +311,7 @@ export const log = {
       return;
     }
 
-    const dbPayload = buildErrorLogPayload(msg, err, context);
+    const dbPayload = buildErrorLogPayload(msg, err, resolvedContext);
 
     try {
       await errorLogRepository.insertErrorLog(dbPayload);

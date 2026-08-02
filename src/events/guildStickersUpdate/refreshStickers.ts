@@ -1,5 +1,5 @@
 import { type Client, type Guild, Sticker } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import type { EventFunction, EventArg } from "../../types/discord/global";
 import type { ErrorContext } from "../../types/db/schema"; // Import ServerRow
 import { log } from "../../utils/misc/logger";
@@ -36,10 +36,14 @@ const handleGuildStickersUpdate: EventFunction = async (_client: Client, ...args
     const currentStickers = Array.from(guild.stickers.cache.values());
     log.info(`Fetched and cached ${currentStickers.length} stickers for guild ${guild.id}. Refreshing DB...`);
 
-    await sql.transaction(async (tx) => {
-      // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
-      await serverRepository.syncStickers(tx, serverId!, currentStickers);
-    });
+    await withTransientDbRetry(
+      () =>
+        sql.transaction(async (tx) => {
+          // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
+          await serverRepository.syncStickers(tx, serverId!, currentStickers);
+        }),
+      `refresh stickers for guild ${guild.id}`,
+    );
 
     // Invalidate in-memory cache to force refresh on next message
     // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above

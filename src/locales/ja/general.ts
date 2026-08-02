@@ -219,9 +219,10 @@ export default {
     task_update_repeat_hours: `{repetition_interval_hours}時間ごと`,
     expand_task_button: `全文を表示`,
     expand_task_title: `タスクの全文`,
-    reminder_triggered_title: `🔵 リマインダー通知`,
-    task_triggered_title: `🔵 タスク通知`,
+    reminder_triggered_title: `🟡 リマインダー通知（配信失敗）`,
+    task_triggered_title: `🟡 タスク通知（配信失敗）`,
     triggered_description: `{reminder_purpose}`,
-    triggered_footer: `生成中にエラーが発生したため、代わりに生のリマインダーを送信しました`,
+    triggered_footer: `生成が繰り返し失敗したため、代わりに生のリマインダーを送信しました。このスケジュールは削除されました。問題の解決後に \`/scheduled-task\` で作成し直してください。`,
+    triggered_footer_recurring: `生成が繰り返し失敗したため、代わりに生のリマインダーを送信しました。この繰り返しスケジュールは削除され、今後は実行されません。問題の解決後に \`/scheduled-task\` で作成し直してください。`,
   },
 };

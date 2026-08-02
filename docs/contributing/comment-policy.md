@@ -106,10 +106,10 @@ Judgment cases stay with review.
 bun run audit-comments
 ```
 
-`audit-comments` is an occasional maintainer tool, similar to the locale-pruning audit.
-It reports subjective narration candidates across the existing tree without failing.
-It is deliberately absent from the validation pipeline and normal test runner, so
-contributors do not need to resolve heuristic findings as part of unrelated work.
+`audit-comments` reports subjective narration candidates across the existing tree without
+failing. It runs as a non-blocking warning under the Documentation section of `bun run vl`,
+so contributors can see policy drift without needing to resolve heuristic findings as part
+of unrelated work. It remains separate from the normal test runner.
 
 Maintainers can invoke `scripts/checks/checkCommentPolicy.ts` directly for deterministic
 checks or pass `--staged` or `--base <ref>` to focus the narration heuristic on changed

@@ -32,7 +32,7 @@ scopedMock.module("@/utils/db/client", () => ({
   sql: sqlTag,
   resetDatabaseConnection: () => undefined,
   resolveProductionPostgresTls: () => undefined,
-  withCachedPlanRetry: async (queryFn: () => Promise<unknown>) => queryFn(),
+  withTransientDbRetry: async (queryFn: () => Promise<unknown>) => queryFn(),
 }));
 
 const { serverMemoryRepository } = await import("@/utils/db/repositories/ServerMemoryRepository");

@@ -8,6 +8,7 @@ import { calculateLateness } from "@/utils/text/processors/timeUtils";
 import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { createStandardEmbed } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
+import { getCachedUserRow } from "../utils/cache/userCache";
 import {
   getOrCreateWebhook,
   resolvePersonaWebhookIdentity,
@@ -17,6 +18,7 @@ import { ensureDiscordUserMention } from "../utils/discord/mentionHelper";
 import { isBridgeUserId } from "../utils/bridges";
 import { sendMatrixReminderMention } from "../utils/bridges/matrix";
 import type { GenerationTurnResult, QueuedMessageDiscardReason } from "@/utils/chat/types";
+import { runWithErrorContext } from "@/utils/misc/errorContextStore";
 
 const REMINDER_DELIVERY_RETRY_DELAY_MS = parseIntegerEnvFlag(
   process.env.REMINDER_DELIVERY_RETRY_DELAY_MS,
@@ -82,6 +84,20 @@ export class ReminderProcessor {
   }
 
   private async executeReminder(reminder: ReminderRow): Promise<void> {
+    return runWithErrorContext(
+      {
+        source: "reminder",
+        sourceDetail: reminder.reminder_id != null ? String(reminder.reminder_id) : undefined,
+        serverId: reminder.server_id,
+        personaId: reminder.persona_id,
+        userDiscId: reminder.user_discord_id,
+        channelDiscId: reminder.channel_disc_id,
+      },
+      () => this.executeReminderInContext(reminder),
+    );
+  }
+
+  private async executeReminderInContext(reminder: ReminderRow): Promise<void> {
     try {
       if (reminder.reminder_id && this.activeReminderIds.has(reminder.reminder_id)) {
         log.info(`Reminder ${reminder.reminder_id} is already queued or executing; skipping duplicate delivery.`);
@@ -413,6 +429,22 @@ export class ReminderProcessor {
     }
   }
 
+  /**
+   * Resolves the locale for a reminder's own embeds. The recipient's saved preference wins over the
+   * guild default, mirroring the slash-command chain, because a reminder addresses one person rather
+   * than the room. Bridge users have no local user row, so they fall through to the guild.
+   */
+  private async resolveReminderLocale(reminder: ReminderRow, channel: TextBasedChannel): Promise<string> {
+    if (!isBridgeUserId(reminder.user_discord_id)) {
+      const userRow = await getCachedUserRow(reminder.user_discord_id).catch(() => null);
+      if (userRow?.language_pref) {
+        return userRow.language_pref;
+      }
+    }
+
+    return "guild" in channel ? channel.guild.preferredLocale : "en-US";
+  }
+
   private async handleReminderExecutionFailure(reminder: ReminderRow, errorReason: string): Promise<void> {
     try {
       if (reminder.reminder_id) {
@@ -425,12 +457,20 @@ export class ReminderProcessor {
         if (channel?.isTextBased() && "send" in channel) {
           const isSelfReminder = reminder.self_reminder === true;
 
-          const embed = createStandardEmbed("en-US", {
-            color: ColorCode.INFO,
+          // This path only runs after the row has been deleted, which for a recurring schedule
+          // also cancels every future occurrence. Say so: the old copy read as a normal trigger,
+          // leaving owners unaware their recurring task had stopped existing.
+          // 0 is the documented one-time sentinel the reminder tools expose to the model, so a bare
+          // typeof check would call a one-time reminder recurring.
+          const isRecurring =
+            typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1;
+
+          const embed = createStandardEmbed(await this.resolveReminderLocale(reminder, channel), {
+            color: ColorCode.WARN,
             titleKey: isSelfReminder ? "reminders.task_triggered_title" : "reminders.reminder_triggered_title",
             descriptionKey: "reminders.triggered_description",
             descriptionVars: { reminder_purpose: reminder.reminder_purpose },
-            footerKey: "reminders.triggered_footer",
+            footerKey: isRecurring ? "reminders.triggered_footer_recurring" : "reminders.triggered_footer",
           });
 
           const mentionContent =

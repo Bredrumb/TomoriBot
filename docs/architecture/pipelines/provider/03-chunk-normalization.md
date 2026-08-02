@@ -125,6 +125,28 @@ After this stage:
   `finishReason`) are normalised to `type: "error"` with `error.type === "content_blocked"` and
   `retryable: false`.
 
+## Message-based classifiers
+
+HTTP status codes are too coarse to pick the right advice, so `utils/provider/providerErrorClassification.ts`
+re-classifies a normalized `ProviderError` by matching its message text (and `originalError` payload).
+`errorUi.ts` consults these before falling back to `ProviderError.type`:
+
+| Classifier | Recognizes | Why it is separate |
+|---|---|---|
+| `isProviderModelError` | unsupported / unknown / deprecated model IDs | Steer to model selection, not to the key |
+| `isAccountBalanceExhaustedError` | zero spendable balance (DeepSeek 402 `Insufficient Balance`, Z.ai `no resource package`) | No request of any size can succeed, so trimming tips are useless |
+| `isCreditAffordabilityError` | affordability ceiling (OpenRouter 402 `can only afford N`) | A smaller `max_tokens` still fits the remaining credit |
+| `isContextLengthError` | hard context-window overflow | Trimming history genuinely resolves it |
+
+The two credit classifiers must stay mutually exclusive. They map to opposite advice: an exhausted
+balance needs a top-up, an affordability ceiling needs fewer output tokens. Ordering in
+`resolveProviderErrorPresentation()` runs exhausted-balance first because it is the stricter
+condition. Both are checked before the generic `api_error` default, whose `verify_api_key` tip
+misdiagnoses a billing failure as a bad credential.
+
+A provider that reports billing denial under a non-402 status (Z.ai uses 429) is re-coded in its
+error formatter so it does not present as a rate limit.
+
 ## Extension points
 
 | Surface | Plugin-relevance |

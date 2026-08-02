@@ -1,5 +1,5 @@
 import type { Guild } from "discord.js";
-import { sql } from "../db/client";
+import { sql, withTransientDbRetry } from "../db/client";
 import { log } from "../misc/logger";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
@@ -75,9 +75,13 @@ export async function lazySyncGuildEmojis(guild: Guild, serverId: number, forceF
 
     log.info(`Fetched ${currentEmojis.length} emoji(s) from Discord for guild ${guild.name}`);
 
-    await sql.transaction(async (tx) => {
-      await serverRepository.syncEmojis(tx, serverId, currentEmojis);
-    });
+    await withTransientDbRetry(
+      () =>
+        sql.transaction(async (tx) => {
+          await serverRepository.syncEmojis(tx, serverId, currentEmojis);
+        }),
+      `lazy sync emojis for guild ${guild.id}`,
+    );
 
     log.info("[Emoji Lazy Sync] Transaction completed successfully");
 

@@ -36,6 +36,7 @@ import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
+import { logRawProviderError } from "@/utils/provider/providerErrorLogging";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
 import { assistantMediaRelocationNotice, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
@@ -2018,8 +2019,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
    * Handle OpenRouter-specific errors using official error codes
    */
   handleProviderError(error: unknown): ProviderError {
-    // Log the full error object for debugging (Pino's error serializer handles non-enumerable Error properties)
-    log.error("OpenRouter error details:", error);
+    // Pino's error serializer handles non-enumerable Error properties, so the full object is logged.
+    logRawProviderError("OpenRouter", error);
 
     const errorMessage = error instanceof Error ? error.message : String(error);
 

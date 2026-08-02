@@ -185,6 +185,27 @@ turns a dead-path hang into a fast, retryable failure. Defaults are production-s
 an incident. This was fixed at the client layer deliberately, so the private endpoint stays removed
 and the free-tier cost target holds.
 
+#### Retrying queries killed by pool recycling
+
+Bun's pool fires those recycling timers without draining first: it marks the connection failed and
+rejects every queued and in-flight query on it, even when the query and the server are both healthy
+([oven-sh/bun#30646](https://github.com/oven-sh/bun/issues/30646), open as of Bun 1.3.14). In
+production this surfaced as `PostgresError: Max lifetime timeout reached after 10m`
+(`ERR_POSTGRES_LIFETIME_TIMEOUT`) aborting a slash command and a guild emoji sync.
+
+`withTransientDbRetry` in `src/utils/db/client.ts` re-issues those operations. It also covers the
+stale prepared-statement plans it originally handled, but the two paths differ: a cached-plan error
+calls `resetDatabaseConnection()` first, while a retired connection must not, because the pool has
+already discarded the dead socket and a reset would throw away the rest of a healthy pool.
+`POSTGRES_TRANSIENT_RETRY_ATTEMPTS` (default 2 total attempts) and
+`POSTGRES_TRANSIENT_RETRY_DELAY_MS` (default 100) tune it.
+
+The helper replays `queryFn`, so only reads, idempotent writes, and transactions may use it. A
+transaction is safe because a socket that dies mid-transaction makes the server roll back; the
+emoji and sticker reconciles qualify additionally because they are upsert-only. A non-idempotent
+write must not use it: if the socket dies between `COMMIT` being sent and its acknowledgement
+arriving, the replay double-applies.
+
 ### Read-only production data inspection
 
 Host lockdown removes every inbound NSG allow rule, so `ssh` cannot reach the VM and the PostgreSQL

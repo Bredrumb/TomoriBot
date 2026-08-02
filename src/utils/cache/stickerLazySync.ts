@@ -1,5 +1,5 @@
 import type { Guild } from "discord.js";
-import { sql } from "../db/client";
+import { sql, withTransientDbRetry } from "../db/client";
 import { log } from "../misc/logger";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 
@@ -75,9 +75,13 @@ export async function lazySyncGuildStickers(guild: Guild, serverId: number, forc
 
     log.info(`Fetched ${currentStickers.length} sticker(s) from Discord for guild ${guild.name}`);
 
-    await sql.transaction(async (tx) => {
-      await serverRepository.syncStickers(tx, serverId, currentStickers);
-    });
+    await withTransientDbRetry(
+      () =>
+        sql.transaction(async (tx) => {
+          await serverRepository.syncStickers(tx, serverId, currentStickers);
+        }),
+      `lazy sync stickers for guild ${guild.id}`,
+    );
 
     log.info("[Sticker Lazy Sync] Transaction completed successfully");
 

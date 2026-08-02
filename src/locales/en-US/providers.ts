@@ -68,6 +68,7 @@ export default {
       provider_overloaded_title: `🔴 Provider Overloaded`,
       context_length_title: `🔴 Message Too Long for This Model`,
       credit_limit_title: `🔴 Not Enough Provider Credits`,
+      balance_exhausted_title: `🔴 Provider Account Out of Credit`,
       flush_limit_title: `🟡️ Response Length Limit Reached`,
       flush_limit_description: `This response has reached the maximum message length limit and has been stopped. You can use \`/bot respond\` to manually continue the response if needed.`,
       inactivity_timeout_title: `🟡️ Response Timed Out`,
@@ -90,6 +91,8 @@ export default {
       reduce_context_length: `Try reducing the length of your message or clearing context with \`/tool refresh\`.`,
       reduce_output_tokens: `Lower the reply length cap with \`/model parameters\` (output tokens) to free up room for chat history.`,
       openrouter_add_credits: `Add credits at [OpenRouter Credits](https://openrouter.ai/settings/credits), or lower the reply length with \`/model parameters\` (output tokens).`,
+      top_up_provider_balance: `Your API key is valid, but the account behind it has run out of credit. Top it up with your provider, then try again. Shortening the message or lowering the reply length will not help here.`,
+      deepseek_top_up: `Add funds on the [DeepSeek top-up page](https://platform.deepseek.com/top_up).`,
       adjust_parameters: `Use \`/config parameters\` and adjust either **Temperature** or **Top P** to ensure only one is sent.`,
       switch_model_provider: `Switch to a different model or provider with \`/model\`.`,
       // Auto-appended to every non-empty tip embed by createTipEmbed(); never list it in a caller's tipKeys.
@@ -155,12 +158,17 @@ The selected model requires allowing data for paid model training, but your Open
       unknown_default_message: `An unexpected error occurred while communicating with Anthropic.`,
     },
     custom: {
+      "402_default_message": `Your account with this endpoint has insufficient balance`,
       unknown_default_message: `An unexpected error occurred`,
     },
     deepseek: {
+      "402_default_message": `Your DeepSeek account has insufficient balance`,
       unknown_default_message: `An unexpected error occurred`,
     },
     zai: {
+      // Z.ai reports billing denial as 429; the formatter re-codes it so it does not read as a rate limit.
+      "429_balance_default_message": `Your Z.ai account has insufficient balance`,
+      "429_plan_access_default_message": `Your Z.ai subscription plan does not include access to this model`,
       unknown_default_message: `An unexpected error occurred`,
     },
     nvidia: {

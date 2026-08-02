@@ -1,4 +1,5 @@
-import { MessageFlags, type Client, type Interaction } from "discord.js";
+import { MessageFlags, type ChatInputCommandInteraction, type Client, type Interaction } from "discord.js";
+import { enrichErrorContext, runWithErrorContext } from "@/utils/misc/errorContextStore";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
@@ -49,6 +50,19 @@ async function setCooldown(userId: string, category: string, duration: number): 
 const handler = async (client: Client, interaction: Interaction): Promise<void> => {
   if (!interaction.isChatInputCommand()) return;
 
+  await runWithErrorContext(
+    {
+      source: "command",
+      sourceDetail: interaction.commandName,
+      userDiscId: interaction.user.id,
+      serverDiscId: interaction.guildId,
+      channelDiscId: interaction.channelId,
+    },
+    () => runChatInputCommand(client, interaction),
+  );
+};
+
+const runChatInputCommand = async (client: Client, interaction: ChatInputCommandInteraction): Promise<void> => {
   // Determine locale early for potential error messages
   const initialLocale = interaction.locale ?? interaction.guildLocale ?? "en-US";
 
@@ -205,6 +219,7 @@ const handler = async (client: Client, interaction: Interaction): Promise<void> 
       const finalLocale = userData?.language_pref ?? interaction.guildLocale ?? "en-US";
 
       if (userData) {
+        enrichErrorContext({ userId: userData.user_id });
         await executeFunction(client, interaction, userData, finalLocale);
 
         // Record command usage (fire-and-forget so stat tracking never adds
