@@ -140,6 +140,66 @@ describe("context reference discovery", () => {
     ).toEqual(new Set());
   });
 
+  it("matches Unicode and multi-word aliases across punctuation and repeated whitespace", () => {
+    const candidates = [
+      { userId: "100", aliases: ["José María"] },
+      { userId: "200", aliases: ["山田 太郎"] },
+    ];
+
+    expect(resolveUniqueTextualAliasReferences("(JOSÉ    MARÍA), can you help?", candidates)).toEqual(new Set(["100"]));
+    expect(resolveUniqueTextualAliasReferences("山田\t太郎さんではなく、@山田\t太郎 に聞いて。", candidates)).toEqual(
+      new Set(["200"]),
+    );
+  });
+
+  it("does not treat a persona nickname as a reference unless a trigger word matches", () => {
+    const nicknameOnly = persona(9, "Ren", ["lilya"]);
+
+    expect(discoverReferencedPersonaIds([message("Ren can stay in the story.")], [nicknameOnly])).toEqual(new Set());
+    expect(discoverReferencedPersonaIds([message("Please ask lilya.")], [nicknameOnly])).toEqual(new Set([9]));
+  });
+
+  it("includes historical and co-responding persona IDs while excluding empty public profiles", () => {
+    const historical = persona(2, "Historical", ["history"]);
+    historical.persona_attributes = [{ attribute_text: "Public history", is_public: true }] as never;
+    const responder = persona(3, "Responder", ["response"]);
+    responder.physical_appearance_tags = ["gold eyes"];
+    const empty = persona(4, "Empty", ["empty"]);
+
+    expect(buildPublicPersonaProfiles([historical, responder, empty], new Set([2, 3, 4]), 1)).toEqual([
+      {
+        personaId: 2,
+        personaName: "Historical",
+        attributes: ["Public history"],
+        imageAppearanceTags: [],
+      },
+      {
+        personaId: 3,
+        personaName: "Responder",
+        attributes: [],
+        imageAppearanceTags: ["gold eyes"],
+      },
+    ]);
+  });
+
+  it("keeps DM reference discovery persona-only when no guild is available", async () => {
+    const referencedPersona = persona(2, "Ren", ["ren"]);
+    referencedPersona.persona_attributes = [{ attribute_text: "Public profile", is_public: true }] as never;
+    const client = { guilds: { cache: new Map() } } as unknown as Client;
+
+    const resolved = await resolveContextReferences({
+      client,
+      guildId: "dm",
+      simplifiedMessageHistory: [message("Ask ren and <@100>.")],
+      personas: [referencedPersona],
+      existingParticipantIds: new Set(),
+    });
+
+    expect(resolved.referencedUserIds).toEqual(new Set());
+    expect(resolved.referencedUserRows).toEqual(new Map());
+    expect(resolved.publicPersonaProfiles.map((profile) => profile.personaId)).toEqual([2]);
+  });
+
   it("resolves real mentions, verifies uncached membership, and skips bots and non-members", async () => {
     const rows = ["100", "200", "300", "400"].map((id) => ({
       ...defaultUser(),
