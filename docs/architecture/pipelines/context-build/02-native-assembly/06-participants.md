@@ -21,9 +21,12 @@ channel/time-of-day footer.
   `ParticipantDiscoveryPlan`.
 - `src/utils/text/participants/candidateSources.ts` defines the injected repository and
   guild-member directory contracts used by reference orchestration.
+- `src/utils/text/participants/hydration.ts` owns active-persona-scoped identity loading,
+  exposure policy, profile-field enrichment, public persona details, and persona self-tasks.
 - `src/utils/text/participants/legacyAdapter.ts` converts the transitional `userList`,
   Matrix, webhook, persona-profile, and reference-reason inputs into typed seeds.
-- `src/utils/text/context/participants.ts` owns the compatibility facade and current renderer.
+- `src/utils/text/context/participants.ts` owns the compatibility facade and renders only
+  from hydrated typed profiles.
 
 ## Typed preparation boundary
 
@@ -38,9 +41,11 @@ the key kind participates in equality and serialization.
 `buildParticipantContextItem()` entry point. Direct
 legacy callers are temporarily supported by `buildUsersInConversationContextItem()` and
 the fallback adapter in `nativeBuilder.ts`; both produce the same seeds before delegating.
-The renderer still consumes the legacy collections during this compatibility phase, so
-provider-visible text and hidden metadata remain byte-identical. Later participant stages
-will move hydration and rendering onto the typed seeds before deleting those adapters.
+`buildParticipantContextItem()` passes those seeds into `hydrateParticipantProfiles()`
+with a required `ActivePersonaScope`. Hydration returns ordered typed profiles whose fields
+carry a stable owner key, render order, and visibility decision. The facade then renders the
+profiles without performing database, cache, or Discord reads. The parallel legacy inputs
+remain only until all context producers migrate to the prepared participant API.
 
 ## Mission
 
@@ -69,6 +74,8 @@ Substantial — see signature in `participants.ts:38-58`. Notable:
 - `participantDiscoveryPlan` — the authoritative live/snapshot discovery result; the separate
   seed field remains as a compatibility input for direct callers
 - `triggererName`, `botName`, `personaLineageId`
+- `ActivePersonaScope` is derived at the hydration boundary from the active persona ID,
+  lineage ID, main/alter state, and impersonation state
 - `tomoriState`, `tomoriConfig` (provides `personal_memories_enabled`,
   `timezone_offset`)
 - `isDMChannel`, `isUserImpersonation`, `impersonatedUserId`,
@@ -119,7 +126,19 @@ Current time: May 21, 2026 18:30 UTC+09:00 (JST), evening.
 ]
 ```
 
-## Side effects
+## Hydration and side effects
+
+Hydration separates critical base identity from optional profile fields. A Discord user
+must resolve to a stored row, including the existing eligible auto-registration path, or
+the participant is skipped. Missing guild-member display data falls back to the Discord
+user object or `<@id>`. Presence is optional: a failed presence lookup records an
+`optional_failure` visibility decision and retains the participant.
+
+The centralized exposure policy decides saved-name use and visibility for presence, roles,
+physical appearance, timezone, and personal memories from privacy, blacklist,
+personalization, and impersonation state. Human reminders retain their active-persona
+filter independently of those profile-field decisions. Persona self-tasks are hydrated
+independently of human participant membership.
 
 - **DB / cache reads (per user)**:
   - `userRepository.loadByDiscordId(userId)` — load or `null`
@@ -165,6 +184,13 @@ Current time: May 21, 2026 18:30 UTC+09:00 (JST), evening.
   ambiguous, and unmatched counts, never raw alias text.
 - **Final mention conversion** — assembled text passes through
   `convertMentions`.
+
+`ParticipantHydrationDependencies` is the fakeable I/O boundary used by focused tests.
+The default implementation wraps the repositories, Discord member/user reads, and presence
+helper. Existing repositories do not expose behavior-equivalent batch APIs for the scoped
+privacy, blacklist, memory, and reminder reads, so hydration retains those calls while
+deduplicating base member loading. The regression fixture records aggregate calls and keeps
+them at or below the pre-refactor baseline.
 
 ## Invariants
 
@@ -224,6 +250,12 @@ After this stage runs:
 - Matrix and synthetic users are appended *after* normal users and are
   marked non-mentionable (`mentionable: false`).
 - The closing footer always emits, even with one participant.
+- Persona-dependent hydration always receives an explicit scope. Personal memories use its
+  lineage, human reminders use its persona ID plus main/alter compatibility flag, and
+  persona self-tasks use its exact persona ID.
+- Triggerer blacklist, privacy, and presence-member snapshot fast paths remain request-local.
+- Rendering consumes only `HydratedParticipantProfile` values and has no repository,
+  cache, or Discord read path.
 
 ## Configuration
 

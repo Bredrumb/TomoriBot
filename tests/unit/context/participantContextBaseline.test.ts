@@ -112,14 +112,14 @@ describe("participant context Phase 0 baseline", () => {
 
       expect(normalizeParticipantContextItem(item)).toEqual(EXPECTED_PARTICIPANT_GOLDEN);
       expect(fixture.counters).toEqual({
-        userRowLoads: 3,
+        userRowLoads: 1,
         candidateQueries: 1,
         registrations: 0,
         blacklistReads: 2,
         privacyReads: 2,
         personalMemoryReads: 2,
         reminderReads: 3,
-        memberFetches: 4,
+        memberFetches: 2,
         fullGuildMemberFetches: 0,
       });
       expect(fixture.memberCache.hits).toBe(3);

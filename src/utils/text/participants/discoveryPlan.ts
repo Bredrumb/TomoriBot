@@ -211,12 +211,15 @@ export function composeParticipantDiscoveryPlan(params: {
       .filter((evidence) => serializeParticipantKey(evidence.key) === serializeParticipantKey(seed.key))
       .map((evidence) => evidence.source),
   }));
+  const referencedUsers = referenceCandidates.filter((candidate) => candidate.key.kind === "discord_user");
+  const referencedPersonas = referenceCandidates.filter((candidate) => candidate.key.kind !== "discord_user");
   return buildParticipantDiscoveryPlan({
     candidates: [
       ...discoverVisibleAuthorCandidates(params.visibleInput, params.personas),
       ...discoverHistoricalSyntheticCandidates(params.visibleInput.syntheticUsers, params.personas),
+      ...referencedUsers,
       ...discoverBridgeCandidates(params.visibleInput.matrixUsers),
-      ...referenceCandidates,
+      ...referencedPersonas,
     ],
     rejections: params.referencePlan.rejections,
     aliasReferenceDiagnostics: params.referencePlan.aliasReferenceDiagnostics,

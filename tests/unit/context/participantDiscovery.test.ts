@@ -122,8 +122,8 @@ describe("participant discovery plan", () => {
       "discord_user:100",
       "bot:999",
       "persona:2",
-      "matrix_user:@mika:example.org",
       "discord_user:200",
+      "matrix_user:@mika:example.org",
     ]);
     const renSeed = plan.seeds.find((seed) => serializeParticipantKey(seed.key) === "persona:2");
     expect(renSeed?.reasons).toEqual(new Set(["historical_persona", "co_responder", "persona_trigger_reference"]));

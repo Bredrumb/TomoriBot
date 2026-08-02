@@ -76,14 +76,14 @@ describe("participant context Phase 0 performance baseline", () => {
           PARTICIPANT_FIXTURE_IDS.matrix,
         ]);
         expect(fixture.counters).toEqual({
-          userRowLoads: 3,
+          userRowLoads: 1,
           candidateQueries: 1,
           registrations: 0,
           blacklistReads: hydratedDiscordUserCount,
           privacyReads: hydratedDiscordUserCount,
           personalMemoryReads: hydratedDiscordUserCount,
           reminderReads: hydratedDiscordUserCount + 1,
-          memberFetches: hydratedDiscordUserCount + 2,
+          memberFetches: hydratedDiscordUserCount,
           fullGuildMemberFetches: 0,
         });
       } finally {

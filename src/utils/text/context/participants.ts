@@ -1,83 +1,19 @@
-import { GatewayIntentBits, type Client, type Guild, type GuildMember } from "discord.js";
-import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
-import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
-import { log } from "@/utils/misc/logger";
-import { formatMemoryWithId } from "@/utils/memory/memoryId";
-import {
-  getCurrentTimeWithOffset,
-  formatTimeWithOffset,
-  formatUTCOffset,
-  getTimeOfDayPhrase,
-} from "@/utils/text/timezoneHelper";
+import type { Client } from "discord.js";
+import { getCurrentTimeWithOffset, formatUTCOffset, getTimeOfDayPhrase } from "@/utils/text/timezoneHelper";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
-import {
-  PrivacyLevel,
-  type AssembledServerConfig,
-  type ReminderRow,
-  type TomoriState,
-  type UserRow,
-} from "@/types/db/schema";
-import { getUserPresenceDetails } from "./history";
+import type { AssembledServerConfig, TomoriState, UserRow } from "@/types/db/schema";
 import type { MentionConverter } from "./templates";
 import type { PublicPersonaProfile } from "./types";
 import {
   aliasesForPurpose,
   buildAliasCollisionIndex,
-  buildBridgeUserAliases,
-  buildDiscordUserAliases,
-  buildPersonaAliases,
-  buildWebhookAliases,
   normalizeParticipantAlias,
 } from "@/utils/text/participants/aliases";
-import {
-  createDiscordUserKey,
-  createMatrixUserKey,
-  createPersonaKey,
-  createWebhookKey,
-  serializeParticipantKey,
-  type ParticipantAlias,
-  type ParticipantSeed,
-} from "@/utils/text/participants/identity";
+import { serializeParticipantKey, type ParticipantSeed } from "@/utils/text/participants/identity";
 import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
+import { hydrateParticipantProfiles, type HydratedParticipantProfile } from "@/utils/text/participants/hydration";
 
-type UserConversationEntry = {
-  userId: string;
-  displayName: string;
-  detailLines: string[];
-  imageAppearanceTags?: string[];
-  personalTimezoneOffset?: number | null;
-  isBot: boolean;
-  aliases: readonly ParticipantAlias[];
-  primaryAlias: string | null;
-  mentionable: boolean;
-  resolvableTargetId?: string;
-};
-
-const normalizeImageAppearanceTags = (tags: string[] | null | undefined): string[] | undefined => {
-  const normalizedTags = tags?.map((tag) => tag.trim()).filter((tag) => tag.length > 0) ?? [];
-  return normalizedTags.length > 0 ? normalizedTags : undefined;
-};
-
-export function formatPendingReminderForContext(
-  reminder: Pick<ReminderRow, "reminder_id" | "reminder_purpose" | "reminder_time" | "repetition_interval_hours">,
-  timezoneOffset: number,
-): string {
-  const formattedTime = `${formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
-    weekday: "short",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })} (${formatUTCOffset(timezoneOffset)})`;
-  const reminderIdPrefix = typeof reminder.reminder_id === "number" ? `ID:${reminder.reminder_id} ` : "";
-  const repeatText =
-    typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-      ? `, repeats every ${reminder.repetition_interval_hours} hour(s)`
-      : "";
-
-  return `${reminderIdPrefix}"${reminder.reminder_purpose}" (scheduled for ${formattedTime}${repeatText})`;
-}
+export { formatPendingReminderForContext } from "@/utils/text/participants/hydration";
 
 export async function buildParticipantContextItem(params: {
   client: Client;
@@ -126,165 +62,42 @@ export async function buildParticipantContextItem(params: {
     ? 'To ping users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n'
     : `If ${params.botName} wants to ping any of these users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n`;
 
-  const userEntries: UserConversationEntry[] = [];
   const conversationUsers: ConversationUserReference[] = [];
-  let botEntryAdded = false;
+  const hydrated = await hydrateParticipantProfiles({
+    client: params.client,
+    guildId: params.guildId,
+    channelName: params.channelName,
+    participantSeeds: params.participantSeeds,
+    activePersonaScope: {
+      personaId: params.tomoriState?.persona_id,
+      lineageId:
+        params.personaLineageId ??
+        params.snapshot?.tomoriState?.persona_lineage_id ??
+        params.tomoriState?.persona_lineage_id,
+      isMainPersona: !params.tomoriState?.is_alter,
+      isUserImpersonation: params.isUserImpersonation,
+      impersonatedUserId: params.impersonatedUserId,
+    },
+    tomoriState: params.tomoriState,
+    tomoriConfig: params.tomoriConfig,
+    isDMChannel: params.isDMChannel,
+    impersonatedIdentityName: params.impersonatedIdentityName,
+    matrixUsers: params.matrixUsers,
+    syntheticUsers: params.syntheticUsers,
+    publicPersonaProfiles: params.publicPersonaProfiles,
+    preloadedReferencedUserRows: params.preloadedReferencedUserRows,
+    referencedUserIds: params.referencedUserIds,
+    toolPromptMacroResolver: params.toolPromptMacroResolver,
+    conversationCorpus: params.conversationCorpus,
+    snapshot: params.snapshot,
+    convertMentions: params.convertMentions,
+    botName: params.botName,
+  });
 
-  for (const userIdToProcess of params.userList) {
-    if (
-      (params.client.user && userIdToProcess === params.client.user.id) ||
-      (params.tomoriState?.is_alter && userIdToProcess === String(params.tomoriState.persona_id)) ||
-      (params.tomoriState?.persona_id != null && userIdToProcess === `persona:${params.tomoriState.persona_id}`)
-    ) {
-      if (!botEntryAdded) {
-        userEntries.push({
-          userId: userIdToProcess,
-          displayName: params.botName,
-          detailLines: ["- Status: Online - Currently active and responding to messages"],
-          imageAppearanceTags: !params.isUserImpersonation
-            ? normalizeImageAppearanceTags(params.tomoriState?.physical_appearance_tags)
-            : undefined,
-          isBot: true,
-          aliases: [],
-          primaryAlias: null,
-          mentionable: false,
-        });
-        botEntryAdded = true;
-      }
-      continue;
-    }
-
-    let userRow =
-      params.preloadedReferencedUserRows?.get(userIdToProcess) ??
-      (await userRepository.loadByDiscordId(userIdToProcess).catch(() => null));
-    if (!userRow && !params.referencedUserIds?.has(userIdToProcess)) {
-      const guild = params.client.guilds.cache.get(params.guildId);
-      const member = guild ? await guild.members.fetch(userIdToProcess).catch(() => null) : null;
-      if (guild && member) {
-        const userLanguage = guild.preferredLocale.startsWith("ja") ? "ja" : "en-US";
-        const registrationDisplayName = resolvePreferredDiscordDisplayName({
-          memberDisplayName: member.displayName,
-          user: member.user,
-        });
-        userRow = await userRepository.register(userIdToProcess, registrationDisplayName, userLanguage);
-      }
-    }
-
-    if (!userRow) {
-      const syntheticEntry = params.syntheticUsers?.get(userIdToProcess);
-      if (syntheticEntry) {
-        userEntries.push({
-          userId: userIdToProcess,
-          displayName: syntheticEntry.displayName,
-          detailLines: [],
-          isBot: false,
-          aliases:
-            syntheticEntry.type === "webhook"
-              ? buildWebhookAliases({
-                  owner: createWebhookKey(userIdToProcess),
-                  displayName: syntheticEntry.displayName,
-                })
-              : [],
-          primaryAlias: null,
-          mentionable: false,
-        });
-        continue;
-      }
-
-      log.warn(`Skipping user ${userIdToProcess} - could not load user data`);
-      continue;
-    }
-
-    const guild = params.client.guilds.cache.get(params.guildId);
-    const member = guild ? await guild.members.fetch(userIdToProcess).catch(() => null) : null;
-    const fallbackUser = member ? null : await params.client.users.fetch(userIdToProcess).catch(() => null);
-    const serverPersonalizationEnabled = params.tomoriConfig.personal_memories_enabled ?? true;
-    const isTriggererId = params.snapshot?.triggererUserRow?.user_disc_id === userRow.user_disc_id;
-    const userIsBlacklisted = isTriggererId
-      ? (params.snapshot?.isTriggererBlacklisted ?? false)
-      : await userRepository.isBlacklisted(params.guildId, userRow.user_disc_id);
-    const userPrivacyLevel = isTriggererId
-      ? (params.snapshot?.triggererPrivacyLevel ?? PrivacyLevel.MINIMAL)
-      : await userRepository.getPrivacyLevel(userRow.user_disc_id);
-
-    const customNickname = userRow.user_nickname;
-    const serverNickname = member?.nickname;
-    const username = member?.user.username ?? fallbackUser?.username ?? null;
-    const globalName = member?.user.globalName ?? fallbackUser?.globalName ?? null;
-    const canUseCustomNickname =
-      customNickname && serverPersonalizationEnabled && !userIsBlacklisted && userPrivacyLevel !== PrivacyLevel.FULL;
-    const shouldIncludeCustomNicknameAlias =
-      customNickname && serverPersonalizationEnabled && !userIsBlacklisted && (!serverNickname || canUseCustomNickname);
-
-    let displayName = canUseCustomNickname
-      ? customNickname
-      : serverNickname
-        ? serverNickname
-        : `<@${userRow.user_disc_id}>`;
-    if (
-      params.isUserImpersonation &&
-      userRow.user_disc_id === params.impersonatedUserId &&
-      params.impersonatedIdentityName
-    ) {
-      displayName = params.impersonatedIdentityName;
-    }
-
-    const detailLines = await buildUserDetailLines({
-      ...params,
-      displayName,
-      userRow,
-      member,
-      guild,
-      serverPersonalizationEnabled,
-      userIsBlacklisted,
-      userPrivacyLevel,
-    });
-
-    const aliases = buildDiscordUserAliases({
-      owner: createDiscordUserKey(userRow.user_disc_id),
-      userRow,
-      identity: {
-        displayName: member?.displayName,
-        nickname: serverNickname,
-        globalName,
-        username,
-      },
-      exposeSavedNickname: Boolean(shouldIncludeCustomNicknameAlias),
-      impersonatedIdentityName:
-        params.isUserImpersonation && userRow.user_disc_id === params.impersonatedUserId
-          ? params.impersonatedIdentityName
-          : null,
-    });
-
-    const primaryAlias =
-      params.isUserImpersonation &&
-      userRow.user_disc_id === params.impersonatedUserId &&
-      params.impersonatedIdentityName
-        ? params.impersonatedIdentityName
-        : canUseCustomNickname
-          ? customNickname
-          : (serverNickname ?? globalName ?? username ?? userRow.user_disc_id);
-    userEntries.push({
-      userId: userRow.user_disc_id,
-      displayName,
-      detailLines,
-      imageAppearanceTags: !params.isUserImpersonation
-        ? normalizeImageAppearanceTags(userRow.physical_appearance_tags)
-        : undefined,
-      personalTimezoneOffset: !params.isUserImpersonation ? (userRow.timezone_offset ?? null) : undefined,
-      isBot: false,
-      aliases,
-      primaryAlias,
-      mentionable: true,
-      resolvableTargetId: userRow.user_disc_id,
-    });
+  usersInConversationText += renderUserEntries(hydrated.profiles, conversationUsers, params.isUserImpersonation);
+  if (hydrated.personaTaskLines.length > 0) {
+    usersInConversationText += `${hydrated.personaTaskLines.join("\n")}\n\n`;
   }
-
-  appendMatrixUsers(params, userEntries);
-  await applyPublicPersonaProfiles(params, userEntries);
-
-  usersInConversationText += renderUserEntries(userEntries, conversationUsers, params.isUserImpersonation);
-  usersInConversationText += await renderPendingPersonaTasks(params);
   usersInConversationText += renderChannelTimeContext(params);
 
   return {
@@ -324,251 +137,8 @@ export async function buildUsersInConversationContextItem(
   });
 }
 
-async function buildUserDetailLines(
-  params: Parameters<typeof buildUsersInConversationContextItem>[0] & {
-    displayName: string;
-    userRow: NonNullable<Awaited<ReturnType<typeof userRepository.loadByDiscordId>>>;
-    member: GuildMember | null;
-    guild: Guild | undefined;
-    serverPersonalizationEnabled: boolean;
-    userIsBlacklisted: boolean;
-    userPrivacyLevel: PrivacyLevel;
-  },
-): Promise<string[]> {
-  const detailLines: string[] = [];
-
-  if (params.userPrivacyLevel === PrivacyLevel.MINIMAL) {
-    const hasPresenceIntent = params.client.options.intents?.has(GatewayIntentBits.GuildPresences);
-    if (params.isDMChannel) {
-      detailLines.push("- Status: Online (Direct Message)");
-    } else if (hasPresenceIntent) {
-      const presenceInfo =
-        params.snapshot?.triggererUserRow?.user_disc_id === params.userRow.user_disc_id
-          ? await getUserPresenceDetails(
-              params.client,
-              params.userRow.user_disc_id,
-              params.guildId,
-              params.snapshot?.preloadedMember,
-            )
-          : await getUserPresenceDetails(params.client, params.userRow.user_disc_id, params.guildId);
-      detailLines.push(`- Status: ${presenceInfo}`);
-    }
-  }
-
-  if (params.userPrivacyLevel === PrivacyLevel.MINIMAL && params.member) {
-    const roles = params.member.roles.cache
-      .filter((role) => role.id !== params.guild?.id && role.name !== "@everyone")
-      .sort((a, b) => b.position - a.position)
-      .map((role) => role.name);
-    if (roles.length > 0) detailLines.push(`- Server Roles: ${roles.join(", ")}`);
-  }
-
-  const shouldIncludePersonalMemories =
-    !params.isUserImpersonation ||
-    (params.isUserImpersonation && params.userRow.user_disc_id === params.impersonatedUserId);
-  if (
-    shouldIncludePersonalMemories &&
-    params.serverPersonalizationEnabled &&
-    !params.userIsBlacklisted &&
-    params.userPrivacyLevel === PrivacyLevel.MINIMAL &&
-    params.userRow.user_id
-  ) {
-    const activeLineageId =
-      params.personaLineageId ??
-      params.snapshot?.tomoriState?.persona_lineage_id ??
-      params.tomoriState?.persona_lineage_id ??
-      0;
-    const personalMemoryRows = await personalMemoryRepository.loadForUserLineage(
-      params.userRow.user_id,
-      activeLineageId,
-      true,
-    );
-    const filteredPersonalRows = personalMemoryRows.filter((row) => {
-      const normalized = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
-      const channelTags = normalized.filter((t) => t.startsWith("#"));
-      const contentTags = normalized.filter((t) => !t.startsWith("#"));
-
-      // Channel tags gate: if present and channel_memory_enabled, channel must match.
-      // Channel and content filters are independent; channel match does not exempt a memory
-      // from the content/corpus check below (per baetican's intended design).
-      if (params.tomoriConfig.channel_memory_enabled && channelTags.length > 0) {
-        const channelAllowed = channelTags.some((t) => t.slice(1).toLowerCase() === params.channelName.toLowerCase());
-        if (!channelAllowed) return false;
-      }
-
-      // Content tags: if corpus filtering is active and the memory has content tags,
-      // at least one must appear in the corpus. Memories with no content tags are
-      // unfiltered by keyword (per /help memory-tagging: "memories without keyword
-      // tags will always be active").
-      if (params.conversationCorpus != null && contentTags.length > 0) {
-        return contentTags.some((tag) => params.conversationCorpus?.includes(tag.toLowerCase()));
-      }
-
-      return true;
-    });
-    if (filteredPersonalRows.length > 0) {
-      const processedMemories = await Promise.all(
-        filteredPersonalRows.map(async (memoryRow, index) => {
-          const processedMemory = await params.convertMentions(
-            memoryRow.content,
-            params.client,
-            params.guildId,
-            params.displayName,
-            params.botName,
-            params.tomoriConfig.personal_memories_enabled,
-          );
-          return formatMemoryWithId(memoryRow.personal_memory_id ?? index + 1, processedMemory, memoryRow.tags ?? []);
-        }),
-      );
-      detailLines.push(`- Memories: ${processedMemories.join("; ")}`);
-    }
-  }
-
-  const pendingReminders = await serverScheduleRepository.getPendingRemindersForUser(
-    params.userRow.user_disc_id,
-    params.guildId,
-    params.tomoriState?.persona_id,
-    !params.tomoriState?.is_alter,
-  );
-  if (pendingReminders && pendingReminders.length > 0) {
-    detailLines.push("- Reminders:");
-    for (const reminder of pendingReminders) {
-      const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
-      detailLines.push(`  - ${formatPendingReminderForContext(reminder, timezoneOffset)}`);
-    }
-  }
-
-  return detailLines;
-}
-
-async function renderPendingPersonaTasks(
-  params: Parameters<typeof buildUsersInConversationContextItem>[0],
-): Promise<string> {
-  const botUserId = params.client.user?.id;
-  const personaId = params.tomoriState?.persona_id;
-  if (params.isUserImpersonation || !botUserId || typeof personaId !== "number") {
-    return "";
-  }
-
-  const pendingTasks = await serverScheduleRepository.getPendingRemindersForUser(botUserId, params.guildId, personaId);
-  const personaTasks = pendingTasks?.filter((reminder) => reminder.self_reminder === true) ?? [];
-  if (personaTasks.length === 0) {
-    return "";
-  }
-
-  const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
-  let text = "Pending Tasks Assigned to You:\n";
-  for (const task of personaTasks) {
-    text += `- ${formatPendingReminderForContext(task, timezoneOffset)}`;
-    if (task.channel_disc_id) {
-      text += ` (destination: <#${task.channel_disc_id}>)`;
-    }
-    text += "\n";
-  }
-
-  return `${text}\n`;
-}
-
-function appendMatrixUsers(
-  params: Parameters<typeof buildUsersInConversationContextItem>[0],
-  userEntries: UserConversationEntry[],
-): void {
-  for (const [matrixUserId, displayName] of params.matrixUsers?.entries() ?? []) {
-    userEntries.push({
-      userId: matrixUserId,
-      displayName,
-      detailLines: ["- Status: Online or status unknown"],
-      isBot: false,
-      aliases: buildBridgeUserAliases({
-        owner: createMatrixUserKey(matrixUserId),
-        displayName,
-      }),
-      primaryAlias: displayName || null,
-      mentionable: false,
-      resolvableTargetId: matrixUserId,
-    });
-  }
-}
-
-async function applyPublicPersonaProfiles(
-  params: Parameters<typeof buildUsersInConversationContextItem>[0],
-  userEntries: UserConversationEntry[],
-): Promise<void> {
-  if (!params.publicPersonaProfiles || params.publicPersonaProfiles.length === 0) return;
-
-  for (const publicPersona of params.publicPersonaProfiles) {
-    const convertedAttributes: string[] = [];
-    for (const attribute of publicPersona.attributes) {
-      const trimmedAttribute = attribute.trim();
-      if (!trimmedAttribute) continue;
-
-      convertedAttributes.push(
-        await params.convertMentions(
-          await params.toolPromptMacroResolver.expand(trimmedAttribute),
-          params.client,
-          params.guildId,
-          "User",
-          publicPersona.personaName,
-          params.tomoriConfig.personal_memories_enabled,
-          params.snapshot,
-        ),
-      );
-    }
-
-    const imageAppearanceTags = params.isUserImpersonation
-      ? undefined
-      : normalizeImageAppearanceTags(publicPersona.imageAppearanceTags);
-    if (convertedAttributes.length === 0 && !imageAppearanceTags) continue;
-
-    const syntheticId = String(publicPersona.personaId);
-    let targetEntry = userEntries.find(
-      (entry) => entry.userId === syntheticId || entry.userId === `persona:${syntheticId}`,
-    );
-
-    if (!targetEntry) {
-      targetEntry = userEntries.find((entry) => entry.displayName === publicPersona.personaName);
-    }
-
-    // Build the header and the attribute lines separately so we can avoid
-    //    re-pushing the header when appending to an entry that already has one.
-    const attributeHeader = `- Known Information about ${publicPersona.personaName}:`;
-    const attributeLines = convertedAttributes.map((attr) => `  - ${attr}`);
-
-    if (targetEntry) {
-      targetEntry.imageAppearanceTags = imageAppearanceTags;
-      if (attributeLines.length > 0) {
-        // A second persona sharing a display name may resolve to this entry via
-        // the fallback. Avoid duplicating the header while retaining every line.
-        if (!targetEntry.detailLines.includes(attributeHeader)) {
-          targetEntry.detailLines.push(attributeHeader);
-        }
-        targetEntry.detailLines.push(...attributeLines);
-      }
-    } else {
-      const detailLines =
-        attributeLines.length > 0
-          ? ["- Status: Online or status unknown", attributeHeader, ...attributeLines]
-          : ["- Status: Online or status unknown"];
-      userEntries.push({
-        userId: `persona:${syntheticId}`,
-        displayName: publicPersona.personaName,
-        detailLines,
-        imageAppearanceTags,
-        isBot: false,
-        aliases: buildPersonaAliases({
-          owner: createPersonaKey(publicPersona.personaId),
-          nickname: publicPersona.personaName,
-        }).aliases,
-        primaryAlias: publicPersona.personaName,
-        mentionable: false,
-        resolvableTargetId: `persona:${syntheticId}`,
-      });
-    }
-  }
-}
-
 function renderUserEntries(
-  userEntries: UserConversationEntry[],
+  userEntries: readonly HydratedParticipantProfile[],
   conversationUsers: ConversationUserReference[],
   isUserImpersonation: boolean,
 ): string {
@@ -604,13 +174,10 @@ function renderUserEntries(
       text += `${entry.displayName}${mentionParts.length > 0 ? ` (${mentionParts.join("; ")})` : ""}\n`;
     }
 
-    if (entry.imageAppearanceTags && entry.imageAppearanceTags.length > 0) {
-      text += `- ${entry.displayName}'s Physical Appearance: ${entry.imageAppearanceTags.join(", ")}\n`;
+    for (const profileField of [...entry.fields].sort((left, right) => left.order - right.order)) {
+      if (!profileField.visibility.visible) continue;
+      for (const line of profileField.lines) text += `${line}\n`;
     }
-    if (entry.personalTimezoneOffset != null) {
-      text += `- ${entry.displayName}'s timezone: ${formatUTCOffset(entry.personalTimezoneOffset)} (their local time: ${getCurrentTimeWithOffset(entry.personalTimezoneOffset)})\n`;
-    }
-    for (const line of entry.detailLines) text += `${line}\n`;
     text += "\n";
 
     const toolAliases = aliasesForPurpose(entry.aliases, "tool_target").map((alias) => alias.value);

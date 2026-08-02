@@ -87,6 +87,10 @@ Key fields populated here:
   `ParticipantDiscoveryPlan`. Reference and persona inclusion reasons, candidate
   evidence, active-turn-independent aliases, first-seen order, and aggregate rejection
   diagnostics remain attached for later hydration; this does not affect response planning.
+  The participant stage then rehydrates profiles with an explicit active persona ID,
+  lineage, main/alter state, and impersonation state. Privacy and identity snapshot fast
+  paths stay request-local, while lineage memories, persona-filtered reminders, and
+  persona self-tasks cannot cross that scope.
 
 ## Invariants
 
