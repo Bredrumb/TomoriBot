@@ -28,7 +28,7 @@ The snapshot mirrors the real `messageCreate → tomoriChat` pipeline as closely
 | `/refresh` reset marker | ✅ | Uses `sliceMessagesAtResetMarker()` — history starts **after** the marker. |
 | `/compact_refresh` marker | ✅ | Same slicer — history starts **at** the marker (compact summary becomes the new opener). |
 | `FULL` privacy users filtered | ✅ | Skipped from history, matching `tomoriChat.ts`. |
-| Reference-driven profiles | ✅ | Uses the shared live-chat resolver, canonical purpose-aware alias catalog, and the same typed participant-seed adapter: visible-history persona triggers and unique eligible user aliases/mentions load the same participant profiles and inclusion reasons without changing response routing. |
+| Reference-driven profiles | ✅ | Uses the shared live-chat resolver, canonical purpose-aware alias catalog, and the same `ParticipantDiscoveryPlan` composer: equivalent sanitized visible authors, persona triggers, eligible user aliases/mentions, synthetic identities, and bridges produce equivalent ordered seeds and evidence without changing response routing. |
 | Webhook persona attribution | ✅ | Webhooks whose username matches an alter persona are re-attributed. |
 | System-produced embeds | ✅ | `memory_learning`, `reminder_set`, `system_injection`, `scene_directive`, `compact_summary`, `compact_refresh`, `reward`, `punish` are converted to `[System: …]` text blocks. |
 | Link-preview embeds | ✅ | Twitter/YouTube/article cards from non-bot messages get text + image + thumbnail extraction via `processLinkEmbed`. |

@@ -37,6 +37,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     simplifiedMessageHistory,
     userList,
     participantSeeds,
+    participantDiscoveryPlan,
     channelName,
     channelId,
     parentChannelId,
@@ -90,6 +91,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   };
   const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
   const resolvedParticipantSeeds =
+    participantDiscoveryPlan?.seeds ??
     participantSeeds ??
     adaptLegacyParticipantSeeds({
       userList,

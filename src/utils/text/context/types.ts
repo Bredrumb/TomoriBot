@@ -10,6 +10,7 @@ import type {
 } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import type { ParticipantSeed } from "@/utils/text/participants/identity";
+import type { ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
 
 /**
  * Simplified message structure received from tomoriChat.ts.
@@ -67,6 +68,8 @@ export interface BuildContextParams {
   userList: string[];
   /** Temporary typed input while legacy rendering remains authoritative behind golden parity gates. */
   participantSeeds?: readonly ParticipantSeed[];
+  /** Ordered discovery evidence and aggregate rejection diagnostics for the typed participant path. */
+  participantDiscoveryPlan?: ParticipantDiscoveryPlan;
   channelDesc: string | null;
   channelName: string;
   channelId: string;

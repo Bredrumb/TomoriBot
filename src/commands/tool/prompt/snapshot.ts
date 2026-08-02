@@ -73,7 +73,7 @@ import {
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
-import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
+import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
 
 const PERSONA_SELECT_ID = "prompt_snapshot_persona_select";
 
@@ -752,17 +752,19 @@ export async function execute(
     });
     for (const referencedUserId of contextReferences.referencedUserIds) userListSet.add(referencedUserId);
     const matrixUsers = new Map<string, string>();
-    const participantSeeds = adaptLegacyParticipantSeeds({
-      userList: [...userListSet],
-      clientUserId: client.user?.id,
-      activePersonaId: selectedPersona.persona_id,
-      activePersonaIsAlter: selectedPersona.is_alter,
-      syntheticUsers,
-      matrixUsers,
-      referencedUserReasons: contextReferences.referencedUserReasons,
-      publicPersonaProfiles: contextReferences.publicPersonaProfiles,
-      personaProfileReasons: contextReferences.personaProfileReasons,
+    const participantDiscoveryPlan = composeParticipantDiscoveryPlan({
+      visibleInput: {
+        userList: [...userListSet].filter((userId) => !contextReferences.referencedUserIds.has(userId)),
+        clientUserId: client.user?.id,
+        activePersonaId: selectedPersona.persona_id,
+        activePersonaIsAlter: selectedPersona.is_alter,
+        syntheticUsers,
+        matrixUsers,
+      },
+      personas,
+      referencePlan: contextReferences.discoveryPlan,
     });
+    const participantSeeds = participantDiscoveryPlan.seeds;
 
     const contextBuild = await buildContext({
       guildId: interaction.guild.id,
@@ -771,6 +773,7 @@ export async function execute(
       simplifiedMessageHistory: simplifiedMessages,
       userList: Array.from(userListSet),
       participantSeeds,
+      participantDiscoveryPlan,
       matrixUsers,
       syntheticUsers,
       channelDesc,

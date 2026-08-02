@@ -40,7 +40,7 @@ function parseLegacyPersonaId(value: string): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-function keyForLegacyUserListEntry(
+export function adaptLegacyParticipantIdentity(
   legacyId: string,
   input: LegacyParticipantAdapterInput,
 ): { key: ParticipantKey; sourceDisplayName?: string } {
@@ -80,7 +80,7 @@ function keyForLegacyUserListEntry(
   return { key: createDiscordUserKey(normalizedLegacyId) };
 }
 
-function reasonsForLegacyUserListEntry(
+export function adaptLegacyParticipantReasons(
   legacyId: string,
   key: ParticipantKey,
   input: LegacyParticipantAdapterInput,
@@ -139,10 +139,10 @@ export function adaptLegacyParticipantSeeds(input: LegacyParticipantAdapterInput
   let firstSeenOrder = 0;
 
   for (const legacyId of input.userList) {
-    const { key, sourceDisplayName } = keyForLegacyUserListEntry(legacyId, input);
+    const { key, sourceDisplayName } = adaptLegacyParticipantIdentity(legacyId, input);
     seeds.push({
       key,
-      reasons: reasonsForLegacyUserListEntry(legacyId, key, input),
+      reasons: adaptLegacyParticipantReasons(legacyId, key, input),
       aliases: [],
       firstSeenOrder,
       ...(sourceDisplayName && { sourceDisplayName }),

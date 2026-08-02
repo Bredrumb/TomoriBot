@@ -253,8 +253,12 @@ describe("context reference discovery", () => {
     const client = {
       guilds: { cache: new Map([["guild", guild]]) },
     } as unknown as Client;
-    const originalLoadCandidates = userRepository.loadEligibleContextReferenceCandidates;
-    userRepository.loadEligibleContextReferenceCandidates = async () => rows;
+    const originalLoadCandidates = userRepository.loadContextReferenceCandidates;
+    userRepository.loadContextReferenceCandidates = async () =>
+      rows.map((userRow) => ({
+        userRow,
+        evidence: { hasServerActivity: true, hasPersonalMemories: false, hasPendingTasks: false },
+      }));
 
     try {
       const resolved = await resolveContextReferences({
@@ -274,7 +278,7 @@ describe("context reference discovery", () => {
         ]),
       );
     } finally {
-      userRepository.loadEligibleContextReferenceCandidates = originalLoadCandidates;
+      userRepository.loadContextReferenceCandidates = originalLoadCandidates;
     }
   });
 });

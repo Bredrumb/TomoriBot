@@ -16,19 +16,26 @@ channel/time-of-day footer.
   purpose filtering, exposure policy, priority, ownership, and collision indexes.
 - `src/utils/text/participants/referenceDiscovery.ts` owns pure standalone alias matching
   and context-only persona-trigger discovery.
+- `src/utils/text/participants/discoveryPlan.ts` composes visible authors, active identity,
+  historical synthetic identities, bridges, and typed reference candidates into one ordered
+  `ParticipantDiscoveryPlan`.
+- `src/utils/text/participants/candidateSources.ts` defines the injected repository and
+  guild-member directory contracts used by reference orchestration.
 - `src/utils/text/participants/legacyAdapter.ts` converts the transitional `userList`,
   Matrix, webhook, persona-profile, and reference-reason inputs into typed seeds.
 - `src/utils/text/context/participants.ts` owns the compatibility facade and current renderer.
 
 ## Typed preparation boundary
 
-Live chat and prompt snapshot convert their finalized participant inputs into
-`ParticipantSeed[]` before calling `buildContext()`. A seed carries a discriminated
+Live chat and prompt snapshot convert equivalent sanitized sources into a
+`ParticipantDiscoveryPlan` before calling `buildContext()`. The plan retains ordered typed
+seeds, candidate evidence, aggregate rejection reasons, and alias diagnostics. A seed carries a discriminated
 `ParticipantKey`, all known inclusion reasons, its alias catalog, and its first-seen order. Numeric strings
 from Discord users, webhooks, personas, Matrix users, and the bot cannot collide because
 the key kind participates in equality and serialization.
 
-`buildContextNative()` calls the typed `buildParticipantContextItem()` entry point. Direct
+`buildContextNative()` prefers the discovery plan's seeds and calls the typed
+`buildParticipantContextItem()` entry point. Direct
 legacy callers are temporarily supported by `buildUsersInConversationContextItem()` and
 the fallback adapter in `nativeBuilder.ts`; both produce the same seeds before delegating.
 The renderer still consumes the legacy collections during this compatibility phase, so
@@ -59,6 +66,8 @@ Substantial — see signature in `participants.ts:38-58`. Notable:
   reference-discovered user IDs; retained temporarily for compatibility rendering
 - `participantSeeds: readonly ParticipantSeed[]` — collision-safe identities, inclusion
   reasons, purpose-aware aliases, and first-seen order prepared by the producer or legacy adapter
+- `participantDiscoveryPlan` — the authoritative live/snapshot discovery result; the separate
+  seed field remains as a compatibility input for direct callers
 - `triggererName`, `botName`, `personaLineageId`
 - `tomoriState`, `tomoriConfig` (provides `personal_memories_enabled`,
   `timezone_offset`)
@@ -140,6 +149,13 @@ Current time: May 21, 2026 18:30 UTC+09:00 (JST), evening.
   the history. Uncached database candidates are individually verified as
   current guild members; the pipeline never fetches the guild's entire member
   list.
+- **Candidate policy and membership (upstream)** — repository rows carry the evidence for
+  explicitly versioned eligibility policy v1. The pure policy runs before one deduplicated,
+  targeted member lookup per eligible Discord ID. Cached members are used first; uncached
+  members use `guild.members.fetch(id)`, and the no-argument full-list fetch is never called.
+- **Discovery diagnostics (upstream)** — the typed plan aggregates ineligible-state, bot,
+  non-member, ambiguous-alias, existing-participant, blocked-source, and missing-guild
+  rejections. Production paths do not log candidate IDs, aliases, or message content.
 - **Alias catalog construction** — saved nicknames, guild display names and nicknames,
   global names, usernames, persona nicknames and triggers, Matrix display names, webhook
   display names, and impersonated identities use source-owned builders. Each alias records
@@ -191,6 +207,9 @@ After this stage runs:
   personalization/image settings, timezone, privacy, or a deliberate-mode
   preference. Registration language, the initial nickname, and default rows
   alone do not qualify.
+- Visible authors, historical synthetic identities, bridges, real mentions, textual aliases,
+  persona triggers, historical personas, and co-responders are isolated source functions.
+  Repeated sources merge by typed key while preserving every reason and earliest seen order.
 - Referenced users use this same full renderer, including privacy, blacklist,
   memory-tag, lineage, reminder/task, presence, role, timezone, alias,
   impersonation, and mention-target behavior.

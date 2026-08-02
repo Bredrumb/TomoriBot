@@ -6,6 +6,7 @@ import { buildAliasCollisionIndex } from "./aliases";
 import { serializeParticipantKey, type ParticipantAlias, type ParticipantKey } from "./identity";
 
 const STANDALONE_ALIAS_CHARACTER_CLASS = "\\p{L}\\p{N}\\p{M}_";
+const REAL_DISCORD_MENTION_PATTERN = /<@!?(\d+)>/g;
 
 export interface AliasReferenceDiagnostics {
   evaluatedAliasCount: number;
@@ -17,6 +18,15 @@ export interface AliasReferenceDiagnostics {
 export interface AliasReferenceResolution {
   referencedOwners: readonly ParticipantKey[];
   diagnostics: AliasReferenceDiagnostics;
+}
+
+export function extractRealDiscordMentionIds(historyText: string): Set<string> {
+  const mentionIds = new Set<string>();
+  for (const match of historyText.matchAll(REAL_DISCORD_MENTION_PATTERN)) {
+    const userId = match[1];
+    if (userId) mentionIds.add(userId);
+  }
+  return mentionIds;
 }
 
 function containsStandaloneAlias(text: string, alias: ParticipantAlias): boolean {

@@ -83,9 +83,10 @@ Key fields populated here:
   alias matching reports bounded aggregate diagnostics without message or alias text.
 - **Typed participant boundary** — after reference resolution, live chat converts
   visible authors, the active identity, referenced users, historical personas,
-  co-responders, webhooks, and Matrix identities into ordered `ParticipantSeed`
-  values. Reference and persona inclusion reasons remain attached for later
-  hydration diagnostics; this does not affect response planning.
+  co-responders, webhooks, and Matrix identities into an ordered
+  `ParticipantDiscoveryPlan`. Reference and persona inclusion reasons, candidate
+  evidence, active-turn-independent aliases, first-seen order, and aggregate rejection
+  diagnostics remain attached for later hydration; this does not affect response planning.
 
 ## Invariants
 

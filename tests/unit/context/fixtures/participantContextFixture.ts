@@ -260,6 +260,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
 
   const originals = {
     loadByDiscordId: userRepository.loadByDiscordId,
+    loadContextReferenceCandidates: userRepository.loadContextReferenceCandidates,
     loadEligibleContextReferenceCandidates: userRepository.loadEligibleContextReferenceCandidates,
     register: userRepository.register,
     isBlacklisted: userRepository.isBlacklisted,
@@ -272,9 +273,12 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     counters.userRowLoads += 1;
     return users.get(discordId) ?? null;
   };
-  userRepository.loadEligibleContextReferenceCandidates = async () => {
+  userRepository.loadContextReferenceCandidates = async () => {
     counters.candidateQueries += 1;
-    return [...eligibleReferenceCandidates];
+    return eligibleReferenceCandidates.map((userRow) => ({
+      userRow,
+      evidence: { hasServerActivity: true, hasPersonalMemories: false, hasPendingTasks: false },
+    }));
   };
   userRepository.register = async () => {
     counters.registrations += 1;
@@ -347,6 +351,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
       if (restored) return;
       restored = true;
       userRepository.loadByDiscordId = originals.loadByDiscordId;
+      userRepository.loadContextReferenceCandidates = originals.loadContextReferenceCandidates;
       userRepository.loadEligibleContextReferenceCandidates = originals.loadEligibleContextReferenceCandidates;
       userRepository.register = originals.register;
       userRepository.isBlacklisted = originals.isBlacklisted;
