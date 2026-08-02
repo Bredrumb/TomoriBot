@@ -55,7 +55,8 @@ const prepared = await prepareParticipantContext({
 ```
 
 `PreparedParticipantContext` carries the enricher registry into native participant hydration.
-No renderer or `buildContext()` change is required.
+It is the only participant input accepted by `buildContext()`; no renderer or context-builder
+change is required.
 
 ## Security boundaries
 

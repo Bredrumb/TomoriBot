@@ -31,18 +31,16 @@ channel/time-of-day footer.
   the ordered, owner-stamped enricher contract.
 - `src/utils/text/participants/renderer.ts` is the pure composite prompt renderer.
 - `src/utils/text/participants/targetIndex.ts` derives purpose-aware downstream targets
-  and the transitional `conversationUsers` projection from hydrated profiles.
-- `src/utils/text/participants/legacyAdapter.ts` converts the transitional `userList`,
-  Matrix, webhook, persona-profile, and reference-reason inputs into typed seeds.
-- `src/utils/text/context/participants.ts` owns the compatibility facade, supplies the
+  and the `conversationUsers` projection from hydrated profiles.
+- `src/utils/text/context/participants.ts` owns the render boundary, supplies the
   deterministic time/footer values, and invokes hydration plus pure rendering.
 
 ## Typed preparation boundary
 
 Live chat, prompt snapshot, cost inspection, and hidden image turns call
 `prepareParticipantContext()` with their sanitized visible history before calling
-`buildContext()`. The returned `PreparedParticipantContext` carries participant IDs, bridge
-and synthetic identities, preloaded reference rows, public persona profiles, diagnostics,
+`buildContext()`. The returned `PreparedParticipantContext` carries the authoritative typed
+discovery plan, bridge and synthetic identities, preloaded reference rows, public persona profiles, diagnostics,
 and the authoritative `ParticipantDiscoveryPlan`. Optional source/enricher registries also
 flow through this one adapter-ready boundary. The plan retains ordered typed seeds,
 candidate evidence, aggregate rejection reasons, and alias diagnostics. A seed carries a discriminated
@@ -50,17 +48,14 @@ candidate evidence, aggregate rejection reasons, and alias diagnostics. A seed c
 from Discord users, webhooks, personas, Matrix users, and the bot cannot collide because
 the key kind participates in equality and serialization.
 
-`buildContextNative()` prefers the prepared result and calls the typed
-`buildParticipantContextItem()` entry point. Direct
-legacy callers are temporarily supported by `buildUsersInConversationContextItem()` and
-the fallback adapter in `nativeBuilder.ts`; both produce the same seeds before delegating.
+`BuildContextParams` requires that prepared result. `buildContextNative()` passes its typed
+seeds and preloaded data directly to `buildParticipantContextItem()`; there is no parallel
+participant collection or fallback adapter.
 `buildParticipantContextItem()` passes those seeds into `hydrateParticipantProfiles()`
 with a required `ActivePersonaScope`. Hydration returns ordered typed profiles whose fields
 carry a stable owner key, render order, and visibility decision. The pure renderer creates
 the one composite prompt item payload and `ParticipantTargetIndex` without performing
-database, cache, Discord, clock, or logging work. The parallel legacy inputs remain only
-as test and compatibility surfaces pending their Phase 8 removal; production context
-producers pass only the prepared participant result.
+database, cache, Discord, clock, or logging work.
 
 Live multi-persona turns attach a `ParticipantRequestScope` to the locked chat turn. The
 scope captures an exact copy of the sanitized messages, visible identities, persona catalog,
@@ -72,8 +67,7 @@ not extend the lifetime of repository, privacy, blacklist, or Discord member cac
 
 ## Mission
 
-For every user ID in `userList` (message authors plus eligible users resolved
-from references in the visible history), emit a rich detail block: display name, mention aliases
+For every typed seed in the prepared discovery plan, emit a rich detail block: display name, mention aliases
 (unique-resolution computed), online/presence status, server roles,
 per-user personal memories (with tag-filtering against the conversation
 corpus, like server memories in stage 03), pending reminders, and public
@@ -90,12 +84,10 @@ The output is *one* context item — all participants live in a single
 
 The production participant input to `buildContext()` is
 `preparedParticipantContext: PreparedParticipantContext`. It contains ordered participant
-IDs, a typed discovery plan, Matrix and synthetic identities, public persona profiles,
+seeds, Matrix and synthetic identities, public persona profiles,
 reference-only rows and IDs, and aggregate diagnostics. The hydration facade additionally
 receives:
 
-- `userList: string[]` — Discord author IDs from history plus eligible
-  reference-discovered user IDs; retained temporarily for compatibility rendering
 - `participantSeeds: readonly ParticipantSeed[]` — collision-safe identities, inclusion
   reasons, purpose-aware aliases, and first-seen order from the prepared discovery plan
 - `triggererName`, `botName`, `personaLineageId`
@@ -110,12 +102,12 @@ receives:
 
 ## Output
 
-`Promise<StructuredContextItem | null>` — `null` if `userList` is empty,
+`Promise<StructuredContextItem | null>` — `null` if the prepared discovery plan has no seeds,
 otherwise one `user`-role item tagged `KNOWLEDGE_USERS_IN_CONVERSATION`.
 
 Also populates `conversationUsers: ConversationUserReference[]` on the
-context item — a structured list used downstream for mention resolution by
-the streaming pipeline. This is now a compatibility projection of the hidden
+context item — the provider-safe projection used by existing downstream mention resolution.
+It is derived from the hidden
 `ParticipantTargetIndex`; new participant-aware consumers use the index's typed keys and
 purpose-specific aliases directly.
 
@@ -226,7 +218,7 @@ personal-memory reads, and six reminder reads still occur across the two turns.
 
 After this stage runs:
 
-- Returns `null` only when `userList` is empty.
+- Returns `null` only when the prepared discovery plan has no seeds.
 - Every user entry has a `displayName` (falls back to `<@id>` for missing
   data).
 - Mention aliases are selected only from the `output_mention` purpose. A per-purpose

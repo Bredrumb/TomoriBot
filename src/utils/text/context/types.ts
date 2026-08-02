@@ -1,16 +1,8 @@
 import type { Client } from "discord.js";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { RequestSnapshot } from "@/types/misc/context";
-import type {
-  AssembledServerConfig,
-  PersonaUserBlockRow,
-  ServerEmojiRow,
-  ServerStickerRow,
-  UserRow,
-} from "@/types/db/schema";
+import type { AssembledServerConfig, PersonaUserBlockRow, ServerEmojiRow, ServerStickerRow } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
-import type { ParticipantSeed } from "@/utils/text/participants/identity";
-import type { ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
 import type { PreparedParticipantContext } from "@/utils/text/participants/preparation";
 
 /**
@@ -66,13 +58,7 @@ export interface BuildContextParams {
   serverName: string;
   serverDescription: string | null;
   simplifiedMessageHistory: SimplifiedMessageForContext[];
-  userList?: string[];
-  /** Temporary typed input while legacy rendering remains authoritative behind golden parity gates. */
-  participantSeeds?: readonly ParticipantSeed[];
-  /** Ordered discovery evidence and aggregate rejection diagnostics for the typed participant path. */
-  participantDiscoveryPlan?: ParticipantDiscoveryPlan;
-  /** Prepared typed participant discovery from the supported orchestration API. */
-  preparedParticipantContext?: PreparedParticipantContext;
+  preparedParticipantContext: PreparedParticipantContext;
   channelDesc: string | null;
   channelName: string;
   channelId: string;
@@ -84,11 +70,6 @@ export interface BuildContextParams {
   emojiStrings?: string[];
   tomoriNickname: string;
   tomoriAttributes: string[];
-  publicPersonaProfiles?: PublicPersonaProfile[];
-  /** Eligible reference-discovered users already loaded by the shared resolver. */
-  preloadedReferencedUserRows?: Map<string, UserRow>;
-  /** Reference-discovered IDs must never take the participant auto-registration path. */
-  referencedUserIds?: ReadonlySet<string>;
   tomoriConfig: AssembledServerConfig;
   /**
    * Per-channel system prompt override resolved at the call site (null when none).
@@ -117,10 +98,6 @@ export interface BuildContextParams {
   impersonatedUserId?: string;
   impersonatedUserNickname?: string;
   impersonatedUserPrompt?: string | null;
-  /** Matrix bridge users: Matrix user ID -> stripped display name. */
-  matrixUsers?: Map<string, string>;
-  /** Synthetic participants surfaced as user-like entries. */
-  syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
   /** Active persona-scoped user mutes/blocks for the responding persona. */
   personaUserBlocks?: PersonaUserBlockRow[];
   includeTimestamps?: boolean;

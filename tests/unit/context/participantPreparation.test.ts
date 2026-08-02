@@ -84,9 +84,12 @@ describe("participant context preparation", () => {
         memberFetches: 0,
       });
       expect(alter.diagnostics.discoveryCacheHit).toBe(true);
-      expect(main.participantIds).toEqual(retry.participantIds);
       expect(retry.discoveryPlan).toEqual(main.discoveryPlan);
-      expect(main.participantIds).toContain(PARTICIPANT_FIXTURE_IDS.referencedHuman);
+      expect(
+        main.discoveryPlan.seeds.some(
+          (seed) => seed.key.kind === "discord_user" && seed.key.discordId === PARTICIPANT_FIXTURE_IDS.referencedHuman,
+        ),
+      ).toBe(true);
       expect(main.publicPersonaProfiles.map((profile) => profile.personaId)).toEqual([
         PARTICIPANT_FIXTURE_IDS.historicalPersona,
       ]);

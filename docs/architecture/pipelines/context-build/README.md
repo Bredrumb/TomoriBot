@@ -113,9 +113,10 @@ will engage with:
   "memory types" plugin category.
 - **Asset contributors** (emojis, stickers) — the "server asset" plugin
   category.
-- **Participant contributors** — Matrix bridge users and synthetic webhook
-  users surface via dedicated maps; a new bridge plugin would emit
-  participants here.
+- **Participant contributors** — typed sources compose Discord, persona, Matrix, webhook,
+  and reference identities behind `prepareParticipantContext()`. Integrations register a
+  narrow `ParticipantSource` or `ParticipantProfileEnricher`; `buildContext()` receives one
+  required prepared result rather than transport-specific maps.
 - **Dialogue contributors** (sample dialogues, dialogue history) — currently
   fixed; future plugins for "few-shot template providers" would extend here.
 

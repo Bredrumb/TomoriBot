@@ -13,15 +13,15 @@ import {
   discoverVisibleAuthorCandidates,
   type DiscoveredParticipantCandidate,
   type ParticipantDiscoveryPlan,
+  type ParticipantVisibleInput,
 } from "@/utils/text/participants/discoveryPlan";
 import type { ParticipantCapability } from "@/utils/text/participants/identity";
 import { participantKeysEqual, serializeParticipantKey } from "@/utils/text/participants/identity";
-import type { LegacyParticipantAdapterInput } from "@/utils/text/participants/legacyAdapter";
 
 const DEFAULT_SOURCE_TIMEOUT_MS = 1_500;
 
 export interface ParticipantSourceInput {
-  visibleInput: LegacyParticipantAdapterInput;
+  visibleInput: ParticipantVisibleInput;
   personas: readonly TomoriState[];
   referencePlan: ParticipantDiscoveryPlan;
 }
@@ -168,6 +168,11 @@ export async function composeParticipantDiscoveryPlan(
   input: ParticipantSourceInput,
   registry: ParticipantSourceRegistry = CORE_PARTICIPANT_SOURCE_REGISTRY,
 ): Promise<ParticipantDiscoveryComposition> {
+  for (const participantId of input.visibleInput.syntheticUsers?.keys() ?? []) {
+    if (input.visibleInput.matrixUsers?.has(participantId)) {
+      throw new Error(`Participant ${participantId} cannot be both a synthetic webhook and a Matrix user`);
+    }
+  }
   const candidates: DiscoveredParticipantCandidate[] = [];
   const contributionDiagnostics: ContributionExecutionDiagnostic[] = [];
   for (const registration of registry.ordered) {

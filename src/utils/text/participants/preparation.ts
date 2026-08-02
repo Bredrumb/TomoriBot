@@ -37,7 +37,6 @@ export interface ParticipantPreparationDiagnostics {
 }
 
 export interface PreparedParticipantContext {
-  participantIds: readonly string[];
   discoveryPlan: ParticipantDiscoveryPlan;
   matrixUsers: ReadonlyMap<string, string>;
   syntheticUsers: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
@@ -110,7 +109,7 @@ export async function prepareParticipantContext(
   const composition = await composeParticipantDiscoveryPlan(
     {
       visibleInput: {
-        userList: frozen.visibleUserIds,
+        participantIds: frozen.visibleUserIds,
         clientUserId: frozen.client.user?.id,
         activePersonaId,
         activePersonaIsAlter: frozen.activePersona?.is_alter,
@@ -123,15 +122,10 @@ export async function prepareParticipantContext(
     input.sourceRegistry,
   );
   const discoveryPlan = composition.plan;
-  const participantIds = [...frozen.visibleUserIds];
-  for (const referencedUserId of discovery.references.referencedUserIds) {
-    if (!participantIds.includes(referencedUserId)) participantIds.push(referencedUserId);
-  }
   const rejectionCounts = { ...EMPTY_REJECTION_COUNTS };
   for (const rejection of discoveryPlan.rejections) rejectionCounts[rejection.reason] += rejection.count;
 
   return {
-    participantIds,
     discoveryPlan,
     matrixUsers: frozen.matrixUsers,
     syntheticUsers: frozen.syntheticUsers,

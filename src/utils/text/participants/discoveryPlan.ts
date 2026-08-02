@@ -1,6 +1,11 @@
 import type { TomoriState } from "@/types/db/schema";
 import { buildBridgeUserAliases, buildPersonaAliases, buildWebhookAliases } from "@/utils/text/participants/aliases";
 import {
+  createBotKey,
+  createDiscordUserKey,
+  createMatrixUserKey,
+  createPersonaKey,
+  createWebhookKey,
   mergeParticipantSeeds,
   serializeParticipantKey,
   type ParticipantAlias,
@@ -9,13 +14,16 @@ import {
   type ParticipantKey,
   type ParticipantSeed,
 } from "@/utils/text/participants/identity";
-import {
-  adaptLegacyParticipantIdentity,
-  adaptLegacyParticipantReasons,
-  adaptLegacySyntheticParticipants,
-  type LegacyParticipantAdapterInput,
-} from "@/utils/text/participants/legacyAdapter";
 import type { AliasReferenceDiagnostics } from "@/utils/text/participants/referenceDiscovery";
+
+export interface ParticipantVisibleInput {
+  participantIds: readonly string[];
+  clientUserId?: string;
+  activePersonaId?: number;
+  activePersonaIsAlter?: boolean;
+  syntheticUsers?: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
+  matrixUsers?: ReadonlyMap<string, string>;
+}
 
 export type ParticipantCandidateEvidenceSource =
   | "visible_author"
@@ -90,13 +98,61 @@ function aliasesForSyntheticParticipant(
   return [];
 }
 
+function parsePersonaId(value: string): number | null {
+  const candidate = value.startsWith("persona:") ? value.slice("persona:".length) : value;
+  if (!/^\d+$/.test(candidate)) return null;
+  const parsed = Number.parseInt(candidate, 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function visibleParticipantIdentity(
+  participantId: string,
+  input: ParticipantVisibleInput,
+): { key: ParticipantKey; sourceDisplayName?: string } {
+  const normalizedId = participantId.trim();
+  if (!normalizedId) throw new Error("Visible participant IDs must not be empty");
+
+  const syntheticUser = input.syntheticUsers?.get(normalizedId);
+  const isClientBot = input.clientUserId === normalizedId;
+  if (isClientBot && syntheticUser) {
+    throw new Error(`Visible participant ${normalizedId} cannot be both the active bot and a synthetic user`);
+  }
+  if (isClientBot) {
+    return input.activePersonaIsAlter && input.activePersonaId !== undefined
+      ? { key: createPersonaKey(input.activePersonaId) }
+      : { key: createBotKey(normalizedId) };
+  }
+  if (syntheticUser?.type === "persona") {
+    const personaId = parsePersonaId(normalizedId);
+    if (personaId === null) {
+      throw new Error(`Synthetic persona key ${normalizedId} does not contain a valid persona ID`);
+    }
+    return { key: createPersonaKey(personaId), sourceDisplayName: syntheticUser.displayName };
+  }
+  if (syntheticUser?.type === "webhook") {
+    return { key: createWebhookKey(normalizedId), sourceDisplayName: syntheticUser.displayName };
+  }
+
+  const participantPersonaId = parsePersonaId(normalizedId);
+  if (input.activePersonaId !== undefined && participantPersonaId === input.activePersonaId) {
+    return { key: createPersonaKey(input.activePersonaId) };
+  }
+  return { key: createDiscordUserKey(normalizedId) };
+}
+
 export function discoverVisibleAuthorCandidates(
-  input: LegacyParticipantAdapterInput,
+  input: ParticipantVisibleInput,
   personas: readonly TomoriState[],
 ): DiscoveredParticipantCandidate[] {
-  return input.userList.map((legacyId) => {
-    const { key, sourceDisplayName } = adaptLegacyParticipantIdentity(legacyId, input);
-    const reasons = adaptLegacyParticipantReasons(legacyId, key, input);
+  return input.participantIds.map((participantId) => {
+    const { key, sourceDisplayName } = visibleParticipantIdentity(participantId, input);
+    const reasons = new Set<ParticipantInclusionReason>(
+      key.kind === "bot" || (key.kind === "persona" && key.personaId === input.activePersonaId)
+        ? ["active_identity"]
+        : key.kind === "persona"
+          ? ["historical_persona"]
+          : ["visible_author"],
+    );
     return {
       key,
       reasons,
@@ -109,32 +165,40 @@ export function discoverVisibleAuthorCandidates(
 }
 
 export function discoverHistoricalSyntheticCandidates(
-  syntheticUsers: LegacyParticipantAdapterInput["syntheticUsers"],
+  syntheticUsers: ParticipantVisibleInput["syntheticUsers"],
   personas: readonly TomoriState[],
 ): DiscoveredParticipantCandidate[] {
-  return adaptLegacySyntheticParticipants(syntheticUsers).map((definition) => ({
-    key: definition.key,
-    reasons: new Set<ParticipantInclusionReason>([
-      definition.key.kind === "persona" ? "historical_persona" : "visible_author",
-    ]),
-    aliases: aliasesForSyntheticParticipant(definition.key, definition.displayName, personas),
-    capabilities: new Set(),
-    sourceDisplayName: definition.displayName,
-    evidenceSources: [definition.key.kind === "persona" ? "historical_persona" : "historical_synthetic"],
-  }));
+  return [...(syntheticUsers ?? [])].map(([participantId, syntheticUser]) => {
+    const personaId = syntheticUser.type === "persona" ? parsePersonaId(participantId) : null;
+    if (syntheticUser.type === "persona" && personaId === null) {
+      throw new Error(`Synthetic persona key ${participantId} does not contain a valid persona ID`);
+    }
+    const key = personaId === null ? createWebhookKey(participantId) : createPersonaKey(personaId);
+    return {
+      key,
+      reasons: new Set<ParticipantInclusionReason>([key.kind === "persona" ? "historical_persona" : "visible_author"]),
+      aliases: aliasesForSyntheticParticipant(key, syntheticUser.displayName, personas),
+      capabilities: new Set(),
+      sourceDisplayName: syntheticUser.displayName,
+      evidenceSources: [key.kind === "persona" ? "historical_persona" : "historical_synthetic"],
+    };
+  });
 }
 
 export function discoverBridgeCandidates(
-  matrixUsers: LegacyParticipantAdapterInput["matrixUsers"],
+  matrixUsers: ParticipantVisibleInput["matrixUsers"],
 ): DiscoveredParticipantCandidate[] {
-  return adaptLegacySyntheticParticipants(undefined, matrixUsers).map((definition) => ({
-    key: definition.key,
-    reasons: new Set<ParticipantInclusionReason>(["bridge_presence"]),
-    aliases: aliasesForSyntheticParticipant(definition.key, definition.displayName, []),
-    capabilities: new Set(),
-    sourceDisplayName: definition.displayName,
-    evidenceSources: ["bridge_presence"],
-  }));
+  return [...(matrixUsers ?? [])].map(([matrixId, displayName]) => {
+    const key = createMatrixUserKey(matrixId);
+    return {
+      key,
+      reasons: new Set<ParticipantInclusionReason>(["bridge_presence"]),
+      aliases: aliasesForSyntheticParticipant(key, displayName, []),
+      capabilities: new Set(),
+      sourceDisplayName: displayName,
+      evidenceSources: ["bridge_presence"],
+    };
+  });
 }
 
 export function discoverPersonaReferenceCandidates(

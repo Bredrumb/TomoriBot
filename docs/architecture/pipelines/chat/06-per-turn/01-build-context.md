@@ -79,7 +79,9 @@ Key fields populated here:
   `prepareParticipantContext()` scans the entire visible fetched window for persona triggers
   and eligible Discord user aliases/mentions, then composes visible authors, active identity,
   references, historical personas, co-responders, webhooks, and Matrix identities into one
-  ordered typed result. This context-only discovery never changes response planning.
+  ordered typed result. That result is the required and only participant input to
+  `buildContext()`; transport maps and raw participant ID lists do not cross the builder
+  boundary. This context-only discovery never changes response planning.
 - **Locked-turn discovery reuse** — all persona turns sharing a `LockedChatTurn` share a
   request scope keyed by an exact snapshot of the sanitized discovery inputs. Equivalent
   inputs reuse candidate and membership discovery, including concurrent in-flight work;

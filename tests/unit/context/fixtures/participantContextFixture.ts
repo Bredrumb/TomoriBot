@@ -10,10 +10,14 @@ import type {
 import { PrivacyLevel } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
-import { buildUsersInConversationContextItem } from "@/utils/text/context/participants";
+import { buildParticipantContextItem } from "@/utils/text/context/participants";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
-import { prepareParticipantContext, type ParticipantRequestScope } from "@/utils/text/participants/preparation";
+import {
+  prepareParticipantContext,
+  type ParticipantRequestScope,
+  type PreparedParticipantContext,
+} from "@/utils/text/participants/preparation";
 
 export const PARTICIPANT_FIXTURE_IDS = {
   guild: "100000000000000001",
@@ -411,11 +415,12 @@ export function normalizeParticipantContextItem(item: StructuredContextItem | nu
   };
 }
 
-export async function buildLegacyParticipantContext(
+export async function buildPreparedParticipantContext(
   fixture: ParticipantContextFixture,
   options: {
     activePersona?: TomoriState;
     requestScope?: ParticipantRequestScope;
+    onPrepared?: (prepared: PreparedParticipantContext) => void;
   } = {},
 ): Promise<StructuredContextItem> {
   const activePersona = options.activePersona ?? fixture.activePersona;
@@ -437,13 +442,14 @@ export async function buildLegacyParticipantContext(
     matrixUsers: fixture.matrixUsers,
     requestScope: options.requestScope,
   });
+  options.onPrepared?.(prepared);
 
-  const item = await buildUsersInConversationContextItem({
+  const item = await buildParticipantContextItem({
     client: fixture.client,
     guildId: PARTICIPANT_FIXTURE_IDS.guild,
     channelName: "general",
     channelId: PARTICIPANT_FIXTURE_IDS.channel,
-    userList: [...prepared.participantIds],
+    participantSeeds: prepared.discoveryPlan.seeds,
     triggererName: "Alice",
     botName: activePersona.persona_nickname ?? "Tomori",
     personaLineageId: activePersona.persona_lineage_id ?? undefined,

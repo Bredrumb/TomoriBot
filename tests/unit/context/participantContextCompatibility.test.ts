@@ -1,8 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
-import { buildUsersInConversationContextItem } from "@/utils/text/context/participants";
+import { buildParticipantContextItem } from "@/utils/text/context/participants";
+import type { PublicPersonaProfile } from "@/utils/text/context/types";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
+import { buildParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
+import { createPersonaKey } from "@/utils/text/participants/identity";
+import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
 import {
   createParticipantContextFixture,
   PARTICIPANT_FIXTURE_IDS,
@@ -14,19 +18,39 @@ interface BuildHumanOptions {
   isUserImpersonation?: boolean;
   impersonatedUserId?: string;
   impersonatedIdentityName?: string | null;
-  publicPersonaProfiles?: Parameters<typeof buildUsersInConversationContextItem>[0]["publicPersonaProfiles"];
+  publicPersonaProfiles?: readonly PublicPersonaProfile[];
 }
 
 async function buildHumanItem(
   fixture: ParticipantContextFixture,
   options: BuildHumanOptions = {},
 ): Promise<StructuredContextItem> {
-  const item = await buildUsersInConversationContextItem({
+  const referencePlan = buildParticipantDiscoveryPlan({
+    candidates: (options.publicPersonaProfiles ?? []).map((profile) => ({
+      key: createPersonaKey(profile.personaId),
+      reasons: new Set(["persona_trigger_reference"]),
+      aliases: [],
+      capabilities: new Set(),
+      sourceDisplayName: profile.personaName,
+      evidenceSources: ["persona_trigger_reference"],
+    })),
+  });
+  const { plan } = await composeParticipantDiscoveryPlan({
+    visibleInput: {
+      participantIds: [PARTICIPANT_FIXTURE_IDS.human, PARTICIPANT_FIXTURE_IDS.bot],
+      clientUserId: PARTICIPANT_FIXTURE_IDS.bot,
+      activePersonaId: fixture.activePersona.persona_id,
+      activePersonaIsAlter: fixture.activePersona.is_alter,
+    },
+    personas: fixture.personas,
+    referencePlan,
+  });
+  const item = await buildParticipantContextItem({
     client: fixture.client,
     guildId: PARTICIPANT_FIXTURE_IDS.guild,
     channelName: "general",
     channelId: PARTICIPANT_FIXTURE_IDS.channel,
-    userList: [PARTICIPANT_FIXTURE_IDS.human, PARTICIPANT_FIXTURE_IDS.bot],
+    participantSeeds: plan.seeds,
     triggererName: "Alice",
     botName: options.isUserImpersonation ? "Copied Alice" : "Tomori",
     personaLineageId: options.personaLineageId ?? PARTICIPANT_FIXTURE_IDS.activeLineage,
@@ -144,12 +168,22 @@ describe("participant context compatibility matrix", () => {
       });
       expect(references.referencedUserIds).toEqual(new Set([PARTICIPANT_FIXTURE_IDS.referencedHuman]));
 
-      const item = await buildUsersInConversationContextItem({
+      const { plan } = await composeParticipantDiscoveryPlan({
+        visibleInput: {
+          participantIds: [PARTICIPANT_FIXTURE_IDS.bot],
+          clientUserId: PARTICIPANT_FIXTURE_IDS.bot,
+          activePersonaId: fixture.activePersona.persona_id,
+          activePersonaIsAlter: fixture.activePersona.is_alter,
+        },
+        personas: fixture.personas,
+        referencePlan: references.discoveryPlan,
+      });
+      const item = await buildParticipantContextItem({
         client: fixture.client,
         guildId: PARTICIPANT_FIXTURE_IDS.guild,
         channelName: "general",
         channelId: PARTICIPANT_FIXTURE_IDS.channel,
-        userList: [PARTICIPANT_FIXTURE_IDS.referencedHuman, PARTICIPANT_FIXTURE_IDS.bot],
+        participantSeeds: plan.seeds,
         triggererName: "Alice",
         botName: "Tomori",
         personaLineageId: PARTICIPANT_FIXTURE_IDS.activeLineage,

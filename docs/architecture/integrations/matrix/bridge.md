@@ -169,6 +169,13 @@ Matrix user sends message
   → TomoriBot processes and responds normally
 ```
 
+During context preparation, the relay's Matrix ID and stripped display name enter the core
+Matrix `ParticipantSource`. It emits a typed `matrix_user` identity with bridge-presence
+evidence and aliases owned by that identity. Matrix participants are non-mentionable in the
+Discord target index; reminder delivery continues to use the bridge's Matrix-specific mention
+surface. The required `PreparedParticipantContext` carries this result into native context
+assembly, so the context builder does not accept a separate Matrix participant map.
+
 **Discord → Matrix (outbound):**
 ```
 TomoriBot sends AI response to Discord channel

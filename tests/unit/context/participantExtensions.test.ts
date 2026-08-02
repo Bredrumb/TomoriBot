@@ -44,7 +44,7 @@ function descriptor(
 function sourceInput(): ParticipantSourceInput {
   return {
     visibleInput: {
-      userList: [],
+      participantIds: [],
       syntheticUsers: new Map(),
       matrixUsers: new Map(),
     },

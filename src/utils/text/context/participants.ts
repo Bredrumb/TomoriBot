@@ -5,7 +5,6 @@ import type { AssembledServerConfig, TomoriState, UserRow } from "@/types/db/sch
 import type { MentionConverter } from "./templates";
 import type { PublicPersonaProfile } from "./types";
 import { serializeParticipantKey, type ParticipantSeed } from "@/utils/text/participants/identity";
-import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
 import { hydrateParticipantProfiles } from "@/utils/text/participants/hydration";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 import type { ParticipantPreparationDiagnostics } from "@/utils/text/participants/preparation";
@@ -19,7 +18,6 @@ export async function buildParticipantContextItem(params: {
   guildId: string;
   channelName: string;
   channelId: string;
-  userList: readonly string[];
   participantSeeds: readonly ParticipantSeed[];
   triggererName: string;
   botName: string;
@@ -50,11 +48,7 @@ export async function buildParticipantContextItem(params: {
     }
     typedKeys.add(serializedKey);
   }
-  if (params.userList.length > 0 && params.participantSeeds.length === 0) {
-    throw new Error("Prepared participant seeds cannot be empty when legacy participants are present");
-  }
-
-  if (params.userList.length === 0) {
+  if (params.participantSeeds.length === 0) {
     return null;
   }
 
@@ -125,23 +119,6 @@ export async function buildParticipantContextItem(params: {
     conversationUsers: rendered.conversationUsers,
     participantTargetIndex: rendered.targetIndex,
   };
-}
-
-export async function buildUsersInConversationContextItem(
-  params: Omit<Parameters<typeof buildParticipantContextItem>[0], "participantSeeds">,
-): Promise<StructuredContextItem | null> {
-  return buildParticipantContextItem({
-    ...params,
-    participantSeeds: adaptLegacyParticipantSeeds({
-      userList: params.userList,
-      clientUserId: params.client.user?.id,
-      activePersonaId: params.tomoriState?.persona_id,
-      activePersonaIsAlter: params.tomoriState?.is_alter,
-      syntheticUsers: params.syntheticUsers,
-      matrixUsers: params.matrixUsers,
-      publicPersonaProfiles: params.publicPersonaProfiles,
-    }),
-  });
 }
 
 function emitParticipantPreparationMetric(

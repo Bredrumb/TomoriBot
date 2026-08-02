@@ -10,6 +10,7 @@ import { createDiscordParticipantMemberDirectory } from "@/utils/text/participan
 import {
   buildParticipantDiscoveryPlan,
   discoverPersonaReferenceCandidates,
+  discoverVisibleAuthorCandidates,
 } from "@/utils/text/participants/discoveryPlan";
 import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
 import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
@@ -82,6 +83,40 @@ function referenceMember(discordId: string, displayName: string, bot = false) {
 }
 
 describe("participant discovery plan", () => {
+  it("rejects malformed or conflicting transport identities at the source boundary", async () => {
+    const referencePlan = buildParticipantDiscoveryPlan({ candidates: [] });
+    expect(() =>
+      discoverVisibleAuthorCandidates(
+        {
+          participantIds: ["999"],
+          clientUserId: "999",
+          syntheticUsers: new Map([["999", { displayName: "Impossible", type: "webhook" }]]),
+        },
+        [],
+      ),
+    ).toThrow("cannot be both the active bot and a synthetic user");
+    expect(() =>
+      discoverVisibleAuthorCandidates(
+        {
+          participantIds: ["broken"],
+          syntheticUsers: new Map([["broken", { displayName: "Broken", type: "persona" }]]),
+        },
+        [],
+      ),
+    ).toThrow("does not contain a valid persona ID");
+    await expect(
+      composeParticipantDiscoveryPlan({
+        visibleInput: {
+          participantIds: [],
+          syntheticUsers: new Map([["same", { displayName: "Webhook", type: "webhook" }]]),
+          matrixUsers: new Map([["same", "Matrix"]]),
+        },
+        personas: [],
+        referencePlan,
+      }),
+    ).rejects.toThrow("cannot be both a synthetic webhook and a Matrix user");
+  });
+
   it("is pure, merges multiple reasons, and retains active-turn-independent aliases and evidence", async () => {
     const ren = persona(2, "Ren", ["lilya", "ren"]);
     const referencePlan = buildParticipantDiscoveryPlan({
@@ -108,7 +143,7 @@ describe("participant discovery plan", () => {
 
     const { plan } = await composeParticipantDiscoveryPlan({
       visibleInput: {
-        userList: ["100", "999", "persona:2"],
+        participantIds: ["100", "999", "persona:2"],
         clientUserId: "999",
         activePersonaId: 1,
         activePersonaIsAlter: false,
@@ -140,7 +175,7 @@ describe("participant discovery plan", () => {
     const personas = [persona(1, "Tomori", ["tomori"]), persona(2, "Ren", ["ren"])];
     const referencePlan = buildParticipantDiscoveryPlan({ candidates: [] });
     const input = {
-      userList: ["100", "999"],
+      participantIds: ["100", "999"],
       clientUserId: "999",
       activePersonaId: 1,
       activePersonaIsAlter: false,
@@ -162,7 +197,7 @@ describe("participant discovery plan", () => {
       await composeParticipantDiscoveryPlan({
         visibleInput: {
           ...input,
-          userList: [...input.userList],
+          participantIds: [...input.participantIds],
           syntheticUsers: new Map(input.syntheticUsers),
           matrixUsers: new Map(input.matrixUsers),
         },

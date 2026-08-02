@@ -58,23 +58,6 @@ export interface ParticipantSeed {
   sourceDisplayName?: string;
 }
 
-export type SyntheticParticipantDefinition =
-  | {
-      key: Extract<ParticipantKey, { kind: "persona" }>;
-      displayName: string;
-      transport: "persona_webhook";
-    }
-  | {
-      key: Extract<ParticipantKey, { kind: "webhook" }>;
-      displayName: string;
-      transport: "webhook";
-    }
-  | {
-      key: Extract<ParticipantKey, { kind: "matrix_user" }>;
-      displayName: string;
-      transport: "matrix";
-    };
-
 function requireIdentifier(value: string, label: string): string {
   const normalized = value.trim();
   if (!normalized) throw new Error(`${label} must not be empty`);

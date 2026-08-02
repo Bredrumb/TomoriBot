@@ -4,7 +4,6 @@ import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTerm
 import { buildUncensorInjectionText } from "@/utils/text/uncensor";
 import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
 import { appendDialogueHistoryContext } from "./dialogueHistory";
 import { convertMentions } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
@@ -35,9 +34,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     serverName,
     serverDescription,
     simplifiedMessageHistory,
-    userList = [],
-    participantSeeds,
-    participantDiscoveryPlan,
     preparedParticipantContext,
     channelName,
     channelId,
@@ -46,9 +42,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     triggererName,
     tomoriNickname,
     tomoriAttributes,
-    publicPersonaProfiles,
-    preloadedReferencedUserRows,
-    referencedUserIds,
     tomoriConfig,
     channelPromptOverride,
     channelContextNote,
@@ -65,8 +58,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     impersonatedUserId,
     impersonatedUserNickname,
     impersonatedUserPrompt,
-    matrixUsers,
-    syntheticUsers,
     personaUserBlocks,
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
@@ -91,25 +82,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
   const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
-  const resolvedParticipantIds = [...(preparedParticipantContext?.participantIds ?? userList)];
-  const resolvedParticipantSeeds =
-    preparedParticipantContext?.discoveryPlan.seeds ??
-    participantDiscoveryPlan?.seeds ??
-    participantSeeds ??
-    adaptLegacyParticipantSeeds({
-      userList,
-      clientUserId: client.user?.id,
-      activePersonaId: tomoriState?.persona_id,
-      activePersonaIsAlter: tomoriState?.is_alter,
-      syntheticUsers,
-      matrixUsers,
-      publicPersonaProfiles,
-    });
-  const resolvedMatrixUsers = preparedParticipantContext?.matrixUsers ?? matrixUsers;
-  const resolvedSyntheticUsers = preparedParticipantContext?.syntheticUsers ?? syntheticUsers;
-  const resolvedPublicPersonaProfiles = preparedParticipantContext?.publicPersonaProfiles ?? publicPersonaProfiles;
-  const resolvedReferencedUserRows = preparedParticipantContext?.referencedUserRows ?? preloadedReferencedUserRows;
-  const resolvedReferencedUserIds = preparedParticipantContext?.referencedUserIds ?? referencedUserIds;
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
     stateForContext:
@@ -258,8 +230,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       guildId,
       channelName,
       channelId,
-      userList: resolvedParticipantIds,
-      participantSeeds: resolvedParticipantSeeds,
+      participantSeeds: preparedParticipantContext.discoveryPlan.seeds,
       triggererName,
       botName,
       personaLineageId,
@@ -269,13 +240,13 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isUserImpersonation,
       impersonatedUserId,
       impersonatedIdentityName,
-      matrixUsers: resolvedMatrixUsers,
-      syntheticUsers: resolvedSyntheticUsers,
-      publicPersonaProfiles: resolvedPublicPersonaProfiles,
-      preloadedReferencedUserRows: resolvedReferencedUserRows,
-      referencedUserIds: resolvedReferencedUserIds,
-      preparationDiagnostics: preparedParticipantContext?.diagnostics,
-      profileEnricherRegistry: preparedParticipantContext?.profileEnricherRegistry,
+      matrixUsers: preparedParticipantContext.matrixUsers,
+      syntheticUsers: preparedParticipantContext.syntheticUsers,
+      publicPersonaProfiles: preparedParticipantContext.publicPersonaProfiles,
+      preloadedReferencedUserRows: preparedParticipantContext.referencedUserRows,
+      referencedUserIds: preparedParticipantContext.referencedUserIds,
+      preparationDiagnostics: preparedParticipantContext.diagnostics,
+      profileEnricherRegistry: preparedParticipantContext.profileEnricherRegistry,
       toolPromptMacroResolver,
       conversationCorpus,
       snapshot,

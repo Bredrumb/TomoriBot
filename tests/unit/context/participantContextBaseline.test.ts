@@ -13,7 +13,7 @@ import { reassembleWithPreset } from "@/utils/text/presetContextBuilder";
 import { replaceMentionHandles } from "@/utils/text/processors/mentionProcessor";
 import { createParticipantRequestScope } from "@/utils/text/participants/preparation";
 import {
-  buildLegacyParticipantContext,
+  buildPreparedParticipantContext,
   createParticipantContextFixture,
   normalizeParticipantContextItem,
   PARTICIPANT_FIXTURE_IDS,
@@ -109,7 +109,7 @@ describe("participant context Phase 0 baseline", () => {
   it("locks native participant text, order, target metadata, aliases, and aggregate I/O", async () => {
     const fixture = createParticipantContextFixture();
     try {
-      const item = await buildLegacyParticipantContext(fixture);
+      const item = await buildPreparedParticipantContext(fixture);
 
       expect(normalizeParticipantContextItem(item)).toEqual(EXPECTED_PARTICIPANT_GOLDEN);
       expect(fixture.counters).toEqual({
@@ -132,7 +132,7 @@ describe("participant context Phase 0 baseline", () => {
   it("preserves participant metadata through SillyTavern preset reassembly", async () => {
     const fixture = createParticipantContextFixture();
     try {
-      const item = await buildLegacyParticipantContext(fixture);
+      const item = await buildPreparedParticipantContext(fixture);
       const presetData: CachedPresetData = {
         preset: {
           preset_id: 1,
@@ -179,14 +179,14 @@ describe("participant context Phase 0 baseline", () => {
     const liveFixture = createParticipantContextFixture();
     let liveOutput: unknown;
     try {
-      liveOutput = normalizeParticipantContextItem(await buildLegacyParticipantContext(liveFixture));
+      liveOutput = normalizeParticipantContextItem(await buildPreparedParticipantContext(liveFixture));
     } finally {
       liveFixture.restoreRepositories();
     }
 
     const snapshotFixture = createParticipantContextFixture();
     try {
-      const snapshotOutput = normalizeParticipantContextItem(await buildLegacyParticipantContext(snapshotFixture));
+      const snapshotOutput = normalizeParticipantContextItem(await buildPreparedParticipantContext(snapshotFixture));
       expect(snapshotOutput).toEqual(liveOutput);
       expect(snapshotFixture.counters).toEqual(liveFixture.counters);
     } finally {
@@ -203,8 +203,8 @@ describe("participant context Phase 0 baseline", () => {
     if (!alterPersona) throw new Error("Alter persona fixture is missing");
 
     try {
-      const mainItem = await buildLegacyParticipantContext(fixture, { requestScope });
-      const alterItem = await buildLegacyParticipantContext(fixture, {
+      const mainItem = await buildPreparedParticipantContext(fixture, { requestScope });
+      const alterItem = await buildPreparedParticipantContext(fixture, {
         activePersona: alterPersona,
         requestScope,
       });
@@ -259,7 +259,7 @@ describe("participant context Phase 0 baseline", () => {
   it("retains participant metadata through strict-chat context normalization", async () => {
     const fixture = createParticipantContextFixture();
     try {
-      const item = await buildLegacyParticipantContext(fixture);
+      const item = await buildPreparedParticipantContext(fixture);
       const normalized = relocateAssistantMediaContextItems([
         item,
         {
@@ -292,7 +292,7 @@ describe("participant context Phase 0 baseline", () => {
   it("drives stream, tool-target, and tool-reply resolution from the same golden metadata", async () => {
     const fixture = createParticipantContextFixture();
     try {
-      const item = await buildLegacyParticipantContext(fixture);
+      const item = await buildPreparedParticipantContext(fixture);
       expect(item.participantTargetIndex?.targets.length).toBeGreaterThan(0);
       const indexedItem = {
         ...item,

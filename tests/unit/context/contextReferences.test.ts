@@ -14,9 +14,13 @@ import {
   resolveUniqueTextualAliasReferences,
 } from "@/utils/text/contextReferences";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
-import { buildUsersInConversationContextItem } from "@/utils/text/context/participants";
+import { buildParticipantContextItem } from "@/utils/text/context/participants";
 import { isEligibleContextReferenceUser, userRepository } from "@/utils/db/repositories/UserRepository";
 import { serverScheduleRepository } from "@/utils/db/repositories";
+import { buildParticipantDiscoveryPlan, type ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
+import { createDiscordUserKey, createPersonaKey, type ParticipantSeed } from "@/utils/text/participants/identity";
+import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
+import type { PublicPersonaProfile } from "@/utils/text/context/types";
 
 const message = (content: string, id = crypto.randomUUID()): SimplifiedMessageForContext => ({
   id,
@@ -36,6 +40,38 @@ const persona = (id: number, nickname: string, triggers: string[]): TomoriState 
     persona_attributes: [],
     physical_appearance_tags: [],
   }) as unknown as TomoriState;
+
+async function participantSeeds(params: {
+  client: Client;
+  activePersona: TomoriState;
+  participantIds: readonly string[];
+  publicPersonaProfiles?: readonly PublicPersonaProfile[];
+  referencePlan?: ParticipantDiscoveryPlan;
+}): Promise<readonly ParticipantSeed[]> {
+  const referencePlan =
+    params.referencePlan ??
+    buildParticipantDiscoveryPlan({
+      candidates: (params.publicPersonaProfiles ?? []).map((profile) => ({
+        key: createPersonaKey(profile.personaId),
+        reasons: new Set(["persona_trigger_reference"] as const),
+        aliases: [],
+        capabilities: new Set(),
+        sourceDisplayName: profile.personaName,
+        evidenceSources: ["persona_trigger_reference"] as const,
+      })),
+    });
+  const { plan } = await composeParticipantDiscoveryPlan({
+    visibleInput: {
+      participantIds: params.participantIds,
+      clientUserId: params.client.user?.id,
+      activePersonaId: params.activePersona.persona_id,
+      activePersonaIsAlter: params.activePersona.is_alter,
+    },
+    personas: [params.activePersona],
+    referencePlan,
+  });
+  return plan.seeds;
+}
 
 const defaultUser = (): UserRow => ({
   user_id: 1,
@@ -336,12 +372,26 @@ describe("public persona profile rendering", () => {
     serverScheduleRepository.getPendingRemindersForUser = async () => [];
 
     try {
-      const item = await buildUsersInConversationContextItem({
+      const publicPersonaProfiles = [
+        {
+          personaId: 2,
+          personaName: "Tags Only",
+          attributes: [],
+          imageAppearanceTags: ["silver hair", "red eyes"],
+        },
+      ];
+      const seeds = await participantSeeds({
+        client,
+        activePersona,
+        participantIds: ["999"],
+        publicPersonaProfiles,
+      });
+      const item = await buildParticipantContextItem({
         client,
         guildId: "guild",
         channelName: "general",
         channelId: "channel",
-        userList: ["999"],
+        participantSeeds: seeds,
         triggererName: "Author",
         botName: "Active",
         tomoriState: null,
@@ -349,14 +399,7 @@ describe("public persona profile rendering", () => {
         isDMChannel: false,
         isUserImpersonation: false,
         impersonatedIdentityName: null,
-        publicPersonaProfiles: [
-          {
-            personaId: 2,
-            personaName: "Tags Only",
-            attributes: [],
-            imageAppearanceTags: ["silver hair", "red eyes"],
-          },
-        ],
+        publicPersonaProfiles,
         toolPromptMacroResolver: { expand: async (text) => text },
         conversationCorpus: "",
         convertMentions: async (text) => text,
@@ -406,12 +449,24 @@ describe("public persona profile rendering", () => {
     activePersona.config = { timezone_offset: 0 } as AssembledServerConfig;
 
     try {
-      await buildUsersInConversationContextItem({
+      const referencePlan = buildParticipantDiscoveryPlan({
+        candidates: [
+          {
+            key: createDiscordUserKey("404"),
+            reasons: new Set(["real_mention"]),
+            aliases: [],
+            capabilities: new Set(["mentionable"]),
+            evidenceSources: ["real_mention"],
+          },
+        ],
+      });
+      const seeds = await participantSeeds({ client, activePersona, participantIds: [], referencePlan });
+      await buildParticipantContextItem({
         client,
         guildId: "guild",
         channelName: "general",
         channelId: "channel",
-        userList: ["404"],
+        participantSeeds: seeds,
         triggererName: "Author",
         botName: "Active",
         tomoriState: null,
@@ -482,12 +537,13 @@ describe("persona task context", () => {
     };
 
     try {
-      const item = await buildUsersInConversationContextItem({
+      const seeds = await participantSeeds({ client, activePersona, participantIds: ["100", "999"] });
+      const item = await buildParticipantContextItem({
         client,
         guildId: "guild",
         channelName: "general",
         channelId: "channel-1",
-        userList: ["100", "999"],
+        participantSeeds: seeds,
         triggererName: "Alice",
         botName: "Active",
         tomoriState: activePersona,
@@ -552,12 +608,13 @@ describe("persona task context", () => {
     };
 
     try {
-      const item = await buildUsersInConversationContextItem({
+      const seeds = await participantSeeds({ client, activePersona, participantIds: ["999"] });
+      const item = await buildParticipantContextItem({
         client,
         guildId: "guild",
         channelName: "general",
         channelId: "channel-1",
-        userList: ["999"],
+        participantSeeds: seeds,
         triggererName: "Author",
         botName: "Active",
         tomoriState: activePersona,

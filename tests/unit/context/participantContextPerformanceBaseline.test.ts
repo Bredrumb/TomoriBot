@@ -3,7 +3,7 @@ import type { GuildMember } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { createParticipantRequestScope } from "@/utils/text/participants/preparation";
 import {
-  buildLegacyParticipantContext,
+  buildPreparedParticipantContext,
   createParticipantContextFixture,
   PARTICIPANT_FIXTURE_IDS,
   type ParticipantContextFixture,
@@ -64,7 +64,7 @@ describe("participant context Phase 0 performance baseline", () => {
       const fixture = createParticipantContextFixture();
       try {
         const addedCandidateIds = addReferenceCandidates(fixture, extraCandidateCount);
-        const item = await buildLegacyParticipantContext(fixture);
+        const item = await buildPreparedParticipantContext(fixture);
         const eligibleCandidateCount = 1 + extraCandidateCount;
         const hydratedDiscordUserCount = 1 + eligibleCandidateCount;
 
@@ -100,8 +100,8 @@ describe("participant context Phase 0 performance baseline", () => {
     const fixture = createParticipantContextFixture();
     const requestScope = createParticipantRequestScope();
     try {
-      await buildLegacyParticipantContext(fixture, { requestScope });
-      await buildLegacyParticipantContext(fixture, { requestScope });
+      await buildPreparedParticipantContext(fixture, { requestScope });
+      await buildPreparedParticipantContext(fixture, { requestScope });
 
       expect(fixture.counters.candidateQueries).toBe(1);
       expect(fixture.counters.memberFetches).toBe(4);
