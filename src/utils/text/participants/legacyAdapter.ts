@@ -144,6 +144,7 @@ export function adaptLegacyParticipantSeeds(input: LegacyParticipantAdapterInput
       key,
       reasons: adaptLegacyParticipantReasons(legacyId, key, input),
       aliases: [],
+      capabilities: new Set(key.kind === "discord_user" ? ["mentionable"] : []),
       firstSeenOrder,
       ...(sourceDisplayName && { sourceDisplayName }),
     });
@@ -161,6 +162,7 @@ export function adaptLegacyParticipantSeeds(input: LegacyParticipantAdapterInput
       key: definition.key,
       reasons: new Set([reason]),
       aliases: [],
+      capabilities: new Set(),
       firstSeenOrder,
       sourceDisplayName: definition.displayName,
     });
@@ -172,6 +174,7 @@ export function adaptLegacyParticipantSeeds(input: LegacyParticipantAdapterInput
       key: createPersonaKey(profile.personaId),
       reasons: input.personaProfileReasons?.get(profile.personaId) ?? new Set(["persona_trigger_reference"]),
       aliases: [],
+      capabilities: new Set(),
       firstSeenOrder,
       sourceDisplayName: profile.personaName,
     });

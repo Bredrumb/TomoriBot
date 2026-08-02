@@ -4,6 +4,7 @@ import {
   mergeParticipantSeeds,
   serializeParticipantKey,
   type ParticipantAlias,
+  type ParticipantCapability,
   type ParticipantInclusionReason,
   type ParticipantKey,
   type ParticipantSeed,
@@ -58,6 +59,7 @@ export interface DiscoveredParticipantCandidate {
   key: ParticipantKey;
   reasons: ReadonlySet<ParticipantInclusionReason>;
   aliases: readonly ParticipantAlias[];
+  capabilities: ReadonlySet<ParticipantCapability>;
   sourceDisplayName?: string;
   evidenceSources: readonly ParticipantCandidateEvidenceSource[];
 }
@@ -99,6 +101,7 @@ export function discoverVisibleAuthorCandidates(
       key,
       reasons,
       aliases: aliasesForSyntheticParticipant(key, sourceDisplayName, personas),
+      capabilities: new Set(key.kind === "discord_user" ? ["mentionable"] : []),
       ...(sourceDisplayName && { sourceDisplayName }),
       evidenceSources: reasons.has("active_identity") ? ["active_identity"] : ["visible_author"],
     };
@@ -115,6 +118,7 @@ export function discoverHistoricalSyntheticCandidates(
       definition.key.kind === "persona" ? "historical_persona" : "visible_author",
     ]),
     aliases: aliasesForSyntheticParticipant(definition.key, definition.displayName, personas),
+    capabilities: new Set(),
     sourceDisplayName: definition.displayName,
     evidenceSources: [definition.key.kind === "persona" ? "historical_persona" : "historical_synthetic"],
   }));
@@ -127,6 +131,7 @@ export function discoverBridgeCandidates(
     key: definition.key,
     reasons: new Set<ParticipantInclusionReason>(["bridge_presence"]),
     aliases: aliasesForSyntheticParticipant(definition.key, definition.displayName, []),
+    capabilities: new Set(),
     sourceDisplayName: definition.displayName,
     evidenceSources: ["bridge_presence"],
   }));
@@ -155,6 +160,7 @@ export function discoverPersonaReferenceCandidates(
         nickname: persona.persona_nickname,
         triggerWords: persona.trigger_words,
       }).aliases,
+      capabilities: new Set(),
       sourceDisplayName: persona.persona_nickname,
       evidenceSources,
     });
@@ -174,6 +180,7 @@ export function buildParticipantDiscoveryPlan(params: {
       key: candidate.key,
       reasons: candidate.reasons,
       aliases: candidate.aliases,
+      capabilities: candidate.capabilities,
       firstSeenOrder,
       ...(candidate.sourceDisplayName && { sourceDisplayName: candidate.sourceDisplayName }),
     });
@@ -195,33 +202,4 @@ export function buildParticipantDiscoveryPlan(params: {
     rejections: params.rejections ?? [],
     aliasReferenceDiagnostics: params.aliasReferenceDiagnostics ?? EMPTY_ALIAS_DIAGNOSTICS,
   };
-}
-
-export function composeParticipantDiscoveryPlan(params: {
-  visibleInput: LegacyParticipantAdapterInput;
-  personas: readonly TomoriState[];
-  referencePlan: ParticipantDiscoveryPlan;
-}): ParticipantDiscoveryPlan {
-  const referenceCandidates: DiscoveredParticipantCandidate[] = params.referencePlan.seeds.map((seed) => ({
-    key: seed.key,
-    reasons: seed.reasons,
-    aliases: seed.aliases,
-    ...(seed.sourceDisplayName && { sourceDisplayName: seed.sourceDisplayName }),
-    evidenceSources: params.referencePlan.evidence
-      .filter((evidence) => serializeParticipantKey(evidence.key) === serializeParticipantKey(seed.key))
-      .map((evidence) => evidence.source),
-  }));
-  const referencedUsers = referenceCandidates.filter((candidate) => candidate.key.kind === "discord_user");
-  const referencedPersonas = referenceCandidates.filter((candidate) => candidate.key.kind !== "discord_user");
-  return buildParticipantDiscoveryPlan({
-    candidates: [
-      ...discoverVisibleAuthorCandidates(params.visibleInput, params.personas),
-      ...discoverHistoricalSyntheticCandidates(params.visibleInput.syntheticUsers, params.personas),
-      ...referencedUsers,
-      ...discoverBridgeCandidates(params.visibleInput.matrixUsers),
-      ...referencedPersonas,
-    ],
-    rejections: params.referencePlan.rejections,
-    aliasReferenceDiagnostics: params.referencePlan.aliasReferenceDiagnostics,
-  });
 }

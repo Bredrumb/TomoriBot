@@ -9,6 +9,7 @@ import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAda
 import { hydrateParticipantProfiles } from "@/utils/text/participants/hydration";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 import type { ParticipantPreparationDiagnostics } from "@/utils/text/participants/preparation";
+import type { ParticipantProfileEnricherRegistry } from "@/utils/text/participants/profileEnrichers";
 import { log } from "@/utils/misc/logger";
 
 export { formatPendingReminderForContext } from "@/utils/text/participants/hydration";
@@ -39,6 +40,7 @@ export async function buildParticipantContextItem(params: {
   snapshot?: import("@/types/misc/context").RequestSnapshot;
   convertMentions: MentionConverter;
   preparationDiagnostics?: ParticipantPreparationDiagnostics;
+  profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
 }): Promise<StructuredContextItem | null> {
   const typedKeys = new Set<string>();
   for (const seed of params.participantSeeds) {
@@ -85,6 +87,7 @@ export async function buildParticipantContextItem(params: {
     snapshot: params.snapshot,
     convertMentions: params.convertMentions,
     botName: params.botName,
+    profileEnricherRegistry: params.profileEnricherRegistry,
   });
   const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
   const renderStartedAt = performance.now();
@@ -147,6 +150,8 @@ function emitParticipantPreparationMetric(
   renderDurationMs: number,
 ): void {
   const rejectionCounts = preparation?.rejectionCounts;
+  const sourceContributions = preparation?.sourceContributions ?? [];
+  const enricherContributions = hydration.enricherContributions;
   log.metric("participant_context_preparation", {
     candidate_count: preparation?.candidateCount ?? 0,
     included_count: preparation?.includedCount ?? 0,
@@ -165,6 +170,18 @@ function emitParticipantPreparationMetric(
     candidate_source_reads: preparation?.externalCalls.candidateSourceReads ?? 0,
     member_cache_hits: preparation?.externalCalls.memberCacheHits ?? 0,
     member_fetches: preparation?.externalCalls.memberFetches ?? 0,
+    source_contribution_successes: sourceContributions.filter((item) => item.status === "success").length,
+    source_contribution_failures: sourceContributions.filter((item) => item.status === "failed").length,
+    source_contribution_timeouts: sourceContributions.filter((item) => item.status === "timed_out").length,
+    source_contribution_duration_ms: Number(
+      sourceContributions.reduce((total, item) => total + item.durationMs, 0).toFixed(3),
+    ),
+    enricher_contribution_successes: enricherContributions.filter((item) => item.status === "success").length,
+    enricher_contribution_failures: enricherContributions.filter((item) => item.status === "failed").length,
+    enricher_contribution_timeouts: enricherContributions.filter((item) => item.status === "timed_out").length,
+    enricher_contribution_duration_ms: Number(
+      enricherContributions.reduce((total, item) => total + item.durationMs, 0).toFixed(3),
+    ),
     user_row_reads: hydration.externalCalls.userRowLoads,
     registration_calls: hydration.externalCalls.registrations,
     blacklist_reads: hydration.externalCalls.blacklistReads,

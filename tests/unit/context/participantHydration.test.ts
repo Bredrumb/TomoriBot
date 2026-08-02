@@ -102,6 +102,7 @@ function createHumanSeed(): ParticipantSeed {
     key: createDiscordUserKey(USER_ID),
     reasons: new Set(["visible_author"]),
     aliases: [],
+    capabilities: new Set(["mentionable"]),
     firstSeenOrder: 0,
   };
 }
@@ -111,6 +112,7 @@ function createBotSeed(): ParticipantSeed {
     key: createBotKey(BOT_ID),
     reasons: new Set(["active_identity"]),
     aliases: [],
+    capabilities: new Set(),
     firstSeenOrder: 1,
   };
 }
@@ -422,6 +424,7 @@ describe("participant hydration", () => {
       key: { kind: "persona", personaId: 8 },
       reasons: new Set(["historical_persona"]),
       aliases: [],
+      capabilities: new Set(),
       firstSeenOrder: 0,
       sourceDisplayName: "Ren",
     };

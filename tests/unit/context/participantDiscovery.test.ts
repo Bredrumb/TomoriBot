@@ -9,9 +9,9 @@ import {
 import { createDiscordParticipantMemberDirectory } from "@/utils/text/participants/candidateSources";
 import {
   buildParticipantDiscoveryPlan,
-  composeParticipantDiscoveryPlan,
   discoverPersonaReferenceCandidates,
 } from "@/utils/text/participants/discoveryPlan";
+import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
 import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
 import { createDiscordUserKey, serializeParticipantKey } from "@/utils/text/participants/identity";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
@@ -82,7 +82,7 @@ function referenceMember(discordId: string, displayName: string, bot = false) {
 }
 
 describe("participant discovery plan", () => {
-  it("is pure, merges multiple reasons, and retains active-turn-independent aliases and evidence", () => {
+  it("is pure, merges multiple reasons, and retains active-turn-independent aliases and evidence", async () => {
     const ren = persona(2, "Ren", ["lilya", "ren"]);
     const referencePlan = buildParticipantDiscoveryPlan({
       candidates: [
@@ -95,6 +95,7 @@ describe("participant discovery plan", () => {
             identity: { displayName: "Bob", nickname: null, globalName: "Bob", username: "bob" },
             exposeSavedNickname: false,
           }),
+          capabilities: new Set(["mentionable"]),
           sourceDisplayName: "Bob",
           evidenceSources: ["real_mention", "unique_text_alias"],
         },
@@ -105,7 +106,7 @@ describe("participant discovery plan", () => {
       ],
     });
 
-    const plan = composeParticipantDiscoveryPlan({
+    const { plan } = await composeParticipantDiscoveryPlan({
       visibleInput: {
         userList: ["100", "999", "persona:2"],
         clientUserId: "999",
@@ -135,7 +136,7 @@ describe("participant discovery plan", () => {
     ).toEqual(["real_mention", "unique_text_alias"]);
   });
 
-  it("produces equivalent live and snapshot plans from equivalent sanitized sources", () => {
+  it("produces equivalent live and snapshot plans from equivalent sanitized sources", async () => {
     const personas = [persona(1, "Tomori", ["tomori"]), persona(2, "Ren", ["ren"])];
     const referencePlan = buildParticipantDiscoveryPlan({ candidates: [] });
     const input = {
@@ -146,7 +147,7 @@ describe("participant discovery plan", () => {
       syntheticUsers: new Map<string, { displayName: string; type: "persona" | "webhook" }>(),
       matrixUsers: new Map([["@mika:example.org", "Mika Matrix"]]),
     };
-    const normalize = (plan: ReturnType<typeof composeParticipantDiscoveryPlan>) => ({
+    const normalize = (plan: Awaited<ReturnType<typeof composeParticipantDiscoveryPlan>>["plan"]) => ({
       seeds: plan.seeds.map((seed) => ({
         key: serializeParticipantKey(seed.key),
         reasons: [...seed.reasons],
@@ -156,17 +157,19 @@ describe("participant discovery plan", () => {
       evidence: plan.evidence.map((item) => [serializeParticipantKey(item.key), item.source, item.firstSeenOrder]),
     });
 
-    const livePlan = composeParticipantDiscoveryPlan({ visibleInput: input, personas, referencePlan });
-    const snapshotPlan = composeParticipantDiscoveryPlan({
-      visibleInput: {
-        ...input,
-        userList: [...input.userList],
-        syntheticUsers: new Map(input.syntheticUsers),
-        matrixUsers: new Map(input.matrixUsers),
-      },
-      personas: [...personas],
-      referencePlan,
-    });
+    const livePlan = (await composeParticipantDiscoveryPlan({ visibleInput: input, personas, referencePlan })).plan;
+    const snapshotPlan = (
+      await composeParticipantDiscoveryPlan({
+        visibleInput: {
+          ...input,
+          userList: [...input.userList],
+          syntheticUsers: new Map(input.syntheticUsers),
+          matrixUsers: new Map(input.matrixUsers),
+        },
+        personas: [...personas],
+        referencePlan,
+      })
+    ).plan;
     expect(normalize(snapshotPlan)).toEqual(normalize(livePlan));
   });
 });

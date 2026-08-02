@@ -269,6 +269,7 @@ export async function resolveContextReferences(params: {
         aliases: participantAliases.filter(
           (alias) => alias.owner.kind === "discord_user" && alias.owner.discordId === userId,
         ),
+        capabilities: new Set(["mentionable"]),
         sourceDisplayName: userRow.user_nickname,
         evidenceSources: [...reasons],
       },

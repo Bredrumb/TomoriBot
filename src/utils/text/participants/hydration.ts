@@ -29,6 +29,11 @@ import {
   type ParticipantSeed,
 } from "@/utils/text/participants/identity";
 import { formatTimeWithOffset, formatUTCOffset, getCurrentTimeWithOffset } from "@/utils/text/timezoneHelper";
+import {
+  applyParticipantProfileEnrichers,
+  type ParticipantProfileEnricherRegistry,
+} from "@/utils/text/participants/profileEnrichers";
+import type { ContributionExecutionDiagnostic } from "@/utils/contributions/registry";
 
 export interface ActivePersonaScope {
   personaId?: number;
@@ -46,7 +51,8 @@ export type ParticipantProfileFieldKind =
   | "roles"
   | "personal_memories"
   | "human_reminders"
-  | "persona_public_attributes";
+  | "persona_public_attributes"
+  | `extension:${string}`;
 
 export type ParticipantFieldVisibilityReason =
   | "visible"
@@ -110,6 +116,7 @@ export interface ParticipantHydrationDiagnostics {
     fallbackUserReads: number;
     presenceReads: number;
   };
+  enricherContributions: readonly ContributionExecutionDiagnostic[];
 }
 
 export interface ParticipantHydrationDependencies {
@@ -149,6 +156,7 @@ export interface ParticipantHydrationParams {
   conversationCorpus: string | null;
   snapshot?: RequestSnapshot;
   convertMentions: MentionConverter;
+  profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
 }
 
 const DEFAULT_HYDRATION_DEPENDENCIES: ParticipantHydrationDependencies = {
@@ -197,6 +205,11 @@ export function createParticipantExposurePolicy(params: {
       !params.blacklisted &&
       params.privacyLevel === PrivacyLevel.MINIMAL,
   };
+}
+
+export function canMentionParticipant(seed: ParticipantSeed): boolean {
+  if (seed.key.kind !== "discord_user") return false;
+  return seed.capabilities?.has("mentionable") ?? true;
 }
 
 export function formatPendingReminderForContext(
@@ -363,7 +376,7 @@ async function hydrateDiscordUserBase(
       displayName,
       aliases,
       primaryAlias,
-      mentionable: true,
+      mentionable: canMentionParticipant(seed),
       isBot: false,
       resolvableTargetId: discordId,
     },
@@ -793,9 +806,19 @@ export async function hydrateParticipantProfiles(
     if (syntheticProfile) profiles.push(syntheticProfile);
   }
   await applyPublicPersonaProfiles(profiles, params);
-  return {
+  const enriched = await applyParticipantProfileEnrichers({
     profiles,
+    activePersonaScope: params.activePersonaScope,
+    registry: params.profileEnricherRegistry,
+  });
+  return {
+    profiles: enriched.profiles,
     personaTaskLines: await hydratePersonaTaskLines(params, dependencies),
-    diagnostics: { durationMs: performance.now() - startedAt, profileCount: profiles.length, externalCalls },
+    diagnostics: {
+      durationMs: performance.now() - startedAt,
+      profileCount: enriched.profiles.length,
+      externalCalls,
+      enricherContributions: enriched.diagnostics,
+    },
   };
 }

@@ -1,5 +1,6 @@
 import type { Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
+import type { ContributionExecutionDiagnostic } from "@/utils/contributions/registry";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { resolveContextReferences, type ResolvedContextReferences } from "@/utils/text/contextReferences";
 import {
@@ -8,11 +9,12 @@ import {
   type ParticipantMemberDirectory,
   type UserReferenceCandidateSource,
 } from "@/utils/text/participants/candidateSources";
-import {
-  composeParticipantDiscoveryPlan,
-  type ParticipantDiscoveryPlan,
-  type ParticipantDiscoveryRejectionReason,
+import type {
+  ParticipantDiscoveryPlan,
+  ParticipantDiscoveryRejectionReason,
 } from "@/utils/text/participants/discoveryPlan";
+import { composeParticipantDiscoveryPlan, type ParticipantSourceRegistry } from "@/utils/text/participants/sources";
+import type { ParticipantProfileEnricherRegistry } from "@/utils/text/participants/profileEnrichers";
 
 export interface ParticipantRequestScope {
   discoveries: Map<string, Promise<CachedParticipantDiscovery>>;
@@ -31,6 +33,7 @@ export interface ParticipantPreparationDiagnostics {
   includedCount: number;
   rejectionCounts: Readonly<Record<ParticipantDiscoveryRejectionReason, number>>;
   externalCalls: ParticipantPreparationExternalCalls;
+  sourceContributions: readonly ContributionExecutionDiagnostic[];
 }
 
 export interface PreparedParticipantContext {
@@ -42,6 +45,7 @@ export interface PreparedParticipantContext {
   referencedUserRows: ReadonlyMap<string, UserRow>;
   referencedUserIds: ReadonlySet<string>;
   diagnostics: ParticipantPreparationDiagnostics;
+  profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
 }
 
 export interface ParticipantPreparationInput {
@@ -57,6 +61,8 @@ export interface ParticipantPreparationInput {
   requestScope?: ParticipantRequestScope;
   candidateSource?: UserReferenceCandidateSource;
   memberDirectory?: ParticipantMemberDirectory | null;
+  sourceRegistry?: ParticipantSourceRegistry;
+  profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
 }
 
 interface CachedParticipantDiscovery {
@@ -101,18 +107,22 @@ export async function prepareParticipantContext(
   const publicPersonaProfiles = discovery.references.publicPersonaProfiles.filter(
     (profile) => profile.personaId !== activePersonaId,
   );
-  const discoveryPlan = composeParticipantDiscoveryPlan({
-    visibleInput: {
-      userList: frozen.visibleUserIds,
-      clientUserId: frozen.client.user?.id,
-      activePersonaId,
-      activePersonaIsAlter: frozen.activePersona?.is_alter,
-      syntheticUsers: frozen.syntheticUsers,
-      matrixUsers: frozen.matrixUsers,
+  const composition = await composeParticipantDiscoveryPlan(
+    {
+      visibleInput: {
+        userList: frozen.visibleUserIds,
+        clientUserId: frozen.client.user?.id,
+        activePersonaId,
+        activePersonaIsAlter: frozen.activePersona?.is_alter,
+        syntheticUsers: frozen.syntheticUsers,
+        matrixUsers: frozen.matrixUsers,
+      },
+      personas: frozen.personas,
+      referencePlan: discovery.references.discoveryPlan,
     },
-    personas: frozen.personas,
-    referencePlan: discovery.references.discoveryPlan,
-  });
+    input.sourceRegistry,
+  );
+  const discoveryPlan = composition.plan;
   const participantIds = [...frozen.visibleUserIds];
   for (const referencedUserId of discovery.references.referencedUserIds) {
     if (!participantIds.includes(referencedUserId)) participantIds.push(referencedUserId);
@@ -137,7 +147,9 @@ export async function prepareParticipantContext(
       externalCalls: discoveryCacheHit
         ? { candidateSourceReads: 0, memberCacheHits: 0, memberFetches: 0 }
         : discovery.externalCalls,
+      sourceContributions: composition.diagnostics,
     },
+    profileEnricherRegistry: input.profileEnricherRegistry,
   };
 }
 

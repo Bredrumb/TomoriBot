@@ -23,6 +23,8 @@ export type ParticipantAliasPurpose =
   | "copied_identity"
   | "persona_trigger";
 
+export type ParticipantCapability = "mentionable";
+
 export type ParticipantAliasSource =
   | "saved_nickname"
   | "guild_display_name"
@@ -51,6 +53,7 @@ export interface ParticipantSeed {
   key: ParticipantKey;
   reasons: ReadonlySet<ParticipantInclusionReason>;
   aliases: readonly ParticipantAlias[];
+  capabilities: ReadonlySet<ParticipantCapability>;
   firstSeenOrder: number;
   sourceDisplayName?: string;
 }
@@ -128,6 +131,8 @@ export function mergeParticipantSeeds(seeds: readonly ParticipantSeed[]): Partic
   const mergedByKey = new Map<string, ParticipantSeed>();
 
   for (const seed of seeds) {
+    const seedCapabilities =
+      seed.capabilities ?? new Set<ParticipantCapability>(seed.key.kind === "discord_user" ? ["mentionable"] : []);
     const serializedKey = serializeParticipantKey(seed.key);
     const existing = mergedByKey.get(serializedKey);
     if (!existing) {
@@ -135,16 +140,20 @@ export function mergeParticipantSeeds(seeds: readonly ParticipantSeed[]): Partic
         ...seed,
         reasons: new Set(seed.reasons),
         aliases: [...seed.aliases],
+        capabilities: new Set(seedCapabilities),
       });
       continue;
     }
 
     const reasons = new Set(existing.reasons);
     for (const reason of seed.reasons) reasons.add(reason);
+    const capabilities = new Set(existing.capabilities);
+    for (const capability of seedCapabilities) capabilities.add(capability);
     mergedByKey.set(serializedKey, {
       ...existing,
       reasons,
       aliases: [...existing.aliases, ...seed.aliases],
+      capabilities,
       firstSeenOrder: Math.min(existing.firstSeenOrder, seed.firstSeenOrder),
       sourceDisplayName: existing.sourceDisplayName ?? seed.sourceDisplayName,
     });

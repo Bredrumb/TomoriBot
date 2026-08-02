@@ -23,8 +23,12 @@ channel/time-of-day footer.
   guild-member directory contracts used by reference orchestration.
 - `src/utils/text/participants/preparation.ts` is the supported orchestration boundary for
   all context producers and owns request-local discovery reuse plus aggregate diagnostics.
+- `src/utils/text/participants/sources.ts` runs ordered Discord, persona, webhook, reference,
+  and Matrix sources plus explicitly supplied extensions.
 - `src/utils/text/participants/hydration.ts` owns active-persona-scoped identity loading,
   exposure policy, profile-field enrichment, public persona details, and persona self-tasks.
+- `src/utils/text/participants/profileEnrichers.ts` runs core and extension fields through
+  the ordered, owner-stamped enricher contract.
 - `src/utils/text/participants/renderer.ts` is the pure composite prompt renderer.
 - `src/utils/text/participants/targetIndex.ts` derives purpose-aware downstream targets
   and the transitional `conversationUsers` projection from hydrated profiles.
@@ -39,7 +43,8 @@ Live chat, prompt snapshot, cost inspection, and hidden image turns call
 `prepareParticipantContext()` with their sanitized visible history before calling
 `buildContext()`. The returned `PreparedParticipantContext` carries participant IDs, bridge
 and synthetic identities, preloaded reference rows, public persona profiles, diagnostics,
-and the authoritative `ParticipantDiscoveryPlan`. The plan retains ordered typed seeds,
+and the authoritative `ParticipantDiscoveryPlan`. Optional source/enricher registries also
+flow through this one adapter-ready boundary. The plan retains ordered typed seeds,
 candidate evidence, aggregate rejection reasons, and alias diagnostics. A seed carries a discriminated
 `ParticipantKey`, all known inclusion reasons, its alias catalog, and its first-seen order. Numeric strings
 from Discord users, webhooks, personas, Matrix users, and the bot cannot collide because
@@ -282,6 +287,11 @@ After this stage runs:
   persona self-tasks use its exact persona ID.
 - Request-scope reuse covers only active-independent discovery. A cache hit recomposes the
   active identity and public-profile exposure, then repeats all persona-scoped hydration.
+- Source capabilities are core-granted. An ungranted Discord identity remains
+  non-mentionable, and non-core sources cannot claim the bot or active-persona identity.
+- Core profile fields and extension fields use the same ordered enricher contract. Extension
+  inputs are cloned and privacy-filtered; returned fields are owner-stamped, ordered after
+  core, and restricted to the contributor's `extension:{id}` namespace.
 - Triggerer blacklist, privacy, and presence-member snapshot fast paths remain request-local.
 - Rendering consumes only `HydratedParticipantProfile` values and has no repository,
   cache, or Discord read path.
@@ -301,24 +311,24 @@ After this stage runs:
 | Client intent | `GuildPresences` | Required for online/activity status; without it, only static info is shown |
 | User row | `personal_dtm`, `privacy_level` | Reference eligibility and per-field privacy behavior; authored messages from `FULL` users are removed upstream |
 | User row | `physical_appearance_tags` | Public physical appearance image tags |
+| Environment | `PARTICIPANT_SOURCE_TIMEOUT_MS` | Abort timeout for each participant source; default 1500 ms |
+| Environment | `PARTICIPANT_ENRICHER_TIMEOUT_MS` | Abort timeout for each profile enricher; default 1500 ms |
 
 ## Extension points
 
-This is the **single richest plugin surface in the context-build pipeline**.
-Multiple plugin-relevant seams:
+`ParticipantSource` and `ParticipantProfileEnricher` are the supported narrow contracts.
+Both use the shared contribution kernel for normalized IDs, owner/source diagnostics,
+dependency ordering, cycles, criticality, abort timeouts, and measured outcomes. Optional
+failure contributes no output; a critical first-party failure throws structurally.
 
-| Surface | Plugin-relevance |
-|---|---|
-| Personal memories per user (`personalMemoryRepository.loadForUserLineage`) | The "personal memory type" plugin category — a sister to server memories (stage 03). |
-| Matrix-user folding (`matrixUsers` map) | A bridge plugin emits its users via this map; the contributor handles them uniformly. A Telegram/Slack bridge plugin would extend the same map. |
-| Synthetic users (persona / webhook) | The chat pipeline pre-populates `syntheticUsers`; a plugin shipping a new "fake participant" type would extend the map. |
-| Pending reminders and persona self-tasks (`serverScheduleRepository.getPendingRemindersForUser`) | Reminder system is core, not plugin — but a plugin adding "scheduled events" might want a parallel display block here. → plugin plan candidate. |
-| Physical Appearance tags (`physical_appearance_tags`) | Coupled to image-generation tooling; a plugin adding a different image-gen tag scheme would extend the `normalizeImageAppearanceTags` path. |
-| Channel + time-of-day footer | Internal — coupled to `timezoneHelper`. |
+Identity deduplication, block/privacy enforcement, alias collisions, capability grants, and
+rendering remain in core. Sources have no routing or response scheduler access. Enrichers
+cannot replace profiles or core fields and receive no DB/client service bag. The generic
+`ContextContributor` registry has not landed, so this entire participant slice remains one
+adapter-ready boundary without claiming modularization Batch 4A completion.
 
-The renderer is pure, but its exact composite text remains a core compatibility contract.
-Profile extensions should contribute typed fields through the ordered enricher contract
-introduced by the participant extension phase, rather than post-process prompt prose.
+See [Adding a Participant Source or Profile Enricher](/contributing/adding-participant-extension/)
+for contracts, registration, security rules, and required tests.
 
 ## Related docs
 
