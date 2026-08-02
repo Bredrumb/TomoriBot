@@ -80,6 +80,11 @@ Key fields populated here:
   persona triggers and eligible Discord user aliases/mentions. The shared
   resolver batches user eligibility reads and passes preloaded rows into the
   normal participant renderer.
+- **Typed participant boundary** — after reference resolution, live chat converts
+  visible authors, the active identity, referenced users, historical personas,
+  co-responders, webhooks, and Matrix identities into ordered `ParticipantSeed`
+  values. Reference and persona inclusion reasons remain attached for later
+  hydration diagnostics; this does not affect response planning.
 
 ## Invariants
 

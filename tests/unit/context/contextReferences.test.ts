@@ -198,6 +198,28 @@ describe("context reference discovery", () => {
     expect(resolved.referencedUserIds).toEqual(new Set());
     expect(resolved.referencedUserRows).toEqual(new Map());
     expect(resolved.publicPersonaProfiles.map((profile) => profile.personaId)).toEqual([2]);
+    expect(resolved.personaProfileReasons).toEqual(new Map([[2, new Set(["persona_trigger_reference"])]]));
+  });
+
+  it("retains every persona inclusion reason without duplicating its public profile", async () => {
+    const referencedPersona = persona(2, "Ren", ["ren"]);
+    referencedPersona.persona_attributes = [{ attribute_text: "Public profile", is_public: true }] as never;
+    const client = { guilds: { cache: new Map() } } as unknown as Client;
+
+    const resolved = await resolveContextReferences({
+      client,
+      guildId: "dm",
+      simplifiedMessageHistory: [message("Ask ren.")],
+      personas: [referencedPersona],
+      existingParticipantIds: new Set(),
+      existingPersonaIds: new Set([2]),
+      responderPersonaIds: new Set([2]),
+    });
+
+    expect(resolved.publicPersonaProfiles).toHaveLength(1);
+    expect(resolved.personaProfileReasons).toEqual(
+      new Map([[2, new Set(["persona_trigger_reference", "historical_persona", "co_responder"])]]),
+    );
   });
 
   it("resolves real mentions, verifies uncached membership, and skips bots and non-members", async () => {
@@ -245,6 +267,12 @@ describe("context reference discovery", () => {
 
       expect(resolved.referencedUserIds).toEqual(new Set(["200", "100"]));
       expect(Array.from(resolved.referencedUserRows.keys()).sort()).toEqual(["100", "200"]);
+      expect(resolved.referencedUserReasons).toEqual(
+        new Map([
+          ["200", new Set(["unique_text_alias"])],
+          ["100", new Set(["real_mention"])],
+        ]),
+      );
     } finally {
       userRepository.loadEligibleContextReferenceCandidates = originalLoadCandidates;
     }

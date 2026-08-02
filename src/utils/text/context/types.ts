@@ -9,6 +9,7 @@ import type {
   UserRow,
 } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
+import type { ParticipantSeed } from "@/utils/text/participants/identity";
 
 /**
  * Simplified message structure received from tomoriChat.ts.
@@ -64,6 +65,8 @@ export interface BuildContextParams {
   serverDescription: string | null;
   simplifiedMessageHistory: SimplifiedMessageForContext[];
   userList: string[];
+  /** Temporary typed input while legacy rendering remains authoritative behind golden parity gates. */
+  participantSeeds?: readonly ParticipantSeed[];
   channelDesc: string | null;
   channelName: string;
   channelId: string;

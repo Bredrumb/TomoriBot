@@ -4,6 +4,7 @@ import { userRepository } from "@/utils/db/repositories";
 import { getTriggerFirstMatchIndexInContent } from "@/utils/chat/triggerProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
+import type { ParticipantInclusionReason } from "@/utils/text/participants/identity";
 
 const REAL_DISCORD_MENTION_PATTERN = /<@!?(\d+)>/g;
 const STANDALONE_ALIAS_CHARACTER_CLASS = "\\p{L}\\p{N}\\p{M}_";
@@ -16,8 +17,16 @@ export type EligibleAliasCandidate = {
 export type ResolvedContextReferences = {
   referencedUserIds: Set<string>;
   referencedUserRows: Map<string, UserRow>;
+  referencedUserReasons: Map<string, ReadonlySet<"real_mention" | "unique_text_alias">>;
   publicPersonaProfiles: PublicPersonaProfile[];
+  personaProfileReasons: Map<number, ReadonlySet<ParticipantInclusionReason>>;
 };
+
+function addReason<Key, Reason>(map: Map<Key, Set<Reason>>, key: Key, reason: Reason): void {
+  const reasons = map.get(key) ?? new Set<Reason>();
+  reasons.add(reason);
+  map.set(key, reasons);
+}
 
 const normalizeAlias = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -172,9 +181,18 @@ export async function resolveContextReferences(params: {
     .filter((content) => content.length > 0)
     .join("\n");
 
-  const profilePersonaIds = discoverReferencedPersonaIds(params.simplifiedMessageHistory, params.personas);
-  for (const personaId of params.existingPersonaIds ?? []) profilePersonaIds.add(personaId);
-  for (const personaId of params.responderPersonaIds ?? []) profilePersonaIds.add(personaId);
+  const referencedPersonaIds = discoverReferencedPersonaIds(params.simplifiedMessageHistory, params.personas);
+  const personaProfileReasons = new Map<number, Set<ParticipantInclusionReason>>();
+  for (const personaId of referencedPersonaIds) {
+    addReason(personaProfileReasons, personaId, "persona_trigger_reference");
+  }
+  for (const personaId of params.existingPersonaIds ?? []) {
+    addReason(personaProfileReasons, personaId, "historical_persona");
+  }
+  for (const personaId of params.responderPersonaIds ?? []) {
+    addReason(personaProfileReasons, personaId, "co_responder");
+  }
+  const profilePersonaIds = new Set(personaProfileReasons.keys());
 
   const publicPersonaProfiles = buildPublicPersonaProfiles(params.personas, profilePersonaIds, params.activePersonaId);
 
@@ -183,7 +201,9 @@ export async function resolveContextReferences(params: {
     return {
       referencedUserIds: new Set<string>(),
       referencedUserRows: new Map<string, UserRow>(),
+      referencedUserReasons: new Map(),
       publicPersonaProfiles,
+      personaProfileReasons,
     };
   }
 
@@ -212,12 +232,18 @@ export async function resolveContextReferences(params: {
     aliases: buildMemberAliases(member, userRow),
   }));
   const referencedUserIds = resolveUniqueTextualAliasReferences(historyText, aliasCandidates);
+  const referencedUserReasons = new Map<string, Set<"real_mention" | "unique_text_alias">>();
+  for (const userId of referencedUserIds) addReason(referencedUserReasons, userId, "unique_text_alias");
 
   for (const userId of realMentionIds) {
-    if (eligibleMembers.some(({ userRow }) => userRow.user_disc_id === userId)) referencedUserIds.add(userId);
+    if (eligibleMembers.some(({ userRow }) => userRow.user_disc_id === userId)) {
+      referencedUserIds.add(userId);
+      addReason(referencedUserReasons, userId, "real_mention");
+    }
   }
   for (const existingParticipantId of params.existingParticipantIds) {
     referencedUserIds.delete(existingParticipantId);
+    referencedUserReasons.delete(existingParticipantId);
   }
 
   return {
@@ -227,6 +253,8 @@ export async function resolveContextReferences(params: {
         .filter(({ userRow }) => referencedUserIds.has(userRow.user_disc_id))
         .map(({ userRow }) => [userRow.user_disc_id, userRow]),
     ),
+    referencedUserReasons,
     publicPersonaProfiles,
+    personaProfileReasons,
   };
 }

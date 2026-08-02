@@ -20,6 +20,8 @@ import {
 import { getUserPresenceDetails } from "./history";
 import type { MentionConverter } from "./templates";
 import type { PublicPersonaProfile } from "./types";
+import { serializeParticipantKey, type ParticipantSeed } from "@/utils/text/participants/identity";
+import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
 
 type UserConversationEntry = {
   userId: string;
@@ -68,12 +70,13 @@ export function formatPendingReminderForContext(
   return `${reminderIdPrefix}"${reminder.reminder_purpose}" (scheduled for ${formattedTime}${repeatText})`;
 }
 
-export async function buildUsersInConversationContextItem(params: {
+export async function buildParticipantContextItem(params: {
   client: Client;
   guildId: string;
   channelName: string;
   channelId: string;
   userList: string[];
+  participantSeeds: readonly ParticipantSeed[];
   triggererName: string;
   botName: string;
   personaLineageId?: number;
@@ -93,6 +96,18 @@ export async function buildUsersInConversationContextItem(params: {
   snapshot?: import("@/types/misc/context").RequestSnapshot;
   convertMentions: MentionConverter;
 }): Promise<StructuredContextItem | null> {
+  const typedKeys = new Set<string>();
+  for (const seed of params.participantSeeds) {
+    const serializedKey = serializeParticipantKey(seed.key);
+    if (typedKeys.has(serializedKey)) {
+      throw new Error(`Prepared participant seeds contain duplicate identity ${serializedKey}`);
+    }
+    typedKeys.add(serializedKey);
+  }
+  if (params.userList.length > 0 && params.participantSeeds.length === 0) {
+    throw new Error("Prepared participant seeds cannot be empty when legacy participants are present");
+  }
+
   if (params.userList.length === 0) {
     return null;
   }
@@ -277,6 +292,23 @@ export async function buildUsersInConversationContextItem(params: {
     metadataTag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
     conversationUsers,
   };
+}
+
+export async function buildUsersInConversationContextItem(
+  params: Omit<Parameters<typeof buildParticipantContextItem>[0], "participantSeeds">,
+): Promise<StructuredContextItem | null> {
+  return buildParticipantContextItem({
+    ...params,
+    participantSeeds: adaptLegacyParticipantSeeds({
+      userList: params.userList,
+      clientUserId: params.client.user?.id,
+      activePersonaId: params.tomoriState?.persona_id,
+      activePersonaIsAlter: params.tomoriState?.is_alter,
+      syntheticUsers: params.syntheticUsers,
+      matrixUsers: params.matrixUsers,
+      publicPersonaProfiles: params.publicPersonaProfiles,
+    }),
+  });
 }
 
 async function buildUserDetailLines(

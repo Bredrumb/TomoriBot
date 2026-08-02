@@ -64,6 +64,7 @@ import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@
 import { resolveReunionNote } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
+import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
 
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
@@ -258,6 +259,17 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   });
   const contextUserIds = new Set(history.userIds);
   for (const referencedUserId of contextReferences.referencedUserIds) contextUserIds.add(referencedUserId);
+  const participantSeeds = adaptLegacyParticipantSeeds({
+    userList: [...contextUserIds],
+    clientUserId: client.user?.id,
+    activePersonaId: effectivePersona.persona_id,
+    activePersonaIsAlter: effectivePersona.is_alter,
+    syntheticUsers: history.syntheticUsers,
+    matrixUsers: history.matrixUsers,
+    referencedUserReasons: contextReferences.referencedUserReasons,
+    publicPersonaProfiles: contextReferences.publicPersonaProfiles,
+    personaProfileReasons: contextReferences.personaProfileReasons,
+  });
 
   // Resolve any per-channel system prompt override (append/replace). Negative results
   // are cached, so DM channels (which can never have an override) cost one cheap lookup.
@@ -286,6 +298,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     serverDescription: turn.serverDescription,
     simplifiedMessageHistory: history.simplifiedMessages,
     userList: Array.from(contextUserIds),
+    participantSeeds,
     matrixUsers: history.matrixUsers,
     syntheticUsers: history.syntheticUsers,
     personaUserBlocks: history.activeUserBlocks,

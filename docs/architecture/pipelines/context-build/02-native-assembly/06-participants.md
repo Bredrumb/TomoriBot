@@ -8,7 +8,28 @@ mention aliases with conflict detection, the active persona's pending
 self-tasks, and the closing
 channel/time-of-day footer.
 
-**File:** `src/utils/text/context/participants.ts:38-236`
+**Files:**
+
+- `src/utils/text/participants/identity.ts` owns typed participant keys, inclusion reasons,
+  stable key serialization, and first-seen deduplication.
+- `src/utils/text/participants/legacyAdapter.ts` converts the transitional `userList`,
+  Matrix, webhook, persona-profile, and reference-reason inputs into typed seeds.
+- `src/utils/text/context/participants.ts` owns the compatibility facade and current renderer.
+
+## Typed preparation boundary
+
+Live chat and prompt snapshot convert their finalized participant inputs into
+`ParticipantSeed[]` before calling `buildContext()`. A seed carries a discriminated
+`ParticipantKey`, all known inclusion reasons, and its first-seen order. Numeric strings
+from Discord users, webhooks, personas, Matrix users, and the bot cannot collide because
+the key kind participates in equality and serialization.
+
+`buildContextNative()` calls the typed `buildParticipantContextItem()` entry point. Direct
+legacy callers are temporarily supported by `buildUsersInConversationContextItem()` and
+the fallback adapter in `nativeBuilder.ts`; both produce the same seeds before delegating.
+The renderer still consumes the legacy collections during this compatibility phase, so
+provider-visible text and hidden metadata remain byte-identical. Later participant stages
+will move hydration and rendering onto the typed seeds before deleting those adapters.
 
 ## Mission
 
@@ -31,7 +52,9 @@ The output is *one* context item — all participants live in a single
 Substantial — see signature in `participants.ts:38-58`. Notable:
 
 - `userList: string[]` — Discord author IDs from history plus eligible
-  reference-discovered user IDs
+  reference-discovered user IDs; retained temporarily for compatibility rendering
+- `participantSeeds: readonly ParticipantSeed[]` — collision-safe identities, inclusion
+  reasons, and first-seen order prepared by the producer or legacy adapter
 - `triggererName`, `botName`, `personaLineageId`
 - `tomoriState`, `tomoriConfig` (provides `personal_memories_enabled`,
   `timezone_offset`)

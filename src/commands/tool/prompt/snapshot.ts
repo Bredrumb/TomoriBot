@@ -73,6 +73,7 @@ import {
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
+import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
 
 const PERSONA_SELECT_ID = "prompt_snapshot_persona_select";
 
@@ -750,6 +751,18 @@ export async function execute(
       existingPersonaIds: personaIdsInHistory,
     });
     for (const referencedUserId of contextReferences.referencedUserIds) userListSet.add(referencedUserId);
+    const matrixUsers = new Map<string, string>();
+    const participantSeeds = adaptLegacyParticipantSeeds({
+      userList: [...userListSet],
+      clientUserId: client.user?.id,
+      activePersonaId: selectedPersona.persona_id,
+      activePersonaIsAlter: selectedPersona.is_alter,
+      syntheticUsers,
+      matrixUsers,
+      referencedUserReasons: contextReferences.referencedUserReasons,
+      publicPersonaProfiles: contextReferences.publicPersonaProfiles,
+      personaProfileReasons: contextReferences.personaProfileReasons,
+    });
 
     const contextBuild = await buildContext({
       guildId: interaction.guild.id,
@@ -757,7 +770,8 @@ export async function execute(
       serverDescription: interaction.guild.description || null,
       simplifiedMessageHistory: simplifiedMessages,
       userList: Array.from(userListSet),
-      matrixUsers: new Map<string, string>(),
+      participantSeeds,
+      matrixUsers,
       syntheticUsers,
       channelDesc,
       channelName,

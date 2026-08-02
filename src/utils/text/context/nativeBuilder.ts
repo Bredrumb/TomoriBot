@@ -4,10 +4,11 @@ import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTerm
 import { buildUncensorInjectionText } from "@/utils/text/uncensor";
 import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
 import { appendDialogueHistoryContext } from "./dialogueHistory";
 import { convertMentions } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
-import { buildUsersInConversationContextItem } from "./participants";
+import { buildParticipantContextItem } from "./participants";
 import { buildPersonaUserBlocksContextItem } from "./personaUserBlocks";
 import { buildPersonaSpriteContextItem } from "./personaSprites";
 import { buildServerDocumentContextItem } from "./rag";
@@ -35,6 +36,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     serverDescription,
     simplifiedMessageHistory,
     userList,
+    participantSeeds,
     channelName,
     channelId,
     parentChannelId,
@@ -87,6 +89,17 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
   const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
+  const resolvedParticipantSeeds =
+    participantSeeds ??
+    adaptLegacyParticipantSeeds({
+      userList,
+      clientUserId: client.user?.id,
+      activePersonaId: tomoriState?.persona_id,
+      activePersonaIsAlter: tomoriState?.is_alter,
+      syntheticUsers,
+      matrixUsers,
+      publicPersonaProfiles,
+    });
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
     stateForContext:
@@ -230,12 +243,13 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   );
   await appendOptionalItem(
     contextItems,
-    buildUsersInConversationContextItem({
+    buildParticipantContextItem({
       client,
       guildId,
       channelName,
       channelId,
       userList,
+      participantSeeds: resolvedParticipantSeeds,
       triggererName,
       botName,
       personaLineageId,
