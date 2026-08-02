@@ -30,8 +30,8 @@ context items per message with three orthogonal concerns interleaved:
    history. The default-off verbatim tool-calling workaround adds a separate
    depth-3 system note when enabled and the effective LLM has tools.
 4. **Better Time Awareness** — when enabled, inject a reunion note at
-   `TIME_AWARENESS_NOTE_DEPTH` for returning people (the triggerer and/or others
-   present in the window) and date separators at server-calendar-day boundaries.
+   `TIME_AWARENESS_NOTE_DEPTH` for the returning direct triggerer and date
+   separators at server-calendar-day boundaries.
 
 ## Input
 
@@ -50,8 +50,8 @@ Substantial — see signature in `dialogueHistory.ts:25-44`. Notable:
 - `messageIdMap` — compact ID ↔ Discord message ID, populated as media
   hints emit
 - `uncensorInputOptions`, `convertMentions`
-- `reunionNotes: string[]` — raw note bodies precomputed by the chat pipeline after
-  the batched stats read; this stage wraps them in `[System: ...]` like every other note
+- `reunionNote: string | null` — raw one-shot note body precomputed by the chat
+  pipeline; this stage wraps it in `[System: ...]` like every other note
 - `dateSpacerTemplate` — pre-expanded once by `nativeBuilder`; `null` disables spacers
 
 ## Output
@@ -181,54 +181,47 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   matching tool *schemas* are dumped earlier in the prompt by stage 07b
   ([`07b-verbatim-tool-definitions.md`](/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/)),
   gated by the same predicate.
-- Producer-supplied reunion notes reuse the same `activeNotes` mechanism at
-  `TIME_AWARENESS_NOTE_DEPTH` (default 3). Several returning people collapse into
-  **one** system block joined by newlines rather than stacking blocks. The chat
-  pipeline omits them for user impersonation and when no internal user id is
-  available. First-time and returning-user variants include an "if you haven't
-  already" social nudge, which encourages a warm question without repeating it
-  throughout the grace window.
+- The producer-supplied reunion note reuses the same `activeNotes` mechanism at
+  `TIME_AWARENESS_NOTE_DEPTH` (default 3). The chat pipeline omits it for user
+  impersonation and when the direct triggerer has no internal user id.
 
-**Who gets a note.** `reunionPresence.resolveReunionNotes` resolves the triggerer
-plus the distinct human authors of the last `TIME_AWARENESS_PRESENCE_WINDOW`
-messages (bridged/synthetic authors are skipped — presence never registers a user
-row), then emits at most `TIME_AWARENESS_MAX_REUNION_NOTES` notes, triggerer first.
-Only the **triggerer** can receive the first-timer welcome; a bystander with no
-history is a stranger, not someone to introduce yourself to. Bystanders get the
-"around again" phrasing instead of "talking to you again".
+**Only the direct triggerer gets a note.** Passive authors in the channel history
+neither receive nor consume reunions. This keeps unrelated turns from advancing a
+person's relationship clock and prevents a busy channel from prompting several
+greetings at once.
 
 **Presence is the clock, not message volume.** `presence_seen` is recorded once per
-turn for every person in that candidate set — in DMs and on turns someone else
-triggered. This is deliberately separate from the `message_sent` telemetry metric,
-whose recording rules exist for leaderboard correctness (guild-only, successful turns,
-triggerer only) and would otherwise silently drive persona behavior.
+successful direct-triggerer turn, including DMs. This is deliberately separate from
+the `message_sent` telemetry metric, whose guild-only recording rules exist for
+leaderboard correctness.
 
 **The clock is a two-phase protocol**, both halves in `@/utils/chat/reunionPresence`:
 
-1. `resolveReunionNotes` at **context build** reads the clocks and returns the notes
-   plus a `ReunionPresenceScope` (server, lineage, user ids), carried on
-   `ChatTurnContext.reunionPresence`.
-2. `recordReunionPresence` at **post-turn** commits that scope as `presence_seen`.
+1. `resolveReunionNote` at **context build** acquires a process-wide
+   `(persona lineage, user)` claim before reading the clock. This ordering prevents
+   a concurrent query from resuming with a stale pre-commit snapshot. Ineligible
+   turns release immediately; eligible turns carry the claim in the
+   `ReunionPresenceScope` on `ChatTurnContext.reunionPresence`.
+2. `recordReunionPresence` at **post-turn** immediately persists `presence_seen`
+   after a response lands, then releases the claim. Empty and failed turns release
+   without writing. A concurrent turn suppressed by an active claim also does not
+   write, so a failed claimant cannot make the user lose the pending reunion.
 
-The split is load-bearing in both directions. Writing during phase 1 would let the
-read see the turn's own tick, so a turn would consume the grace window it just
-opened. It would also tick turns that never answered — and a failed or silent turn
-delivered no acknowledgment, so ticking it would burn today's grace and reset
-tomorrow's day gap, permanently losing a reunion the user never received. Unlike
-`recordUsageStats`, phase 2 does **not** skip DMs.
+The claim prevents separate channel locks from building the same reunion context at
+the same time. `TIME_AWARENESS_REUNION_CLAIM_TTL_MS` releases abandoned claims after
+an interrupted turn. Empty-response retries finalize the old claim before rebuilding
+context, allowing the retry to claim the note itself.
 
-**Reunion grace is stateless.** `StatRepository.getUsersPersonaReunionInfo` reads,
-per user, the last activity timestamp from buckets before `CURRENT_DATE` and today's
-persisted `presence_seen` count for the `(user, persona lineage)` tuple across all
+**Reunions are one-shot.** `StatRepository.getUserPersonaReunionInfo` reads the last
+activity timestamp from buckets before `CURRENT_DATE` and whether a persisted
+`presence_seen` row exists today for the `(user, persona lineage)` tuple across all
 servers. The gap lookup spans `presence_seen` **and** `message_sent` so relationships
-predating the presence metric keep their history. Today's writes cannot erase the
-detected gap; the note expires when today's presence count reaches
-`TIME_AWARENESS_GRACE_TRIGGERS`, and the next DB day resets it naturally. The read
-happens in a different phase from the turn's own presence write, so a turn cannot
-consume the grace window it just opened, and a turn that produced no response
-records nothing at all. A failed read returns `null` and injects nothing, rather than
-reading as "no history". With `STAT_TRACKING_ENABLED=false` the feature disables
-itself for the same reason.
+predating the presence metric retain their history. A successful direct turn writes
+`presence_seen` immediately rather than through the telemetry buffer, providing the
+read-after-write consistency needed by another channel. A failed read injects nothing.
+The consumed-today flag follows the UTC database bucket, while the displayed day gap
+uses the personal/server timezone chain. With `STAT_TRACKING_ENABLED=false` the feature
+disables itself.
 
 | Injection | Calendar timezone | Reason |
 |---|---|---|
@@ -258,8 +251,7 @@ After this stage runs:
 - Capability OFF passes neither a reunion note nor a spacer template, preserving
   the pre-feature dialogue context for both injections. It also records no
   `presence_seen` ticks, so a disabled server writes nothing.
-- Reunion notes inject at most once per build regardless of how many people are
-  returning — the bodies are joined into a single `[System: ...]` block.
+- At most one reunion note is injected, and it can describe only the direct triggerer.
 - `messageIdMap.register(...)` is called for every media reference the
   LLM might ask about after resolution (so `increase_media_context`,
   `image_analysis_tool`, and media-reference tools have stable IDs).
@@ -271,10 +263,8 @@ After this stage runs:
 | `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
 | `PERSONA_USER_BLOCK_CACHE_TTL_SECONDS` | `60` | TTL for active persona user block lookups |
 | `TIME_AWARENESS_REUNION_DAYS` | `7` | Minimum personal-calendar-day reunion gap |
-| `TIME_AWARENESS_GRACE_TRIGGERS` | `3` | Persisted same-day presence ticks that retain a reunion note |
 | `TIME_AWARENESS_NOTE_DEPTH` | `3` | Messages from the end where reunion notes inject |
-| `TIME_AWARENESS_PRESENCE_WINDOW` | `20` | Trailing messages that count as "present in the conversation" |
-| `TIME_AWARENESS_MAX_REUNION_NOTES` | `2` | Cap on reunion notes injected in one turn |
+| `TIME_AWARENESS_REUNION_CLAIM_TTL_MS` | `240000` | Safety expiry for an abandoned process-local Reunion claim |
 | `STAT_TRACKING_ENABLED` | `true` | Write side of the presence clock; `false` disables reunion notes |
 
 | Source | Field | Effect |

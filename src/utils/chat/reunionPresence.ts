@@ -1,85 +1,94 @@
 /**
- * Reunion presence: the behavioral "when did this persona last see this person"
- * clock behind reunion notes.
- *
- * The clock is deliberately **presence**, not the `message_sent` telemetry metric.
- * That metric's recording rules exist for leaderboard correctness (guild-only,
- * successful turns, triggerer only), and reading them as relationship state made
- * DM conversations and bystanders look like weeks of absence.
- *
- * ## Two-phase protocol
- *
- * This module owns both halves, which run in different pipeline phases:
- *
- *  1. {@link resolveReunionNotes}: at **context build** (`contextPipeline`).
- *     Resolves who the persona can see, reads their clocks in one grouped query,
- *     and returns the notes to inject plus the presence scope to commit later.
- *  2. {@link recordReunionPresence}: at **post-turn** (`postTurnEffects`).
- *     Commits that scope as `presence_seen` ticks.
- *
- * Splitting them is load-bearing in both directions:
- *
- *  - Writing during phase 1 would let the read see the turn's own tick, so a turn
- *    would consume the grace window it just opened.
- *  - Writing during phase 1 would also tick turns that never answered. A failed or
- *    silent turn delivered no acknowledgment, so it must not consume the reunion:
- *    it would burn today's grace and, worse, reset tomorrow's day gap, permanently
- *    losing a reunion the user never received.
- *
- * Keep the two functions together: editing one without the other breaks the clock
- * in ways no type error will catch.
+ * Coordinates the one-shot reunion note and its successful presence commit.
+ * Eligibility is global to a persona lineage and user, while the claim prevents
+ * separate channel contexts in this process from injecting the same reunion.
  */
-import { getCachedUserRow } from "@/utils/cache/userCache";
-import { statRepository } from "@/utils/db/repositories";
 import type { TomoriState } from "@/types/db/schema";
 import type { ChatTurn, GenerationTurnResult } from "@/utils/chat/types";
-import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
-import {
-  buildReunionNote,
-  TIME_AWARENESS_MAX_REUNION_NOTES,
-  TIME_AWARENESS_PRESENCE_WINDOW,
-} from "@/utils/text/context/timeAwareness";
+import { statRepository } from "@/utils/db/repositories";
+import { buildReunionNote } from "@/utils/text/context/timeAwareness";
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const REUNION_CLAIM_TTL_MS = readPositiveIntEnv("TIME_AWARENESS_REUNION_CLAIM_TTL_MS", 240000);
+
+export interface ReunionClaimHandle {
+  key: string;
+  token: symbol;
+}
+
+interface ReunionClaimEntry {
+  token: symbol;
+  expiryTimer: ReturnType<typeof setTimeout>;
+}
 
 /**
- * Who the answering persona could see this turn, pending a post-turn commit.
- * Null when reunion tracking did not apply (capability off, impersonation,
- * stat tracking disabled, or no resolvable people).
+ * Process-wide exclusion for reunion context injection. Expiry prevents a turn
+ * interrupted outside the normal post-turn path from suppressing future notes.
  */
-export interface ReunionPresenceScope {
+export class ReunionClaimRegistry {
+  private readonly claims = new Map<string, ReunionClaimEntry>();
+
+  constructor(private readonly ttlMs = REUNION_CLAIM_TTL_MS) {}
+
+  tryClaim(lineageId: number, userId: number): ReunionClaimHandle | null {
+    const key = `${lineageId}:${userId}`;
+    if (this.claims.has(key)) return null;
+
+    const token = Symbol(key);
+    const expiryTimer = setTimeout(() => {
+      const current = this.claims.get(key);
+      if (current?.token === token) this.claims.delete(key);
+    }, this.ttlMs);
+    expiryTimer.unref?.();
+    this.claims.set(key, { token, expiryTimer });
+    return { key, token };
+  }
+
+  owns(handle: ReunionClaimHandle): boolean {
+    return this.claims.get(handle.key)?.token === handle.token;
+  }
+
+  release(handle: ReunionClaimHandle): void {
+    const current = this.claims.get(handle.key);
+    if (current?.token !== handle.token) return;
+    clearTimeout(current.expiryTimer);
+    this.claims.delete(handle.key);
+  }
+}
+
+type ReunionPresenceBase = {
   serverId: number;
   lineageId: number;
-  userIds: number[];
-}
+  userId: number;
+};
 
-/** One person the persona can currently see, in reunion-note priority order. */
-interface ReunionCandidate {
-  displayName: string;
-  timezoneOffset: number | null;
-  isTriggerer: boolean;
-}
+export type ReunionPresenceScope =
+  | (ReunionPresenceBase & { mode: "record" })
+  | (ReunionPresenceBase & { mode: "claimed"; claim: ReunionClaimHandle })
+  | (ReunionPresenceBase & { mode: "deferred" });
+
+const reunionClaims = new ReunionClaimRegistry();
 
 /**
- * Phase 1: builds this turn's reunion notes and the presence scope to commit
- * once the turn produces a response.
- *
- * @param args - Turn scope, the effective persona, and the identities to exclude.
- *          `[System: ]`), triggerer first, capped at TIME_AWARENESS_MAX_REUNION_NOTES;
- *          and `presence`, the scope handed to {@link recordReunionPresence}.
+ * Resolves a one-shot reunion for the direct triggerer and reserves it before
+ * another channel can build an equivalent context.
  */
-export async function resolveReunionNotes(args: {
+export async function resolveReunionNote(args: {
   turn: ChatTurn;
   effectivePersona: TomoriState;
-  simplifiedMessages: SimplifiedMessageForContext[];
   isUserImpersonation: boolean;
-  impersonatedUserId?: string;
-  botUserDiscId?: string;
-}): Promise<{ notes: string[]; presence: ReunionPresenceScope | null }> {
+}): Promise<{ note: string | null; presence: ReunionPresenceScope | null }> {
   const { turn, effectivePersona } = args;
   const lineageId = effectivePersona.persona_lineage_id;
   const serverId = effectivePersona.server_id;
+  const userId = turn.userRow.user_id;
 
-  // Preconditions. Stat tracking is one of them: with the write side off every
-  //    read returns "no history", which would greet everyone as a stranger forever.
   if (
     effectivePersona.config.time_awareness_enabled === false ||
     args.isUserImpersonation ||
@@ -88,93 +97,68 @@ export async function resolveReunionNotes(args: {
     !Number.isInteger(lineageId) ||
     lineageId < 0 ||
     typeof serverId !== "number" ||
-    !Number.isInteger(serverId)
+    !Number.isInteger(serverId) ||
+    typeof userId !== "number" ||
+    !Number.isInteger(userId)
   ) {
-    return { notes: [], presence: null };
+    return { note: null, presence: null };
   }
 
-  // Candidate set, insertion-ordered: the triggerer first, then the distinct
-  //    human authors of the trailing presence window, most recent first.
-  const candidates = new Map<number, ReunionCandidate>();
-  const triggererUserId = turn.userRow.user_id;
-  if (typeof triggererUserId === "number" && Number.isInteger(triggererUserId)) {
-    candidates.set(triggererUserId, {
-      displayName: turn.triggererName,
-      timezoneOffset: turn.userRow.timezone_offset ?? null,
-      isTriggerer: true,
-    });
+  const basePresence: ReunionPresenceBase = { serverId, lineageId, userId };
+  const claim = reunionClaims.tryClaim(lineageId, userId);
+  if (!claim) {
+    // Claim before reading so a query that started before another channel's
+    // commit cannot resume afterward and reopen the stale reunion state.
+    return { note: null, presence: { ...basePresence, mode: "deferred" } };
   }
 
-  const windowMessages = args.simplifiedMessages.slice(-TIME_AWARENESS_PRESENCE_WINDOW);
-  const visitedAuthorDiscIds = new Set<string>();
-  for (let index = windowMessages.length - 1; index >= 0; index--) {
-    const msg = windowMessages[index];
-    if (msg.authorType !== "user" || !msg.authorId) continue;
-    if (msg.authorId === args.botUserDiscId || msg.authorId === args.impersonatedUserId) continue;
-    if (visitedAuthorDiscIds.has(msg.authorId)) continue;
-    visitedAuthorDiscIds.add(msg.authorId);
-
-    // Bridged/synthetic authors have no users row; skip them rather than
-    //     registering an account as a side effect of building context.
-    const userRow = await getCachedUserRow(msg.authorId).catch(() => null);
-    const userId = userRow?.user_id;
-    if (typeof userId !== "number" || !Number.isInteger(userId) || candidates.has(userId)) continue;
-    candidates.set(userId, {
-      // Use the transcript's own name so the note references someone the model
-      // can actually find in the dialogue above it.
-      displayName: msg.authorName,
-      timezoneOffset: userRow?.timezone_offset ?? null,
-      isTriggerer: false,
-    });
+  const reunionInfo = await statRepository.getUserPersonaReunionInfo(userId, lineageId);
+  if (!reunionInfo) {
+    reunionClaims.release(claim);
+    return { note: null, presence: null };
   }
-  if (candidates.size === 0) return { notes: [], presence: null };
 
-  // One grouped read for the whole candidate set. A failed read yields null,
-  //    which must mean "say nothing"; never "nobody here has any history".
-  const reunionInfoByUserId = await statRepository.getUsersPersonaReunionInfo(Array.from(candidates.keys()), lineageId);
-  if (!reunionInfoByUserId) return { notes: [], presence: null };
-
-  // Presence scope for the post-turn commit (see the module header for why it
-  //    is not written here).
-  const presence: ReunionPresenceScope = { serverId, lineageId, userIds: Array.from(candidates.keys()) };
-
-  // Notes in candidate order (triggerer first), capped so a channel waking up
-  //    doesn't bury the conversation under greetings.
-  const notes: string[] = [];
-  for (const [userId, candidate] of candidates) {
-    if (notes.length >= TIME_AWARENESS_MAX_REUNION_NOTES) break;
-    const reunionInfo = reunionInfoByUserId.get(userId) ?? { lastPreviousDayAt: null, todayCount: 0 };
-    const note = buildReunionNote({
-      ...reunionInfo,
-      personalOffset: candidate.timezoneOffset,
-      serverOffset: effectivePersona.config.timezone_offset,
-      displayName: candidate.displayName,
-      isTriggerer: candidate.isTriggerer,
-    });
-    if (note) notes.push(note);
+  const note = buildReunionNote({
+    ...reunionInfo,
+    personalOffset: turn.userRow.timezone_offset ?? null,
+    serverOffset: effectivePersona.config.timezone_offset,
+    displayName: turn.triggererName,
+  });
+  if (!note) {
+    reunionClaims.release(claim);
+    return { note: null, presence: { ...basePresence, mode: "record" } };
   }
-  return { notes, presence };
+
+  if (!reunionClaims.owns(claim)) {
+    return { note: null, presence: { ...basePresence, mode: "deferred" } };
+  }
+
+  return { note, presence: { ...basePresence, mode: "claimed", claim } };
 }
 
 /**
- * Phase 2: commits the turn's `presence_seen` ticks.
- *
- * Only runs when the turn actually produced a response (see the module header).
- * Unlike `recordUsageStats` this deliberately does NOT skip DMs: excluding them is
- * a leaderboard-hygiene rule, and applying it to a relationship clock is exactly
- * what made DM conversations look like weeks of absence.
- *
- * @param presence - Scope resolved by {@link resolveReunionNotes}; null is a no-op.
- * @param result   - The turn result; an empty personaResponses list records nothing.
+ * Commits direct-triggerer presence only after a response lands. Claimed turns
+ * release on every terminal result, while concurrent deferred turns never
+ * consume the reunion they did not receive.
  */
-export function recordReunionPresence(presence: ReunionPresenceScope | null, result: GenerationTurnResult): void {
-  if (!presence || result.personaResponses.length === 0) return;
-  for (const userId of presence.userIds) {
-    statRepository.recordStat({
-      serverId: presence.serverId,
-      userId,
-      lineageId: presence.lineageId,
-      metric: "presence_seen",
-    });
+export async function recordReunionPresence(
+  presence: ReunionPresenceScope | null,
+  result: GenerationTurnResult,
+): Promise<void> {
+  if (!presence) return;
+
+  if (result.personaResponses.length === 0) {
+    if (presence.mode === "claimed") reunionClaims.release(presence.claim);
+    return;
   }
+  if (presence.mode === "deferred") return;
+  if (presence.mode === "claimed" && !reunionClaims.owns(presence.claim)) return;
+
+  await statRepository.recordPresenceSeen({
+    serverId: presence.serverId,
+    userId: presence.userId,
+    lineageId: presence.lineageId,
+  });
+
+  if (presence.mode === "claimed") reunionClaims.release(presence.claim);
 }

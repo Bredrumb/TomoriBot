@@ -40,7 +40,7 @@ export async function appendDialogueHistoryContext(params: {
   tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null;
   channelContextNote?: { note: string; depth: number } | null;
-  reunionNotes?: string[] | null;
+  reunionNote?: string | null;
   dateSpacerTemplate?: string | null;
   mediaContextWindow?: number;
   includeTimestamps: boolean;
@@ -95,14 +95,10 @@ export async function appendDialogueHistoryContext(params: {
       emitted: false,
     });
   }
-  // Reunion notes sit above the newest messages rather than directly against the
-  // triggering prompt, so they read as background awareness instead of an
-  // instruction that outranks whatever the user actually asked for. Several
-  // returning people collapse into one system block rather than stacking blocks.
-  const reunionNoteText = (params.reunionNotes ?? [])
-    .map((note) => note.trim())
-    .filter((note) => note.length > 0)
-    .join("\n");
+  // The reunion note sits above the newest messages rather than directly against
+  // the triggering prompt, so it reads as background awareness instead of an
+  // instruction that outranks whatever the user actually asked for.
+  const reunionNoteText = params.reunionNote?.trim();
   if (reunionNoteText) {
     activeNotes.push({
       text: reunionNoteText,

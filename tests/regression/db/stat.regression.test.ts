@@ -225,7 +225,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(statRepository.bufferedEntryCount).toBe(before);
   });
 
-  it("getUsersPersonaReunionInfo reads prior activity and today's grace count across servers", async () => {
+  it("getUserPersonaReunionInfo reads prior activity and today's delivery state across servers", async () => {
     const previousAt = new Date(`${dayOffset(4)}T18:30:00Z`);
     const [otherServer] = await testSql<{ server_id: number }[]>`
       INSERT INTO servers (server_disc_id)
@@ -242,12 +242,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
          NOW(), NOW())
     `;
 
-    const reunion = await statRepository.getUsersPersonaReunionInfo([refs.userId], lineageA);
-    expect(reunion?.get(refs.userId)?.lastPreviousDayAt?.toISOString()).toBe(previousAt.toISOString());
-    expect(reunion?.get(refs.userId)?.todayCount).toBe(3);
+    const reunion = await statRepository.getUserPersonaReunionInfo(refs.userId, lineageA);
+    expect(reunion?.lastPreviousDayAt?.toISOString()).toBe(previousAt.toISOString());
+    expect(reunion?.seenToday).toBe(true);
   });
 
-  it("getUsersPersonaReunionInfo batches users, keeps legacy message_sent history, and graces on presence only", async () => {
+  it("getUserPersonaReunionInfo keeps legacy history but only presence consumes today's reunion", async () => {
     const legacyAt = new Date(`${dayOffset(9)}T08:00:00Z`);
     const presenceAt = new Date(`${dayOffset(2)}T08:00:00Z`);
     await testSql`
@@ -257,22 +257,37 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
         -- Relationship that predates the presence metric: the gap must still resolve.
         (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(9)}::date, 5,
          ${legacyAt}, ${legacyAt}),
-        -- Today's message_sent must NOT burn grace; only presence ticks do.
+        -- Today's message_sent must not consume the one-shot reunion.
         (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(0)}::date, 4,
          NOW(), NOW()),
         (${refs.serverId}, ${altUserId}, ${lineageA}, 'presence_seen', '', ${dayOffset(2)}::date, 1,
          ${presenceAt}, ${presenceAt})
     `;
 
-    const reunion = await statRepository.getUsersPersonaReunionInfo([refs.userId, altUserId], lineageA);
-    expect(reunion?.size).toBe(2);
-    expect(reunion?.get(refs.userId)?.lastPreviousDayAt?.toISOString()).toBe(legacyAt.toISOString());
-    expect(reunion?.get(refs.userId)?.todayCount).toBe(0);
-    expect(reunion?.get(altUserId)?.lastPreviousDayAt?.toISOString()).toBe(presenceAt.toISOString());
+    const reunion = await statRepository.getUserPersonaReunionInfo(refs.userId, lineageA);
+    expect(reunion?.lastPreviousDayAt?.toISOString()).toBe(legacyAt.toISOString());
+    expect(reunion?.seenToday).toBe(false);
 
-    // Users with no rows at all are simply absent, never a fabricated zero row.
-    const empty = await statRepository.getUsersPersonaReunionInfo([refs.userId], lineageB);
-    expect(empty?.size).toBe(0);
+    const alternate = await statRepository.getUserPersonaReunionInfo(altUserId, lineageA);
+    expect(alternate?.lastPreviousDayAt?.toISOString()).toBe(presenceAt.toISOString());
+
+    const empty = await statRepository.getUserPersonaReunionInfo(refs.userId, lineageB);
+    expect(empty).toEqual({ lastPreviousDayAt: null, seenToday: false });
+  });
+
+  it("recordPresenceSeen persists immediately without entering the telemetry buffer", async () => {
+    const before = statRepository.bufferedEntryCount;
+    expect(
+      await statRepository.recordPresenceSeen({
+        serverId: refs.serverId,
+        userId: refs.userId,
+        lineageId: lineageA,
+      }),
+    ).toBe(true);
+
+    expect(statRepository.bufferedEntryCount).toBe(before);
+    expect(await readCount("presence_seen", "", lineageA, refs.userId)).toBe(1);
+    expect((await statRepository.getUserPersonaReunionInfo(refs.userId, lineageA))?.seenToday).toBe(true);
   });
 
   it("getFavoritePersona ranks by message share and computes loyalty %", async () => {

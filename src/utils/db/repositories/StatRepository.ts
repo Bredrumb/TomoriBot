@@ -200,10 +200,10 @@ interface StreakInfo {
   lastActiveDate: string | null;
 }
 
-/** Previous-day activity plus today's persisted grace counter for one persona lineage. */
+/** Previous-day activity plus whether today's one-shot reunion was consumed. */
 interface UserPersonaReunionInfo {
   lastPreviousDayAt: Date | null;
-  todayCount: number;
+  seenToday: boolean;
 }
 
 /**
@@ -451,69 +451,80 @@ class StatRepository implements IRepository<null> {
     return STAT_TRACKING_ENABLED;
   }
 
+  /**
+   * Persists the behavioral presence clock immediately so a context being built
+   * in another channel observes the successful turn. Buffered telemetry cannot
+   * provide that read-after-write guarantee.
+   */
+  async recordPresenceSeen(args: { serverId: number; userId: number; lineageId: number }): Promise<boolean> {
+    if (
+      !STAT_TRACKING_ENABLED ||
+      !Number.isInteger(args.serverId) ||
+      !Number.isInteger(args.userId) ||
+      !Number.isInteger(args.lineageId)
+    ) {
+      return false;
+    }
+
+    try {
+      await sql`
+        INSERT INTO stat_counters
+          (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
+        VALUES
+          (${args.serverId}, ${args.userId}, ${args.lineageId}, 'presence_seen', '', CURRENT_DATE, 1, NOW(), NOW())
+        ON CONFLICT (server_id, user_id, persona_lineage_id, metric, metric_key, bucket)
+        DO UPDATE SET
+          count = stat_counters.count + 1,
+          last_at = GREATEST(stat_counters.last_at, EXCLUDED.last_at)
+      `;
+      return true;
+    } catch (error) {
+      log.error(`StatRepository.recordPresenceSeen: failed for user ${args.userId}, lineage ${args.lineageId}`, error);
+      return false;
+    }
+  }
+
   // NOTE: reads hit the DB directly (no read cache in Phase 1). Dashboard and
   // infographic entry points await flush() before these reads, so user-facing
   // snapshots include every successfully buffered increment. All windowing is
   // `bucket >= from` + SUM, never finer.
 
   /**
-   * Reads prior-day activity and today's persisted presence count for a batch of
-   * users against one persona lineage: the two facts the reunion note needs.
-   * Batched because the caller resolves every human in the context window, not
-   * just the triggerer, and one grouped query beats N round-trips on the hot path.
+   * Reads the triggerer's last prior-day activity and whether this persona has
+   * already completed a direct turn with them today. Prior-day activity spans
+   * the legacy message metric so existing relationships retain their history.
    *
-   * Today's rows are deliberately invisible to the gap lookup, so the current turn
-   * cannot erase the gap that triggered it; that is what makes the grace window
-   * restart-safe and self-expiring at the DB day rollover with no stored state.
+   * Today's rows stay out of the gap timestamp, preserving the absence that
+   * opened the current reunion episode until its successful one-shot delivery.
+   * The daily consumed flag follows the UTC database bucket, while the displayed
+   * gap follows the user's timezone; their midnight boundaries can differ.
    *
-   * Grace counts `presence_seen` only (one tick per turn per person), while the
-   * gap lookup spans REUNION_ACTIVITY_METRICS so pre-presence history still counts.
-   *
-   * Known tolerance: the UTC DB bucket can differ cosmetically from the user-facing
-   * timezone around midnight.
-   *
-   * @param userIds  - Internal users FKs to read; duplicates are harmless.
-   * @param lineageId - Persona lineage whose relationship clock is being read.
-   * @returns Map keyed by user id (users with no rows are absent), or `null` when
-   *          the read failed, so callers must treat `null` as "inject nothing"
-   *          rather than as "no history".
+   * @returns Null on read failure, which callers treat as "inject nothing".
    */
-  async getUsersPersonaReunionInfo(
-    userIds: number[],
-    lineageId: number,
-  ): Promise<Map<number, UserPersonaReunionInfo> | null> {
-    if (userIds.length === 0) return new Map();
+  async getUserPersonaReunionInfo(userId: number, lineageId: number): Promise<UserPersonaReunionInfo | null> {
     try {
-      const rows = await sql<
+      const [row] = await sql<
         Array<{
-          user_id: number | string;
           last_previous_day_at: Date | string | null;
-          today_count: number | string;
+          seen_today: boolean;
         }>
       >`
         SELECT
-          user_id,
           MAX(last_at) FILTER (WHERE bucket < CURRENT_DATE) AS last_previous_day_at,
-          COALESCE(SUM(count) FILTER (WHERE bucket = CURRENT_DATE AND metric = 'presence_seen'), 0) AS today_count
+          COALESCE(SUM(count) FILTER (
+            WHERE bucket = CURRENT_DATE AND metric = 'presence_seen'
+          ), 0) > 0 AS seen_today
         FROM stat_counters
-        WHERE user_id = ANY(${sql.array(Array.from(new Set(userIds)), "int4")})
+        WHERE user_id = ${userId}
           AND persona_lineage_id = ${lineageId}
           AND metric = ANY(${sql.array([...REUNION_ACTIVITY_METRICS], "TEXT")})
-        GROUP BY user_id
       `;
-      const byUserId = new Map<number, UserPersonaReunionInfo>();
-      for (const row of rows) {
-        byUserId.set(Number(row.user_id), {
-          lastPreviousDayAt: row.last_previous_day_at ? new Date(row.last_previous_day_at) : null,
-          todayCount: Number(row.today_count ?? 0),
-        });
-      }
-      return byUserId;
+      return {
+        lastPreviousDayAt: row?.last_previous_day_at ? new Date(row.last_previous_day_at) : null,
+        seenToday: row?.seen_today ?? false,
+      };
     } catch (error) {
-      log.error(
-        `StatRepository.getUsersPersonaReunionInfo: failed for lineage ${lineageId} (${userIds.length} users)`,
-        error,
-      );
+      log.error(`StatRepository.getUserPersonaReunionInfo: failed for user ${userId}, lineage ${lineageId}`, error);
       return null;
     }
   }

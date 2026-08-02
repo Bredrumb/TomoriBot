@@ -33,6 +33,9 @@ const EMPTY_RESPONSE_RETRY_DELAY_MS = 1000;
  * Runs side effects that must happen after a generation attempt finishes.
  */
 export async function runPostTurnEffects(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  // Empty-response retries rebuild context recursively, so release or commit the
+  // claim before that retry tries to acquire it again.
+  await recordReunionPresence(context.reunionPresence, result);
   await sendSelectedSticker(context, result);
   await maybeScheduleEmptyResponseRetry(context, result);
   await consumeTextQuota(context, result);
@@ -42,8 +45,6 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   scheduleBoomerangFollowUp(context);
   // Fire-and-forget so stat tracking never adds latency to the response path.
   void recordUsageStats(context, result);
-  // Phase 2 of the reunion presence protocol: see @/utils/chat/reunionPresence.
-  recordReunionPresence(context.reunionPresence, result);
 }
 
 async function sendSelectedSticker(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

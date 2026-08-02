@@ -56,52 +56,48 @@ describe("time awareness calendar helpers", () => {
 });
 
 describe("buildReunionNote", () => {
-  it("covers first-timer, recent, reunion, and grace-expired conditions", () => {
+  it("covers first-timer, recent, reunion, and already-seen conditions", () => {
     expect(
       buildReunionNote({
         lastPreviousDayAt: null,
-        todayCount: 0,
+        seenToday: false,
         displayName: "Alice",
         nowMs: NOW,
         reunionDays: 3,
-        graceTriggers: 3,
       }),
     ).toBe(
-      "Alice is talking to you for the very first time! If you haven't already, welcome them naturally and ask something friendly to get to know them.",
+      "Alice is talking to you for the very first time! Welcome them naturally and ask something friendly to get to know them.",
     );
 
     expect(
       buildReunionNote({
         lastPreviousDayAt: new Date("2026-07-14T12:00:00Z"),
-        todayCount: 0,
+        seenToday: false,
         displayName: "Alice",
         nowMs: NOW,
         reunionDays: 3,
-        graceTriggers: 3,
       }),
     ).toBeNull();
 
     expect(
       buildReunionNote({
         lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
-        todayCount: 2,
+        seenToday: false,
         displayName: "Alice",
         nowMs: NOW,
         reunionDays: 3,
-        graceTriggers: 3,
       }),
     ).toBe(
-      "Alice is talking to you again for the first time since July 12, 2026. It's been 3 days! If you haven't already, acknowledge their return naturally and ask what they've been up to.",
+      "Alice is talking to you again for the first time since July 12, 2026. It's been 3 days! Acknowledge their return naturally and ask what they've been up to.",
     );
 
     expect(
       buildReunionNote({
         lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
-        todayCount: 3,
+        seenToday: true,
         displayName: "Alice",
         nowMs: NOW,
         reunionDays: 3,
-        graceTriggers: 3,
       }),
     ).toBeNull();
   });
@@ -109,54 +105,15 @@ describe("buildReunionNote", () => {
   it("uses personal, then server, then UTC timezone fallback", () => {
     const args = {
       lastPreviousDayAt: new Date("2026-07-12T23:30:00Z"),
-      todayCount: 0,
+      seenToday: false,
       displayName: "Alice",
       nowMs: Date.parse("2026-07-15T00:30:00Z"),
       reunionDays: 3,
-      graceTriggers: 3,
     };
 
     expect(buildReunionNote({ ...args, personalOffset: 2, serverOffset: 0 })).toBeNull();
     expect(buildReunionNote({ ...args, personalOffset: null, serverOffset: 0 })).toContain("July 12, 2026");
     expect(buildReunionNote({ ...args, personalOffset: null, serverOffset: null })).toContain("July 12, 2026");
-  });
-
-  it("skips synthetic impersonation turns", () => {
-    expect(
-      buildReunionNote({
-        lastPreviousDayAt: null,
-        todayCount: 0,
-        displayName: "Synthetic User",
-        isUserImpersonation: true,
-      }),
-    ).toBeNull();
-  });
-
-  it("never welcomes a non-triggerer as a first-timer, but still acknowledges their return", () => {
-    expect(
-      buildReunionNote({
-        lastPreviousDayAt: null,
-        todayCount: 0,
-        displayName: "Bob",
-        isTriggerer: false,
-        nowMs: NOW,
-        reunionDays: 3,
-        graceTriggers: 3,
-      }),
-    ).toBeNull();
-
-    const note = buildReunionNote({
-      lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
-      todayCount: 0,
-      displayName: "Bob",
-      isTriggerer: false,
-      nowMs: NOW,
-      reunionDays: 3,
-      graceTriggers: 3,
-    });
-    expect(note).toBe(
-      "Bob is around again for the first time since July 12, 2026. It's been 3 days! If you haven't already, acknowledge their return naturally without derailing the current topic.",
-    );
   });
 });
 
@@ -196,7 +153,7 @@ describe("buildDateSpacer", () => {
 });
 
 describe("appendDialogueHistoryContext — time-awareness injections", () => {
-  it("injects producer-supplied reunion notes as one system block above the newest messages", async () => {
+  it("injects the producer-supplied reunion note above the newest messages", async () => {
     const contextItems = [];
     await appendDialogueHistoryContext({
       contextItems,
@@ -212,7 +169,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
       botName: "Tomori",
       tomoriConfig: makeConfig(),
       tomoriState: null,
-      reunionNotes: ["Alice is talking to you for the very first time!", "Bob is around again."],
+      reunionNote: "Alice is talking to you for the very first time!",
       includeTimestamps: false,
       isUserImpersonation: false,
       uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
@@ -226,7 +183,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
     expect(noteIndex).toBe(depthTargetIndex - 1);
 
     const noteText = itemText(contextItems[noteIndex]);
-    expect(noteText).toBe("[System: Alice is talking to you for the very first time!\nBob is around again.]");
+    expect(noteText).toBe("[System: Alice is talking to you for the very first time!]");
     expect(contextItems.filter((item) => itemText(item).startsWith("[System: Alice"))).toHaveLength(1);
   });
 
@@ -261,8 +218,8 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
   it("keeps the producer-to-native-builder reunion field wired", async () => {
     const producer = await Bun.file("src/utils/chat/contextPipeline.ts").text();
     const nativeBuilder = await Bun.file("src/utils/text/context/nativeBuilder.ts").text();
-    expect(producer).toContain("reunionNotes,");
-    expect(nativeBuilder).toContain("reunionNotes,");
+    expect(producer).toContain("reunionNote,");
+    expect(nativeBuilder).toContain("reunionNote,");
     expect(nativeBuilder).toContain("dateSpacerTemplate,");
   });
 
@@ -274,7 +231,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
     const postTurn = await Bun.file("src/utils/chat/postTurnEffects.ts").text();
     const presence = await Bun.file("src/utils/chat/reunionPresence.ts").text();
 
-    expect(producer).toContain("resolveReunionNotes");
+    expect(producer).toContain("resolveReunionNote");
     expect(producer).toContain("reunionPresence,");
     expect(postTurn).toContain("recordReunionPresence(context.reunionPresence, result)");
 

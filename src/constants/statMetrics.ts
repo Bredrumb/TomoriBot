@@ -6,17 +6,12 @@
  * carries the metric and its sub-key as data, not columns).
  *
  * `metric_key` semantics per metric:
- *   - presence_seen → "" (one per turn per human author present in the context
- *                     window, including the triggerer). This is the *behavioral*
- *                     "when did this persona last see this person" clock behind
- *                     reunion notes, so deliberately separate from message_sent so
- *                     leaderboards, favorite-persona shares, and cost reads keep
- *                     counting only real exchanges. Unlike message_sent it is
- *                     recorded in DMs, but it still requires a response, since a
- *                     turn that never answered delivered no acknowledgment and must
- *                     not consume the reunion. Owned end-to-end by
- *                     `@/utils/chat/reunionPresence` (resolve at context build,
- *                     commit post-turn).
+ *   - presence_seen → "" (one per successful direct-triggerer turn). This is the
+ *                     behavioral reunion clock, deliberately separate from
+ *                     message_sent so DMs participate without changing telemetry
+ *                     leaderboards. It is written immediately rather than buffered
+ *                     because cross-channel context builds require read-after-write
+ *                     consistency.
  *   - command_used  → full command path, space-joined (e.g. "config humanizer",
  *                     "server welcome-channel set"); not just the top-level category
  *   - model_used    → model id / codename

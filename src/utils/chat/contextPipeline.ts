@@ -61,7 +61,7 @@ import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLa
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
-import { resolveReunionNotes } from "@/utils/chat/reunionPresence";
+import { resolveReunionNote } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
 
@@ -272,15 +272,12 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     : null;
 
   // Reunion state is deliberately cross-server: the lineage is the persona's
-  // cross-server identity anchor (same as personal_memories), so prior activity
-  // and today's grace count pool across every server sharing the lineage.
-  const { notes: reunionNotes, presence: reunionPresence } = await resolveReunionNotes({
+  // cross-server identity anchor, so a successful delivery in one channel or
+  // server consumes the same one-shot return everywhere that lineage appears.
+  const { note: reunionNote, presence: reunionPresence } = await resolveReunionNote({
     turn,
     effectivePersona,
-    simplifiedMessages: history.simplifiedMessages,
     isUserImpersonation: incoming.isUserImpersonation,
-    impersonatedUserId: incoming.impersonatedUserId,
-    botUserDiscId: client.user?.id,
   });
 
   const contextBuild = await buildContext({
@@ -308,7 +305,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     tomoriConfig: effectivePersona.config,
     channelPromptOverride,
     channelContextNote,
-    reunionNotes,
+    reunionNote,
     personaPrompt: effectivePersona.persona_prompt ?? null,
     personaLineageId: effectivePersona.persona_lineage_id,
     isDMChannel: turn.isDMChannel,

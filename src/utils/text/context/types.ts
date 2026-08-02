@@ -95,12 +95,8 @@ export interface BuildContextParams {
    * only used when neither persona nor channel has one set.
    */
   channelContextNote?: { note: string; depth: number } | null;
-  /**
-   * Precomputed persona-reunion note bodies (raw text: the dialogue-history
-   * stage wraps them in `[System: ...]`). One entry per returning person the
-   * chat pipeline resolved: the triggerer and/or others present in the window.
-   */
-  reunionNotes?: string[] | null;
+  /** Precomputed one-shot reunion note body. Null disables injection. */
+  reunionNote?: string | null;
   personaPrompt?: string | null;
   personaLineageId?: number;
   isDMChannel?: boolean;
