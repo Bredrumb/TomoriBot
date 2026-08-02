@@ -16,6 +16,16 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 
 Official bundled character presets have their own pointer behavior for seeded text, sprites, and avatars. Pointer alters live-resolve a shared preset avatar; the main persona's guild avatar is fanned out by a hash-gated background reconciler. See [Persona Presets](/architecture/subsystems/persona-presets/).
 
+### Participant context freshness
+
+Persona responses in the same locked chat turn share only active-independent participant
+discovery. The request scope freezes the sanitized visible history, participant identities,
+persona catalog, and responder set, so equivalent turns avoid repeating the candidate query
+and reference-membership checks. Each persona still gets a newly composed active identity
+and public-profile view, followed by fresh member, privacy, blacklist, lineage-memory,
+persona-reminder, and self-task hydration. No prepared participant result is reused across
+locked chat turns.
+
 ## Data Model
 
 ### `personas`

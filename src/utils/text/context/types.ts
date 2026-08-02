@@ -11,6 +11,7 @@ import type {
 import type { StructuredContextItem } from "@/types/misc/context";
 import type { ParticipantSeed } from "@/utils/text/participants/identity";
 import type { ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
+import type { PreparedParticipantContext } from "@/utils/text/participants/preparation";
 
 /**
  * Simplified message structure received from tomoriChat.ts.
@@ -65,11 +66,13 @@ export interface BuildContextParams {
   serverName: string;
   serverDescription: string | null;
   simplifiedMessageHistory: SimplifiedMessageForContext[];
-  userList: string[];
+  userList?: string[];
   /** Temporary typed input while legacy rendering remains authoritative behind golden parity gates. */
   participantSeeds?: readonly ParticipantSeed[];
   /** Ordered discovery evidence and aggregate rejection diagnostics for the typed participant path. */
   participantDiscoveryPlan?: ParticipantDiscoveryPlan;
+  /** Prepared typed participant discovery from the supported orchestration API. */
+  preparedParticipantContext?: PreparedParticipantContext;
   channelDesc: string | null;
   channelName: string;
   channelId: string;

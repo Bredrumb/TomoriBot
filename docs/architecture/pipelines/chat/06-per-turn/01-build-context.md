@@ -75,22 +75,20 @@ Key fields populated here:
   attempts.
 - **Impersonation identity resolution** — if `isUserImpersonation`, fetches
   the impersonated user's nickname/avatar via `resolveImpersonatedIdentity`.
-- **Reference-driven participant discovery** — after privacy/block filtering
-  and message simplification, scans the entire visible fetched window for
-  persona triggers and eligible Discord user aliases/mentions. The shared
-  resolver batches user eligibility reads, constructs the canonical input-reference
-  alias catalog, then passes preloaded rows into the normal participant renderer. Pure
-  alias matching reports bounded aggregate diagnostics without message or alias text.
-- **Typed participant boundary** — after reference resolution, live chat converts
-  visible authors, the active identity, referenced users, historical personas,
-  co-responders, webhooks, and Matrix identities into an ordered
-  `ParticipantDiscoveryPlan`. Reference and persona inclusion reasons, candidate
-  evidence, active-turn-independent aliases, first-seen order, and aggregate rejection
-  diagnostics remain attached for later hydration; this does not affect response planning.
-  The participant stage then rehydrates profiles with an explicit active persona ID,
-  lineage, main/alter state, and impersonation state. Privacy and identity snapshot fast
-  paths stay request-local, while lineage memories, persona-filtered reminders, and
-  persona self-tasks cannot cross that scope.
+- **Participant preparation** — after privacy/block filtering and message simplification,
+  `prepareParticipantContext()` scans the entire visible fetched window for persona triggers
+  and eligible Discord user aliases/mentions, then composes visible authors, active identity,
+  references, historical personas, co-responders, webhooks, and Matrix identities into one
+  ordered typed result. This context-only discovery never changes response planning.
+- **Locked-turn discovery reuse** — all persona turns sharing a `LockedChatTurn` share a
+  request scope keyed by an exact snapshot of the sanitized discovery inputs. Equivalent
+  inputs reuse candidate and membership discovery, including concurrent in-flight work;
+  changed privacy-filtered history receives a separate entry. Every call recomposes active
+  identity and public-profile exposure, and the participant stage rehydrates member data,
+  privacy, blacklist, lineage memories, persona-filtered reminders, and persona self-tasks
+  for the current active persona. The scope is request-local and weakly held.
+- **Bounded diagnostics** — preparation emits candidate, inclusion, rejection, cache,
+  duration, and external-call counts without IDs, aliases, or message text.
 
 ## Invariants
 

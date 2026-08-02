@@ -8,6 +8,8 @@ import { serializeParticipantKey, type ParticipantSeed } from "@/utils/text/part
 import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
 import { hydrateParticipantProfiles } from "@/utils/text/participants/hydration";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
+import type { ParticipantPreparationDiagnostics } from "@/utils/text/participants/preparation";
+import { log } from "@/utils/misc/logger";
 
 export { formatPendingReminderForContext } from "@/utils/text/participants/hydration";
 
@@ -16,7 +18,7 @@ export async function buildParticipantContextItem(params: {
   guildId: string;
   channelName: string;
   channelId: string;
-  userList: string[];
+  userList: readonly string[];
   participantSeeds: readonly ParticipantSeed[];
   triggererName: string;
   botName: string;
@@ -27,15 +29,16 @@ export async function buildParticipantContextItem(params: {
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
   impersonatedIdentityName: string | null;
-  matrixUsers?: Map<string, string>;
-  syntheticUsers?: Map<string, { displayName: string; type: "persona" | "webhook" }>;
-  publicPersonaProfiles?: PublicPersonaProfile[];
-  preloadedReferencedUserRows?: Map<string, UserRow>;
+  matrixUsers?: ReadonlyMap<string, string>;
+  syntheticUsers?: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
+  publicPersonaProfiles?: readonly PublicPersonaProfile[];
+  preloadedReferencedUserRows?: ReadonlyMap<string, UserRow>;
   referencedUserIds?: ReadonlySet<string>;
   toolPromptMacroResolver: { expand(text: string): Promise<string> };
   conversationCorpus: string | null;
   snapshot?: import("@/types/misc/context").RequestSnapshot;
   convertMentions: MentionConverter;
+  preparationDiagnostics?: ParticipantPreparationDiagnostics;
 }): Promise<StructuredContextItem | null> {
   const typedKeys = new Set<string>();
   for (const seed of params.participantSeeds) {
@@ -84,6 +87,7 @@ export async function buildParticipantContextItem(params: {
     botName: params.botName,
   });
   const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
+  const renderStartedAt = performance.now();
   const rendered = renderParticipantPrompt({
     profiles: hydrated.profiles,
     personaTaskLines: hydrated.personaTaskLines,
@@ -96,6 +100,8 @@ export async function buildParticipantContextItem(params: {
     timezoneLabel: formatUTCOffset(timezoneOffset),
     timeOfDayPhrase: getTimeOfDayPhrase(timezoneOffset),
   });
+  const renderDurationMs = performance.now() - renderStartedAt;
+  emitParticipantPreparationMetric(params.preparationDiagnostics, hydrated.diagnostics, renderDurationMs);
 
   return {
     role: "user",
@@ -132,5 +138,41 @@ export async function buildUsersInConversationContextItem(
       matrixUsers: params.matrixUsers,
       publicPersonaProfiles: params.publicPersonaProfiles,
     }),
+  });
+}
+
+function emitParticipantPreparationMetric(
+  preparation: ParticipantPreparationDiagnostics | undefined,
+  hydration: Awaited<ReturnType<typeof hydrateParticipantProfiles>>["diagnostics"],
+  renderDurationMs: number,
+): void {
+  const rejectionCounts = preparation?.rejectionCounts;
+  log.metric("participant_context_preparation", {
+    candidate_count: preparation?.candidateCount ?? 0,
+    included_count: preparation?.includedCount ?? 0,
+    hydrated_participant_count: hydration.profileCount,
+    discovery_cache_hit: preparation?.discoveryCacheHit ? 1 : 0,
+    discovery_duration_ms: Number((preparation?.discoveryDurationMs ?? 0).toFixed(3)),
+    hydration_duration_ms: Number(hydration.durationMs.toFixed(3)),
+    render_duration_ms: Number(renderDurationMs.toFixed(3)),
+    rejected_ineligible_state: rejectionCounts?.ineligible_state ?? 0,
+    rejected_bot: rejectionCounts?.bot ?? 0,
+    rejected_non_member: rejectionCounts?.non_member ?? 0,
+    rejected_ambiguous_alias: rejectionCounts?.ambiguous_alias ?? 0,
+    rejected_existing_participant: rejectionCounts?.existing_participant ?? 0,
+    rejected_blocked_source: rejectionCounts?.blocked_source ?? 0,
+    rejected_missing_guild: rejectionCounts?.missing_guild ?? 0,
+    candidate_source_reads: preparation?.externalCalls.candidateSourceReads ?? 0,
+    member_cache_hits: preparation?.externalCalls.memberCacheHits ?? 0,
+    member_fetches: preparation?.externalCalls.memberFetches ?? 0,
+    user_row_reads: hydration.externalCalls.userRowLoads,
+    registration_calls: hydration.externalCalls.registrations,
+    blacklist_reads: hydration.externalCalls.blacklistReads,
+    privacy_reads: hydration.externalCalls.privacyReads,
+    personal_memory_reads: hydration.externalCalls.personalMemoryReads,
+    reminder_reads: hydration.externalCalls.reminderReads,
+    hydration_member_reads: hydration.externalCalls.memberReads,
+    fallback_user_reads: hydration.externalCalls.fallbackUserReads,
+    presence_reads: hydration.externalCalls.presenceReads,
   });
 }

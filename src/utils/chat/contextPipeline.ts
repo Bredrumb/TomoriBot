@@ -59,12 +59,17 @@ import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMes
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
-import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
+import type { ChatTurn, ChatTurnContext, LockedChatTurn } from "@/utils/chat/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
 import { resolveReunionNote } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
-import { resolveContextReferences } from "@/utils/text/contextReferences";
-import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
+import {
+  createParticipantRequestScope,
+  prepareParticipantContext,
+  type ParticipantRequestScope,
+} from "@/utils/text/participants/preparation";
+
+const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
@@ -241,37 +246,23 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     streamingContext.disableAllTools && rpBasePersona.llm.has_tools
       ? { ...rpBasePersona, llm: { ...rpBasePersona.llm, has_tools: false } }
       : rpBasePersona;
-  const personaIdsInHistory = new Set(
-    Array.from(history.syntheticUsers.entries())
-      .filter(([, u]) => u.type === "persona")
-      .map(([id]) => Number.parseInt(id, 10))
-      .filter((id) => !Number.isNaN(id)),
-  );
-  const contextReferences = await resolveContextReferences({
+  let participantRequestScope = participantRequestScopes.get(turn.lockedTurn);
+  if (!participantRequestScope) {
+    participantRequestScope = createParticipantRequestScope();
+    participantRequestScopes.set(turn.lockedTurn, participantRequestScope);
+  }
+  const preparedParticipantContext = await prepareParticipantContext({
     client,
     guildId: turn.serverDiscId,
     simplifiedMessageHistory: history.simplifiedMessages,
     personas: turn.allPersonas,
-    activePersonaId: effectivePersona.persona_id,
-    existingParticipantIds: history.userIds,
-    existingPersonaIds: personaIdsInHistory,
+    activePersona: effectivePersona,
+    visibleUserIds: [...history.userIds],
+    syntheticUsers: history.syntheticUsers,
+    matrixUsers: history.matrixUsers,
     responderPersonaIds: new Set(turn.triggeredPersonaIds),
+    requestScope: participantRequestScope,
   });
-  const contextUserIds = new Set(history.userIds);
-  for (const referencedUserId of contextReferences.referencedUserIds) contextUserIds.add(referencedUserId);
-  const participantDiscoveryPlan = composeParticipantDiscoveryPlan({
-    visibleInput: {
-      userList: [...history.userIds],
-      clientUserId: client.user?.id,
-      activePersonaId: effectivePersona.persona_id,
-      activePersonaIsAlter: effectivePersona.is_alter,
-      syntheticUsers: history.syntheticUsers,
-      matrixUsers: history.matrixUsers,
-    },
-    personas: turn.allPersonas,
-    referencePlan: contextReferences.discoveryPlan,
-  });
-  const participantSeeds = participantDiscoveryPlan.seeds;
 
   // Resolve any per-channel system prompt override (append/replace). Negative results
   // are cached, so DM channels (which can never have an override) cost one cheap lookup.
@@ -299,11 +290,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     serverName: turn.serverName,
     serverDescription: turn.serverDescription,
     simplifiedMessageHistory: history.simplifiedMessages,
-    userList: Array.from(contextUserIds),
-    participantSeeds,
-    participantDiscoveryPlan,
-    matrixUsers: history.matrixUsers,
-    syntheticUsers: history.syntheticUsers,
+    preparedParticipantContext,
     personaUserBlocks: history.activeUserBlocks,
     channelDesc: turn.channelDescription,
     channelName: turn.channelName,
@@ -315,9 +302,6 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     emojiStrings: assets.emojiStrings,
     tomoriNickname: effectivePersona.persona_nickname,
     tomoriAttributes: effectivePersona.attribute_list,
-    publicPersonaProfiles: contextReferences.publicPersonaProfiles,
-    preloadedReferencedUserRows: contextReferences.referencedUserRows,
-    referencedUserIds: contextReferences.referencedUserIds,
     tomoriConfig: effectivePersona.config,
     channelPromptOverride,
     channelContextNote,

@@ -21,6 +21,8 @@ channel/time-of-day footer.
   `ParticipantDiscoveryPlan`.
 - `src/utils/text/participants/candidateSources.ts` defines the injected repository and
   guild-member directory contracts used by reference orchestration.
+- `src/utils/text/participants/preparation.ts` is the supported orchestration boundary for
+  all context producers and owns request-local discovery reuse plus aggregate diagnostics.
 - `src/utils/text/participants/hydration.ts` owns active-persona-scoped identity loading,
   exposure policy, profile-field enrichment, public persona details, and persona self-tasks.
 - `src/utils/text/participants/renderer.ts` is the pure composite prompt renderer.
@@ -33,14 +35,17 @@ channel/time-of-day footer.
 
 ## Typed preparation boundary
 
-Live chat and prompt snapshot convert equivalent sanitized sources into a
-`ParticipantDiscoveryPlan` before calling `buildContext()`. The plan retains ordered typed
-seeds, candidate evidence, aggregate rejection reasons, and alias diagnostics. A seed carries a discriminated
+Live chat, prompt snapshot, cost inspection, and hidden image turns call
+`prepareParticipantContext()` with their sanitized visible history before calling
+`buildContext()`. The returned `PreparedParticipantContext` carries participant IDs, bridge
+and synthetic identities, preloaded reference rows, public persona profiles, diagnostics,
+and the authoritative `ParticipantDiscoveryPlan`. The plan retains ordered typed seeds,
+candidate evidence, aggregate rejection reasons, and alias diagnostics. A seed carries a discriminated
 `ParticipantKey`, all known inclusion reasons, its alias catalog, and its first-seen order. Numeric strings
 from Discord users, webhooks, personas, Matrix users, and the bot cannot collide because
 the key kind participates in equality and serialization.
 
-`buildContextNative()` prefers the discovery plan's seeds and calls the typed
+`buildContextNative()` prefers the prepared result and calls the typed
 `buildParticipantContextItem()` entry point. Direct
 legacy callers are temporarily supported by `buildUsersInConversationContextItem()` and
 the fallback adapter in `nativeBuilder.ts`; both produce the same seeds before delegating.
@@ -48,8 +53,17 @@ the fallback adapter in `nativeBuilder.ts`; both produce the same seeds before d
 with a required `ActivePersonaScope`. Hydration returns ordered typed profiles whose fields
 carry a stable owner key, render order, and visibility decision. The pure renderer creates
 the one composite prompt item payload and `ParticipantTargetIndex` without performing
-database, cache, Discord, clock, or logging work. The parallel legacy inputs
-remain only until all context producers migrate to the prepared participant API.
+database, cache, Discord, clock, or logging work. The parallel legacy inputs remain only
+as test and compatibility surfaces pending their Phase 8 removal; production context
+producers pass only the prepared participant result.
+
+Live multi-persona turns attach a `ParticipantRequestScope` to the locked chat turn. The
+scope captures an exact copy of the sanitized messages, visible identities, persona catalog,
+and responder set. Equivalent persona turns share the in-flight or completed discovery
+promise, while different sanitized inputs receive distinct cache entries. Active persona
+identity and public-profile exclusion are recomposed for every call, and hydration always
+runs again with the current persona scope. The request scope is held by a `WeakMap` and does
+not extend the lifetime of repository, privacy, blacklist, or Discord member caches.
 
 ## Mission
 
@@ -69,14 +83,16 @@ The output is *one* context item — all participants live in a single
 
 ## Input
 
-Substantial — see signature in `participants.ts:38-58`. Notable:
+The production participant input to `buildContext()` is
+`preparedParticipantContext: PreparedParticipantContext`. It contains ordered participant
+IDs, a typed discovery plan, Matrix and synthetic identities, public persona profiles,
+reference-only rows and IDs, and aggregate diagnostics. The hydration facade additionally
+receives:
 
 - `userList: string[]` — Discord author IDs from history plus eligible
   reference-discovered user IDs; retained temporarily for compatibility rendering
 - `participantSeeds: readonly ParticipantSeed[]` — collision-safe identities, inclusion
-  reasons, purpose-aware aliases, and first-seen order prepared by the producer or legacy adapter
-- `participantDiscoveryPlan` — the authoritative live/snapshot discovery result; the separate
-  seed field remains as a compatibility input for direct callers
+  reasons, purpose-aware aliases, and first-seen order from the prepared discovery plan
 - `triggererName`, `botName`, `personaLineageId`
 - `ActivePersonaScope` is derived at the hydration boundary from the active persona ID,
   lineage ID, main/alter state, and impersonation state
@@ -84,12 +100,6 @@ Substantial — see signature in `participants.ts:38-58`. Notable:
   `timezone_offset`)
 - `isDMChannel`, `isUserImpersonation`, `impersonatedUserId`,
   `impersonatedIdentityName`
-- `matrixUsers: Map<string, string>` — Matrix user ID → stripped display name
-- `syntheticUsers: Map<string, { displayName, type: "persona" | "webhook" }>`
-- `publicPersonaProfiles` — referenced/history/responder personas' public
-  attributes plus normalized Physical Appearance tags
-- `preloadedReferencedUserRows`, `referencedUserIds` — batched alias-resolution
-  results; referenced users never take the auto-registration path
 - `conversationCorpus` — for personal-memory tag filtering
 - `snapshot`, `convertMentions`
 
@@ -181,6 +191,10 @@ independently of human participant membership.
 - **Discovery diagnostics (upstream)** — the typed plan aggregates ineligible-state, bot,
   non-member, ambiguous-alias, existing-participant, blocked-source, and missing-guild
   rejections. Production paths do not log candidate IDs, aliases, or message content.
+- **Preparation metric** — `participant_context_preparation` records only bounded numeric
+  fields: candidate/included/hydrated counts, rejection totals, cache-hit state, stage
+  durations, and external-call counts. User IDs, persona IDs, aliases, and message content
+  are never metric labels or values.
 - **Alias catalog construction** — saved nicknames, guild display names and nicknames,
   global names, usernames, persona nicknames and triggers, Matrix display names, webhook
   display names, and impersonated identities use source-owned builders. Each alias records
@@ -197,6 +211,11 @@ helper. Existing repositories do not expose behavior-equivalent batch APIs for t
 privacy, blacklist, memory, and reminder reads, so hydration retains those calls while
 deduplicating base member loading. The regression fixture records aggregate calls and keeps
 them at or below the pre-refactor baseline.
+
+The request-reuse fixture measures two equivalent builds in one locked request. Candidate
+repository reads improve from two to one, with no full-guild member fetch. Hydration remains
+fresh on both builds: four member reads, four blacklist reads, four privacy reads, four
+personal-memory reads, and six reminder reads still occur across the two turns.
 
 ## Invariants
 
@@ -261,6 +280,8 @@ After this stage runs:
 - Persona-dependent hydration always receives an explicit scope. Personal memories use its
   lineage, human reminders use its persona ID plus main/alter compatibility flag, and
   persona self-tasks use its exact persona ID.
+- Request-scope reuse covers only active-independent discovery. A cache hit recomposes the
+  active identity and public-profile exposure, then repeats all persona-scoped hydration.
 - Triggerer blacklist, privacy, and presence-member snapshot fast paths remain request-local.
 - Rendering consumes only `HydratedParticipantProfile` values and has no repository,
   cache, or Discord read path.

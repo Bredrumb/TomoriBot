@@ -35,9 +35,10 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     serverName,
     serverDescription,
     simplifiedMessageHistory,
-    userList,
+    userList = [],
     participantSeeds,
     participantDiscoveryPlan,
+    preparedParticipantContext,
     channelName,
     channelId,
     parentChannelId,
@@ -90,7 +91,9 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     sanitizeEnabled: tomoriConfig.uncensor_sanitize_enabled,
   };
   const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
+  const resolvedParticipantIds = [...(preparedParticipantContext?.participantIds ?? userList)];
   const resolvedParticipantSeeds =
+    preparedParticipantContext?.discoveryPlan.seeds ??
     participantDiscoveryPlan?.seeds ??
     participantSeeds ??
     adaptLegacyParticipantSeeds({
@@ -102,6 +105,11 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       matrixUsers,
       publicPersonaProfiles,
     });
+  const resolvedMatrixUsers = preparedParticipantContext?.matrixUsers ?? matrixUsers;
+  const resolvedSyntheticUsers = preparedParticipantContext?.syntheticUsers ?? syntheticUsers;
+  const resolvedPublicPersonaProfiles = preparedParticipantContext?.publicPersonaProfiles ?? publicPersonaProfiles;
+  const resolvedReferencedUserRows = preparedParticipantContext?.referencedUserRows ?? preloadedReferencedUserRows;
+  const resolvedReferencedUserIds = preparedParticipantContext?.referencedUserIds ?? referencedUserIds;
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
     stateForContext:
@@ -250,7 +258,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       guildId,
       channelName,
       channelId,
-      userList,
+      userList: resolvedParticipantIds,
       participantSeeds: resolvedParticipantSeeds,
       triggererName,
       botName,
@@ -261,11 +269,12 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isUserImpersonation,
       impersonatedUserId,
       impersonatedIdentityName,
-      matrixUsers,
-      syntheticUsers,
-      publicPersonaProfiles,
-      preloadedReferencedUserRows,
-      referencedUserIds,
+      matrixUsers: resolvedMatrixUsers,
+      syntheticUsers: resolvedSyntheticUsers,
+      publicPersonaProfiles: resolvedPublicPersonaProfiles,
+      preloadedReferencedUserRows: resolvedReferencedUserRows,
+      referencedUserIds: resolvedReferencedUserIds,
+      preparationDiagnostics: preparedParticipantContext?.diagnostics,
       toolPromptMacroResolver,
       conversationCorpus,
       snapshot,

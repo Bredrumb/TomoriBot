@@ -11,6 +11,7 @@ import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { cleanToolReplyText } from "@/utils/discord/toolReplyText";
 import { reassembleWithPreset } from "@/utils/text/presetContextBuilder";
 import { replaceMentionHandles } from "@/utils/text/processors/mentionProcessor";
+import { createParticipantRequestScope } from "@/utils/text/participants/preparation";
 import {
   buildLegacyParticipantContext,
   createParticipantContextFixture,
@@ -190,6 +191,68 @@ describe("participant context Phase 0 baseline", () => {
       expect(snapshotFixture.counters).toEqual(liveFixture.counters);
     } finally {
       snapshotFixture.restoreRepositories();
+    }
+  });
+
+  it("rehydrates memories and reminders for each active persona after shared discovery", async () => {
+    const fixture = createParticipantContextFixture();
+    const requestScope = createParticipantRequestScope();
+    const alterPersona = fixture.personas.find(
+      (persona) => persona.persona_id === PARTICIPANT_FIXTURE_IDS.historicalPersona,
+    );
+    if (!alterPersona) throw new Error("Alter persona fixture is missing");
+
+    try {
+      const mainItem = await buildLegacyParticipantContext(fixture, { requestScope });
+      const alterItem = await buildLegacyParticipantContext(fixture, {
+        activePersona: alterPersona,
+        requestScope,
+      });
+      const mainText = mainItem.parts.find((part) => part.type === "text")?.text ?? "";
+      const alterText = alterItem.parts.find((part) => part.type === "text")?.text ?? "";
+
+      expect(fixture.counters.candidateQueries).toBe(1);
+      expect(fixture.hydrationObservations.memoryLineages).toEqual([70, 70, 80, 80]);
+      expect(fixture.hydrationObservations.reminderScopes.slice(0, 3)).toEqual([
+        {
+          discordId: PARTICIPANT_FIXTURE_IDS.human,
+          personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
+          includeUnassignedForMainPersona: true,
+        },
+        {
+          discordId: PARTICIPANT_FIXTURE_IDS.referencedHuman,
+          personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
+          includeUnassignedForMainPersona: true,
+        },
+        {
+          discordId: PARTICIPANT_FIXTURE_IDS.bot,
+          personaId: PARTICIPANT_FIXTURE_IDS.activePersona,
+          includeUnassignedForMainPersona: undefined,
+        },
+      ]);
+      expect(fixture.hydrationObservations.reminderScopes.slice(3)).toEqual([
+        {
+          discordId: PARTICIPANT_FIXTURE_IDS.human,
+          personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
+          includeUnassignedForMainPersona: false,
+        },
+        {
+          discordId: PARTICIPANT_FIXTURE_IDS.referencedHuman,
+          personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
+          includeUnassignedForMainPersona: false,
+        },
+        {
+          discordId: PARTICIPANT_FIXTURE_IDS.bot,
+          personaId: PARTICIPANT_FIXTURE_IDS.historicalPersona,
+          includeUnassignedForMainPersona: undefined,
+        },
+      ]);
+      expect(mainText).toContain("Alice likes archival maps.");
+      expect(mainText).not.toContain("Alice remembers the alter's star chart.");
+      expect(alterText).not.toContain("Alice likes archival maps.");
+      expect(alterText).toContain("Alice remembers the alter's star chart.");
+    } finally {
+      fixture.restoreRepositories();
     }
   });
 

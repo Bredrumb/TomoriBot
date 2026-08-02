@@ -12,8 +12,8 @@ import type { StructuredContextItem } from "@/types/misc/context";
 import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 import { buildUsersInConversationContextItem } from "@/utils/text/context/participants";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
-import { resolveContextReferences } from "@/utils/text/contextReferences";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
+import { prepareParticipantContext, type ParticipantRequestScope } from "@/utils/text/participants/preparation";
 
 export const PARTICIPANT_FIXTURE_IDS = {
   guild: "100000000000000001",
@@ -66,6 +66,14 @@ export interface ParticipantContextFixture {
   personaUserBlocks: PersonaUserBlockRow[];
   blacklistedUserIds: Set<string>;
   counters: ParticipantFixtureCounters;
+  hydrationObservations: {
+    memoryLineages: number[];
+    reminderScopes: Array<{
+      discordId: string;
+      personaId?: number;
+      includeUnassignedForMainPersona?: boolean;
+    }>;
+  };
   memberCache: CountingMemberCache;
   restoreRepositories(): void;
 }
@@ -136,6 +144,10 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     reminderReads: 0,
     memberFetches: 0,
     fullGuildMemberFetches: 0,
+  };
+  const hydrationObservations: ParticipantContextFixture["hydrationObservations"] = {
+    memoryLineages: [],
+    reminderScopes: [],
   };
 
   const human = createUserRow(41, PARTICIPANT_FIXTURE_IDS.human, "Alice Saved");
@@ -213,6 +225,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     ["tomori"],
     PARTICIPANT_FIXTURE_IDS.activeLineage,
   );
+  activePersona.is_alter = false;
   activePersona.config = config;
   activePersona.physical_appearance_tags = ["black hair", "blue eyes"];
   const historicalPersona = createPersona(PARTICIPANT_FIXTURE_IDS.historicalPersona, "Ren", ["ren", "Ren Senpai"], 80);
@@ -228,6 +241,13 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
       user_id: human.user_id,
       persona_lineage_id: PARTICIPANT_FIXTURE_IDS.activeLineage,
       content: "Alice likes archival maps.",
+      tags: ["#general", "maps"],
+    } as PersonalMemoryRow,
+    {
+      personal_memory_id: 94,
+      user_id: human.user_id,
+      persona_lineage_id: 80,
+      content: "Alice remembers the alter's star chart.",
       tags: ["#general", "maps"],
     } as PersonalMemoryRow,
   ];
@@ -294,10 +314,17 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
   };
   personalMemoryRepository.loadForUserLineage = async (userId, lineageId) => {
     counters.personalMemoryReads += 1;
+    hydrationObservations.memoryLineages.push(lineageId);
     return personalMemories.filter((memory) => memory.user_id === userId && memory.persona_lineage_id === lineageId);
   };
-  serverScheduleRepository.getPendingRemindersForUser = async (discordId) => {
+  serverScheduleRepository.getPendingRemindersForUser = async (
+    discordId,
+    _serverDiscId,
+    personaId,
+    includeUnassignedForMainPersona,
+  ) => {
     counters.reminderReads += 1;
+    hydrationObservations.reminderScopes.push({ discordId, personaId, includeUnassignedForMainPersona });
     if (discordId === PARTICIPANT_FIXTURE_IDS.human) return reminders.filter((reminder) => !reminder.self_reminder);
     if (discordId === PARTICIPANT_FIXTURE_IDS.bot) return reminders;
     return [];
@@ -346,6 +373,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     personaUserBlocks,
     blacklistedUserIds,
     counters,
+    hydrationObservations,
     memberCache,
     restoreRepositories() {
       if (restored) return;
@@ -385,7 +413,12 @@ export function normalizeParticipantContextItem(item: StructuredContextItem | nu
 
 export async function buildLegacyParticipantContext(
   fixture: ParticipantContextFixture,
+  options: {
+    activePersona?: TomoriState;
+    requestScope?: ParticipantRequestScope;
+  } = {},
 ): Promise<StructuredContextItem> {
+  const activePersona = options.activePersona ?? fixture.activePersona;
   const historicalPersonaKey = `persona:${PARTICIPANT_FIXTURE_IDS.historicalPersona}`;
   const baselineParticipantIds = [
     PARTICIPANT_FIXTURE_IDS.human,
@@ -393,36 +426,37 @@ export async function buildLegacyParticipantContext(
     historicalPersonaKey,
     PARTICIPANT_FIXTURE_IDS.webhook,
   ];
-  const references = await resolveContextReferences({
+  const prepared = await prepareParticipantContext({
     client: fixture.client,
     guildId: PARTICIPANT_FIXTURE_IDS.guild,
     simplifiedMessageHistory: fixture.history,
     personas: fixture.personas,
-    activePersonaId: PARTICIPANT_FIXTURE_IDS.activePersona,
-    existingParticipantIds: new Set(baselineParticipantIds),
-    existingPersonaIds: new Set([PARTICIPANT_FIXTURE_IDS.historicalPersona]),
+    activePersona,
+    visibleUserIds: baselineParticipantIds,
+    syntheticUsers: fixture.syntheticUsers,
+    matrixUsers: fixture.matrixUsers,
+    requestScope: options.requestScope,
   });
-  const userList = [...baselineParticipantIds, ...references.referencedUserIds];
 
   const item = await buildUsersInConversationContextItem({
     client: fixture.client,
     guildId: PARTICIPANT_FIXTURE_IDS.guild,
     channelName: "general",
     channelId: PARTICIPANT_FIXTURE_IDS.channel,
-    userList,
+    userList: [...prepared.participantIds],
     triggererName: "Alice",
-    botName: "Tomori",
-    personaLineageId: PARTICIPANT_FIXTURE_IDS.activeLineage,
-    tomoriState: fixture.activePersona,
+    botName: activePersona.persona_nickname ?? "Tomori",
+    personaLineageId: activePersona.persona_lineage_id ?? undefined,
+    tomoriState: activePersona,
     tomoriConfig: fixture.config,
     isDMChannel: false,
     isUserImpersonation: false,
     impersonatedIdentityName: null,
-    matrixUsers: fixture.matrixUsers,
-    syntheticUsers: fixture.syntheticUsers,
-    publicPersonaProfiles: references.publicPersonaProfiles,
-    preloadedReferencedUserRows: references.referencedUserRows,
-    referencedUserIds: references.referencedUserIds,
+    matrixUsers: prepared.matrixUsers,
+    syntheticUsers: prepared.syntheticUsers,
+    publicPersonaProfiles: prepared.publicPersonaProfiles,
+    preloadedReferencedUserRows: prepared.referencedUserRows,
+    referencedUserIds: prepared.referencedUserIds,
     toolPromptMacroResolver: { expand: async (text) => text },
     conversationCorpus: fixture.history
       .map((message) => message.content ?? "")

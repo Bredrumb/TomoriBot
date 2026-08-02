@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { GuildMember } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
+import { createParticipantRequestScope } from "@/utils/text/participants/preparation";
 import {
   buildLegacyParticipantContext,
   createParticipantContextFixture,
@@ -93,5 +94,24 @@ describe("participant context Phase 0 performance baseline", () => {
 
     expect(observedCandidateCounts).toEqual([1, 6, 21, 51]);
     expect(observedTargetCounts).toEqual([3, 8, 23, 53]);
+  });
+
+  it("reuses discovery without extending persona-scoped hydration freshness", async () => {
+    const fixture = createParticipantContextFixture();
+    const requestScope = createParticipantRequestScope();
+    try {
+      await buildLegacyParticipantContext(fixture, { requestScope });
+      await buildLegacyParticipantContext(fixture, { requestScope });
+
+      expect(fixture.counters.candidateQueries).toBe(1);
+      expect(fixture.counters.memberFetches).toBe(4);
+      expect(fixture.counters.blacklistReads).toBe(4);
+      expect(fixture.counters.privacyReads).toBe(4);
+      expect(fixture.counters.personalMemoryReads).toBe(4);
+      expect(fixture.counters.reminderReads).toBe(6);
+      expect(fixture.counters.fullGuildMemberFetches).toBe(0);
+    } finally {
+      fixture.restoreRepositories();
+    }
   });
 });

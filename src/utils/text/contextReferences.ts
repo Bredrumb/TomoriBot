@@ -36,6 +36,7 @@ export type EligibleAliasCandidate = {
 };
 
 export type ResolvedContextReferences = {
+  candidateCount: number;
   referencedUserIds: Set<string>;
   referencedUserRows: Map<string, UserRow>;
   referencedUserReasons: Map<string, ReadonlySet<"real_mention" | "unique_text_alias">>;
@@ -167,6 +168,7 @@ export async function resolveContextReferences(params: {
     if (!memberDirectory && historyText) addRejection(rejections, "missing_guild");
     const discoveryPlan = buildParticipantDiscoveryPlan({ candidates: personaCandidates, rejections });
     return {
+      candidateCount: personaCandidates.length,
       referencedUserIds: new Set<string>(),
       referencedUserRows: new Map<string, UserRow>(),
       referencedUserReasons: new Map(),
@@ -279,6 +281,7 @@ export async function resolveContextReferences(params: {
   });
 
   return {
+    candidateCount: personaCandidates.length + loadedCandidates.length,
     referencedUserIds,
     referencedUserRows,
     referencedUserReasons,

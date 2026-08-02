@@ -72,8 +72,7 @@ import {
 } from "@/utils/chat/contextMedia";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
-import { resolveContextReferences } from "@/utils/text/contextReferences";
-import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
+import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 
 const PERSONA_SELECT_ID = "prompt_snapshot_persona_select";
 
@@ -733,49 +732,24 @@ export async function execute(
       "name" in textChannel && typeof textChannel.name === "string" ? textChannel.name : "unknown-channel";
     const channelDesc = "topic" in textChannel ? (textChannel.topic as string | null) : null;
 
-    // Resolve the same context-only persona/user references as live chat,
-    // then assemble context using the selected persona.
-    const personaIdsInHistory = new Set(
-      Array.from(syntheticUsers.entries())
-        .filter(([, user]) => user.type === "persona")
-        .map(([id]) => Number.parseInt(id, 10))
-        .filter((id) => !Number.isNaN(id)),
-    );
-    const contextReferences = await resolveContextReferences({
+    const matrixUsers = new Map<string, string>();
+    const preparedParticipantContext = await prepareParticipantContext({
       client,
       guildId: interaction.guild.id,
       simplifiedMessageHistory: simplifiedMessages,
       personas,
-      activePersonaId: selectedPersona.persona_id,
-      existingParticipantIds: userListSet,
-      existingPersonaIds: personaIdsInHistory,
+      activePersona: effectivePersona,
+      visibleUserIds: [...userListSet],
+      syntheticUsers,
+      matrixUsers,
     });
-    for (const referencedUserId of contextReferences.referencedUserIds) userListSet.add(referencedUserId);
-    const matrixUsers = new Map<string, string>();
-    const participantDiscoveryPlan = composeParticipantDiscoveryPlan({
-      visibleInput: {
-        userList: [...userListSet].filter((userId) => !contextReferences.referencedUserIds.has(userId)),
-        clientUserId: client.user?.id,
-        activePersonaId: selectedPersona.persona_id,
-        activePersonaIsAlter: selectedPersona.is_alter,
-        syntheticUsers,
-        matrixUsers,
-      },
-      personas,
-      referencePlan: contextReferences.discoveryPlan,
-    });
-    const participantSeeds = participantDiscoveryPlan.seeds;
 
     const contextBuild = await buildContext({
       guildId: interaction.guild.id,
       serverName: interaction.guild.name,
       serverDescription: interaction.guild.description || null,
       simplifiedMessageHistory: simplifiedMessages,
-      userList: Array.from(userListSet),
-      participantSeeds,
-      participantDiscoveryPlan,
-      matrixUsers,
-      syntheticUsers,
+      preparedParticipantContext,
       channelDesc,
       channelName,
       channelId: interaction.channelId,
@@ -787,9 +761,6 @@ export async function execute(
       snapshot: { triggererUserRow: userData, tomoriState: effectivePersona },
       tomoriNickname: selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
       tomoriAttributes: selectedPersona.attribute_list,
-      publicPersonaProfiles: contextReferences.publicPersonaProfiles,
-      preloadedReferencedUserRows: contextReferences.referencedUserRows,
-      referencedUserIds: contextReferences.referencedUserIds,
       tomoriConfig: effectivePersona.config,
       channelPromptOverride,
       channelContextNote,

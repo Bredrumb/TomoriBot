@@ -93,6 +93,23 @@ export interface ParticipantExposurePolicy {
 export interface ParticipantHydrationResult {
   profiles: readonly HydratedParticipantProfile[];
   personaTaskLines: readonly string[];
+  diagnostics: ParticipantHydrationDiagnostics;
+}
+
+export interface ParticipantHydrationDiagnostics {
+  durationMs: number;
+  profileCount: number;
+  externalCalls: {
+    userRowLoads: number;
+    registrations: number;
+    blacklistReads: number;
+    privacyReads: number;
+    personalMemoryReads: number;
+    reminderReads: number;
+    memberReads: number;
+    fallbackUserReads: number;
+    presenceReads: number;
+  };
 }
 
 export interface ParticipantHydrationDependencies {
@@ -706,7 +723,57 @@ export async function hydrateParticipantProfiles(
   params: ParticipantHydrationParams,
   dependencyOverrides: Partial<ParticipantHydrationDependencies> = {},
 ): Promise<ParticipantHydrationResult> {
-  const dependencies = { ...DEFAULT_HYDRATION_DEPENDENCIES, ...dependencyOverrides };
+  const startedAt = performance.now();
+  const baseDependencies = { ...DEFAULT_HYDRATION_DEPENDENCIES, ...dependencyOverrides };
+  const externalCalls: ParticipantHydrationDiagnostics["externalCalls"] = {
+    userRowLoads: 0,
+    registrations: 0,
+    blacklistReads: 0,
+    privacyReads: 0,
+    personalMemoryReads: 0,
+    reminderReads: 0,
+    memberReads: 0,
+    fallbackUserReads: 0,
+    presenceReads: 0,
+  };
+  const dependencies: ParticipantHydrationDependencies = {
+    loadUserRow: async (discordId) => {
+      externalCalls.userRowLoads += 1;
+      return baseDependencies.loadUserRow(discordId);
+    },
+    registerUser: async (discordId, displayName, language) => {
+      externalCalls.registrations += 1;
+      return baseDependencies.registerUser(discordId, displayName, language);
+    },
+    isBlacklisted: async (guildId, discordId) => {
+      externalCalls.blacklistReads += 1;
+      return baseDependencies.isBlacklisted(guildId, discordId);
+    },
+    getPrivacyLevel: async (discordId) => {
+      externalCalls.privacyReads += 1;
+      return baseDependencies.getPrivacyLevel(discordId);
+    },
+    loadPersonalMemories: async (userId, lineageId) => {
+      externalCalls.personalMemoryReads += 1;
+      return baseDependencies.loadPersonalMemories(userId, lineageId);
+    },
+    loadReminders: async (discordId, guildId, personaId, includeUnassignedForMainPersona) => {
+      externalCalls.reminderReads += 1;
+      return baseDependencies.loadReminders(discordId, guildId, personaId, includeUnassignedForMainPersona);
+    },
+    loadMember: async (client, guildId, discordId) => {
+      externalCalls.memberReads += 1;
+      return baseDependencies.loadMember(client, guildId, discordId);
+    },
+    loadFallbackUser: async (client, discordId) => {
+      externalCalls.fallbackUserReads += 1;
+      return baseDependencies.loadFallbackUser(client, discordId);
+    },
+    loadPresence: async (client, discordId, guildId, preloadedMember) => {
+      externalCalls.presenceReads += 1;
+      return baseDependencies.loadPresence(client, discordId, guildId, preloadedMember);
+    },
+  };
   const profiles: HydratedParticipantProfile[] = [];
   let botAdded = false;
   for (const seed of params.participantSeeds) {
@@ -729,5 +796,6 @@ export async function hydrateParticipantProfiles(
   return {
     profiles,
     personaTaskLines: await hydratePersonaTaskLines(params, dependencies),
+    diagnostics: { durationMs: performance.now() - startedAt, profileCount: profiles.length, externalCalls },
   };
 }
