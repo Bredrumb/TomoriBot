@@ -11,7 +11,11 @@ channel/time-of-day footer.
 **Files:**
 
 - `src/utils/text/participants/identity.ts` owns typed participant keys, inclusion reasons,
-  stable key serialization, and first-seen deduplication.
+  alias contracts, stable key serialization, and first-seen deduplication.
+- `src/utils/text/participants/aliases.ts` owns alias normalization, source builders,
+  purpose filtering, exposure policy, priority, ownership, and collision indexes.
+- `src/utils/text/participants/referenceDiscovery.ts` owns pure standalone alias matching
+  and context-only persona-trigger discovery.
 - `src/utils/text/participants/legacyAdapter.ts` converts the transitional `userList`,
   Matrix, webhook, persona-profile, and reference-reason inputs into typed seeds.
 - `src/utils/text/context/participants.ts` owns the compatibility facade and current renderer.
@@ -20,7 +24,7 @@ channel/time-of-day footer.
 
 Live chat and prompt snapshot convert their finalized participant inputs into
 `ParticipantSeed[]` before calling `buildContext()`. A seed carries a discriminated
-`ParticipantKey`, all known inclusion reasons, and its first-seen order. Numeric strings
+`ParticipantKey`, all known inclusion reasons, its alias catalog, and its first-seen order. Numeric strings
 from Discord users, webhooks, personas, Matrix users, and the bot cannot collide because
 the key kind participates in equality and serialization.
 
@@ -54,7 +58,7 @@ Substantial — see signature in `participants.ts:38-58`. Notable:
 - `userList: string[]` — Discord author IDs from history plus eligible
   reference-discovered user IDs; retained temporarily for compatibility rendering
 - `participantSeeds: readonly ParticipantSeed[]` — collision-safe identities, inclusion
-  reasons, and first-seen order prepared by the producer or legacy adapter
+  reasons, purpose-aware aliases, and first-seen order prepared by the producer or legacy adapter
 - `triggererName`, `botName`, `personaLineageId`
 - `tomoriState`, `tomoriConfig` (provides `personal_memories_enabled`,
   `timezone_offset`)
@@ -136,9 +140,13 @@ Current time: May 21, 2026 18:30 UTC+09:00 (JST), evening.
   the history. Uncached database candidates are individually verified as
   current guild members; the pipeline never fetches the guild's entire member
   list.
-- **Mention alias collection** — addresses, server nicknames, global names,
-  usernames, and custom nicknames are collected per user; `aliasCounts`
-  tracks duplicates across users to detect conflicts.
+- **Alias catalog construction** — saved nicknames, guild display names and nicknames,
+  global names, usernames, persona nicknames and triggers, Matrix display names, webhook
+  display names, and impersonated identities use source-owned builders. Each alias records
+  its owner, normalized value, purpose set, exposure, and priority.
+- **Pure alias discovery** — eligibility and guild membership are resolved before the pure
+  matcher receives `ParticipantAlias[]`. Its diagnostics expose only aggregate accepted,
+  ambiguous, and unmatched counts, never raw alias text.
 - **Final mention conversion** — assembled text passes through
   `convertMentions`.
 
@@ -149,9 +157,14 @@ After this stage runs:
 - Returns `null` only when `userList` is empty.
 - Every user entry has a `displayName` (falls back to `<@id>` for missing
   data).
-- Mention aliases marked as `unique` are exactly those that appear *once*
-  across `aliasCounts` — duplicates are silently dropped from the mention
-  handle list (the LLM is told "mention requires clarification" instead).
+- Mention aliases are selected only from the `output_mention` purpose. A per-purpose
+  collision index treats an alias as unique when exactly one typed participant owner claims
+  its normalized value; duplicates are dropped from the mention handle list and the LLM is
+  told "mention requires clarification" instead.
+- Input recognition does not imply output exposure. Saved nicknames remain valid
+  `input_reference` aliases when privacy or personalization excludes them from
+  `output_mention`, `tool_target`, and `copied_identity` purposes. Guild display names are
+  likewise lookup-only input aliases unless another visible source supplies the same value.
 - Each entry's `aliases` (server nickname, global name, username, custom
   nickname) plus its `displayLabel` are emitted as `conversationUsers` metadata
   for tool-side user resolution (`resolveUserTarget`). The conversation stage of
@@ -169,6 +182,10 @@ After this stage runs:
   words, bots, non-members, unknown users, and default-only registrations add
   nobody. Real `<@id>` mentions are unambiguous but still require eligibility
   and current guild membership.
+- All participant alias consumers share whitespace, case, and leading-`@` normalization.
+  Standalone matching uses Unicode letter, number, and combining-mark boundaries. Persona
+  trigger discovery deliberately retains the routing trigger processor's fuzzy and legacy
+  quote behavior instead of treating persona nicknames as textual references.
 - Eligibility requires `message_sent`/`command_used` activity or meaningful
   state: personal memories, pending reminders/tasks, non-default
   personalization/image settings, timezone, privacy, or a deliberate-mode

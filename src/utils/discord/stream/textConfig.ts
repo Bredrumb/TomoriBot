@@ -2,6 +2,7 @@ import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { getVisibleDeliveryMode, type TextProcessingConfig } from "@/types/stream/types";
+import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 
 export function createStreamTextProcessingConfig(config: StreamConfig, context: StreamContext): TextProcessingConfig {
   const { mentionMap, mentionIdSet, personaMentionMap } = buildMentionLookup(context.contextItems);
@@ -105,7 +106,7 @@ function applyForcedMentions(
     if (!handle || !userId) continue;
 
     mentionIdSet.add(userId);
-    const normalizedHandle = handle.toLowerCase();
+    const normalizedHandle = normalizeParticipantAlias(handle);
     const existing = mentionMap.get(normalizedHandle) ?? [];
     if (!existing.includes(userId)) {
       existing.push(userId);
@@ -151,7 +152,7 @@ export function buildMentionLookup(contextItems: StructuredContextItem[]): {
       mentionIdSet.add(conversationUser.targetId);
 
       for (const alias of conversationUser.aliases) {
-        const normalizedHandle = alias.trim().toLowerCase();
+        const normalizedHandle = normalizeParticipantAlias(alias);
         if (!normalizedHandle) {
           continue;
         }

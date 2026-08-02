@@ -78,8 +78,9 @@ Key fields populated here:
 - **Reference-driven participant discovery** — after privacy/block filtering
   and message simplification, scans the entire visible fetched window for
   persona triggers and eligible Discord user aliases/mentions. The shared
-  resolver batches user eligibility reads and passes preloaded rows into the
-  normal participant renderer.
+  resolver batches user eligibility reads, constructs the canonical input-reference
+  alias catalog, then passes preloaded rows into the normal participant renderer. Pure
+  alias matching reports bounded aggregate diagnostics without message or alias text.
 - **Typed participant boundary** — after reference resolution, live chat converts
   visible authors, the active identity, referenced users, historical personas,
   co-responders, webhooks, and Matrix identities into ordered `ParticipantSeed`

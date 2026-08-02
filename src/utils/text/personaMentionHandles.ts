@@ -1,36 +1,14 @@
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
-import { dedupeTriggerWords, normalizeTriggerWord } from "@/utils/text/triggerWords";
+import {
+  buildAliasCollisionIndex,
+  buildPersonaAliases,
+  normalizeParticipantAlias,
+} from "@/utils/text/participants/aliases";
+import { createPersonaKey, type ParticipantAlias } from "@/utils/text/participants/identity";
 
-type PersonaMentionSource = Pick<TomoriState, "persona_nickname" | "trigger_words">;
-
-function normalizePersonaMentionAlias(value: string): string {
-  return normalizeTriggerWord(value.replace(/^@+/, "")).trim();
-}
-
-function isDiscordMentionTrigger(value: string): boolean {
-  return normalizeTriggerWord(value, { lowercase: false }).startsWith("<@");
-}
-
-function registerAlias(
-  map: Map<string, string>,
-  ambiguousAliases: Set<string>,
-  alias: string,
-  canonicalTrigger: string,
-): void {
-  const normalizedAlias = normalizePersonaMentionAlias(alias);
-  const normalizedCanonical = normalizeTriggerWord(canonicalTrigger, { lowercase: false }).trim();
-  if (!normalizedAlias || !normalizedCanonical || ambiguousAliases.has(normalizedAlias)) return;
-
-  const existing = map.get(normalizedAlias);
-  if (existing && normalizeTriggerWord(existing) !== normalizeTriggerWord(normalizedCanonical)) {
-    map.delete(normalizedAlias);
-    ambiguousAliases.add(normalizedAlias);
-    return;
-  }
-
-  map.set(normalizedAlias, normalizedCanonical);
-}
+type PersonaMentionSource = Pick<TomoriState, "persona_nickname" | "trigger_words"> &
+  Partial<Pick<TomoriState, "persona_id">>;
 
 /**
  * Builds a lookup for persona-directed `@name` text that should remain a plain
@@ -41,24 +19,26 @@ function registerAlias(
  */
 export function buildPersonaMentionMap(personas: readonly PersonaMentionSource[]): Map<string, string> {
   const map = new Map<string, string>();
-  const ambiguousAliases = new Set<string>();
+  const aliases: ParticipantAlias[] = [];
 
-  for (const persona of personas) {
-    const triggers = dedupeTriggerWords(persona.trigger_words ?? [], { lowercase: false }).filter(
-      (trigger) => !isDiscordMentionTrigger(trigger),
+  personas.forEach((persona, index) => {
+    const personaId =
+      typeof persona.persona_id === "number" && Number.isSafeInteger(persona.persona_id) && persona.persona_id >= 0
+        ? persona.persona_id
+        : index;
+    aliases.push(
+      ...buildPersonaAliases({
+        owner: createPersonaKey(personaId),
+        nickname: persona.persona_nickname,
+        triggerWords: persona.trigger_words,
+      }).aliases,
     );
-    const nickname = normalizeTriggerWord(persona.persona_nickname ?? "", { lowercase: false }).trim();
-    const nicknameKey = normalizePersonaMentionAlias(nickname);
-    const nicknameTrigger =
-      triggers.find((trigger) => normalizePersonaMentionAlias(trigger) === nicknameKey) ?? triggers[0] ?? nickname;
+  });
 
-    if (nickname && nicknameTrigger) {
-      registerAlias(map, ambiguousAliases, nickname, nicknameTrigger);
-    }
-
-    for (const trigger of triggers) {
-      registerAlias(map, ambiguousAliases, trigger, trigger);
-    }
+  for (const collision of buildAliasCollisionIndex(aliases, "output_mention").values()) {
+    if (collision.owners.length !== 1) continue;
+    const alias = collision.aliases[0];
+    if (alias?.canonicalValue) map.set(alias.normalized, alias.canonicalValue);
   }
 
   return map;
@@ -70,7 +50,7 @@ export function resolvePersonaMentionHandle(
 ): string | null {
   if (!personaMentionMap || personaMentionMap.size === 0) return null;
 
-  const normalizedHandle = normalizePersonaMentionAlias(handle);
+  const normalizedHandle = normalizeParticipantAlias(handle);
   if (!normalizedHandle) return null;
 
   const canonicalTrigger = personaMentionMap.get(normalizedHandle);

@@ -3,6 +3,7 @@ import { ContextItemTag, type ConversationUserReference, type StructuredContextI
 import type { ToolContext } from "@/types/tool/interfaces";
 import { userRepository } from "@/utils/db/repositories";
 import { isBridgeUserId } from "@/utils/bridges";
+import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 
 type ResolvedUserTarget = {
   status: "resolved";
@@ -64,16 +65,16 @@ export type ChannelTargetResolution = ResolvedChannelTarget | AmbiguousChannelTa
 type GuildSearchStage = "guild_display_name" | "global_name" | "username";
 const CHANNEL_ID_SUFFIX_PATTERN = /\s*\(ID:\s*(\d{17,20})\)\s*$/iu;
 
-function normalizeLookupValue(value: string, prefixToStrip?: "@" | "#"): string {
+function normalizeChannelLookupValue(value: string): string {
   let normalized = value.trim();
-  if (prefixToStrip && normalized.startsWith(prefixToStrip)) {
+  if (normalized.startsWith("#")) {
     normalized = normalized.slice(1).trim();
   }
   return normalized.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 export function normalizeUserTargetInput(value: string): string {
-  return normalizeLookupValue(value, "@");
+  return normalizeParticipantAlias(value);
 }
 
 function unwrapInlineCodeDelimiters(value: string): string {
@@ -94,7 +95,7 @@ function stripEmoji(text: string): string {
 }
 
 function normalizeChannelTargetInput(value: string): string {
-  return normalizeLookupValue(stripEmoji(unwrapInlineCodeDelimiters(value)), "#");
+  return normalizeChannelLookupValue(stripEmoji(unwrapInlineCodeDelimiters(value)));
 }
 
 function extractExplicitChannelId(value: string): {

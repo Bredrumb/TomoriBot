@@ -16,9 +16,41 @@ export type ParticipantInclusionReason =
   | "bridge_presence"
   | "reminder_target";
 
+export type ParticipantAliasPurpose =
+  | "input_reference"
+  | "output_mention"
+  | "tool_target"
+  | "copied_identity"
+  | "persona_trigger";
+
+export type ParticipantAliasSource =
+  | "saved_nickname"
+  | "guild_display_name"
+  | "guild_nickname"
+  | "global_name"
+  | "username"
+  | "discord_id_fallback"
+  | "impersonated_identity"
+  | "persona_nickname"
+  | "persona_trigger"
+  | "bridge_display_name"
+  | "webhook_display_name";
+
+export interface ParticipantAlias {
+  owner: ParticipantKey;
+  value: string;
+  normalized: string;
+  source: ParticipantAliasSource;
+  purposes: ReadonlySet<ParticipantAliasPurpose>;
+  exposure: "visible" | "lookup_only";
+  priority: number;
+  canonicalValue?: string;
+}
+
 export interface ParticipantSeed {
   key: ParticipantKey;
   reasons: ReadonlySet<ParticipantInclusionReason>;
+  aliases: readonly ParticipantAlias[];
   firstSeenOrder: number;
   sourceDisplayName?: string;
 }
@@ -102,6 +134,7 @@ export function mergeParticipantSeeds(seeds: readonly ParticipantSeed[]): Partic
       mergedByKey.set(serializedKey, {
         ...seed,
         reasons: new Set(seed.reasons),
+        aliases: [...seed.aliases],
       });
       continue;
     }
@@ -111,6 +144,7 @@ export function mergeParticipantSeeds(seeds: readonly ParticipantSeed[]): Partic
     mergedByKey.set(serializedKey, {
       ...existing,
       reasons,
+      aliases: [...existing.aliases, ...seed.aliases],
       firstSeenOrder: Math.min(existing.firstSeenOrder, seed.firstSeenOrder),
       sourceDisplayName: existing.sourceDisplayName ?? seed.sourceDisplayName,
     });

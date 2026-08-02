@@ -143,6 +143,7 @@ export function adaptLegacyParticipantSeeds(input: LegacyParticipantAdapterInput
     seeds.push({
       key,
       reasons: reasonsForLegacyUserListEntry(legacyId, key, input),
+      aliases: [],
       firstSeenOrder,
       ...(sourceDisplayName && { sourceDisplayName }),
     });
@@ -159,6 +160,7 @@ export function adaptLegacyParticipantSeeds(input: LegacyParticipantAdapterInput
     seeds.push({
       key: definition.key,
       reasons: new Set([reason]),
+      aliases: [],
       firstSeenOrder,
       sourceDisplayName: definition.displayName,
     });
@@ -169,6 +171,7 @@ export function adaptLegacyParticipantSeeds(input: LegacyParticipantAdapterInput
     seeds.push({
       key: createPersonaKey(profile.personaId),
       reasons: input.personaProfileReasons?.get(profile.personaId) ?? new Set(["persona_trigger_reference"]),
+      aliases: [],
       firstSeenOrder,
       sourceDisplayName: profile.personaName,
     });

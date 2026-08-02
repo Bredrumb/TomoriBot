@@ -20,7 +20,24 @@ import {
 import { getUserPresenceDetails } from "./history";
 import type { MentionConverter } from "./templates";
 import type { PublicPersonaProfile } from "./types";
-import { serializeParticipantKey, type ParticipantSeed } from "@/utils/text/participants/identity";
+import {
+  aliasesForPurpose,
+  buildAliasCollisionIndex,
+  buildBridgeUserAliases,
+  buildDiscordUserAliases,
+  buildPersonaAliases,
+  buildWebhookAliases,
+  normalizeParticipantAlias,
+} from "@/utils/text/participants/aliases";
+import {
+  createDiscordUserKey,
+  createMatrixUserKey,
+  createPersonaKey,
+  createWebhookKey,
+  serializeParticipantKey,
+  type ParticipantAlias,
+  type ParticipantSeed,
+} from "@/utils/text/participants/identity";
 import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
 
 type UserConversationEntry = {
@@ -30,18 +47,10 @@ type UserConversationEntry = {
   imageAppearanceTags?: string[];
   personalTimezoneOffset?: number | null;
   isBot: boolean;
-  mentionAliases: string[];
+  aliases: readonly ParticipantAlias[];
   primaryAlias: string | null;
   mentionable: boolean;
   resolvableTargetId?: string;
-};
-
-const addAlias = (aliasCounts: Map<string, number>, aliases: Set<string>, value?: string | null) => {
-  const alias = value?.trim();
-  if (!alias || aliases.has(alias)) return;
-  aliases.add(alias);
-  const key = alias.toLowerCase();
-  aliasCounts.set(key, (aliasCounts.get(key) ?? 0) + 1);
 };
 
 const normalizeImageAppearanceTags = (tags: string[] | null | undefined): string[] | undefined => {
@@ -119,7 +128,6 @@ export async function buildParticipantContextItem(params: {
 
   const userEntries: UserConversationEntry[] = [];
   const conversationUsers: ConversationUserReference[] = [];
-  const aliasCounts = new Map<string, number>();
   let botEntryAdded = false;
 
   for (const userIdToProcess of params.userList) {
@@ -137,7 +145,7 @@ export async function buildParticipantContextItem(params: {
             ? normalizeImageAppearanceTags(params.tomoriState?.physical_appearance_tags)
             : undefined,
           isBot: true,
-          mentionAliases: [],
+          aliases: [],
           primaryAlias: null,
           mentionable: false,
         });
@@ -170,7 +178,13 @@ export async function buildParticipantContextItem(params: {
           displayName: syntheticEntry.displayName,
           detailLines: [],
           isBot: false,
-          mentionAliases: [],
+          aliases:
+            syntheticEntry.type === "webhook"
+              ? buildWebhookAliases({
+                  owner: createWebhookKey(userIdToProcess),
+                  displayName: syntheticEntry.displayName,
+                })
+              : [],
           primaryAlias: null,
           mentionable: false,
         });
@@ -226,18 +240,21 @@ export async function buildParticipantContextItem(params: {
       userPrivacyLevel,
     });
 
-    const aliasSet = new Set<string>();
-    if (
-      params.isUserImpersonation &&
-      userRow.user_disc_id === params.impersonatedUserId &&
-      params.impersonatedIdentityName
-    ) {
-      addAlias(aliasCounts, aliasSet, params.impersonatedIdentityName);
-    }
-    if (shouldIncludeCustomNicknameAlias) addAlias(aliasCounts, aliasSet, customNickname);
-    if (serverNickname) addAlias(aliasCounts, aliasSet, serverNickname);
-    if (globalName) addAlias(aliasCounts, aliasSet, globalName);
-    if (username) addAlias(aliasCounts, aliasSet, username);
+    const aliases = buildDiscordUserAliases({
+      owner: createDiscordUserKey(userRow.user_disc_id),
+      userRow,
+      identity: {
+        displayName: member?.displayName,
+        nickname: serverNickname,
+        globalName,
+        username,
+      },
+      exposeSavedNickname: Boolean(shouldIncludeCustomNicknameAlias),
+      impersonatedIdentityName:
+        params.isUserImpersonation && userRow.user_disc_id === params.impersonatedUserId
+          ? params.impersonatedIdentityName
+          : null,
+    });
 
     const primaryAlias =
       params.isUserImpersonation &&
@@ -247,10 +264,6 @@ export async function buildParticipantContextItem(params: {
         : canUseCustomNickname
           ? customNickname
           : (serverNickname ?? globalName ?? username ?? userRow.user_disc_id);
-    if (aliasSet.size === 0) {
-      addAlias(aliasCounts, aliasSet, primaryAlias);
-    }
-
     userEntries.push({
       userId: userRow.user_disc_id,
       displayName,
@@ -260,17 +273,17 @@ export async function buildParticipantContextItem(params: {
         : undefined,
       personalTimezoneOffset: !params.isUserImpersonation ? (userRow.timezone_offset ?? null) : undefined,
       isBot: false,
-      mentionAliases: Array.from(aliasSet),
+      aliases,
       primaryAlias,
       mentionable: true,
       resolvableTargetId: userRow.user_disc_id,
     });
   }
 
-  appendMatrixAndSyntheticUsers(params, userEntries, aliasCounts);
-  await applyPublicPersonaProfiles(params, userEntries, aliasCounts);
+  appendMatrixUsers(params, userEntries);
+  await applyPublicPersonaProfiles(params, userEntries);
 
-  usersInConversationText += renderUserEntries(userEntries, aliasCounts, conversationUsers, params.isUserImpersonation);
+  usersInConversationText += renderUserEntries(userEntries, conversationUsers, params.isUserImpersonation);
   usersInConversationText += await renderPendingPersonaTasks(params);
   usersInConversationText += renderChannelTimeContext(params);
 
@@ -456,20 +469,20 @@ async function renderPendingPersonaTasks(
   return `${text}\n`;
 }
 
-function appendMatrixAndSyntheticUsers(
+function appendMatrixUsers(
   params: Parameters<typeof buildUsersInConversationContextItem>[0],
   userEntries: UserConversationEntry[],
-  aliasCounts: Map<string, number>,
 ): void {
   for (const [matrixUserId, displayName] of params.matrixUsers?.entries() ?? []) {
-    const aliases = new Set<string>();
-    addAlias(aliasCounts, aliases, displayName);
     userEntries.push({
       userId: matrixUserId,
       displayName,
       detailLines: ["- Status: Online or status unknown"],
       isBot: false,
-      mentionAliases: Array.from(aliases),
+      aliases: buildBridgeUserAliases({
+        owner: createMatrixUserKey(matrixUserId),
+        displayName,
+      }),
       primaryAlias: displayName || null,
       mentionable: false,
       resolvableTargetId: matrixUserId,
@@ -480,7 +493,6 @@ function appendMatrixAndSyntheticUsers(
 async function applyPublicPersonaProfiles(
   params: Parameters<typeof buildUsersInConversationContextItem>[0],
   userEntries: UserConversationEntry[],
-  aliasCounts: Map<string, number>,
 ): Promise<void> {
   if (!params.publicPersonaProfiles || params.publicPersonaProfiles.length === 0) return;
 
@@ -533,8 +545,6 @@ async function applyPublicPersonaProfiles(
         targetEntry.detailLines.push(...attributeLines);
       }
     } else {
-      const aliases = new Set<string>();
-      addAlias(aliasCounts, aliases, publicPersona.personaName);
       const detailLines =
         attributeLines.length > 0
           ? ["- Status: Online or status unknown", attributeHeader, ...attributeLines]
@@ -545,7 +555,10 @@ async function applyPublicPersonaProfiles(
         detailLines,
         imageAppearanceTags,
         isBot: false,
-        mentionAliases: Array.from(aliases),
+        aliases: buildPersonaAliases({
+          owner: createPersonaKey(publicPersona.personaId),
+          nickname: publicPersona.personaName,
+        }).aliases,
         primaryAlias: publicPersona.personaName,
         mentionable: false,
         resolvableTargetId: `persona:${syntheticId}`,
@@ -556,11 +569,15 @@ async function applyPublicPersonaProfiles(
 
 function renderUserEntries(
   userEntries: UserConversationEntry[],
-  aliasCounts: Map<string, number>,
   conversationUsers: ConversationUserReference[],
   isUserImpersonation: boolean,
 ): string {
-  const isAliasUnique = (alias: string) => (aliasCounts.get(alias.toLowerCase()) ?? 0) === 1;
+  const outputCollisionIndex = buildAliasCollisionIndex(
+    userEntries.flatMap((entry) => entry.aliases),
+    "output_mention",
+  );
+  const isAliasUnique = (alias: string) =>
+    (outputCollisionIndex.get(normalizeParticipantAlias(alias))?.owners.length ?? 0) === 1;
   const formatMentionHandle = (alias: string) => `@{${alias}}`;
   let text = "";
 
@@ -568,7 +585,8 @@ function renderUserEntries(
     if (entry.isBot) {
       text += `${entry.displayName}${isUserImpersonation ? "" : " (This is you!)"}\n`;
     } else {
-      const uniqueAliases = entry.mentionAliases.filter(isAliasUnique);
+      const outputAliases = aliasesForPurpose(entry.aliases, "output_mention").map((alias) => alias.value);
+      const uniqueAliases = outputAliases.filter(isAliasUnique);
       const primaryVisibleAlias =
         entry.primaryAlias && isAliasUnique(entry.primaryAlias)
           ? entry.primaryAlias
@@ -580,7 +598,7 @@ function renderUserEntries(
       if (entry.mentionable && primaryVisibleAlias)
         mentionParts.push(`Mention: ${formatMentionHandle(primaryVisibleAlias)}`);
       if (aliasHandles.length > 0) mentionParts.push(`Aliases: ${aliasHandles.join(", ")}`);
-      if (entry.mentionable && entry.mentionAliases.length > 0 && !primaryVisibleAlias) {
+      if (entry.mentionable && outputAliases.length > 0 && !primaryVisibleAlias) {
         mentionParts.push("Mention requires clarification");
       }
       text += `${entry.displayName}${mentionParts.length > 0 ? ` (${mentionParts.join("; ")})` : ""}\n`;
@@ -595,11 +613,12 @@ function renderUserEntries(
     for (const line of entry.detailLines) text += `${line}\n`;
     text += "\n";
 
-    if (entry.resolvableTargetId && entry.mentionAliases.length > 0) {
+    const toolAliases = aliasesForPurpose(entry.aliases, "tool_target").map((alias) => alias.value);
+    if (entry.resolvableTargetId && toolAliases.length > 0) {
       conversationUsers.push({
         targetId: entry.resolvableTargetId,
         displayLabel: entry.displayName,
-        aliases: entry.mentionAliases,
+        aliases: toolAliases,
         mentionable: entry.mentionable,
       });
     }

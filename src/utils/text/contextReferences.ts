@@ -1,13 +1,22 @@
 import type { Client, GuildMember } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { userRepository } from "@/utils/db/repositories";
-import { getTriggerFirstMatchIndexInContent } from "@/utils/chat/triggerProcessor";
-import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
-import type { ParticipantInclusionReason } from "@/utils/text/participants/identity";
+import { buildDiscordUserAliases, createParticipantAlias } from "@/utils/text/participants/aliases";
+import {
+  discoverReferencedPersonaIds,
+  resolveUniqueParticipantAliasReferences,
+  type AliasReferenceDiagnostics,
+} from "@/utils/text/participants/referenceDiscovery";
+import {
+  createDiscordUserKey,
+  type ParticipantAlias,
+  type ParticipantInclusionReason,
+} from "@/utils/text/participants/identity";
+
+export { discoverReferencedPersonaIds } from "@/utils/text/participants/referenceDiscovery";
 
 const REAL_DISCORD_MENTION_PATTERN = /<@!?(\d+)>/g;
-const STANDALONE_ALIAS_CHARACTER_CLASS = "\\p{L}\\p{N}\\p{M}_";
 
 export type EligibleAliasCandidate = {
   userId: string;
@@ -18,6 +27,7 @@ export type ResolvedContextReferences = {
   referencedUserIds: Set<string>;
   referencedUserRows: Map<string, UserRow>;
   referencedUserReasons: Map<string, ReadonlySet<"real_mention" | "unique_text_alias">>;
+  aliasReferenceDiagnostics: AliasReferenceDiagnostics;
   publicPersonaProfiles: PublicPersonaProfile[];
   personaProfileReasons: Map<number, ReadonlySet<ParticipantInclusionReason>>;
 };
@@ -28,87 +38,34 @@ function addReason<Key, Reason>(map: Map<Key, Set<Reason>>, key: Key, reason: Re
   map.set(key, reasons);
 }
 
-const normalizeAlias = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, " ");
-
-const containsStandaloneAlias = (text: string, alias: string): boolean => {
-  const normalizedAlias = alias.trim();
-  if (!normalizedAlias) return false;
-
-  const aliasPattern = escapeRegExp(normalizedAlias).replace(/\s+/g, "\\s+");
-  return new RegExp(
-    `(?:` +
-      `(?<![${STANDALONE_ALIAS_CHARACTER_CLASS}])@${aliasPattern}` +
-      `|(?<![${STANDALONE_ALIAS_CHARACTER_CLASS}@])${aliasPattern}` +
-      `)(?![${STANDALONE_ALIAS_CHARACTER_CLASS}])`,
-    "iu",
-  ).test(text);
-};
-
 /**
- * Resolves aliases only when exactly one eligible guild member owns the
- * standalone phrase. Every alias is considered; there is intentionally no cap
- * or common-word denylist.
+ * Keeps the pre-catalog candidate shape as a named compatibility boundary.
  */
 export function resolveUniqueTextualAliasReferences(
   historyText: string,
   candidates: EligibleAliasCandidate[],
 ): Set<string> {
-  const aliasOwners = new Map<string, Set<string>>();
-  const aliasDisplayValues = new Map<string, string>();
-
+  const aliases: ParticipantAlias[] = [];
   for (const candidate of candidates) {
-    for (const rawAlias of candidate.aliases) {
-      const alias = rawAlias.trim();
-      const normalizedAlias = normalizeAlias(alias);
-      if (!normalizedAlias) continue;
-
-      const owners = aliasOwners.get(normalizedAlias) ?? new Set<string>();
-      owners.add(candidate.userId);
-      aliasOwners.set(normalizedAlias, owners);
-      if (!aliasDisplayValues.has(normalizedAlias)) aliasDisplayValues.set(normalizedAlias, alias);
-    }
+    const owner = createDiscordUserKey(candidate.userId);
+    candidate.aliases.forEach((value, priority) => {
+      const alias = createParticipantAlias({
+        owner,
+        value,
+        source: "guild_display_name",
+        purposes: ["input_reference"],
+        exposure: "lookup_only",
+        priority,
+      });
+      if (alias) aliases.push(alias);
+    });
   }
 
-  const referencedUserIds = new Set<string>();
-  for (const [normalizedAlias, owners] of aliasOwners) {
-    if (owners.size !== 1) continue;
-    const alias = aliasDisplayValues.get(normalizedAlias);
-    if (!alias || !containsStandaloneAlias(historyText, alias)) continue;
-    const [ownerId] = owners;
-    if (ownerId) referencedUserIds.add(ownerId);
-  }
-
-  return referencedUserIds;
-}
-
-/**
- * Finds persona trigger references in the complete sanitized history. This
- * deliberately ignores Deliberate Trigger Mode; callers use the result only
- * for context enrichment, never response scheduling.
- */
-export function discoverReferencedPersonaIds(
-  simplifiedMessageHistory: SimplifiedMessageForContext[],
-  personas: TomoriState[],
-): Set<number> {
-  const referencedPersonaIds = new Set<number>();
-
-  for (const message of simplifiedMessageHistory) {
-    if (message.id.startsWith("synthetic-user-block-") || !message.content) continue;
-
-    for (const persona of personas) {
-      if (typeof persona.persona_id !== "number" || referencedPersonaIds.has(persona.persona_id)) continue;
-      if (
-        (persona.trigger_words ?? []).some(
-          (trigger) =>
-            getTriggerFirstMatchIndexInContent(message.content ?? "", trigger, false) !== Number.POSITIVE_INFINITY,
-        )
-      ) {
-        referencedPersonaIds.add(persona.persona_id);
-      }
-    }
-  }
-
-  return referencedPersonaIds;
+  return new Set(
+    resolveUniqueParticipantAliasReferences(historyText, aliases).referencedOwners.flatMap((owner) =>
+      owner.kind === "discord_user" ? [owner.discordId] : [],
+    ),
+  );
 }
 
 export function buildPublicPersonaProfiles(
@@ -135,22 +92,6 @@ export function buildPublicPersonaProfiles(
     }))
     .filter((profile) => profile.attributes.length > 0 || profile.imageAppearanceTags.length > 0);
 }
-
-const buildMemberAliases = (member: GuildMember, userRow: UserRow): string[] => {
-  const aliases = new Map<string, string>();
-  for (const value of [
-    userRow.user_nickname,
-    member.displayName,
-    member.nickname,
-    member.user.globalName,
-    member.user.username,
-  ]) {
-    const alias = value?.trim();
-    const normalizedAlias = alias ? normalizeAlias(alias) : "";
-    if (alias && normalizedAlias && !aliases.has(normalizedAlias)) aliases.set(normalizedAlias, alias);
-  }
-  return Array.from(aliases.values());
-};
 
 const extractRealDiscordMentionIds = (historyText: string): Set<string> => {
   const mentionIds = new Set<string>();
@@ -202,6 +143,12 @@ export async function resolveContextReferences(params: {
       referencedUserIds: new Set<string>(),
       referencedUserRows: new Map<string, UserRow>(),
       referencedUserReasons: new Map(),
+      aliasReferenceDiagnostics: {
+        evaluatedAliasCount: 0,
+        acceptedAliasCount: 0,
+        ambiguousAliasCount: 0,
+        unmatchedAliasCount: 0,
+      },
       publicPersonaProfiles,
       personaProfileReasons,
     };
@@ -227,11 +174,23 @@ export async function resolveContextReferences(params: {
     )
   ).filter((candidate): candidate is { member: GuildMember; userRow: UserRow } => candidate !== null);
 
-  const aliasCandidates = eligibleMembers.map(({ member, userRow }) => ({
-    userId: userRow.user_disc_id,
-    aliases: buildMemberAliases(member, userRow),
-  }));
-  const referencedUserIds = resolveUniqueTextualAliasReferences(historyText, aliasCandidates);
+  const participantAliases = eligibleMembers.flatMap(({ member, userRow }) =>
+    buildDiscordUserAliases({
+      owner: createDiscordUserKey(userRow.user_disc_id),
+      userRow,
+      identity: {
+        displayName: member.displayName,
+        nickname: member.nickname,
+        globalName: member.user.globalName,
+        username: member.user.username,
+      },
+      exposeSavedNickname: false,
+    }),
+  );
+  const aliasResolution = resolveUniqueParticipantAliasReferences(historyText, participantAliases);
+  const referencedUserIds = new Set(
+    aliasResolution.referencedOwners.flatMap((owner) => (owner.kind === "discord_user" ? [owner.discordId] : [])),
+  );
   const referencedUserReasons = new Map<string, Set<"real_mention" | "unique_text_alias">>();
   for (const userId of referencedUserIds) addReason(referencedUserReasons, userId, "unique_text_alias");
 
@@ -254,6 +213,7 @@ export async function resolveContextReferences(params: {
         .map(({ userRow }) => [userRow.user_disc_id, userRow]),
     ),
     referencedUserReasons,
+    aliasReferenceDiagnostics: aliasResolution.diagnostics,
     publicPersonaProfiles,
     personaProfileReasons,
   };

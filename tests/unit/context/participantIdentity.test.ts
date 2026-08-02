@@ -57,18 +57,21 @@ describe("typed participant identity", () => {
       {
         key: createPersonaKey(7),
         reasons: new Set(["historical_persona"]),
+        aliases: [],
         firstSeenOrder: 3,
         sourceDisplayName: "Ren",
       },
       {
         key: createDiscordUserKey("100"),
         reasons: new Set(["visible_author"]),
+        aliases: [],
         firstSeenOrder: 1,
         sourceDisplayName: "Alice",
       },
       {
         key: createPersonaKey(7),
         reasons: new Set(["co_responder", "persona_trigger_reference"]),
+        aliases: [],
         firstSeenOrder: 0,
       },
     ];
