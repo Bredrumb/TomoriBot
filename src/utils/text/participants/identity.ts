@@ -102,10 +102,6 @@ export function serializeParticipantKey(key: ParticipantKey): string {
   }
 }
 
-export function participantKeyDebugLabel(key: ParticipantKey): string {
-  return serializeParticipantKey(key);
-}
-
 export function participantKeysEqual(left: ParticipantKey, right: ParticipantKey): boolean {
   return serializeParticipantKey(left) === serializeParticipantKey(right);
 }
@@ -114,8 +110,7 @@ export function mergeParticipantSeeds(seeds: readonly ParticipantSeed[]): Partic
   const mergedByKey = new Map<string, ParticipantSeed>();
 
   for (const seed of seeds) {
-    const seedCapabilities =
-      seed.capabilities ?? new Set<ParticipantCapability>(seed.key.kind === "discord_user" ? ["mentionable"] : []);
+    const seedCapabilities = seed.capabilities;
     const serializedKey = serializeParticipantKey(seed.key);
     const existing = mergedByKey.get(serializedKey);
     if (!existing) {

@@ -181,8 +181,8 @@ export function buildBridgeUserAliases(params: {
     owner: params.owner,
     value: params.displayName,
     source: "bridge_display_name",
-    purposes: ["tool_target"],
-    exposure: "visible",
+    purposes: ["output_mention", "tool_target"],
+    exposure: "lookup_only",
     priority: 10,
   });
   return alias ? [alias] : [];

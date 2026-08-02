@@ -87,8 +87,6 @@ export function isEligibleContextReferenceUserV1(
   );
 }
 
-export const isEligibleContextReferenceUser = isEligibleContextReferenceUserV1;
-
 class UserRepository implements IRepository<UserExportShape> {
   /**
    *
@@ -272,17 +270,6 @@ class UserRepository implements IRepository<UserExportShape> {
       log.error("Error loading context reference candidates:", error);
       return [];
     }
-  }
-
-  async loadEligibleContextReferenceCandidates(params: {
-    serverDiscId: string;
-    candidateDiscordIds: string[];
-    normalizedHistoryText: string;
-  }): Promise<UserRow[]> {
-    const candidates = await this.loadContextReferenceCandidates(params);
-    return candidates
-      .filter((candidate) => isEligibleContextReferenceUserV1(candidate.userRow, candidate.evidence))
-      .map((candidate) => candidate.userRow);
   }
 
   /**

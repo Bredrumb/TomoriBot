@@ -27,10 +27,6 @@ export interface PersonaMentionCatalog {
  * Values are canonical trigger words without the leading `@`; callers emit them
  * as `@${value}` so deliberate trigger mode can route the generated message.
  */
-export function buildPersonaMentionMap(personas: readonly PersonaMentionSource[]): Map<string, string> {
-  return buildPersonaMentionCatalog(personas).mentionMap;
-}
-
 export function buildPersonaMentionCatalog(personas: readonly PersonaMentionSource[]): PersonaMentionCatalog {
   const map = new Map<string, string>();
   const aliases: ParticipantAlias[] = [];

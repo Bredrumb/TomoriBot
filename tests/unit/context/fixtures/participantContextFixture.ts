@@ -32,7 +32,7 @@ export const PARTICIPANT_FIXTURE_IDS = {
   matrix: "@bridge-user:example.test",
 } as const;
 
-export interface ParticipantFixtureCounters {
+interface ParticipantFixtureCounters {
   userRowLoads: number;
   candidateQueries: number;
   registrations: number;
@@ -285,7 +285,6 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
   const originals = {
     loadByDiscordId: userRepository.loadByDiscordId,
     loadContextReferenceCandidates: userRepository.loadContextReferenceCandidates,
-    loadEligibleContextReferenceCandidates: userRepository.loadEligibleContextReferenceCandidates,
     register: userRepository.register,
     isBlacklisted: userRepository.isBlacklisted,
     getPrivacyLevel: userRepository.getPrivacyLevel,
@@ -384,7 +383,6 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
       restored = true;
       userRepository.loadByDiscordId = originals.loadByDiscordId;
       userRepository.loadContextReferenceCandidates = originals.loadContextReferenceCandidates;
-      userRepository.loadEligibleContextReferenceCandidates = originals.loadEligibleContextReferenceCandidates;
       userRepository.register = originals.register;
       userRepository.isBlacklisted = originals.isBlacklisted;
       userRepository.getPrivacyLevel = originals.getPrivacyLevel;
@@ -420,6 +418,7 @@ export async function buildPreparedParticipantContext(
   options: {
     activePersona?: TomoriState;
     requestScope?: ParticipantRequestScope;
+    responderPersonaIds?: ReadonlySet<number>;
     onPrepared?: (prepared: PreparedParticipantContext) => void;
   } = {},
 ): Promise<StructuredContextItem> {
@@ -440,6 +439,7 @@ export async function buildPreparedParticipantContext(
     visibleUserIds: baselineParticipantIds,
     syntheticUsers: fixture.syntheticUsers,
     matrixUsers: fixture.matrixUsers,
+    responderPersonaIds: options.responderPersonaIds,
     requestScope: options.requestScope,
   });
   options.onPrepared?.(prepared);

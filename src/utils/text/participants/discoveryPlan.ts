@@ -25,7 +25,7 @@ export interface ParticipantVisibleInput {
   matrixUsers?: ReadonlyMap<string, string>;
 }
 
-export type ParticipantCandidateEvidenceSource =
+type ParticipantCandidateEvidenceSource =
   | "visible_author"
   | "active_identity"
   | "real_mention"
@@ -45,7 +45,7 @@ export type ParticipantDiscoveryRejectionReason =
   | "blocked_source"
   | "missing_guild";
 
-export interface ParticipantCandidateEvidence {
+interface ParticipantCandidateEvidence {
   key: ParticipantKey;
   source: ParticipantCandidateEvidenceSource;
   firstSeenOrder: number;
@@ -82,25 +82,17 @@ const EMPTY_ALIAS_DIAGNOSTICS: AliasReferenceDiagnostics = {
 function aliasesForSyntheticParticipant(
   key: ParticipantKey,
   displayName: string | undefined,
-  personas: readonly TomoriState[],
 ): readonly ParticipantAlias[] {
   if (!displayName) return [];
-  if (key.kind === "persona") {
-    const persona = personas.find((candidate) => candidate.persona_id === key.personaId);
-    return buildPersonaAliases({
-      owner: key,
-      nickname: displayName,
-      triggerWords: persona?.trigger_words,
-    }).aliases;
-  }
+  if (key.kind === "persona") return [];
   if (key.kind === "webhook") return buildWebhookAliases({ owner: key, displayName });
   if (key.kind === "matrix_user") return buildBridgeUserAliases({ owner: key, displayName });
   return [];
 }
 
-function parsePersonaId(value: string): number | null {
+export function parsePersonaId(value: string): number | null {
   const candidate = value.startsWith("persona:") ? value.slice("persona:".length) : value;
-  if (!/^\d+$/.test(candidate)) return null;
+  if (!/^\d+$/u.test(candidate)) return null;
   const parsed = Number.parseInt(candidate, 10);
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
@@ -140,10 +132,7 @@ function visibleParticipantIdentity(
   return { key: createDiscordUserKey(normalizedId) };
 }
 
-export function discoverVisibleAuthorCandidates(
-  input: ParticipantVisibleInput,
-  personas: readonly TomoriState[],
-): DiscoveredParticipantCandidate[] {
+export function discoverVisibleAuthorCandidates(input: ParticipantVisibleInput): DiscoveredParticipantCandidate[] {
   return input.participantIds.map((participantId) => {
     const { key, sourceDisplayName } = visibleParticipantIdentity(participantId, input);
     const reasons = new Set<ParticipantInclusionReason>(
@@ -156,7 +145,7 @@ export function discoverVisibleAuthorCandidates(
     return {
       key,
       reasons,
-      aliases: aliasesForSyntheticParticipant(key, sourceDisplayName, personas),
+      aliases: aliasesForSyntheticParticipant(key, sourceDisplayName),
       capabilities: new Set(key.kind === "discord_user" ? ["mentionable"] : []),
       ...(sourceDisplayName && { sourceDisplayName }),
       evidenceSources: reasons.has("active_identity") ? ["active_identity"] : ["visible_author"],
@@ -166,7 +155,6 @@ export function discoverVisibleAuthorCandidates(
 
 export function discoverHistoricalSyntheticCandidates(
   syntheticUsers: ParticipantVisibleInput["syntheticUsers"],
-  personas: readonly TomoriState[],
 ): DiscoveredParticipantCandidate[] {
   return [...(syntheticUsers ?? [])].map(([participantId, syntheticUser]) => {
     const personaId = syntheticUser.type === "persona" ? parsePersonaId(participantId) : null;
@@ -177,7 +165,7 @@ export function discoverHistoricalSyntheticCandidates(
     return {
       key,
       reasons: new Set<ParticipantInclusionReason>([key.kind === "persona" ? "historical_persona" : "visible_author"]),
-      aliases: aliasesForSyntheticParticipant(key, syntheticUser.displayName, personas),
+      aliases: aliasesForSyntheticParticipant(key, syntheticUser.displayName),
       capabilities: new Set(),
       sourceDisplayName: syntheticUser.displayName,
       evidenceSources: [key.kind === "persona" ? "historical_persona" : "historical_synthetic"],
@@ -193,7 +181,7 @@ export function discoverBridgeCandidates(
     return {
       key,
       reasons: new Set<ParticipantInclusionReason>(["bridge_presence"]),
-      aliases: aliasesForSyntheticParticipant(key, displayName, []),
+      aliases: aliasesForSyntheticParticipant(key, displayName),
       capabilities: new Set(),
       sourceDisplayName: displayName,
       evidenceSources: ["bridge_presence"],

@@ -1,4 +1,4 @@
-export type ContributionCriticality = "critical" | "optional";
+type ContributionCriticality = "critical" | "optional";
 
 export interface ContributionMeta {
   id: string;

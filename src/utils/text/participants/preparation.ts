@@ -9,10 +9,12 @@ import {
   type ParticipantMemberDirectory,
   type UserReferenceCandidateSource,
 } from "@/utils/text/participants/candidateSources";
-import type {
-  ParticipantDiscoveryPlan,
-  ParticipantDiscoveryRejectionReason,
+import {
+  parsePersonaId,
+  type ParticipantDiscoveryPlan,
+  type ParticipantDiscoveryRejectionReason,
 } from "@/utils/text/participants/discoveryPlan";
+import { serializeParticipantKey } from "@/utils/text/participants/identity";
 import { composeParticipantDiscoveryPlan, type ParticipantSourceRegistry } from "@/utils/text/participants/sources";
 import type { ParticipantProfileEnricherRegistry } from "@/utils/text/participants/profileEnrichers";
 
@@ -20,7 +22,7 @@ export interface ParticipantRequestScope {
   discoveries: Map<string, Promise<CachedParticipantDiscovery>>;
 }
 
-export interface ParticipantPreparationExternalCalls {
+interface ParticipantPreparationExternalCalls {
   candidateSourceReads: number;
   memberCacheHits: number;
   memberFetches: number;
@@ -106,6 +108,12 @@ export async function prepareParticipantContext(
   const publicPersonaProfiles = discovery.references.publicPersonaProfiles.filter(
     (profile) => profile.personaId !== activePersonaId,
   );
+  const referencePlan = scopePersonaReferencePlan({
+    plan: discovery.references.discoveryPlan,
+    activePersonaId,
+    publicPersonaProfiles,
+    syntheticUsers: frozen.syntheticUsers,
+  });
   const composition = await composeParticipantDiscoveryPlan(
     {
       visibleInput: {
@@ -117,7 +125,7 @@ export async function prepareParticipantContext(
         matrixUsers: frozen.matrixUsers,
       },
       personas: frozen.personas,
-      referencePlan: discovery.references.discoveryPlan,
+      referencePlan,
     },
     input.sourceRegistry,
   );
@@ -144,6 +152,41 @@ export async function prepareParticipantContext(
       sourceContributions: composition.diagnostics,
     },
     profileEnricherRegistry: input.profileEnricherRegistry,
+  };
+}
+
+/**
+ * Keeps shared discovery independent of the responder while preserving the
+ * provider-visible identity rules that depend on the active persona and history.
+ */
+function scopePersonaReferencePlan(params: {
+  plan: ParticipantDiscoveryPlan;
+  activePersonaId?: number;
+  publicPersonaProfiles: readonly PublicPersonaProfile[];
+  syntheticUsers: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
+}): ParticipantDiscoveryPlan {
+  const renderablePersonaIds = new Set(params.publicPersonaProfiles.map((profile) => profile.personaId));
+  const historicalPersonaIds = new Set<number>();
+  for (const [participantId, syntheticUser] of params.syntheticUsers) {
+    if (syntheticUser.type !== "persona") continue;
+    const personaId = parsePersonaId(participantId);
+    if (personaId !== null) historicalPersonaIds.add(personaId);
+  }
+
+  const seeds = params.plan.seeds.flatMap((seed) => {
+    if (seed.key.kind !== "persona") return [seed];
+    const personaId = seed.key.personaId;
+    if (personaId === params.activePersonaId) return [];
+    if (historicalPersonaIds.has(personaId)) return [{ ...seed, aliases: [] }];
+    if (!renderablePersonaIds.has(personaId)) return [];
+    return [{ ...seed, aliases: seed.aliases.filter((alias) => alias.source === "persona_nickname") }];
+  });
+  const includedKeys = new Set(seeds.map((seed) => serializeParticipantKey(seed.key)));
+
+  return {
+    ...params.plan,
+    seeds,
+    evidence: params.plan.evidence.filter((item) => includedKeys.has(serializeParticipantKey(item.key))),
   };
 }
 
@@ -210,8 +253,8 @@ async function discoverParticipants(
   const existingPersonaIds = new Set(
     [...input.syntheticUsers.entries()].flatMap(([id, user]) => {
       if (user.type !== "persona") return [];
-      const parsed = Number.parseInt(id.replace(/^persona:/, ""), 10);
-      return Number.isSafeInteger(parsed) ? [parsed] : [];
+      const personaId = parsePersonaId(id);
+      return personaId === null ? [] : [personaId];
     }),
   );
   const references = await resolveContextReferences({

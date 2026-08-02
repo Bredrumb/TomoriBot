@@ -4,7 +4,7 @@ import {
   replaceMentionHandles,
   sanitizeUnknownTemplatePlaceholders,
 } from "@/utils/text/processors/mentionProcessor";
-import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
+import { buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
 
 describe("sanitizeUnknownTemplatePlaceholders", () => {
   describe("single-brace allowed vars", () => {
@@ -200,10 +200,10 @@ describe("replaceMentionHandles", () => {
   });
 
   describe("persona trigger preservation", () => {
-    const personaMentionMap = buildPersonaMentionMap([
+    const personaMentionMap = buildPersonaMentionCatalog([
       { persona_nickname: "Shy Tomori", trigger_words: ["lilya"] },
       { persona_nickname: "Ren", trigger_words: ["ren"] },
-    ]);
+    ]).mentionMap;
 
     it("canonicalizes braced persona nicknames to @trigger text", () => {
       expect(replaceMentionHandles("go ask @{Shy Tomori}", mentionMap, mentionIdSet, personaMentionMap)).toBe(
@@ -224,17 +224,19 @@ describe("replaceMentionHandles", () => {
     });
 
     it("keeps Discord user mentions ahead of persona trigger aliases", () => {
-      const overlappingPersonas = buildPersonaMentionMap([{ persona_nickname: "Alice", trigger_words: ["alice"] }]);
+      const overlappingPersonas = buildPersonaMentionCatalog([
+        { persona_nickname: "Alice", trigger_words: ["alice"] },
+      ]).mentionMap;
       expect(replaceMentionHandles("hey @alice", mentionMap, mentionIdSet, overlappingPersonas)).toBe(
         "hey <@111111111111111111>",
       );
     });
 
     it("does not preserve ambiguous persona aliases", () => {
-      const ambiguousPersonas = buildPersonaMentionMap([
+      const ambiguousPersonas = buildPersonaMentionCatalog([
         { persona_nickname: "Ren", trigger_words: ["ren"] },
         { persona_nickname: "Ren", trigger_words: ["renee"] },
-      ]);
+      ]).mentionMap;
       expect(replaceMentionHandles("hey @Ren", new Map(), new Set(), ambiguousPersonas)).toBe("hey Ren");
     });
   });

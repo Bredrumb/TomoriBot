@@ -280,7 +280,12 @@ describe("participant context compatibility matrix", () => {
       expect(text).toContain("Known Information about Alice Saved:");
       expect(text).toContain("This field belongs to persona 999, not the Discord user.");
       expect(text).toContain("Alice Saved's Physical Appearance: persona-only silver hair");
-      expect(item.conversationUsers).toHaveLength(1);
+      expect(item.conversationUsers).toHaveLength(2);
+      expect(item.conversationUsers?.find((target) => target.targetId === "persona:999")).toMatchObject({
+        displayLabel: "Alice Saved",
+        aliases: ["Alice Saved"],
+        mentionable: false,
+      });
     } finally {
       fixture.restoreRepositories();
     }

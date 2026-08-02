@@ -26,7 +26,7 @@ export interface ParticipantSourceInput {
   referencePlan: ParticipantDiscoveryPlan;
 }
 
-export type ParticipantSourceCandidate = Omit<DiscoveredParticipantCandidate, "capabilities">;
+type ParticipantSourceCandidate = Omit<DiscoveredParticipantCandidate, "capabilities">;
 
 export interface ParticipantSource {
   meta: ContributionMeta;
@@ -83,7 +83,7 @@ const CORE_SOURCE_REGISTRATIONS: readonly ParticipantSourceRegistration[] = [
         order: 100,
         criticality: "critical",
       },
-      discover: async (input) => discoverVisibleAuthorCandidates(input.visibleInput, input.personas),
+      discover: async (input) => discoverVisibleAuthorCandidates(input.visibleInput),
     },
     grantedCapabilities: ["mentionable"],
   },
@@ -97,8 +97,7 @@ const CORE_SOURCE_REGISTRATIONS: readonly ParticipantSourceRegistration[] = [
         criticality: "critical",
         after: ["core.visible"],
       },
-      discover: async (input) =>
-        discoverHistoricalSyntheticCandidates(input.visibleInput.syntheticUsers, input.personas),
+      discover: async (input) => discoverHistoricalSyntheticCandidates(input.visibleInput.syntheticUsers),
     },
   },
   {
@@ -200,7 +199,7 @@ export async function composeParticipantDiscoveryPlan(
     for (const candidate of executed.value ?? []) {
       candidates.push({
         ...candidate,
-        capabilities: new Set(registration.grantedCapabilities),
+        capabilities: new Set(candidate.key.kind === "discord_user" ? registration.grantedCapabilities : []),
       });
     }
   }

@@ -1,5 +1,5 @@
 import type { ConversationUserReference, StructuredContextItem } from "@/types/misc/context";
-import { aliasesForPurpose, normalizeParticipantAlias } from "@/utils/text/participants/aliases";
+import { aliasesForPurpose } from "@/utils/text/participants/aliases";
 import type { HydratedParticipantProfile } from "@/utils/text/participants/hydration";
 import {
   serializeParticipantKey,
@@ -113,15 +113,4 @@ export function buildPurposeCollisionIndex(
     }
   }
   return new Map([...collisions].map(([normalized, owners]) => [normalized, [...owners.values()]]));
-}
-
-export function findTargetsByAlias(
-  index: ParticipantTargetIndex,
-  input: string,
-  purpose: ParticipantAliasPurpose,
-  keyFilter?: (key: ParticipantKey) => boolean,
-): ParticipantTargetEntry[] {
-  const normalized = normalizeParticipantAlias(input);
-  if (!normalized) return [];
-  return buildPurposeCollisionIndex(index, purpose, keyFilter).get(normalized) ?? [];
 }

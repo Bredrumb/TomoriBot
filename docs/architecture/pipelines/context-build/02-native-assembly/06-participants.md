@@ -18,7 +18,8 @@ channel/time-of-day footer.
   and context-only persona-trigger discovery.
 - `src/utils/text/participants/discoveryPlan.ts` composes visible authors, active identity,
   historical synthetic identities, bridges, and typed reference candidates into one ordered
-  `ParticipantDiscoveryPlan`.
+  `ParticipantDiscoveryPlan`. It also owns parsing the canonical `persona:N` and legacy
+  numeric synthetic-persona key forms used by discovery and preparation.
 - `src/utils/text/participants/candidateSources.ts` defines the injected repository and
   guild-member directory contracts used by reference orchestration.
 - `src/utils/text/participants/preparation.ts` is the supported orchestration boundary for
@@ -64,6 +65,13 @@ promise, while different sanitized inputs receive distinct cache entries. Active
 identity and public-profile exclusion are recomposed for every call, and hydration always
 runs again with the current persona scope. The request scope is held by a `WeakMap` and does
 not extend the lifetime of repository, privacy, blacklist, or Discord member caches.
+
+The shared reference result is scoped again for each responder before source composition.
+The active persona is supplied only by the active-identity source, so a visible trigger does
+not duplicate it. A persona found only through a reference is included only when it has a
+public attribute or Physical Appearance value to render. Historical personas keep their
+history-derived identity and inclusion evidence without gaining new nickname or trigger
+aliases that could suppress a human participant's output handles.
 
 ## Mission
 
@@ -196,6 +204,9 @@ independently of human participant membership.
   global names, usernames, persona nicknames and triggers, Matrix display names, webhook
   display names, and impersonated identities use source-owned builders. Each alias records
   its owner, normalized value, purpose set, exposure, and priority.
+- **Matrix alias exposure** — a Matrix display name remains a lookup-only tool target and
+  output-mention collision claimant. It is never rendered as a Discord ping handle, but a
+  human participant cannot be offered the same ambiguous handle.
 - **Pure alias discovery** — eligibility and guild membership are resolved before the pure
   matcher receives `ParticipantAlias[]`. Its diagnostics expose only aggregate accepted,
   ambiguous, and unmatched counts, never raw alias text.
@@ -268,7 +279,10 @@ After this stage runs:
   destination channel, and are omitted during user-impersonation turns.
 - Persona public attributes and Physical Appearance tags are attached to the
   same participant entry. A tags-only persona is still rendered; a referenced
-  persona with no existing synthetic entry is non-mentionable.
+  persona with no existing synthetic entry is non-mentionable but retains its unknown-status
+  line and `persona:N` tool target under its nickname. When a historical persona already has
+  a decorated display label, such as a sprite label, public fields use that history-derived
+  label instead of replacing it with the plain persona nickname.
 - Public persona fields merge only by the stable persona key. A Discord user with the same
   display text remains a separate profile and cannot receive persona attributes or tags.
 - Matrix and synthetic users are appended *after* normal users and are

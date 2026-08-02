@@ -102,7 +102,7 @@ export interface ParticipantHydrationResult {
   diagnostics: ParticipantHydrationDiagnostics;
 }
 
-export interface ParticipantHydrationDiagnostics {
+interface ParticipantHydrationDiagnostics {
   durationMs: number;
   profileCount: number;
   externalCalls: {
@@ -624,6 +624,7 @@ function hydrateSyntheticBase(
     };
   }
   if (seed.key.kind !== "persona" && seed.key.kind !== "webhook") return null;
+  if (seed.key.kind === "persona" && !seed.reasons.has("historical_persona")) return null;
   const displayName = findSyntheticDisplayName(seed, params.syntheticUsers);
   if (!displayName) return null;
   return {
@@ -675,7 +676,7 @@ async function applyPublicPersonaProfiles(
         : [];
     const appearanceLines =
       appearanceTags.length > 0
-        ? [`- ${publicPersona.personaName}'s Physical Appearance: ${appearanceTags.join(", ")}`]
+        ? [`- ${target?.displayName ?? publicPersona.personaName}'s Physical Appearance: ${appearanceTags.join(", ")}`]
         : [];
     if (target) {
       const fields = target.fields.filter(

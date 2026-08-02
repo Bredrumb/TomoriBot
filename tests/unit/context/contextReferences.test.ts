@@ -11,16 +11,50 @@ import {
   buildPublicPersonaProfiles,
   discoverReferencedPersonaIds,
   resolveContextReferences,
-  resolveUniqueTextualAliasReferences,
 } from "@/utils/text/contextReferences";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { buildParticipantContextItem } from "@/utils/text/context/participants";
-import { isEligibleContextReferenceUser, userRepository } from "@/utils/db/repositories/UserRepository";
+import { isEligibleContextReferenceUserV1, userRepository } from "@/utils/db/repositories/UserRepository";
 import { serverScheduleRepository } from "@/utils/db/repositories";
 import { buildParticipantDiscoveryPlan, type ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
 import { createDiscordUserKey, createPersonaKey, type ParticipantSeed } from "@/utils/text/participants/identity";
+import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
+import { resolveUniqueParticipantAliasReferences } from "@/utils/text/participants/referenceDiscovery";
 import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
 import type { PublicPersonaProfile } from "@/utils/text/context/types";
+
+/**
+ * Resolves textual references through the same alias catalog and matcher the
+ * production resolver uses, so these cases cannot pass against a test-only
+ * alias shape. Positional aliases map onto the real sources in catalog
+ * priority order: saved nickname, guild nickname, guild display name, global
+ * name, username.
+ */
+function resolveAliasReferences(
+  historyText: string,
+  candidates: readonly { userId: string; aliases: readonly string[] }[],
+): Set<string> {
+  const aliases = candidates.flatMap((candidate) => {
+    const [savedNickname, guildNickname, guildDisplayName, globalName, username] = candidate.aliases;
+    return buildDiscordUserAliases({
+      owner: createDiscordUserKey(candidate.userId),
+      userRow: { user_nickname: savedNickname ?? null },
+      identity: {
+        displayName: guildDisplayName ?? null,
+        nickname: guildNickname ?? null,
+        globalName: globalName ?? null,
+        username: username ?? null,
+      },
+      exposeSavedNickname: false,
+    });
+  });
+
+  return new Set(
+    resolveUniqueParticipantAliasReferences(historyText, aliases).referencedOwners.flatMap((owner) =>
+      owner.kind === "discord_user" ? [owner.discordId] : [],
+    ),
+  );
+}
 
 const message = (content: string, id = crypto.randomUUID()): SimplifiedMessageForContext => ({
   id,
@@ -151,25 +185,21 @@ describe("context reference discovery", () => {
     ];
 
     for (const alias of candidates[0].aliases) {
-      expect(resolveUniqueTextualAliasReferences(`Please ask @${alias.toUpperCase()} about this.`, candidates)).toEqual(
+      expect(resolveAliasReferences(`Please ask @${alias.toUpperCase()} about this.`, candidates)).toEqual(
         new Set(["100"]),
       );
-      expect(resolveUniqueTextualAliasReferences(`${alias} can help.`, candidates)).toEqual(new Set(["100"]));
+      expect(resolveAliasReferences(`${alias} can help.`, candidates)).toEqual(new Set(["100"]));
     }
   });
 
   it("accepts unique common words but rejects partial words, emails, and shared aliases", () => {
-    expect(resolveUniqueTextualAliasReferences("Apple can help.", [{ userId: "100", aliases: ["Apple"] }])).toEqual(
+    expect(resolveAliasReferences("Apple can help.", [{ userId: "100", aliases: ["Apple"] }])).toEqual(
       new Set(["100"]),
     );
-    expect(resolveUniqueTextualAliasReferences("Pineapple can help.", [{ userId: "100", aliases: ["Apple"] }])).toEqual(
-      new Set(),
-    );
+    expect(resolveAliasReferences("Pineapple can help.", [{ userId: "100", aliases: ["Apple"] }])).toEqual(new Set());
+    expect(resolveAliasReferences("mail x@Apple.example", [{ userId: "100", aliases: ["Apple"] }])).toEqual(new Set());
     expect(
-      resolveUniqueTextualAliasReferences("mail x@Apple.example", [{ userId: "100", aliases: ["Apple"] }]),
-    ).toEqual(new Set());
-    expect(
-      resolveUniqueTextualAliasReferences("Ask Apple.", [
+      resolveAliasReferences("Ask Apple.", [
         { userId: "100", aliases: ["Apple"] },
         { userId: "200", aliases: ["apple"] },
       ]),
@@ -182,8 +212,8 @@ describe("context reference discovery", () => {
       { userId: "200", aliases: ["山田 太郎"] },
     ];
 
-    expect(resolveUniqueTextualAliasReferences("(JOSÉ    MARÍA), can you help?", candidates)).toEqual(new Set(["100"]));
-    expect(resolveUniqueTextualAliasReferences("山田\t太郎さんではなく、@山田\t太郎 に聞いて。", candidates)).toEqual(
+    expect(resolveAliasReferences("(JOSÉ    MARÍA), can you help?", candidates)).toEqual(new Set(["100"]));
+    expect(resolveAliasReferences("山田\t太郎さんではなく、@山田\t太郎 に聞いて。", candidates)).toEqual(
       new Set(["200"]),
     );
   });
@@ -327,7 +357,7 @@ describe("context reference user eligibility", () => {
   };
 
   it("rejects an auto-created default-only user", () => {
-    expect(isEligibleContextReferenceUser(defaultUser(), noEvidence)).toBe(false);
+    expect(isEligibleContextReferenceUserV1(defaultUser(), noEvidence)).toBe(false);
   });
 
   for (const [label, mutate, evidence] of [
@@ -346,7 +376,7 @@ describe("context reference user eligibility", () => {
     it(`accepts ${label} as meaningful state`, () => {
       const user = defaultUser();
       mutate(user);
-      expect(isEligibleContextReferenceUser(user, evidence)).toBe(true);
+      expect(isEligibleContextReferenceUserV1(user, evidence)).toBe(true);
     });
   }
 
@@ -355,7 +385,7 @@ describe("context reference user eligibility", () => {
     user.language_pref = "ja";
     user.registration_locale = "ja";
     user.user_nickname = "Saved At Registration";
-    expect(isEligibleContextReferenceUser(user, noEvidence)).toBe(false);
+    expect(isEligibleContextReferenceUserV1(user, noEvidence)).toBe(false);
   });
 });
 

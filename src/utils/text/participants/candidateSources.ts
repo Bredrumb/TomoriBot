@@ -2,7 +2,7 @@ import type { Client } from "discord.js";
 import type { ContextReferenceCandidate } from "@/utils/db/repositories/UserRepository";
 import { userRepository } from "@/utils/db/repositories";
 
-export interface UserReferenceCandidateQuery {
+interface UserReferenceCandidateQuery {
   serverDiscId: string;
   candidateDiscordIds: readonly string[];
   normalizedHistoryText: string;
@@ -12,7 +12,7 @@ export interface UserReferenceCandidateSource {
   loadCandidates(query: UserReferenceCandidateQuery): Promise<readonly ContextReferenceCandidate[]>;
 }
 
-export interface ReferenceMemberIdentity {
+interface ReferenceMemberIdentity {
   discordId: string;
   bot: boolean;
   displayName: string;

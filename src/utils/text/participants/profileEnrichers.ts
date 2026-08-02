@@ -16,9 +16,9 @@ import type {
 
 const DEFAULT_ENRICHER_TIMEOUT_MS = 1_500;
 
-export type HydratedParticipantBase = Omit<HydratedParticipantProfile, "fields">;
+type HydratedParticipantBase = Omit<HydratedParticipantProfile, "fields">;
 
-export interface ParticipantProfileFieldContribution {
+interface ParticipantProfileFieldContribution {
   kind: ParticipantProfileFieldKind | `extension:${string}`;
   visibility: {
     visible: boolean;
@@ -28,7 +28,7 @@ export interface ParticipantProfileFieldContribution {
   order?: number;
 }
 
-export interface ParticipantHydrationContext {
+interface ParticipantHydrationContext {
   activePersonaScope: Readonly<ActivePersonaScope>;
   coreFields: readonly ParticipantProfileFieldContribution[];
 }

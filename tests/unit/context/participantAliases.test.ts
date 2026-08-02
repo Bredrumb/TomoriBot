@@ -112,7 +112,9 @@ describe("participant alias catalog", () => {
     });
 
     expect(aliasesForPurpose(bridgeAliases, "tool_target").map((alias) => alias.value)).toEqual(["Alice Matrix"]);
-    expect(aliasesForPurpose(bridgeAliases, "output_mention")).toEqual([]);
+    expect(aliasesForPurpose(bridgeAliases, "output_mention")).toMatchObject([
+      { value: "Alice Matrix", exposure: "lookup_only" },
+    ]);
     expect(webhookAliases[0]?.source).toBe("webhook_display_name");
     expect(aliasesForPurpose(webhookAliases, "tool_target")).toEqual([]);
   });

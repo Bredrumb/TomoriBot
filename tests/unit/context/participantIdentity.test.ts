@@ -6,7 +6,6 @@ import {
   createPersonaKey,
   createWebhookKey,
   mergeParticipantSeeds,
-  participantKeyDebugLabel,
   participantKeysEqual,
   serializeParticipantKey,
   type ParticipantSeed,
@@ -32,7 +31,6 @@ describe("typed participant identity", () => {
       "persona:7",
       "matrix_user:@7:example.test",
     ]);
-    expect(keys.map(participantKeyDebugLabel)).toEqual(serialized);
   });
 
   it("compares identity by kind and stable identifier", () => {

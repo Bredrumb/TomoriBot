@@ -11,6 +11,7 @@ import {
   buildParticipantDiscoveryPlan,
   discoverPersonaReferenceCandidates,
   discoverVisibleAuthorCandidates,
+  parsePersonaId,
 } from "@/utils/text/participants/discoveryPlan";
 import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
 import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
@@ -29,6 +30,17 @@ const INELIGIBLE_EVIDENCE = {
   hasPersonalMemories: false,
   hasPendingTasks: false,
 };
+
+describe("persona participant key parsing", () => {
+  it("accepts canonical and legacy numeric persona keys without accepting partial IDs", () => {
+    expect(parsePersonaId("persona:9")).toBe(9);
+    expect(parsePersonaId("9")).toBe(9);
+    expect(parsePersonaId("persona:9-extra")).toBeNull();
+    expect(parsePersonaId("persona:")).toBeNull();
+    expect(parsePersonaId("-9")).toBeNull();
+    expect(parsePersonaId("9007199254740992")).toBeNull();
+  });
+});
 
 function userRow(discordId: string, nickname: string): UserRow {
   return {
@@ -86,23 +98,17 @@ describe("participant discovery plan", () => {
   it("rejects malformed or conflicting transport identities at the source boundary", async () => {
     const referencePlan = buildParticipantDiscoveryPlan({ candidates: [] });
     expect(() =>
-      discoverVisibleAuthorCandidates(
-        {
-          participantIds: ["999"],
-          clientUserId: "999",
-          syntheticUsers: new Map([["999", { displayName: "Impossible", type: "webhook" }]]),
-        },
-        [],
-      ),
+      discoverVisibleAuthorCandidates({
+        participantIds: ["999"],
+        clientUserId: "999",
+        syntheticUsers: new Map([["999", { displayName: "Impossible", type: "webhook" }]]),
+      }),
     ).toThrow("cannot be both the active bot and a synthetic user");
     expect(() =>
-      discoverVisibleAuthorCandidates(
-        {
-          participantIds: ["broken"],
-          syntheticUsers: new Map([["broken", { displayName: "Broken", type: "persona" }]]),
-        },
-        [],
-      ),
+      discoverVisibleAuthorCandidates({
+        participantIds: ["broken"],
+        syntheticUsers: new Map([["broken", { displayName: "Broken", type: "persona" }]]),
+      }),
     ).toThrow("does not contain a valid persona ID");
     await expect(
       composeParticipantDiscoveryPlan({

@@ -61,7 +61,9 @@ function renderProfileEntries(
         (candidate) => candidate.serializedKey === serializeParticipantKey(profile.key),
       );
       const targetOutputAliases = target
-        ? targetAliasesForPurpose(target, "output_mention").map((alias) => alias.value)
+        ? targetAliasesForPurpose(target, "output_mention")
+            .filter((alias) => alias.exposure === "visible")
+            .map((alias) => alias.value)
         : [];
       const outputAliases = profile.mentionable || profile.primaryAlias ? targetOutputAliases : [];
       const isAliasUnique = (alias: string) => {

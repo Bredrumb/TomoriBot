@@ -173,8 +173,11 @@ During context preparation, the relay's Matrix ID and stripped display name ente
 Matrix `ParticipantSource`. It emits a typed `matrix_user` identity with bridge-presence
 evidence and aliases owned by that identity. Matrix participants are non-mentionable in the
 Discord target index; reminder delivery continues to use the bridge's Matrix-specific mention
-surface. The required `PreparedParticipantContext` carries this result into native context
-assembly, so the context builder does not accept a separate Matrix participant map.
+surface. Their display names remain lookup-only tool targets and participate in output-handle
+collision detection, preventing the provider from receiving an ambiguous Discord handle with
+the same name without rendering the Matrix alias as a ping. The required
+`PreparedParticipantContext` carries this result into native context assembly, so the context
+builder does not accept a separate Matrix participant map.
 
 **Discord → Matrix (outbound):**
 ```

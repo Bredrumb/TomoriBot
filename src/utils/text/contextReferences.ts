@@ -2,7 +2,7 @@ import type { Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { isEligibleContextReferenceUserV1 } from "@/utils/db/repositories/UserRepository";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
-import { buildDiscordUserAliases, createParticipantAlias } from "@/utils/text/participants/aliases";
+import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
 import {
   createDiscordParticipantMemberDirectory,
   repositoryUserReferenceCandidateSource,
@@ -22,18 +22,9 @@ import {
   resolveUniqueParticipantAliasReferences,
   type AliasReferenceDiagnostics,
 } from "@/utils/text/participants/referenceDiscovery";
-import {
-  createDiscordUserKey,
-  type ParticipantAlias,
-  type ParticipantInclusionReason,
-} from "@/utils/text/participants/identity";
+import { createDiscordUserKey, type ParticipantInclusionReason } from "@/utils/text/participants/identity";
 
 export { discoverReferencedPersonaIds } from "@/utils/text/participants/referenceDiscovery";
-
-export type EligibleAliasCandidate = {
-  userId: string;
-  aliases: string[];
-};
 
 export type ResolvedContextReferences = {
   candidateCount: number;
@@ -60,36 +51,6 @@ function addRejection(
   const existing = rejections.find((rejection) => rejection.reason === reason);
   if (existing) existing.count += count;
   else rejections.push({ reason, count });
-}
-
-/**
- * Keeps the pre-catalog candidate shape as a named compatibility boundary.
- */
-export function resolveUniqueTextualAliasReferences(
-  historyText: string,
-  candidates: EligibleAliasCandidate[],
-): Set<string> {
-  const aliases: ParticipantAlias[] = [];
-  for (const candidate of candidates) {
-    const owner = createDiscordUserKey(candidate.userId);
-    candidate.aliases.forEach((value, priority) => {
-      const alias = createParticipantAlias({
-        owner,
-        value,
-        source: "guild_display_name",
-        purposes: ["input_reference"],
-        exposure: "lookup_only",
-        priority,
-      });
-      if (alias) aliases.push(alias);
-    });
-  }
-
-  return new Set(
-    resolveUniqueParticipantAliasReferences(historyText, aliases).referencedOwners.flatMap((owner) =>
-      owner.kind === "discord_user" ? [owner.discordId] : [],
-    ),
-  );
 }
 
 export function buildPublicPersonaProfiles(
