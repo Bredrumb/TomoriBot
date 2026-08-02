@@ -60,7 +60,7 @@ import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { ChatTurn, ChatTurnContext } from "@/utils/chat/types";
-import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
+import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
 import { resolveReunionNote } from "@/utils/chat/reunionPresence";
 import { getCalendarDayWithOffset } from "@/utils/text/timezoneHelper";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
@@ -356,7 +356,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       messageIdMap,
       allowSpriteLabel,
     }),
-    buildPersonaMentionMap(turn.allPersonas),
+    buildPersonaMentionCatalog(turn.allPersonas),
   );
 
   return {

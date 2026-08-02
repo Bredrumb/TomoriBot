@@ -1,17 +1,13 @@
 import type { Client } from "discord.js";
 import { getCurrentTimeWithOffset, formatUTCOffset, getTimeOfDayPhrase } from "@/utils/text/timezoneHelper";
-import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
+import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { AssembledServerConfig, TomoriState, UserRow } from "@/types/db/schema";
 import type { MentionConverter } from "./templates";
 import type { PublicPersonaProfile } from "./types";
-import {
-  aliasesForPurpose,
-  buildAliasCollisionIndex,
-  normalizeParticipantAlias,
-} from "@/utils/text/participants/aliases";
 import { serializeParticipantKey, type ParticipantSeed } from "@/utils/text/participants/identity";
 import { adaptLegacyParticipantSeeds } from "@/utils/text/participants/legacyAdapter";
-import { hydrateParticipantProfiles, type HydratedParticipantProfile } from "@/utils/text/participants/hydration";
+import { hydrateParticipantProfiles } from "@/utils/text/participants/hydration";
+import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 
 export { formatPendingReminderForContext } from "@/utils/text/participants/hydration";
 
@@ -57,12 +53,6 @@ export async function buildParticipantContextItem(params: {
     return null;
   }
 
-  let usersInConversationText = "[System: The following users are having a conversation:\n\n";
-  usersInConversationText += params.isUserImpersonation
-    ? 'To ping users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n'
-    : `If ${params.botName} wants to ping any of these users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n`;
-
-  const conversationUsers: ConversationUserReference[] = [];
   const hydrated = await hydrateParticipantProfiles({
     client: params.client,
     guildId: params.guildId,
@@ -93,12 +83,19 @@ export async function buildParticipantContextItem(params: {
     convertMentions: params.convertMentions,
     botName: params.botName,
   });
-
-  usersInConversationText += renderUserEntries(hydrated.profiles, conversationUsers, params.isUserImpersonation);
-  if (hydrated.personaTaskLines.length > 0) {
-    usersInConversationText += `${hydrated.personaTaskLines.join("\n")}\n\n`;
-  }
-  usersInConversationText += renderChannelTimeContext(params);
+  const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
+  const rendered = renderParticipantPrompt({
+    profiles: hydrated.profiles,
+    personaTaskLines: hydrated.personaTaskLines,
+    isUserImpersonation: params.isUserImpersonation,
+    botName: params.botName,
+    isDMChannel: params.isDMChannel,
+    channelName: params.channelName,
+    channelId: params.channelId,
+    currentTime: getCurrentTimeWithOffset(timezoneOffset),
+    timezoneLabel: formatUTCOffset(timezoneOffset),
+    timeOfDayPhrase: getTimeOfDayPhrase(timezoneOffset),
+  });
 
   return {
     role: "user",
@@ -106,7 +103,7 @@ export async function buildParticipantContextItem(params: {
       {
         type: "text",
         text: await params.convertMentions(
-          usersInConversationText.trim(),
+          rendered.text,
           params.client,
           params.guildId,
           params.triggererName,
@@ -116,7 +113,8 @@ export async function buildParticipantContextItem(params: {
       },
     ],
     metadataTag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
-    conversationUsers,
+    conversationUsers: rendered.conversationUsers,
+    participantTargetIndex: rendered.targetIndex,
   };
 }
 
@@ -135,72 +133,4 @@ export async function buildUsersInConversationContextItem(
       publicPersonaProfiles: params.publicPersonaProfiles,
     }),
   });
-}
-
-function renderUserEntries(
-  userEntries: readonly HydratedParticipantProfile[],
-  conversationUsers: ConversationUserReference[],
-  isUserImpersonation: boolean,
-): string {
-  const outputCollisionIndex = buildAliasCollisionIndex(
-    userEntries.flatMap((entry) => entry.aliases),
-    "output_mention",
-  );
-  const isAliasUnique = (alias: string) =>
-    (outputCollisionIndex.get(normalizeParticipantAlias(alias))?.owners.length ?? 0) === 1;
-  const formatMentionHandle = (alias: string) => `@{${alias}}`;
-  let text = "";
-
-  for (const entry of userEntries) {
-    if (entry.isBot) {
-      text += `${entry.displayName}${isUserImpersonation ? "" : " (This is you!)"}\n`;
-    } else {
-      const outputAliases = aliasesForPurpose(entry.aliases, "output_mention").map((alias) => alias.value);
-      const uniqueAliases = outputAliases.filter(isAliasUnique);
-      const primaryVisibleAlias =
-        entry.primaryAlias && isAliasUnique(entry.primaryAlias)
-          ? entry.primaryAlias
-          : (uniqueAliases.find((alias) => alias !== entry.primaryAlias) ?? null);
-      const aliasHandles = uniqueAliases
-        .filter((alias) => alias !== primaryVisibleAlias)
-        .map((alias) => formatMentionHandle(alias));
-      const mentionParts: string[] = [];
-      if (entry.mentionable && primaryVisibleAlias)
-        mentionParts.push(`Mention: ${formatMentionHandle(primaryVisibleAlias)}`);
-      if (aliasHandles.length > 0) mentionParts.push(`Aliases: ${aliasHandles.join(", ")}`);
-      if (entry.mentionable && outputAliases.length > 0 && !primaryVisibleAlias) {
-        mentionParts.push("Mention requires clarification");
-      }
-      text += `${entry.displayName}${mentionParts.length > 0 ? ` (${mentionParts.join("; ")})` : ""}\n`;
-    }
-
-    for (const profileField of [...entry.fields].sort((left, right) => left.order - right.order)) {
-      if (!profileField.visibility.visible) continue;
-      for (const line of profileField.lines) text += `${line}\n`;
-    }
-    text += "\n";
-
-    const toolAliases = aliasesForPurpose(entry.aliases, "tool_target").map((alias) => alias.value);
-    if (entry.resolvableTargetId && toolAliases.length > 0) {
-      conversationUsers.push({
-        targetId: entry.resolvableTargetId,
-        displayLabel: entry.displayName,
-        aliases: toolAliases,
-        mentionable: entry.mentionable,
-      });
-    }
-  }
-
-  return text;
-}
-
-function renderChannelTimeContext(params: Parameters<typeof buildUsersInConversationContextItem>[0]): string {
-  const timezoneOffset = params.tomoriConfig.timezone_offset ?? 0;
-  const currentTime = getCurrentTimeWithOffset(timezoneOffset);
-  const timezoneLabel = formatUTCOffset(timezoneOffset);
-  const timeOfDayPhrase = getTimeOfDayPhrase(timezoneOffset);
-  const conversationContext = params.isDMChannel
-    ? "Conversation context: Direct Message."
-    : `Conversation context: #${params.channelName}${params.channelId ? ` (ID: ${params.channelId})` : ""}.`;
-  return `${conversationContext}\nCurrent time: ${currentTime} (${timezoneLabel}), ${timeOfDayPhrase}.\n]`;
 }

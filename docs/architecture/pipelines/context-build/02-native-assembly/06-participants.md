@@ -23,10 +23,13 @@ channel/time-of-day footer.
   guild-member directory contracts used by reference orchestration.
 - `src/utils/text/participants/hydration.ts` owns active-persona-scoped identity loading,
   exposure policy, profile-field enrichment, public persona details, and persona self-tasks.
+- `src/utils/text/participants/renderer.ts` is the pure composite prompt renderer.
+- `src/utils/text/participants/targetIndex.ts` derives purpose-aware downstream targets
+  and the transitional `conversationUsers` projection from hydrated profiles.
 - `src/utils/text/participants/legacyAdapter.ts` converts the transitional `userList`,
   Matrix, webhook, persona-profile, and reference-reason inputs into typed seeds.
-- `src/utils/text/context/participants.ts` owns the compatibility facade and renders only
-  from hydrated typed profiles.
+- `src/utils/text/context/participants.ts` owns the compatibility facade, supplies the
+  deterministic time/footer values, and invokes hydration plus pure rendering.
 
 ## Typed preparation boundary
 
@@ -43,8 +46,9 @@ legacy callers are temporarily supported by `buildUsersInConversationContextItem
 the fallback adapter in `nativeBuilder.ts`; both produce the same seeds before delegating.
 `buildParticipantContextItem()` passes those seeds into `hydrateParticipantProfiles()`
 with a required `ActivePersonaScope`. Hydration returns ordered typed profiles whose fields
-carry a stable owner key, render order, and visibility decision. The facade then renders the
-profiles without performing database, cache, or Discord reads. The parallel legacy inputs
+carry a stable owner key, render order, and visibility decision. The pure renderer creates
+the one composite prompt item payload and `ParticipantTargetIndex` without performing
+database, cache, Discord, clock, or logging work. The parallel legacy inputs
 remain only until all context producers migrate to the prepared participant API.
 
 ## Mission
@@ -96,7 +100,9 @@ otherwise one `user`-role item tagged `KNOWLEDGE_USERS_IN_CONVERSATION`.
 
 Also populates `conversationUsers: ConversationUserReference[]` on the
 context item — a structured list used downstream for mention resolution by
-the streaming pipeline.
+the streaming pipeline. This is now a compatibility projection of the hidden
+`ParticipantTargetIndex`; new participant-aware consumers use the index's typed keys and
+purpose-specific aliases directly.
 
 Content shape:
 
@@ -183,7 +189,7 @@ independently of human participant membership.
   matcher receives `ParticipantAlias[]`. Its diagnostics expose only aggregate accepted,
   ambiguous, and unmatched counts, never raw alias text.
 - **Final mention conversion** — assembled text passes through
-  `convertMentions`.
+  `convertMentions` after pure rendering.
 
 `ParticipantHydrationDependencies` is the fakeable I/O boundary used by focused tests.
 The default implementation wraps the repositories, Discord member/user reads, and presence
@@ -247,6 +253,8 @@ After this stage runs:
 - Persona public attributes and Physical Appearance tags are attached to the
   same participant entry. A tags-only persona is still rendered; a referenced
   persona with no existing synthetic entry is non-mentionable.
+- Public persona fields merge only by the stable persona key. A Discord user with the same
+  display text remains a separate profile and cannot receive persona attributes or tags.
 - Matrix and synthetic users are appended *after* normal users and are
   marked non-mentionable (`mentionable: false`).
 - The closing footer always emits, even with one participant.
@@ -256,6 +264,11 @@ After this stage runs:
 - Triggerer blacklist, privacy, and presence-member snapshot fast paths remain request-local.
 - Rendering consumes only `HydratedParticipantProfile` values and has no repository,
   cache, or Discord read path.
+- Output handles, tool targets, copied-user identities, and persona canonical-trigger
+  aliases are purpose-filtered views of one `ParticipantTargetIndex`. Discord pings still
+  require a mentionable 17-20 digit snowflake, and tool targets retain primary-display-name
+  tie-breaking. Preset and strict-chat transforms preserve both the index and its
+  `conversationUsers` compatibility projection.
 
 ## Configuration
 
@@ -282,12 +295,9 @@ Multiple plugin-relevant seams:
 | Physical Appearance tags (`physical_appearance_tags`) | Coupled to image-generation tooling; a plugin adding a different image-gen tag scheme would extend the `normalizeImageAppearanceTags` path. |
 | Channel + time-of-day footer | Internal — coupled to `timezoneHelper`. |
 
-**A plugin extension for "alternate participant rendering"** (e.g.
-collapse-when-many-users, show-roles-only-for-mods) would either:
-- (a) Wrap this contributor with a post-processor on the emitted text.
-  Brittle — text format is not a contract.
-- (b) Replace this contributor entirely with the plugin's own. Cleaner —
-  if a "register contributor" mechanism is built. → plugin plan candidate.
+The renderer is pure, but its exact composite text remains a core compatibility contract.
+Profile extensions should contribute typed fields through the ordered enricher contract
+introduced by the participant extension phase, rather than post-process prompt prose.
 
 ## Related docs
 

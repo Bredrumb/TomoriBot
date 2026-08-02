@@ -11,6 +11,7 @@ import { formatRenderModifierWebhookName, normalizeRenderModifierName } from "@/
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { log } from "@/utils/misc/logger";
 import { normalizePersonaSpriteKey } from "@/utils/persona/sprites";
+import { collectParticipantTargetIndex, targetAliasesForPurpose } from "@/utils/text/participants/targetIndex";
 import {
   isLocalPersonaAvatarPath,
   loadStoredPersonaAvatarDataUri,
@@ -156,6 +157,57 @@ async function collectCopiedRenderCandidates(context: StreamContext): Promise<Co
     log.warn(`Failed to load personas while resolving render modifier in guild ${guild.id}`, error);
     return [];
   });
+
+  const targetIndex = collectParticipantTargetIndex(context.contextItems);
+  if (targetIndex.targets.length > 0) {
+    const personasById = new Map(
+      personas.flatMap((persona) =>
+        typeof persona.persona_id === "number" ? [[persona.persona_id, persona] as const] : [],
+      ),
+    );
+    for (const target of targetIndex.targets) {
+      const copiedAliases = targetAliasesForPurpose(target, "copied_identity").map((alias) => alias.value);
+      if (copiedAliases.length === 0) continue;
+      if (target.key.kind === "persona") {
+        if (target.key.personaId === context.tomoriState.persona_id) continue;
+        const persona = personasById.get(target.key.personaId);
+        if (!persona) continue;
+        addCandidate(candidatesByKey, {
+          kind: "persona",
+          key: target.serializedKey,
+          displayName: target.displayLabel,
+          persona,
+        });
+        continue;
+      }
+      if (
+        target.key.kind === "discord_user" &&
+        target.inParticipantContext &&
+        target.targetId &&
+        isDiscordSnowflake(target.targetId)
+      ) {
+        addCandidate(candidatesByKey, {
+          kind: "user",
+          key: target.serializedKey,
+          displayName: target.displayLabel,
+          aliases: copiedAliases,
+          userId: target.targetId,
+        });
+      }
+    }
+    if (!targetIndex.personaCatalogComplete) {
+      for (const persona of personas) {
+        if (persona.persona_id == null || persona.persona_id === context.tomoriState.persona_id) continue;
+        addCandidate(candidatesByKey, {
+          kind: "persona",
+          key: `persona:${persona.persona_id}`,
+          displayName: persona.persona_nickname,
+          persona,
+        });
+      }
+    }
+    return [...candidatesByKey.values()];
+  }
 
   for (const persona of personas) {
     if (persona.persona_id == null || persona.persona_id === context.tomoriState.persona_id) {

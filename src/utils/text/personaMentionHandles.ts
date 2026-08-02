@@ -5,10 +5,20 @@ import {
   buildPersonaAliases,
   normalizeParticipantAlias,
 } from "@/utils/text/participants/aliases";
-import { createPersonaKey, type ParticipantAlias } from "@/utils/text/participants/identity";
+import { createPersonaKey, serializeParticipantKey, type ParticipantAlias } from "@/utils/text/participants/identity";
+import {
+  mergeParticipantTargetIndexes,
+  type ParticipantTargetEntry,
+  type ParticipantTargetIndex,
+} from "@/utils/text/participants/targetIndex";
 
 type PersonaMentionSource = Pick<TomoriState, "persona_nickname" | "trigger_words"> &
   Partial<Pick<TomoriState, "persona_id">>;
+
+export interface PersonaMentionCatalog {
+  mentionMap: Map<string, string>;
+  targetIndex: ParticipantTargetIndex;
+}
 
 /**
  * Builds a lookup for persona-directed `@name` text that should remain a plain
@@ -18,21 +28,35 @@ type PersonaMentionSource = Pick<TomoriState, "persona_nickname" | "trigger_word
  * as `@${value}` so deliberate trigger mode can route the generated message.
  */
 export function buildPersonaMentionMap(personas: readonly PersonaMentionSource[]): Map<string, string> {
+  return buildPersonaMentionCatalog(personas).mentionMap;
+}
+
+export function buildPersonaMentionCatalog(personas: readonly PersonaMentionSource[]): PersonaMentionCatalog {
   const map = new Map<string, string>();
   const aliases: ParticipantAlias[] = [];
+  const targets: ParticipantTargetEntry[] = [];
 
   personas.forEach((persona, index) => {
     const personaId =
       typeof persona.persona_id === "number" && Number.isSafeInteger(persona.persona_id) && persona.persona_id >= 0
         ? persona.persona_id
         : index;
-    aliases.push(
-      ...buildPersonaAliases({
-        owner: createPersonaKey(personaId),
-        nickname: persona.persona_nickname,
-        triggerWords: persona.trigger_words,
-      }).aliases,
-    );
+    const key = createPersonaKey(personaId);
+    const personaAliases = buildPersonaAliases({
+      owner: key,
+      nickname: persona.persona_nickname,
+      triggerWords: persona.trigger_words,
+    }).aliases;
+    aliases.push(...personaAliases);
+    targets.push({
+      key,
+      serializedKey: serializeParticipantKey(key),
+      displayLabel: persona.persona_nickname,
+      primaryAlias: persona.persona_nickname,
+      mentionable: false,
+      inParticipantContext: false,
+      aliases: personaAliases,
+    });
   });
 
   for (const collision of buildAliasCollisionIndex(aliases, "output_mention").values()) {
@@ -41,7 +65,7 @@ export function buildPersonaMentionMap(personas: readonly PersonaMentionSource[]
     if (alias?.canonicalValue) map.set(alias.normalized, alias.canonicalValue);
   }
 
-  return map;
+  return { mentionMap: map, targetIndex: { targets, personaCatalogComplete: true } };
 }
 
 export function resolvePersonaMentionHandle(
@@ -59,8 +83,22 @@ export function resolvePersonaMentionHandle(
 
 export function attachPersonaMentionMapToContextItems(
   contextItems: StructuredContextItem[],
-  personaMentionMap: Map<string, string>,
+  catalogOrMap: PersonaMentionCatalog | Map<string, string>,
 ): StructuredContextItem[] {
-  if (contextItems.length === 0 || personaMentionMap.size === 0) return contextItems;
-  return [{ ...contextItems[0], personaMentionMap }, ...contextItems.slice(1)];
+  const personaMentionMap = catalogOrMap instanceof Map ? catalogOrMap : catalogOrMap.mentionMap;
+  const personaTargetIndex = catalogOrMap instanceof Map ? undefined : catalogOrMap.targetIndex;
+  if (contextItems.length === 0 || (personaMentionMap.size === 0 && !personaTargetIndex)) return contextItems;
+  return [
+    {
+      ...contextItems[0],
+      personaMentionMap,
+      ...(personaTargetIndex && {
+        participantTargetIndex: mergeParticipantTargetIndexes(
+          contextItems[0].participantTargetIndex,
+          personaTargetIndex,
+        ),
+      }),
+    },
+    ...contextItems.slice(1),
+  ];
 }

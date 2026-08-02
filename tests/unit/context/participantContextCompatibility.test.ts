@@ -226,7 +226,7 @@ describe("participant context compatibility matrix", () => {
     }
   });
 
-  it("documents the legacy display-name persona-profile merge collision", async () => {
+  it("keeps same-name user and persona profile fields on separate stable identities", async () => {
     const fixture = createParticipantContextFixture();
     try {
       const item = await buildHumanItem(fixture, {
@@ -241,6 +241,8 @@ describe("participant context compatibility matrix", () => {
       });
       const text = getText(item);
 
+      expect(text.match(/^Alice Saved(?: \(|$)/gm)).toHaveLength(2);
+      expect(text).toContain("Alice Saved's Physical Appearance: auburn hair, green eyes");
       expect(text).toContain("Known Information about Alice Saved:");
       expect(text).toContain("This field belongs to persona 999, not the Discord user.");
       expect(text).toContain("Alice Saved's Physical Appearance: persona-only silver hair");

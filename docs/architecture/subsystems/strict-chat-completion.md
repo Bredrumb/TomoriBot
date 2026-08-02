@@ -54,6 +54,10 @@ Relocation runs on that neutral representation first, so multi-persona histories
 each relocated image to the persona that actually sent it, including image-only turns where parsing
 a leading `{Name}:` text label would fail.
 
+When relocation clones or splits a structured item, it also preserves hidden participant metadata,
+including `conversationUsers` and `participantTargetIndex`. Provider normalization never reparses
+participant prompt prose to recover mention, tool-target, or copied-identity candidates.
+
 Anthropic and OpenRouter previously used a single per-request name
 (`[System: This image was sent by {botName}.]`) for every relocated image. That could mislabel
 images sent earlier by other personas. The OpenAI-compatible family previously used the generic

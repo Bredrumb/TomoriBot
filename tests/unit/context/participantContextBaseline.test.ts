@@ -5,7 +5,7 @@ import type { StreamContext } from "@/types/stream/interfaces";
 import { ContextItemTag } from "@/types/misc/context";
 import { relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { cache as tomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
-import { resolveCopiedRenderModifierTarget } from "@/utils/discord/renderModifierResolver";
+import { collectKnownSpeakerNames, resolveCopiedRenderModifierTarget } from "@/utils/discord/renderModifierResolver";
 import { buildMentionLookup } from "@/utils/discord/stream/textConfig";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { cleanToolReplyText } from "@/utils/discord/toolReplyText";
@@ -168,6 +168,7 @@ describe("participant context Phase 0 baseline", () => {
         ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
       ]);
       expect(normalizeParticipantContextItem(result.contextItems[0] ?? null)).toEqual(EXPECTED_PARTICIPANT_GOLDEN);
+      expect(result.contextItems[0]?.participantTargetIndex).toEqual(item.participantTargetIndex);
     } finally {
       fixture.restoreRepositories();
     }
@@ -206,10 +207,19 @@ describe("participant context Phase 0 baseline", () => {
           ],
           sender: { name: "Tomori", type: "persona" },
           metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+          conversationUsers: item.conversationUsers,
+          participantTargetIndex: item.participantTargetIndex,
+          personaMentionMap: item.personaMentionMap,
         },
       ]);
 
       expect(normalizeParticipantContextItem(normalized[0] ?? null)).toEqual(EXPECTED_PARTICIPANT_GOLDEN);
+      expect(normalized[0]?.participantTargetIndex).toEqual(item.participantTargetIndex);
+      expect(normalized[2]).toMatchObject({
+        conversationUsers: item.conversationUsers,
+        participantTargetIndex: item.participantTargetIndex,
+        personaMentionMap: item.personaMentionMap,
+      });
       expect(normalized.map((contextItem) => contextItem.role)).toEqual(["user", "model", "user"]);
     } finally {
       fixture.restoreRepositories();
@@ -220,7 +230,13 @@ describe("participant context Phase 0 baseline", () => {
     const fixture = createParticipantContextFixture();
     try {
       const item = await buildLegacyParticipantContext(fixture);
-      const lookup = buildMentionLookup([item]);
+      expect(item.participantTargetIndex?.targets.length).toBeGreaterThan(0);
+      const indexedItem = {
+        ...item,
+        conversationUsers: [],
+        personaMentionMap: undefined,
+      };
+      const lookup = buildMentionLookup([indexedItem]);
       const streamText = replaceMentionHandles(
         "Ask @{Alice Guild} and @{Ren}.",
         lookup.mentionMap,
@@ -238,7 +254,7 @@ describe("participant context Phase 0 baseline", () => {
         locale: "en-US",
         provider: "fixture",
         personaUsername: "Tomori",
-        contextItems: [item],
+        contextItems: [indexedItem],
       } as unknown as ToolContext;
 
       await expect(resolveUserTarget("Alice Guild", toolContext)).resolves.toMatchObject({
@@ -251,15 +267,22 @@ describe("participant context Phase 0 baseline", () => {
       );
 
       tomoriStateCache.set(PARTICIPANT_FIXTURE_IDS.guild, {
-        personas: [fixture.activePersona],
+        personas: fixture.personas,
         mainPersona: fixture.activePersona,
         cachedAt: Date.now(),
       });
+      await expect(
+        collectKnownSpeakerNames({
+          ...toolContext,
+          contextItems: [indexedItem],
+          currentTurnModelParts: [],
+        } as unknown as StreamContext),
+      ).resolves.toEqual(expect.arrayContaining(["Alice Saved", "Alice Guild", "Ren"]));
       const copiedTarget = await resolveCopiedRenderModifierTarget(
         "Alice Guild",
         {
           ...toolContext,
-          contextItems: [item],
+          contextItems: [indexedItem],
           currentTurnModelParts: [],
         } as unknown as StreamContext,
         "Tomori",

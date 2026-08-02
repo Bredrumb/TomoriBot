@@ -13,7 +13,7 @@ import { personalMemoryRepository, serverScheduleRepository, userRepository } fr
 import { buildUsersInConversationContextItem } from "@/utils/text/context/participants";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { resolveContextReferences } from "@/utils/text/contextReferences";
-import { attachPersonaMentionMapToContextItems, buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
+import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
 
 export const PARTICIPANT_FIXTURE_IDS = {
   guild: "100000000000000001",
@@ -434,7 +434,7 @@ export async function buildLegacyParticipantContext(
 
   const [itemWithPersonaAliases] = attachPersonaMentionMapToContextItems(
     [item],
-    buildPersonaMentionMap(fixture.personas),
+    buildPersonaMentionCatalog(fixture.personas),
   );
   if (!itemWithPersonaAliases) throw new Error("Participant baseline fixture lost its context item");
   return itemWithPersonaAliases;

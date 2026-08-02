@@ -154,6 +154,12 @@ Resolution order is:
 2. **Copied identity** if no sprite matched. `target` resolves only against known personas in the server and Discord users already present in conversation context. If exactly one target matches, TomoriBot uses the **flipped** username `target (SourcePersona)` and the target's avatar — the impersonated name leads so the disguise reads naturally in chat, while the model-facing context label stays `SourcePersona (target)` so the LLM never confuses who is speaking.
 3. **Plain output** when no sprite/copy target resolves, or copied identity is ambiguous. The parenthetical modifier is stripped before delivery.
 
+Copied user and persona matching consumes the same hidden `ParticipantTargetIndex` used by
+stream mentions and tool targets. User candidates are limited to hydrated conversation
+participants and the `copied_identity` alias purpose. The request's complete persona alias
+catalog is merged into that index without making every persona a rendered participant or a
+tool-user target.
+
 Attribution, quota, self-reply bookkeeping, STM ownership, and reply routing remain attached to `SourcePersona`. History reconstruction (`resolveRenderModifierSourcePersona`) accepts both webhook-name orientations: flipped copied identities like `bredrumb (Ren)` (persona inside the parens, current format) and legacy `Ren (bredrumb)` decorations, always rebuilding the source-first `Ren (bredrumb)` label for prompt history. When *both* parts match personas (persona impersonating another persona), the flipped interpretation wins; legacy persona-on-persona messages are misattributed until they age out of the fetch window. Sprite messages are visually identical to plain `Ren` messages in Discord; their decorated prompt label is recovered from the `persona_sprite_messages` mapping (cache-primed per context build), and a missing mapping degrades to the plain persona name.
 
 ### Personal spotlight

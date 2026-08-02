@@ -600,7 +600,7 @@ function hydrateSyntheticBase(
     key: seed.key,
     reasons: seed.reasons,
     displayName,
-    aliases: seed.key.kind === "webhook" ? seed.aliases : [],
+    aliases: seed.aliases,
     primaryAlias: null,
     mentionable: false,
     isBot: false,
@@ -635,8 +635,7 @@ async function applyPublicPersonaProfiles(
       : normalizeImageAppearanceTags(publicPersona.imageAppearanceTags);
     if (convertedAttributes.length === 0 && appearanceTags.length === 0) continue;
 
-    let target = profiles.find((profile) => serializeParticipantKey(profile.key) === serializeParticipantKey(key));
-    if (!target) target = profiles.find((profile) => profile.displayName === publicPersona.personaName);
+    const target = profiles.find((profile) => serializeParticipantKey(profile.key) === serializeParticipantKey(key));
     const attributeLines =
       convertedAttributes.length > 0
         ? [

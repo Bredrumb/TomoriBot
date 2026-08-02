@@ -4,6 +4,10 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { userRepository } from "@/utils/db/repositories";
 import { isBridgeUserId } from "@/utils/bridges";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
+import {
+  collectParticipantTargetIndex,
+  projectConversationUserReferences,
+} from "@/utils/text/participants/targetIndex";
 
 type ResolvedUserTarget = {
   status: "resolved";
@@ -241,6 +245,9 @@ function getConversationUserReferences(contextItems?: StructuredContextItem[]): 
   if (!contextItems) {
     return [];
   }
+
+  const targetIndex = collectParticipantTargetIndex(contextItems);
+  if (targetIndex.targets.length > 0) return projectConversationUserReferences(targetIndex);
 
   const collected: ConversationUserReference[] = [];
   for (const item of contextItems) {

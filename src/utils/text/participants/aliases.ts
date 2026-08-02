@@ -153,7 +153,7 @@ export function buildPersonaAliases(params: {
     owner: params.owner,
     value: nickname,
     source: "persona_nickname",
-    purposes: ["output_mention", "tool_target"],
+    purposes: ["output_mention", "tool_target", "copied_identity"],
     exposure: "visible",
     priority: 10,
     ...(canonicalTrigger && { canonicalValue: canonicalTrigger }),
