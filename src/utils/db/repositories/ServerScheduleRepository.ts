@@ -174,6 +174,15 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlRescheduleReminder(reminderId, nextReminderTime);
   }
 
+  /** Defers delivery without changing the reminder's canonical occurrence time. */
+  async scheduleReminderRetry(
+    reminderId: number,
+    nextAttemptAt: Date,
+    deliveryRetryCount: number,
+  ): Promise<ReminderRow | null> {
+    return this.sqlScheduleReminderRetry(reminderId, nextAttemptAt, deliveryRetryCount);
+  }
+
   /**
    * Updates mutable fields on an existing reminder.
    *
@@ -295,9 +304,14 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     try {
       return await withTransientDbRetry(async () => {
         const reminderData = await sql`
-          SELECT * FROM reminders
-          WHERE reminder_time <= CURRENT_TIMESTAMP
-          ORDER BY reminder_time ASC
+          SELECT
+            r.*,
+            s.server_disc_id,
+            s.is_dm_channel AS server_is_dm_channel
+          FROM reminders r
+          JOIN servers s ON s.server_id = r.server_id
+          WHERE COALESCE(r.next_attempt_at, r.reminder_time) <= CURRENT_TIMESTAMP
+          ORDER BY COALESCE(r.next_attempt_at, r.reminder_time) ASC
         `;
 
         if (!reminderData) {
@@ -334,9 +348,9 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     try {
       return await withTransientDbRetry(async () => {
         const [result] = await sql<{ next_reminder_time: Date | string | null }[]>`
-          SELECT reminder_time AS next_reminder_time
+          SELECT COALESCE(next_attempt_at, reminder_time) AS next_reminder_time
           FROM reminders
-          ORDER BY reminder_time ASC
+          ORDER BY COALESCE(next_attempt_at, reminder_time) ASC
           LIMIT 1
         `;
 
@@ -666,6 +680,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
       const [updatedReminder] = await sql`
         UPDATE reminders
         SET reminder_time = ${nextReminderTime},
+            next_attempt_at = NULL,
+            delivery_retry_count = 0,
             updated_at = CURRENT_TIMESTAMP
         WHERE reminder_id = ${reminderId}
         RETURNING *
@@ -711,6 +727,59 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     }
   }
 
+  private async sqlScheduleReminderRetry(
+    reminderId: number,
+    nextAttemptAt: Date,
+    deliveryRetryCount: number,
+  ): Promise<ReminderRow | null> {
+    try {
+      const [updatedReminder] = await sql`
+        UPDATE reminders
+        SET next_attempt_at = ${nextAttemptAt},
+            delivery_retry_count = ${deliveryRetryCount},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE reminder_id = ${reminderId}
+        RETURNING *
+      `;
+
+      if (!updatedReminder) {
+        log.warn(`Failed to schedule retry for reminder ${reminderId} (no row returned)`);
+        return null;
+      }
+
+      const validatedReminder = reminderSchema.safeParse(updatedReminder);
+      if (!validatedReminder.success) {
+        await log.error(
+          `Failed to validate reminder after scheduling retry (ID: ${reminderId})`,
+          validatedReminder.error,
+          {
+            errorType: "SchemaValidationError",
+            metadata: {
+              operation: "scheduleReminderRetry",
+              reminderId,
+              validationErrors: validatedReminder.error.flatten(),
+            },
+          },
+        );
+        return null;
+      }
+
+      emitScheduledWorkNudge(`reminder-retry:${reminderId}`);
+      return validatedReminder.data;
+    } catch (error) {
+      await log.error(`Error scheduling retry for reminder ${reminderId}`, error, {
+        errorType: "DatabaseUpdateError",
+        metadata: {
+          operation: "scheduleReminderRetry",
+          reminderId,
+          nextAttemptAt: nextAttemptAt.toISOString(),
+          deliveryRetryCount,
+        },
+      });
+      return null;
+    }
+  }
+
   private async sqlUpdateReminder(reminderData: {
     reminder_id: number;
     reminder_purpose: string;
@@ -728,6 +797,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
         SET
           reminder_purpose = ${reminderData.reminder_purpose},
           reminder_time = ${reminderData.reminder_time},
+          next_attempt_at = NULL,
+          delivery_retry_count = 0,
           repetition_interval_hours = ${reminderData.repetition_interval_hours},
           self_reminder = ${reminderData.self_reminder},
           user_discord_id = ${reminderData.user_discord_id},
@@ -816,6 +887,8 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
         SET
           reminder_purpose = ${reminderData.reminder_purpose},
           reminder_time = ${reminderData.reminder_time},
+          next_attempt_at = NULL,
+          delivery_retry_count = 0,
           repetition_interval_hours = ${reminderData.repetition_interval_hours},
           updated_at = CURRENT_TIMESTAMP
         WHERE reminder_id = ${reminderData.reminder_id}

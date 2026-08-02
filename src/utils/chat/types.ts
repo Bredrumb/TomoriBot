@@ -42,6 +42,11 @@ export interface ManualTriggerInvoker {
   member?: GuildMember | null;
 }
 
+export interface SystemTriggerIdentity {
+  serverDiscId: string;
+  userDiscId: string;
+}
+
 export interface SceneTurnSpeaker {
   personaId: number;
   personaName: string;
@@ -85,6 +90,7 @@ export interface TomoriChatInput {
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
+  systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
   onGenerationResult?: ChatGenerationResultHandler;
@@ -120,6 +126,7 @@ export interface ChatIncoming {
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
+  systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
   onGenerationResult?: ChatGenerationResultHandler;

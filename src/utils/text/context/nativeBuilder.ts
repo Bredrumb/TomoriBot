@@ -245,7 +245,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       publicPersonaProfiles: preparedParticipantContext.publicPersonaProfiles,
       preloadedReferencedUserRows: preparedParticipantContext.referencedUserRows,
       referencedUserIds: preparedParticipantContext.referencedUserIds,
-      preparationDiagnostics: preparedParticipantContext.diagnostics,
       profileEnricherRegistry: preparedParticipantContext.profileEnricherRegistry,
       toolPromptMacroResolver,
       conversationCorpus,

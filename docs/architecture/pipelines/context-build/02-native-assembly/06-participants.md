@@ -196,10 +196,9 @@ independently of human participant membership.
 - **Discovery diagnostics (upstream)** — the typed plan aggregates ineligible-state, bot,
   non-member, ambiguous-alias, existing-participant, blocked-source, and missing-guild
   rejections. Production paths do not log candidate IDs, aliases, or message content.
-- **Preparation metric** — `participant_context_preparation` records only bounded numeric
-  fields: candidate/included/hydrated counts, rejection totals, cache-hit state, stage
-  durations, and external-call counts. User IDs, persona IDs, aliases, and message content
-  are never metric labels or values.
+- **Preparation diagnostics are not logged** — the typed preparation and hydration
+  diagnostics stay in-process for tests and callers. No per-generation metric line is
+  emitted, so participant preparation adds nothing to production log volume.
 - **Alias catalog construction** — saved nicknames, guild display names and nicknames,
   global names, usernames, persona nicknames and triggers, Matrix display names, webhook
   display names, and impersonated identities use source-owned builders. Each alias records

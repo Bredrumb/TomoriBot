@@ -221,8 +221,9 @@ export default {
     expand_task_title: `タスクの全文`,
     reminder_triggered_title: `🟡 リマインダー通知（配信失敗）`,
     task_triggered_title: `🟡 タスク通知（配信失敗）`,
-    triggered_description: `{reminder_purpose}`,
-    triggered_footer: `生成が繰り返し失敗したため、代わりに生のリマインダーを送信しました。このスケジュールは削除されました。問題の解決後に \`/scheduled-task\` で作成し直してください。`,
-    triggered_footer_recurring: `生成が繰り返し失敗したため、代わりに生のリマインダーを送信しました。この繰り返しスケジュールは削除され、今後は実行されません。問題の解決後に \`/scheduled-task\` で作成し直してください。`,
+    triggered_description: `**スケジュール項目ID：** \`{reminder_id}\`\n**元の内容：**`,
+    triggered_footer_one_time: `生成が繰り返し失敗したため、スケジュールされた内容をそのまま表示しています。この1回限りのスケジュールは完了済みとして削除されました。`,
+    triggered_footer_recurring_retained: `生成が繰り返し失敗したため、スケジュールされた内容をそのまま表示しています。次回は元の周期を維持して実行されます。管理するには \`/scheduled-task edit\` または \`/scheduled-task remove\` を使用してください。`,
+    triggered_footer_recurring_removed: `生成が繰り返し失敗し、次回の実行も維持できませんでした。この繰り返しスケジュールは削除されました。問題の解決後に作成し直してください。`,
   },
 };

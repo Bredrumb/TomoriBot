@@ -1078,11 +1078,15 @@ export type OptApiKeyRow = z.infer<typeof optApiKeySchema>;
 export const reminderSchema = z.object({
   reminder_id: z.number().optional(), // Primary key, optional as it's generated
   server_id: z.number(), // Foreign key to servers table
+  server_disc_id: z.string().optional(), // Joined routing identity for scheduler-triggered turns
+  server_is_dm_channel: z.boolean().optional(), // Joined routing scope for scheduler-triggered turns
   channel_disc_id: z.string(), // Discord channel ID where reminder was set
   user_discord_id: z.string(), // Target user's Discord ID
   user_nickname: z.string(), // Target user's nickname for display
   reminder_purpose: z.string(), // What the reminder is for
   reminder_time: z.date(), // When to trigger the reminder (TIMESTAMP WITH TIME ZONE)
+  next_attempt_at: z.date().nullable().optional(), // Retry lease; canonical cadence stays in reminder_time
+  delivery_retry_count: z.number().int().nonnegative().default(0),
   repetition_interval_hours: z.number().int().nullable().optional(), // Optional: repeat interval in hours
   self_reminder: z.boolean().nullable().optional(), // Optional: reminder targets the bot itself
   created_by_user_id: z.number().nullable(), // Who requested the reminder (nullable - set to NULL if user deleted)
