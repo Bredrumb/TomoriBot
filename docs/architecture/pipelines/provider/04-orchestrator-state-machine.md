@@ -4,7 +4,7 @@ title: "04: Orchestrator State Machine"
 
 Drives the provider generator as a state machine, routing each `ProcessedChunk` and resolving stop signals, timeouts, and stream completion into a `StreamResult`.
 
-**File:** `src/utils/discord/stream/stateMachine.ts:119-456`
+**File:** `src/utils/discord/stream/stateMachine.ts:119-485`
 
 ## Mission
 
@@ -12,10 +12,13 @@ Drives the provider generator as a state machine, routing each `ProcessedChunk` 
 It owns the `for await` loop over the stage 02 generator and makes the per-chunk decisions that
 determine the shape of the final `StreamResult`. Three concerns are woven through the loop:
 
-1. **Stop / interrupt resolution** — before processing each chunk, the stop registry is checked.
-   A user stop (`/stop`) flushes the pending buffer and returns `{ status: "stopped_by_user" }`.
-   A follow-up interrupt discards the buffer and returns `{ status: "follow_up_interrupt" }` so
-   the chat pipeline can restart for the new message.
+1. **Stop / interrupt resolution** — the stop registry is checked both before processing each
+   chunk and again immediately after it is written out. A user stop (`/stop`) flushes the pending
+   buffer and returns `{ status: "stopped_by_user" }`. A follow-up interrupt discards the buffer
+   and returns `{ status: "follow_up_interrupt" }` so the chat pipeline can restart for the new
+   message. The post-write check exists because delivery-side stops (the send and flush limits in
+   stage 07) are raised *during* the write; resolving them there cancels the upstream response one
+   chunk sooner than waiting for the next loop iteration would.
 
 2. **Chunk routing** — after stop checks, the `ProcessedChunk.type` determines the path:
    - `"text"` → stage 05 (`StreamBufferFlusher.processTextChunk`)

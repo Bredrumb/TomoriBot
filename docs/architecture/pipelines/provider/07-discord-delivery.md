@@ -48,7 +48,11 @@ payload. It handles:
 
 - **Send-message-limit enforcement** — if `state.messageSentCount >= config.send_message_limit`
   (server-configured cap), a stop is requested and the send is skipped. The absolute safety cap
-  `STREAMING_LIMITS.MAX_FLUSH_COUNT` is also enforced here with a user-facing embed.
+  `STREAMING_LIMITS.MAX_FLUSH_COUNT` is also enforced here with a user-facing embed (suppressed
+  under user impersonation, like every other notice in this subsystem).
+  Both caps resolve as stop requests for every delivery mode, including impersonation. They are
+  deterministic, so raising them as errors would only drive the generation stage to retry across
+  rotation keys and fallback models against a condition no retry can satisfy.
 - **Webhook path** — when `context.webhook` and `context.personaUsername` are set (alter persona
   mode), the message is sent via `sendWebhookMessageWithIdentity()` with the persona's name and
   avatar. Webhooks cannot use Discord's native reply, so for the *first* message of any webhook

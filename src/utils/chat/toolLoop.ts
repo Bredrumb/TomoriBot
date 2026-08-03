@@ -104,6 +104,10 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       case "stopped_by_user":
         queueStopResponseIfPresent(params.context);
         resetChannelFollowUpCount(params.context.channel.id);
+        // Text already delivered before the stop still has to reach short-term memory, or Tomori
+        // forgets what it just said in the channel whenever a turn is cut short.
+        finalText = streamResult.accumulatedText ?? finalText;
+        detailsText = mergeDetails(detailsText, streamResult.detailsContent);
         return buildResult("stopped_by_user", params.context, streamResults, finalText, detailsText, thoughtLog);
       case "follow_up_interrupt":
         incrementChannelFollowUpCount(params.context.channel.id);

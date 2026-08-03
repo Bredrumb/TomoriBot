@@ -109,7 +109,10 @@ a non-error result *and* the loop falls through (rare; defensive).
 - On non-error or last attempt: emits only final error results, calls
   `responseSink.finalize(result)`, and returns.
 - On thrown error: calls `responseSink.emitError(error)` and finalizes with
-  an `error` result.
+  an `error` result — except under user impersonation, where `emitError`
+  rethrows by design and neither the `error` result nor `finalize` is reached.
+  `responseSink.cleanup()` runs from a `finally` on every path, so per-turn
+  resources are released even then.
 
 **Superseded-message cleanup (`purgeSupersededDeliveries`):**
 
@@ -152,8 +155,11 @@ a non-error result *and* the loop falls through (rare; defensive).
 
 After this stage runs:
 
-- `responseSink.finalize(result)` has been called exactly once. Generation
-  guarantees this in both the success and the `catch` paths.
+- `responseSink.finalize(result)` has been called exactly once on every path
+  that returns a result — that is, all of them except user impersonation, whose
+  rethrowing error handler propagates instead of returning.
+- `responseSink.cleanup()` has been called exactly once, without exception.
+  This is the invariant per-turn resource release relies on; `finalize` is not.
 - If the result is non-error, `result.personaResponses.length > 0` (or the
   status is `"skipped"`, which post-turn effects will distinguish).
 - Rotation-key bookkeeping (`recordKeySuccess`/`recordKeyError`) reflects

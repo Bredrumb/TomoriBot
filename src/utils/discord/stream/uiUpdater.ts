@@ -105,11 +105,10 @@ export class StreamUiUpdater {
       log.info(
         `Send message limit reached: ${state.messageSentCount} messages sent (server limit: ${sendMessageLimit})`,
       );
-      if (strictUserImpersonation) {
-        throw new Error(
-          "User impersonation stopped because the server message limit was reached before a reply could be sent.",
-        );
-      }
+      // Deliberate operator config, not a failure, and never reached before the first send
+      // (messageSentCount only increments after one lands). User impersonation used to throw
+      // here, which surfaced as `status: "error"` and made generationTurn retry across every
+      // fallback key and model, each burning tokens on a limit that can never pass.
       this.deps.requestStop(context.channel.id, "send_message_limit");
       return null;
     }
@@ -119,11 +118,11 @@ export class StreamUiUpdater {
         `Flush limit exceeded: ${state.messageSentCount} messages sent (limit: ${STREAMING_LIMITS.MAX_FLUSH_COUNT})`,
       );
 
-      if (strictUserImpersonation) {
-        throw new Error("User impersonation stopped because the response exceeded the streaming message limit.");
-      }
-
-      if (!context.suppressUserErrors) {
+      // Deterministic like the send limit above, so throwing would only buy pointless retries
+      // across every fallback key and model. The warn above is the operator-facing signal.
+      // The embed stays off during impersonation for the same reason every other notice in this
+      // subsystem does: a bot-authored embed under a user's identity breaks the disguise.
+      if (!context.suppressUserErrors && !strictUserImpersonation) {
         await sendStandardEmbed(context.channel, context.locale, {
           titleKey: "genai.stream.flush_limit_title",
           descriptionKey: "genai.stream.flush_limit_description",

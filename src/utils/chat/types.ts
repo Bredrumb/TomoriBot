@@ -277,6 +277,11 @@ export interface ChatResponseSink {
   emitStreamResult(result: StreamResult): Promise<void>;
   emitError(error: unknown): Promise<void>;
   finalize(result: GenerationTurnResult): Promise<void>;
+  /**
+   * Releases per-turn resources (currently the temporary impersonation webhook) on every exit
+   * path, including the throws that bypass {@link ChatResponseSink.finalize}. Must be idempotent.
+   */
+  cleanup?(): Promise<void>;
 }
 
 interface ChatPersonaResponse {

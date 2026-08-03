@@ -51,11 +51,27 @@ export async function runGenerationTurn(
   context: ChatTurnContext,
   responseSink: ChatResponseSink,
 ): Promise<GenerationTurnResult> {
-  const responseTarget = await responseSink.prepare?.(context);
-  if (responseTarget) {
-    context.responseTarget = responseTarget;
-  }
+  try {
+    // Inside the try because prepare() is what creates the temporary webhook: a throw in the
+    // channel-lock bookkeeping that follows creation would otherwise strand it with no cleanup.
+    const responseTarget = await responseSink.prepare?.(context);
+    if (responseTarget) {
+      context.responseTarget = responseTarget;
+    }
 
+    return await runGenerationAttempts(context, responseSink);
+  } finally {
+    // emitGenerationError rethrows for user impersonation, so the error handler in
+    // runGenerationAttempts can itself throw and never reach finalize. Without this the
+    // turn's temporary webhook would survive in the channel.
+    await responseSink.cleanup?.();
+  }
+}
+
+async function runGenerationAttempts(
+  context: ChatTurnContext,
+  responseSink: ChatResponseSink,
+): Promise<GenerationTurnResult> {
   try {
     const attempts = await buildGenerationAttempts(context);
     const failures: FallbackNoticeAttempt[] = [];

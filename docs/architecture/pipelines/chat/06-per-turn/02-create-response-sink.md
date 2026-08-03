@@ -31,6 +31,7 @@ interface ChatResponseSink {
   emitStreamResult(result: StreamResult): Promise<void>;
   emitError(error: unknown): Promise<void>;
   finalize(result: GenerationTurnResult): Promise<void>;
+  cleanup?(): Promise<void>;
 }
 ```
 
@@ -92,13 +93,19 @@ After `prepare()` runs:
 - `context.responseTarget` is set (to the resolved target or `undefined`).
 - The channel lock's `activeTurnState` reflects this turn's persona +
   impersonation identity.
-- A temporary impersonation webhook, if created, will be deleted in
-  `finalize` regardless of generation outcome.
+- A temporary impersonation webhook, if created, will be deleted before
+  `runGenerationTurn` returns, regardless of generation outcome.
 
-After `finalize()` runs:
+After `finalize()` *or* `cleanup()` runs:
 
 - Any temporary webhook created during `prepare` has been deleted (best-effort
   — failures are logged, not thrown).
+
+`finalize` alone is not sufficient to guarantee this. `emitGenerationError`
+rethrows for user impersonation, so the generation stage's own error handler
+can throw and skip `finalize` entirely. `runGenerationTurn` therefore calls
+`cleanup()` from a `finally` that wraps `prepare` as well as the attempt loop.
+Deletion is guarded so the two entry points cannot both issue it.
 
 ## Extension points
 
