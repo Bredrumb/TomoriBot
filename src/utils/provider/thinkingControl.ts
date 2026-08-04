@@ -143,7 +143,7 @@ function resolveConfiguredThinkingLevel(value: string | null | undefined): Think
   return value && isThinkingLevelValue(value) ? value : DEFAULT_THINKING_LEVEL;
 }
 
-function resolveEffectiveThinkingLevel(
+export function resolveEffectiveThinkingLevel(
   configuredLevel: string | null | undefined,
   forceReason?: boolean,
 ): ThinkingLevelValue {

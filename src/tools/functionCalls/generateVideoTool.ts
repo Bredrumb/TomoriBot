@@ -23,10 +23,12 @@ import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
-import { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { ProviderNativeVideoResolution } from "@/types/provider/featureInterfaces";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
+import { MessageIdMap } from "@/utils/text/messageIdMap";
+import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
+import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -180,13 +182,6 @@ export class GenerateVideoTool extends BaseTool {
     filename: string,
     elapsedMs: number,
   ): Promise<import("discord.js").Message> {
-    const recordOutputMessage = (message: import("discord.js").Message): import("discord.js").Message => {
-      context.streamContext?.recordTurnOutputMessage?.(
-        message,
-        context.activePersonaId ?? context.tomoriState.persona_id,
-      );
-      return message;
-    };
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
@@ -199,21 +194,19 @@ export class GenerateVideoTool extends BaseTool {
         const webhookAttachment = new AttachmentBuilder(videoData, {
           name: filename,
         });
-        return recordOutputMessage(
-          await sendWebhookMessageWithIdentity(
-            context.webhook,
-            {
-              files: [webhookAttachment],
-              ...componentsPayload,
-              withComponents: true,
-              ...(threadId ? { threadId } : {}),
-            },
-            {
-              username: context.personaUsername,
-              avatarUrl: context.personaAvatarUrl,
-              avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
-            },
-          ),
+        return await sendWebhookMessageWithIdentity(
+          context.webhook,
+          {
+            files: [webhookAttachment],
+            ...componentsPayload,
+            withComponents: true,
+            ...(threadId ? { threadId } : {}),
+          },
+          {
+            username: context.personaUsername,
+            avatarUrl: context.personaAvatarUrl,
+            avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+          },
         );
       } catch (error) {
         log.warn(
@@ -224,19 +217,17 @@ export class GenerateVideoTool extends BaseTool {
           const webhookAttachment = new AttachmentBuilder(videoData, {
             name: filename,
           });
-          return recordOutputMessage(
-            await sendWebhookMessageWithIdentity(
-              context.webhook,
-              {
-                files: [webhookAttachment],
-                ...(threadId ? { threadId } : {}),
-              },
-              {
-                username: context.personaUsername,
-                avatarUrl: context.personaAvatarUrl,
-                avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
-              },
-            ),
+          return await sendWebhookMessageWithIdentity(
+            context.webhook,
+            {
+              files: [webhookAttachment],
+              ...(threadId ? { threadId } : {}),
+            },
+            {
+              username: context.personaUsername,
+              avatarUrl: context.personaAvatarUrl,
+              avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+            },
           );
         } catch (fallbackError) {
           const discordError = fallbackError as Error & {
@@ -267,12 +258,10 @@ export class GenerateVideoTool extends BaseTool {
       const channelAttachment = new AttachmentBuilder(videoData, {
         name: filename,
       });
-      return recordOutputMessage(
-        await context.channel.send({
-          files: [channelAttachment],
-          ...componentsPayload,
-        }),
-      );
+      return await context.channel.send({
+        files: [channelAttachment],
+        ...componentsPayload,
+      });
     } catch (error) {
       log.warn(
         "Failed to send generated video with Components V2, falling back to attachment-only message",
@@ -282,7 +271,7 @@ export class GenerateVideoTool extends BaseTool {
         const channelAttachment = new AttachmentBuilder(videoData, {
           name: filename,
         });
-        return recordOutputMessage(await context.channel.send({ files: [channelAttachment] }));
+        return await context.channel.send({ files: [channelAttachment] });
       } catch (fallbackError) {
         const discordError = fallbackError as Error & {
           code?: string | number;

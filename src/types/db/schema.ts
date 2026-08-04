@@ -1088,6 +1088,8 @@ export const reminderSchema = z.object({
   user_nickname: z.string(), // Target user's nickname for display
   reminder_purpose: z.string(), // What the reminder is for
   reminder_time: z.date(), // When to trigger the reminder (TIMESTAMP WITH TIME ZONE)
+  next_attempt_at: z.date().nullable().optional(), // Retry lease; canonical cadence stays in reminder_time
+  delivery_retry_count: z.number().int().nonnegative().default(0),
   repetition_interval_hours: z.number().int().nullable().optional(), // Legacy: repeat interval in hours
   repetition_interval_minutes: z.number().int().nullable().optional(), // Optional: repeat interval in minutes
   repeat_remaining_count: z.number().int().nullable().optional(), // Optional: finite recurring reminders delete at 0
