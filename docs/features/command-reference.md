@@ -174,25 +174,25 @@ Manage stored memories and documents.
 
 ## `/model`
 
-Model commands.
+Manage this server's default AI models.
 
 | Command | Summary |
 |---|---|
-| `/model embedding` | Change the embedding model used for document retrieval. |
-| `/model fallback` | Set backup models to use if the primary model fails, or clear slots with None. |
-| `/model image` | Change the image generation model for this server. |
+| `/model embedding` | Change this server's embedding model used for document retrieval. |
+| `/model fallback` | Set this server's backup text models, or clear slots with None. |
+| `/model image` | Change this server's image generation model. |
 | `/model logit-bias add` | Add comma-separated logit bias entries with one shared bias value. |
 | `/model logit-bias remove` | Remove saved logit bias entries. |
 | `/model logit-bias upload` | Upload SillyTavern-style logit bias JSON entries. |
 | `/model override remove` | Remove channel and persona model overrides. |
-| `/model parameters` | Update saved sampler settings for a provider. |
-| `/model speech` | Choose the active speech endpoint. |
+| `/model parameters` | Update this server's saved sampler settings for a provider. |
+| `/model speech` | Choose this server's active speech endpoint. |
 | `/model stop-strings add` | Add server-wide stop strings. |
 | `/model stop-strings manage` | Manage server-wide stop strings and the speaker-pattern stop behavior. |
-| `/model text` | Change the underlying AI model that I use. |
-| `/model transcription` | Choose the active transcription endpoint. |
-| `/model video` | Change the video generation model for this server. |
-| `/model vision` | Set a dedicated vision model for image analysis when your chat model can't see images. |
+| `/model text` | Change this server's default text model. |
+| `/model transcription` | Choose this server's active transcription endpoint. |
+| `/model video` | Change this server's video generation model. |
+| `/model vision` | Set this server's vision model for when its chat model can't see images. |
 
 ## `/novelai`
 
@@ -281,20 +281,20 @@ Manage your personal settings
 | `/personal image-tags` | Set comma-separated image tags for your physical appearance to assist image generation. |
 | `/personal impersonate prompt` | Set a reusable prompt that tells me how to impersonate you. |
 | `/personal language` | Set your preferred language for my interface. |
-| `/personal model fallback` | Set fallback models for your active personal text provider, or clear slots with None. |
+| `/personal model fallback` | Set fallback models for your personal text override, or clear slots with None. |
 | `/personal nickname` | Change the name I use to refer to you. |
 | `/personal openrouter-model add` | Register an OpenRouter model codename for your personal provider list. |
 | `/personal openrouter-model remove` | Remove registered OpenRouter models from your personal provider list. |
-| `/personal parameters` | Adjust sampler settings for your personal providers. |
+| `/personal parameters` | Adjust sampler settings for your personal providers, not this server's. |
 | `/personal privacy` | Control personal memory storage and privacy settings |
-| `/personal provider add` | Add or update a personal provider API key. |
-| `/personal provider model-embedding` | Pick the embedding model for one of your personal providers. |
-| `/personal provider model-image` | Pick the image model for one of your personal providers. |
-| `/personal provider model-text` | Pick the text model for one of your personal providers. |
-| `/personal provider model-video` | Pick the video model for one of your personal providers. |
-| `/personal provider model-vision` | Pick the vision model for one of your personal providers. |
-| `/personal provider remove` | Remove one of your saved personal providers. |
-| `/personal provider toggle-models` | Enable or disable which personal models override the server. |
+| `/personal provider add` | Save your API key and enable its default personal text model everywhere. |
+| `/personal provider model-embedding` | Select and enable your personal embedding model, used in every server. |
+| `/personal provider model-image` | Select and enable your personal image model, used in every server. |
+| `/personal provider model-text` | Select and enable your personal text model, used in every server. |
+| `/personal provider model-video` | Select and enable your personal video model, used in every server. |
+| `/personal provider model-vision` | Select and enable your personal vision model, used in every server. |
+| `/personal provider remove` | Remove one of your cross-server personal provider configurations. |
+| `/personal provider toggle-models` | Choose which capabilities use your personal provider instead of the server's. |
 | `/personal spotlight manage` | Remove your active personal spotlights. Use /help spotlight to learn more. |
 | `/personal spotlight set` | Set a personal persona spotlight for one channel. Use /help spotlight to learn more. |
 | `/personal stm` | Configure STM (short-term memory) settings |
@@ -302,16 +302,16 @@ Manage your personal settings
 
 ## `/provider`
 
-Manage saved provider configurations
+Manage this server's shared AI providers.
 
 | Command | Summary |
 |---|---|
-| `/provider add` | Add or update a saved provider configuration and activate its saved text model. |
+| `/provider add` | Save credentials for this server and activate its saved text model. |
 | `/provider api-key rotation` | Manage API key rotation for load balancing and failover. |
 | `/provider custom-endpoint add` | Register a model under a custom endpoint label (reuse the label to add more). |
 | `/provider custom-endpoint edit` | Edit fields on a registered custom endpoint. |
 | `/provider custom-endpoint remove` | Remove selected capabilities from labeled custom endpoints. |
-| `/provider remove` | Remove a saved provider configuration. |
+| `/provider remove` | Remove a saved provider configuration from this server. |
 
 ## `/scheduled-task`
 

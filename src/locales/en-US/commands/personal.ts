@@ -133,7 +133,7 @@ export default {
       },
     },
     provider: {
-      description: `Manage your personal AI providers.`,
+      description: `Manage AI providers used for your own requests in every server.`,
       no_saved_title: `No Personal Providers`,
       no_saved_description: `You do not have any saved personal providers yet. Add one with \`/personal provider add\`.`,
       capability_text: `Text`,
@@ -142,83 +142,121 @@ export default {
       capability_video: `Video`,
       capability_vision: `Vision`,
       model_success_title: `Personal Model Updated`,
+      scope_notice: `This affects only your own requests, but follows you across every server where you use TomoriBot.`,
+      routing_personal: `Personal / {provider}`,
+      routing_server_default: `Server default`,
+      activation_confirm_title: `Enable Personal Override?`,
+      activation_confirm_description: `This enables your personal **{capability}** provider across every server where you use TomoriBot. Your requests will use **{provider}** / \`{model}\` instead of each server's default {capability} model.
+
+Continue?`,
+      activation_confirm_continue: `Yes, enable it`,
+      activation_confirm_cancel: `No, cancel`,
+      activation_cancelled_title: `No Changes Made`,
+      activation_cancelled_description: `Nothing was saved, so your personal routing is unchanged.`,
       add: {
-        description: `Add or update a personal provider API key.`,
+        description: `Save your API key and enable its default personal text model everywhere.`,
         modal_title: `Add Personal Provider`,
         provider_label: `Provider`,
-        provider_description: `Choose which provider to save for yourself.`,
+        provider_description: `Choose which provider to save for your own requests in every server.`,
         provider_placeholder: `Select a provider...`,
         api_key_label: `API Key`,
-        api_key_description: `Enter the API key you want me to use for your messages.`,
+        api_key_description: `The API key I use for your own requests. Never for anyone else's.`,
         api_key_placeholder: `Paste your API key here`,
         already_existing_suffix: `saved`,
         custom_deprecated_description: `Moved to /personal custom-endpoint add.`,
         custom_moved_title: `Custom Endpoint Moved`,
         custom_moved_description: `The legacy Custom Endpoint provider flow is deprecated. Register the endpoint with {custom_models_add_command}, then activate it with {model_text_command}. Use {help_custom_models_command} for the updated help page.`,
         success_title: `Personal Provider Saved`,
-        success_description: `{provider} was added to your personal provider vault. Your personal text provider is now enabled with \`{model_name}\`. Manage capability routing with \`/personal provider toggle-models\`.`,
-        updated_description: `{provider} was updated in your personal provider vault. Your personal text provider is now enabled with \`{model_name}\`.`,
+        success_description: `{provider} was added to your personal provider vault, and your personal **Text** override is now enabled with \`{model_name}\`.
+
+{scope_notice}
+
+Choose which capabilities use a personal override with \`/personal provider toggle-models\`.`,
+        updated_description: `{provider} was updated in your personal provider vault, and your personal **Text** override is now enabled with \`{model_name}\`.
+
+{scope_notice}`,
+        rotated_description: `Your saved {provider} credentials were updated. Your personal **Text** override stays enabled with \`{model_name}\`.
+
+{scope_notice}`,
       },
       remove: {
-        description: `Remove one of your saved personal providers.`,
+        description: `Remove one of your cross-server personal provider configurations.`,
         no_saved_title: `No Personal Providers`,
         no_saved_description: `You do not have any saved personal providers to remove.`,
         picker_title: `Remove Personal Provider`,
-        picker_description: `Choose which personal provider to remove.`,
+        picker_description: `Choose which personal provider to remove. It is deleted for every server, not just this one.`,
         success_title: `Personal Provider Removed`,
-        success_description: `Removed your personal {provider} configuration.`,
+        success_description: `Removed your personal {provider} configuration from every server. Capabilities it served fall back to each server's default, unless that server requires a personal provider.`,
       },
       "model-text": {
-        description: `Pick the text model for one of your personal providers.`,
+        description: `Select and enable your personal text model, used in every server.`,
       },
       "model-embedding": {
-        description: `Pick the embedding model for one of your personal providers.`,
+        description: `Select and enable your personal embedding model, used in every server.`,
       },
       "model-image": {
-        description: `Pick the image model for one of your personal providers.`,
+        description: `Select and enable your personal image model, used in every server.`,
       },
       "model-video": {
-        description: `Pick the video model for one of your personal providers.`,
+        description: `Select and enable your personal video model, used in every server.`,
       },
       "model-vision": {
-        description: `Pick the vision model for one of your personal providers.`,
+        description: `Select and enable your personal vision model, used in every server.`,
       },
       model_text: {
-        success_description: `Your personal text provider is now {provider} using \`{model}\`.`,
+        success_description: `**Text** now routes to your personal {provider} provider using \`{model}\`.
+
+{scope_notice}`,
       },
       model_embedding: {
-        success_description: `Your personal embedding provider is now {provider} using \`{model}\`.`,
+        success_description: `**Embedding** now routes to your personal {provider} provider using \`{model}\`.
+
+{scope_notice}`,
       },
       model_image: {
-        success_description: `Your personal image provider is now {provider} using \`{model}\`.`,
+        success_description: `**Image** now routes to your personal {provider} provider using \`{model}\`.
+
+{scope_notice}`,
       },
       model_video: {
-        success_description: `Your personal video provider is now {provider} using \`{model}\`.`,
+        success_description: `**Video** now routes to your personal {provider} provider using \`{model}\`.
+
+{scope_notice}`,
       },
       model_vision: {
-        success_description: `Your personal vision provider is now {provider} using \`{model}\`.`,
+        success_description: `**Vision** now routes to your personal {provider} provider using \`{model}\`.
+
+{scope_notice}`,
       },
       "toggle-models": {
-        description: `Enable or disable which personal models override the server.`,
+        description: `Choose which capabilities use your personal provider instead of the server's.`,
         modal_title: `Toggle Personal Provider Capabilities`,
         group_label: `Capabilities`,
-        group_description: `Unchecked capabilities will use a server's default instead. Check to use your own provider.`,
+        group_description: `Checked capabilities are personal overrides in every server. Unchecked use the server default.`,
         provider_description: `Assigned provider: {provider}`,
-        none_set_description: `None set, pick a model first using \`/personal provider model-\``,
+        none_set_description: `Server default. Pick a model with \`/personal provider model-\` to enable a personal override.`,
         missing_model_title: `Model Required`,
         missing_model_description: `{capability} does not have a personal model selected yet.`,
         success_title: `Personal Routing Updated`,
         success_description: `Updated your personal capability routing.
 
-{active_summary}`,
+{active_summary}
+
+{scope_notice}`,
+        confirm_title: `Enable Personal Overrides?`,
+        confirm_description: `These capabilities will switch from the server default to your personal provider across every server where you use TomoriBot:
+
+{newly_enabled}
+
+Continue?`,
       },
     },
     model: {
-      description: `Manage personal model failover.`,
+      description: `Manage model settings for your personal provider overrides.`,
       fallback: {
-        description: `Set fallback models for your active personal text provider, or clear slots with None.`,
+        description: `Set fallback models for your personal text override, or clear slots with None.`,
         no_provider_title: `No Active Personal Text Provider`,
-        no_provider_description: `Enable a personal text provider first with \`/personal provider model-text\` and \`/personal provider toggle-models\`.`,
+        no_provider_description: `Enable a personal text override first with \`/personal provider add\` or \`/personal provider model-text\`.`,
         primary_conflict_title: `Invalid Selection`,
         primary_conflict_description: `One or more selected fallback models matches your personal primary model \`{model}\` for this provider. Please choose different models.`,
         success_title: `Personal Fallback Updated`,
@@ -230,12 +268,14 @@ export default {
       },
     },
     parameters: {
-      description: `Adjust sampler settings for your personal providers.`,
+      description: `Adjust sampler settings for your personal providers, not this server's.`,
       provider_description: `Optional: choose a saved personal provider. Defaults to your active personal text provider.`,
       no_provider_title: `No Personal Provider Selected`,
-      no_provider_description: `Save a personal provider first, or enable a personal text provider to use it as the default target.`,
+      no_provider_description: `Save a personal provider first, or enable a personal text override to use it as the default target.`,
       success_title: `Personal Samplers Updated`,
-      success_description: `Updated personal sampler settings for {provider}: {settings}`,
+      success_description: `Updated personal sampler settings for {provider}: {settings}
+
+These samplers apply to your own requests in every server. This server's samplers are unchanged.`,
     },
     config: {
       description: `Manage your personal configuration data.`,

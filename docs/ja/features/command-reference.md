@@ -172,25 +172,25 @@ Botコマンドです。
 
 ## `/model`
 
-モデルコマンドです。
+このサーバーの既定AIモデルを管理します。
 
 | コマンド | 概要 |
 |---|---|
-| `/model embedding` | ドキュメントの検索に使用する埋め込みモデルを変更します。 |
-| `/model fallback` | プライマリモデルが失敗した場合に使用するバックアップモデルを設定するか、Noneでスロットをクリアします。 |
+| `/model embedding` | このサーバーで文書検索に使う埋め込みモデルを変更します。 |
+| `/model fallback` | このサーバーのバックアップテキストモデルを設定し、なしで各スロットをクリアできます。 |
 | `/model image` | このサーバーの画像生成モデルを変更します。 |
 | `/model logit-bias add` | 共有のバイアス値を1つ持つ、カンマ区切りのロジットバイアスエントリを追加します。 |
 | `/model logit-bias remove` | 保存されたロジットバイアスエントリを削除します。 |
 | `/model logit-bias upload` | SillyTavernスタイルのロジットバイアスJSONエントリをアップロードします。 |
 | `/model override remove` | チャンネルおよびペルソナのモデルオーバーライドを削除します。 |
-| `/model parameters` | プロバイダーの保存されたサンプラー設定を更新します。 |
-| `/model speech` | アクティブな音声エンドポイントを選択します。 |
+| `/model parameters` | このサーバーのプロバイダーごとの保存済みサンプラー設定を更新します。 |
+| `/model speech` | このサーバーの音声生成エンドポイントを選択します。 |
 | `/model stop-strings add` | サーバー全体の中止文字列を追加します。 |
 | `/model stop-strings manage` | サーバー全体の中止文字列と、話者パターンの停止動作を管理します。 |
-| `/model text` | トモリが使用する基盤となるAIモデルを変更します。 |
-| `/model transcription` | アクティブな文字起こしエンドポイントを選択します。 |
+| `/model text` | このサーバーの既定テキストモデルを変更します。 |
+| `/model transcription` | このサーバーの文字起こしエンドポイントを選択します。 |
 | `/model video` | このサーバーの動画生成モデルを変更します。 |
-| `/model vision` | チャットモデルが画像を見ることができない場合の、画像分析用の専用ビジョンモデルを設定します。 |
+| `/model vision` | チャットモデルが画像を見られない場合に使うこのサーバーのビジョンモデルを設定します。 |
 
 ## `/novelai`
 
@@ -279,20 +279,20 @@ OpenRouter固有のモデルと設定を管理します。
 | `/personal image-tags` | 画像生成を支援するために、あなたの身体的な外観を表すカンマ区切りの画像タグを設定します。 |
 | `/personal impersonate prompt` | トモリがどのようにあなたになりすますべきかを指示する、再利用可能なプロンプトを設定します。 |
 | `/personal language` | トモリのインターフェースの優先言語を設定します。 |
-| `/personal model fallback` | アクティブな個人のテキストプロバイダーのフォールバックモデルを設定するか、Noneでスロットをクリアします。 |
+| `/personal model fallback` | 個人テキスト上書きのフォールバックモデルを設定し、なしで各スロットをクリアできます。 |
 | `/personal nickname` | トモリがあなたを呼ぶときの名前を変更します。 |
 | `/personal openrouter-model add` | 個人プロバイダーリストにOpenRouterモデルのコードネームを登録します。 |
 | `/personal openrouter-model remove` | 個人プロバイダーリストから登録されたOpenRouterモデルを削除します。 |
-| `/personal parameters` | 個人プロバイダーのサンプラー設定を調整します。 |
+| `/personal parameters` | このサーバーではなく、個人プロバイダーのサンプラー設定を調整します。 |
 | `/personal privacy` | 個人メモリーの保存とプライバシー設定を制御します。 |
-| `/personal provider add` | 個人プロバイダーのAPIキーを追加または更新します。 |
-| `/personal provider model-embedding` | 個人プロバイダーのいずれかの埋め込みモデルを選択します。 |
-| `/personal provider model-image` | 個人プロバイダーのいずれかの画像モデルを選択します。 |
-| `/personal provider model-text` | 個人プロバイダーのいずれかのテキストモデルを選択します。 |
-| `/personal provider model-video` | 個人プロバイダーのいずれかの動画モデルを選択します。 |
-| `/personal provider model-vision` | 個人プロバイダーのいずれかのビジョンモデルを選択します。 |
-| `/personal provider remove` | 保存された個人プロバイダーの1つを削除します。 |
-| `/personal provider toggle-models` | どの個人的な機能がサーバーの設定をオーバーライドするかを有効または無効にします。 |
+| `/personal provider add` | APIキーを保存し、既定の個人テキストモデルを全サーバーで有効化します。 |
+| `/personal provider model-embedding` | 全サーバーで使う個人埋め込みモデルを選択して有効化します。 |
+| `/personal provider model-image` | 全サーバーで使う個人画像モデルを選択して有効化します。 |
+| `/personal provider model-text` | 全サーバーで使う個人テキストモデルを選択して有効化します。 |
+| `/personal provider model-video` | 全サーバーで使う個人動画モデルを選択して有効化します。 |
+| `/personal provider model-vision` | 全サーバーで使う個人ビジョンモデルを選択して有効化します。 |
+| `/personal provider remove` | 全サーバー共通の個人プロバイダー設定を削除します。 |
+| `/personal provider toggle-models` | どの機能でサーバー既定ではなく個人プロバイダーを使うか選択します。 |
 | `/personal spotlight manage` | アクティブな個人スポットライトを削除します。詳細については`/help spotlight`を使用してください。 |
 | `/personal spotlight set` | 1つのチャンネルに個人のペルソナスポットライトを設定します。詳細については`/help spotlight`を使用してください。 |
 | `/personal stm` | STM（短期記憶）設定を構成します。 |
@@ -300,16 +300,16 @@ OpenRouter固有のモデルと設定を管理します。
 
 ## `/provider`
 
-保存されたプロバイダー設定を管理します。
+このサーバー共通のAIプロバイダーを管理します。
 
 | コマンド | 概要 |
 |---|---|
-| `/provider add` | 保存されたプロバイダー設定を追加または更新し、そのデフォルトのテキストモデルをアクティブにします。 |
+| `/provider add` | このサーバー用の認証情報を保存し、保存済みテキストモデルを有効化します。 |
 | `/provider api-key rotation` | 負荷分散とフェイルオーバーのためにAPIキーのローテーションを管理します。 |
 | `/provider custom-endpoint add` | カスタムエンドポイントのラベルの下にモデルを登録します（ラベルを再利用してさらに追加できます）。 |
 | `/provider custom-endpoint edit` | 登録されたカスタムエンドポイントのフィールドを編集します。 |
 | `/provider custom-endpoint remove` | ラベル付けされたカスタムエンドポイントから選択した機能を削除します。 |
-| `/provider remove` | 保存されたプロバイダー設定を削除します。 |
+| `/provider remove` | このサーバーから保存済みプロバイダー設定を削除します。 |
 
 ## `/scheduled-task`
 

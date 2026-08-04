@@ -33,6 +33,17 @@ interface NoticeOptions {
   descriptionVars?: Record<string, string>;
 }
 
+/**
+ * What lands on the anchor message. The cross-server activation confirmation renders a raw
+ * Components V2 container rather than a notice, so `components` is what distinguishes it.
+ */
+type AnchorPayload = Partial<NoticeOptions> & { components?: unknown[] };
+
+/** True for the activation confirmation step, false for every notice terminal. */
+function isConfirmationPayload(payload: AnchorPayload): boolean {
+  return Array.isArray(payload.components);
+}
+
 /** A capability row as `assignPersonalCapabilityToProvider` hands it to the updater. */
 interface CapabilityRow {
   provider: string;
@@ -56,7 +67,7 @@ interface AssignCall {
 
 const chronology: string[] = [];
 const infoReplies: NoticeOptions[] = [];
-const replacements: NoticeOptions[] = [];
+const replacements: AnchorPayload[] = [];
 const initialPayloads: NoticeOptions[] = [];
 const assignCalls: AssignCall[] = [];
 const errorLogs: Array<{ context: ErrorContext }> = [];
@@ -73,6 +84,13 @@ interface Scenario {
   /** Saved fallback chain the updater sees on the row it is handed. */
   fallbackModelRefs: Array<{ type: string; id: number }>;
   customPrimaryEndpointMode: boolean;
+  /**
+   * Merged into the rows the picker step reads. Presetting a capability here makes the command
+   * see it as already routing personally, which is what suppresses the activation confirmation.
+   */
+  activeCapabilityRow: Partial<CapabilityRow> | null;
+  /** Custom id the fake collector hands back, used to decline the activation confirmation. */
+  buttonCustomId: string;
 }
 
 let scenario: Scenario;
@@ -85,6 +103,8 @@ function makeScenario(): Scenario {
     imageGenerationStyle: "standard",
     fallbackModelRefs: [],
     customPrimaryEndpointMode: false,
+    activeCapabilityRow: null,
+    buttonCustomId: "opener",
   };
 }
 
@@ -172,7 +192,11 @@ scopedMock.module("@/utils/provider/savedProviderConfig", () => ({
   ...realSavedProviderConfig,
   loadSavedProvidersForCapability: async () => [],
   loadUserSavedProvidersForCapability: async () =>
-    scenario.providers.map((provider) => ({ ...baselineRow(provider), api_key: "encrypted-key" })),
+    scenario.providers.map((provider) => ({
+      ...baselineRow(provider),
+      ...(scenario.activeCapabilityRow ?? {}),
+      api_key: "encrypted-key",
+    })),
 }));
 
 // The commands under test only touch `llmModelRepo`. Spreading the real barrel
@@ -265,7 +289,7 @@ scopedMock.module("@/utils/text/localizer", () => ({
 // "open selector" button, the modal opens and submits the scenario's value, and every
 // terminal `replace` is recorded so assertions can inspect what landed on the message.
 function makeAnchorController() {
-  const replace = async (payload: NoticeOptions) => {
+  const replace = async (payload: AnchorPayload) => {
     chronology.push("message.replace");
     replacements.push(payload);
     return {};
@@ -279,7 +303,7 @@ function makeAnchorController() {
       // id, so this fake stays agnostic of each subcommand's ID_ROOT.
       awaitMessageComponent: async () => ({
         id: "opener-button",
-        customId: "opener",
+        customId: scenario.buttonCustomId,
         user: { id: "user-1" },
       }),
     }),
@@ -341,6 +365,10 @@ const subcommands = [
     name: "model-text",
     module: "@/commands/personal/provider/model-text",
     capability: "text",
+    /** Row shape that makes this capability read as an override that is already switched on. */
+    activeCapabilityRow: { enabled_capabilities: ["text"], llm_id: 11 },
+    /** Decline button id for this command's activation confirmation (`${ID_ROOT}_activate_no`). */
+    declineCustomId: "personal_model_text_activate_no",
     submittedValue: "text-model",
     successDescriptionKey: "commands.personal.provider.model_text.success_description",
     expectedModelName: "text-model",
@@ -350,6 +378,10 @@ const subcommands = [
     name: "model-vision",
     module: "@/commands/personal/provider/model-vision",
     capability: "vision",
+    /** Row shape that makes this capability read as an override that is already switched on. */
+    activeCapabilityRow: { enabled_capabilities: ["vision"], vision_llm_id: 11 },
+    /** Decline button id for this command's activation confirmation (`${ID_ROOT}_activate_no`). */
+    declineCustomId: "personal_model_vision_activate_no",
     submittedValue: "text-model",
     successDescriptionKey: "commands.personal.provider.model_vision.success_description",
     expectedModelName: "text-model",
@@ -359,6 +391,10 @@ const subcommands = [
     name: "model-video",
     module: "@/commands/personal/provider/model-video",
     capability: "video",
+    /** Row shape that makes this capability read as an override that is already switched on. */
+    activeCapabilityRow: { enabled_capabilities: ["video"], video_model_id: 22 },
+    /** Decline button id for this command's activation confirmation (`${ID_ROOT}_activate_no`). */
+    declineCustomId: "personal_model_video_activate_no",
     submittedValue: "22",
     successDescriptionKey: "commands.personal.provider.model_video.success_description",
     expectedModelName: "video-model",
@@ -368,6 +404,10 @@ const subcommands = [
     name: "model-image",
     module: "@/commands/personal/provider/model-image",
     capability: "image",
+    /** Row shape that makes this capability read as an override that is already switched on. */
+    activeCapabilityRow: { enabled_capabilities: ["image"], diffusion_model_id: 33 },
+    /** Decline button id for this command's activation confirmation (`${ID_ROOT}_activate_no`). */
+    declineCustomId: "personal_model_image_activate_no",
     submittedValue: "33",
     successDescriptionKey: "commands.personal.provider.model_image.success_description",
     expectedModelName: "image-model",
@@ -377,6 +417,10 @@ const subcommands = [
     name: "model-embedding",
     module: "@/commands/personal/provider/model-embedding",
     capability: "embedding",
+    /** Row shape that makes this capability read as an override that is already switched on. */
+    activeCapabilityRow: { enabled_capabilities: ["embedding"], embedding_model_id: 44 },
+    /** Decline button id for this command's activation confirmation (`${ID_ROOT}_activate_no`). */
+    declineCustomId: "personal_model_embedding_activate_no",
     submittedValue: "44",
     successDescriptionKey: "commands.personal.provider.model_embedding.success_description",
     expectedModelName: "embedding-model",
@@ -421,7 +465,11 @@ describe("personal provider model-* anchor workflow", () => {
         expect.objectContaining({
           titleKey: "commands.personal.provider.model_success_title",
           descriptionKey: subcommand.successDescriptionKey,
-          descriptionVars: { provider: "provider-a", model: subcommand.expectedModelName },
+          descriptionVars: {
+            provider: "provider-a",
+            model: subcommand.expectedModelName,
+            scope_notice: "commands.personal.provider.scope_notice",
+          },
         }),
       );
       // The success notice is rendered only after the write returns.
@@ -439,6 +487,41 @@ describe("personal provider model-* anchor workflow", () => {
       expect(
         replacements.some((options) => options.titleKey === "commands.personal.provider.model_success_title"),
       ).toBe(false);
+    });
+
+    it(`${subcommand.name} confirms before newly enabling a cross-server personal override`, async () => {
+      scenario.submittedValue = subcommand.submittedValue;
+
+      await runSubcommand(subcommand.module);
+
+      // The confirmation must land before the write, never after it.
+      const confirmIndex = replacements.findIndex(isConfirmationPayload);
+      expect(confirmIndex).toBeGreaterThanOrEqual(0);
+      expect(chronology.indexOf("message.replace")).toBeLessThan(chronology.indexOf("repo.assign"));
+      expect(assignCalls).toHaveLength(1);
+    });
+
+    it(`${subcommand.name} skips the confirmation when the capability is already personal`, async () => {
+      scenario.submittedValue = subcommand.submittedValue;
+      scenario.activeCapabilityRow = subcommand.activeCapabilityRow;
+
+      await runSubcommand(subcommand.module);
+
+      // Switching models inside an active override changes no scope, so re-prompting is noise.
+      expect(replacements.some(isConfirmationPayload)).toBe(false);
+      expect(assignCalls).toHaveLength(1);
+    });
+
+    it(`${subcommand.name} writes nothing when the activation confirmation is declined`, async () => {
+      scenario.submittedValue = subcommand.submittedValue;
+      scenario.buttonCustomId = subcommand.declineCustomId;
+
+      await runSubcommand(subcommand.module);
+
+      expect(assignCalls).toHaveLength(0);
+      expect(replacements).toContainEqual(
+        expect.objectContaining({ titleKey: "commands.personal.provider.activation_cancelled_title" }),
+      );
     });
 
     it(`${subcommand.name} opens the anchor message with the no-providers notice and stops`, async () => {

@@ -147,6 +147,33 @@ misdiagnoses a billing failure as a bad credential.
 A provider that reports billing denial under a non-402 status (Z.ai uses 429) is re-coded in its
 error formatter so it does not present as a rate limit.
 
+## Credential-scoped recovery tips
+
+Which classifier fires decides *what* to advise; `StreamContext.textCredentialSource` decides
+*which commands* the advice names. It is the resolved credential policy of the turn
+(`"server" | "personal"`), threaded from `ChatTurn` through `StreamingContext` and
+`buildStreamContext()`. Scope is never inferred from the provider or model name, because both
+scopes can run the same provider with the same model.
+
+`resolveProviderErrorPresentation()` resolves every command-bearing tip through a `scoped()`
+helper that appends `_personal` to the locale key when the failing request used a personal key,
+so `genai.tips.model_fallback` becomes `genai.tips.model_fallback_personal`. Two rules fall out
+of that and are easy to regress:
+
+- **`genai.tips.api_key_rotation` is suppressed entirely on personal failures.** Rotation pools
+  are a server-scoped, manager-only feature, so the tip would point a normal member at a command
+  they cannot run and that could not repair their own key anyway.
+- **`modelFallbackTip` gates on `!isPersonal`.** A personal text override reads the *user's*
+  fallback chain, so `tomoriState.fallback_chain` says nothing about whether that request had a
+  fallback available.
+
+Personal text failures additionally get `genai.tips.disable_personal_text_override`, which offers
+the fastest recovery (hand the turn back to the server default) and carries the User BYOK caveat,
+since a server in that mode rejects server fallback and will still require a personal provider.
+
+Non-chat provider calls may leave `textCredentialSource` unset; the tips then resolve to their
+server-scoped form, which is the correct default for configuration a member does not own.
+
 ## Extension points
 
 | Surface | Plugin-relevance |

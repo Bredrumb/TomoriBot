@@ -37,7 +37,9 @@ Brave SearchはAIプロバイダーとは別であり、ウェブ検索を強化
 
 ## モデルの選択
 
-プロバイダーを設定した後、各機能で使用するモデルを選択します。
+`/provider`と`/model`は**サーバースコープ**です。このサーバーの全員が使う共通の既定を設定するもので、実行には必要なサーバー権限が要ります。個々のメンバーは`/personal provider`で自分自身のリクエスト用に既定を上書きでき、その設定はTomoriBotを使うすべてのサーバーに引き継がれます。詳しくは[パーソナライゼーション](/ja/features/knowledge/personalization/#個人のプロバイダー)を参照してください。
+
+プロバイダーを設定した後、このサーバーの各機能で使用するモデルを選択します。
 
 - `/model text`：メインのチャットモデル
 - `/model vision`：ビジョンモデル（チャットモデルが画像を読み取れない場合に画像を読み取るため）
@@ -46,7 +48,7 @@ Brave SearchはAIプロバイダーとは別であり、ウェブ検索を強化
 - `/model embedding`：[ドキュメントナレッジベース](/ja/features/knowledge/memory/#document-knowledge-base-rag)用の埋め込み（embeddings）
 - `/model speech` / `/model transcription`：[音声](/ja/features/capabilities/media-generation/tts-and-stt/)
 
-また、`/config api-key rotation`を使用して、自動フェイルオーバーと負荷分散用のバックアップキーを管理することもできます。
+また、`/provider api-key rotation`を使用して、このサーバーの自動フェイルオーバーと負荷分散用のバックアップキーを管理することもできます。
 
 ## カスタムエンドポイント
 

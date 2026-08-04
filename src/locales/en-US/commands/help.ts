@@ -3,16 +3,16 @@ export default {
     "personal-provider": {
       description: `Learn how personal providers work.`,
       title: `Personal Providers`,
-      description_body: `Personal providers let your messages use your own API keys and models instead of the server's defaults.`,
+      description_body: `Personal providers let your own requests use your own API keys and models instead of a server's shared defaults.`,
       setup_field: `Setup`,
-      setup_value: `1. Run {add_command} to save a provider.
-2. Run {model_command} to choose a model.
-3. Run {toggle_command} to turn that capability on.`,
+      setup_value: `1. {add_command} saves a provider and immediately enables your personal **Text** model.
+2. {model_command} is optional. Use it only if you want a different text model than the default from step 1.
+3. {toggle_command} turns each capability's personal override on or off.`,
       behavior_field: `Behavior`,
-      behavior_value: `When enabled, your personal provider overrides the server for that capability. Thought logs attribute those turns, and you can tune them with {samplers_command} and {fallback_command}.`,
+      behavior_value: `An enabled capability overrides the server default for your requests only, across every server where you use TomoriBot. Selecting a model already enables that capability, so step 3 is mainly how you turn one back off. Thought logs attribute those turns, and you can tune them with {samplers_command} and {fallback_command}.`,
       byok_field: `BYOK Servers`,
       byok_value: `Servers can require member-provided providers with {byok_command}. If that mode is enabled, user-triggered messages need your personal provider before I can answer.`,
-      footer: `Your personal providers apply across every server you use TomoriBot in.`,
+      footer: `Server defaults live in /provider and /model. Personal overrides affect only your requests, in every server you use TomoriBot in.`,
     },
     custom_models: {
       description: `Learn how custom endpoints work.`,

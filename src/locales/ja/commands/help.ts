@@ -3,16 +3,16 @@ export default {
     "personal-provider": {
       description: `個人プロバイダーの仕組みを確認します。`,
       title: `個人プロバイダー`,
-      description_body: `個人プロバイダーを使うと、サーバー既定の設定ではなく、あなた自身のAPIキーとモデルでメッセージを処理できます。`,
+      description_body: `個人プロバイダーを使うと、サーバー共通の既定ではなく、あなた自身のAPIキーとモデルであなた自身のリクエストを処理できます。`,
       setup_field: `設定手順`,
-      setup_value: `1. {add_command} でプロバイダーを保存します。
-2. {model_command} でモデルを選びます。
-3. {toggle_command} でその機能を有効にします。`,
+      setup_value: `1. {add_command} でプロバイダーを保存すると、個人の **テキスト** モデルが同時に有効になります。
+2. {model_command} は任意です。手順1の既定モデル以外を使いたい場合にのみ使用します。
+3. {toggle_command} で機能ごとに個人上書きを有効化・無効化します。`,
       behavior_field: `動作`,
-      behavior_value: `有効にすると、その機能ではサーバー設定より個人プロバイダーが優先されます。思考ログにはその旨が記録され、{samplers_command} と {fallback_command} で調整できます。`,
+      behavior_value: `有効な機能は、TomoriBotを使うすべてのサーバーであなた自身のリクエストにのみサーバー既定を上書きします。モデルを選んだ時点でその機能は有効になるため、手順3は主に機能をオフに戻すためのものです。思考ログにはその旨が記録され、{samplers_command} と {fallback_command} で調整できます。`,
       byok_field: `BYOKサーバー`,
       byok_value: `{byok_command} により、メンバー自身のプロバイダーが必須になるサーバーがあります。このモードでは、ユーザー発言に対する応答に個人プロバイダーが必要です。`,
-      footer: `個人プロバイダー設定は、TomoriBot を使うすべてのサーバーで共通です。`,
+      footer: `サーバー既定は /provider と /model で管理します。個人上書きは、TomoriBotを使うすべてのサーバーであなたのリクエストにのみ影響します。`,
     },
     custom_models: {
       description: `カスタムエンドポイントの使い方を確認します。`,

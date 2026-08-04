@@ -383,6 +383,74 @@ export async function acquireModalOptionRange(
 }
 
 /**
+ * Renders a two-button confirm step on the anchor message and returns the unacknowledged
+ * Continue button, or null when the user declined or timed out (both rendered in place).
+ *
+ * Personal-scope model commands enable a cross-server override as a side effect of picking a
+ * model, so a capability moving off the server default needs an explicit acknowledgement before
+ * the write. The Continue button is deliberately left unacknowledged so the caller decides when
+ * the three-second ack lands relative to its own database work.
+ */
+export async function confirmPersonalOverrideActivation(
+  phase: AnchorPrivateWorkflowPhase,
+  modalPhase: PersonaWorkflowModalPhase,
+  userId: string,
+  locale: string,
+  details: { capability: string; provider: string; model: string },
+  idRoot: string,
+): Promise<ButtonInteraction | null> {
+  const prefix = `${idRoot}_activate`;
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.WARN.replace("#", ""), 16),
+    components: [
+      {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.personal.provider.activation_confirm_title")}`,
+      },
+      {
+        type: ComponentType.TextDisplay,
+        content: localizer(locale, "commands.personal.provider.activation_confirm_description", details),
+      },
+      {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            customId: `${prefix}_yes`,
+            label: localizer(locale, "commands.personal.provider.activation_confirm_continue"),
+            style: ButtonStyle.Success,
+          },
+          {
+            type: ComponentType.Button,
+            customId: `${prefix}_no`,
+            label: localizer(locale, "commands.personal.provider.activation_confirm_cancel"),
+            style: ButtonStyle.Danger,
+          },
+        ],
+      } satisfies ActionRowData<ButtonComponentData>,
+    ],
+  };
+
+  await modalPhase.replace({ components: [container], flags: MessageFlags.IsComponentsV2 });
+
+  const button = await awaitAnchorButton(phase, userId, prefix, locale);
+  if (!button) return null;
+  if (button.customId === `${prefix}_no`) {
+    await phase.useButton(button).replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.personal.provider.activation_cancelled_title",
+        descriptionKey: "commands.personal.provider.activation_cancelled_description",
+        color: ColorCode.WARN,
+      }),
+    );
+    return null;
+  }
+  return button;
+}
+
+/**
  * Opens the model-selection modal on the anchor message from `button`, routing the
  * `>25` case through the anchor range selector automatically. Returns the submitted
  * modal phase, or null when the flow ended without a submit, so cancel and timeout are

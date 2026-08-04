@@ -97,6 +97,13 @@ export interface StreamingContext {
   forceReason?: boolean; // Flag to indicate reasoning mode for enhanced AI responses
   isManuallyTriggered?: boolean; // Flag to indicate this stream was triggered by a manual command
   suppressUserErrors?: boolean; // Suppress user-facing error embeds during retries or non-deliberate chat turns
+  /**
+   * Whose credentials answered this turn's text request. Error recovery tips must name the
+   * commands that can actually repair the failing configuration, and scope cannot be inferred
+   * from the provider or model name because both scopes can run the same provider. Optional
+   * only for non-chat provider calls that have no user-scoped routing decision to report.
+   */
+  textCredentialSource?: "server" | "personal";
   forceModelFallback?: boolean; // Force suppress errors regardless of key availability (model fallback retries)
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
   disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)

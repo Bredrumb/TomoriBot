@@ -53,7 +53,13 @@ free credit — set a $5 usage limit in the Brave dashboard to avoid charges.
 
 ## Choosing Models
 
-After a provider is set, pick which model each capability uses:
+`/provider` and `/model` are **server-scoped**: they set the shared defaults every member of
+this server uses, and they need the required server permission. Individual members can override
+those defaults for their own requests with `/personal provider`, which follows them across every
+server they use TomoriBot in. See
+[Personalization](/features/knowledge/personalization/#your-own-providers) for that side.
+
+After a provider is set, pick which model each capability uses for this server:
 
 - `/model text` — the main chat model
 - `/model vision` — a vision model (for reading images when the chat model can't)
@@ -62,8 +68,8 @@ After a provider is set, pick which model each capability uses:
 - `/model embedding` — embeddings for the [document knowledge base](/features/knowledge/memory/#document-knowledge-base-rag)
 - `/model speech` / `/model transcription` — [voice](/features/capabilities/media-generation/tts-and-stt/)
 
-You can also manage backup keys for automatic failover and load balancing with
-`/config api-key rotation`.
+You can also manage this server's backup keys for automatic failover and load balancing with
+`/provider api-key rotation`.
 
 ## Custom Endpoints
 

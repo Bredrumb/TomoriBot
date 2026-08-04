@@ -67,7 +67,12 @@ export class StreamErrorUi {
         reason: providerError.type || "unknown",
       },
       color: ColorCode.ERROR,
-      tipKeys: ["genai.tips.refresh_context", "genai.tips.switch_model_provider"],
+      tipKeys: [
+        "genai.tips.refresh_context",
+        context.textCredentialSource === "personal"
+          ? "genai.tips.switch_model_provider_personal"
+          : "genai.tips.switch_model_provider",
+      ],
     }).catch((e) => log.warn("Stream: Failed to send error embed to channel", e));
   }
 
@@ -106,6 +111,8 @@ export class StreamErrorUi {
    * Tips are composed from atomic keys so conditional items stay declarative:
    * - `model_fallback` is only offered when the server has no fallback chain configured yet.
    * - OpenRouter-specific items (free-model list / model list) are appended only for that provider.
+   * - Every command-bearing tip resolves against `context.textCredentialSource`, so a failure on
+   *   the user's own key never recommends a manager-only server command that cannot repair it.
    * @param provider - The active stream provider (used to detect OpenRouter for conditional tips).
    * @returns The title key, ordered tip-item keys, and embed color.
    */
@@ -121,9 +128,20 @@ export class StreamErrorUi {
     // Detect the provider and whether a fallback chain already exists: both gate conditional tips.
     const providerName = provider.getProviderInfo().name;
     const isOpenRouter = providerName === "openrouter";
+    const isPersonal = context.textCredentialSource === "personal";
+
+    /** Picks the personal variant of a tip key when the failing request used a personal key. */
+    const scoped = (key: string): string => (isPersonal ? `${key}_personal` : key);
+
+    // A personal text override reads the user's own fallback chain, not the server's, so the
+    // server-side chain says nothing about whether this request had a fallback to fall back to.
     const hasFallbackModels =
-      (context.tomoriState.fallback_chain?.length ?? context.tomoriState.fallback_llms?.length ?? 0) > 0;
-    const modelFallbackTip = hasFallbackModels ? [] : ["genai.tips.model_fallback"];
+      !isPersonal && (context.tomoriState.fallback_chain?.length ?? context.tomoriState.fallback_llms?.length ?? 0) > 0;
+    const modelFallbackTip = hasFallbackModels ? [] : [scoped("genai.tips.model_fallback")];
+
+    // Offered whenever a personal text route failed: the user can usually recover immediately by
+    // handing the turn back to the server default, except where User BYOK mode forbids it.
+    const disableOverrideTip = isPersonal ? ["genai.tips.disable_personal_text_override"] : [];
 
     // Specialized Error Conditions
     const isPrivacyError = providerError.message.includes("Privacy Policy Error");
@@ -132,7 +150,7 @@ export class StreamErrorUi {
         titleKey: "genai.stream.privacy_error_title",
         tipKeys: [
           "genai.tips.openrouter_privacy_settings",
-          "genai.tips.choose_supported_model",
+          scoped("genai.tips.choose_supported_model"),
           ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),
         ],
         color: ColorCode.ERROR,
@@ -145,7 +163,7 @@ export class StreamErrorUi {
     if (isTempTopPConflict) {
       return {
         titleKey: "genai.stream.api_error_title",
-        tipKeys: ["genai.tips.adjust_parameters", "genai.tips.switch_model_provider"],
+        tipKeys: [scoped("genai.tips.adjust_parameters"), scoped("genai.tips.switch_model_provider")],
         color: ColorCode.ERROR,
       };
     }
@@ -154,7 +172,11 @@ export class StreamErrorUi {
     if (isProviderModelError(providerError)) {
       return {
         titleKey: "genai.stream.model_error_title",
-        tipKeys: ["genai.tips.choose_supported_model", ...(isOpenRouter ? ["genai.tips.openrouter_models"] : [])],
+        tipKeys: [
+          scoped("genai.tips.choose_supported_model"),
+          ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),
+          ...disableOverrideTip,
+        ],
         color: ColorCode.ERROR,
       };
     }
@@ -168,8 +190,9 @@ export class StreamErrorUi {
         tipKeys: [
           "genai.tips.top_up_provider_balance",
           ...(providerName === "deepseek" ? ["genai.tips.deepseek_top_up"] : []),
-          ...(isOpenRouter ? ["genai.tips.openrouter_add_credits"] : []),
-          "genai.tips.switch_model_provider",
+          ...(isOpenRouter ? [scoped("genai.tips.openrouter_add_credits")] : []),
+          scoped("genai.tips.switch_model_provider"),
+          ...disableOverrideTip,
         ],
         color: ColorCode.ERROR,
       };
@@ -183,9 +206,10 @@ export class StreamErrorUi {
       return {
         titleKey: "genai.stream.credit_limit_title",
         tipKeys: [
-          "genai.tips.reduce_output_tokens",
-          ...(isOpenRouter ? ["genai.tips.openrouter_add_credits"] : []),
-          "genai.tips.switch_model_provider",
+          scoped("genai.tips.reduce_output_tokens"),
+          ...(isOpenRouter ? [scoped("genai.tips.openrouter_add_credits")] : []),
+          scoped("genai.tips.switch_model_provider"),
+          ...disableOverrideTip,
         ],
         color: ColorCode.ERROR,
       };
@@ -198,7 +222,7 @@ export class StreamErrorUi {
       return {
         titleKey: "genai.stream.context_length_title",
         tipKeys: [
-          "genai.tips.reduce_output_tokens",
+          scoped("genai.tips.reduce_output_tokens"),
           "genai.tips.refresh_context",
           "genai.tips.shorten_message",
           ...modelFallbackTip,
@@ -215,12 +239,14 @@ export class StreamErrorUi {
             : "genai.stream.rate_limit_title",
           tipKeys: [
             "genai.tips.wait_and_retry",
-            "genai.tips.api_key_rotation",
+            // Rotation pools are a server-scoped, manager-only feature; a personal key has none.
+            ...(isPersonal ? [] : ["genai.tips.api_key_rotation"]),
             ...modelFallbackTip,
             ...(isOpenRouter ? ["genai.tips.openrouter_free_models"] : []),
             ...(isOpenRouter && providerError.message.includes("free-models-per-day")
               ? ["genai.tips.openrouter_fund_account"]
               : []),
+            ...disableOverrideTip,
           ],
           color: ColorCode.WARN,
         };
@@ -232,7 +258,7 @@ export class StreamErrorUi {
             "genai.tips.review_messages",
             "genai.tips.review_memories",
             "genai.tips.blacklist_member",
-            "genai.tips.switch_model_provider",
+            scoped("genai.tips.switch_model_provider"),
           ],
           color: ColorCode.ERROR,
         };
@@ -258,9 +284,10 @@ export class StreamErrorUi {
             ...(providerError.message.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED")
               ? ["genai.tips.google_credential_type"]
               : []),
-            "genai.tips.verify_api_key",
-            "genai.tips.switch_model_provider",
+            scoped("genai.tips.verify_api_key"),
+            scoped("genai.tips.switch_model_provider"),
             ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),
+            ...disableOverrideTip,
           ],
           color: providerError.retryable ? ColorCode.WARN : ColorCode.ERROR,
         };

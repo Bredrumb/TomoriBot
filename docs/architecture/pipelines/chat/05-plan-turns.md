@@ -40,7 +40,10 @@ treats it as "release lock, replay queue."
 - `userRow`, `triggererName`, `requestSnapshot` (privacy, blacklist, member ref)
 - Channel/server name and description, DM flag, self-message flag
 - Resolved credential policy (`textCredentialSource: "server" | "personal"`,
-  `personalRoutingUserId`, `personalTextProvider`)
+  `personalRoutingUserId`, `personalTextProvider`). `textCredentialSource` is copied
+  into `StreamingContext` by `buildChatTurnContext` and on into `StreamContext`, so the
+  provider error layer can name server- or personal-scoped recovery commands. See
+  [Credential-scoped recovery tips](/architecture/pipelines/provider/03-chunk-normalization/#credential-scoped-recovery-tips).
 - Text-quota preflight result (`shouldApplyTextQuota`, `textQuotaTriggerKey`,
   `textQuotaState`)
 - User-error visibility (`shouldSurfaceUserErrors`) so passive autochat/random

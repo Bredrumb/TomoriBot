@@ -90,6 +90,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     forceReason: incoming.forceReason,
     isManuallyTriggered: incoming.isManuallyTriggered,
     suppressUserErrors: !turn.shouldSurfaceUserErrors,
+    textCredentialSource: turn.textCredentialSource,
     disableAllTools: incoming.isUserImpersonation,
     naiContinuationPrefill: incoming.naiContinuationPrefill,
     emptyResponseRetryCount: incoming.retryCount,

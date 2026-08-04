@@ -1,14 +1,16 @@
 import {
   MessageFlags,
   TextInputStyle,
+  type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
@@ -21,6 +23,7 @@ import { encryptApiKey } from "@/utils/security/crypto";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { ModalComponent, SelectOption } from "@/types/discord/modal";
+import { isPersonalTextCredentialRotation } from "@/utils/provider/personalProviderHelpers";
 import { buildUserSavedProviderConfigFromExistingOrDefaults } from "@/utils/provider/savedProviderConfig";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
@@ -186,9 +189,40 @@ export async function execute(
       existingConfig,
     });
 
+    // Saving a provider also activates its personal text model, so this command can silently
+    // move the user's text routing off every server's default. Confirm that cross-server
+    // consequence unless the personal text route already points at this same provider, where
+    // the only real change is the stored credential.
+    const savedProviderRows = await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id);
+    const isCredentialRotation = isPersonalTextCredentialRotation(savedProviderRows, selectedProvider);
+
+    let responseInteraction: typeof modalResult.interaction | ButtonInteraction = modalResult.interaction;
+    if (!isCredentialRotation) {
+      const pendingModel = savedConfig.llm_id ? await llmModelRepo.loadById(savedConfig.llm_id) : null;
+      const confirmation = await promptWithUnacknowledgedConfirmation(modalResult.interaction, locale, {
+        embedTitleKey: "commands.personal.provider.activation_confirm_title",
+        embedDescriptionKey: "commands.personal.provider.activation_confirm_description",
+        embedDescriptionVars: {
+          capability: localizer(locale, "commands.personal.provider.capability_text"),
+          provider: getProviderDisplayName(selectedProvider),
+          model: pendingModel?.llm_codename ?? localizer(locale, "general.unknown"),
+        },
+        continueLabelKey: "commands.personal.provider.activation_confirm_continue",
+        cancelLabelKey: "commands.personal.provider.activation_confirm_cancel",
+        continueCustomId: "personal_provider_add_confirm",
+        cancelCustomId: "personal_provider_add_cancel",
+      });
+      if (confirmation.outcome !== "continue" || !confirmation.interaction) {
+        return;
+      }
+      // Acknowledge before the encrypt/upsert/activate chain so the button never expires.
+      await confirmation.interaction.deferUpdate();
+      responseInteraction = confirmation.interaction;
+    }
+
     const upserted = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, savedConfig);
     if (!upserted) {
-      await replyInfoEmbed(modalResult.interaction, locale, {
+      await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.update_failed_title",
         descriptionKey: "general.errors.update_failed_description",
         color: ColorCode.ERROR,
@@ -202,7 +236,7 @@ export async function execute(
       llmId: savedConfig.llm_id,
     });
     if (activationResult.status !== "activated") {
-      await replyInfoEmbed(modalResult.interaction, locale, {
+      await replyInfoEmbed(responseInteraction, locale, {
         titleKey:
           activationResult.status === "missing_model"
             ? "commands.provider.api-key.set.no_default_model_title"
@@ -219,14 +253,17 @@ export async function execute(
       return;
     }
 
-    await replyInfoEmbed(modalResult.interaction, locale, {
+    await replyInfoEmbed(responseInteraction, locale, {
       titleKey: "commands.personal.provider.add.success_title",
-      descriptionKey: existingConfig
-        ? "commands.personal.provider.add.updated_description"
-        : "commands.personal.provider.add.success_description",
+      descriptionKey: isCredentialRotation
+        ? "commands.personal.provider.add.rotated_description"
+        : existingConfig
+          ? "commands.personal.provider.add.updated_description"
+          : "commands.personal.provider.add.success_description",
       descriptionVars: {
         provider: getProviderDisplayName(selectedProvider),
         model_name: activationResult.modelName ?? localizer(locale, "general.unknown"),
+        scope_notice: localizer(locale, "commands.personal.provider.scope_notice"),
       },
       color: ColorCode.SUCCESS,
     });

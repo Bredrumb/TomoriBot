@@ -11,11 +11,13 @@ import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProvi
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import {
   assignPersonalCapabilityToProvider,
+  activatesNewPersonalOverride,
   resolveActivePersonalProviderModelSelections,
 } from "@/utils/provider/personalProviderHelpers";
 import {
   beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
+  type PersonaWorkflowInPlacePhase,
   type PersonaWorkflowMessageController,
 } from "@/utils/discord/ui/anchorWorkflow";
 import {
@@ -23,6 +25,7 @@ import {
   buildNoProvidersPayload,
   buildOpenSelectorPayload,
   buildProviderPickerPayload,
+  confirmPersonalOverrideActivation,
   openAnchorModal,
 } from "@/utils/discord/ui/anchorModelFlow";
 
@@ -139,12 +142,15 @@ export async function execute(
     });
     if (!modalPhase) return;
 
-    // Acknowledge the modal submit within 3s, then render the terminal in place.
-    const work = await modalPhase.beginInPlaceWork();
+    // Selecting a model also activates the capability, so whether Embedding was already routing
+    // personally is what separates "newly enabling a cross-server override" (needs consent)
+    // from "switching models inside an override that is already on".
+    const activatesOverride = activatesNewPersonalOverride(savedProviders, "embedding");
+
     const selectedModelId = Number.parseInt(modalPhase.values[MODEL_SELECT_ID] ?? "", 10);
     const selectedModel = availableModels.find((model) => model.embedding_model_id === selectedModelId) ?? null;
     if (!selectedModel?.embedding_model_id) {
-      await work.message.replace(
+      await modalPhase.replace(
         buildPersonaWorkflowNotice({
           locale,
           titleKey: "commands.model.embedding.invalid_model_title",
@@ -153,6 +159,28 @@ export async function execute(
         }),
       );
       return;
+    }
+
+    // Either branch acknowledges its own interaction within 3s and yields the same in-place
+    // controller, so everything below is unaware of whether a confirmation was shown.
+    let work: PersonaWorkflowInPlacePhase;
+    if (!activatesOverride) {
+      work = await modalPhase.beginInPlaceWork();
+    } else {
+      const confirmed = await confirmPersonalOverrideActivation(
+        phase,
+        modalPhase,
+        interaction.user.id,
+        locale,
+        {
+          capability: localizer(locale, "commands.personal.provider.capability_embedding"),
+          provider: getProviderDisplayName(selectedProvider),
+          model: selectedModel.codename,
+        },
+        ID_ROOT,
+      );
+      if (!confirmed) return;
+      work = await phase.useButton(confirmed).beginInPlaceWork();
     }
 
     const updated = await assignPersonalCapabilityToProvider(
@@ -184,6 +212,7 @@ export async function execute(
         descriptionVars: {
           provider: getProviderDisplayName(selectedProvider),
           model: selectedModel.codename,
+          scope_notice: localizer(locale, "commands.personal.provider.scope_notice"),
         },
         color: ColorCode.SUCCESS,
       }),
