@@ -60,8 +60,18 @@ export type ContextReferenceEligibilityEvidence = {
   hasPendingTasks: boolean;
 };
 
+export const CONTEXT_REFERENCE_ELIGIBILITY_POLICY_VERSION = 1 as const;
+
+export interface ContextReferenceCandidate {
+  userRow: UserRow;
+  evidence: ContextReferenceEligibilityEvidence;
+}
+
 /** Auto-created identity/default rows are not enough to load a user by alias. */
-export function isEligibleContextReferenceUser(user: UserRow, evidence: ContextReferenceEligibilityEvidence): boolean {
+export function isEligibleContextReferenceUserV1(
+  user: UserRow,
+  evidence: ContextReferenceEligibilityEvidence,
+): boolean {
   return (
     evidence.hasServerActivity ||
     evidence.hasPersonalMemories ||
@@ -171,16 +181,15 @@ class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
-   * Loads registered guild members who are eligible to be added to context by
-   * reference. Candidate discovery is intentionally bounded to IDs Discord has
-   * already exposed, users active on this server, and meaningful saved
-   * nicknames that occur in the visible history.
+   * Loads bounded reference candidates plus the evidence needed by eligibility
+   * policy v1. The participant pipeline owns the policy decision so injected
+   * sources and repository results follow the same pure contract.
    */
-  async loadEligibleContextReferenceCandidates(params: {
+  async loadContextReferenceCandidates(params: {
     serverDiscId: string;
     candidateDiscordIds: string[];
     normalizedHistoryText: string;
-  }): Promise<UserRow[]> {
+  }): Promise<ContextReferenceCandidate[]> {
     try {
       return await withTransientDbRetry(async () => {
         const candidateDiscordIds = Array.from(new Set(params.candidateDiscordIds));
@@ -241,24 +250,24 @@ class UserRepository implements IRepository<UserExportShape> {
             )
           `;
 
-        const parsedUsers: UserRow[] = [];
+        const candidates: ContextReferenceCandidate[] = [];
         for (const row of rows) {
           const parsedUser = this.parseUserRow(row, `context reference candidate ${row.user_disc_id}`);
-          if (
-            parsedUser &&
-            isEligibleContextReferenceUser(parsedUser, {
-              hasServerActivity: row.has_server_activity === true,
-              hasPersonalMemories: row.has_personal_memories === true,
-              hasPendingTasks: row.has_pending_tasks === true,
-            })
-          ) {
-            parsedUsers.push(parsedUser);
+          if (parsedUser) {
+            candidates.push({
+              userRow: parsedUser,
+              evidence: {
+                hasServerActivity: row.has_server_activity === true,
+                hasPersonalMemories: row.has_personal_memories === true,
+                hasPendingTasks: row.has_pending_tasks === true,
+              },
+            });
           }
         }
-        return parsedUsers;
-      }, `load eligible context reference candidates for server ${params.serverDiscId}`);
+        return candidates;
+      }, `load context reference candidates for server ${params.serverDiscId}`);
     } catch (error) {
-      log.error("Error loading eligible context reference candidates:", error);
+      log.error("Error loading context reference candidates:", error);
       return [];
     }
   }

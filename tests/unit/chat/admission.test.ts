@@ -118,4 +118,16 @@ describe("resolveAdmissionChannelScope DM server key", () => {
 
     expect(scope?.serverDiscId).toBe("human-user");
   });
+
+  it("prefers an explicit system-trigger identity when cached DM metadata is wrong", async () => {
+    const incoming = makeDmIncoming({ authorDiscId: "tomori-bot", recipientDiscId: "tomori-bot" });
+    incoming.systemTriggerIdentity = {
+      serverDiscId: "human-user",
+      userDiscId: "human-user",
+    };
+
+    const scope = await resolveAdmissionChannelScope(incoming, incoming.systemTriggerIdentity.userDiscId);
+
+    expect(scope?.serverDiscId).toBe("human-user");
+  });
 });

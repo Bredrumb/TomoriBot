@@ -16,6 +16,7 @@ import type {
   QueuedMessageDiscardReason,
   RunnableChatAdmission,
   SceneTurnMetadata,
+  SystemTriggerIdentity,
   TextQuotaSource,
 } from "@/utils/chat/types";
 
@@ -57,6 +58,7 @@ export type QueuedMessage = {
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
+  systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Pick<
     StreamingContext,
     "disableCrossChannelMessage" | "disableRecentMessageReplyTool" | "disableReminderTool"

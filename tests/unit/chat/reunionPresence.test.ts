@@ -1,8 +1,12 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import type { TomoriState } from "@/types/db/schema";
 import type { ChatTurn, GenerationTurnResult } from "@/utils/chat/types";
-import { recordReunionPresence, ReunionClaimRegistry, resolveReunionNote } from "@/utils/chat/reunionPresence";
-import { statRepository } from "@/utils/db/repositories";
+import {
+  recordReunionPresence,
+  ReunionClaimRegistry,
+  type ReunionPresenceStore,
+  resolveReunionNote,
+} from "@/utils/chat/reunionPresence";
 
 const completedResult: GenerationTurnResult = {
   status: "completed",
@@ -28,6 +32,15 @@ function makeResolveArgs(userId: number) {
       config: { time_awareness_enabled: true, timezone_offset: 0 },
     } as TomoriState,
     isUserImpersonation: false,
+  };
+}
+
+function makePresenceStore(overrides: Partial<ReunionPresenceStore>): ReunionPresenceStore {
+  return {
+    isTrackingEnabled: true,
+    getUserPersonaReunionInfo: async () => null,
+    recordPresenceSeen: async () => true,
+    ...overrides,
   };
 }
 
@@ -63,87 +76,76 @@ describe("ReunionClaimRegistry", () => {
 
   it("suppresses a concurrent channel until one successful delivery consumes the reunion", async () => {
     let seenToday = false;
-    const read = spyOn(statRepository, "getUserPersonaReunionInfo").mockImplementation(async () => ({
+    const read = mock(async () => ({
       lastPreviousDayAt: new Date("2026-07-01T00:00:00Z"),
       seenToday,
     }));
-    const write = spyOn(statRepository, "recordPresenceSeen").mockImplementation(async () => {
+    const write = mock(async () => {
       seenToday = true;
       return true;
     });
+    const presenceStore = makePresenceStore({ getUserPersonaReunionInfo: read, recordPresenceSeen: write });
 
-    try {
-      const first = await resolveReunionNote(makeResolveArgs(30));
-      const concurrent = await resolveReunionNote(makeResolveArgs(30));
+    const first = await resolveReunionNote(makeResolveArgs(30), presenceStore);
+    const concurrent = await resolveReunionNote(makeResolveArgs(30), presenceStore);
 
-      expect(first.note).toContain("Alice is talking to you again");
-      expect(first.presence?.mode).toBe("claimed");
-      expect(concurrent.note).toBeNull();
-      expect(concurrent.presence?.mode).toBe("deferred");
+    expect(first.note).toContain("Alice is talking to you again");
+    expect(first.presence?.mode).toBe("claimed");
+    expect(concurrent.note).toBeNull();
+    expect(concurrent.presence?.mode).toBe("deferred");
 
-      await recordReunionPresence(concurrent.presence, completedResult);
-      expect(write).not.toHaveBeenCalled();
+    await recordReunionPresence(concurrent.presence, completedResult, presenceStore);
+    expect(write).not.toHaveBeenCalled();
 
-      await recordReunionPresence(first.presence, completedResult);
-      expect(write).toHaveBeenCalledTimes(1);
+    await recordReunionPresence(first.presence, completedResult, presenceStore);
+    expect(write).toHaveBeenCalledTimes(1);
 
-      const afterDelivery = await resolveReunionNote(makeResolveArgs(30));
-      expect(afterDelivery.note).toBeNull();
-      expect(afterDelivery.presence?.mode).toBe("record");
-    } finally {
-      read.mockRestore();
-      write.mockRestore();
-    }
+    const afterDelivery = await resolveReunionNote(makeResolveArgs(30), presenceStore);
+    expect(afterDelivery.note).toBeNull();
+    expect(afterDelivery.presence?.mode).toBe("record");
   });
 
   it("claims before the database read so a concurrent context cannot use a stale snapshot", async () => {
     let finishRead: ((value: { lastPreviousDayAt: Date; seenToday: boolean }) => void) | undefined;
-    const read = spyOn(statRepository, "getUserPersonaReunionInfo").mockImplementation(
+    const read = mock(
       () =>
         new Promise((resolve) => {
           finishRead = resolve;
         }),
     );
+    const presenceStore = makePresenceStore({ getUserPersonaReunionInfo: read });
 
-    try {
-      const firstPromise = resolveReunionNote(makeResolveArgs(32));
-      const concurrent = await resolveReunionNote(makeResolveArgs(32));
+    const firstPromise = resolveReunionNote(makeResolveArgs(32), presenceStore);
+    const concurrent = await resolveReunionNote(makeResolveArgs(32), presenceStore);
 
-      expect(concurrent.note).toBeNull();
-      expect(concurrent.presence?.mode).toBe("deferred");
-      expect(read).toHaveBeenCalledTimes(1);
+    expect(concurrent.note).toBeNull();
+    expect(concurrent.presence?.mode).toBe("deferred");
+    expect(read).toHaveBeenCalledTimes(1);
 
-      finishRead?.({ lastPreviousDayAt: new Date("2026-07-01T00:00:00Z"), seenToday: false });
-      const first = await firstPromise;
-      expect(first.presence?.mode).toBe("claimed");
-      await recordReunionPresence(first.presence, emptyResult);
-    } finally {
-      read.mockRestore();
-    }
+    finishRead?.({ lastPreviousDayAt: new Date("2026-07-01T00:00:00Z"), seenToday: false });
+    const first = await firstPromise;
+    expect(first.presence?.mode).toBe("claimed");
+    await recordReunionPresence(first.presence, emptyResult, presenceStore);
   });
 
   it("releases a failed claim without letting a suppressed turn consume it", async () => {
-    const read = spyOn(statRepository, "getUserPersonaReunionInfo").mockResolvedValue({
+    const read = mock(async () => ({
       lastPreviousDayAt: new Date("2026-07-01T00:00:00Z"),
       seenToday: false,
-    });
-    const write = spyOn(statRepository, "recordPresenceSeen").mockResolvedValue(true);
+    }));
+    const write = mock(async () => true);
+    const presenceStore = makePresenceStore({ getUserPersonaReunionInfo: read, recordPresenceSeen: write });
 
-    try {
-      const first = await resolveReunionNote(makeResolveArgs(31));
-      const concurrent = await resolveReunionNote(makeResolveArgs(31));
+    const first = await resolveReunionNote(makeResolveArgs(31), presenceStore);
+    const concurrent = await resolveReunionNote(makeResolveArgs(31), presenceStore);
 
-      await recordReunionPresence(concurrent.presence, completedResult);
-      await recordReunionPresence(first.presence, emptyResult);
-      expect(write).not.toHaveBeenCalled();
+    await recordReunionPresence(concurrent.presence, completedResult, presenceStore);
+    await recordReunionPresence(first.presence, emptyResult, presenceStore);
+    expect(write).not.toHaveBeenCalled();
 
-      const retry = await resolveReunionNote(makeResolveArgs(31));
-      expect(retry.note).toContain("Alice is talking to you again");
-      expect(retry.presence?.mode).toBe("claimed");
-      await recordReunionPresence(retry.presence, emptyResult);
-    } finally {
-      read.mockRestore();
-      write.mockRestore();
-    }
+    const retry = await resolveReunionNote(makeResolveArgs(31), presenceStore);
+    expect(retry.note).toContain("Alice is talking to you again");
+    expect(retry.presence?.mode).toBe("claimed");
+    await recordReunionPresence(retry.presence, emptyResult, presenceStore);
   });
 });

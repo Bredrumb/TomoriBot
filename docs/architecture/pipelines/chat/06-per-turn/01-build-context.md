@@ -75,11 +75,22 @@ Key fields populated here:
   attempts.
 - **Impersonation identity resolution** — if `isUserImpersonation`, fetches
   the impersonated user's nickname/avatar via `resolveImpersonatedIdentity`.
-- **Reference-driven participant discovery** — after privacy/block filtering
-  and message simplification, scans the entire visible fetched window for
-  persona triggers and eligible Discord user aliases/mentions. The shared
-  resolver batches user eligibility reads and passes preloaded rows into the
-  normal participant renderer.
+- **Participant preparation** — after privacy/block filtering and message simplification,
+  `prepareParticipantContext()` scans the entire visible fetched window for persona triggers
+  and eligible Discord user aliases/mentions, then composes visible authors, active identity,
+  references, historical personas, co-responders, webhooks, and Matrix identities into one
+  ordered typed result. That result is the required and only participant input to
+  `buildContext()`; transport maps and raw participant ID lists do not cross the builder
+  boundary. This context-only discovery never changes response planning.
+- **Locked-turn discovery reuse** — all persona turns sharing a `LockedChatTurn` share a
+  request scope keyed by an exact snapshot of the sanitized discovery inputs. Equivalent
+  inputs reuse candidate and membership discovery, including concurrent in-flight work;
+  changed privacy-filtered history receives a separate entry. Every call recomposes active
+  identity and public-profile exposure, and the participant stage rehydrates member data,
+  privacy, blacklist, lineage memories, persona-filtered reminders, and persona self-tasks
+  for the current active persona. The scope is request-local and weakly held.
+- **Bounded diagnostics** — preparation emits candidate, inclusion, rejection, cache,
+  duration, and external-call counts without IDs, aliases, or message text.
 
 ## Invariants
 

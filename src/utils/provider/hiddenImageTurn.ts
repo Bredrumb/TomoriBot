@@ -29,6 +29,8 @@ import type { FunctionCall } from "@/types/provider/interfaces";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
+import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 
 /** Number of recent messages to fetch from the channel for context. */
 const BOT_GENERATE_IMAGE_HISTORY_LIMIT = parseEnvInt("BOT_GENERATE_IMAGE_HISTORY_LIMIT", 24, 5, 100);
@@ -221,13 +223,24 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     const channelPromptOverride = tomoriState.server_id
       ? await getCachedChannelPrompt(tomoriState.server_id, channel.id)
       : null;
+    const personas = await getCachedAllPersonas(guild.id).catch(() => [tomoriState]);
+    const preparedParticipantContext = await prepareParticipantContext({
+      client,
+      guildId: guild.id,
+      simplifiedMessageHistory: simplifiedMessages,
+      personas,
+      activePersona: tomoriState,
+      visibleUserIds: userList,
+      syntheticUsers: new Map(),
+      matrixUsers: new Map(),
+    });
 
     const contextBuild = await buildContext({
       guildId: guild.id,
       serverName: guild.name,
       serverDescription: guild.description ?? null,
       simplifiedMessageHistory: simplifiedMessages,
-      userList,
+      preparedParticipantContext,
       channelDesc,
       channelName,
       channelId: channel.id,

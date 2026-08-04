@@ -70,6 +70,12 @@ DMs have no guild, so TomoriBot gives each DM a synthetic server whose
 derives that key from `DMChannel.recipientId`, which is a property of the
 channel and therefore independent of who authored the trigger message.
 
+Scheduled reminder/task turns additionally provide `systemTriggerIdentity`
+from the reminder row's joined `servers` record. This authoritative identity
+wins in DMs because cached or partial Discord channel metadata may not contain
+a usable recipient even though the persisted schedule still has the correct
+private-server owner.
+
 This matters because system-initiated turns do not supply a user-authored
 trigger. Reminders (`reminderProcessor`) and boomerang follow-ups
 (`postTurnEffects`) pass the channel's most recent message, which in an active
@@ -89,7 +95,8 @@ After this stage runs:
 - Privacy-level `FULL` users are blocked unconditionally (except for
   self-reminders and manual triggers).
 - DM channels never carry a guild; guild text/thread/voice channels always do.
-- In a DM, `serverDiscId` is the channel recipient's ID regardless of who
+- In a DM, `serverDiscId` is the persisted system-trigger identity when one is
+  supplied; otherwise it is the channel recipient's ID regardless of who
   authored the trigger message.
 - An audio transcript that succeeded leaves a `voice_transcript` cache entry
   keyed by message ID (legacy mode) or a posted webhook message (chat mode),

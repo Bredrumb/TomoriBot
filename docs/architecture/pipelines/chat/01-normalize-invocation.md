@@ -36,6 +36,11 @@ re-entries, boomerang follow-ups, reminder scheduler, stop-response generation.
 
 Every other field is copied through verbatim.
 
+`systemTriggerIdentity` is one such pass-through field. Scheduled work uses it
+to carry the authoritative private-server and user IDs recovered from the
+reminder's database join, independent of whichever Discord message is used as
+the generation passport.
+
 ## Side effects
 
 None. Pure function.

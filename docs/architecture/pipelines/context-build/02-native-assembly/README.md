@@ -44,7 +44,7 @@ tail directives *after* this output, so the actual prompt the LLM sees is:
 | 03 | Server memories | [`03-server-memories.md`](./03-server-memories) | `KNOWLEDGE_SERVER_MEMORIES` | impersonation; no memories |
 | 04 | Server emojis | [`04-server-emojis.md`](./04-server-emojis) | `KNOWLEDGE_SERVER_EMOJIS` | DM; `emoji_usage_enabled=false`; no guild emojis |
 | 05 | Server stickers | [`05-server-stickers.md`](./05-server-stickers) | `KNOWLEDGE_SERVER_STICKERS` | DM; impersonation; `sticker_usage_enabled=false` |
-| 06 | Participants | [`06-participants.md`](./06-participants) | `KNOWLEDGE_USERS_IN_CONVERSATION` | empty `userList` |
+| 06 | Participants | [`06-participants.md`](./06-participants) | `KNOWLEDGE_USERS_IN_CONVERSATION` | prepared discovery plan has no seeds |
 | 07 | Short-term memory | [`07-short-term-memory.md`](./07-short-term-memory) | `KNOWLEDGE_SHORT_TERM_MEMORY` | no triggering user ID |
 | 07b | Verbatim tool definitions | [`07b-verbatim-tool-definitions.md`](./07b-verbatim-tool-definitions) | `KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS` | `verbatim_tool_calling_enabled=false`; model not tool-capable; no tools resolve |
 | 08 | RAG documents | [`08-rag-documents.md`](./08-rag-documents) | `KNOWLEDGE_SERVER_DOCUMENTS` | RAG unavailable; no docs; memory pressure critical |

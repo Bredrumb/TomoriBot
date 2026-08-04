@@ -11,12 +11,50 @@ import {
   buildPublicPersonaProfiles,
   discoverReferencedPersonaIds,
   resolveContextReferences,
-  resolveUniqueTextualAliasReferences,
 } from "@/utils/text/contextReferences";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
-import { buildUsersInConversationContextItem } from "@/utils/text/context/participants";
-import { isEligibleContextReferenceUser, userRepository } from "@/utils/db/repositories/UserRepository";
+import { buildParticipantContextItem } from "@/utils/text/context/participants";
+import { isEligibleContextReferenceUserV1, userRepository } from "@/utils/db/repositories/UserRepository";
 import { serverScheduleRepository } from "@/utils/db/repositories";
+import { buildParticipantDiscoveryPlan, type ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
+import { createDiscordUserKey, createPersonaKey, type ParticipantSeed } from "@/utils/text/participants/identity";
+import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
+import { resolveUniqueParticipantAliasReferences } from "@/utils/text/participants/referenceDiscovery";
+import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
+import type { PublicPersonaProfile } from "@/utils/text/context/types";
+
+/**
+ * Resolves textual references through the same alias catalog and matcher the
+ * production resolver uses, so these cases cannot pass against a test-only
+ * alias shape. Positional aliases map onto the real sources in catalog
+ * priority order: saved nickname, guild nickname, guild display name, global
+ * name, username.
+ */
+function resolveAliasReferences(
+  historyText: string,
+  candidates: readonly { userId: string; aliases: readonly string[] }[],
+): Set<string> {
+  const aliases = candidates.flatMap((candidate) => {
+    const [savedNickname, guildNickname, guildDisplayName, globalName, username] = candidate.aliases;
+    return buildDiscordUserAliases({
+      owner: createDiscordUserKey(candidate.userId),
+      userRow: { user_nickname: savedNickname ?? null },
+      identity: {
+        displayName: guildDisplayName ?? null,
+        nickname: guildNickname ?? null,
+        globalName: globalName ?? null,
+        username: username ?? null,
+      },
+      exposeSavedNickname: false,
+    });
+  });
+
+  return new Set(
+    resolveUniqueParticipantAliasReferences(historyText, aliases).referencedOwners.flatMap((owner) =>
+      owner.kind === "discord_user" ? [owner.discordId] : [],
+    ),
+  );
+}
 
 const message = (content: string, id = crypto.randomUUID()): SimplifiedMessageForContext => ({
   id,
@@ -36,6 +74,38 @@ const persona = (id: number, nickname: string, triggers: string[]): TomoriState 
     persona_attributes: [],
     physical_appearance_tags: [],
   }) as unknown as TomoriState;
+
+async function participantSeeds(params: {
+  client: Client;
+  activePersona: TomoriState;
+  participantIds: readonly string[];
+  publicPersonaProfiles?: readonly PublicPersonaProfile[];
+  referencePlan?: ParticipantDiscoveryPlan;
+}): Promise<readonly ParticipantSeed[]> {
+  const referencePlan =
+    params.referencePlan ??
+    buildParticipantDiscoveryPlan({
+      candidates: (params.publicPersonaProfiles ?? []).map((profile) => ({
+        key: createPersonaKey(profile.personaId),
+        reasons: new Set(["persona_trigger_reference"] as const),
+        aliases: [],
+        capabilities: new Set(),
+        sourceDisplayName: profile.personaName,
+        evidenceSources: ["persona_trigger_reference"] as const,
+      })),
+    });
+  const { plan } = await composeParticipantDiscoveryPlan({
+    visibleInput: {
+      participantIds: params.participantIds,
+      clientUserId: params.client.user?.id,
+      activePersonaId: params.activePersona.persona_id,
+      activePersonaIsAlter: params.activePersona.is_alter,
+    },
+    personas: [params.activePersona],
+    referencePlan,
+  });
+  return plan.seeds;
+}
 
 const defaultUser = (): UserRow => ({
   user_id: 1,
@@ -115,29 +185,107 @@ describe("context reference discovery", () => {
     ];
 
     for (const alias of candidates[0].aliases) {
-      expect(resolveUniqueTextualAliasReferences(`Please ask @${alias.toUpperCase()} about this.`, candidates)).toEqual(
+      expect(resolveAliasReferences(`Please ask @${alias.toUpperCase()} about this.`, candidates)).toEqual(
         new Set(["100"]),
       );
-      expect(resolveUniqueTextualAliasReferences(`${alias} can help.`, candidates)).toEqual(new Set(["100"]));
+      expect(resolveAliasReferences(`${alias} can help.`, candidates)).toEqual(new Set(["100"]));
     }
   });
 
   it("accepts unique common words but rejects partial words, emails, and shared aliases", () => {
-    expect(resolveUniqueTextualAliasReferences("Apple can help.", [{ userId: "100", aliases: ["Apple"] }])).toEqual(
+    expect(resolveAliasReferences("Apple can help.", [{ userId: "100", aliases: ["Apple"] }])).toEqual(
       new Set(["100"]),
     );
-    expect(resolveUniqueTextualAliasReferences("Pineapple can help.", [{ userId: "100", aliases: ["Apple"] }])).toEqual(
-      new Set(),
-    );
+    expect(resolveAliasReferences("Pineapple can help.", [{ userId: "100", aliases: ["Apple"] }])).toEqual(new Set());
+    expect(resolveAliasReferences("mail x@Apple.example", [{ userId: "100", aliases: ["Apple"] }])).toEqual(new Set());
     expect(
-      resolveUniqueTextualAliasReferences("mail x@Apple.example", [{ userId: "100", aliases: ["Apple"] }]),
-    ).toEqual(new Set());
-    expect(
-      resolveUniqueTextualAliasReferences("Ask Apple.", [
+      resolveAliasReferences("Ask Apple.", [
         { userId: "100", aliases: ["Apple"] },
         { userId: "200", aliases: ["apple"] },
       ]),
     ).toEqual(new Set());
+  });
+
+  it("matches Unicode and multi-word aliases across punctuation and repeated whitespace", () => {
+    const candidates = [
+      { userId: "100", aliases: ["José María"] },
+      { userId: "200", aliases: ["山田 太郎"] },
+    ];
+
+    expect(resolveAliasReferences("(JOSÉ    MARÍA), can you help?", candidates)).toEqual(new Set(["100"]));
+    expect(resolveAliasReferences("山田\t太郎さんではなく、@山田\t太郎 に聞いて。", candidates)).toEqual(
+      new Set(["200"]),
+    );
+  });
+
+  it("does not treat a persona nickname as a reference unless a trigger word matches", () => {
+    const nicknameOnly = persona(9, "Ren", ["lilya"]);
+
+    expect(discoverReferencedPersonaIds([message("Ren can stay in the story.")], [nicknameOnly])).toEqual(new Set());
+    expect(discoverReferencedPersonaIds([message("Please ask lilya.")], [nicknameOnly])).toEqual(new Set([9]));
+  });
+
+  it("includes historical and co-responding persona IDs while excluding empty public profiles", () => {
+    const historical = persona(2, "Historical", ["history"]);
+    historical.persona_attributes = [{ attribute_text: "Public history", is_public: true }] as never;
+    const responder = persona(3, "Responder", ["response"]);
+    responder.physical_appearance_tags = ["gold eyes"];
+    const empty = persona(4, "Empty", ["empty"]);
+
+    expect(buildPublicPersonaProfiles([historical, responder, empty], new Set([2, 3, 4]), 1)).toEqual([
+      {
+        personaId: 2,
+        personaName: "Historical",
+        attributes: ["Public history"],
+        imageAppearanceTags: [],
+      },
+      {
+        personaId: 3,
+        personaName: "Responder",
+        attributes: [],
+        imageAppearanceTags: ["gold eyes"],
+      },
+    ]);
+  });
+
+  it("keeps DM reference discovery persona-only when no guild is available", async () => {
+    const referencedPersona = persona(2, "Ren", ["ren"]);
+    referencedPersona.persona_attributes = [{ attribute_text: "Public profile", is_public: true }] as never;
+    const client = { guilds: { cache: new Map() } } as unknown as Client;
+
+    const resolved = await resolveContextReferences({
+      client,
+      guildId: "dm",
+      simplifiedMessageHistory: [message("Ask ren and <@100>.")],
+      personas: [referencedPersona],
+      existingParticipantIds: new Set(),
+    });
+
+    expect(resolved.referencedUserIds).toEqual(new Set());
+    expect(resolved.referencedUserRows).toEqual(new Map());
+    expect(resolved.publicPersonaProfiles.map((profile) => profile.personaId)).toEqual([2]);
+    expect(resolved.personaProfileReasons).toEqual(new Map([[2, new Set(["persona_trigger_reference"])]]));
+  });
+
+  it("retains every persona inclusion reason without duplicating its public profile", async () => {
+    const referencedPersona = persona(2, "Ren", ["ren"]);
+    referencedPersona.persona_attributes = [{ attribute_text: "Public profile", is_public: true }] as never;
+    const client = { guilds: { cache: new Map() } } as unknown as Client;
+
+    const resolved = await resolveContextReferences({
+      client,
+      guildId: "dm",
+      simplifiedMessageHistory: [message("Ask ren.")],
+      personas: [referencedPersona],
+      existingParticipantIds: new Set(),
+      existingPersonaIds: new Set([2]),
+      responderPersonaIds: new Set([2]),
+    });
+
+    expect(resolved.publicPersonaProfiles).toHaveLength(1);
+    expect(resolved.personaProfileReasons).toEqual(
+      new Map([[2, new Set(["persona_trigger_reference", "historical_persona", "co_responder"])]]),
+    );
   });
 
   it("resolves real mentions, verifies uncached membership, and skips bots and non-members", async () => {
@@ -171,8 +319,12 @@ describe("context reference discovery", () => {
     const client = {
       guilds: { cache: new Map([["guild", guild]]) },
     } as unknown as Client;
-    const originalLoadCandidates = userRepository.loadEligibleContextReferenceCandidates;
-    userRepository.loadEligibleContextReferenceCandidates = async () => rows;
+    const originalLoadCandidates = userRepository.loadContextReferenceCandidates;
+    userRepository.loadContextReferenceCandidates = async () =>
+      rows.map((userRow) => ({
+        userRow,
+        evidence: { hasServerActivity: true, hasPersonalMemories: false, hasPendingTasks: false },
+      }));
 
     try {
       const resolved = await resolveContextReferences({
@@ -185,8 +337,14 @@ describe("context reference discovery", () => {
 
       expect(resolved.referencedUserIds).toEqual(new Set(["200", "100"]));
       expect(Array.from(resolved.referencedUserRows.keys()).sort()).toEqual(["100", "200"]);
+      expect(resolved.referencedUserReasons).toEqual(
+        new Map([
+          ["200", new Set(["unique_text_alias"])],
+          ["100", new Set(["real_mention"])],
+        ]),
+      );
     } finally {
-      userRepository.loadEligibleContextReferenceCandidates = originalLoadCandidates;
+      userRepository.loadContextReferenceCandidates = originalLoadCandidates;
     }
   });
 });
@@ -199,7 +357,7 @@ describe("context reference user eligibility", () => {
   };
 
   it("rejects an auto-created default-only user", () => {
-    expect(isEligibleContextReferenceUser(defaultUser(), noEvidence)).toBe(false);
+    expect(isEligibleContextReferenceUserV1(defaultUser(), noEvidence)).toBe(false);
   });
 
   for (const [label, mutate, evidence] of [
@@ -218,7 +376,7 @@ describe("context reference user eligibility", () => {
     it(`accepts ${label} as meaningful state`, () => {
       const user = defaultUser();
       mutate(user);
-      expect(isEligibleContextReferenceUser(user, evidence)).toBe(true);
+      expect(isEligibleContextReferenceUserV1(user, evidence)).toBe(true);
     });
   }
 
@@ -227,7 +385,7 @@ describe("context reference user eligibility", () => {
     user.language_pref = "ja";
     user.registration_locale = "ja";
     user.user_nickname = "Saved At Registration";
-    expect(isEligibleContextReferenceUser(user, noEvidence)).toBe(false);
+    expect(isEligibleContextReferenceUserV1(user, noEvidence)).toBe(false);
   });
 });
 
@@ -244,12 +402,26 @@ describe("public persona profile rendering", () => {
     serverScheduleRepository.getPendingRemindersForUser = async () => [];
 
     try {
-      const item = await buildUsersInConversationContextItem({
+      const publicPersonaProfiles = [
+        {
+          personaId: 2,
+          personaName: "Tags Only",
+          attributes: [],
+          imageAppearanceTags: ["silver hair", "red eyes"],
+        },
+      ];
+      const seeds = await participantSeeds({
+        client,
+        activePersona,
+        participantIds: ["999"],
+        publicPersonaProfiles,
+      });
+      const item = await buildParticipantContextItem({
         client,
         guildId: "guild",
         channelName: "general",
         channelId: "channel",
-        userList: ["999"],
+        participantSeeds: seeds,
         triggererName: "Author",
         botName: "Active",
         tomoriState: null,
@@ -257,14 +429,7 @@ describe("public persona profile rendering", () => {
         isDMChannel: false,
         isUserImpersonation: false,
         impersonatedIdentityName: null,
-        publicPersonaProfiles: [
-          {
-            personaId: 2,
-            personaName: "Tags Only",
-            attributes: [],
-            imageAppearanceTags: ["silver hair", "red eyes"],
-          },
-        ],
+        publicPersonaProfiles,
         toolPromptMacroResolver: { expand: async (text) => text },
         conversationCorpus: "",
         convertMentions: async (text) => text,
@@ -314,12 +479,24 @@ describe("public persona profile rendering", () => {
     activePersona.config = { timezone_offset: 0 } as AssembledServerConfig;
 
     try {
-      await buildUsersInConversationContextItem({
+      const referencePlan = buildParticipantDiscoveryPlan({
+        candidates: [
+          {
+            key: createDiscordUserKey("404"),
+            reasons: new Set(["real_mention"]),
+            aliases: [],
+            capabilities: new Set(["mentionable"]),
+            evidenceSources: ["real_mention"],
+          },
+        ],
+      });
+      const seeds = await participantSeeds({ client, activePersona, participantIds: [], referencePlan });
+      await buildParticipantContextItem({
         client,
         guildId: "guild",
         channelName: "general",
         channelId: "channel",
-        userList: ["404"],
+        participantSeeds: seeds,
         triggererName: "Author",
         botName: "Active",
         tomoriState: null,
@@ -390,12 +567,13 @@ describe("persona task context", () => {
     };
 
     try {
-      const item = await buildUsersInConversationContextItem({
+      const seeds = await participantSeeds({ client, activePersona, participantIds: ["100", "999"] });
+      const item = await buildParticipantContextItem({
         client,
         guildId: "guild",
         channelName: "general",
         channelId: "channel-1",
-        userList: ["100", "999"],
+        participantSeeds: seeds,
         triggererName: "Alice",
         botName: "Active",
         tomoriState: activePersona,
@@ -460,12 +638,13 @@ describe("persona task context", () => {
     };
 
     try {
-      const item = await buildUsersInConversationContextItem({
+      const seeds = await participantSeeds({ client, activePersona, participantIds: ["999"] });
+      const item = await buildParticipantContextItem({
         client,
         guildId: "guild",
         channelName: "general",
         channelId: "channel-1",
-        userList: ["999"],
+        participantSeeds: seeds,
         triggererName: "Author",
         botName: "Active",
         tomoriState: activePersona,

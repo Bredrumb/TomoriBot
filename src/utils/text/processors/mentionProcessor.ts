@@ -1,5 +1,6 @@
 import { escapeRegExp } from "./regexUtils";
 import { resolvePersonaMentionHandle } from "@/utils/text/personaMentionHandles";
+import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 
 /**
  * Strips curly braces from unknown template placeholders in text, leaving only the inner word.
@@ -119,7 +120,7 @@ export function replaceMentionHandles(
 
     if (/^\d{17,20}$/.test(handle) && mentionIdSet?.has(handle)) return `<@${handle}>`;
 
-    const normalizedHandle = handle.toLowerCase();
+    const normalizedHandle = normalizeParticipantAlias(handle);
     const ids = mentionMap?.get(normalizedHandle);
     if (!ids || ids.length !== 1) {
       const personaMention = resolvePersonaMentionHandle(handle, personaMentionMap);
@@ -172,7 +173,7 @@ export function replaceMentionHandles(
     (match, prefix, rawHandle) => {
       const handle = (rawHandle as string).trim();
       if (!handle) return match;
-      const normalizedHandle = handle.toLowerCase();
+      const normalizedHandle = normalizeParticipantAlias(handle);
       const ids = mentionMap?.get(normalizedHandle);
       if (!ids || ids.length !== 1) {
         const personaMention = resolvePersonaMentionHandle(handle, personaMentionMap);

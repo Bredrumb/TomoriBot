@@ -31,7 +31,8 @@ The transformation pipeline runs in this order:
    row matches but its image cannot be loaded, the parenthetical modifier is stripped and the
    line is delivered as normal source-persona output without trying copied identity. If no
    sprite matches, the modifier falls back to copied-render resolution against known personas
-   and users in current context; copied matches use the **flipped** webhook username
+   and users in current context. The candidate identities and purpose-filtered aliases come
+   from the participant target index; copied matches use the **flipped** webhook username
    `target (SourcePersona)` (impersonated name first for the in-chat disguise) while the
    accumulated-text prefix stays source-first (`SourcePersona (target): `) for the model.
    Unknown or ambiguous copied targets are stripped and delivered as
@@ -190,7 +191,7 @@ After this stage (per segment):
 | Surface | Plugin-relevance |
 |---|---|
 | `cleanLLMOutput()` | `src/utils/text/processors/llmOutputProcessor.ts`. Internal — LLM output normalization is tightly coupled to TomoriBot's persona-name conventions and Discord formatting rules. The `emojiUsageEnabled` and `uncensor_*` DB config flags are the configuration surfaces. |
-| `resolveGuildMentions()` | `src/utils/discord/stream/mentionResolver.ts`. Internal — mention resolution uses the static mention map built at stream-init from conversation context. A plugin adding custom handle → user-ID mappings would modify the `KNOWLEDGE_USERS_IN_CONVERSATION` contributor in the context-build pipeline, not this stage. Takes `(text, channel, mentionMap, mentionIdSet, personaMentionMap?)` so it can be shared by non-stream callers (see `cleanToolReplyText`, below). Known persona handles stay as bare `@trigger` text after Discord user mentions are resolved. |
+| `resolveGuildMentions()` | `src/utils/discord/stream/mentionResolver.ts`. Internal — mention resolution uses the static mention map derived at stream-init from the participant target index. A plugin adding custom handle → user-ID mappings would extend the participant source/profile contracts, not this stage. Takes `(text, channel, mentionMap, mentionIdSet, personaMentionMap?)` so it can be shared by non-stream callers (see `cleanToolReplyText`, below). Known persona handles stay as bare `@trigger` text after Discord user mentions are resolved. |
 | `cleanToolReplyText()` | `src/utils/discord/toolReplyText.ts`. Internal — applies this stage's `filterDuplicateCustomEmojis` → `cleanLLMOutput` → `resolveGuildMentions` chain to tool-authored reply text (e.g. the `reply` action of `interact_with_recent_message`), which bypasses the streaming segment path. Keeps tool replies and normal replies rendering identically (emoji, Discord `@mention` resolution, and persona `@trigger` preservation). A plugin adding another tool that sends Tomori-authored Discord text should route it through this helper. |
 | `filterDuplicateCustomEmojis()` | `src/utils/text/emojiPenalty.ts`. Internal — emoji deduplication heuristic; no plugin-relevant seam. |
 | `extractMarkdownTableSegments()` + `renderMarkdownTableToPng()` | `src/utils/text/markdownTable.ts` + `src/utils/image/markdownTableRenderer.ts`. The table renderer path is the only place in the stream pipeline where image attachments are sent during streaming (as opposed to tool results). **A plugin adding other attachment types mid-stream would extend here.** → plugin plan candidate |

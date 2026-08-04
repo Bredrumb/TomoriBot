@@ -16,6 +16,16 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 
 Official bundled character presets have their own pointer behavior for seeded text, sprites, and avatars. Pointer alters live-resolve a shared preset avatar; the main persona's guild avatar is fanned out by a hash-gated background reconciler. See [Persona Presets](/architecture/subsystems/persona-presets/).
 
+### Participant context freshness
+
+Persona responses in the same locked chat turn share only active-independent participant
+discovery. The request scope freezes the sanitized visible history, participant identities,
+persona catalog, and responder set, so equivalent turns avoid repeating the candidate query
+and reference-membership checks. Each persona still gets a newly composed active identity
+and public-profile view, followed by fresh member, privacy, blacklist, lineage-memory,
+persona-reminder, and self-task hydration. No prepared participant result is reused across
+locked chat turns.
+
 ## Data Model
 
 ### `personas`
@@ -153,6 +163,12 @@ Resolution order is:
    In both cases the model-facing context label stays `SourcePersona (sprite)`. If the sprite row matches but the stored image is missing/unusable, TomoriBot strips the prefix and sends the text as normal source-persona output; it does not fall through to copied identity.
 2. **Copied identity** if no sprite matched. `target` resolves only against known personas in the server and Discord users already present in conversation context. If exactly one target matches, TomoriBot uses the **flipped** username `target (SourcePersona)` and the target's avatar — the impersonated name leads so the disguise reads naturally in chat, while the model-facing context label stays `SourcePersona (target)` so the LLM never confuses who is speaking.
 3. **Plain output** when no sprite/copy target resolves, or copied identity is ambiguous. The parenthetical modifier is stripped before delivery.
+
+Copied user and persona matching consumes the same hidden `ParticipantTargetIndex` used by
+stream mentions and tool targets. User candidates are limited to hydrated conversation
+participants and the `copied_identity` alias purpose. The request's complete persona alias
+catalog is merged into that index without making every persona a rendered participant or a
+tool-user target.
 
 Attribution, quota, self-reply bookkeeping, STM ownership, and reply routing remain attached to `SourcePersona`. History reconstruction (`resolveRenderModifierSourcePersona`) accepts both webhook-name orientations: flipped copied identities like `bredrumb (Ren)` (persona inside the parens, current format) and legacy `Ren (bredrumb)` decorations, always rebuilding the source-first `Ren (bredrumb)` label for prompt history. When *both* parts match personas (persona impersonating another persona), the flipped interpretation wins; legacy persona-on-persona messages are misattributed until they age out of the fetch window. Sprite messages are visually identical to plain `Ren` messages in Discord; their decorated prompt label is recovered from the `persona_sprite_messages` mapping (cache-primed per context build), and a missing mapping degrades to the plain persona name.
 
@@ -507,7 +523,8 @@ Behavior:
 - If the persona still exists, that persona responds.
 - If the persona is missing, **fallback to main**.
 - Mention verification includes webhook messages, and sends a fallback ping if the response did not mention the target.
-- Reminder rows are deleted/rescheduled only after the generated delivery turn completes. If `/bot kill` stops the active turn or clears a queued reminder, delivery is not consumed; the row is rescheduled for retry after `REMINDER_DELIVERY_RETRY_DELAY_MS`.
+- Reminder rows are deleted/rescheduled only after the generated delivery turn completes. If `/bot kill` stops the active turn or clears a queued reminder, delivery is not consumed; `next_attempt_at` schedules a retry after `REMINDER_DELIVERY_RETRY_DELAY_MS` without changing the canonical `reminder_time`.
+- Automated retry errors stay silent. After `REMINDER_DELIVERY_MAX_RETRIES`, the raw scheduled content is shown once. One-time rows are removed, while recurring rows advance from the original cadence and remain available through `/scheduled-task edit` and `/scheduled-task remove`.
 
 ## Commands and Workflows
 

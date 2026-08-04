@@ -7,7 +7,7 @@ import {
   truncateBeforeGenericSpeakerLine,
 } from "@/utils/text/processors/llmOutputProcessor";
 import { isAllowedRenderModifierSpeakerLabel } from "@/utils/discord/renderModifierParser";
-import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
+import { buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
 
 const PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV = "EMOJI_PRESERVE_UNRESOLVED_SHORTCODES";
 
@@ -96,7 +96,9 @@ describe("cleanLLMOutput", () => {
   });
 
   it("preserves known persona @trigger text after normal output cleanup", () => {
-    const personaMentionMap = buildPersonaMentionMap([{ persona_nickname: "Shy Tomori", trigger_words: ["lilya"] }]);
+    const personaMentionMap = buildPersonaMentionCatalog([
+      { persona_nickname: "Shy Tomori", trigger_words: ["lilya"] },
+    ]).mentionMap;
     const cleaned = cleanLLMOutput(
       "Tomori: I should ask @(Shy Tomori).",
       "Tomori",

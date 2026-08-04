@@ -114,6 +114,9 @@ Primary files:
 Current runtime effects for `FULL`:
 - Message-based chat trigger flow silently ignores the user in `messageCreate` (non-manual trigger path).
 - Messages from level-2 users are filtered out of conversation history context.
+- Participant reference discovery may recognize a saved nickname as lookup-only evidence,
+  but typed hydration applies privacy before rendering or target projection. A hidden saved
+  nickname cannot become an output mention, tool target, or copied identity.
 
 ### Per-server blacklist (`/server user-blacklist add|remove`)
 
@@ -123,6 +126,11 @@ Blacklisted users:
 - Are excluded from personalization behavior in that server.
 - Are not globally opted out.
 - Can still exist and interact; blacklist controls personalization scope rather than account existence.
+
+Participant profile fields pass through the same centralized exposure policy before profile
+enrichers run. Extension enrichers receive cloned privacy-filtered core fields and can emit
+only owner-stamped `extension:{id}` fields; they cannot restore suppressed names, memories,
+presence, roles, timezone, or physical appearance.
 
 `/server user-blacklist remove` also lists active `persona_user_blocks` rows so moderators can remove persona-scoped mutes/blocks through the same checklist flow. These rows are separate from `personalization_blacklist`: a `mute` prevents the target from triggering that persona, while a `block` also hides the target's recent live dialogue-history messages/media from that persona's context. Persona user blocks are not data deletion, forgetting, or memory redaction.
 
