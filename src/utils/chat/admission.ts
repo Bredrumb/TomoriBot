@@ -53,6 +53,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     injectedContextItems: input.injectedContextItems,
     forcedMentions: input.forcedMentions,
     manualTriggerInvoker: input.manualTriggerInvoker,
+    systemTriggerIdentity: input.systemTriggerIdentity,
     manualStreamingContextOverrides: input.manualStreamingContextOverrides,
     sceneTurn: input.sceneTurn,
     onGenerationResult: input.onGenerationResult,
@@ -190,7 +191,11 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   const dmOwnerDiscId = channel instanceof DMChannel ? (channel.recipientId ?? null) : null;
   const authorFallbackDiscId =
     dmOwnerDiscId && message.author.id === client.user?.id ? dmOwnerDiscId : message.author.id;
-  const userDiscId = incoming.manualTriggerInvoker?.userDiscId ?? chainOriginUserDiscId ?? authorFallbackDiscId;
+  const userDiscId =
+    incoming.manualTriggerInvoker?.userDiscId ??
+    incoming.systemTriggerIdentity?.userDiscId ??
+    chainOriginUserDiscId ??
+    authorFallbackDiscId;
   const matrixRelayUserId = isMatrixRelay ? extractBridgeUserId(message.author.username) : undefined;
   const cooldownUserDiscId = matrixRelayUserId ?? userDiscId;
 
@@ -473,7 +478,7 @@ export async function resolveAdmissionChannelScope(
     // channel and not of whoever authored the trigger message. Guilds get this for free
     // via guild.id; DMs must not fall back to the author or a bot-authored trigger
     // message would key the lookup to the bot and report the DM as unconfigured.
-    const serverDiscId = channel.recipientId ?? userDiscId;
+    const serverDiscId = incoming.systemTriggerIdentity?.serverDiscId ?? channel.recipientId ?? userDiscId;
     log.info(`Processing DM from user ${userDiscId} in channel ${channel.id}`);
     return {
       guild: null,

@@ -1527,6 +1527,9 @@ SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
+-- Delivery retries must not replace reminder_time because recurring schedules use it as their cadence anchor.
+SELECT add_column_if_not_exists('reminders', 'next_attempt_at', 'TIMESTAMP WITH TIME ZONE');
+SELECT add_column_if_not_exists('reminders', 'delivery_retry_count', 'INTEGER', '0', 'NOT NULL');
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -1544,8 +1547,10 @@ END $$;
 -- Create index for efficient reminder queries
 CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_reminders_server_id ON reminders(server_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_effective_due_time
+  ON reminders((COALESCE(next_attempt_at, reminder_time)));
 
--- Removed updated_at trigger for reminders table (never updated after creation, only INSERT/DELETE)
+-- Reminder writes set updated_at explicitly, so this table does not need a general update trigger.
 DROP TRIGGER IF EXISTS update_reminders_timestamp ON reminders;
 
 -- Drop deprecated columns 

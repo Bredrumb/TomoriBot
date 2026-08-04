@@ -249,6 +249,8 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
       ...(item.messageId && { messageId: item.messageId }),
       ...(item.sender && { sender: item.sender }),
       ...(item.conversationUsers && { conversationUsers: item.conversationUsers }),
+      ...(item.participantTargetIndex && { participantTargetIndex: item.participantTargetIndex }),
+      ...(item.personaMentionMap && { personaMentionMap: item.personaMentionMap }),
     });
   }
 

@@ -54,7 +54,14 @@ so you don't need to remember IDs.
 
 Reminders are delivered by an in-app scheduler and are only marked done **after delivery
 succeeds** — if a delivery is aborted or the channel queue is cleared, it's automatically
-rescheduled and retried. For the runtime details, see the
+retried. Retry delays do not change the original recurring cadence.
+
+Automated attempts do not post an error message each time. If delivery still fails after the
+retry limit, TomoriBot posts one warning containing the unchanged scheduled content and its ID.
+Failed human reminders ping the target so the reminder is not missed; failed self-tasks do not
+ping anyone. One-time schedules are then removed, while recurring schedules stay active for the
+next original occurrence and can be managed with `/scheduled-task edit` or
+`/scheduled-task remove`. For the runtime details, see the
 [architecture overview](/architecture/#runtime-extensions).
 
 ---

@@ -5,7 +5,7 @@
  */
 import type { TomoriState } from "@/types/db/schema";
 import type { ChatTurn, GenerationTurnResult } from "@/utils/chat/types";
-import { statRepository } from "@/utils/db/repositories";
+import { statRepository } from "@/utils/db/repositories/StatRepository";
 import { buildReunionNote } from "@/utils/text/context/timeAwareness";
 
 function readPositiveIntEnv(name: string, fallback: number): number {
@@ -75,15 +75,27 @@ export type ReunionPresenceScope =
 
 const reunionClaims = new ReunionClaimRegistry();
 
+export interface ReunionPresenceStore {
+  readonly isTrackingEnabled: boolean;
+  getUserPersonaReunionInfo: typeof statRepository.getUserPersonaReunionInfo;
+  recordPresenceSeen: typeof statRepository.recordPresenceSeen;
+}
+
 /**
  * Resolves a one-shot reunion for the direct triggerer and reserves it before
  * another channel can build an equivalent context.
  */
-export async function resolveReunionNote(args: {
-  turn: ChatTurn;
-  effectivePersona: TomoriState;
-  isUserImpersonation: boolean;
-}): Promise<{ note: string | null; presence: ReunionPresenceScope | null }> {
+export async function resolveReunionNote(
+  args: {
+    turn: ChatTurn;
+    effectivePersona: TomoriState;
+    isUserImpersonation: boolean;
+  },
+  presenceStore: ReunionPresenceStore = statRepository,
+): Promise<{
+  note: string | null;
+  presence: ReunionPresenceScope | null;
+}> {
   const { turn, effectivePersona } = args;
   const lineageId = effectivePersona.persona_lineage_id;
   const serverId = effectivePersona.server_id;
@@ -92,7 +104,7 @@ export async function resolveReunionNote(args: {
   if (
     effectivePersona.config.time_awareness_enabled === false ||
     args.isUserImpersonation ||
-    !statRepository.isTrackingEnabled ||
+    !presenceStore.isTrackingEnabled ||
     typeof lineageId !== "number" ||
     !Number.isInteger(lineageId) ||
     lineageId < 0 ||
@@ -112,7 +124,7 @@ export async function resolveReunionNote(args: {
     return { note: null, presence: { ...basePresence, mode: "deferred" } };
   }
 
-  const reunionInfo = await statRepository.getUserPersonaReunionInfo(userId, lineageId);
+  const reunionInfo = await presenceStore.getUserPersonaReunionInfo(userId, lineageId);
   if (!reunionInfo) {
     reunionClaims.release(claim);
     return { note: null, presence: null };
@@ -144,6 +156,7 @@ export async function resolveReunionNote(args: {
 export async function recordReunionPresence(
   presence: ReunionPresenceScope | null,
   result: GenerationTurnResult,
+  presenceStore: ReunionPresenceStore = statRepository,
 ): Promise<void> {
   if (!presence) return;
 
@@ -154,7 +167,7 @@ export async function recordReunionPresence(
   if (presence.mode === "deferred") return;
   if (presence.mode === "claimed" && !reunionClaims.owns(presence.claim)) return;
 
-  await statRepository.recordPresenceSeen({
+  await presenceStore.recordPresenceSeen({
     serverId: presence.serverId,
     userId: presence.userId,
     lineageId: presence.lineageId,

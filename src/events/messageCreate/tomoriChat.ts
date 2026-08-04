@@ -123,6 +123,7 @@ async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissio
           injectedContextItems: queued.injectedContextItems,
           forcedMentions: queued.forcedMentions,
           manualTriggerInvoker: queued.manualTriggerInvoker,
+          systemTriggerIdentity: queued.systemTriggerIdentity,
           manualStreamingContextOverrides: queued.manualStreamingContextOverrides,
           sceneTurn: queued.sceneTurn,
           onGenerationResult: queued.onGenerationResult,

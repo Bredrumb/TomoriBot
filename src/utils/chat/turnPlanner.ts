@@ -71,20 +71,20 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       allPersonas,
     });
     incoming.shouldSurfaceUserErrors = shouldSurfaceNoStateError;
-    // Surface the "not set up" error when the user directly triggered Tomori,
-    // rather than failing silently; validateDirectChatTrigger handles null state.
-    await validateDirectChatTrigger({
-      client,
-      message,
-      guild,
-      allPersonas,
-      tomoriState: null,
-      isDMChannel,
-      isManuallyTriggered: shouldSurfaceNoStateError && incoming.isManuallyTriggered,
-      userDiscId,
-      serverDiscId,
-      locale: admission.locale ?? "en-US",
-    });
+    if (shouldSurfaceNoStateError) {
+      await validateDirectChatTrigger({
+        client,
+        message,
+        guild,
+        allPersonas,
+        tomoriState: null,
+        isDMChannel,
+        isManuallyTriggered: incoming.isManuallyTriggered,
+        userDiscId,
+        serverDiscId,
+        locale: admission.locale ?? "en-US",
+      });
+    }
     log.info(`No persona state available for message ${message.id} in server ${serverDiscId}.`);
     return { lockedTurn, turns: [] };
   }

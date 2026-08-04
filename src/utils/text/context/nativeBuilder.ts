@@ -7,7 +7,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import { appendDialogueHistoryContext } from "./dialogueHistory";
 import { convertMentions } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
-import { buildUsersInConversationContextItem } from "./participants";
+import { buildParticipantContextItem } from "./participants";
 import { buildPersonaUserBlocksContextItem } from "./personaUserBlocks";
 import { buildPersonaSpriteContextItem } from "./personaSprites";
 import { buildServerDocumentContextItem } from "./rag";
@@ -34,7 +34,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     serverName,
     serverDescription,
     simplifiedMessageHistory,
-    userList,
+    preparedParticipantContext,
     channelName,
     channelId,
     parentChannelId,
@@ -42,9 +42,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     triggererName,
     tomoriNickname,
     tomoriAttributes,
-    publicPersonaProfiles,
-    preloadedReferencedUserRows,
-    referencedUserIds,
     tomoriConfig,
     channelPromptOverride,
     channelContextNote,
@@ -61,8 +58,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     impersonatedUserId,
     impersonatedUserNickname,
     impersonatedUserPrompt,
-    matrixUsers,
-    syntheticUsers,
     personaUserBlocks,
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
@@ -230,12 +225,12 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   );
   await appendOptionalItem(
     contextItems,
-    buildUsersInConversationContextItem({
+    buildParticipantContextItem({
       client,
       guildId,
       channelName,
       channelId,
-      userList,
+      participantSeeds: preparedParticipantContext.discoveryPlan.seeds,
       triggererName,
       botName,
       personaLineageId,
@@ -245,11 +240,12 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isUserImpersonation,
       impersonatedUserId,
       impersonatedIdentityName,
-      matrixUsers,
-      syntheticUsers,
-      publicPersonaProfiles,
-      preloadedReferencedUserRows,
-      referencedUserIds,
+      matrixUsers: preparedParticipantContext.matrixUsers,
+      syntheticUsers: preparedParticipantContext.syntheticUsers,
+      publicPersonaProfiles: preparedParticipantContext.publicPersonaProfiles,
+      preloadedReferencedUserRows: preparedParticipantContext.referencedUserRows,
+      referencedUserIds: preparedParticipantContext.referencedUserIds,
+      profileEnricherRegistry: preparedParticipantContext.profileEnricherRegistry,
       toolPromptMacroResolver,
       conversationCorpus,
       snapshot,

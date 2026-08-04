@@ -62,6 +62,10 @@ treats it as "release lock, replay queue."
   `incoming.isUserImpersonation`, `incoming.impersonatedUserId` are set on the
   carried admission/incoming objects so downstream stages share the resolved
   state.
+- **Missing persona feedback** — direct user turns surface the localized setup
+  error. Automated turns with `shouldSurfaceUserErrors: false`, including
+  reminder retries, return an empty plan silently so their owning scheduler can
+  apply its retry and final-fallback policy.
 - **Multi-persona queueing** — if more than one persona matched (and the
   message is a real user message, non-stop-response, non-reminder),
   `queueAdditionalPersonaTurns` puts the *extra* personas at the *front* of the

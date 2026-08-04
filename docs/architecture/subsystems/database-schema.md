@@ -153,6 +153,12 @@ than externalising SQL. Size is the signal; the split must follow a coherent dom
 - `openrouter_image_model_registrations`
 - `openrouter_video_model_registrations`
 
+The `reminders` table keeps the canonical next occurrence in `reminder_time`.
+`next_attempt_at` is a nullable delivery-retry lease and
+`delivery_retry_count` persists the current occurrence's retry budget. Successful
+delivery, manual edits, and recurring fallback advancement clear both retry
+fields, so retry delays never shift the recurring cadence.
+
 ### Quota system
 
 - `image_quota_configs`

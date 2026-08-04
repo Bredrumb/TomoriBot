@@ -12,6 +12,7 @@ import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomori
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { buildContext } from "@/utils/text/contextBuilder";
+import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
@@ -826,15 +827,23 @@ async function buildRuntimeParityContext(
   const channelPromptOverride = tomoriState.server_id
     ? await getCachedChannelPrompt(tomoriState.server_id, interaction.channelId)
     : null;
+  const preparedParticipantContext = await prepareParticipantContext({
+    client,
+    guildId: serverDiscId,
+    simplifiedMessageHistory: simplifiedMessages,
+    personas,
+    activePersona: tomoriState,
+    visibleUserIds: [...userListSet],
+    syntheticUsers: new Map(),
+    matrixUsers: new Map(),
+  });
 
   const contextBuild = await buildContext({
     guildId: serverDiscId,
     serverName,
     serverDescription,
     simplifiedMessageHistory: simplifiedMessages,
-    userList: Array.from(userListSet),
-    matrixUsers: new Map<string, string>(),
-    syntheticUsers: new Map<string, { displayName: string; type: "persona" | "webhook" }>(),
+    preparedParticipantContext,
     channelDesc,
     channelName,
     channelId: interaction.channelId,
