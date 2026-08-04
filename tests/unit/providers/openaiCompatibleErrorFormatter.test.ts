@@ -66,6 +66,52 @@ describe("openAI-compatible provider error formatting", () => {
     }
   });
 
+  it("describes 5xx overloads as overloads for namespaces that define no 5xx strings", () => {
+    const cases = [
+      { localeNamespace: "genai.deepseek", code: "503" },
+      { localeNamespace: "genai.deepseek", code: "500" },
+      { localeNamespace: "genai.custom", code: "502" },
+      { localeNamespace: "genai.zai", code: "503" },
+    ] as const;
+
+    for (const { localeNamespace, code } of cases) {
+      const description = createOpenAICompatibleErrorDescription(
+        {
+          type: "provider_overloaded",
+          message: `DeepSeek API error: HTTP ${code}: Service is too busy.`,
+          code,
+          retryable: true,
+        },
+        "en-US",
+        {
+          localeNamespace,
+          fallbackMessage: "Fallback should not be needed",
+        },
+      );
+
+      expect(description).toContain("The provider is currently overloaded or temporarily unavailable");
+      expect(description).not.toContain("An unexpected error occurred");
+    }
+  });
+
+  it("prefers a namespace-specific 5xx string over the shared overload fallback", () => {
+    const description = createOpenAICompatibleErrorDescription(
+      {
+        type: "provider_overloaded",
+        message: "OpenRouter API error: HTTP 503: upstream overloaded",
+        code: "503",
+        retryable: true,
+      },
+      "en-US",
+      {
+        localeNamespace: "genai.openrouter",
+        fallbackMessage: "Fallback should not be needed",
+      },
+    );
+
+    expect(description).toContain("The upstream AI model is currently overloaded");
+  });
+
   it("uses NVIDIA 500 parameter guidance and keeps provider details visible", () => {
     const description = createOpenAICompatibleErrorDescription(
       {

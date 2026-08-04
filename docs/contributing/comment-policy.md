@@ -46,6 +46,43 @@ Also avoid:
 Numbered JSDoc lists remain valid when they describe a genuinely ordered public contract.
 Ordinary line comments should not carry step numbers.
 
+## No meta commentary
+
+A comment states a constraint the reader must respect. It is not a record of the work that
+produced the line. Keep out:
+
+- **Incident and changelog narrative.** "this was the biggest consumer before we fixed it",
+  "added after last quarter's outage". Git history already holds this, and the comment cannot be
+  kept accurate.
+- **Point-in-time measurements.** Concrete counts, sizes, or timings sampled once. They read as
+  current facts and silently become false. State the constraint, not the sample.
+- **Commentary about the comment.** "Two exclusions are load-bearing", "Note the following three
+  points", "Important:". If the reader must count the parts, write fewer parts.
+- **Justification aimed at a reviewer.** Arguing why a change is safe belongs in the PR
+  description; a later maintainer only needs the rule that must hold.
+
+Write the constraint that would still be true a year from now:
+
+```ts
+// Never sweep the client's own member: discord.js resolves permissions through it.
+```
+
+not the story of how it was found:
+
+```ts
+// While chasing a memory leak we measured this cache and it dominated the heap, so we added a
+// sweeper. Note that two exclusions are load-bearing here, the first being that discord.js
+// resolves permissions through the client's own member.
+```
+
+Length is the usual symptom. If a comment runs past two or three lines, the surplus is almost
+always narrative rather than constraint.
+
+The same restraint applies to this page and every other doc: examples of bad comments should be
+illustrative, not transcribed from production. Deployment sizes, record counts, and host details do
+not belong in a public repository. See
+[Docs Authoring](/contributing/docs-authoring/) ("Audience: Guide or Runbook").
+
 ## JSDoc tags
 
 JSDoc predates TypeScript, where `@param {string} name` was the only way to state a type.

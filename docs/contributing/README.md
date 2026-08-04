@@ -34,3 +34,9 @@ conventions, then jump to the guide for your task.
 - [`testing-db-changes.md`](./testing-db-changes)
 - [`testing-chat-changes.md`](./testing-chat-changes)
 - [`testing-module-mocks.md`](./testing-module-mocks)
+
+## Conventions and Policies
+
+- [`comment-policy.md`](./comment-policy) — durable comments and the advisory policy audit
+- [`raw-sql-boundary.md`](./raw-sql-boundary) — keeping raw SQL in the repository layer
+- [`dependency-security-policy.md`](./dependency-security-policy) — overrides, patches, and audit exceptions

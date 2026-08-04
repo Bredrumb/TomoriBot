@@ -66,6 +66,7 @@ export default {
       content_blocked_title: `🔴️ プロバイダーコンテンツフィルター`,
       timeout_title: `🟡️ プロバイダーリクエストタイムアウト`,
       provider_overloaded_title: `🔴 プロバイダーの過負荷`,
+      provider_overloaded_description: `プロバイダーが現在過負荷状態、または一時的に利用できません`,
       context_length_title: `🔴 このモデルにはメッセージが長すぎます`,
       credit_limit_title: `🔴 プロバイダーのクレジットが不足しています`,
       balance_exhausted_title: `🔴 プロバイダーアカウントの残高がありません`,
@@ -86,6 +87,7 @@ export default {
       openrouter_models: `[OpenRouterのモデル一覧](https://openrouter.ai/models)を確認し、\`/openrouter model add\` でモデルを切り替えてください。`,
       choose_supported_model: `サポートされているモデルIDを \`/model text\`、\`/personal provider model-text\` またはカスタムエンドポイント設定で選択してください。`,
       verify_api_key: `APIキーをもう一度確認してから、再試行してください。`,
+      google_credential_type: `OAuthトークンまたはサービスアカウントの認証情報が使われているようです。\`google\` プロバイダーには [Google AI Studio](https://aistudio.google.com/apikey) の通常のAPIキーが必要です。Google Cloudの認証情報を使う場合は \`vertex\` プロバイダーを選んでください。`,
       openrouter_privacy_settings: `[OpenRouter プライバシー設定](https://openrouter.ai/settings/privacy)で「Data Policy」を調整してこのモデルを許可するか、別のモデルを選択してください。`,
       openrouter_fund_account: `1日1000回までの無料モデルリクエストのロックを解除するには、OpenRouterアカウントに少なくとも10クレジットを追加してください。`,
       reduce_context_length: `メッセージを短くするか、\`/tool refresh\` でコンテキストをクリアしてみてください。`,
@@ -107,6 +109,7 @@ export default {
     google: {
       "400_default_message": `リクエスト形式にエラーがありました`,
       "400_billing_default_message": `このサービスには課金が必要です`,
+      "401_default_message": `Googleの認証情報が拒否されました。Google AI StudioのAPIキーを使用しているか確認してください`,
       "403_default_message": `APIキーに必要な権限がありません。Google AI Studioから合法的に取得した自分自身のAPIキーを使用していることを確認してください`,
       "404_default_message": `参照されたリソースが見つかりませんでした`,
       "429_default_message": `短時間に多くのリクエストを送信しすぎました`,

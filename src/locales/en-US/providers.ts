@@ -66,6 +66,7 @@ export default {
       content_blocked_title: `🔴️ Provider Content Filter`,
       timeout_title: `🟡️ Provider Request Timeout`,
       provider_overloaded_title: `🔴 Provider Overloaded`,
+      provider_overloaded_description: `The provider is currently overloaded or temporarily unavailable`,
       context_length_title: `🔴 Message Too Long for This Model`,
       credit_limit_title: `🔴 Not Enough Provider Credits`,
       balance_exhausted_title: `🔴 Provider Account Out of Credit`,
@@ -86,6 +87,7 @@ export default {
       openrouter_models: `Browse the [OpenRouter model list](https://openrouter.ai/models) and switch models with \`/openrouter model add\`.`,
       choose_supported_model: `Choose a supported model ID with \`/model text\`, \`/personal provider model-text\`, or your custom endpoint settings.`,
       verify_api_key: `Double-check your API key, then try again.`,
+      google_credential_type: `This looks like an OAuth or service account token. The \`google\` provider needs a plain API key from [Google AI Studio](https://aistudio.google.com/apikey); use the \`vertex\` provider for Google Cloud credentials.`,
       openrouter_privacy_settings: `Adjust your "Data Policy" settings at [OpenRouter Privacy Settings](https://openrouter.ai/settings/privacy) to allow this model, or choose a different model.`,
       openrouter_fund_account: `Add at least 10 credits to your OpenRouter account to unlock 1000 free model requests per day.`,
       reduce_context_length: `Try reducing the length of your message or clearing context with \`/tool refresh\`.`,
@@ -108,6 +110,7 @@ export default {
     google: {
       "400_default_message": `There was an error in your request format`,
       "400_billing_default_message": `Billing is required for this service`,
+      "401_default_message": `Your Google credentials were rejected. Make sure you're using an API key from Google AI Studio`,
       "403_default_message": `Your API key doesn't have the required permissions. Please ensure you're using your own legally obtained API key from Google AI Studio`,
       "404_default_message": `A referenced resource could not be found`,
       "429_default_message": `You've sent too many requests too quickly`,

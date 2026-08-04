@@ -91,6 +91,12 @@ export function createDiscordClient(includePresences: boolean): Client {
         interval: 3600, // Run sweep every 1 hour (in seconds)
         lifetime: 1800, // Keep messages for 30 minutes (in seconds)
       },
+      // Never sweep the client's own member: discord.js resolves permissions through it.
+      // Voice paths read members synchronously with no fetch fallback.
+      guildMembers: {
+        interval: 3600,
+        filter: () => (member) => member.id !== member.client.user.id && !member.voice.channelId,
+      },
       users: {
         interval: 3600,
         filter: () => (user) => user.bot,

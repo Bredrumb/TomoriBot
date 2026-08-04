@@ -66,7 +66,9 @@ jobs:
         # bun audit has no working workspace filter — it always audits the whole
         # lockfile, including apps/docs devDeps. Advisories reaching this gate via
         # workspace:tomoribot-docs are build-time-only, but still block the job.
-        run: bun audit --audit-level=high
+        # Ignored advisories are justified in docs/contributing/dependency-security-policy.md;
+        # keep this list identical to auditClean.ts and vl.ts.
+        run: bun audit --audit-level=high --ignore=GHSA-mwp4-54f8-5fhr
 
       - name: Audit inline SQL outside repositories
         run: bun run scripts/checks/audit_sql.ts

@@ -22,6 +22,33 @@ Markdown docs.
   with no `sidebar.hidden: true`.
 - Nested folders are discovered recursively under visible top-level folders.
 
+## Audience: Guide or Runbook
+
+The repository is public and the docs site builds every page under `docs/`. Only `wiki/` is
+`noindex` and hidden from navigation, so everything else is world-readable and search-indexed.
+Decide which of two things a page is before writing it, because the rules are opposite.
+
+**A guide** teaches a reader to operate their own deployment. It uses second person and belongs in
+its normal section. **Use placeholders** for anything tied to one account: `<gcp-project-id>`,
+`<resource-group>`, `<workspace-name>`. A reader who copies a literal value from a guide gets a
+failure, so a real project ID in a guide is a bug, not just an oversight.
+
+**A runbook** performs a procedure against the project's own production. It belongs in `docs/wiki/`
+and **keeps real resource names**, because substituting placeholders into a runbook makes it wrong.
+Link it from the related architecture page rather than the sidebar.
+
+"Specific to a cloud provider" and "specific to our account" are different axes.
+`docs/architecture/cloud/` covers the first; only `docs/wiki/` covers the second.
+
+Regardless of type, never write credentials, API keys, tokens, private keys, connection strings,
+tenant IDs, or the production VM's public IP into any page. GitHub push protection blocks true
+credentials but does not flag infrastructure identifiers, so those are on the author.
+
+A page may legitimately be part guide and part runbook. Split it: keep the architecture description
+public and move the step-by-step procedure to `wiki/`, leaving a one-line pointer behind. See
+[Azure Production Deployment](/architecture/cloud/azure-production-deployment/) and
+[Azure Production Data Inspection](/wiki/azure-production-inspection/) for that shape.
+
 ## Frontmatter
 
 Use simple YAML frontmatter. The sidebar builder understands strings, numbers, booleans,

@@ -251,6 +251,12 @@ export class StreamErrorUi {
         return {
           titleKey: "genai.stream.api_error_title",
           tipKeys: [
+            // Google rejects a Vertex-style OAuth/service account credential with
+            // ACCESS_TOKEN_TYPE_UNSUPPORTED. "Double-check your API key" misleads here: the key is
+            // not mistyped, it is the wrong kind of credential for this provider.
+            ...(providerError.message.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED")
+              ? ["genai.tips.google_credential_type"]
+              : []),
             "genai.tips.verify_api_key",
             "genai.tips.switch_model_provider",
             ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),

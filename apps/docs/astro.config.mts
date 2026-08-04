@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import sitemap from "@astrojs/sitemap";
 import starlightLlmsTxt from "starlight-llms-txt";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
@@ -260,6 +261,13 @@ function buildTopLevelSidebar() {
 
 const sidebar = buildTopLevelSidebar();
 
+// Shared with the sitemap integration below. Registering our own sitemap makes Starlight skip its
+// own, so the hreflang i18n block must be derived here from this same object or the two drift.
+const docsLocales = {
+  root: { label: "English", lang: "en" },
+  ja: { label: "日本語", lang: "ja" },
+} as const;
+
 export default defineConfig({
   site: "https://docs.tomoribot.app",
   // Redirects for the /features/ restructure: the flat pages were bucketed into
@@ -285,6 +293,9 @@ export default defineConfig({
     "/features/stats-and-insights": "/features/setup-administration/stats-and-insights/",
     "/features/matrix-bridge": "/features/integrations/matrix-bridge/",
     "/features/sillytavern-support": "/features/integrations/sillytavern-support/",
+    // Destination is `noindex`, so the redirect is what drops the old URL from the index rather
+    // than leaving it to age out through 404s.
+    "/architecture/cloud/azure-terraform-state-recovery": "/wiki/azure-terraform-state-recovery/",
   },
   // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`
   // (see above). Vite resolves each content file to its real path under `../../docs/...`,
@@ -307,6 +318,15 @@ export default defineConfig({
     },
   },
   integrations: [
+    // Before starlight so it detects this one and skips adding its own. A `noindex` URL left in the
+    // sitemap makes Search Console report "Submitted URL marked 'noindex'", hence the wiki filter.
+    sitemap({
+      i18n: {
+        defaultLocale: "root",
+        locales: Object.fromEntries(Object.entries(docsLocales).map(([locale, { lang }]) => [locale, lang])),
+      },
+      filter: (page) => !/\/wiki(\/|$)/.test(new URL(page).pathname),
+    }),
     starlight({
       title: "TomoriBot",
       // i18n: `root` keeps every existing English URL unchanged (no /en/ prefix,
@@ -314,10 +334,7 @@ export default defineConfig({
       // mirroring the English tree; untranslated pages fall back to English
       // content served at the /ja/ URL with a translation notice.
       defaultLocale: "root",
-      locales: {
-        root: { label: "English", lang: "en" },
-        ja: { label: "日本語", lang: "ja" },
-      },
+      locales: docsLocales,
       // Fallback meta description for pages without one (see routeMiddleware
       // below, which auto-derives per-page descriptions from page content).
       description:

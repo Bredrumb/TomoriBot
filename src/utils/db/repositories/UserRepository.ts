@@ -593,6 +593,22 @@ class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
+   * Reports whether a server has any personal spotlight rows.
+   *
+   * Lets the cache layer skip {@link getPersonalSpotlightStatus}, which issues a DELETE before its
+   * SELECT and is keyed per user per channel, when the answer is the same server-wide.
+   */
+  async serverHasPersonalSpotlights(serverId: number): Promise<boolean> {
+    const [row] = await sql<{ exists: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM personal_spotlights WHERE server_id = ${serverId}
+      ) AS exists
+    `;
+
+    return row?.exists ?? false;
+  }
+
+  /**
    * Loads the current personal spotlight status for a user in a channel, pruning
    * expired entries and orphaned spotlights (no remaining personas) first.
    *

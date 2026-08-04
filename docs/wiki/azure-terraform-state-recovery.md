@@ -2,8 +2,15 @@
 title: "Azure Terraform State Recovery"
 sidebar:
   label: "Terraform State Recovery"
-  order: 3
+  hidden: true
+aiGenerated: false
 ---
+
+:::caution[Operator runbook]
+This page documents recovery against one specific storage account that only the TomoriBot operator
+can reach. It is not a guide for self-hosters. If you run your own deployment, the equivalent
+procedure applies to your own Terraform backend with your own account and container names.
+:::
 
 The Azure production backend stores `production.tfstate` in the `tfstate` container of
 `tomoribottfstate`. The account uses Microsoft Entra authorization only, TLS 1.2+, blob versioning,

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "bun";
 import { config } from "dotenv";
+import { AUDIT_IGNORED_ADVISORIES } from "./lib/auditIgnores";
 
 /** Shape of every item pushed into the results array */
 type ResultItem = {
@@ -383,9 +384,10 @@ async function runAudit(): Promise<ResultItem> {
   // lockfile, including apps/docs devDeps. Advisories reaching the gate via
   // workspace:tomoribot-docs are build-time-only, but still block audit:clean.
   // We use cmd.exe on Windows for bun audit to prevent pipe hangs, just in case.
-  let command = ["bun", "audit"];
+  const ignoreFlags = AUDIT_IGNORED_ADVISORIES.map((id) => `--ignore=${id}`);
+  let command = ["bun", "audit", ...ignoreFlags];
   if (process.platform === "win32") {
-    command = ["cmd.exe", "/d", "/s", "/c", "bun audit"];
+    command = ["cmd.exe", "/d", "/s", "/c", ["bun", "audit", ...ignoreFlags].join(" ")];
   }
 
   // This is the only check that depends on a remote server, so it is the only one

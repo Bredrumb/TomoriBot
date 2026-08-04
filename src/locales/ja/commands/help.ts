@@ -295,8 +295,9 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       step1_description: `TomoriBotは複数のAIプロバイダーに対応しています。いずれかのAPIキーが必要です。
 - {helpApikey}で取得方法を確認
   - **Google Gemini**（*推奨*）— 汎用、無料で利用可能、すべての機能を実行可能
-  - **NovelAI** — 無検閲なロールプレイ、ストーリーテリング、画像生成
+  - **DeepSeek**（*推奨*）— 非常に安価で無検閲な代替手段
   - **OpenRouter** — 有料で信頼性の高い、多数のAIモデルへの一箇所からのアクセス
+  - **NovelAI** — 無検閲なロールプレイ、ストーリーテリング、画像生成
 - このAPIキーを**他人と共有しないでください**
 - Customエンドポイントはセットアップ後に{configApiKeySet}でBearer認証トークンを追加可能`,
       step2_title: `ステップ2：セットアップコマンドを実行`,

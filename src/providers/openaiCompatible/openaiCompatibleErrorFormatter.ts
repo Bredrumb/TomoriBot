@@ -154,12 +154,15 @@ export function createOpenAICompatibleErrorDescription(
       detailsAppended = true;
     }
   } else {
-    if (message === localeKey && error.type === "provider_overloaded" && messageKey !== "503_default_message") {
-      const providerOverloadedKey = `${options.localeNamespace}.503_default_message`;
-      const providerOverloadedMessage = localizer(locale, providerOverloadedKey);
-      if (providerOverloadedMessage !== providerOverloadedKey) {
-        message = providerOverloadedMessage;
-      }
+    if (message === localeKey && error.type === "provider_overloaded") {
+      // A namespace with no entry for this 5xx still knows the provider is overloaded, so borrow its
+      // 503 string when it has one and otherwise the shared cross-provider string. Without the shared
+      // step, a namespace carrying no 5xx entries at all (deepseek, custom, zai) renders every
+      // overload as "An unexpected error occurred", which reads as a bug on our side.
+      message =
+        resolveLocalizedOrNull(locale, `${options.localeNamespace}.503_default_message`) ??
+        resolveLocalizedOrNull(locale, "genai.stream.provider_overloaded_description") ??
+        localeKey;
     }
 
     if (message === localeKey) {
@@ -179,6 +182,14 @@ export function createOpenAICompatibleErrorDescription(
   }
 
   return `Error Code ${errorCode}: ${message}`;
+}
+
+/**
+ * Localizes a key, returning null instead of the key itself when no string is defined for it.
+ */
+function resolveLocalizedOrNull(locale: string, key: string): string | null {
+  const value = localizer(locale, key);
+  return value === key ? null : value;
 }
 
 function appendProviderErrorDetails(message: string, error: ProviderError): string {

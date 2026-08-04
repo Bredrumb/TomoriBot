@@ -62,8 +62,10 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
 
   if (secrets.TOPGG_TOKEN) process.env.TOPGG_TOKEN = secrets.TOPGG_TOKEN;
 
-  // Must be set before any module reads MEMORY_PROTECTION()
-  if (secrets.CONTAINER_MEMORY_LIMIT_MB) process.env.CONTAINER_MEMORY_LIMIT_MB = secrets.CONTAINER_MEMORY_LIMIT_MB;
+  // Must be set before any module reads MEMORY_PROTECTION(). Deployment env wins: a stale bundle
+  // value could otherwise restore a limit above physical memory, leaving the guard unreachable.
+  if (secrets.CONTAINER_MEMORY_LIMIT_MB && !process.env.CONTAINER_MEMORY_LIMIT_MB)
+    process.env.CONTAINER_MEMORY_LIMIT_MB = secrets.CONTAINER_MEMORY_LIMIT_MB;
 
   const secretsSource =
     environment !== "production" || process.env.TEST_PRODUCTION === "true"

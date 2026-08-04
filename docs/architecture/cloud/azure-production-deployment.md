@@ -21,7 +21,7 @@ federated credential subject must be exactly:
 repo:Bredrumb/TomoriBot:environment:production
 ```
 
-The GitHub deployment principal needs `Contributor` only on `tomoribot-rg` and
+The GitHub deployment principal needs `Contributor` only on the deployment resource group and
 `Storage Blob Data Contributor` only on the `tfstate` container. It must not retain subscription
 `Contributor`, `Owner`, `User Access Administrator`, or unrelated resource-group roles after the
 replacement workflow is proven.
@@ -210,46 +210,12 @@ arriving, the replay double-applies.
 
 Host lockdown removes every inbound NSG allow rule, so `ssh` cannot reach the VM and the PostgreSQL
 firewall does not admit an operator workstation. Ad-hoc production queries therefore run **inside the
-bot container, driven through VM Run Command**. This is the supported path for incident triage; do
-not reopen SSH or widen the database firewall for it.
+bot container, driven through VM Run Command**, reading credentials from the mounted JSON secret file
+rather than the container environment. This is the supported path for incident triage; do not reopen
+SSH or widen the database firewall for it, and keep triage read-only.
 
-Credentials are not in the container environment: Compose mounts them as a JSON secret file at
-`SECRET_FILE=/run/secrets/tomoribot.json`, so `docker exec … env` shows empty `POSTGRES_*`. Read them
-from that file. The container root filesystem is read-only, so `docker cp` fails; pass the script on
-stdin instead. Write the query as a local file, base64 it to survive Run Command's shell quoting, and
-decode it into the host's `/tmp`:
-
-```bash
-# probe.js — uses Bun.SQL directly; the app's own client.ts is not importable via `bun -e`
-cat > probe.js <<'EOF'
-const s = await Bun.file(process.env.SECRET_FILE).json();
-const sql = new Bun.SQL({
-  hostname: s.POSTGRES_HOST, port: Number(s.POSTGRES_PORT || 5432),
-  username: s.POSTGRES_USER, password: s.POSTGRES_PASSWORD,
-  database: s.POSTGRES_DB, tls: { rejectUnauthorized: true },
-});
-console.log(JSON.stringify(await sql`SELECT ...`, null, 2));
-await sql.end();
-EOF
-
-B64=$(base64 -w0 probe.js)
-printf 'echo %s | base64 -d > /tmp/probe.js\ndocker exec -i tomoribot-azure-tomoribot-1 bun -e "$(cat /tmp/probe.js)"\n' "$B64" > run.sh
-
-az vm run-command invoke -g tomoribot-rg -n tomoribot-vm \
-  --command-id RunShellScript --scripts @run.sh \
-  --query "value[0].message" -o tsv
-```
-
-Notes that save a round trip:
-
-- `tls: { rejectUnauthorized: true }` is required; a bare `tls: true` fails with
-  `ERR_POSTGRES_CONNECTION_CLOSED`.
-- `az` lives at `C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin` and may need adding to `PATH`
-  inside a tool shell.
-- The same wrapper reaches the Discord REST API using `s.DISCORD_TOKEN`, which is how a
-  `channel_disc_id` or bot-authored message is resolved to a real channel or user during triage.
-- Keep these scripts read-only. Route writes through a migration or an explicitly confirmed
-  one-off, never through casual triage.
+The step-by-step recipe is an operator runbook against this specific deployment, so it lives in
+[Azure Production Data Inspection](/wiki/azure-production-inspection/).
 
 ## Container and host operations
 
@@ -268,6 +234,40 @@ Docker uses `json-file` rotation with three 10 MiB files, live restore, and daem
 ingested records for 30 days. Backup and application-data mounts remain under
 `/var/lib/tomoribot` and require explicit operator retention decisions.
 
+Each deploy pulls a new image digest and leaves the previous one untagged, so
+`run-command-deploy.sh` runs `docker image prune -f` after the health check and file-permission
+assertions pass. Pruning after the health check keeps the prior image available for rollback, and it
+is dangling-only so tagged images and anything a running container references survive. The step is
+never fatal: the deploy has already succeeded by that point, and reclaiming disk must not fail it.
+
+### Memory limits must track physical RAM
+
+`TOMORIBOT_MEMORY_LIMIT_MB` (default 512) sets both the Compose `mem_limit` and the
+`CONTAINER_MEMORY_LIMIT_MB` the application reads. **These two must stay equal.** The application
+sheds media load at 75% of that value and enters emergency cache clearing at 85%; if the cgroup
+ceiling were lower than what the app believes it has, the container would be OOM-killed before it
+ever shed load.
+
+The value is sized against the `Standard_B2ats_v2`'s roughly 842 MB of usable RAM, not rounded up to
+a convenient number. A limit above physical memory is unreachable: RSS cannot climb to it, the guard
+never fires, and the kernel silently swaps the heap instead.
+
+Two related traps:
+
+- `src/init/secrets.ts` also reads `CONTAINER_MEMORY_LIMIT_MB` from the mounted secret bundle, but
+  only when the environment does not already define it. Compose therefore wins on Azure, while
+  AWS/GCP deployments that set no environment variable still fall back to the bundle. A stale copy
+  of this key in the secret bundle is inert but misleading, so prefer removing it there.
+- The guard measures `process.memoryUsage().rss`, which counts only resident pages. On a host with
+  swap enabled the kernel suppresses RSS precisely when memory pressure is worst, so RSS alone can
+  understate commitment. Confirm real state with per-process `VmSwap` from `/proc/*/status` rather
+  than trusting RSS. See [Azure Production Data Inspection](/wiki/azure-production-inspection/)
+  for the Run Command pattern.
+
+`SEARXNG_MEMORY_LIMIT_MB` (default 256) is sized so the optional sidecar and the bot together stay
+inside physical RAM. Enable the sidecar only after confirming the host has real headroom; the
+`web_search` chain degrades to `Brave -> DDG -> Felo` without it.
+
 ## Release proof and rollback
 
 A production hardening rollout is proven only after the protected `validate` check passes, the PR
@@ -278,4 +278,4 @@ IMDS blocking, `/stats generate`, and one representative slash command.
 Application rollback means redeploying a previously reviewed immutable image digest with the same
 runtime configuration. Do not restore an administrator credential to the runtime file. Database or
 Terraform-state recovery follows its own runbook; see
-[Azure Terraform State Recovery](./azure-terraform-state-recovery/).
+[Azure Terraform State Recovery](/wiki/azure-terraform-state-recovery/).

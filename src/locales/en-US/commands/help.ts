@@ -295,8 +295,9 @@ Transcription supports ~100 languages (auto-detected).`,
       step1_description: `TomoriBot supports multiple AI providers. You'll need an API key from one of them.
 - Use {helpApikey} to learn how to get one
   - **Google Gemini** *(recommended)*: general-purpose, free usage, runs all features
-  - **NovelAI**: uncensored role-playing, storytelling, and image generation
+  - **DeepSeek** *(recommended)*: a very cheap and uncensored alternative
   - **OpenRouter**: paid, reliable access to many AI models in one place
+  - **NovelAI**: uncensored role-playing, storytelling, and image generation
 - Do **NOT** share this API key with anyone else
 - Custom endpoints can add a Bearer auth token after setup via {configApiKeySet}`,
       step2_title: `Step 2: Run the Setup Command`,

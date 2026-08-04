@@ -7,7 +7,9 @@ services:
     init: true
     restart: unless-stopped
     read_only: true
-    mem_limit: "${TOMORIBOT_MEMORY_LIMIT_MB:-1536}m"
+    # Must stay at or below the VM's usable RAM (~842 MB): an unreachable limit means the app's
+    # RSS guard never trips and the kernel swaps the heap instead.
+    mem_limit: "${TOMORIBOT_MEMORY_LIMIT_MB:-512}m"
     pids_limit: ${TOMORIBOT_PIDS_LIMIT:-256}
     security_opt:
       - no-new-privileges:true
@@ -19,7 +21,8 @@ services:
       PORT: "8081"
       SECRET_FILE: /run/secrets/tomoribot.json
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-vertex-wif.json
-      CONTAINER_MEMORY_LIMIT_MB: "${TOMORIBOT_MEMORY_LIMIT_MB:-1536}"
+      # Must track mem_limit above so the app sheds load before the cgroup OOM-kills it.
+      CONTAINER_MEMORY_LIMIT_MB: "${TOMORIBOT_MEMORY_LIMIT_MB:-512}"
       DATABASE_SCHEMA_MANAGEMENT_ENABLED: "false"
       FETCH_URL_ALLOW_PRIVATE_NETWORK: "false"
       SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-}
@@ -53,7 +56,7 @@ services:
       - searxng
     restart: unless-stopped
     read_only: true
-    mem_limit: "${SEARXNG_MEMORY_LIMIT_MB:-512}m"
+    mem_limit: "${SEARXNG_MEMORY_LIMIT_MB:-256}m"
     pids_limit: ${SEARXNG_PIDS_LIMIT:-128}
     security_opt:
       - no-new-privileges:true

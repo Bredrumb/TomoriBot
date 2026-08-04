@@ -156,5 +156,9 @@ assert_file /etc/tomoribot/secrets.json 640 0 1001
 assert_file /etc/tomoribot/google-vertex-wif.json 640 0 1001
 assert_file /etc/tomoribot/docker-compose.yml 644 0 0
 
+# After the health check so a failed deploy keeps the prior image for rollback. Never fatal: the
+# deploy has already succeeded here, so reclaiming disk must not fail it.
+docker image prune -f >/dev/null 2>&1 || echo "Image prune skipped; disk reclaim deferred." >&2
+
 echo "TomoriBot deployment succeeded through Azure Run Command."
 echo "TOMORIBOT_DEPLOYMENT_SUCCEEDED"

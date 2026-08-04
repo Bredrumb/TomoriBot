@@ -52,6 +52,12 @@ const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
   Number.parseInt(process.env.VIDEO_CONTEXT_MAX_INLINE_MB ?? "20", 10) || 20,
 );
 
+// Anchored on a word boundary because every Gemini method name embeds "rate" (the streaming method
+// is named "StreamGenerateContent"), and Google echoes the called method back in ErrorInfo metadata.
+// A bare `includes("rate")` therefore matched every error payload and filed unmapped status codes
+// such as 401 as rate limits.
+const GOOGLE_RATE_LIMIT_MESSAGE_PATTERN = /\brate[-\s]?limit|\bquota/i;
+
 /**
  * Google-specific stream configuration extending the base StreamConfig
  */
@@ -861,6 +867,10 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
           retryable = false;
         }
         break;
+      case 401:
+        errorType = "api_error";
+        retryable = false;
+        break;
       case 403:
         errorType = "api_error";
         retryable = false;
@@ -886,12 +896,15 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         retryable = true;
         break;
       default:
-        if (errorMessage.includes("API key") || errorMessage.includes("PERMISSION_DENIED")) {
+        if (
+          errorMessage.includes("API key") ||
+          errorMessage.includes("PERMISSION_DENIED") ||
+          errorMessage.includes("UNAUTHENTICATED")
+        ) {
           errorType = "api_error";
           retryable = false;
         } else if (
-          errorMessage.includes("rate") ||
-          errorMessage.includes("quota") ||
+          GOOGLE_RATE_LIMIT_MESSAGE_PATTERN.test(errorMessage) ||
           errorMessage.includes("RESOURCE_EXHAUSTED")
         ) {
           errorType = "rate_limit";

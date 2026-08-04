@@ -59,3 +59,5 @@
 /features/matrix-bridge/ /features/integrations/matrix-bridge/ 301
 /features/sillytavern-support /features/integrations/sillytavern-support/ 301
 /features/sillytavern-support/ /features/integrations/sillytavern-support/ 301
+/architecture/cloud/azure-terraform-state-recovery /wiki/azure-terraform-state-recovery/ 301
+/architecture/cloud/azure-terraform-state-recovery/ /wiki/azure-terraform-state-recovery/ 301

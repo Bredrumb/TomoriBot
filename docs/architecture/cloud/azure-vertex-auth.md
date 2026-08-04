@@ -16,9 +16,9 @@ system-assigned managed identity.
 2. Google Auth obtains a managed identity token from Azure Instance Metadata Service (IMDS).
 3. Google Security Token Service accepts that token only when its `xms_mirid` claim matches the
    production VM resource ID.
-4. The federated principal impersonates
-   `tomoribot-azure-vertex@tomoribot-vertex.iam.gserviceaccount.com`.
-5. That service account calls Vertex AI in the `tomoribot-vertex` project.
+4. The federated principal impersonates the runtime service account,
+   `<service-account>@<gcp-project-id>.iam.gserviceaccount.com`.
+5. That service account calls Vertex AI in `<gcp-project-id>`.
 
 No Google private key or API key is stored on the VM. The checked-in
 [`deploy/azure/google-vertex-wif.json`](../../../deploy/azure/google-vertex-wif.json) file contains
@@ -26,9 +26,9 @@ only public federation metadata.
 
 ## Google Cloud boundary
 
-- Project ID: `tomoribot-vertex`
+- Project ID: `<gcp-project-id>`, dedicated to this integration
 - Project purpose: Vertex AI provider calls only; it does not host TomoriBot infrastructure
-- Workload identity pool/provider: `tomoribot-azure/azure-vm`
+- Workload identity pool/provider: `<pool-id>/<provider-id>`
 - Runtime service account roles: Vertex AI User and Service Usage Consumer
 - Service account binding: Workload Identity User for principals admitted by the pool
 - Provider condition: exact Azure production VM resource ID (`xms_mirid`)
@@ -46,10 +46,11 @@ changing its audience or impersonation target changes the identity TomoriBot req
 
 ## Discord configuration
 
-Run `/provider add`, choose **Google Vertex AI**, and enter:
+Run `/provider add`, choose **Google Vertex AI**, and enter your own project and location in
+`<gcp-project-id>::<location>` form, for example:
 
 ```text
-tomoribot-vertex::global
+my-vertex-project::global
 ```
 
 The saved value is the Google project and location, not a credential. The Azure workload identity

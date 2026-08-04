@@ -9,6 +9,62 @@ This document reflects current cache layers in `src/utils/cache/` and related mo
 TomoriBot reads server config, user state, memories, and tool capability metadata on almost every interaction.
 Caching reduces repeated DB/API calls and helps meet Discord interaction timing constraints.
 
+## TTL Does Not Bound Memory
+
+Every TTL in this document is **lazy**: the deadline is checked when an entry is read, a stale entry
+is treated as a miss and refetched, and the entry itself stays in its `Map` until something
+overwrites or explicitly invalidates it. No cache in `src/utils/cache/` runs a periodic sweeper.
+
+The practical consequence, confirmed in production: a cache's reported `size` only ever grows.
+`channelWhitelistCache` was observed holding 1772 entries under a 5-minute TTL, because a key written
+once and never read again is never revisited.
+
+Two implementations of the same lazy pattern exist, so a search for one will miss the other:
+
+| Pattern | Examples |
+|---|---|
+| `expiresAt` timestamp compared on read | `channelWhitelistCache`, `channelLlmCacheStore`, `personalSpotlightCache` |
+| `cachedAt` plus a duration constant | `userCache.ts:33,55`, `tomoriStateCache.ts:23,105` |
+
+So **tightening a TTL reduces staleness, not memory.** It shortens how long a value is served before
+a refetch, and it adds database reads, but it frees nothing. Bounding memory requires a different
+mechanism, and the codebase offers three:
+
+1. **A size cap with eviction on insert.** See `personalSpotlightCache.evictForInsert()`, which drops
+   expired entries first and then oldest-inserted.
+2. **A gate that prevents the entry from being created at all.** Preferred when the answer is
+   uniform across a coarser key. See the personal spotlight gate below.
+3. **The emergency clearer**, which is reactive rather than continuous. See
+   [Emergency Memory Cleanup](#emergency-memory-cleanup).
+
+`clearExpiredEntries()` in `shortTermMemoryCache.ts` is the only expired-entry sweeper in the
+codebase, and its single caller is `emergencyCacheClearer.ts`. It is not a background task.
+
+## Discord.js Caches Dominate Process Memory
+
+Application caches are small next to the discord.js client caches. A production snapshot across ~516
+guilds recorded roughly 90,900 discord.js entries (members ~31,800, users ~27,100, presences ~12,100,
+channels ~11,200, emojis ~6,500) against roughly 6,500 entries across every cache in this document.
+`cacheMetricsLogger` reports both under `discord_*` and per-cache names.
+
+Investigate `sweepers` in `src/init/discord.ts` before tuning anything here. Configured sweepers:
+
+| Cache | Policy |
+|---|---|
+| `messages` | Hourly, 30-minute lifetime |
+| `guildMembers` | Hourly; excludes the client's own member and anyone in a voice channel |
+| `users` | Hourly, bots only |
+
+Two exclusions in the `guildMembers` filter are load-bearing. discord.js resolves permissions through
+the client's own `GuildMember`, and the voice paths read members synchronously with no fetch
+fallback. Member eviction is otherwise safe because every `MESSAGE_CREATE` carries a `member` field,
+so anyone actively chatting is re-cached within minutes and only idle members stay evicted.
+
+Widening the `users` sweeper is deliberately conservative: `historyFormatter.resolveMentions` runs
+inside a `String.replace()` callback, so it cannot await a fetch, and `client.users.cache` is its last
+fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by a cached
+`GuildMember` also frees nothing, because the object stays reachable.
+
 ## Active Cache Layers
 
 ### 1) Tomori state cache (`tomoriStateCache.ts`)
@@ -194,6 +250,32 @@ When `retryPersonaWorkflow(updatedPersonas)` supplies a refreshed array, the run
 persona IDs by absolute index. It retains the avatar cache only when that identity ordering is
 unchanged; a removal, addition, or reorder clears the map before the next picker render.
 
+### 17) Personal spotlight cache (`personalSpotlightCache.ts`)
+
+Two maps, deliberately keyed at different granularities.
+
+- **Gate:** `serverId -> { hasAny, expiresAt }`, bounded by guild count
+- **Result:** `serverId:userId:channelDiscId -> { result, expiresAt }`, the highest-cardinality key
+  in the cache layer
+- Default TTL: `PERSONAL_SPOTLIGHT_CACHE_TTL_MINUTES` (default 5), applied to both maps
+- Hard cap: `PERSONAL_SPOTLIGHT_CACHE_MAX_ENTRIES` (default 2000) on the result map
+- API: `getCachedPersonalSpotlightStatus`, `invalidatePersonalSpotlightCache`
+
+A read consults the gate before the triple. When a server has no spotlight rows, the gate answers
+`null` and **no triple entry is created**, so a server that never uses the feature contributes one
+entry instead of one per user per channel. Misses are cached as `null` (an unconfigured spotlight
+must not hit the database on every message), which is what made the unbounded triple key expensive
+before the gate existed.
+
+The gate also avoids real database work, not just a `Map` write:
+`UserRepository.getPersonalSpotlightStatus` issues a `DELETE` for expired rows before its aggregate
+`SELECT`, so every miss was costing a write plus a `LEFT JOIN`.
+
+`invalidatePersonalSpotlightCache` drops the gate alongside matching triple keys. Both write paths
+(`commands/personal/spotlight/set.ts`, `commands/personal/spotlight/manage.ts`) already call it, so
+a server's first spotlight takes effect immediately rather than after the TTL. **Any new write path
+must call it too**, or the gate will keep answering "none" for up to the TTL.
+
 ## Cache Invalidation Rules (Critical)
 
 Invalidate after successful DB writes that affect cached reads.
@@ -210,6 +292,7 @@ Common examples:
 - persona webhook/avatar changes -> webhook invalidation helpers
 - channel system prompt changes -> `invalidateChannelPromptCache(serverId, channelDiscId)` (handled inside `ChannelPromptRepository`)
 - persona sprite changes -> `invalidatePersonaSpriteCache(personaId)` (handled inside `PersonaSpriteRepository`)
+- personal spotlight create/remove -> `invalidatePersonalSpotlightCache(serverId, userId?, channelDiscId?)` (also drops the per-server gate)
 
 ## Emergency Memory Cleanup
 
@@ -250,6 +333,14 @@ because STM is conversational state, not merely a database read-through cache.
 - Forgetting invalidation on alternate code paths
 - Manually mutating cached objects instead of invalidating
 - Clearing whole caches when only one key changed
+- Shortening a TTL to reduce memory. TTLs here are lazy, so this adds database reads and frees
+  nothing. Add a size cap or a coarser-keyed gate instead.
+- Reading a cache `size` metric as a population count. It reports entries currently resident, which
+  for a lazily-expiring cache means "keys touched since the last restart or invalidation". For
+  example `tomoriState` size is not the number of configured servers; that is
+  `SELECT count(*) FROM server_model_configs WHERE api_key IS NOT NULL`.
+- Adding a cache keyed on a product of identifiers (server x user x channel) without either a size
+  cap or a gate on a coarser key
 
 ## Recommended Env Knobs
 
@@ -258,6 +349,8 @@ TOMORI_STATE_CACHE_TTL_MINUTES=10
 USER_CACHE_TTL_MINUTES=30
 EMOJI_STICKER_CACHE_TTL_MINUTES=10
 CHANNEL_WHITELIST_CACHE_TTL_MINUTES=5
+PERSONAL_SPOTLIGHT_CACHE_TTL_MINUTES=5
+PERSONAL_SPOTLIGHT_CACHE_MAX_ENTRIES=2000
 PERSONA_SPRITE_CACHE_TTL_MINUTES=10
 PERSONA_SPRITE_MAX_PER_PERSONA=50
 PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH=300

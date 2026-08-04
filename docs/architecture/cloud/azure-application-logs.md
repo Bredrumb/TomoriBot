@@ -194,6 +194,39 @@ volume is tiny — ~288 samples/day at ~900 bytes (~260 KB/day), well within the
 discord.js caches (`discord_users`, `discord_members`, `discord_channels`, `discord_presences`)
 are the real memory story; the app caches are usually small.
 
+### Emitted fields are not the same as table columns
+
+The transform projects a fixed column list, so a field the application emits is silently absent from
+the table unless it was added to both the transform and the table schema. `discord_messages` is the
+known case: `collectCacheMetricsSnapshot()` emits it, but it is **not** a column, and projecting it
+fails the query with `SEM0100: 'project' operator: Failed to resolve scalar expression`.
+
+Confirm the real column list before writing a panel query rather than inferring it from the emitter:
+
+```powershell
+az monitor log-analytics workspace table show -g <resource-group> --workspace-name <workspace-name> `
+  -n TomoriBotCacheMetrics_CL --query "schema.columns[].name" -o tsv
+```
+
+`rss_limit_mb` **is** a column, which makes it the cheapest way to confirm a deployed memory-limit
+change actually took effect. `rss_pct` works as a cross-check without any DCR change, since it is
+RSS divided by that limit: the same resident set reads about 16% against a 1536 limit and about 48%
+against 512.
+
+Ad-hoc queries can go through the REST API. The `log-analytics` az CLI extension currently has no
+installable stable version, so `az monitor log-analytics query` may be unavailable:
+
+```powershell
+$wsid = az monitor log-analytics workspace show -g <resource-group> -n <workspace-name> --query customerId -o tsv
+$uri = "https://api.loganalytics.io/v1/workspaces/$wsid/query?query=" + [uri]::EscapeDataString($q)
+az rest --method get --url $uri --resource "https://api.loganalytics.io" -o json
+```
+
+Host-level memory forensics are **not** available here. Azure Monitor collects neither
+`/proc/pressure/*` nor `vmstat` swap-in/swap-out rates, and the agent's `Available Memory Bytes` is
+only a coarse proxy. Diagnosing swap thrash requires Run Command against the VM; see
+[Azure Production Deployment](./azure-production-deployment/).
+
 ## Grafana
 
 Point panels at an Azure Monitor data source whose identity has `Reader` on the resource group
@@ -207,7 +240,29 @@ ingestion permissions belong to the DCR/agent path, never to Grafana. Current pa
 - **Error log** (`Logs`) — `TomoriBotLogs_CL` showing `TimeGenerated`, a title from
   `code`/`errorType` + `message`, `commandName`, and `RawData`.
 - **Cache sizes** (`Time series`, stacked) — `TomoriBotCacheMetrics_CL`, one series per cache
-  column, for spotting growth/leaks.
+  column, for spotting growth/leaks. Include `rss_mb`, `rss_pct`, and the `discord_*` columns.
+  A panel projecting only the app-cache columns hides both the process memory the growth is being
+  correlated against and the discord.js caches that usually hold most of it:
+
+  ```kusto
+  TomoriBotCacheMetrics_CL
+  | where $__timeFilter(TimeGenerated)
+  | project TimeGenerated, rss_mb, rss_pct, rss_limit_mb,
+            discord_members, discord_users, discord_presences, discord_channels, discord_emojis,
+            userCache, channelWhitelist, personalSpotlight, shortTermMemory
+  | order by TimeGenerated asc
+  ```
+
+- **Memory guard events** (`Logs`) — `TomoriBotLogs_CL` filtered to the memory guard. An empty
+  result does not prove health: it also matches a guard whose threshold sits above physical RAM and
+  therefore can never fire. Correlate with `rss_limit_mb` before concluding anything.
+
+  ```kusto
+  TomoriBotLogs_CL
+  | where TimeGenerated > ago(24h)
+  | where RawData has_any ("Memory warning", "CRITICAL MEMORY", "memory_emergency_entered")
+  | order by TimeGenerated desc
+  ```
 - **Token consumption** (`Time series`, stacked bars) — Postgres `stat_counters`,
   `SUM(count)` of `tokens_in`+`tokens_out` grouped by `bucket` (day) and `metric_key` (model).
   Daily grain only; the table stores no finer bucket.

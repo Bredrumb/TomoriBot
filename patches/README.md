@@ -2,6 +2,11 @@
 
 This directory tracks TomoriBot's manual dependency patches and vendored dependency overrides.
 
+For when to reach for a patch instead of an override or an audit exception, and for the list of
+accepted advisories, see `docs/contributing/dependency-security-policy.md`. Patches here bump a
+manifest, add a compatibility shim, or stub an unusable module; they never reimplement library
+behavior, and they cannot clear `bun audit`, which grades resolved lockfile versions.
+
 Keep these changes small, package-scoped, and temporary. On any related dependency update, try removing the patch or override first, then run:
 
 - `bun install`

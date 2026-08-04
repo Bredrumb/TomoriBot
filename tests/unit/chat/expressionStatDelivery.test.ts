@@ -1,26 +1,19 @@
-import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { RecordStatInput } from "@/utils/db/repositories/StatRepository";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
-import * as realRepositories from "@/utils/db/repositories";
+import { statRepository } from "@/utils/db/repositories";
+import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
 import { initializeLocalizer } from "@/utils/text/localizer";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 const recorded: RecordStatInput[] = [];
 
-const scopedMock = createScopedModuleMocker(mock, {
-  "@/utils/db/repositories": realRepositories,
+// A `mock.module` over the repositories barrel would be process-global for the whole run and is not
+// undone by `mock.restore()`, which left `spyOn` against `statRepository` silently installing
+// nothing in every file loaded afterwards. `recordStat` is resolved off the live singleton at call
+// time, so spying the method captures the same calls without replacing the module for anyone else.
+const recordStatSpy = spyOn(statRepository, "recordStat").mockImplementation((input: RecordStatInput) => {
+  recorded.push(input);
 });
-
-scopedMock.module("@/utils/db/repositories", () => ({
-  ...realRepositories,
-  statRepository: overrideMembers(realRepositories.statRepository, {
-    recordStat: (input: RecordStatInput) => {
-      recorded.push(input);
-    },
-  }),
-}));
-
-const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
 
 const SERVER_ID = 7;
 const USER_ID = 42;
@@ -93,6 +86,10 @@ function makeResult(overrides: Partial<GenerationTurnResult>): GenerationTurnRes
 describe("expression stats count only what Discord accepted", () => {
   beforeAll(async () => {
     await initializeLocalizer();
+  });
+
+  afterAll(() => {
+    recordStatSpy.mockRestore();
   });
 
   beforeEach(() => {
