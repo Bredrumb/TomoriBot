@@ -12,8 +12,8 @@ export const NAI_IMAGE_SAMPLERS = [
 
 export const NAI_IMAGE_NOISE_SCHEDULES = ["karras", "exponential", "polyexponential"] as const;
 
-export type NaiImageSampler = (typeof NAI_IMAGE_SAMPLERS)[number];
-export type NaiImageNoiseSchedule = (typeof NAI_IMAGE_NOISE_SCHEDULES)[number];
+type NaiImageSampler = (typeof NAI_IMAGE_SAMPLERS)[number];
+type NaiImageNoiseSchedule = (typeof NAI_IMAGE_NOISE_SCHEDULES)[number];
 
 export type EffectiveNaiImageParams = {
   steps: number;

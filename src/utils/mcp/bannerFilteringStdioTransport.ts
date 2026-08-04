@@ -1,4 +1,4 @@
-import { spawn, type IOType } from "node:child_process";
+import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { PassThrough, type Stream } from "node:stream";
 import { getDefaultEnvironment, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -97,25 +97,19 @@ export class BannerFilteringStdioClientTransport implements Transport {
 
       try {
         processToClose.stdin?.end();
-      } catch {
-        // Ignore shutdown races.
-      }
+      } catch {}
 
       await Promise.race([closePromise, new Promise<void>((resolve) => setTimeout(resolve, 2000).unref())]);
       if (processToClose.exitCode === null) {
         try {
           processToClose.kill("SIGTERM");
-        } catch {
-          // Ignore shutdown races.
-        }
+        } catch {}
         await Promise.race([closePromise, new Promise<void>((resolve) => setTimeout(resolve, 2000).unref())]);
       }
       if (processToClose.exitCode === null) {
         try {
           processToClose.kill("SIGKILL");
-        } catch {
-          // Ignore shutdown races.
-        }
+        } catch {}
       }
     }
 
@@ -185,4 +179,4 @@ function isBannerLine(line: string): boolean {
   return !trimmed.startsWith("{") && !trimmed.startsWith("[") && /[╔╗╚╝║═]/.test(line);
 }
 
-export type { IOType, StdioServerParameters };
+export type { StdioServerParameters };

@@ -8,6 +8,11 @@ TomoriBot can set reminders and schedule tasks for later — one-time or recurri
 easiest way is to just **ask her**; she creates the task through her `create_task` tool.
 Scheduled tasks are persona-specific.
 
+Each persona keeps its pending self-tasks in context whenever it responds, regardless of
+which members appear in the recent conversation. Human-targeted reminders are more selective:
+the target must be present or referenced in the active conversation context, and the reminder
+must belong to the active persona.
+
 ## Creating One
 
 Just tell her in chat:
@@ -49,7 +54,14 @@ so you don't need to remember IDs.
 
 Reminders are delivered by an in-app scheduler and are only marked done **after delivery
 succeeds** — if a delivery is aborted or the channel queue is cleared, it's automatically
-rescheduled and retried. For the runtime details, see the
+retried. Retry delays do not change the original recurring cadence.
+
+Automated attempts do not post an error message each time. If delivery still fails after the
+retry limit, TomoriBot posts one warning containing the unchanged scheduled content and its ID.
+Failed human reminders ping the target so the reminder is not missed; failed self-tasks do not
+ping anyone. One-time schedules are then removed, while recurring schedules stay active for the
+next original occurrence and can be managed with `/scheduled-task edit` or
+`/scheduled-task remove`. For the runtime details, see the
 [architecture overview](/architecture/#runtime-extensions).
 
 ---

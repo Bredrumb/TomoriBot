@@ -2,11 +2,16 @@
  * Stat-tracking metric catalog.
  *
  * Each value is one `metric` in the `stat_counters` table. Adding a new metric
- * is a new entry here — never an `ALTER TABLE` (the long/narrow counter table
- * carries the metric and its sub-key as data, not columns). See
- * plans/stat-tracking.md §5 for the full catalog and grain notes.
+ * is a new entry here: never an `ALTER TABLE` (the long/narrow counter table
+ * carries the metric and its sub-key as data, not columns).
  *
  * `metric_key` semantics per metric:
+ *   - presence_seen → "" (one per successful direct-triggerer turn). This is the
+ *                     behavioral reunion clock, deliberately separate from
+ *                     message_sent so DMs participate without changing telemetry
+ *                     leaderboards. It is written immediately rather than buffered
+ *                     because cross-channel context builds require read-after-write
+ *                     consistency.
  *   - command_used  → full command path, space-joined (e.g. "config humanizer",
  *                     "server welcome-channel set"); not just the top-level category
  *   - model_used    → model id / codename
@@ -34,8 +39,9 @@
  *                         privacy-safe, and answers "paid API vs local TTS" for cost.
  *   - (all others)      → "" (scalar event counter)
  */
-export const STAT_METRICS = [
+const STAT_METRICS = [
   "message_sent",
+  "presence_seen",
   "command_used",
   "model_used",
   "tokens_in",
@@ -65,8 +71,3 @@ export type StatMetric = (typeof STAT_METRICS)[number];
  * metrics carry the active persona's lineage id.
  */
 export const PERSONA_AGNOSTIC_METRICS = new Set<StatMetric>(["command_used"]);
-
-/** Type guard for a raw string against the metric catalog. */
-export function isStatMetric(value: string): value is StatMetric {
-  return STAT_METRICS.includes(value as StatMetric);
-}

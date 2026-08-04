@@ -160,7 +160,6 @@ function buildThoughtLogEmbeds(args: {
       continue;
     }
 
-    // Standard sections: split across multiple embeds if needed
     let remaining = section.content;
 
     while (remaining.length > 0) {
@@ -184,52 +183,6 @@ function buildThoughtLogEmbeds(args: {
   }
 
   return embeds;
-}
-
-function appendThoughtSection(existing?: string, incoming?: string): string | undefined {
-  const normalizedExisting = normalizeThoughtLogText(existing);
-  const normalizedIncoming = normalizeThoughtLogText(incoming);
-  if (!normalizedIncoming) {
-    return normalizedExisting;
-  }
-  if (!normalizedExisting || normalizedExisting === normalizedIncoming) {
-    return normalizedIncoming;
-  }
-  if (normalizedExisting.includes(normalizedIncoming)) {
-    return normalizedExisting;
-  }
-  if (normalizedIncoming.includes(normalizedExisting)) {
-    return normalizedIncoming;
-  }
-
-  return `${normalizedExisting}\n\n${normalizedIncoming}`;
-}
-
-export function mergeThoughtLogPayload(
-  base?: ThoughtLogPayload | null,
-  next?: ThoughtLogPayload | null,
-): ThoughtLogPayload | undefined {
-  const summary = appendThoughtSection(base?.summary, next?.summary);
-  const raw = appendThoughtSection(base?.raw, next?.raw);
-  const fetchedContent = appendThoughtSection(base?.fetchedContent, next?.fetchedContent);
-  const firstReplyUrl = base?.firstReplyUrl || next?.firstReplyUrl;
-  const generationDurationMs =
-    typeof base?.generationDurationMs === "number" || typeof next?.generationDurationMs === "number"
-      ? (base?.generationDurationMs ?? 0) + (next?.generationDurationMs ?? 0)
-      : undefined;
-
-  if (!summary && !raw && !fetchedContent && !firstReplyUrl && generationDurationMs === undefined) {
-    return undefined;
-  }
-
-  return {
-    summary,
-    raw,
-    fetchedContent,
-    firstReplyUrl,
-    generationDurationMs,
-    servingProvider: base?.servingProvider || next?.servingProvider,
-  };
 }
 
 export function hasThoughtLogContent(payload?: ThoughtLogPayload | null): boolean {

@@ -31,7 +31,7 @@ function shouldSendWebhookError(channelId: string): boolean {
   return true;
 }
 
-export async function sendWebhookErrorEmbed(
+async function sendWebhookErrorEmbed(
   channel: BaseGuildTextChannel | AnyThreadChannel,
   locale: string,
   reason: WebhookCreateErrorReason,
@@ -212,7 +212,7 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
       descriptionVars: {
         error_message: error instanceof Error ? error.message : "Unknown Error",
       },
-      footerKey: "genai.generic_error_footer",
+      tipKeys: ["genai.tips.refresh_context"],
     },
     {
       webhook: context.responseTarget?.webhook,

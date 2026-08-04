@@ -644,7 +644,6 @@ export class UpdateTaskTool extends BaseTool {
       const personaNickname =
         context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
-      // Attach a "Show Full Task" button when the deleted purpose was truncated.
       await sendTaskEmbedWithExpand(
         context.channel,
         context.locale,
@@ -856,7 +855,6 @@ export class UpdateTaskTool extends BaseTool {
         : formatReminderTime(finalReminderTime, timezoneOffset);
     const repeatText = formatRepeatText(context.locale, finalRepetitionIntervalMinutes);
 
-    // Attach a "Show Full Task" button when the new purpose was truncated.
     await sendTaskEmbedWithExpand(
       context.channel,
       context.locale,

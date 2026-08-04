@@ -7,9 +7,9 @@ import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 // the OpenAI-compatible builder) unable to front strict backends such as Claude. This module
 // centralizes the three normalizations behind one tested seam:
 //
-//   A. Prefix-completion  — vendor "continue this assistant turn" extension (`prefix: true`).
-//   B. Role alternation   — merge consecutive same-role turns + guarantee a leading `user` turn.
-//   C. Media relocation   — assistant turns cannot carry media; peel it into a synthetic `user`
+//   A. Prefix-completion: vendor "continue this assistant turn" extension (`prefix: true`).
+//   B. Role alternation: merge consecutive same-role turns + guarantee a leading `user` turn.
+//   C. Media relocation: assistant turns cannot carry media; peel it into a synthetic `user`
 //                           turn. This one is ALWAYS-ON (universal across OpenAI/Anthropic/Gemini
 //                           shaped APIs) and is never gated by a toggle.
 //
@@ -56,19 +56,15 @@ export function providerRequiresPrefixCompletion(provider: string): boolean {
   return PREFIX_COMPLETION_REQUIRED_PROVIDERS.has(provider);
 }
 
-// ---------------------------------------------------------------------------------------------
-// A. Prefix-completion
-// ---------------------------------------------------------------------------------------------
-
 /**
  * Sets `prefix: true` on the trailing assistant message when it matches the resolved output
  * prefill, enabling the vendor "continue this turn" completion used by DeepSeek and Z.ai.
  *
  * All four original guards are preserved so the request body is only mutated when it is safe:
- *   1. A non-empty prefill must be present.
- *   2. `messages` must be a non-empty array.
- *   3. The last message must have role `assistant`.
- *   4. Its `content` must exactly equal the prefill (so we only flag a genuine prefill turn).
+ *   - A non-empty prefill must be present.
+ *   - `messages` must be a non-empty array.
+ *   - The last message must have role `assistant`.
+ *   - Its `content` must exactly equal the prefill (so we only flag a genuine prefill turn).
  *
  * @param requestBody - The OpenAI-shaped request body (mutated in place).
  * @param outputPrefill - The already-trimmed output prefill, or undefined when none is set.
@@ -77,18 +73,17 @@ export function applyAssistantPrefixCompletion(
   requestBody: Record<string, unknown>,
   outputPrefill: string | undefined,
 ): void {
-  // 1. Bail when there is no prefill to continue from.
   if (!outputPrefill) {
     return;
   }
 
-  // 2. The body must carry a non-empty messages array.
+  // The body must carry a non-empty messages array.
   const messages = requestBody.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return;
   }
 
-  // 3. The trailing message must be the assistant prefill turn...
+  // The trailing message must be the assistant prefill turn...
   const lastMessage = messages.at(-1) as Record<string, unknown> | undefined;
   if (
     !lastMessage ||
@@ -99,13 +94,8 @@ export function applyAssistantPrefixCompletion(
     return;
   }
 
-  // 4. ...so flag it for continuation.
   lastMessage.prefix = true;
 }
-
-// ---------------------------------------------------------------------------------------------
-// B. Role alternation
-// ---------------------------------------------------------------------------------------------
 
 /** Canonical text used when prepending a synthetic leading `user` turn (Anthropic's wording). */
 export const CONVERSATION_START_USER_TEXT = "[System: Conversation start]";
@@ -124,14 +114,12 @@ function normalizeToParts(content: string | Array<Record<string, unknown>>): Arr
 
 /**
  * Whether a message carries OpenAI-style top-level tool wiring: `tool_calls` on an assistant turn
- * or `tool_call_id` on a tool result turn. Such turns must NOT be merged — the merge keeps only the
+ * or `tool_call_id` on a tool result turn. Such turns must NOT be merged, so the merge keeps only the
  * run's first message's non-`content` keys (see {@link mergeConsecutiveSameRole}), which would
  * silently drop a second turn's `tool_calls`/`tool_call_id` and orphan the matching tool result,
  * producing an invalid request body. Anthropic carries tool data inside `content` blocks rather
  * than as top-level keys, so this is always `false` there and that path stays byte-identical.
  *
- * @param message - A message to inspect.
- * @returns `true` when the message has top-level tool metadata.
  */
 function hasToolMetadata(message: NormalizableMessage): boolean {
   const record = message as unknown as Record<string, unknown>;
@@ -149,11 +137,8 @@ function hasToolMetadata(message: NormalizableMessage): boolean {
  * tool path valid while leaving the Anthropic path byte-identical.
  *
  * @typeParam T - Any {@link NormalizableMessage}-compatible message shape.
- * @param messages - Messages in order.
- * @returns A new array with consecutive same-role runs merged.
  */
 export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages: T[]): T[] {
-  // 1. Empty input → empty output.
   if (messages.length === 0) {
     return [];
   }
@@ -161,14 +146,12 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
   const merged: T[] = [];
   let current = messages[0];
 
-  // 2. Walk the list, folding each same-role neighbor into the current run.
   for (let i = 1; i < messages.length; i++) {
     const next = messages[i];
     // Merge only same-role neighbors, and never across a tool-bearing turn (which would drop its
-    // top-level tool_calls/tool_call_id — see hasToolMetadata).
+    // top-level tool_calls/tool_call_id: see hasToolMetadata).
     if (current.role === next.role && !hasToolMetadata(current) && !hasToolMetadata(next)) {
       const combined = [...normalizeToParts(current.content), ...normalizeToParts(next.content)];
-      // Preserve any extra keys on the run's first message while overriding content.
       const allText = combined.every((part) => part.type === "text");
       current = {
         ...current,
@@ -180,7 +163,6 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
     }
   }
 
-  // 3. Flush the trailing run.
   merged.push(current);
   return merged;
 }
@@ -191,28 +173,21 @@ export function mergeConsecutiveSameRole<T extends NormalizableMessage>(messages
  * `system` turn carried in the array) are skipped so the inserted turn lands in the right place.
  *
  * @typeParam T - Any {@link NormalizableMessage}-compatible message shape.
- * @param messages - Messages in order.
  * @param leadingTurnFactory - Builds the synthetic leading `user` turn to insert when needed.
  * @returns A new array, with the synthetic turn inserted when required.
  */
 export function ensureLeadingUserTurn<T extends NormalizableMessage>(messages: T[], leadingTurnFactory: () => T): T[] {
-  // 1. Locate the first dialogue turn (skip leading system/tool turns).
+  // Locate the first dialogue turn (skip leading system/tool turns).
   const firstDialogueIndex = messages.findIndex((m) => m.role === "user" || m.role === "assistant");
 
-  // 2. Nothing to fix when there is no dialogue or it already starts with a user turn.
   if (firstDialogueIndex === -1 || messages[firstDialogueIndex].role !== "assistant") {
     return messages;
   }
 
-  // 3. Insert the synthetic user turn immediately before the leading assistant turn.
   const result = [...messages];
   result.splice(firstDialogueIndex, 0, leadingTurnFactory());
   return result;
 }
-
-// ---------------------------------------------------------------------------------------------
-// C. Media relocation (always-on)
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Canonical system notice prepended to a synthetic user turn that carries media peeled off an
@@ -238,14 +213,13 @@ export function assistantMediaRelocationNotice(imageCount: number, senderName?: 
  * metadata is still attached to the originating context item. Provider serializers then see only
  * user-role media and one canonical attributed notice.
  *
- * @param contextItems - Provider-agnostic context items in prompt order.
  * @returns A new context item array with model-role image parts relocated.
  */
 export function relocateAssistantMediaContextItems(contextItems: StructuredContextItem[]): StructuredContextItem[] {
   const result: StructuredContextItem[] = [];
 
   for (const item of contextItems) {
-    // 1. Only model turns can carry assistant media that provider APIs reject.
+    // Only model turns can carry assistant media that provider APIs reject.
     if (item.role !== "model") {
       result.push(item);
       continue;
@@ -257,7 +231,6 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
       continue;
     }
 
-    // 2. Preserve any non-image model content as the original assistant/model turn.
     const remainingParts = item.parts.filter((part) => part.type !== "image");
     if (remainingParts.length > 0) {
       result.push({
@@ -266,7 +239,6 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
       });
     }
 
-    // 3. Emit the relocated images as a user turn, attributing them to the original sender.
     result.push({
       role: "user",
       parts: [
@@ -277,6 +249,8 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
       ...(item.messageId && { messageId: item.messageId }),
       ...(item.sender && { sender: item.sender }),
       ...(item.conversationUsers && { conversationUsers: item.conversationUsers }),
+      ...(item.participantTargetIndex && { participantTargetIndex: item.participantTargetIndex }),
+      ...(item.personaMentionMap && { personaMentionMap: item.personaMentionMap }),
     });
   }
 
@@ -295,7 +269,6 @@ export function relocateAssistantMediaContextItems(contextItems: StructuredConte
  *   3. Any peeled images are emitted as a trailing `{ role: "user", content: [notice, ...images] }`.
  * Messages with string content, and non-assistant messages, pass through untouched.
  *
- * @param messages - OpenAI-shaped messages in order.
  * @returns A new array with assistant media relocated to synthetic user turns.
  */
 export function relocateAssistantMediaToUserTurns(
@@ -305,7 +278,7 @@ export function relocateAssistantMediaToUserTurns(
   const result: Array<Record<string, unknown>> = [];
 
   for (const message of messages) {
-    // 1. Only assistant turns with array content can hold relocatable media.
+    // Only assistant turns with array content can hold relocatable media.
     if (message.role !== "assistant" || !Array.isArray(message.content)) {
       result.push(message);
       continue;
@@ -314,7 +287,6 @@ export function relocateAssistantMediaToUserTurns(
     const parts = message.content as Array<Record<string, unknown>>;
     const imageParts = parts.filter((part) => part.type === "image_url");
 
-    // 2. No media → flatten/forward without relocation (still collapse to string for consistency).
     if (imageParts.length === 0) {
       const textOnly = flattenTextParts(parts);
       if (textOnly.length > 0) {
@@ -323,13 +295,12 @@ export function relocateAssistantMediaToUserTurns(
       continue;
     }
 
-    // 3. Emit the text-only assistant turn (when there is any text) ...
+    // Emit the text-only assistant turn (when there is any text) ...
     const assistantText = flattenTextParts(parts);
     if (assistantText.length > 0) {
       result.push({ role: "assistant", content: assistantText });
     }
 
-    // 4. ... then the synthetic user turn carrying the relocated images.
     const senderName =
       typeof message.assistantMediaSenderName === "string" ? message.assistantMediaSenderName : fallbackSenderName;
     result.push({

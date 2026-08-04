@@ -31,20 +31,41 @@ The transformation pipeline runs in this order:
    row matches but its image cannot be loaded, the parenthetical modifier is stripped and the
    line is delivered as normal source-persona output without trying copied identity. If no
    sprite matches, the modifier falls back to copied-render resolution against known personas
-   and users in current context; copied matches use the **flipped** webhook username
+   and users in current context. The candidate identities and purpose-filtered aliases come
+   from the participant target index; copied matches use the **flipped** webhook username
    `target (SourcePersona)` (impersonated name first for the in-chat disguise) while the
    accumulated-text prefix stays source-first (`SourcePersona (target): `) for the model.
    Unknown or ambiguous copied targets are stripped and delivered as
    normal output. This path is line-scoped across stream splits and ignored inside code blocks
    and list-like starts.
 
-3. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
+3. **Opening-label leak guard** (`matchLeadingSpeakerLeak` + `parseLeadingGenericSpeakerLabel`) —
+   runs only at response start (nothing accumulated or sent yet) on segments the render-modifier
+   capture refused, and **regardless of `llm_stop_speaker_pattern_enabled`**. It catches the model
+   cross-breeding history label formats into a foreign speaker label the other guards all miss:
+   the decorated grammar with a non-persona name (`Chris (smug): …` — any name outside the active
+   persona/aliases using the parenthetical form is unambiguously a leak), or a plain
+   `Name:` opening where `Name` is a known conversation participant (another persona, or a user
+   from `KNOWLEDGE_USERS_IN_CONVERSATION` via `collectKnownSpeakerNames`). Prose openings
+   (`Note:`, `TL;DR:`), list items, blockquotes, headings, code fences, and bracketed starts
+   (links/mentions/timestamps) never fire. On detection:
+   - **Retry budget remaining** (`context.emptyResponseRetryCount < MAX_EMPTY_RESPONSE_RETRIES`,
+     threaded from `incoming.retryCount` through `StreamingContext` → `buildStreamContext`): the
+     attempt is discarded via `requestStop(channelId, "speaker_guard")` with nothing sent, which
+     classifies the turn as `empty_response` so `maybeScheduleEmptyResponseRetry` regenerates it
+     with the "reply only as {persona}" directive injected.
+   - **Budget exhausted**: the leaked label is stripped and the body delivered as the active
+     persona — a stripped reply beats silence.
+   Deliberate impersonation (`Tomori (Chris): …`) is unaffected: the render-modifier capture
+   consumes it before this guard runs.
+
+4. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`) — strips any custom emoji
    shortcode (`:name:`) from the segment if the same emoji was already used in a recent bot
    message (lookback window controlled by `EMOJI_UNIQUE_LOOKBACK`, default 5). History is stored
    in converted Discord format (`<:name:id>`), so the filter normalises that form to shortcodes
    before comparison.
 
-4. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
+5. **LLM output cleaning** (`cleanLLMOutput`) — strips the bot's own name-prefix if the model
    writes it (e.g., `"Tomori: hello"` → `"hello"`), converts `:name:` shortcodes to full Discord
    custom emoji syntax (`<:name:id>`) using the server emoji list, strips unresolved shortcodes by
    default, optionally preserves unresolved shortcodes when
@@ -57,24 +78,36 @@ The transformation pipeline runs in this order:
    extra names; the leaked-preamble and later-boundary passes stay scoped to the active name so
    mid-prose `"Name:"` usages are preserved.
 
-5. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
+   The opening chain also matches **identity-macro labels** — `{bot}:`, `{{char}}:`, `{user}:` and
+   their bold forms — because the model sometimes labels its turn with the template syntax instead
+   of the resolved name. Like aliases, macros widen the *opening-chain* match only. Identity macros
+   elsewhere in the response are deliberately delivered to Discord verbatim: a persona asked to
+   draft a preset or system prompt is *supposed* to emit `{{char}}: …` sample dialogue, and that
+   draft must survive both the send and its round-trip back through dialogue history (see
+   [`11-dialogue-history.md`](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)).
+   A response opening with a code fence never matches the leading pattern, so fenced drafts are
+   safe regardless.
+
+6. **Guild mention resolution** (`resolveGuildMentions`) — converts name-based handle references
    in the text (e.g., `@alice`) to Discord snowflake mentions (`<@1234567890>`) using the mention
    map built at stream init from `ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION` items.
 
-6. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`) — when
+7. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`) — when
    `context.outputPrefill` is set (hybrid prefix streaming for NAI), the first segment strips the
    model-echoed prefill from its start and the cleaned prefill is prepended to the outgoing
    segment (injected exactly once; subsequent segments are unmodified).
 
-7. **Speaker guard** (`truncateBeforeGenericSpeakerLine`) — if `llm_stop_speaker_pattern_enabled`
+8. **Speaker guard** (`truncateBeforeGenericSpeakerLine`) — if `llm_stop_speaker_pattern_enabled`
    is true and a speaker-label line (e.g., `User:`) appears in the segment, the text is truncated
    before it and `requestStop(channelId, "speaker_guard")` is queued. The segment is sent with
    the truncated content; the stop is processed by the stage 04 orchestrator on the next
    iteration. Active render-modifier labels such as `Ren (mad):` or `Ren (target):` are explicitly
    allowed through both the provider-level fallback guard and this segment-level guard so they can
-   be resolved instead of treated as foreign speaker turns.
+   be resolved instead of treated as foreign speaker turns. This guard skips the response's opening
+   line (`includeStart` only turns on once text has accumulated) — that position is covered by the
+   always-on opening-label leak guard in step 3.
 
-8. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
+9. **Markdown table detection** (`extractMarkdownTableSegments`) — if the segment contains a
    rendered Markdown table, the segment is split into text parts and table parts. Table parts are
    routed to `StreamMessageDelivery.sendRenderedMarkdownTable()` which renders the table to a PNG
    via `renderMarkdownTableToPng()` and sends it as a Discord file attachment.
@@ -108,20 +141,36 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
     newlines and only switch when a *different* `SourcePersona (sprite):` label appears — an
     expression is a sustained visual state, e.g. `"Touko (mad): ARGGHHH!\nFine... I'll do it"` keeps
     the `mad` sprite for the second line.
-- **`state.lastDeliveredSpriteKey`** / **`state.spriteGroupParity`** — track the last non-identity
-  sprite delivered and a toggle flipped on each sprite change. The toggle decides whether the sprite
-  uses the clean persona name (`false`) or the decorated `Persona (sprite)` name (`true`). Discord
-  groups consecutive webhook messages by `webhook_id` + `username` (ignoring the avatar) and strips
-  zero-width/blank chars from usernames, so a visibly distinct name is the only reliable break:
-  adjacent different-sprite messages alternate clean/decorated and never match, forcing Discord to
-  render each avatar instead of grouping them under the first one, while same-sprite runs keep an
-  identical username and still group. Identity sprites are excluded (their decorated name is already
-  distinct).
+- **Sprite group-break alternation** (`channelDeliveryContinuity.ts`, keyed by channel — *not*
+  `StreamState`) — tracks the last non-identity sprite delivered in the channel plus a toggle flipped
+  on each sprite change. The toggle decides whether the sprite uses the clean persona name (`false`)
+  or the decorated `Persona (sprite)` name (`true`). Discord groups consecutive webhook messages by
+  `webhook_id` + `username` (ignoring the avatar) and strips zero-width/blank chars from usernames,
+  so a visibly distinct name is the only reliable break: adjacent different-sprite messages alternate
+  clean/decorated and never match, forcing Discord to render each avatar instead of grouping them
+  under the first one, while same-sprite runs keep an identical username and still group. Identity
+  sprites are excluded (their decorated name is already distinct).
+
+  The state is channel-scoped because Discord's grouping spans turns. It previously lived in
+  `StreamState`, which is rebuilt for every SDK call, so any turn boundary (queued chain, follow-up,
+  persona job, tool-loop continuation) reset the alternation and let the new turn's first sprite
+  collide with the previous turn's last one. Entries expire after
+  `SPRITE_GROUP_CONTINUITY_TTL_MINUTES` (default 10) — past Discord's own grouping window, continuity
+  no longer matters.
+
+  The same module also records the **identity each message was actually delivered under**
+  (`recordChannelDeliveredWebhookIdentity` on a webhook send, `recordChannelDeliveredBotMessage`
+  on an ordinary bot send). Post-turn artifacts read it back via
+  `getChannelDeliveredWebhookIdentity()` so they group with the message they follow — see
+  stage 07.
 - **`requestStop(channelId, "speaker_guard")`** — queued if the speaker guard fires; the stop
-  is consumed by the stage 04 orchestrator on the next loop iteration.
+  is consumed by the stage 04 orchestrator on the next loop iteration. The opening-label leak
+  guard (step 3) queues the same stop with nothing sent, which the state machine classifies as
+  `empty_response` / `speaker_guard` so post-turn effects schedule a regeneration.
 - **PNG attachment** — when a Markdown table is detected and rendered successfully, a Discord file
-  attachment is sent and the table's raw Markdown is cached in `markdownTableCache` (keyed by
-  message ID) for subsequent reference.
+  attachment is sent with a "Show Markdown" button, and the table's raw Markdown is cached in
+  `markdownTableCache` (keyed by message ID) both for subsequent context reads and to serve the
+  button's ephemeral reply. See stage 07 § Rendered Markdown tables.
 - **`prepareOutputPrefill()`** (companion method) — called once before stage 02 begins (from
   `executeStream` setup). Resolves the prefill string through the same mention/cleaning pipeline
   and stores it on `state.prefillTarget`.
@@ -142,11 +191,12 @@ After this stage (per segment):
 | Surface | Plugin-relevance |
 |---|---|
 | `cleanLLMOutput()` | `src/utils/text/processors/llmOutputProcessor.ts`. Internal — LLM output normalization is tightly coupled to TomoriBot's persona-name conventions and Discord formatting rules. The `emojiUsageEnabled` and `uncensor_*` DB config flags are the configuration surfaces. |
-| `resolveGuildMentions()` | `src/utils/discord/stream/mentionResolver.ts`. Internal — mention resolution uses the static mention map built at stream-init from conversation context. A plugin adding custom handle → user-ID mappings would modify the `KNOWLEDGE_USERS_IN_CONVERSATION` contributor in the context-build pipeline, not this stage. Takes `(text, channel, mentionMap, mentionIdSet, personaMentionMap?)` so it can be shared by non-stream callers (see `cleanToolReplyText`, below). Known persona handles stay as bare `@trigger` text after Discord user mentions are resolved. |
+| `resolveGuildMentions()` | `src/utils/discord/stream/mentionResolver.ts`. Internal — mention resolution uses the static mention map derived at stream-init from the participant target index. A plugin adding custom handle → user-ID mappings would extend the participant source/profile contracts, not this stage. Takes `(text, channel, mentionMap, mentionIdSet, personaMentionMap?)` so it can be shared by non-stream callers (see `cleanToolReplyText`, below). Known persona handles stay as bare `@trigger` text after Discord user mentions are resolved. |
 | `cleanToolReplyText()` | `src/utils/discord/toolReplyText.ts`. Internal — applies this stage's `filterDuplicateCustomEmojis` → `cleanLLMOutput` → `resolveGuildMentions` chain to tool-authored reply text (e.g. the `reply` action of `interact_with_recent_message`), which bypasses the streaming segment path. Keeps tool replies and normal replies rendering identically (emoji, Discord `@mention` resolution, and persona `@trigger` preservation). A plugin adding another tool that sends Tomori-authored Discord text should route it through this helper. |
 | `filterDuplicateCustomEmojis()` | `src/utils/text/emojiPenalty.ts`. Internal — emoji deduplication heuristic; no plugin-relevant seam. |
 | `extractMarkdownTableSegments()` + `renderMarkdownTableToPng()` | `src/utils/text/markdownTable.ts` + `src/utils/image/markdownTableRenderer.ts`. The table renderer path is the only place in the stream pipeline where image attachments are sent during streaming (as opposed to tool results). **A plugin adding other attachment types mid-stream would extend here.** → plugin plan candidate |
 | Speaker guard (`truncateBeforeGenericSpeakerLine`) | `src/utils/text/processors/llmOutputProcessor.ts`. Internal — speaker-label detection runs in both the adapter (stage 02) and the segment processor. The `llm_stop_speaker_pattern_enabled` DB flag is the configuration surface. |
+| Opening-label leak guard (`parseLeadingGenericSpeakerLabel` + `collectKnownSpeakerNames`) | `src/utils/discord/renderModifierParser.ts` + `src/utils/discord/renderModifierResolver.ts`. Internal — always-on response-start companion to the speaker guard; no configuration surface by design (the shapes it fires on are unambiguous leaks). |
 | Output prefill (`context.outputPrefill`) | Internal — NAI-specific hybrid prefix streaming mechanism; not a general extension point. |
 
 ## Configuration

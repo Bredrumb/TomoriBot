@@ -70,7 +70,7 @@ The shared `presets/` images are **immutable and never deleted** by per-persona 
 
 ### `persona_presets.preset_attribute_public_flags`
 
-A `BOOLEAN[]` aligned 1:1 with `preset_attribute_list`. Pointer personas resolve these flags from the live preset row; materialized copies store them in `persona_attributes.is_public`. Official Tomori presets mark their first appearance-style attribute public; public attributes can be shown to other personas triggered by the same message. All other seeded attributes are private.
+A `BOOLEAN[]` aligned 1:1 with `preset_attribute_list`. Pointer personas resolve these flags from the live preset row; materialized copies store them in `persona_attributes.is_public`. Official Tomori presets mark their first appearance-style attribute public; public attributes can be shown in another persona's participant profile when the persona spoke in visible history, is a co-responder, or is referenced by trigger text. All other seeded attributes are private.
 
 The flags are still derived at seed time, not authored in each catalog row. `seedPersonasFromCatalog()` runs the preserved `official_attribute_flags` update after the persona upsert for lineage IDs `4`, `716`, `1770`, `3585`, and `50`.
 
@@ -91,6 +91,8 @@ For the main/default target, re-pointing also **resets the avatar**: `applyPrese
 For `type=alter`, `/persona default` creates an alter pointer from the preset and leaves `personas.webhook_avatar_url` NULL — **no per-server upload**. The alter live-resolves the shared preset avatar (`preset_avatar_shared_url`) at load time, so N servers share one image and catalog avatar edits fan out on the next reseed.
 
 Preset-application avatar writes for the main persona are one-time operational Discord updates and do not materialize a pointer: `/config setup`, `/persona default`, and `/persona import` can establish or preserve the pointer while patching the guild avatar. Direct `/server avatar` edits are different; setting or resetting a persona avatar is deliberate customization and materializes a pointer before the avatar write.
+
+All main-persona avatar uploads are re-encoded to PNG before the guild-member PATCH, same as alter avatars. Discord returns 200 OK for structurally corrupt image files but stores an unservable asset (the CDN returns 415 and clients silently keep the old avatar), so raw user bytes are never sent as-is.
 
 ## Materialization
 

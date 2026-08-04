@@ -2,18 +2,19 @@ import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 import { Crawl4aiEngine } from "./crawl4aiEngine";
-import { McpFetchEngine } from "./mcpFetchEngine";
+import { SafeHttpFetchEngine } from "./mcpFetchEngine";
 import type { FetchEngine, FetchEngineName, FetchOpts } from "./types";
+import { isPrivateNetworkFetchAllowed } from "./urlSafety";
 
-const DEFAULT_ENGINE_ORDER: readonly FetchEngineName[] = ["crawl4ai", "mcp_fetch"];
-const REQUIRED_FALLBACK_ENGINE: FetchEngineName = "mcp_fetch";
+const DEFAULT_ENGINE_ORDER: readonly FetchEngineName[] = ["safe_http"];
+const REQUIRED_FALLBACK_ENGINE: FetchEngineName = "safe_http";
 
 function createEngine(name: FetchEngineName): FetchEngine {
   switch (name) {
     case "crawl4ai":
       return new Crawl4aiEngine();
-    case "mcp_fetch":
-      return new McpFetchEngine();
+    case "safe_http":
+      return new SafeHttpFetchEngine();
   }
 }
 
@@ -30,21 +31,31 @@ export function parseFetchUrlEngineOrder(raw = process.env.FETCH_URL_ENGINE_ORDE
       continue;
     }
 
-    if (name !== "crawl4ai" && name !== REQUIRED_FALLBACK_ENGINE) {
+    const normalizedName = name === "mcp_fetch" ? REQUIRED_FALLBACK_ENGINE : name;
+    if (normalizedName !== "crawl4ai" && normalizedName !== REQUIRED_FALLBACK_ENGINE) {
       log.warn(`Ignoring unknown fetch_url engine name "${name}" from FETCH_URL_ENGINE_ORDER`);
       continue;
     }
 
-    if (name === REQUIRED_FALLBACK_ENGINE) {
+    if (normalizedName === REQUIRED_FALLBACK_ENGINE) {
       continue;
     }
 
-    if (seen.has(name)) {
+    // Crawl4AI follows redirects outside this process, so it is only admitted
+    // where private-network fetches are permitted: any non-production runtime,
+    // or production with an explicit FETCH_URL_ALLOW_PRIVATE_NETWORK opt-in.
+    // Elsewhere the secure default uses the per-hop validated in-process engine.
+    if (normalizedName === "crawl4ai" && !isPrivateNetworkFetchAllowed()) {
+      log.warn(
+        "Ignoring crawl4ai fetch_url engine: private-network fetching is disabled (production without FETCH_URL_ALLOW_PRIVATE_NETWORK)",
+      );
       continue;
     }
 
-    seen.add(name);
-    order.push(name);
+    if (seen.has(normalizedName)) continue;
+
+    seen.add(normalizedName);
+    order.push(normalizedName);
   }
 
   order.push(REQUIRED_FALLBACK_ENGINE);
@@ -54,16 +65,6 @@ export function parseFetchUrlEngineOrder(raw = process.env.FETCH_URL_ENGINE_ORDE
 
 function buildEngineChain(): FetchEngine[] {
   return parseFetchUrlEngineOrder().map((name) => createEngine(name));
-}
-
-export async function getActiveFetchUrlEngine(context: ToolContext): Promise<FetchEngine | null> {
-  for (const engine of buildEngineChain()) {
-    if (await engine.available(context)) {
-      return engine;
-    }
-  }
-
-  return null;
 }
 
 export async function executeFetchUrlWithFallback(

@@ -16,7 +16,6 @@ class CommandRegistry {
   /**
    * Initialize the command registry by fetching all registered commands from Discord.
    * This should be called once during bot startup after commands are registered.
-   * @param client - The Discord client instance
    */
   async initialize(client: Client): Promise<void> {
     if (this.initialized) {
@@ -25,7 +24,7 @@ class CommandRegistry {
     }
 
     try {
-      // 1. Fetch application commands (global commands)
+      // Fetch application commands (global commands)
       const commands = await client.application?.commands.fetch();
 
       if (!commands) {
@@ -33,12 +32,12 @@ class CommandRegistry {
         return;
       }
 
-      // 2. Cache command IDs with their names
+      // Cache command IDs with their names
       for (const [id, command] of commands) {
         // Store base command
         this.commandIds.set(command.name, id);
 
-        // 3. If command has subcommands, store them with format "command:subcommand"
+        // If command has subcommands, store them with format "command:subcommand"
         if (command.options && command.options.length > 0) {
           for (const option of command.options) {
             if (option.type === 1) {
@@ -87,7 +86,6 @@ class CommandRegistry {
    * getCommandMention("teach", "memory", "personal");
    */
   getCommandMention(commandName: string, subcommandOrGroup?: string, subcommand?: string): string {
-    // Build the command string based on parameters
     let commandString: string;
 
     if (subcommandOrGroup && subcommand) {
@@ -101,7 +99,6 @@ class CommandRegistry {
       commandString = `/${commandName}`;
     }
 
-    // Return as inline code for clear formatting
     return `\`${commandString}\``;
   }
 
@@ -115,7 +112,6 @@ class CommandRegistry {
 
   /**
    * Get all registered command names (for debugging).
-   * @returns Array of all command keys in the registry
    */
   getRegisteredCommands(): string[] {
     return Array.from(this.commandIds.keys());

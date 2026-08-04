@@ -49,8 +49,8 @@ const STARTUP_GRACE_PERIOD_MS = (Number(process.env.STARTUP_GRACE_PERIOD_MINUTES
  * deployment artifact rather than a genuinely unconfigured server.
  *
  * Returns a synthetic error entry when:
- * 1. A real DB error was recently recorded for this server, OR
- * 2. The bot is still within the startup grace period (fresh container start)
+ * - A real DB error was recently recorded for this server, OR
+ * - The bot is still within the startup grace period (fresh container start)
  *
  * Used by the UI layer (replyInfoEmbed / sendStandardEmbed) to swap
  * "Initial Setup Required" for "Currently Updating..." when appropriate.
@@ -60,10 +60,8 @@ const STARTUP_GRACE_PERIOD_MS = (Number(process.env.STARTUP_GRACE_PERIOD_MINUTES
  *          startup grace period, or null if this is genuinely "not set up"
  */
 export function getLastDbError(serverDiscId: string): { message: string; timestamp: number } | null {
-  // 1. Check for a real DB error recorded by getCachedAllPersonas
   const entry = lastDbError.get(serverDiscId);
   if (entry) {
-    // Discard stale entries
     if (Date.now() - entry.timestamp > DB_ERROR_STALENESS_MS) {
       lastDbError.delete(serverDiscId);
     } else {
@@ -71,7 +69,7 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
     }
   }
 
-  // 2. During startup grace period, treat empty results as "updating"
+  // During startup grace period, treat empty results as "updating"
   //    so users don't see "Initial Setup Required" on servers that ARE
   //    configured but whose data hasn't been fetched yet.
   if (Date.now() - botStartTimestamp < STARTUP_GRACE_PERIOD_MS) {
@@ -99,7 +97,6 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
  * @returns Array of TomoriState objects (main first, then alters), or empty array if not found
  */
 export async function getCachedAllPersonas(serverDiscId: string): Promise<TomoriState[]> {
-  // 1. Check in-memory cache
   const now = Date.now();
   const cachedEntry = cache.get(serverDiscId);
 
@@ -107,7 +104,6 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
     // Check if cache is still fresh (< 10 minutes old)
     const cacheAge = now - cachedEntry.cachedAt;
     if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
-      // Cache hit - return immediately
       cacheHits++;
       return cachedEntry.personas;
     }
@@ -115,18 +111,15 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
     // Cache stale - fall through to refresh
   }
 
-  // 2. Cache miss or stale - refresh from DB
+  // Cache miss or stale - refresh from DB
   cacheMisses++;
 
   try {
-    // 3. Load fresh data from database (all personas)
     const personas = await personaRepository.loadAllForServer(serverDiscId);
 
-    // Successful load — clear any stale DB error for this server
     lastDbError.delete(serverDiscId);
 
     if (personas.length > 0) {
-      // Find main persona (is_alter=false)
       const mainPersona = personas.find((p) => !p.is_alter);
       if (!mainPersona) {
         log.error(`[TomoriState Cache] No main persona found for server ${serverDiscId}`);
@@ -140,7 +133,6 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
       );
       const effectiveMainPersona = effectivePersonas.find((p) => !p.is_alter) ?? mainPersona;
 
-      // 4. Cache the loaded data
       cache.set(serverDiscId, {
         personas: effectivePersonas,
         mainPersona: effectiveMainPersona,
@@ -183,25 +175,22 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
  * @returns Main TomoriState or null if not found
  */
 export async function getCachedMainPersona(serverDiscId: string): Promise<TomoriState | null> {
-  // 1. Check in-memory cache first for quick lookup
   const cachedEntry = cache.get(serverDiscId);
   if (cachedEntry) {
     const cacheAge = Date.now() - cachedEntry.cachedAt;
     if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
-      // Cache hit - return main persona immediately
       cacheHits++;
       return cachedEntry.mainPersona;
     }
   }
 
-  // 2. Cache miss or stale - load all personas
+  // Cache miss or stale - load all personas
   const personas = await getCachedAllPersonas(serverDiscId);
 
   if (personas.length === 0) {
     return null;
   }
 
-  // Return main persona (is_alter=false)
   const mainPersona = personas.find((p) => !p.is_alter);
   return mainPersona || null;
 }

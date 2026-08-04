@@ -12,7 +12,13 @@ Use `/generate video`, or just ask her.
 - **Text-to-video** — generate a short clip from a prompt.
 - **Image-to-video** — animate a reference image (the first image from a referenced message
   becomes the starting frame).
+- **Looping image-to-video** — when requested through chat, supported models can reuse the
+  starting image as the final frame.
 - **Customizable aspect ratios**.
+
+Image-to-video and looping depend on the selected model's first/last-frame capabilities. TomoriBot
+checks OpenRouter's current video-model catalog before submitting a paid job and asks you to remove
+the image, disable looping, or select a compatible model when necessary.
 
 Video generation uses an **asynchronous polling workflow**: the request is submitted, then
 TomoriBot polls the provider until the finished clip is ready, and posts it when done. Large

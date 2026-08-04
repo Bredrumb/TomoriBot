@@ -10,5 +10,3 @@ export function getTokenizerAssetDir(): string {
 
   return path.resolve(process.cwd(), configuredDir);
 }
-
-export const TOKENIZER_ASSET_DIR_DEFAULT = DEFAULT_TOKENIZER_ASSET_DIR;

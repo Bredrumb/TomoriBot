@@ -1,7 +1,7 @@
 ---
 // Custom SiteTitle that injects the brand icon into the nav header.
 // We bypass the standard `logo` config (which requires an importable image module)
-// and reference the PNG directly as a plain <img> URL instead.
+// and reference the SVG directly as a plain <img> URL instead.
 // /favicon.ico is kept for the browser tab only — ICO files don't render
 // reliably in <img> tags across browsers.
 // biome-ignore lint/correctness/noUnusedVariables: Used in Astro template
@@ -9,7 +9,7 @@ const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
 ---
 
 <a href={siteTitleHref} class="site-title sl-flex">
-  <img src="/tomoricon.png" alt="" aria-hidden="true" class="site-icon" />
+  <img src="/tomoricon.svg" alt="" aria-hidden="true" class="site-icon" />
   <span translate="no">{siteTitle}</span>
 </a>
 

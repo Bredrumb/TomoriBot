@@ -86,6 +86,8 @@ Per-task guides:
 - [`contributing/adding-new-provider.md`](./contributing/adding-new-provider)
 - [`contributing/adding-locale.md`](./contributing/adding-locale)
 - [`contributing/adding-persona-preset.md`](./contributing/adding-persona-preset)
+- [`contributing/adding-participant-extension.md`](./contributing/adding-participant-extension)
+- [`contributing/comment-policy.md`](./contributing/comment-policy) — durable comments and the advisory policy audit
 - [`contributing/raw-sql-boundary.md`](./contributing/raw-sql-boundary) — keeping raw SQL in the repository layer
 - [`contributing/docs-authoring.md`](./contributing/docs-authoring) — docs routes, frontmatter, sidebar, cards, and asset conventions
 
@@ -93,6 +95,7 @@ Testing your changes:
 
 - [`contributing/testing-db-changes.md`](./contributing/testing-db-changes)
 - [`contributing/testing-chat-changes.md`](./contributing/testing-chat-changes)
+- [`contributing/testing-module-mocks.md`](./contributing/testing-module-mocks) — leak-safe Bun module mocks
 
 ## Architecture (order 5)
 
@@ -122,6 +125,16 @@ Supporting services that pipelines depend on.
 
 - [`architecture/integrations/`](./architecture/integrations/) — Discord platform, Matrix bridge,
   NovelAI, SillyTavern, and voice pipeline internals
+
+### Cloud
+
+Production infrastructure on cloud provider services (Azure, AWS, GCP).
+
+- [`architecture/cloud/`](./architecture/cloud/) — deployment and operations on cloud providers
+  - [`cloud/azure-production-deployment.md`](./architecture/cloud/azure-production-deployment) — hardened OIDC/Run Command production deployment and operations
+  - [`cloud/azure-application-logs.md`](./architecture/cloud/azure-application-logs) — shipping error logs to Azure Log Analytics + Grafana
+  - [`cloud/azure-terraform-state-recovery.md`](./architecture/cloud/azure-terraform-state-recovery) — state version and stale-lock recovery
+  - [`cloud/azure-vertex-auth.md`](./architecture/cloud/azure-vertex-auth) — keyless Azure VM authentication to Google Vertex AI
 
 ## Meet Tomori (order 6)
 

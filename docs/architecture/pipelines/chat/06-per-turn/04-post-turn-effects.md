@@ -32,11 +32,22 @@ Steps run in this order:
 
 If a completed `GenerationTurnResult` carries `selectedSticker`:
 
-- An alter persona first sends the sticker URL through its identity webhook,
-  forwarding the thread ID where applicable.
-- If that fails, or the active persona is not an alter, a queued turn replies
-  to the trigger message with the native sticker; a non-queued turn sends it
-  directly to the channel.
+- The sticker URL is sent through a webhook using the identity the stream last
+  delivered under, read from `getChannelDeliveredWebhookIdentity()`, forwarding
+  the thread ID where applicable. The webhook is taken from
+  `responseTarget.webhook` when present and otherwise resolved lazily via
+  `resolveManagedChannelWebhook()`, since the main persona has none.
+- This is **not** gated on `is_alter`: the main persona also delivers through a
+  webhook whenever a sprite renders, and the sticker must match it.
+- The recorded username is reused **verbatim** — it may be the decorated
+  `Persona (sprite)` form chosen by the group-break alternation. Re-resolving the
+  persona's default identity would yield a different name, and Discord would
+  split the sticker into its own message group instead of attaching it to the
+  message it belongs with.
+- A null identity means the last delivery was an ordinary bot message, so the
+  sticker follows: a queued turn replies to the trigger message with the native
+  sticker; a non-queued turn sends it directly to the channel. The same path is
+  the fallback if the webhook send fails.
 - Final delivery failures are logged with the server and sticker IDs and do
   not propagate.
 
@@ -45,6 +56,7 @@ If a completed `GenerationTurnResult` carries `selectedSticker`:
 If `result.status === "empty_response"` and `incoming.retryCount <
 MAX_EMPTY_RESPONSE_RETRIES` (default 2):
 
+- Logs the current attempt and terminal finish reason.
 - Sleeps `EMPTY_RESPONSE_RETRY_DELAY_MS` (default 1000ms).
 - If the empty-response reason was `"speaker_guard"`, prepends a synthetic
   speaker-guard directive to `injectedContextItems` via
@@ -52,6 +64,23 @@ MAX_EMPTY_RESPONSE_RETRIES` (default 2):
 - Re-enters `tomoriChat()` with `skipLock=true`, `retryCount + 1`,
   `selectedPersonaId` pinned to the same persona, and the OpenRouter
   finish-reason-length flag forwarded so stage 03 can trim history.
+
+The `"speaker_guard"` reason is produced both by the config-gated mid-text
+speaker guard and by the always-on opening-label leak guard (a response
+opening with a foreign speaker label like `Chris (smug):` — see provider
+stage 06). The stream side reads `incoming.retryCount` (threaded through
+`StreamingContext.emptyResponseRetryCount`) to strip-and-deliver instead of
+discarding once this retry budget is exhausted, so leak turns degrade to a
+label-stripped reply rather than silence.
+
+When the retry budget is exhausted:
+
+- Deliberate turns (`context.shouldSurfaceUserErrors === true`) receive the
+  localized `genai.empty_response_*` warning embed.
+- Passive autochat and other non-deliberate turns log the exhaustion without
+  posting an error embed into the conversation.
+- User-impersonation turns throw an error back to their command flow instead
+  of posting the standard warning embed.
 
 ### 3. `consumeTextQuota`
 
@@ -111,8 +140,20 @@ Schedules a `setImmediate` callback:
 ### 8. `recordUsageStats`
 
 Starts fire-and-forget recording for completed persona responses: turn/model,
-token, impersonation, emoji, and sprite metrics. Sticker-use statistics remain
-at successful tool selection, matching the tool-dispatch timing.
+token, impersonation, emoji, and sprite metrics.
+
+Expression metrics are **delivery-gated**: they count what Discord accepted, not
+what the model produced. `emoji_used` is therefore scanned from each stream
+segment's `StreamResult.accumulatedText` (appended only inside the post-send
+`recordSuccessfulSend` block) rather than from `personaResponses[].text`, which
+is the short-term-memory payload and carries the `[Scene Metadata]` block drained
+out of `<details>` (content that never reaches the channel). Scanning the
+segments also picks up text delivered *before* a tool call, which the response
+text drops because stream state is fresh per `streamOnce`.
+
+`sticker_used` follows the same rule from its own delivery site: it is recorded
+in `recordStickerDelivery`, called by `sendSelectedSticker` once a webhook or
+native send succeeds, not at tool-selection time.
 
 ## Invariants
 
@@ -132,6 +173,8 @@ After this stage runs:
   with the appropriate flags (`skipLock=true` for retry,
   `suppressNextSelfReply` for boomerang) so they do not interfere with the
   outer lock or self-reply chain semantics.
+- Empty-response exhaustion is user-visible only for deliberate turns;
+  passive and internal chat turns remain silent.
 
 ## Extension points
 
@@ -141,7 +184,7 @@ extend or replace:
 
 | Step | Named helper | Plugin-relevance |
 |---|---|---|
-| Sticker delivery | `sendSelectedSticker` | Post-stream media companion path; alter identity webhook with native-sticker fallback |
+| Sticker delivery | `sendSelectedSticker` | Post-stream media companion path; reuses the last delivered webhook identity, with native-sticker fallback |
 | Empty-response retry | `maybeScheduleEmptyResponseRetry` | Retry policy (provider-specific) — extension via per-provider hook |
 | Text-quota consumption | `incrementTextQuota` | Quota-manager subsystem; plugins shipping their own quotas would add hooks here |
 | Self-reply bookkeeping | `setLastRespondedPersona`, `getSelfReplyChainState` | Cascade-trigger limit semantics; coupled to stage 05 |
@@ -166,7 +209,7 @@ runs after the built-in steps with the same `(context, result)` signature.
 
 | Constant | Default | Purpose |
 |---|---|---|
-| `MAX_EMPTY_RESPONSE_RETRIES` | `2` | Cap on empty-response retry chain (file-local constant) |
+| `MAX_EMPTY_RESPONSE_RETRIES` | `2` | Cap on empty-response retry chain (shared constant in `src/utils/discord/stream/constants.ts`; also read by the stage 06 opening-label leak guard) |
 | `EMPTY_RESPONSE_RETRY_DELAY_MS` | `1000` | Backoff between retries (file-local constant) |
 
 Both are currently file-local — promoting to env vars would be a small

@@ -9,7 +9,7 @@ import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repo
 import { assignPersonalCapabilityToProvider } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 
-export type ActivationStatus = "activated" | "missing_model" | "missing_provider" | "update_failed";
+type ActivationStatus = "activated" | "missing_model" | "missing_provider" | "update_failed";
 
 export interface ActivationResult {
   status: ActivationStatus;

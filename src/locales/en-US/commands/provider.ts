@@ -1,10 +1,8 @@
-// locales/en-US/commands/provider.ts
-
 export default {
   provider: {
     description: `Manage saved provider configurations`,
     add: {
-      description: `Add or update a saved provider configuration and activate its default text model.`,
+      description: `Add or update a saved provider configuration and activate its saved text model.`,
       modal_title: `Add Saved Provider`,
       success_title: `Provider Saved`,
       success: `Saved credentials for **{provider}** and set the current text model to \`{model_name}\`. Use \`/model embedding|image|video|vision\` if you want to configure other capabilities.`,
@@ -27,8 +25,8 @@ export default {
         openrouter: `Many model vendors through one OpenRouter account.`,
         vertex: `Google Cloud Vertex AI using service-account credentials.`,
         vertexexpress: `Vertex AI Express API-key access for Gemini.`,
-        zai: `Z.ai general chat models; check ToS for non-coding use.`,
-        zaicoding: `Z.ai coding/agent models for coding-oriented use.`,
+        zai: `General chat models from Zhipu; check ToS for non-coding use.`,
+        zaicoding: `Coding/agent models from Zhipu for coding-oriented use.`,
       },
       api_key_description: `This key will be securely stored. Leave it blank if you selected Custom Endpoint.`,
       api_key_label: `API Key`,

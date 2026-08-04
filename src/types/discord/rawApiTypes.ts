@@ -143,20 +143,6 @@ export interface RawDiscordWebSocketPacket {
 }
 
 /**
- * Discord.js Client interface extension for internal properties
- * Used for accessing WebSocket manager and other internal features.
- */
-export interface ExtendedDiscordClient {
-  /** WebSocket manager with handlePacket method */
-  ws?: {
-    handlePacket?: (packet: RawDiscordWebSocketPacket, shard: RawDiscordShard) => void;
-    [key: string]: unknown;
-  } & Record<string, unknown>;
-  /** Additional client properties */
-  [key: string]: unknown;
-}
-
-/**
  * Discord WebSocket shard information
  * Used for WebSocket packet handling with shard context.
  */

@@ -26,11 +26,11 @@ export type ProviderApiFamily = "google-genai" | "openrouter" | "novelai" | "ope
 /** LLM generation parameters that providers may support via DB config. */
 export type SupportedParam = SupportedParamValue;
 
-export type ImageGenerationStyle = "chat-completion" | "nai-pipeline" | "none";
+type ImageGenerationStyle = "chat-completion" | "nai-pipeline" | "none";
 
-export type VideoGenerationStyle = "chat-completion" | "none";
+type VideoGenerationStyle = "chat-completion" | "none";
 
-export interface ProviderFeatureSupport {
+interface ProviderFeatureSupport {
   imageGeneration: ImageGenerationStyle;
   videoGeneration: VideoGenerationStyle;
   embeddings: boolean;
@@ -67,7 +67,7 @@ export type StreamStopReason =
   | "flush_limit"
   | "unknown";
 
-export type ThoughtLogKind = "summary" | "raw";
+type ThoughtLogKind = "summary" | "raw";
 
 export interface ThoughtLogEntry {
   kind: ThoughtLogKind;
@@ -232,17 +232,13 @@ export interface LLMProvider {
   /**
    * Get available tools/functions based on Tomori's configuration
    * @param tomoriState - The current Tomori state with configuration
-   * @returns Array of tool configurations specific to this provider
    */
   getTools(tomoriState: TomoriState): Promise<Array<Record<string, unknown>>>;
 
   /**
    * Stream LLM response directly to a Discord channel
    * @param channel - The Discord text channel or thread to send messages to
-   * @param client - The Discord client instance
-   * @param tomoriState - The current Tomori state
    * @param config - Provider-specific configuration
-   * @param contextItems - An array of structured context items for the LLM
    * @param currentTurnModelParts - Accumulated model parts for the current turn
    * @param emojiStrings - Optional array of emoji strings for cleaning
    * @param functionInteractionHistory - Optional function calling history
@@ -254,7 +250,6 @@ export interface LLMProvider {
    * @param personaAvatarUrl - Optional avatar URL for current persona (used with webhook)
    * @param personaUsername - Optional username override for current persona (used with webhook)
    * @param prefixStrippingName - Optional name used for prefix stripping (may differ from personaUsername for user impersonation)
-   * @returns Promise<StreamResult> - The outcome of the streaming operation
    */
   streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
@@ -282,16 +277,13 @@ export interface LLMProvider {
   ): Promise<StreamResult>;
 
   /**
-   * Get the default model for this provider
    * @returns Promise<string> - The default model codename
    */
   getDefaultModel(): Promise<string>;
 
   /**
    * Convert provider-specific configuration from TomoriState
-   * @param tomoriState - The current Tomori state
    * @param apiKey - The decrypted API key
-   * @returns Provider-specific configuration object
    */
   createConfig(tomoriState: TomoriState, apiKey: string): Promise<ProviderConfig>;
 }

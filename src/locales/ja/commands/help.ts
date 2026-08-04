@@ -1,5 +1,3 @@
-// locales/ja/commands/help.ts
-
 export default {
   help: {
     "personal-provider": {
@@ -296,16 +294,9 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       step1_title: `ステップ1：APIキーを取得`,
       step1_description: `TomoriBotは複数のAIプロバイダーに対応しています。いずれかのAPIキーが必要です。
 - {helpApikey}で取得方法を確認
-  - **Google Gemini** — 汎用、無料枠あり、すべての機能を実行可能
-  - **OpenRouter** — 多数のAIモデルに一箇所でアクセス
-  - **NovelAI** — 無検閲なロールプレイとストーリーテリング特化
-  - **DeepSeek** — コスト効率の高い推論モデル
-  - **NVIDIA NIM** — NVIDIAホスト型モデル
-  - **Anthropic** — Claudeモデル
-  - **Vertex AI** — ADC経由のGoogle Cloudモデル
-  - **Vertex AI Express** — Express Mode経由のGoogle Cloud APIキーBYOK（Preview、Gemini限定）
-  - **Z.ai (Zhipu)** — 中国のAIモデル、コーディングプランあり ⚠️ *利用規約でコーディング/エージェントのシナリオのみに制限*
-  - **Custom**: OpenAI互換エンドポイント（Ollama、vLLM、LiteLLMなど）
+  - **Google Gemini**（*推奨*）— 汎用、無料で利用可能、すべての機能を実行可能
+  - **NovelAI** — 無検閲なロールプレイ、ストーリーテリング、画像生成
+  - **OpenRouter** — 有料で信頼性の高い、多数のAIモデルへの一箇所からのアクセス
 - このAPIキーを**他人と共有しないでください**
 - Customエンドポイントはセットアップ後に{configApiKeySet}でBearer認証トークンを追加可能`,
       step2_title: `ステップ2：セットアップコマンドを実行`,
@@ -520,7 +511,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 4. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
       nvidia_important_title: `重要な注意事項：`,
       nvidia_important_description: `- テキストと埋め込みはNVIDIAのホスト型 \`integrate.api.nvidia.com\` を使用します
-- ネイティブ画像生成はNVIDIAホストの \`ai.api.nvidia.com\` Stabilityエンドポイントを使用します`,
+- ネイティブ画像生成はNVIDIAホストの \`ai.api.nvidia.com\` FLUXエンドポイントを使用します`,
       nvidia_footer: `このプロバイダーを設定したら、{configModel}、{configModelEmbedding}、{configModelImage}でテキスト・埋め込み・画像モデルを変更できます`,
       provider_choice_zai: `Z.ai`,
       provider_choice_vertex: `Google Vertex AI`,
@@ -571,7 +562,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       vertex_title: `Google Vertex AIの設定`,
       vertex_description: `Google Vertex AIは、Google Cloudを通じてGeminiモデルへのエンタープライズグレードのアクセスを提供します。
 - 認証にApplication Default Credentials（ADC）を使用、APIキーの管理が不要
-- TomoriBotをローカル（PC）で実行している開発者やユーザーに最適
+- ローカルのgcloud ADC、またはホスト環境のワークロードID・サービスアカウントを使用
 - [Vertex AIドキュメント](https://cloud.google.com/vertex-ai/docs)`,
       vertex_getting_key_title: `設定手順：`,
       vertex_getting_key_description: `**手順1: [Google Cloud CLI](https://cloud.google.com/cli)をインストール**
@@ -599,8 +590,8 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - 例：\`my-vertex-project-12345::global\``,
       vertex_important_title: `重要な注意事項：`,
       vertex_important_description: `- 保存される値は**設定情報**（プロジェクト＋ロケーション）であり、認証情報ではありません
-- すべてのVertexリクエストはPCのGoogle Cloud CLI IDを使用します
-- ⚠️ \`gen-lang-client-\` で始まるプロジェクトはGoogle AI Studioが自動生成したもので、Vertex AIでは**使用できません**。上記の手順でプロジェクトを作成してください。
+- すべてのVertexリクエストはホストのApplication Default Credentials IDを使用します
+- AI StudioのAPIキーだけではこのプロバイダーを認証できません。プロジェクトで請求とVertex AI APIを有効にし、ホストIDにVertexアクセス権を付与してください。
 - チャット、ツール呼び出し、ストリーミング、構造化出力、圧縮、埋め込み、プリセット生成に対応`,
       vertex_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
       vertexexpress_title: `Google Vertex AI Expressの設定`,

@@ -117,6 +117,14 @@ export class StreamBufferFlusher {
         state.buffer,
         DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
       );
+
+      // A zero index means every candidate breakpoint would split a markdown table. Hold the
+      // buffer instead, so the table stays whole and the final flush renders it as one image.
+      if (flushIndex <= 0) {
+        log.info("Stream Seg: Deferring oversized buffer flush to keep a markdown table intact");
+        break;
+      }
+
       const segmentToFlush = state.buffer.substring(0, flushIndex);
       const updatedBuffer = state.buffer.substring(flushIndex);
 

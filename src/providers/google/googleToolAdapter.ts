@@ -55,9 +55,6 @@ interface GoogleObjectSchema extends GoogleParameterSchema {
 export class GoogleToolAdapter implements MCPCapableToolAdapter {
   private static instance: GoogleToolAdapter;
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): GoogleToolAdapter {
     if (!GoogleToolAdapter.instance) {
       GoogleToolAdapter.instance = new GoogleToolAdapter();
@@ -65,10 +62,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     return GoogleToolAdapter.instance;
   }
 
-  /**
-   * Get the provider name this adapter supports
-   * @returns Provider identifier
-   */
   getProviderName(): string {
     return "google";
   }
@@ -76,7 +69,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
   /**
    * Convert a generic tool to Google's function declaration format
    * @param tool - The generic tool to convert
-   * @returns Google-specific function declaration
    */
   convertTool(tool: Tool): Record<string, unknown> {
     try {
@@ -101,19 +93,16 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
    * Convert tool result back to Google-specific format
    * This is used when the tool execution result needs to be fed back to Gemini
    * @param result - The generic tool result
-   * @returns Google-specific result format (Part object)
    */
   convertResult(result: ToolResult): Record<string, unknown> {
     try {
       // Google expects a Part object with text content
       if (result.success) {
-        // Successful execution - provide meaningful result text
         let resultText = result.message || "Tool executed successfully";
 
         if (result.data && typeof result.data === "object") {
           const data = result.data as Record<string, unknown>;
 
-          // Format the result based on the data structure
           if (data.summary && typeof data.summary === "string") {
             resultText = data.summary;
           } else if (data.message && typeof data.message === "string") {
@@ -121,7 +110,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
           } else if (data.selectionReason && typeof data.selectionReason === "string") {
             resultText = data.selectionReason;
           } else {
-            // Include relevant data in the result text
             const relevantData = this.extractRelevantData(data);
             if (relevantData) {
               resultText = `${resultText}\n\nResult: ${relevantData}`;
@@ -134,7 +122,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
         };
       }
 
-      // Failed execution - provide error information
       const errorText = result.message || result.error || "Tool execution failed";
 
       return {
@@ -154,8 +141,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Convert multiple tools to Google's tools array format
-   * @param tools - Array of generic tools
-   * @returns Google tools configuration
    */
   convertToolsArray(tools: Tool[]): Array<Record<string, unknown>> {
     if (tools.length === 0) {
@@ -163,7 +148,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     }
 
     try {
-      // Convert each tool to Google function declaration
       const functionDeclarations = tools.map((tool) => this.convertTool(tool));
 
       // Google expects tools in this specific format
@@ -184,10 +168,8 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
   /**
    * Get all available tools (built-in + MCP) in provider-specific format
    * Implementation of MCPCapableToolAdapter interface
-   * @param builtInTools - Array of built-in tools
    * @param serverId - Optional Discord server ID for server-specific tool selection
    * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   * @returns Combined provider-specific tools configuration
    */
   async getAllToolsInProviderFormat(
     builtInTools: Tool[],
@@ -200,7 +182,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
   /**
    * Get all available tools (built-in + MCP) in Google tools format
    * This provides a unified interface for the provider to get all tools
-   * @param builtInTools - Array of built-in tools
    * @param serverId - Optional Discord server ID for server-specific tool selection
    * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
    * @returns Combined Google tools configuration with conditional search tool filtering
@@ -211,7 +192,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     allowedMCPFunctions?: string[],
   ): Promise<Array<Record<string, unknown>>> {
     try {
-      // Start with built-in tools
       const allFunctionDeclarations: Record<string, unknown>[] = [];
 
       // Brave-key dance removed: the unified `web_search` tool is gated centrally
@@ -223,7 +203,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
         log.info(`Converted ${builtInTools.length} built-in tools to Google format`);
       }
 
-      // Add MCP tools if available (using pre-filtered list or legacy filtering)
       const mcpManager = getMCPManager();
       if (mcpManager.isReady()) {
         let addedMCPToolsCount = 0;
@@ -246,12 +225,10 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
             try {
               const geminiTool = await mcpTool.tool();
               if (geminiTool.functionDeclarations) {
-                // Filter declarations to only include allowed functions and exclude disabled DDG functions
                 const declarations = (geminiTool.functionDeclarations as Record<string, unknown>[]).filter(
                   (declaration) => {
                     const functionName = declaration.name as string;
 
-                    // Exclude disabled DuckDuckGo functions
                     if (disabledDDGFunctions.includes(functionName)) {
                       disabledFunctionsCount++;
                       return false;
@@ -283,7 +260,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
           // Legacy path with Brave API key filtering (for backward compatibility)
           const mcpTools = mcpManager.getMCPTools();
 
-          // DuckDuckGo search function names for filtering when Brave is available
           const duckduckgoSearchFunctions = ["web-search", "iask-search", "monica-search", "url-metadata"];
 
           for (const mcpTool of mcpTools) {
@@ -293,12 +269,10 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
                 // Cast FunctionDeclaration to Record<string, unknown> for type compatibility
                 let declarations = geminiTool.functionDeclarations as Record<string, unknown>[];
 
-                // Filter out disabled DuckDuckGo functions (always)
                 const originalCount = declarations.length;
                 declarations = declarations.filter((declaration: Record<string, unknown>) => {
                   const functionName = declaration.name as string;
 
-                  // Always exclude disabled functions
                   if (disabledDDGFunctions.includes(functionName)) {
                     disabledFunctionsCount++;
                     return false;
@@ -316,7 +290,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 
                 excludedDDGFunctionsCount += originalCount - declarations.length - disabledFunctionsCount;
 
-                // Add remaining declarations
                 if (declarations.length > 0) {
                   allFunctionDeclarations.push(...declarations);
                   addedMCPToolsCount++;
@@ -341,7 +314,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
         }
       }
 
-      // Add guild MCP tools (per-guild remote servers)
       if (serverId && allowedMCPFunctions) {
         try {
           const guildMcpManager = getGuildMcpManager();
@@ -370,7 +342,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
         }
       }
 
-      // Return in Google's expected format
       if (allFunctionDeclarations.length === 0) {
         return [];
       }
@@ -382,7 +353,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
       ];
     } catch (error) {
       log.error("Failed to get all tools in Google format:", error as Error);
-      // Return just built-in tools as fallback
       return this.convertToolsArray(builtInTools);
     }
   }
@@ -391,8 +361,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
    * Check if a function name belongs to an MCP tool (global or guild)
    * Delegates to the provider-agnostic MCP executor for global,
    * and checks guild MCP manager for per-guild tools
-   * @param functionName - Name of the function to check
-   * @returns Promise<boolean> - True if this is an MCP tool function
    */
   async isMCPFunction(functionName: string): Promise<boolean> {
     const mcpExecutor = getMCPExecutor();
@@ -404,10 +372,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
   /**
    * Execute an MCP tool function
    * Delegates to the provider-agnostic MCP executor for all processing
-   * @param functionName - Name of the MCP function to execute
-   * @param args - Arguments for the function
-   * @param context - Tool execution context for Discord operations
-   * @returns Promise<TypedMCPToolResult> - Enhanced typed tool result
    */
   async executeMCPFunction(
     functionName: string,
@@ -418,12 +382,8 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
     return mcpExecutor.executeMCPFunction(functionName, args, context);
   }
 
-  // Private helper methods
-
   /**
    * Convert generic parameter type to Google Type enum
-   * @param genericType - Generic parameter type
-   * @returns Google Type enum value
    */
   private convertParameterType(genericType: ToolParameterType): GoogleTypeValue {
     switch (genericType) {
@@ -438,7 +398,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
       case "object":
         return Type.OBJECT;
       default:
-        // Default to string for unknown types
         log.warn(`Unknown parameter type: ${genericType}, defaulting to STRING`);
         return Type.STRING;
     }
@@ -489,8 +448,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Extract relevant data from tool result for Google response
-   * @param data - Tool result data object
-   * @returns Formatted string with relevant information
    */
   private extractRelevantData(data: Record<string, unknown>): string | null {
     try {
@@ -507,7 +464,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
         return null;
       }
 
-      // Format as readable text
       const entries = Object.entries(extractedData)
         .map(([key, value]) => `${key}: ${String(value)}`)
         .join(", ");
@@ -521,22 +477,17 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Validate that a tool can be converted to Google format
-   * @param tool - Tool to validate
-   * @returns True if tool is compatible with Google format
    */
   validateToolCompatibility(tool: Tool): boolean {
     try {
-      // Check required properties
       if (!tool.name || !tool.description || !tool.parameters) {
         return false;
       }
 
-      // Check parameter schema structure
       if (!tool.parameters.properties || !Array.isArray(tool.parameters.required)) {
         return false;
       }
 
-      // Check parameter types are supported
       for (const paramSchema of Object.values(tool.parameters.properties)) {
         if (!this.isSupportedParameterSchema(paramSchema)) return false;
       }
@@ -569,7 +520,6 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
   }
 }
 
-// Export convenience function for getting the adapter instance
 export function getGoogleToolAdapter(): GoogleToolAdapter {
   return GoogleToolAdapter.getInstance();
 }

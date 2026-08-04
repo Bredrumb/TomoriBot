@@ -52,7 +52,7 @@ async function getAppliedMigrations(client: SQL): Promise<Set<string>> {
  * pair is ordered by code-point of their stems rather than by filesystem
  * `readdir` order, so a fresh install and an upgraded install apply them
  * identically. Because stems are unique per file, (version, name) is a total
- * order — no ties survive. Same-number siblings must still be mutually
+ * order, so no ties survive. Same-number siblings must still be mutually
  * order-independent; this tie-break guarantees *stability*, not that an
  * alphabetically-later migration may safely depend on an earlier one.
  *
@@ -73,9 +73,7 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
   const pending: PendingMigration[] = [];
 
   for (const file of files) {
-    // Skip rollback files
     if (file.endsWith(".down.sql")) continue;
-    // Skip unrelated files
     if (!file.endsWith(".sql")) continue;
 
     const match = MIGRATION_FILENAME.exec(file);
@@ -92,8 +90,8 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
     }
   }
 
-  // 1. Primary key: ascending version number.
-  // 2. Tie-break: code-point comparison of the full stem, so same-numbered
+  // Primary key: ascending version number.
+  // Tie-break: code-point comparison of the full stem, so same-numbered
   //    migrations apply in a stable, filesystem-independent order. We compare
   //    by code point (not localeCompare) to stay deterministic across host
   //    locales; stems are restricted to [a-z0-9_] so this is well-defined.
@@ -111,7 +109,6 @@ async function getPendingMigrations(applied: Set<string>): Promise<PendingMigrat
  * migrations are already represented by schema.sql and replaying them would ask
  * for legacy source tables that correctly do not exist on a clean install.
  *
- * @param client - SQL client to use for the target database
  */
 export async function markAllMigrationsApplied(client: SQL = defaultSql): Promise<void> {
   await ensureMigrationsTable(client);
@@ -132,10 +129,9 @@ export async function markAllMigrationsApplied(client: SQL = defaultSql): Promis
  * Applies a single migration file and records it in schema_migrations.
  *
  * Comment-only files (e.g. the 001_baseline marker) produce zero statements
- * from splitSqlStatements and are recorded without executing any SQL —
+ * from splitSqlStatements and are recorded without executing any SQL, so
  * this is intentional for marker migrations.
  *
- * @param migration - Migration to apply
  */
 async function applyMigration(client: SQL, migration: PendingMigration): Promise<void> {
   const sqlText = await readFile(migration.filePath, "utf-8");

@@ -120,7 +120,7 @@ SHOW config_file;
 
 `postgresql.conf` で拡張機能を有効にします。`shared_preload_libraries` に他のライブラリがすでにリストされている場合は末尾に追加します。
 
-```conf
+```ini
 shared_preload_libraries = 'pg_cron'   # 例: 'pg_stat_statements,pg_cron'
 cron.database_name = 'your_dbname'
 ```

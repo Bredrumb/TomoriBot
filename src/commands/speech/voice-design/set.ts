@@ -1,22 +1,30 @@
 import {
   MessageFlags,
   TextInputStyle,
-  type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
-  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
 
-import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
+import {
+  buildTextPreview,
+  CONFIRMATION_PREVIEW_BUDGET,
+  textPreviewFooterKey,
+  textPreviewFooterVars,
+} from "@/utils/text/textPreview";
 
 const PROMPT_MODAL_ID = "speech_voice_design_prompt_modal";
 const PROMPT_FIELD_ID = "voice_design_prompt";
@@ -41,7 +49,7 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-  let selectedPersona: TomoriState | null = null;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
@@ -54,6 +62,8 @@ export async function execute(
   }
 
   try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -93,76 +103,107 @@ export async function execute(
 
     const inlinePrompt = interaction.options.getString("prompt")?.trim() ?? "";
 
-    const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
+    await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
-      preserveSelectedInteraction: true,
       titleKey: "commands.speech.voice_design.select_persona_title",
-      onSelect: async () => {},
+      async onSelected(selection) {
+        workflowState.message = selection.message;
+        const selectedPersona = selection.persona;
+        const personaId = selectedPersona.persona_id;
+        if (personaId == null) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
+
+        try {
+          let designPrompt = inlinePrompt;
+          let message: PersonaWorkflowMessageController;
+          if (!designPrompt) {
+            const existingPrompt = selectedPersona.speech_voice_design_prompt?.trim() ?? "";
+            const modalResult = await selection.openModal({
+              modalCustomId: PROMPT_MODAL_ID,
+              modalTitleKey: existingPrompt
+                ? "commands.speech.voice_design.update_modal_title"
+                : "commands.speech.voice_design.modal_title",
+              components: [
+                {
+                  customId: PROMPT_FIELD_ID,
+                  labelKey: "commands.speech.voice_design.prompt_label",
+                  descriptionKey: "commands.speech.voice_design.prompt_help",
+                  placeholder: "commands.speech.voice_design.prompt_placeholder",
+                  style: TextInputStyle.Paragraph,
+                  required: true,
+                  minLength: 10,
+                  maxLength: MAX_VOICE_DESIGN_PROMPT_LENGTH,
+                  value: existingPrompt.slice(0, MAX_VOICE_DESIGN_PROMPT_LENGTH),
+                },
+              ],
+            });
+            if (modalResult.outcome !== "submitted") {
+              return completePersonaWorkflow();
+            }
+
+            const work = await modalResult.phase.beginInPlaceWork();
+            message = work.message;
+            designPrompt = modalResult.phase.values[PROMPT_FIELD_ID]?.trim() ?? "";
+          } else {
+            const work = await selection.beginInPlaceWork();
+            message = work.message;
+          }
+
+          if (!designPrompt) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "commands.speech.voice_design.prompt_required_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+
+          await saveVoiceDesignPrompt(message, locale, serverDiscId, selectedPersona, designPrompt);
+          return completePersonaWorkflow();
+        } catch (error) {
+          const context: ErrorContext = {
+            userId: userData.user_id,
+            serverId: selectedPersona.server_id,
+            personaId,
+            errorType: "CommandExecutionError",
+            metadata: {
+              command: "speech voice-design set",
+              guildId: serverDiscId,
+              executorDiscordId: interaction.user.id,
+            },
+          };
+          await log.error("Error executing /speech voice-design set", error as Error, context);
+          await selection.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.unknown_error_title",
+              descriptionKey: "general.errors.unknown_error_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          throw error;
+        }
+      },
     });
-
-    if (!personaSelection.success || personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-      return;
-    }
-
-    const personaButtonInteraction = personaSelection.interaction as ButtonInteraction;
-    selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-    if (!selectedPersona?.persona_id) {
-      await replyInfoEmbed(personaButtonInteraction, locale, {
-        titleKey: "general.errors.invalid_option_title",
-        descriptionKey: "general.errors.invalid_option_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    let designPrompt = inlinePrompt;
-    if (!designPrompt) {
-      const existingPrompt = selectedPersona.speech_voice_design_prompt?.trim() ?? "";
-      const modalResult = await promptWithRawModal(personaButtonInteraction, locale, {
-        modalCustomId: PROMPT_MODAL_ID,
-        modalTitleKey: existingPrompt
-          ? "commands.speech.voice_design.update_modal_title"
-          : "commands.speech.voice_design.modal_title",
-        components: [
-          {
-            customId: PROMPT_FIELD_ID,
-            labelKey: "commands.speech.voice_design.prompt_label",
-            descriptionKey: "commands.speech.voice_design.prompt_help",
-            placeholder: "commands.speech.voice_design.prompt_placeholder",
-            style: TextInputStyle.Paragraph,
-            required: true,
-            minLength: 10,
-            maxLength: MAX_VOICE_DESIGN_PROMPT_LENGTH,
-            value: existingPrompt.slice(0, MAX_VOICE_DESIGN_PROMPT_LENGTH),
-          },
-        ],
-      });
-
-      if (modalResult.outcome !== "submit" || !modalResult.interaction) {
-        return;
-      }
-
-      designPrompt = modalResult.values?.[PROMPT_FIELD_ID]?.trim() ?? "";
-      if (!designPrompt) {
-        await replyInfoEmbed(modalResult.interaction, locale, {
-          titleKey: "general.errors.invalid_option_title",
-          descriptionKey: "commands.speech.voice_design.prompt_required_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      await saveVoiceDesignPrompt(modalResult.interaction, locale, serverDiscId, selectedPersona, designPrompt);
-      return;
-    }
-
-    await saveVoiceDesignPrompt(personaButtonInteraction, locale, serverDiscId, selectedPersona, designPrompt);
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
-      serverId: selectedPersona?.server_id ?? null,
-      personaId: selectedPersona?.persona_id ?? null,
+      serverId: null,
+      personaId: null,
       errorType: "CommandExecutionError",
       metadata: {
         command: "speech voice-design set",
@@ -171,6 +212,17 @@ export async function execute(
       },
     };
     await log.error("Error executing /speech voice-design set", error as Error, context);
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
@@ -181,18 +233,21 @@ export async function execute(
 }
 
 async function saveVoiceDesignPrompt(
-  responseInteraction: ButtonInteraction | ChatInputCommandInteraction | ModalSubmitInteraction,
+  message: PersonaWorkflowMessageController,
   locale: string,
   serverDiscId: string,
   selectedPersona: TomoriState,
   designPrompt: string,
 ): Promise<void> {
   if (!selectedPersona.persona_id) {
-    await replyInfoEmbed(responseInteraction, locale, {
-      titleKey: "general.errors.invalid_option_title",
-      descriptionKey: "general.errors.invalid_option_description",
-      color: ColorCode.ERROR,
-    });
+    await message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.errors.invalid_option_title",
+        descriptionKey: "general.errors.invalid_option_description",
+        color: ColorCode.ERROR,
+      }),
+    );
     return;
   }
 
@@ -207,22 +262,33 @@ async function saveVoiceDesignPrompt(
   });
 
   if (!updatedTomori) {
-    await replyInfoEmbed(responseInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
+    await message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      }),
+    );
     return;
   }
 
   invalidateTomoriStateCache(serverDiscId);
-  await replyInfoEmbed(responseInteraction, locale, {
-    titleKey: "commands.speech.voice_design.success_title",
-    descriptionKey: "commands.speech.voice_design.success_description",
-    descriptionVars: {
-      persona: selectedPersona.persona_nickname,
-      preview: designPrompt.length > 120 ? `${designPrompt.slice(0, 117)}...` : designPrompt,
-    },
-    color: ColorCode.SUCCESS,
-  });
+  // Rendered as a fenced block rather than a blockquote: a newline terminates a
+  // Discord blockquote, so multi-line design prompts used to spill out of it.
+  const preview = buildTextPreview(designPrompt, CONFIRMATION_PREVIEW_BUDGET);
+  await message.replace(
+    buildPersonaWorkflowNotice({
+      locale,
+      titleKey: "commands.speech.voice_design.success_title",
+      descriptionKey: "commands.speech.voice_design.success_description",
+      descriptionVars: {
+        persona: selectedPersona.persona_nickname,
+        preview: preview.text,
+      },
+      footerKey: textPreviewFooterKey(preview),
+      footerVars: textPreviewFooterVars(preview),
+      color: ColorCode.SUCCESS,
+    }),
+  );
 }

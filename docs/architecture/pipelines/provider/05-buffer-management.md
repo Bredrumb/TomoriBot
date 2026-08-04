@@ -33,6 +33,29 @@ Three flush paths exist beyond the main `processTextChunk` loop:
   hitting a sentence boundary, a safe word-break index is found via `findRegularOverflowFlushIndex`
   and the buffer is flushed in segments until it is back under the limit.
 
+### Markdown table atomicity
+
+A Markdown table must reach stage 06 as one intact block: `extractMarkdownTableSegments` only
+recognizes a table when its header, separator, and body rows arrive together, and any fragment that
+fails to parse is delivered as raw pipe-delimited text instead of a rendered PNG. Two mechanisms in
+this stage protect that:
+
+- **Overflow snapping** — table rows end in newlines, so every sentence/whitespace heuristic in
+  `findRegularOverflowFlushIndex` treats a row boundary as a safe break. Each candidate index is run
+  through `findMarkdownTableBlockAt` and, when it lands strictly inside a table, moved back to the
+  table's start (preferred — the whole table stays together for the next flush) or forward past its
+  end. When neither is possible the function returns `0`, and `processTextChunk` breaks out of the
+  overflow loop to hold the buffer for the final flush.
+
+- **Marker repair scoping** — `autoCloseIncompleteMarkers` counts unbalanced inline markers over
+  *prose only* and lands the closers at the end of the last prose segment, ahead of that segment's
+  trailing whitespace. Because EOF never terminates a table block, every response ending in a table
+  reaches the final flush with `hasSemanticMarkers === true`; appending a closer at the buffer's end
+  would put it on the last table row, changing that row's cell count so the renderer drops it. Cell
+  contents like `user_id`, a `Best*` footnote, or `(approx` are not unclosed inline markdown and are
+  excluded from the counts for the same reason. A buffer that is nothing but a table is left
+  untouched.
+
 ### Semantic block detection
 
 `drainThinkBlocksFromBuffer(state)` and `drainDetailsBlocksFromBuffer(state)` scan `state.buffer`
@@ -105,7 +128,8 @@ After `flushFinalBuffer()`:
 |---|---|
 | `processStreamBufferContent()` (in `bufferManager.ts`) | Internal — boundary detection (sentence, code block, newline) is tightly coupled to Discord message formatting constraints. The `flushBufferSize` configuration (`StreamConfig`) is the operational surface. |
 | `drainThinkBlocksFromBuffer()` / `drainDetailsBlocksFromBuffer()` | Internal — semantic block capture routes are tightly coupled to the think/details tag conventions used by TomoriBot's prompts. |
-| `findRegularOverflowFlushIndex()` | Internal — overflow flush breakpoint logic; coupled to Discord's 2000-character message limit. |
+| `findRegularOverflowFlushIndex()` | Internal — overflow flush breakpoint logic; coupled to Discord's 2000-character message limit. Returns `0` when every candidate breakpoint would split a Markdown table, which callers must treat as "hold the buffer". |
+| `findMarkdownTableBlockAt()` (in `utils/text/markdownTable.ts`) | Internal — reports the table block enclosing an offset so flush logic can avoid splitting it. A plugin adding another atomic block type would need equivalent protection here. |
 | Chunk deduplication (`STREAM_CHUNK_DEDUP_MIN_CHARS`, `STREAM_CHUNK_DEDUP_TAIL_CHARS`) | `src/utils/discord/stream/constants.ts`. Internal — a workaround for overlapping chunk delivery; no plugin-relevant seam. |
 
 ## Configuration

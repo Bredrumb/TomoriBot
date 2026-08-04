@@ -4,6 +4,8 @@ import {
   collectRenderModifierSourceNames,
   formatRenderModifierWebhookName,
   isAllowedRenderModifierSpeakerLabel,
+  matchesRenderModifierName,
+  parseLeadingGenericSpeakerLabel,
   parseLeadingRenderModifier,
   parseRenderModifierWebhookName,
   resolveRenderModifierSourcePersona,
@@ -141,5 +143,72 @@ describe("render modifier parser", () => {
     expect(isAllowedRenderModifierSpeakerLabel("Ren (bredrumb)", sourceNames)).toBe(true);
     expect(isAllowedRenderModifierSpeakerLabel("Tomori (bredrumb)", sourceNames)).toBe(true);
     expect(isAllowedRenderModifierSpeakerLabel("Other (bredrumb)", sourceNames)).toBe(false);
+  });
+});
+
+describe("generic leading speaker label parser (opening-label leak guard)", () => {
+  it("parses a decorated label with any speaker name", () => {
+    const result = parseLeadingGenericSpeakerLabel('Chris (smug): Bro said "love you"');
+
+    expect(result).toEqual({
+      sourceName: "Chris",
+      modifier: "smug",
+      body: 'Bro said "love you"',
+      matchedPrefix: "Chris (smug): ",
+    });
+  });
+
+  it("parses a plain label with any speaker name", () => {
+    const result = parseLeadingGenericSpeakerLabel("Chris: overreaction, dont you think?");
+
+    expect(result).toEqual({
+      sourceName: "Chris",
+      modifier: undefined,
+      body: "overreaction, dont you think?",
+      matchedPrefix: "Chris: ",
+    });
+  });
+
+  it("parses full-width colon labels", () => {
+    const result = parseLeadingGenericSpeakerLabel("クリス (照れ)： うるさい！");
+
+    expect(result?.sourceName).toBe("クリス");
+    expect(result?.modifier).toBe("照れ");
+    expect(result?.body).toBe("うるさい！");
+  });
+
+  it("still parses prose-shaped openings, leaving known-name filtering to the caller", () => {
+    // "Note:" IS label-shaped: the segment processor only fires when the name matches a
+    // known conversation participant, which "Note" never will.
+    const result = parseLeadingGenericSpeakerLabel("Note: remember to hydrate");
+
+    expect(result?.sourceName).toBe("Note");
+    expect(matchesRenderModifierName("Note", ["Chris", "Tomori"])).toBe(false);
+  });
+
+  it("ignores code fences, list items, blockquotes, and headings", () => {
+    expect(parseLeadingGenericSpeakerLabel("```\nChris (smug): hi\n```")).toBeNull();
+    expect(parseLeadingGenericSpeakerLabel("- Chris (smug): quoted line")).toBeNull();
+    expect(parseLeadingGenericSpeakerLabel("1. Chris (smug): quoted line")).toBeNull();
+    expect(parseLeadingGenericSpeakerLabel("> Chris: quoted line")).toBeNull();
+    expect(parseLeadingGenericSpeakerLabel("# Chris: heading")).toBeNull();
+  });
+
+  it("ignores names opening with link/mention/timestamp brackets or without word characters", () => {
+    expect(parseLeadingGenericSpeakerLabel("<@123456789012345678>: hi")).toBeNull();
+    expect(parseLeadingGenericSpeakerLabel("[Chris]: hi")).toBeNull();
+    expect(parseLeadingGenericSpeakerLabel("!!!: hi")).toBeNull();
+    expect(parseLeadingGenericSpeakerLabel(":thumbsup: nice")).toBeNull();
+  });
+
+  it("rejects overlong modifiers in the decorated shape", () => {
+    expect(parseLeadingGenericSpeakerLabel(`Chris (${"a".repeat(65)}): hi`)).toBeNull();
+  });
+
+  it("matches names case-insensitively via render-modifier normalization", () => {
+    expect(matchesRenderModifierName("chris", ["Chris"])).toBe(true);
+    expect(matchesRenderModifierName("CHRIS", ["chris"])).toBe(true);
+    expect(matchesRenderModifierName("Matt", ["Chris"])).toBe(false);
+    expect(matchesRenderModifierName("", ["Chris"])).toBe(false);
   });
 });

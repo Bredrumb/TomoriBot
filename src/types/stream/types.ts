@@ -6,7 +6,6 @@
  */
 
 import { HumanizerDegree } from "../db/schema";
-import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
 /**
@@ -14,24 +13,19 @@ import type { TokenUsage } from "@/utils/text/tokenEstimate";
  * These control message length limits, buffer sizes, and timing behavior
  */
 export const DISCORD_STREAMING_CONSTANTS = {
-  // Message length limits
   MAX_SINGLE_MESSAGE_LENGTH: 1950,
 
-  // Buffer flush sizes
   FLUSH_BUFFER_SIZE_REGULAR: 1000, // For normal text
   FLUSH_BUFFER_SIZE_CODE_BLOCK: 15000, // For code blocks (much larger)
 
-  // Typing simulation timing
   BASE_TYPE_SPEED_MS_PER_CHAR: 10,
   MAX_TYPING_TIME_MS: 4000,
   MIN_VISIBLE_TYPING_DURATION_MS: 750,
 
-  // Random pause timing for natural feel
   MIN_RANDOM_PAUSE_MS: 250,
   MAX_RANDOM_PAUSE_MS: 1500,
   THINKING_PAUSE_CHANCE: 0.25,
 
-  // Stream timeout
   INACTIVITY_TIMEOUT_MS: 120000, // 2 minutes
 } as const;
 
@@ -63,13 +57,13 @@ export interface SpriteMessageRecordInfo {
  * `sprite_shown` count from the non-identity `sprite_emotion` count.
  */
 export interface SpriteShownEntry {
-  /** Sprite name — the user-given tag, used directly as the stat metric_key. */
+  /** Sprite name : the user-given tag, used directly as the stat metric_key. */
   name: string;
   /** Identity (DID-alter) sprites count toward sprite_shown but never sprite_emotion. */
   isIdentity: boolean;
 }
 
-export interface StreamRenderModifierState {
+interface StreamRenderModifierState {
   identity: {
     username?: string;
     avatarUrl?: string;
@@ -125,18 +119,6 @@ export interface StreamState {
   /** Active render-modifier identity for the current generated line. */
   activeRenderModifier?: StreamRenderModifierState;
   /**
-   * Sprite-key of the most recently delivered non-identity sprite, used to detect
-   * when the sprite changes so the group-break name representation can be toggled.
-   */
-  lastDeliveredSpriteKey?: string;
-  /**
-   * Toggles each time a non-identity sprite changes. Decides whether the current
-   * sprite uses the clean persona name (`false`) or the decorated `Persona (sprite)`
-   * name (`true`), so adjacent different-sprite messages never share a username and
-   * Discord renders each avatar instead of grouping them under the first.
-   */
-  spriteGroupParity?: boolean;
-  /**
    * Sprite labels delivered during this stream, in render order (one entry per
    * delivered sprite message, repeats kept). Drained into StreamResult.spritesShown
    * so the post-turn stat recorder can count `sprite_shown` (all) and `sprite_emotion`
@@ -146,23 +128,13 @@ export interface StreamState {
   /**
    * Real, provider-reported token usage for this stream segment, normalized
    * (via normalizeProviderUsage) from whichever chunk's metadata carried it.
-   * Captured across the whole loop — not just the terminal `done` chunk — so
+   * Captured across the whole loop: not just the terminal `done` chunk, so
    * providers that emit usage on a separate trailing chunk (OpenAI
    * `include_usage`) or clobber the done metadata (Anthropic `message_stop`)
    * are still counted. Drained into StreamResult.usage. Undefined when the
    * provider reported no usage.
    */
   usage?: TokenUsage;
-}
-
-/**
- * Result of processing a text segment for Discord sending
- */
-export interface ProcessedSegment {
-  chunks: string[];
-  wasHumanized: boolean;
-  originalLength: number;
-  processedLength: number;
 }
 
 /**
@@ -177,7 +149,7 @@ export interface TextProcessingConfig {
   mentionIdSet?: Set<string>;
   personaMentionMap?: Map<string, string>;
   botName: string;
-  /** Extra names the active persona answers to (lore/default name, trigger names) — used to strip
+  /** Extra names the active persona answers to (lore/default name, trigger names) : used to strip
    *  a leaked multi-name opening label chain like "Tomori: Lilya: ..." */
   botNameAliases: string[];
   registeredSpeakerNamesLower: Set<string>;
@@ -213,17 +185,6 @@ export interface StreamMetrics {
 }
 
 /**
- * Buffer management configuration
- */
-export interface BufferManagementConfig {
-  regularFlushSize: number;
-  codeBlockFlushSize: number;
-  enablePunctuationFlush: boolean;
-  enableCodeBlockDetection: boolean;
-  sentenceBoundaryRegex: RegExp;
-}
-
-/**
  * Stream chunk processing result
  */
 export interface ChunkProcessingResult {
@@ -234,78 +195,6 @@ export interface ChunkProcessingResult {
   breakType?: "newline" | "period" | "code_open" | "code_close" | "overflow";
 }
 
-/**
- * Function call execution context
- */
-export interface FunctionCallContext {
-  functionName: string;
-  arguments: Record<string, unknown>;
-  executionStartTime: number;
-  toolResult?: unknown;
-  error?: Error;
-}
-
-/**
- * Stream error categorization
- */
-export enum StreamErrorType {
-  PROVIDER_API_ERROR = "provider_api_error",
-  DISCORD_API_ERROR = "discord_api_error",
-  TIMEOUT_ERROR = "timeout_error",
-  FUNCTION_CALL_ERROR = "function_call_error",
-  BUFFER_OVERFLOW = "buffer_overflow",
-  CONTENT_BLOCKED = "content_blocked",
-  RATE_LIMITED = "rate_limited",
-  UNKNOWN_ERROR = "unknown_error",
-}
-
-/**
- * Comprehensive stream error information
- */
-export interface StreamError {
-  type: StreamErrorType;
-  message: string;
-  code?: string;
-  retryable: boolean;
-  context?: {
-    provider?: string;
-    channelId?: string;
-    serverId?: string;
-    functionName?: string;
-    chunkIndex?: number;
-  };
-  originalError?: unknown;
-  timestamp: number;
-}
-
-/**
- * Stream status tracking
- */
-export enum StreamStatus {
-  INITIALIZING = "initializing",
-  STREAMING = "streaming",
-  FUNCTION_CALLING = "function_calling",
-  COMPLETED = "completed",
-  ERROR = "error",
-  TIMEOUT = "timeout",
-  CANCELLED = "cancelled",
-}
-
-/**
- * Comprehensive stream result with detailed information
- */
-export interface DetailedStreamResult {
-  status: StreamStatus;
-  data?: unknown;
-  error?: StreamError;
-  metrics: StreamMetrics;
-  functionCalls: FunctionCallContext[];
-  warnings: string[];
-}
-
-/**
- * Helper function to create default stream state
- */
 export function createDefaultStreamState(): StreamState {
   return {
     buffer: "",
@@ -333,16 +222,11 @@ export function createDefaultStreamState(): StreamState {
     pendingAggregatedText: "",
     pendingAggregateJoinNextWithBlankLine: false,
     activeRenderModifier: undefined,
-    lastDeliveredSpriteKey: undefined,
-    spriteGroupParity: false,
     spritesShown: [],
     usage: undefined,
   };
 }
 
-/**
- * Helper function to create default stream metrics
- */
 export function createDefaultStreamMetrics(): StreamMetrics {
   return {
     startTime: Date.now(),
@@ -352,20 +236,6 @@ export function createDefaultStreamMetrics(): StreamMetrics {
     functionCalls: 0,
     errors: 0,
     timeouts: 0,
-  };
-}
-
-/**
- * Helper function to create buffer management configuration
- */
-export function createBufferManagementConfig(customConfig?: Partial<BufferManagementConfig>): BufferManagementConfig {
-  return {
-    regularFlushSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
-    codeBlockFlushSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_CODE_BLOCK,
-    enablePunctuationFlush: true,
-    enableCodeBlockDetection: true,
-    sentenceBoundaryRegex: createSentenceSplitRegex(),
-    ...customConfig,
   };
 }
 

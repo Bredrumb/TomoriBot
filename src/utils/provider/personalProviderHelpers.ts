@@ -3,7 +3,12 @@ import type {
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+
+export interface ProviderModelSelection {
+  model: string;
+  provider: string;
+}
 
 function sortProviderRows(rows: UserSavedProviderConfigRow[]): UserSavedProviderConfigRow[] {
   return [...rows].sort((left, right) => left.provider.localeCompare(right.provider));
@@ -43,6 +48,41 @@ export function getStoredPersonalProviderForCapability(
   capability: PersonalProviderCapability,
 ): UserSavedProviderConfigRow | null {
   return sortProviderRows(rows).find((row) => hasConfiguredPersonalModel(row, capability)) ?? null;
+}
+
+/** Resolves the active personal model/provider pair(s) for a capability. */
+export async function resolveActivePersonalProviderModelSelections(
+  rows: UserSavedProviderConfigRow[],
+  capability: PersonalProviderCapability,
+): Promise<ProviderModelSelection[]> {
+  const row = getActivePersonalProviderForCapability(rows, capability);
+  if (!row) return [];
+
+  switch (capability) {
+    case "text": {
+      const model = row.llm_id ? await llmModelRepo.loadById(row.llm_id) : null;
+      return model ? [{ model: model.llm_codename, provider: row.provider }] : [];
+    }
+    case "embedding": {
+      const model = row.embedding_model_id ? await llmModelRepo.loadEmbeddingModelById(row.embedding_model_id) : null;
+      return model ? [{ model: model.codename, provider: row.provider }] : [];
+    }
+    case "image": {
+      const modelIds = [row.diffusion_model_id, row.nai_diffusion_model_id].filter(
+        (modelId): modelId is number => typeof modelId === "number",
+      );
+      const models = await Promise.all(modelIds.map((modelId) => llmModelRepo.loadDiffusionModelById(modelId)));
+      return models.flatMap((model) => (model ? [{ model: model.codename, provider: row.provider }] : []));
+    }
+    case "video": {
+      const model = row.video_model_id ? await llmModelRepo.loadVideoGenerationModelById(row.video_model_id) : null;
+      return model ? [{ model: model.codename, provider: row.provider }] : [];
+    }
+    case "vision": {
+      const model = row.vision_llm_id ? await llmModelRepo.loadById(row.vision_llm_id) : null;
+      return model ? [{ model: model.llm_codename, provider: row.provider }] : [];
+    }
+  }
 }
 
 export function withCapabilityEnabled(

@@ -36,5 +36,3 @@ export function hasExplicitLongTermMemoryIntent(text: string | null | undefined)
   const normalizedText = normalizeExplicitLongTermMemoryIntentText(text);
   return EXPLICIT_LONG_TERM_MEMORY_INTENT_PHRASES.some((phrase) => normalizedText.includes(phrase));
 }
-
-export { ENGLISH_EXPLICIT_LONG_TERM_MEMORY_INTENT_PHRASES, JAPANESE_EXPLICIT_LONG_TERM_MEMORY_INTENT_PHRASES };

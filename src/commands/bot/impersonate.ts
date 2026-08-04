@@ -34,8 +34,6 @@ import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/pe
 
 /**
  * Configures the /bot impersonate subcommand
- * @param subcommand - The slash command subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) => {
   return subcommand
@@ -65,9 +63,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Handles user-target impersonation - prompt for a user, then run user impersonation flow
- * @param client - Discord client
- * @param interaction - Command interaction
- * @param locale - User's locale
  */
 async function handleTargetUserImpersonation(
   client: Client,
@@ -124,9 +119,6 @@ async function handleTargetUserImpersonation(
 
 /**
  * Handles persona impersonation - user sends messages as bot personas
- * @param client - Discord client
- * @param interaction - Command interaction
- * @param locale - User's locale
  */
 async function handlePersonaImpersonation(
   client: Client,
@@ -144,7 +136,6 @@ async function handlePersonaImpersonation(
     return;
   }
 
-  // Narrow channel type to TextChannel
   if (!isGuildMessageCommandChannel(interaction.channel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.bot.impersonate.missing_permissions_title",
@@ -159,7 +150,7 @@ async function handlePersonaImpersonation(
   const channel = interaction.channel;
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
 
-  // 1. Load all personas (main + alters) - keep this under 3 seconds
+  // Load all personas (main + alters) - keep this under 3 seconds
   const allPersonas = await personaRepository.loadAllForServer(serverId);
   if (!allPersonas || allPersonas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
@@ -209,14 +200,13 @@ async function handlePersonaImpersonation(
     return;
   }
 
-  // 2. Build select options for modal
   const personaSelectOptions: SelectOption[] = availablePersonas.map((persona, index) => ({
     label: safeSelectOptionText(persona.persona_nickname),
     value: index.toString(), // Use index to avoid ID truncation issues
     description: persona.is_alter ? "Alter Persona" : "Main Persona",
   }));
 
-  // 3. Show modal with persona select + message text area
+  // Show modal with persona select + message text area
   // DO NOT defer before modal - Pattern 3
   const modalResult = await promptWithPaginatedModal(interaction, locale, {
     modalCustomId: "impersonate_persona_modal",
@@ -241,12 +231,10 @@ async function handlePersonaImpersonation(
     ],
   });
 
-  // 4. Process modal submission
   if (modalResult.outcome !== "submit" || !modalResult.values || !modalResult.interaction) {
     return;
   }
 
-  // Ensure submission is deferred
   if (!modalResult.interaction.deferred && !modalResult.interaction.replied) {
     await modalResult.interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
@@ -272,12 +260,10 @@ async function handlePersonaImpersonation(
   }
 
   try {
-    // 5. Check notice embed visibility for impersonation notices
     const shouldShowNotice = tomoriState?.config
       ? isNoticeEmbedVisible(tomoriState.config, "impersonation_notice")
       : true;
 
-    // 6. Build impersonation notice embed if needed
     const embeds: EmbedBuilder[] = [];
     if (shouldShowNotice) {
       const invokerAvatarUrl = interaction.member
@@ -304,16 +290,13 @@ async function handlePersonaImpersonation(
       embeds.push(noticeEmbed);
     }
 
-    // 7. Send message based on persona type
     let sentMessage: import("discord.js").Message | null = null;
     if (!selectedPersona.is_alter) {
-      // Main persona: Send as bot directly with embeds
       sentMessage = await channel.send({
         content: messageContent,
         embeds,
       });
     } else {
-      // Alter persona: Send via webhook with embeds
       const webhookTargetChannel = resolveGuildWebhookTargetChannel(channel);
       const webhookThreadId = resolveGuildWebhookThreadId(channel);
       if (!webhookTargetChannel) {
@@ -348,14 +331,13 @@ async function handlePersonaImpersonation(
       );
     }
 
-    // 7.5. If the sent message contains a trigger word, let the normal cascade fire.
+    // If the sent message contains a trigger word, let the normal cascade fire.
     // tomoriChat runs with isManuallyTriggered=false so trigger rules apply as usual.
     // The self-message detection skips the sending persona; other personas may respond.
     if (sentMessage) {
       void tomoriChat({ client, message: sentMessage, isFromQueue: false });
     }
 
-    // 8. Send success confirmation to user
     await replyInfoEmbed(modalResult.interaction, locale, {
       titleKey: "commands.bot.impersonate.persona_success_title",
       descriptionKey: "commands.bot.impersonate.persona_success_description",
@@ -381,9 +363,6 @@ async function handlePersonaImpersonation(
 
 /**
  * Handles user impersonation - bot mimics the user through webhook
- * @param client - Discord client
- * @param interaction - Command interaction
- * @param locale - User's locale
  */
 async function handleUserImpersonation(
   client: Client,
@@ -403,7 +382,6 @@ async function handleUserImpersonation(
     return;
   }
 
-  // Narrow channel type to TextChannel
   if (!isGuildMessageCommandChannel(interaction.channel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.bot.impersonate.missing_permissions_title",
@@ -430,13 +408,12 @@ async function handleUserImpersonation(
     `[/bot impersonate ${commandTarget}] Command invoked by user ${interaction.user.id} (${interaction.user.username}) in channel ${interaction.channel.id} targeting ${impersonatedUserId}`,
   );
 
-  // 1. Defer the interaction immediately (Pattern 2 - async work ahead)
+  // Defer the interaction immediately (Pattern 2 - async work ahead)
   if (!interaction.deferred && !interaction.replied) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
 
   try {
-    // 2. Load tomori state for cooldown configuration
     const tomoriState = await personaRepository.loadState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -447,7 +424,7 @@ async function handleUserImpersonation(
       return;
     }
 
-    // 3. Check cooldown (shares cooldown pool with message triggers and /bot respond)
+    // Check cooldown (shares cooldown pool with message triggers and /bot respond)
     // Uses whitelist-aware version to respect per-channel cooldown overrides
     const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
     const cooldownLength = tomoriState.config.cooldown_length ?? 5;
@@ -469,7 +446,6 @@ async function handleUserImpersonation(
     );
 
     if (cooldownResult.isOnCooldown) {
-      // If blocked by whitelist, show a specific "not whitelisted" message instead of cooldown
       if (cooldownResult.blockedByWhitelist) {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.message_cooldown_title",
@@ -479,7 +455,6 @@ async function handleUserImpersonation(
         return;
       }
 
-      // Show cooldown warning via DM (with ephemeral fallback)
       const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
       await sendCooldownDM(
         interaction.user,
@@ -523,7 +498,6 @@ async function handleUserImpersonation(
       return;
     }
 
-    // 4. Get the latest message in the channel to use as a "passport"
     // Same pattern as /bot respond - no placeholder message needed
     const messages = await channel.messages.fetch({ limit: 1 });
     const latestMessage = messages.first();
@@ -540,7 +514,6 @@ async function handleUserImpersonation(
     const member = interaction.guild.members.cache.get(impersonatedUserId);
     const displayName = impersonatedDisplayName || member?.displayName || member?.user.displayName || "User";
 
-    // 5. Show public impersonation notice when that notice embed is visible
     if (isNoticeEmbedVisible(tomoriState.config, "impersonation_notice")) {
       try {
         const invokerAvatarUrl = interaction.member
@@ -581,8 +554,6 @@ async function handleUserImpersonation(
       }
     }
 
-    // 6. Call tomoriChat with user impersonation enabled
-    // tomoriChat will handle everything: context building, refresh embeds, provider call, webhook, etc.
     await tomoriChat({
       client,
       message: latestMessage,
@@ -603,7 +574,7 @@ async function handleUserImpersonation(
       },
     });
 
-    // 7. Set cooldown after successful response (shares cooldown pool with message triggers and /bot respond)
+    // Set cooldown after successful response (shares cooldown pool with message triggers and /bot respond)
     // Uses whitelist-aware version to respect per-channel cooldown overrides
     log.info(
       `[/bot impersonate ${commandTarget}] Setting cooldown - globalType: ${cooldownType}, globalLength: ${cooldownLength}s`,
@@ -617,8 +588,6 @@ async function handleUserImpersonation(
       invokingMember,
     );
     log.info(`[/bot impersonate ${commandTarget}] Cooldown set successfully`);
-
-    // 8. Send success confirmation
 
     await interaction.editReply({
       embeds: [
@@ -636,7 +605,6 @@ async function handleUserImpersonation(
       guildId: interaction.guild?.id,
     });
 
-    // Check if interaction is still valid before replying
     if (interaction.deferred || interaction.replied) {
       const isTimeoutError = error instanceof Error && /timed?\s*out|timeout/i.test(error.message);
       const description = isTimeoutError
@@ -660,8 +628,6 @@ async function handleUserImpersonation(
 
 /**
  * Handles system impersonation - user injects system prompts as embeds
- * @param interaction - Command interaction
- * @param locale - User's locale
  */
 async function handleSystemImpersonation(interaction: ChatInputCommandInteraction, locale: string): Promise<void> {
   if (!interaction.guild || !interaction.channel) {
@@ -674,7 +640,6 @@ async function handleSystemImpersonation(interaction: ChatInputCommandInteractio
     return;
   }
 
-  // Narrow channel type to TextChannel
   if (!isGuildMessageCommandChannel(interaction.channel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.bot.impersonate.missing_permissions_title",
@@ -687,7 +652,7 @@ async function handleSystemImpersonation(interaction: ChatInputCommandInteractio
 
   const channel = interaction.channel;
 
-  // 1. Show modal for system prompt content
+  // Show modal for system prompt content
   // DO NOT defer before modal - Pattern 3
   const modalResult = await promptWithPaginatedModal(interaction, locale, {
     modalCustomId: "impersonate_system_modal",
@@ -705,25 +670,22 @@ async function handleSystemImpersonation(interaction: ChatInputCommandInteractio
     ],
   });
 
-  // 2. Process modal submission
   if (modalResult.outcome !== "submit" || !modalResult.values || !modalResult.interaction) {
     return;
   }
 
-  // Ensure submission is deferred
   if (!modalResult.interaction.deferred && !modalResult.interaction.replied) {
     await modalResult.interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
 
   const systemContent = modalResult.values.system_content || "";
 
-  // 3. Create embed with "System Message" title (triggers detection in tomoriChat)
+  // Create embed with "System Message" title (triggers detection in tomoriChat)
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.bot.impersonate.system_title"))
     .setDescription(systemContent)
     .setColor(ColorCode.SECTION);
 
-  // Add footer showing who injected the prompt
   const invokerAvatarUrl = interaction.member
     ? (interaction.member as import("discord.js").GuildMember).displayAvatarURL({
         size: 64,
@@ -743,12 +705,11 @@ async function handleSystemImpersonation(interaction: ChatInputCommandInteractio
     iconURL: invokerAvatarUrl,
   });
 
-  // 4. Send as public message in the channel (not ephemeral - this is the injection)
+  // Send as public message in the channel (not ephemeral - this is the injection)
   await channel.send({
     embeds: [embed],
   });
 
-  // 5. Send confirmation to user
   await replyInfoEmbed(modalResult.interaction, locale, {
     titleKey: "commands.bot.impersonate.system_success_title",
     descriptionKey: "commands.bot.impersonate.system_success_description",
@@ -758,10 +719,6 @@ async function handleSystemImpersonation(interaction: ChatInputCommandInteractio
 
 /**
  * Executes the /bot impersonate command
- * @param client - Discord client
- * @param interaction - Command interaction
- * @param userData - User data from database (unused)
- * @param locale - User's locale
  */
 export async function execute(
   client: Client,
@@ -769,7 +726,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Fast validation
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -780,10 +736,8 @@ export async function execute(
     return;
   }
 
-  // 2. Get target option
   const target = interaction.options.getString("target", true);
 
-  // 3. Route to appropriate handler
   switch (target) {
     case "persona":
       await handlePersonaImpersonation(client, interaction, userData, locale);

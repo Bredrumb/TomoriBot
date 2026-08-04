@@ -64,6 +64,8 @@ Current message preprocessing enriches fetched history before `buildContext()`:
 
 - registers the joining Discord user in the database
 - optionally triggers a configured welcome message in the server's welcome channel
+- configured greetings wait for `WELCOME_DELAY_MS` (default 60000 ms / 1 minute) after registration so onboarding can finish; `0` disables the delay
+- after the delay, the handler skips memberships that ended (including leave/rejoin races) and reloads the Welcome configuration before generating
 - welcome greetings reuse the normal chat coordinator manual-trigger pipeline, including persona selection, queueing, and mention fallback checks
 
 ## Adding a New Event Handler

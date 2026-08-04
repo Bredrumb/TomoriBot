@@ -12,7 +12,7 @@ const NEVER_MATCH_REGEX = /a^/i;
  * Creates a regex that matches a trigger word with "screaming" support.
  * Allows repeated letters, e.g. "Lilja" matches "Liiiljaaaa".
  */
-export function createScreamingRegex(trigger: string): RegExp {
+function createScreamingRegex(trigger: string): RegExp {
   const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
   if (!normalizedTrigger) {
     return NEVER_MATCH_REGEX;
@@ -79,6 +79,39 @@ export function getDeliberateTriggerMatch(content: string, trigger: string): Reg
   return content.match(createDeliberateTriggerRegex(firstTriggerWord));
 }
 
+/**
+ * Finds a persona trigger in already-sanitized text without applying deliberate
+ * trigger mode. Context-reference discovery uses this so loading a public
+ * profile cannot affect response routing.
+ */
+export function getTriggerFirstMatchIndexInContent(content: string, trigger: string, deliberateOnly = false): number {
+  const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
+  if (!normalizedTrigger) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  if (normalizedTrigger.startsWith("<@")) {
+    const userId = normalizedTrigger.replace(/[<@!>]/g, "");
+    const mentionPattern = new RegExp(`<@!?${escapeRegExp(userId)}>`);
+    const mentionMatch = content.match(mentionPattern);
+    return mentionMatch?.index ?? Number.POSITIVE_INFINITY;
+  }
+
+  if (deliberateOnly) {
+    const deliberateMatch = getDeliberateTriggerMatch(content, normalizedTrigger);
+    return deliberateMatch?.index ?? Number.POSITIVE_INFINITY;
+  }
+
+  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
+  if (isJapanese) {
+    const index = content.indexOf(normalizedTrigger);
+    return index >= 0 ? index : Number.POSITIVE_INFINITY;
+  }
+
+  const match = content.match(createScreamingRegex(normalizedTrigger));
+  return match?.index ?? Number.POSITIVE_INFINITY;
+}
+
 export function getTriggerFirstMatchIndex(message: Message, trigger: string, deliberateOnly = false): number {
   const normalizedTrigger = normalizeTriggerWord(trigger, { lowercase: false });
   if (!normalizedTrigger) {
@@ -90,25 +123,11 @@ export function getTriggerFirstMatchIndex(message: Message, trigger: string, del
     if (!message.mentions.users.has(userId)) {
       return Number.POSITIVE_INFINITY;
     }
-
-    const mentionPattern = new RegExp(`<@!?${escapeRegExp(userId)}>`);
-    const mentionMatch = message.content.match(mentionPattern);
-    return mentionMatch?.index ?? Number.MAX_SAFE_INTEGER;
+    const contentMatchIndex = getTriggerFirstMatchIndexInContent(message.content, normalizedTrigger, deliberateOnly);
+    return contentMatchIndex === Number.POSITIVE_INFINITY ? Number.MAX_SAFE_INTEGER : contentMatchIndex;
   }
 
-  if (deliberateOnly) {
-    const deliberateMatch = getDeliberateTriggerMatch(message.content, normalizedTrigger);
-    return deliberateMatch?.index ?? Number.POSITIVE_INFINITY;
-  }
-
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
-  if (isJapanese) {
-    const index = message.content.indexOf(normalizedTrigger);
-    return index >= 0 ? index : Number.POSITIVE_INFINITY;
-  }
-
-  const match = message.content.match(createScreamingRegex(normalizedTrigger));
-  return match?.index ?? Number.POSITIVE_INFINITY;
+  return getTriggerFirstMatchIndexInContent(message.content, normalizedTrigger, deliberateOnly);
 }
 
 export function doesMessageMatchTrigger(message: Message, trigger: string, deliberateOnly = false): boolean {
@@ -219,7 +238,6 @@ export function isAutochatCounterHit(tomoriState: TomoriState, channelId: string
  *
  * @param message - The incoming Discord message
  * @param allPersonas - All known personas for this server
- * @param activePersonaId - The persona_id currently streaming/responding
  */
 export function hasExplicitCrossPersonaTrigger(
   message: Message,
@@ -228,7 +246,6 @@ export function hasExplicitCrossPersonaTrigger(
 ): boolean {
   const mainPersona = allPersonas.find((p) => !p.is_alter);
 
-  // Build nickname → persona lookup for webhook/reply resolution
   const personaByNickname = new Map<string, TomoriState>();
   for (const persona of allPersonas) {
     const key = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
@@ -237,7 +254,6 @@ export function hasExplicitCrossPersonaTrigger(
 
   const clientUserId = message.client.user?.id;
 
-  // 1. Bot mention or reply-to-bot triggers the main persona
   const isBotMentioned = clientUserId ? message.mentions.users.has(clientUserId) : false;
   const refMessage = message.reference?.messageId
     ? message.channel.messages.cache.get(message.reference.messageId)
@@ -247,7 +263,6 @@ export function hasExplicitCrossPersonaTrigger(
     return true;
   }
 
-  // 2. Reply to a webhook persona message triggers that persona
   if (refMessage?.webhookId) {
     const webhookPersona =
       resolveRenderModifierSourcePersona(refMessage.author.username, personaByNickname)?.persona ??
@@ -257,7 +272,6 @@ export function hasExplicitCrossPersonaTrigger(
     }
   }
 
-  // 3. Trigger words for any persona other than the active one
   for (const persona of allPersonas) {
     if (persona.persona_id === activePersonaId) continue;
     const triggers = persona.trigger_words ?? [];

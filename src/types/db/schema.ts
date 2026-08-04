@@ -2,7 +2,6 @@ import { StickerFormatType } from "discord.js";
 import { z } from "zod";
 import { SUPPORTED_PARAM_VALUES, isSupportedParamValue, type SupportedParamValue } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
-import { STAT_METRICS } from "@/constants/statMetrics";
 import { TOOL_NOTICE_KEYS, isToolNoticeKey, type ToolNoticeKey } from "@/constants/toolNotices";
 import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 import { logitBiasEntrySchema, normalizeLogitBiasEntries } from "@/types/provider/logitBias";
@@ -52,7 +51,7 @@ export const userSchema = z.object({
 });
 export type UserRow = z.infer<typeof userSchema>;
 
-export const serverSchema = z.object({
+const serverSchema = z.object({
   server_id: z.number().optional(),
   server_disc_id: z.string(),
   is_dm_channel: z.boolean().default(false), // Added for DM support
@@ -60,8 +59,6 @@ export const serverSchema = z.object({
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
-export type ServerRow = z.infer<typeof serverSchema>;
-
 export const tomoriSchema = z.object({
   persona_id: z.number().optional(),
   server_id: z.number(),
@@ -102,7 +99,7 @@ export const tomoriSchema = z.object({
 });
 export type TomoriRow = z.infer<typeof tomoriSchema>;
 
-export const personaScopedConfigStateSchema = z.object({
+const personaScopedConfigStateSchema = z.object({
   physical_appearance_tags: z.array(z.string()).default([]), // From persona_imagegen_configs
   nai_char_ref_url: z.string().nullable().optional(), // From persona_imagegen_configs
   nai_attg_author: z.string().nullable().optional(), // From persona_textgen_configs
@@ -117,9 +114,9 @@ export const personaScopedConfigStateSchema = z.object({
   speech_voice_name: z.string().nullable().optional(), // From persona_voice_configs
   speech_voice_design_prompt: z.string().nullable().optional(), // From persona_voice_configs
 });
-export type PersonaScopedConfigState = z.infer<typeof personaScopedConfigStateSchema>;
+type PersonaScopedConfigState = z.infer<typeof personaScopedConfigStateSchema>;
 
-export const personaAttributeSchema = z.object({
+const personaAttributeSchema = z.object({
   attribute_id: z.number().optional(),
   persona_id: z.number().int(),
   attribute_order: z.number().int().min(1),
@@ -149,20 +146,6 @@ export type PersonaSpriteRow = z.infer<typeof personaSpriteSchema>;
 // the preset identity (preset_lineage_id, preset_language) and seeded from the
 // catalog; the avatar_url is a shared object-storage reference used by every
 // server's pointer persona. See docs/subsystems/persona-presets.md.
-export const presetSpriteSchema = z.object({
-  preset_sprite_id: z.number().optional(),
-  preset_lineage_id: z.coerce.number().int(),
-  preset_language: z.string(),
-  sprite_name: z.string().min(1).max(64),
-  sprite_key: z.string().min(1).max(64),
-  avatar_url: z.string().min(1),
-  usage_instructions: z.string().max(1000).default(""),
-  is_identity: z.boolean().default(false),
-  created_at: z.coerce.date().optional(),
-  updated_at: z.coerce.date().optional(),
-});
-export type PresetSpriteRow = z.infer<typeof presetSpriteSchema>;
-
 /**
  * Maps a webhook-delivered sprite message to the sprite label it rendered with.
  * Sprite messages display a clean persona name in Discord; context rebuilding
@@ -189,39 +172,8 @@ export const personaAutochRuntimeStateSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonaAutochRuntimeStateRow = z.infer<typeof personaAutochRuntimeStateSchema>;
-
 /**
- * Coerces a Postgres BIGINT (returned by Bun SQL as bigint or string depending
- * on magnitude/driver) into a JS number. Mirrors the conditioning_history
- * lineage handling so large counters/lineage ids parse uniformly.
- */
-const bigintToNumber = (value: unknown): unknown => {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && value.trim() !== "") return Number(value);
-  return value;
-};
-
-/**
- * Schema for the stat_counters telemetry table (migration 035). One row per
- * (server, user, persona lineage, metric, metric_key, day). `count` is a generic
- * accumulator and `persona_lineage_id` is the cross-server persona anchor (both
- * BIGINT in Postgres). See plans/stat-tracking.md and src/constants/statMetrics.ts.
- */
-export const statCounterSchema = z.object({
-  server_id: z.number().int(),
-  user_id: z.number().int(),
-  persona_lineage_id: z.preprocess(bigintToNumber, z.number().int().nonnegative().default(0)),
-  metric: z.enum(STAT_METRICS),
-  metric_key: z.string().default(""),
-  bucket: z.date(),
-  count: z.preprocess(bigintToNumber, z.number().int().default(0)),
-  first_at: z.date().optional(),
-  last_at: z.date().optional(),
-});
-export type StatCounterRow = z.infer<typeof statCounterSchema>;
-
-/**
- * Schema for voice_samples table — reference audio clips for local TTS voice cloning.
+ * Schema for voice_samples table : reference audio clips for local TTS voice cloning.
  * file_path stores either a production S3/CloudFront URL or a local data/voice-samples path.
  */
 export const voiceSampleSchema = z.object({
@@ -313,17 +265,10 @@ export const embeddingModelSchema = z.object({
 });
 export type EmbeddingModelRow = z.infer<typeof embeddingModelSchema>;
 
-export const customEndpointCapabilitySchema = z.enum([
-  "text",
-  "embedding",
-  "image",
-  "video",
-  "speech",
-  "transcription",
-]);
+const customEndpointCapabilitySchema = z.enum(["text", "embedding", "image", "video", "speech", "transcription"]);
 export type CustomEndpointCapability = z.infer<typeof customEndpointCapabilitySchema>;
 
-export const customEndpointApiStyleSchema = z.enum([
+const customEndpointApiStyleSchema = z.enum([
   "openai-compatible",
   "comfyui",
   "ollama-native",
@@ -418,7 +363,7 @@ export type OpenRouterVideoModelRegistrationRow = z.infer<typeof openRouterVideo
 /**
  * Normalizes a JSONB array value from the database driver.
  * Handles the case where Bun SQL returns JSONB columns as strings
- * instead of parsed objects — parses the string before returning.
+ * instead of parsed objects ; parses the string before returning.
  * @param value - Raw value from the database (may be array, string, or other)
  * @returns Parsed array, or empty array if parsing fails
  */
@@ -457,13 +402,13 @@ function normalizeFallbackLlmIds(value: unknown): number[] {
     .filter((id): id is number => id !== null);
 }
 
-export const fallbackModelRefSchema = z.object({
+const fallbackModelRefSchema = z.object({
   type: z.enum(["llm", "custom_endpoint"]),
   id: z.number().int(),
 });
 export type FallbackModelRef = z.infer<typeof fallbackModelRefSchema>;
 
-/** Resolved fallback entry — either a known LLM row or a custom endpoint row. */
+/** Resolved fallback entry : either a known LLM row or a custom endpoint row. */
 export type FallbackEntry =
   | { kind: "llm"; model: z.infer<typeof llmSchema> }
   | { kind: "custom_endpoint"; endpoint: z.infer<typeof customEndpointSchema> };
@@ -607,15 +552,13 @@ function normalizeDisabledLlmParams(value: unknown): SupportedParamValue[] {
 
 const toolNoticeKeySchema = z.enum(TOOL_NOTICE_KEYS);
 const supportedParamSchema = z.enum(SUPPORTED_PARAM_VALUES);
-export const autochatPersonaOverrideSchema = z.object({
+const autochatPersonaOverrideSchema = z.object({
   channel_disc_id: z.string(),
   persona_id: z.number().int(),
 });
 export type AutochatPersonaOverride = z.infer<typeof autochatPersonaOverrideSchema>;
 
-// ── Split Config Tables (Phase 6 / Stage A & B) ──────────────────────────
-
-export const userPersonalizationConfigsSchema = z.object({
+const userPersonalizationConfigsSchema = z.object({
   user_id: z.number().int(),
   shortterm_cache_crossserver_opt_in: z.boolean().default(false),
   physical_appearance_tags: z.array(z.string()).default([]),
@@ -627,7 +570,7 @@ export const userPersonalizationConfigsSchema = z.object({
 });
 export type UserPersonalizationConfigsRow = z.infer<typeof userPersonalizationConfigsSchema>;
 
-export const serverModelConfigSchema = z.object({
+const serverModelConfigSchema = z.object({
   server_id: z.number().int(),
   llm_id: z.number().int().nullable().optional(),
   embedding_model_id: z.number().int().nullable().optional(),
@@ -655,7 +598,7 @@ export const serverModelConfigSchema = z.object({
 });
 export type ServerModelConfigRow = z.infer<typeof serverModelConfigSchema>;
 
-export const serverChatConfigSchema = z.object({
+const serverChatConfigSchema = z.object({
   server_id: z.number().int(),
   humanizer_degree: z.nativeEnum(HumanizerDegree).default(HumanizerDegree.LIGHT),
   message_fetch_limit: z.number().int().default(80),
@@ -689,7 +632,7 @@ export const serverChatConfigSchema = z.object({
 });
 export type ServerChatConfigRow = z.infer<typeof serverChatConfigSchema>;
 
-export const serverMemberPermissionsConfigSchema = z.object({
+const serverMemberPermissionsConfigSchema = z.object({
   server_id: z.number().int(),
   server_memteaching_enabled: z.boolean().default(true),
   attribute_memteaching_enabled: z.boolean().default(false),
@@ -703,7 +646,7 @@ export const serverMemberPermissionsConfigSchema = z.object({
 });
 export type ServerMemberPermissionsConfigRow = z.infer<typeof serverMemberPermissionsConfigSchema>;
 
-export const serverCapabilitiesConfigSchema = z.object({
+const serverCapabilitiesConfigSchema = z.object({
   server_id: z.number().int(),
   emoji_usage_enabled: z.boolean().default(true),
   sticker_usage_enabled: z.boolean().default(true),
@@ -722,7 +665,7 @@ export const serverCapabilitiesConfigSchema = z.object({
 });
 export type ServerCapabilitiesConfigRow = z.infer<typeof serverCapabilitiesConfigSchema>;
 
-export const serverNoticeEmbedsConfigSchema = z.object({
+const serverNoticeEmbedsConfigSchema = z.object({
   server_id: z.number().int(),
   tool_notice_hidden_keys: z.preprocess(
     (value) => normalizeToolNoticeHiddenKeys(value),
@@ -733,7 +676,7 @@ export const serverNoticeEmbedsConfigSchema = z.object({
 });
 export type ServerNoticeEmbedsConfigRow = z.infer<typeof serverNoticeEmbedsConfigSchema>;
 
-export const serverNsfwConfigSchema = z.object({
+const serverNsfwConfigSchema = z.object({
   server_id: z.number().int(),
   uncensor_injection_enabled: z.boolean().default(false),
   uncensor_unicode_space_enabled: z.boolean().default(false),
@@ -743,7 +686,7 @@ export const serverNsfwConfigSchema = z.object({
 });
 export type ServerNsfwConfigRow = z.infer<typeof serverNsfwConfigSchema>;
 
-export const serverSpeechConfigSchema = z.object({
+const serverSpeechConfigSchema = z.object({
   server_id: z.number().int(),
   voice_transcript_chat_mode: z.boolean().default(true),
   chatterbox_turbo_enabled: z.boolean().default(true),
@@ -754,7 +697,7 @@ export const serverSpeechConfigSchema = z.object({
 });
 export type ServerSpeechConfigRow = z.infer<typeof serverSpeechConfigSchema>;
 
-export const serverAutoTriggerConfigSchema = z.object({
+const serverAutoTriggerConfigSchema = z.object({
   server_id: z.number().int(),
   autoch_disc_ids: z.array(z.string()).default([]),
   autoch_persona_overrides: z.preprocess(
@@ -768,7 +711,7 @@ export const serverAutoTriggerConfigSchema = z.object({
 });
 export type ServerAutoTriggerConfigRow = z.infer<typeof serverAutoTriggerConfigSchema>;
 
-export const serverChannelScopeConfigSchema = z.object({
+const serverChannelScopeConfigSchema = z.object({
   server_id: z.number().int(),
   rp_channel_ids: z.array(z.string()).default([]),
   private_channel_ids: z.array(z.string()).default([]),
@@ -780,7 +723,7 @@ export const serverChannelScopeConfigSchema = z.object({
 });
 export type ServerChannelScopeConfigRow = z.infer<typeof serverChannelScopeConfigSchema>;
 
-export const serverTriggerBehaviorConfigSchema = z.object({
+const serverTriggerBehaviorConfigSchema = z.object({
   server_id: z.number().int(),
   always_reply_enabled: z.boolean().default(false),
   deliberate_trigger_mode: z.boolean().default(false),
@@ -800,7 +743,7 @@ export const serverTriggerBehaviorConfigSchema = z.object({
 });
 export type ServerTriggerBehaviorConfigRow = z.infer<typeof serverTriggerBehaviorConfigSchema>;
 
-export const serverNovelaiImagegenConfigSchema = z.object({
+const serverNovelaiImagegenConfigSchema = z.object({
   server_id: z.number().int(),
   nai_preset_name: z.string().nullable().optional(),
   image_default_positive_tags: z.array(z.string()).default([...DEFAULT_IMAGE_POSITIVE_TAGS]),
@@ -816,7 +759,7 @@ export const serverNovelaiImagegenConfigSchema = z.object({
 });
 export type ServerNovelaiImagegenConfigRow = z.infer<typeof serverNovelaiImagegenConfigSchema>;
 
-export const serverByokConfigSchema = z.object({
+const serverByokConfigSchema = z.object({
   server_id: z.number().int(),
   user_byok_mode: z.boolean().default(false),
   created_at: z.date().optional(),
@@ -824,7 +767,7 @@ export const serverByokConfigSchema = z.object({
 });
 export type ServerByokConfigRow = z.infer<typeof serverByokConfigSchema>;
 
-export const serverMemoryConfigSchema = z.object({
+const serverMemoryConfigSchema = z.object({
   server_id: z.number().int(),
   memory_tagging_enabled: z.boolean().default(false),
   channel_memory_enabled: z.boolean().default(false), // Added May 2026 - Per-channel memory scoping toggle
@@ -836,7 +779,7 @@ export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
 /**
  * Assembled view over the 13 split server config tables (Phase 6 / Stage B).
  * Replaces the previous monolithic `tomori_configs` row shape.
- * Callers read this as a flat object — nested restructuring (config.model.X) is deferred to Task G.
+ * Callers read this as a flat object : nested restructuring (config.model.X) is deferred to Task G.
  *
  * Composition order: serverModelConfigSchema anchors the merge chain (13 tables total).
  * Shared identity columns (server_id, created_at, updated_at) are omitted from every
@@ -886,7 +829,6 @@ export const assembledServerConfigSchema = serverModelConfigSchema
         .nullable()
         .optional(),
     ),
-    // Welcome fields live in server_welcome_configs (not part of the 13-schema merge).
     welcome_channel_disc_id: z.string().nullable().optional(),
     welcome_prompt: z.string().nullable().optional(),
     welcome_persona_id: z.number().int().nullable().optional(),
@@ -923,57 +865,10 @@ export const personaConfigSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonaConfigRow = z.infer<typeof personaConfigSchema>;
-
-/**
- * Schema for per-channel LLM model overrides.
- * When set, overrides the global llm_id for all personas in that channel.
- */
-export const channelLlmOverrideSchema = z.object({
-  server_id: z.number(),
-  channel_disc_id: z.string(),
-  llm_id: z.number(),
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type ChannelLlmOverrideRow = z.infer<typeof channelLlmOverrideSchema>;
-
 /** Prompt-mode values for a per-channel system prompt override. */
-export const CHANNEL_PROMPT_MODES = ["append", "replace"] as const;
+const CHANNEL_PROMPT_MODES = ["append", "replace"] as const;
 export type ChannelPromptMode = (typeof CHANNEL_PROMPT_MODES)[number];
-
-/**
- * Schema for per-channel system prompt overrides.
- * When a row exists for a channel, its prompt either appends after
- * (mode = "append") or fully replaces (mode = "replace") the server-level
- * system prompt in that channel only. Persona prompt/attributes are untouched.
- */
-export const channelPromptOverrideSchema = z.object({
-  server_id: z.number(),
-  channel_disc_id: z.string(),
-  channel_prompt: z.string(),
-  channel_prompt_mode: z.enum(CHANNEL_PROMPT_MODES).default("append"),
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type ChannelPromptOverrideRow = z.infer<typeof channelPromptOverrideSchema>;
-
-/**
- * Schema for per-channel context note entries (migration 034).
- * When a row exists for a channel, its note is injected into the dialogue
- * history at the configured depth alongside any persona-scoped note (additive).
- * The global note from server_chat_configs is only used when neither applies.
- */
-export const channelContextNoteSchema = z.object({
-  server_id: z.number(),
-  channel_disc_id: z.string(),
-  context_note: z.string(),
-  context_note_depth: z.number().int().min(0).max(100).default(0),
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type ChannelContextNoteRow = z.infer<typeof channelContextNoteSchema>;
-
-export const tomoriPresetSchema = z.object({
+const tomoriPresetSchema = z.object({
   persona_preset_id: z.number(),
   persona_preset_name: z.string(),
   persona_preset_desc: z.string(),
@@ -1005,7 +900,7 @@ export const tomoriPresetSchema = z.object({
 });
 export type TomoriPresetRow = z.infer<typeof tomoriPresetSchema>;
 
-export const systemPromptPresetSchema = z.object({
+const systemPromptPresetSchema = z.object({
   system_prompt_preset_id: z.number(),
   system_prompt_preset_name: z.string(),
   system_prompt_preset_desc: z.string(),
@@ -1038,7 +933,6 @@ export const serverStickerSchema = z.object({
   sticker_desc: z.string().default(""),
   emotion_key: z.string(),
   is_global: z.boolean().default(false),
-  //is_animated: z.boolean().default(false),
   sticker_format: z.nativeEnum(StickerFormatType).default(StickerFormatType.PNG),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -1108,45 +1002,7 @@ export const personalMemorySchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonalMemoryRow = z.infer<typeof personalMemorySchema>;
-
-export const documentSchema = z.object({
-  document_id: z.number().optional(),
-  server_id: z.number(),
-  persona_id: z.number().nullable().optional(),
-  uploader_user_id: z.number().nullable().optional(),
-  document_name: z.string(),
-  file_name: z.string().nullable().optional(),
-  mime_type: z.string().nullable().optional(),
-  file_size_bytes: z.number().int().nullable().optional(),
-  text_content: z.string(),
-  source_type: z.string().default("upload"),
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type DocumentRow = z.infer<typeof documentSchema>;
-
-export const documentChunkSchema = z.object({
-  document_chunk_id: z.number().optional(),
-  document_id: z.number(),
-  server_id: z.number(),
-  embedding_model_id: z.number(),
-  embedding_family: z.string(),
-  chunk_index: z.number().int(),
-  content: z.string(),
-  embedding: z.unknown().optional(),
-  created_at: z.date().optional(),
-});
-export type DocumentChunkRow = z.infer<typeof documentChunkSchema>;
-
-export const personalizationBlacklistSchema = z.object({
-  server_id: z.number(),
-  user_disc_id: z.string(), // Discord ID - persists even if user deletes account
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type PersonalizationBlacklistRow = z.infer<typeof personalizationBlacklistSchema>;
-
-export const personaUserBlockTypeSchema = z.enum(["mute", "block"]);
+const personaUserBlockTypeSchema = z.enum(["mute", "block"]);
 export type PersonaUserBlockType = z.infer<typeof personaUserBlockTypeSchema>;
 
 export const personaUserBlockSchema = z.object({
@@ -1166,7 +1022,7 @@ export type PersonaUserBlockRow = z.infer<typeof personaUserBlockSchema>;
  * Defines channel allowlist entries with optional per-channel cooldown overrides.
  * When ANY channel is whitelisted, ONLY whitelisted channels can trigger the bot.
  */
-export const channelWhitelistSchema = z.object({
+const channelWhitelistSchema = z.object({
   server_id: z.number(),
   channel_disc_id: z.string(),
   cooldown_type: z.nativeEnum(CooldownType).nullable().default(null),
@@ -1181,7 +1037,7 @@ export type ChannelWhitelistRow = z.infer<typeof channelWhitelistSchema>;
  * Defines role-based trigger access for server-wide whitelist restrictions.
  * When ANY role is whitelisted, only members with whitelisted roles can trigger the bot.
  */
-export const roleWhitelistSchema = z.object({
+const roleWhitelistSchema = z.object({
   server_id: z.number(),
   role_disc_id: z.string(),
   created_at: z.date().optional(),
@@ -1194,7 +1050,7 @@ export type RoleWhitelistRow = z.infer<typeof roleWhitelistSchema>;
  * Defines persona-specific channel allowlists for automatic message triggers.
  * If a channel has no entries, all personas remain eligible in that channel.
  */
-export const channelPersonaWhitelistSchema = z.object({
+const channelPersonaWhitelistSchema = z.object({
   server_id: z.number(),
   channel_disc_id: z.string(),
   persona_id: z.number().int(),
@@ -1202,44 +1058,6 @@ export const channelPersonaWhitelistSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type ChannelPersonaWhitelistRow = z.infer<typeof channelPersonaWhitelistSchema>;
-
-export const personalSpotlightSchema = z.object({
-  server_id: z.number(),
-  user_id: z.number(),
-  channel_disc_id: z.string(),
-  auto_trigger_persona_id: z.number().int().nullable().optional(),
-  expires_at: z.date().nullable().optional(),
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type PersonalSpotlightRow = z.infer<typeof personalSpotlightSchema>;
-
-export const personalSpotlightPersonaSchema = z.object({
-  server_id: z.number(),
-  user_id: z.number(),
-  channel_disc_id: z.string(),
-  persona_id: z.number().int(),
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type PersonalSpotlightPersonaRow = z.infer<typeof personalSpotlightPersonaSchema>;
-
-export const errorLogSchema = z.object({
-  error_log_id: z.number().optional(), // Primary key, optional as it's generated
-  // Context IDs - Optional because errors can occur outside specific contexts
-  persona_id: z.number().nullable().optional(),
-  user_id: z.number().nullable().optional(),
-  server_id: z.number().nullable().optional(),
-  // Error Details
-  error_type: z.string().default("GenericError"), // Categorize the error, default if not specified
-  error_message: z.string(), // The main error message, required
-  stack_trace: z.string().nullable().optional(), // Dedicated field for stack trace, optional
-  error_metadata: z.record(z.string(), z.unknown()).nullable().optional().default({}), // Flexible JSON for extra context, optional
-  // Timestamps
-  created_at: z.date().optional(), // Handled by DB default
-  updated_at: z.date().optional(), // Handled by DB default/trigger
-});
-export type ErrorLogRow = z.infer<typeof errorLogSchema>;
 
 export interface ErrorContext {
   personaId?: number | null;
@@ -1249,19 +1067,7 @@ export interface ErrorContext {
   metadata?: Record<string, unknown> | null;
 }
 
-export const cooldownSchema = z.object({
-  cooldown_id: z.number().optional(),
-  cooldown_type: z.number(),
-  server_disc_id: z.string().nullable(),
-  user_disc_id: z.string().nullable(),
-  channel_disc_id: z.string().nullable(),
-  command_category: z.string().nullable(),
-  expiry_time: z.number(),
-  created_at: z.string().optional(),
-});
-export type CooldownRow = z.infer<typeof cooldownSchema>;
-
-export const optApiKeySchema = z.object({
+const optApiKeySchema = z.object({
   opt_api_key_id: z.number().optional(), // Primary key, optional as it's generated
   server_id: z.number(), // Foreign key to servers table
   service_name: z.string(), // Service name identifier (e.g., 'brave-search', 'duckduckgo-search', 'fetch')
@@ -1275,6 +1081,8 @@ export type OptApiKeyRow = z.infer<typeof optApiKeySchema>;
 export const reminderSchema = z.object({
   reminder_id: z.number().optional(), // Primary key, optional as it's generated
   server_id: z.number(), // Foreign key to servers table
+  server_disc_id: z.string().optional(), // Joined routing identity for scheduler-triggered turns
+  server_is_dm_channel: z.boolean().optional(), // Joined routing scope for scheduler-triggered turns
   channel_disc_id: z.string(), // Discord channel ID where reminder was set
   user_discord_id: z.string(), // Target user's Discord ID
   user_nickname: z.string(), // Target user's nickname for display
@@ -1327,7 +1135,7 @@ const coerceIntNumber = z.preprocess((value) => {
  * Schema for api_key_rotation table (config/security columns only).
  * Runtime telemetry lives in api_key_rotation_runtime_state.
  */
-export const apiKeyRotationConfigSchema = z.object({
+const apiKeyRotationConfigSchema = z.object({
   rotation_key_id: z.number().optional(), // Primary key, auto-generated
   server_id: z.number(), // Foreign key to servers table
   provider: z.string(), // Must match the active provider for this server
@@ -1343,7 +1151,7 @@ export const apiKeyRotationConfigSchema = z.object({
  * Schema for api_key_rotation_runtime_state table.
  * Excluded from export; reset independently of config/credentials.
  */
-export const apiKeyRotationRuntimeStateSchema = z.object({
+const apiKeyRotationRuntimeStateSchema = z.object({
   rotation_key_id: z.number(), // PK + FK → api_key_rotation(rotation_key_id) ON DELETE CASCADE
   usage_count: coerceNumber.default(0), // For round-robin tracking
   error_count: coerceIntNumber.default(0), // Consecutive errors since last success
@@ -1353,8 +1161,6 @@ export const apiKeyRotationRuntimeStateSchema = z.object({
   last_error_message: z.string().nullable().optional(), // Human-readable error (truncated to 500)
   updated_at: z.date().optional(), // Handled by DB default/trigger
 });
-export type ApiKeyRotationRuntimeStateRow = z.infer<typeof apiKeyRotationRuntimeStateSchema>;
-
 /**
  * Schema for the joined api_key_rotation + api_key_rotation_runtime_state row.
  * All key selection queries JOIN both tables; this is the shape returned to callers.
@@ -1489,20 +1295,6 @@ export const videoServerwideQuotaSchema = z.object({
   updated_at: z.date().optional(), // Handled by DB default
 });
 export type VideoServerwideQuotaRow = z.infer<typeof videoServerwideQuotaSchema>;
-
-/**
- * Schema for Matrix ↔ Discord channel bridge links.
- * Enforces strict 1-to-1 mapping: one Discord channel per Matrix room and vice versa.
- */
-export const matrixChannelLinkSchema = z.object({
-  link_id: z.number().optional(),
-  server_id: z.number(),
-  channel_disc_id: z.string(),
-  matrix_room_id: z.string(),
-  created_at: z.date().optional(),
-});
-export type MatrixChannelLinkRow = z.infer<typeof matrixChannelLinkSchema>;
-
 export const randomTriggerSchema = z.object({
   trigger_id: z.number().optional(), // Primary key, auto-generated
   server_id: z.number(), // Foreign key to servers table
@@ -1619,10 +1411,10 @@ export const setupResultSchema = z.object({
 export type SetupResult = z.infer<typeof setupResultSchema>;
 
 /**
- * Guild MCP Server — per-guild remote MCP server registration.
+ * Guild MCP Server : per-guild remote MCP server registration.
  * Stored in guild_mcp_servers table; auth_token is PGP-encrypted BYTEA.
  */
-export const guildMcpServerSchema = z.object({
+const guildMcpServerSchema = z.object({
   guild_mcp_id: z.number().optional(),
   server_id: z.number(),
   name: z.string(),
@@ -1637,7 +1429,7 @@ export const guildMcpServerSchema = z.object({
 export type GuildMcpServerRow = z.infer<typeof guildMcpServerSchema>;
 
 /**
- * Saved Provider Config — snapshot of provider-specific settings stored in
+ * Saved Provider Config : snapshot of provider-specific settings stored in
  * saved_provider_configs. One row per provider per server; UPSERT on save.
  */
 export const savedProviderConfigSchema = z.object({
@@ -1688,7 +1480,7 @@ export const personalProviderCapabilitySchema = z.enum(["text", "embedding", "im
 export type PersonalProviderCapability = z.infer<typeof personalProviderCapabilitySchema>;
 
 /**
- * User Saved Provider Config — personal provider snapshot stored in
+ * User Saved Provider Config : personal provider snapshot stored in
  * user_saved_provider_configs. One row per provider per user; UPSERT on save.
  */
 export const userSavedProviderConfigSchema = z.object({
@@ -1743,11 +1535,11 @@ export type UserSavedProviderConfigUpsert = Omit<
 >;
 
 /**
- * SillyTavern Preset — imported preset metadata + raw JSON blob.
+ * SillyTavern Preset : imported preset metadata + raw JSON blob.
  * Stored in st_presets table; scoped per server_id.
  * Multiple presets may exist per server; only one is active at a time.
  */
-export const stPresetSchema = z.object({
+const stPresetSchema = z.object({
   preset_id: z.number().optional(),
   server_id: z.number(),
   preset_name: z.string(),
@@ -1759,11 +1551,11 @@ export const stPresetSchema = z.object({
 export type StPresetRow = z.infer<typeof stPresetSchema>;
 
 /**
- * SillyTavern Preset Node — individual toggleable prompt node parsed
+ * SillyTavern Preset Node : individual toggleable prompt node parsed
  * from a preset's prompts array. Stored in st_preset_nodes table.
  * Nodes are ordered by node_order (matching the preset's prompt_order).
  */
-export const stPresetNodeSchema = z.object({
+const stPresetNodeSchema = z.object({
   node_id: z.number().optional(),
   preset_id: z.number(),
   identifier: z.string(),

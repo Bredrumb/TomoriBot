@@ -1,13 +1,4 @@
 /**
- * Words and patterns that can trigger a bot response
- */
-export interface TriggerConfig {
-  autoThreshold: number;
-  words: string[];
-  regexPatterns?: RegExp[];
-}
-
-/**
  * A segment of context for the LLM conversation
  */
 export type ContextPart =
@@ -35,14 +26,12 @@ export interface ConversationUserReference {
   mentionable: boolean; // True only when this target can be converted into a Discord mention
 }
 
-export interface ContextItemSender {
+interface ContextItemSender {
   name: string;
   type: "user" | "persona";
 }
 
-// New: Define the possible metadata tags for context items (Rule 13)
 export enum ContextItemTag {
-  // System-level instructions and configurations
   SYSTEM_INSTRUCTION_BLOCK = "system_instruction_block", // For the main consolidated system prompt
   SYSTEM_PERSONALITY = "system_personality", // Specific to bot's core personality attributes
   SYSTEM_HUMANIZER_RULES = "system_humanizer_rules", // Specific to humanization instructions
@@ -50,7 +39,6 @@ export enum ContextItemTag {
   SYSTEM_PERSONA_PROMPT = "system_persona_prompt", // Specific to persona prompt
   SYSTEM_FUNCTION_GUIDE = "system_function_guide", // New: For instructions on using available functions
 
-  // Knowledge base and environmental context
   KNOWLEDGE_SERVER_INFO = "knowledge_server_info",
   KNOWLEDGE_SERVER_EMOJIS = "knowledge_server_emojis",
   KNOWLEDGE_SERVER_STICKERS = "knowledge_server_stickers",
@@ -66,14 +54,9 @@ export enum ContextItemTag {
   KNOWLEDGE_USERS_IN_CONVERSATION = "knowledge_users_in_conversation", // Combined: time, channel, user status, memories, reminders
   KNOWLEDGE_SHORT_TERM_MEMORY = "knowledge_short_term_memory", // Short-term memory for recent conversations (goes to dialogue history)
 
-  // Dialogue examples and history
   DIALOGUE_SAMPLE = "dialogue_sample", // For individual sample user/model turns
   DIALOGUE_HISTORY = "dialogue_history", // For actual conversation history turns
   CONTEXT_NOTE_INJECTION = "context_note_injection", // Author's note injected into dialogue at configurable depth
-
-  // Tool/Function related (if we ever need to tag parts of tool descriptions or results)
-  // TOOL_DESCRIPTION = "tool_description",
-  // TOOL_RESULT = "tool_result",
 }
 
 export type StructuredContextItem = {
@@ -84,24 +67,9 @@ export type StructuredContextItem = {
   messageId?: string; // Optional Discord message ID for tools that need to reference the original message
   sender?: ContextItemSender; // Hidden sender metadata for provider-side history normalization
   conversationUsers?: ConversationUserReference[]; // Hidden metadata for user resolution and mention handling
+  participantTargetIndex?: import("@/utils/text/participants/targetIndex").ParticipantTargetIndex;
   personaMentionMap?: Map<string, string>; // Hidden metadata for preserving known persona @trigger text
 };
-
-/**
- * Full context assembly options
- */
-export interface ContextOptions {
-  preambles: string[];
-  serverMemories: string[];
-  userMemories: Record<string, string[]>;
-  sampleDialogs: string[];
-  messageHistory: Array<{
-    author: string;
-    content: string;
-    timestamp: Date;
-  }>;
-  variables: Record<string, string>;
-}
 
 /**
  * Per-request snapshot of data used throughout context building.

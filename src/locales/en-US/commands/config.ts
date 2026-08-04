@@ -1,5 +1,3 @@
-// locales/en-US/commands/config.ts
-
 export default {
   config: {
     options: {
@@ -566,17 +564,21 @@ Restored now ({restored_count}): {restored_list}`,
       provider_invalid: `Error: Invalid API provider selected. Please choose from the available options.`,
       preset_not_found: `Error: The selected preset was not found in the database. Please try again.`,
       success_title: `🟢 Setup Complete!`,
-      success_desc: `I am now configured for this server! To modify my configuration, use my \`/config\`, \`/server\`, \`/persona\`, and \`/memory\` commands. Optional but recommended: run the \`/server initialize\` commands to optimize emoji and sticker metadata. You can also export or reset data anytime with \`/memory personal export\`, \`/memory server export\`, \`/personal config\`, or \`/server config\`. Here's a summary:`,
-      success_desc_with_model: `I am now configured for this server! I will use the \`{model_name}\` model (the default for this provider). To modify my configuration, use my \`/config\`, \`/server\`, \`/persona\`, and \`/memory\` commands. Optional but recommended: run the \`/server initialize\` commands to optimize emoji and sticker metadata. You can also export or reset data anytime with \`/memory personal export\`, \`/memory server export\`, \`/personal config\`, or \`/server config\`. Here's a summary:`,
-      success_desc_byok: `I am now configured for this server in User BYOK mode. User-triggered messages will require each member's personal provider until you disable that mode. Optional but recommended: run the \`/server initialize\` commands to optimize emoji and sticker metadata. Here's a summary:`,
-      success_desc_custom_endpoint: `I am now configured for this server, but no server text provider is active yet. Finish the Custom Endpoint flow next so I can answer with that endpoint. Here's a summary:`,
-      success_desc_dm: `I am now configured for this Direct Message. You can export or reset your data anytime with \`/memory personal export\` and \`/personal config\`. Here's a summary:`,
-      success_desc_dm_with_model: `I am now configured for this Direct Message. I will use the \`{model_name}\` model (the default for this provider). You can export or reset your data anytime with \`/memory personal export\` and \`/personal config\`. Here's a summary:`,
-      next_steps_title: `🟢 What Can I Do?`,
-      next_steps_description: `Use {helpFeatures} to see all my features, or just ask me in chat! I can also tell you what slash commands are available.`,
-      novelai_expressions_warning_field: `⚠️ Expressions Disabled`,
-      novelai_expressions_warning_value: `Emoji and sticker usage have been automatically disabled to keep NovelAI's context lean and stable. You can re-enable them anytime with .`,
-      zai_tos_warning_field: `⚠️ Z.ai Terms of Service`,
+      success_desc: `I'm all set up for this server as \`{persona}\`!`,
+      success_desc_with_model: `I'm all set up for this server! I'll answer with the \`{model_name}\` model (\`{provider}\`'s default) as \`{persona}\`.`,
+      success_desc_byok: `I'm all set up for this server in User BYOK mode as \`{persona}\`! Each member answers with their own provider until BYOK is turned off.`,
+      success_desc_custom_endpoint: `I'm almost set up for this server as \`{persona}\`! I don't have an active text provider yet, finish the Custom Endpoint step (below) so I can answer.`,
+      success_desc_dm: `I'm all set up for our DM as \`{persona}\`!`,
+      success_desc_dm_with_model: `I'm all set up for our DM as \`{persona}\`! I'll answer with the \`{model_name}\` model (\`{provider}\`'s default).`,
+      next_steps_title: `➡️ Recommended Next Steps`,
+      next_steps_value: `- **Mention me in chat** to start talking!\n- Use \`/persona\` to change my name, look, and personality.\n- Use \`/config\` to adjust how I act and what I can do.\n- Use \`/memory\` to teach me things about you and this server.\n- Use \`/server initialize\` to let me use this server's emoji and stickers.`,
+      next_steps_value_dm: `- **Just message me here** to start talking!\n- Use \`/persona\` to change my name, look, and personality.\n- Use \`/config\` to adjust how I act and what I can do.\n- Use \`/memory\` to teach me things about you.`,
+      learn_more_title: `📖 Learn More`,
+      learn_more_value: `Read the [Official Wiki](https://docs.tomoribot.app/features/) or use {helpFeatures} to learn more about what I can do!\n- [Multiple Personas](https://docs.tomoribot.app/features/chatting-personality/multiple-personas/) = Give me different looks, voices, and triggers\n- [Chatting & Triggers](https://docs.tomoribot.app/features/chatting-personality/chatting-and-triggers/) = Decide when and how I join conversations\n- [Memory](https://docs.tomoribot.app/features/knowledge/memory/) = I remember people, facts, and context\n- [Personalization](https://docs.tomoribot.app/features/knowledge/personalization/) = Teach me about you so I can treat you how you like to be treated\n- [Media Generation](https://docs.tomoribot.app/features/capabilities/media-generation/) = I can make images, video, and voice\n- [Tools & Extensions](https://docs.tomoribot.app/features/capabilities/tools-and-extensions/) = Web search, link reading, and custom tools`,
+      heads_up_title: `⚠️ A Few Things to Note`,
+      novelai_expressions_warning_field: `Expressions Disabled`,
+      novelai_expressions_warning_value: `Emoji and sticker usage have been automatically disabled to keep NovelAI's context lean and stable. You can re-enable them anytime with \`/capabilities manage\`.`,
+      zai_tos_warning_field: `Z.ai Terms of Service`,
       zai_tos_warning_value: `Z.ai's ToS have been updated to only permit coding/agent use cases. Using Z.ai for general chat is at your own risk and may violate their terms.`,
       custom_bearer_hint_field: `Bearer Token`,
       custom_bearer_hint_value: `If your endpoint requires authentication, use {apiKeySet} to add a Bearer token.`,
@@ -714,7 +716,7 @@ Disabled ({omitted_count}): {omitted_list}`,
         success_title: `System Prompt Updated`,
         success_description: `Custom system prompt has been set successfully:
 \`\`\`
-{preview}...
+{preview}
 \`\`\``,
       },
       clear: {
@@ -725,9 +727,12 @@ Disabled ({omitted_count}): {omitted_list}`,
 {defaultPrompt}
 \`\`\``,
         success_title: `System Prompt Cleared`,
-        success_description: `Custom system prompt has been cleared. Now using the default prompt:
+        success_description: `Custom system prompt has been cleared. Now using the default prompt.`,
+        success_description_with_prompt: `Custom system prompt has been cleared. Now using the default prompt.
+
+Your removed custom prompt, in case you want to keep a copy:
 \`\`\`
-{defaultPrompt}
+{removed_prompt}
 \`\`\``,
       },
       preset: {
@@ -739,7 +744,7 @@ Disabled ({omitted_count}): {omitted_list}`,
         success_description: `System prompt preset applied: **{presetName}**
 Preview:
 \`\`\`
-{preview}...
+{preview}
 \`\`\``,
         no_presets_title: `No Presets Available`,
         no_presets_description: `No system prompt presets found. Please contact the bot administrator.`,

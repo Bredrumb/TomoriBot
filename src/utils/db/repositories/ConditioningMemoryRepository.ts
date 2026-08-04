@@ -1,5 +1,5 @@
 /**
- * ConditioningMemoryRepository — manages the `conditioning_history` table.
+ * ConditioningMemoryRepository: manages the `conditioning_history` table.
  *
  * Conditioning memories record reward/punishment events that shape Tomori's
  * persona behavior over time. Reads are aggregated into ConditioningGroup
@@ -25,7 +25,7 @@ import {
 import type { IRepository } from "./IRepository";
 
 /** Portable conditioning export shape (expanded in Phase 6 #16.7). */
-export type ConditioningExportShape = {
+type ConditioningExportShape = {
   persona_lineage_id: number;
   groups: ConditioningGroup[];
 };
@@ -54,9 +54,7 @@ export type ConditioningGroup = {
   conditioningIds: number[];
 };
 
-export class ConditioningMemoryRepository implements IRepository<ConditioningExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
+class ConditioningMemoryRepository implements IRepository<ConditioningExportShape> {
   /**
    * Loads aggregated conditioning groups for a persona lineage.
    * Groups cluster related events so the prompt assembly can summarize them.
@@ -73,8 +71,6 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
   ): Promise<ConditioningGroup[]> {
     return this.sqlLoadConditioningGroupsForPersona(serverId, personaLineageId, conditioningType);
   }
-
-  // ── writes ─────────────────────────────────────────────────────────────────
 
   /**
    * Records a single conditioning event (reward or punishment).
@@ -99,7 +95,6 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
    *
    * @param personaId        - Internal tomori DB ID
    * @param conditioningType - Type to toggle (reward | punish)
-   * @param enabled         - New enabled state
    */
   async setPersonaConditioningEnabled(
     personaId: number,
@@ -114,7 +109,6 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
    *
    * @param serverId        - Internal server DB ID
    * @param conditioningType - Type to toggle (reward | punish)
-   * @param enabled         - New enabled state
    * @returns Number of personas updated
    */
   async setServerConditioningEnabled(
@@ -140,8 +134,6 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
   ): Promise<number> {
     return this.sqlDeleteConditioningGroupsForPersona(serverId, personaLineageId, groups);
   }
-
-  // ── private SQL ────────────────────────────────────────────────────────────
 
   private async sqlRecordConditioningEvent(params: {
     serverId: number;
@@ -406,8 +398,6 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Exports conditioning groups for a persona lineage.
    * The ownerId is interpreted as personaLineageId; serverId defaults to 0
@@ -432,5 +422,5 @@ export class ConditioningMemoryRepository implements IRepository<ConditioningExp
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const conditioningMemoryRepository = new ConditioningMemoryRepository();

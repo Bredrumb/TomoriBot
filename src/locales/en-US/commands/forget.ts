@@ -1,5 +1,3 @@
-// locales/en-US/commands/forget.ts
-
 export default {
   forget: {
     sampledialogue: {
@@ -41,8 +39,14 @@ export default {
       description: `Clear a persona-specific prompt`,
       no_permission_title: `🔴 Permission Denied`,
       no_permission_description: `You need the **Manage Server** permission to clear persona prompts.`,
+      no_prompt_title: `No Persona Prompt`,
+      no_prompt_description: `There is no persona-specific prompt to clear. Set one with \`/persona prompt set\`.`,
       success_title: `Persona Prompt Cleared`,
       success_description: `Cleared persona prompt for "{persona_name}".`,
+      success_description_with_prompt: `Cleared persona prompt for "{persona_name}". Here it is in case you want to keep a copy:
+\`\`\`
+{removed_prompt}
+\`\`\``,
     },
     memory: {
       personal: {

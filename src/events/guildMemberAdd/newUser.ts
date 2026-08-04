@@ -22,6 +22,7 @@ import {
   ZAI_CODING_CHAT_COMPLETIONS_URL,
   ZAI_GENERAL_CHAT_COMPLETIONS_URL,
 } from "@/providers/zai/zaiShared";
+import { resolveWelcomeDelayMs, waitForWelcomeDelay } from "@/events/guildMemberAdd/helpers/welcomeDelay";
 
 /**
  * Provider-to-chat-completions-URL mapping for vision model routing.
@@ -40,11 +41,8 @@ const WELCOME_AVATAR_VISION_PROMPT =
 
 /**
  * Call the Google GenAI vision API with a single base64-encoded avatar image.
- * @param apiKey - Decrypted Google API key
  * @param model - Model codename (e.g., "gemini-2.0-flash")
  * @param base64Image - Base64-encoded PNG image data
- * @param prompt - Analysis prompt describing what to look for
- * @returns Text description produced by the vision model
  */
 async function callGoogleVisionForAvatar(
   apiKey: string,
@@ -65,12 +63,8 @@ async function callGoogleVisionForAvatar(
 
 /**
  * Call an OpenAI-compatible vision API with a single base64-encoded avatar image.
- * @param apiKey - Decrypted API key
- * @param model - Model codename
  * @param endpointUrl - Chat completions endpoint URL
  * @param base64Image - Base64-encoded PNG image data
- * @param prompt - Analysis prompt
- * @returns Text description produced by the vision model
  */
 async function callOpenAICompatibleVisionForAvatar(
   apiKey: string,
@@ -120,14 +114,12 @@ async function callOpenAICompatibleVisionForAvatar(
  * Called when the greeting persona's primary LLM cannot see images but a vision_llm is set.
  * Downloads the avatar, calls the vision model API, and returns a plain-text description.
  * @param member - The guild member whose avatar will be analyzed
- * @param persona - The chosen greeting persona (must have vision_llm configured)
  * @returns Text description from the vision model, or null if analysis fails
  */
 async function getAvatarVisionDescription(member: GuildMember, persona: TomoriState): Promise<string | null> {
   const visionLlm = persona.vision_llm;
   if (!visionLlm || !persona.config.api_key) return null;
 
-  // 1. Download the member's avatar and convert to base64
   const avatarUrl = member.displayAvatarURL({
     extension: "png",
     forceStatic: true,
@@ -136,24 +128,20 @@ async function getAvatarVisionDescription(member: GuildMember, persona: TomoriSt
   const avatarBuffer = await downloadImage(avatarUrl);
   const base64Image = avatarBuffer.toString("base64");
 
-  // 2. Decrypt the server API key
   const keyVersion = persona.config.key_version || 1;
   const apiKey = await decryptApiKey(persona.config.api_key, keyVersion);
   if (!apiKey) return null;
 
-  // 3. Resolve provider name and API model codename
   const provider = visionLlm.llm_provider.toLowerCase();
   const apiModelName =
     provider === "zai" || provider === "zaicoding" ? toZaiApiModelName(visionLlm.llm_codename) : visionLlm.llm_codename;
 
   log.info(`newUser: Delegating avatar analysis to vision model ${provider}/${apiModelName} for member ${member.id}`);
 
-  // 4. Route to the appropriate provider API
   if (provider === "google") {
     return await callGoogleVisionForAvatar(apiKey, apiModelName, base64Image, WELCOME_AVATAR_VISION_PROMPT);
   }
 
-  // 5. Resolve endpoint URL for OpenAI-compatible providers
   const knownUrl = VISION_PROVIDER_URLS[provider];
   const customUrl = persona.config.custom_endpoint_url;
   const endpointUrl =
@@ -177,7 +165,7 @@ async function buildWelcomeContextItem(params: {
   member: GuildMember;
   additionalPrompt: string;
   includeAvatarContext: boolean;
-  /** Text description from vision model — used when the primary model cannot see images */
+  /** Text description from vision model, so used when the primary model cannot see images */
   avatarDescription?: string;
 }): Promise<StructuredContextItem> {
   const { member, additionalPrompt, includeAvatarContext, avatarDescription } = params;
@@ -191,7 +179,6 @@ async function buildWelcomeContextItem(params: {
   const parts: StructuredContextItem["parts"] = [];
 
   if (includeAvatarContext) {
-    // Vision-capable primary model: attach the raw avatar image so the model can see it directly
     const avatarUrl = member.displayAvatarURL({
       extension: "png",
       forceStatic: true,
@@ -215,7 +202,6 @@ async function buildWelcomeContextItem(params: {
       log.warn(`Failed to load avatar context for welcome message (${member.id}):`, error);
     }
   } else if (avatarDescription) {
-    // Non-vision primary model with vision_llm: include the pre-analyzed text description
     sentences.push(`Their profile picture has been analyzed by a vision model: ${avatarDescription}`);
   }
 
@@ -233,16 +219,37 @@ async function buildWelcomeContextItem(params: {
 }
 
 async function triggerWelcomeMessage(client: Client, member: GuildMember): Promise<void> {
-  const tomoriState = await getCachedTomoriState(member.guild.id);
-  if (!tomoriState) return;
+  const initialTomoriState = await getCachedTomoriState(member.guild.id);
+  if (!initialTomoriState) return;
 
-  const welcomeChannelId = tomoriState.config.welcome_channel_disc_id;
-  const additionalPrompt = tomoriState.config.welcome_prompt?.trim();
+  const welcomeChannelId = initialTomoriState.config.welcome_channel_disc_id;
+  const additionalPrompt = initialTomoriState.config.welcome_prompt?.trim();
   if (!welcomeChannelId || !additionalPrompt) return;
 
-  const rawChannel = await member.guild.channels.fetch(welcomeChannelId).catch(() => null);
+  const welcomeDelayMs = resolveWelcomeDelayMs();
+  if (welcomeDelayMs > 0) {
+    log.info(`Waiting ${welcomeDelayMs}ms before welcoming ${member.user.tag}`);
+    await waitForWelcomeDelay(welcomeDelayMs);
+
+    const currentMember = member.guild.members.cache.get(member.id);
+    if (!currentMember || currentMember.joinedTimestamp !== member.joinedTimestamp) {
+      log.info(`Skipping welcome for ${member.user.tag}: original membership ended during the onboarding grace period`);
+      return;
+    }
+  }
+
+  const tomoriState = welcomeDelayMs > 0 ? await getCachedTomoriState(member.guild.id) : initialTomoriState;
+  if (!tomoriState) return;
+
+  const currentWelcomeChannelId = tomoriState.config.welcome_channel_disc_id;
+  const currentAdditionalPrompt = tomoriState.config.welcome_prompt?.trim();
+  if (!currentWelcomeChannelId || !currentAdditionalPrompt) return;
+
+  const rawChannel = await member.guild.channels.fetch(currentWelcomeChannelId).catch(() => null);
   if (!rawChannel || rawChannel.type !== ChannelType.GuildText) {
-    log.warn(`Skipping welcome for ${member.user.tag}: configured welcome channel ${welcomeChannelId} is unavailable`);
+    log.warn(
+      `Skipping welcome for ${member.user.tag}: configured welcome channel ${currentWelcomeChannelId} is unavailable`,
+    );
     return;
   }
 
@@ -281,10 +288,6 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
 
   if (!lastMessage) return;
 
-  // Determine avatar context strategy:
-  // - Vision-capable primary model → pass the raw image directly
-  // - Non-vision model with vision_llm → delegate to vision model for a text description
-  // - Non-vision model, no vision_llm → no avatar context
   const includeAvatarContext = chosenPersona.llm.sees_images;
   let avatarDescription: string | undefined;
 
@@ -299,7 +302,7 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
 
   const welcomeContextItem = await buildWelcomeContextItem({
     member,
-    additionalPrompt,
+    additionalPrompt: currentAdditionalPrompt,
     includeAvatarContext,
     avatarDescription,
   });
@@ -335,7 +338,6 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
     triggerStartTime: welcomeStartTime,
     contextLabel: `welcome for member ${member.id} in server ${member.guild.id}`,
     fallbackSender: async (content) => {
-      // Only use the Alter persona webhook if the chosen greeter is an Alter
       if (!chosenPersona.is_alter) return false;
 
       const supportsWebhooks =
@@ -371,9 +373,7 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
 /**
  * Handles registration of new users when they join a guild.
  * Creates user record if new, and logs the action.
- * @param client - The Discord client instance
  * @param member - The guild member who joined
- * @returns Promise<void>
  */
 const handler = async (_client: Client, member: GuildMember): Promise<void> => {
   try {

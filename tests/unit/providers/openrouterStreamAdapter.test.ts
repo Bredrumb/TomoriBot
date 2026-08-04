@@ -179,10 +179,8 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
   });
 
   it("assembles a function_call with correct name and args on finishReason tool_calls", () => {
-    // Fresh adapter — accumulator starts empty
     const adapter = new OpenrouterStreamAdapter();
 
-    // Single-chunk tool call: both the delta and the finish reason arrive together
     const result = adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -207,14 +205,12 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
     expect(result.type).toBe("function_call");
     expect(result.functionCall?.name).toBe("search_web");
     expect(result.functionCall?.args).toEqual({ query: "TomoriBot changelog" });
-    // Visible content must not leak into a function_call chunk
     expect(result.content).toBeUndefined();
   });
 
   it("accumulates split tool-call chunks and resolves on the finish chunk", () => {
     const adapter = new OpenrouterStreamAdapter();
 
-    // 1. First chunk: name arrives
     adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -230,7 +226,6 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       }),
     );
 
-    // 2. Second chunk: arguments fragment arrives
     adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -242,7 +237,6 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       }),
     );
 
-    // 3. Terminal chunk: finishReason signals the call is complete
     const result = adapter.processChunk(
       makeOpenrouterChunk({
         choices: [{ index: 0, finishReason: "tool_calls", delta: {} }],
@@ -334,6 +328,37 @@ describe("OpenrouterStreamAdapter.handleProviderError", () => {
     expect(typeof result.message).toBe("string");
     expect(typeof result.retryable).toBe("boolean");
     expect(result.originalError).toBe(error);
+  });
+});
+
+describe("OpenrouterStreamAdapter tool history", () => {
+  it("does not duplicate a text-only tool response as a user message", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return makeSseResponse(["[DONE]"]);
+    }) as typeof fetch;
+
+    const context = makeStreamContext();
+    context.functionInteractionHistory = [
+      {
+        functionCall: { name: "fetch_url", args: { url: "https://example.com" } },
+        functionResponse: {
+          functionResponse: {
+            name: "fetch_url",
+            response: { result: { summary: "Fetched page content" } },
+          },
+        },
+      },
+    ];
+
+    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
+      // Drain the stream so the request body is fully assembled and processed.
+    }
+
+    const messages = requestBody?.messages as Array<Record<string, unknown>>;
+    expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
+    expect(String(messages[1]?.content)).toContain("Fetched page content");
   });
 });
 

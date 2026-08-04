@@ -29,9 +29,9 @@ function parsePositiveIntegerEnv(name: string, defaultValue: number): number {
  */
 export const PRESET_MAX_STRING_LENGTH = parsePositiveIntegerEnv("PRESET_MAX_STRING_LENGTH", 5000);
 export const PRESET_MAX_ATTRIBUTES = parsePositiveIntegerEnv("PRESET_MAX_ATTRIBUTES", 200);
-export const PRESET_MAX_SAMPLE_DIALOGUES = parsePositiveIntegerEnv("PRESET_MAX_SAMPLE_DIALOGUES", 100);
-export const PRESET_MAX_TRIGGER_WORDS = parsePositiveIntegerEnv("PRESET_MAX_TRIGGER_WORDS", 100);
-export const PRESET_MAX_IMAGE_TAGS = parsePositiveIntegerEnv("PRESET_MAX_IMAGE_TAGS", 200);
+const PRESET_MAX_SAMPLE_DIALOGUES = parsePositiveIntegerEnv("PRESET_MAX_SAMPLE_DIALOGUES", 100);
+const PRESET_MAX_TRIGGER_WORDS = parsePositiveIntegerEnv("PRESET_MAX_TRIGGER_WORDS", 100);
+const PRESET_MAX_IMAGE_TAGS = parsePositiveIntegerEnv("PRESET_MAX_IMAGE_TAGS", 200);
 
 /**
  * Generated presets use the canonical 6-attribute layout from presetCommon.ts:
@@ -181,9 +181,3 @@ export const presetExportSchema = z.object({
   exported_at: z.string(), // ISO 8601 format
   data: presetExportDataSchema,
 });
-
-/**
- * Type inference from Zod schemas for TypeScript safety
- */
-export type PresetExportDataValidated = z.infer<typeof presetExportDataSchema>;
-export type PresetExportValidated = z.infer<typeof presetExportSchema>;

@@ -35,10 +35,15 @@ Never share your API key with anyone else. Custom endpoints can add a Bearer aut
 `/config api-key set`.
 :::
 
-**Vertex AI** authenticates with Application Default Credentials rather than a stored secret,
-so it involves a short `gcloud` CLI setup. The full step-by-step lives in
-`/help api-key provider:Google Vertex AI`. ⚠️ Projects starting with `gen-lang-client-`
-(auto-created by AI Studio) won't work with Vertex — create a proper project.
+**Vertex AI** authenticates with Application Default Credentials rather than a stored secret.
+For local hosting, ADC can come from `gcloud`; hosted deployments should use a workload identity
+or service account. An AI Studio API key alone does not authenticate full Vertex AI. The selected
+project must have billing and the Vertex AI API enabled, and the host identity needs Vertex access.
+The full setup guide lives in `/help api-key provider:Google Vertex AI`.
+
+Google-backed provider setup validates credentials through the authenticated model-listing
+endpoint. It does not generate text or depend on whichever chat model is currently marked as
+the catalog default, so a retired default cannot prevent a valid credential from being saved.
 
 ### Optional: Brave Search key
 
@@ -108,7 +113,7 @@ services. Not every feature is available on every provider.
 | **Google** | ✅ | ✅ | – | – |
 | **OpenRouter** | ✅ | ✅ | – | – |
 | **NovelAI** | ✅ | ✅ | ✅ | Can combine with other providers |
-| **NVIDIA** | ✅ | ✅ | – | – |
+| **NVIDIA** | ✅ | – | – | Text-to-image only; reference images are ignored |
 | **Z.ai** | ✅ | – | – | – |
 
 ### Video Generation

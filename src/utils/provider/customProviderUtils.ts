@@ -91,7 +91,6 @@ function slugifyCodenamePart(value: string): string {
 }
 
 /**
- * Builds the synthetic model codename for a custom endpoint.
  *
  * When a model name is supplied it is appended as a slug so several models can coexist under one
  * provider+capability with distinct codenames (e.g. `custom-s5-home-text-llama3-1-8b`). When omitted
@@ -100,7 +99,6 @@ function slugifyCodenamePart(value: string): string {
  * Discord select-option value limit when used as a picker value.
  *
  * @param provider   - Internal custom provider name (e.g. "custom:s5:home")
- * @param capability - Endpoint capability
  * @param modelName  - Optional model name used as the disambiguating suffix
  */
 export function buildSyntheticCustomModelCodename(
@@ -132,7 +130,6 @@ const CUSTOM_CODENAME_CAPABILITIES = ["embedding", "image", "video", "text"] as 
 export function prettifyModelCodename(codename: string): string {
   if (!codename.startsWith("custom-")) return codename;
 
-  // Strip "custom-" then the scope+id segment (e.g. "u49-" or "s5-").
   const withoutPrefix = codename.slice("custom-".length).replace(/^[us]\d+-/, "");
 
   for (const cap of CUSTOM_CODENAME_CAPABILITIES) {

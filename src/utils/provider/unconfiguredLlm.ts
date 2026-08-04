@@ -1,7 +1,7 @@
 import type { LlmRow } from "@/types/db/schema";
 
-export const UNCONFIGURED_LLM_PROVIDER = "user-byok";
-export const UNCONFIGURED_LLM_CODENAME = "None";
+const UNCONFIGURED_LLM_PROVIDER = "user-byok";
+const UNCONFIGURED_LLM_CODENAME = "None";
 
 const UNCONFIGURED_LLM: LlmRow = {
   llm_id: 0,
@@ -27,8 +27,4 @@ const UNCONFIGURED_LLM: LlmRow = {
 
 export function getUnconfiguredLlm(): LlmRow {
   return { ...UNCONFIGURED_LLM };
-}
-
-export function isUnconfiguredLlm(llm: LlmRow | null | undefined): boolean {
-  return (llm?.llm_provider ?? "").toLowerCase() === UNCONFIGURED_LLM_PROVIDER;
 }

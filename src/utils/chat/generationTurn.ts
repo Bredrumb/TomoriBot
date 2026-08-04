@@ -2,7 +2,7 @@ import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ProviderError } from "@/types/stream/interfaces";
-import type { ToolContext } from "@/types/tool/interfaces";
+import type { DeliveredStreamMessage, ToolContext } from "@/types/tool/interfaces";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
 import { getNovelAITokenLimits } from "@/utils/cache/novelaiCapabilityCache";
@@ -11,9 +11,11 @@ import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/ut
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
+import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
@@ -59,6 +61,11 @@ export async function runGenerationTurn(
     const failures: FallbackNoticeAttempt[] = [];
     const baseContextItems = context.contextItems;
 
+    // Sink the streaming layer appends every committed message to. Initialized here (once per turn)
+    // so a superseded attempt's partial output can be deleted when a later attempt supersedes it.
+    context.streamingContext.deliveredMessageRefs ??= [];
+    const deliveredMessageRefs = context.streamingContext.deliveredMessageRefs;
+
     for (const [index, attempt] of attempts.entries()) {
       const hasPendingModelFallback = index < attempts.length - 1;
       context.tomoriState = attempt.tomoriState;
@@ -76,6 +83,9 @@ export async function runGenerationTurn(
       let result!: GenerationTurnResult;
       let keyAttemptCount = 0;
       context.streamingContext.rotationKeyRetriesUsed = false;
+      // Index into deliveredMessageRefs marking where the current runToolLoop invocation's
+      // committed messages begin, so a superseded invocation's partials can be sliced out.
+      let invocationStart = deliveredMessageRefs.length;
 
       while (true) {
         keyAttemptCount++;
@@ -89,6 +99,7 @@ export async function runGenerationTurn(
         setStreamUserErrorSuppression(context, hasFallbackKey || hasPendingModelFallback);
         context.streamingContext.forceModelFallback = hasPendingModelFallback;
 
+        invocationStart = deliveredMessageRefs.length;
         result = await runToolLoop({
           context,
           provider: attempt.provider,
@@ -97,14 +108,13 @@ export async function runGenerationTurn(
         });
 
         if (result.status !== "error") {
-          // Don't credit a timed-out key as successful — a timeout is not a clean completion.
+          // Don't credit a timed-out key as successful : a timeout is not a clean completion.
           if (result.status !== "timeout" && rotationKeyId != null) await recordKeySuccess(rotationKeyId);
           break;
         }
 
         if (!hasFallbackKey) break;
 
-        // Record error for the key that just failed, then rotate to the next one.
         context.streamingContext.rotationKeyRetriesUsed = true;
         if (rotationKeyId != null) {
           const errorCode = extractErrorCode(result.streamResults.at(-1));
@@ -116,6 +126,9 @@ export async function runGenerationTurn(
         const nextKey = await selectApiKey(attempt.tomoriState, [...Array.from(excludedKeyIds)]);
         if (!nextKey) break;
 
+        // A key-rotation retry supersedes this invocation: delete its partial output before the
+        // retry so the eventual response is not stacked on top of a truncated first attempt.
+        await purgeSupersededDeliveries(context, deliveredMessageRefs, invocationStart);
         attempt.providerConfig.apiKey = nextKey.apiKey;
         rotationKeyId = nextKey.rotationKeyId;
         log.warn(
@@ -138,6 +151,10 @@ export async function runGenerationTurn(
         await responseSink.finalize(result);
         return result;
       }
+
+      // A model fallback supersedes this attempt: delete the partial output it committed (e.g. text
+      // flushed before an SDK-call timeout) so only the fallback model's response remains visible.
+      await purgeSupersededDeliveries(context, deliveredMessageRefs, invocationStart);
 
       failures.push({
         modelCodename: attempt.tomoriState.llm.llm_codename,
@@ -172,25 +189,53 @@ function setStreamUserErrorSuppression(context: ChatTurnContext, temporarySuppre
   context.streamingContext.suppressUserErrors = temporarySuppressed || !context.shouldSurfaceUserErrors;
 }
 
+/**
+ * Deletes and forgets the messages a superseded generation invocation committed to Discord.
+ *
+ * Slices off every delivered-message ref from `fromIndex` onward (this invocation's output plus any
+ * stragglers an abandoned timeout stream flushed after it), removing them from the shared sink so
+ * later attempts start clean, then best-effort deletes them from the channel. Called at each point
+ * `runGenerationTurn` decides not to keep an invocation's result (key-rotation retry, model
+ * fallback), so only the surviving attempt's messages remain visible.
+ *
+ * @param context - Active chat turn context (supplies the channel and persona webhook).
+ * @param deliveredMessageRefs - The shared delivered-message sink for this turn.
+ * @param fromIndex - First index belonging to the superseded invocation.
+ */
+async function purgeSupersededDeliveries(
+  context: ChatTurnContext,
+  deliveredMessageRefs: DeliveredStreamMessage[],
+  fromIndex: number,
+): Promise<void> {
+  if (deliveredMessageRefs.length <= fromIndex) {
+    return;
+  }
+  const superseded = deliveredMessageRefs.splice(fromIndex);
+  log.info(`Deleting ${superseded.length} superseded partial message(s) from a failed generation attempt.`);
+  await deleteSupersededStreamMessages(superseded, {
+    channel: context.channel,
+    webhook: context.responseTarget?.webhook,
+  });
+}
+
 async function buildGenerationAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
   const disableAllTools = !!context.streamingContext.disableAllTools;
   const primaryState = await resolvePrimaryTomoriState(context);
   const fallbackEntries =
     primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 
-  // 1. Build a unified pool: the primary model leads at index 0, then the existing failover chain.
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
 
-  // 2. Model randomizer: when enabled, splice a random pool member to the front so a different model
+  // Model randomizer: when enabled, splice a random pool member to the front so a different model
   //    leads each turn. The remainder keeps its relative order as the failover tail. This is a pure
-  //    reordering — every model (including the original primary) stays in the chain, so failover
+  //    reordering , so every model (including the original primary) stays in the chain, so failover
   //    semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
   if (primaryState.config.model_randomizer_enabled && pool.length > 1) {
     const leadIdx = Math.floor(Math.random() * pool.length);
     pool.unshift(...pool.splice(leadIdx, 1));
   }
 
-  // 3. Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
+  // Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
   //    primary's own llm entry yields a state equivalent to primaryState (provider matches, no config
   //    swap), so index 0 stays semantically identical to the old dedicated "primary" attempt.
   const attempts: GenerationAttempt[] = [];
@@ -202,7 +247,7 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
         // so at least one valid attempt always remains in the chain.
         continue;
       }
-      // 4. Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
+      // Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
       //    The true model still surfaces via successModel for log verification.
       if (index === 0) {
         attempt.label = "primary";
@@ -216,7 +261,7 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   return attempts;
 }
 
-// Must run before provider.createConfig — providers eagerly attach the full tool
+// Must run before provider.createConfig : providers eagerly attach the full tool
 // list and the streaming path won't strip them if has_tools flips later.
 function applyDeliberateToolKillSwitch(state: TomoriState, disableAllTools: boolean): TomoriState {
   if (disableAllTools && state.llm.has_tools) {
@@ -370,7 +415,6 @@ async function createAttempt(
     ? await ProviderFactory.getProviderByName(forcedProviderName)
     : await getProviderForTomori(effectiveState);
 
-  // 1. Try the rotation pool first; fall back to the server's own encrypted key.
   const rotationSelection = await selectApiKey(effectiveState);
   const apiKey = rotationSelection ? rotationSelection.apiKey : await resolveApiKey(effectiveState);
   const rotationKeyId = rotationSelection?.rotationKeyId ?? null;
@@ -441,10 +485,9 @@ const MAX_FALLBACK_DETAIL_LENGTH = 600;
 /**
  * Resolves a human-readable failure detail for the "Fallback Model Used" notice. Unlike
  * {@link extractErrorCode} (which prefers terse codes for key-rotation bookkeeping), this prefers
- * the provider's verbose message — e.g. "Unsupported model X. Supported IDs: ..." — so users see
+ * the provider's verbose message: e.g. "Unsupported model X. Supported IDs: ...", so users see
  * the actionable reason instead of an opaque error code.
  * @param streamResult - The last stream result recorded for the failed attempt.
- * @returns A trimmed, length-capped detail string.
  */
 function extractErrorDetail(streamResult: StreamResult | undefined): string {
   const data = streamResult?.data;
@@ -455,13 +498,11 @@ function extractErrorDetail(streamResult: StreamResult | undefined): string {
     return truncateFallbackDetail(data.message || "error");
   }
 
-  // 1. Prefer the normalized provider detail (userMessage/message/originalError) used by the error embed.
   const providerDetail = getProviderErrorDetail(data as ProviderError);
   if (providerDetail) {
     return truncateFallbackDetail(providerDetail);
   }
 
-  // 2. Fall back to whatever identifying field is present on the raw result.
   const record = data as Record<string, unknown>;
   return truncateFallbackDetail(
     String(record.message ?? record.code ?? record.type ?? streamResult?.status ?? "unknown"),
@@ -569,9 +610,17 @@ async function applyProviderContextTruncation(
     isOpenRouterCapabilityCacheReady()
   ) {
     const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-    const openrouterTruncationOutputCap = Number.parseInt(process.env.OPENROUTER_MAX_OUTPUT_TOKENS || "8192", 10);
     if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      const truncationMaxCompletionTokens = Math.min(tokenLimits.maxCompletionTokens, openrouterTruncationOutputCap);
+      // Reserve the SAME output budget the request builder sends: the server's
+      // `/model parameters` override first, then OPENROUTER_MAX_OUTPUT_TOKENS, then a
+      // flat 8192 , so clamped to the model's reported completion ceiling. Previously this
+      // ignored the server override, over-reserving output and dropping fitting history.
+      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
+        configured: tomoriState.config.llm_max_output_tokens,
+        envRaw: process.env.OPENROUTER_MAX_OUTPUT_TOKENS,
+        fallback: DEFAULT_MAX_OUTPUT_TOKENS,
+        providerReportedMax: tokenLimits.maxCompletionTokens,
+      });
       const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
         contextItems,
         tokenLimits.contextLength,
@@ -590,10 +639,23 @@ async function applyProviderContextTruncation(
   if (providerIsApiFamily(tomoriState.llm.llm_provider, "google-genai")) {
     const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
     if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
+      // Use the SAME fallback chain as the Google request builder (config override →
+      // GOOGLE_MAX_OUTPUT_TOKENS → flat 8192), so big-ceiling Gemini models (e.g. 65536
+      // reported) no longer over-reserve output and drop history that would otherwise fit.
+      // The extra clamp to the model-reported ceiling (which the request builder omits) only
+      // bites when the resolved value is ABOVE what the model can emit; reserving the real
+      // ceiling there is correct , so the model cannot output more than that regardless of the
+      // requested max, so this never under-reserves relative to actual output.
+      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
+        configured: tomoriState.config.llm_max_output_tokens,
+        envRaw: process.env.GOOGLE_MAX_OUTPUT_TOKENS,
+        fallback: DEFAULT_MAX_OUTPUT_TOKENS,
+        providerReportedMax: tokenLimits.maxCompletionTokens,
+      });
       const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
         contextItems,
         tokenLimits.contextLength,
-        tokenLimits.maxCompletionTokens,
+        truncationMaxCompletionTokens,
       );
       if (totalDropped > 0) {
         log.warn(
@@ -617,10 +679,18 @@ async function applyProviderContextTruncation(
     }
     const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
     if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
+      // NovelAI has no dedicated output-token env cap, so the reserve falls back to the
+      // subscription-tier ceiling unless the server set a `/model parameters` override.
+      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
+        configured: tomoriState.config.llm_max_output_tokens,
+        envRaw: undefined,
+        fallback: tokenLimits.maxCompletionTokens,
+        providerReportedMax: tokenLimits.maxCompletionTokens,
+      });
       const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
         contextItems,
         tokenLimits.contextLength,
-        tokenLimits.maxCompletionTokens,
+        truncationMaxCompletionTokens,
       );
       if (totalDropped > 0) {
         log.warn(

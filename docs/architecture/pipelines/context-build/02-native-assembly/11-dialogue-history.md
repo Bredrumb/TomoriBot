@@ -29,8 +29,9 @@ context items per message with three orthogonal concerns interleaved:
    `[System: ${note}]` at `context_note_depth` messages from the end of
    history. The default-off verbatim tool-calling workaround adds a separate
    depth-3 system note when enabled and the effective LLM has tools.
-4. **Better Time Awareness** — when enabled, inject a depth-1 reunion note for
-   a returning triggerer and date separators at server-calendar-day boundaries.
+4. **Better Time Awareness** — when enabled, inject a reunion note at
+   `TIME_AWARENESS_NOTE_DEPTH` for the returning direct triggerer and date
+   separators at server-calendar-day boundaries.
 
 ## Input
 
@@ -49,7 +50,8 @@ Substantial — see signature in `dialogueHistory.ts:25-44`. Notable:
 - `messageIdMap` — compact ID ↔ Discord message ID, populated as media
   hints emit
 - `uncensorInputOptions`, `convertMentions`
-- `reunionNote` — precomputed by the chat pipeline after the indexed stats read
+- `reunionNote: string | null` — raw one-shot note body precomputed by the chat
+  pipeline; this stage wraps it in `[System: ...]` like every other note
 - `dateSpacerTemplate` — pre-expanded once by `nativeBuilder`; `null` disables spacers
 
 ## Output
@@ -80,9 +82,15 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   - Drops duplicate images that recur in a later in-window message
     (`duplicateImageLastIndex` lookup).
   - Adds per-message `mediaDescriptors` carrying URI, MIME type,
-    registered media ID, media-window membership, and `extendBy` for older
+    a source-aware registered media ID, media-window membership, and `extendBy` for older
     out-of-window media. Custom emoji images are not descriptors; they remain
     text via emoji normalization.
+  - Media copied from a directly replied-to message registers that original
+    message as its media ID owner. This lets image generation, image analysis,
+    and image-to-video tools fetch the referenced bytes even though the
+    descriptor appears on the text-only reply's dialogue entry. As a defensive
+    fallback, the shared image resolver also follows one direct reply hop when
+    a tool is given the wrapper message ID.
 - **Budget-only media notes**:
   - Rendered-image-limit skips emit a capability-neutral
     `[System: N image(s) omitted due to rendered-image limit]` note.
@@ -97,11 +105,50 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
     example img2img/inpaint/image-to-video) can target the source message.
     Previously that blind + out-of-window combination emitted no line, which
     hid the fact that media existed at all.
-- **Media attribution hint** — when media is referenced from a reply or
-  forward, `[System: These images (Media IDs: X, Y) were sent by Z]`.
+- **Media attribution hint** — `[System: These images (Media IDs: X, Y) were
+  sent by Z]`, with dedicated wording for reply-referenced media ("included in
+  the message being replied to") and forwarded media ("attached to the
+  forwarded message described above"). Reply media registers the referenced
+  message that owns the bytes, while forwarded media registers the forward
+  *wrapper's* own message ID as its media ID: the original message lives in the
+  source channel, so only the wrapper ID is resolvable by media-ID tools
+  fetching from the current channel (the shared image extractor scans the
+  wrapper's `messageSnapshots` to find the media).
+- **Nested forwards (a forward of a forward)** — Discord's `message_snapshots`
+  payload is non-recursive, so re-forwarding an already-forwarded message
+  delivers an *empty* snapshot: no text, no attachments, no embeds. The wrapper's
+  own `reference` survives and points at the intermediate forward, so
+  `resolveForwardChain` (`utils/discord/forwardChain.ts`) re-fetches that message
+  to reach the next snapshot level, repeating up to `FORWARD_CHAIN_MAX_DEPTH`
+  hops (default 3, each hop costing one message fetch). An empty snapshot is a
+  reliable nested-forward signal because Discord rejects genuinely empty
+  messages. When the origin cannot be re-fetched — unreadable channel, deleted
+  message, depth exhausted — the block degrades to an explicit "was itself a
+  forward … contents cannot be seen" notice and registers no media ID, rather
+  than emitting an empty forward block that would invite the model to invent one.
+  Both `buildForwardContext` and the shared image extractor resolve the chain, so
+  a registered media ID always re-resolves to the same bytes.
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.
+- **Identity macros are preserved in message bodies** — this stage is the only
+  `convertMentions` caller that handles raw prose it did not author, so it splits
+  the conversion in two: the **author label** is converted with
+  `identityMacroMode: "resolve"` (it names the turn's owner), and the **joined
+  line** is then converted with `identityMacroMode: "preserve"`. Mentions,
+  channel links, and roles still resolve in the body; only `{bot}` / `{char}` /
+  `{user}` stay literal. Two reasons:
+  - On a model-role line `authorName` *is* the persona label and `botName` *is*
+    the persona nickname, so resolving would collapse **both** macros onto the
+    same persona name — turning `{bot} greets {user}` into `Tomori greets Tomori`.
+  - A message body legitimately contains macros whenever a user asks the persona
+    to draft a preset or system prompt; rewriting them corrupts the draft the
+    user is iterating on.
+
+  Every other `convertMentions` caller (prompt items, server info/memories/
+  emojis/stickers, participants, sample dialogues, preset nodes, and the
+  memory/thread/cross-channel tools) authors its own text and keeps the default
+  `"resolve"` mode.
 - **Copied-render webhook reconstruction** — webhook usernames formatted as
   `SourcePersona (target)` are attributed to `SourcePersona` for role mapping,
   self-reply ownership, and reply routing, while `authorName` preserves the full
@@ -134,18 +181,47 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   matching tool *schemas* are dumped earlier in the prompt by stage 07b
   ([`07b-verbatim-tool-definitions.md`](/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/)),
   gated by the same predicate.
-- A producer-supplied reunion note reuses the same `activeNotes` mechanism at
-  depth 1, immediately above the most recent message. The chat pipeline omits
-  it for user impersonation and when no internal user id is available. First-time
-  and returning-user variants include an "if you haven't already" social nudge,
-  which encourages a warm question without repeating it throughout the grace window.
+- The producer-supplied reunion note reuses the same `activeNotes` mechanism at
+  `TIME_AWARENESS_NOTE_DEPTH` (default 3). The chat pipeline omits it for user
+  impersonation and when the direct triggerer has no internal user id.
 
-**Reunion grace is stateless.** `StatRepository.getUserPersonaReunionInfo`
-reads the last `message_sent` timestamp from buckets before `CURRENT_DATE` and
-today's persisted count for the `(user, persona lineage)` tuple across all servers. Today's
-writes cannot erase the detected gap; the note expires when today's count
-reaches `TIME_AWARENESS_GRACE_TRIGGERS`, and the next DB day resets it naturally.
-The stat buffer can extend the grace window by one trigger, an accepted cosmetic tolerance.
+**Only the direct triggerer gets a note.** Passive authors in the channel history
+neither receive nor consume reunions. This keeps unrelated turns from advancing a
+person's relationship clock and prevents a busy channel from prompting several
+greetings at once.
+
+**Presence is the clock, not message volume.** `presence_seen` is recorded once per
+successful direct-triggerer turn, including DMs. This is deliberately separate from
+the `message_sent` telemetry metric, whose guild-only recording rules exist for
+leaderboard correctness.
+
+**The clock is a two-phase protocol**, both halves in `@/utils/chat/reunionPresence`:
+
+1. `resolveReunionNote` at **context build** acquires a process-wide
+   `(persona lineage, user)` claim before reading the clock. This ordering prevents
+   a concurrent query from resuming with a stale pre-commit snapshot. Ineligible
+   turns release immediately; eligible turns carry the claim in the
+   `ReunionPresenceScope` on `ChatTurnContext.reunionPresence`.
+2. `recordReunionPresence` at **post-turn** immediately persists `presence_seen`
+   after a response lands, then releases the claim. Empty and failed turns release
+   without writing. A concurrent turn suppressed by an active claim also does not
+   write, so a failed claimant cannot make the user lose the pending reunion.
+
+The claim prevents separate channel locks from building the same reunion context at
+the same time. `TIME_AWARENESS_REUNION_CLAIM_TTL_MS` releases abandoned claims after
+an interrupted turn. Empty-response retries finalize the old claim before rebuilding
+context, allowing the retry to claim the note itself.
+
+**Reunions are one-shot.** `StatRepository.getUserPersonaReunionInfo` reads the last
+activity timestamp from buckets before `CURRENT_DATE` and whether a persisted
+`presence_seen` row exists today for the `(user, persona lineage)` tuple across all
+servers. The gap lookup spans `presence_seen` **and** `message_sent` so relationships
+predating the presence metric retain their history. A successful direct turn writes
+`presence_seen` immediately rather than through the telemetry buffer, providing the
+read-after-write consistency needed by another channel. A failed read injects nothing.
+The consumed-today flag follows the UTC database bucket, while the displayed day gap
+uses the personal/server timezone chain. With `STAT_TRACKING_ENABLED=false` the feature
+disables itself.
 
 | Injection | Calendar timezone | Reason |
 |---|---|---|
@@ -173,7 +249,9 @@ After this stage runs:
   persona/channel/global context notes; adding the workaround must not suppress
   the global context-note fallback.
 - Capability OFF passes neither a reunion note nor a spacer template, preserving
-  the pre-feature dialogue context for both injections.
+  the pre-feature dialogue context for both injections. It also records no
+  `presence_seen` ticks, so a disabled server writes nothing.
+- At most one reunion note is injected, and it can describe only the direct triggerer.
 - `messageIdMap.register(...)` is called for every media reference the
   LLM might ask about after resolution (so `increase_media_context`,
   `image_analysis_tool`, and media-reference tools have stable IDs).
@@ -184,8 +262,10 @@ After this stage runs:
 |---|---|---|
 | `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
 | `PERSONA_USER_BLOCK_CACHE_TTL_SECONDS` | `60` | TTL for active persona user block lookups |
-| `TIME_AWARENESS_REUNION_DAYS` | `3` | Minimum personal-calendar-day reunion gap |
-| `TIME_AWARENESS_GRACE_TRIGGERS` | `3` | Persisted same-day triggers that retain a reunion note |
+| `TIME_AWARENESS_REUNION_DAYS` | `7` | Minimum personal-calendar-day reunion gap |
+| `TIME_AWARENESS_NOTE_DEPTH` | `3` | Messages from the end where reunion notes inject |
+| `TIME_AWARENESS_REUNION_CLAIM_TTL_MS` | `240000` | Safety expiry for an abandoned process-local Reunion claim |
+| `STAT_TRACKING_ENABLED` | `true` | Write side of the presence clock; `false` disables reunion notes |
 
 | Source | Field | Effect |
 |---|---|---|

@@ -35,7 +35,7 @@ const SPECIALIZED_STOP_STRING_RULES: readonly SpecializedStopStringRule[] = [
     // NovelAI's OpenAI-compatible GLM endpoint may emit role tags or stray
     // closing think tags in completions mode. Stop strings are sent to the API
     // and matched literally, so a namespaced variant (e.g. `</mm:think>`) must
-    // be added here explicitly per model — see reasoningTags.ts for the shape.
+    // be added here explicitly per model, so see reasoningTags.ts for the shape.
     providerName: "novelai",
     exactModels: ["glm-4-6"],
     stopStrings: ["<|user|>", "<|observation|>", "<|system|>", THINK_CLOSE_TAG],
@@ -49,7 +49,7 @@ const SPECIALIZED_STOP_STRING_RULES: readonly SpecializedStopStringRule[] = [
  * Newline prefix is intentional so an initial "Tomori:" at the very beginning
  * of a response is not blocked.
  */
-export function buildPersonaSpeakerStopString(personaName?: string | null): string | null {
+function buildPersonaSpeakerStopString(personaName?: string | null): string | null {
   if (!personaName) return null;
 
   const normalizedName = personaName
@@ -95,7 +95,7 @@ function matchesSpecializedStopRule(
   return true;
 }
 
-export function getUniversalStopStrings(): string[] | undefined {
+function getUniversalStopStrings(): string[] | undefined {
   const universalStops: string[] = [];
 
   for (const stop of UNIVERSAL_STOP_STRINGS) {
@@ -105,7 +105,7 @@ export function getUniversalStopStrings(): string[] | undefined {
   return universalStops.length > 0 ? universalStops : undefined;
 }
 
-export function getSpecializedStopStrings(providerName?: string | null, model?: string | null): string[] | undefined {
+function getSpecializedStopStrings(providerName?: string | null, model?: string | null): string[] | undefined {
   const matchedStops: string[] = [];
 
   for (const rule of SPECIALIZED_STOP_STRING_RULES) {

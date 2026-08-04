@@ -29,7 +29,6 @@ interface AnthropicPresetGenerationOptions {
 }
 
 /**
- * Build the system prompt for Anthropic preset generation.
  * Injects the response schema so the model knows the expected output shape.
  */
 function buildAnthropicPresetSystemPrompt(): string {
@@ -71,17 +70,15 @@ export async function generatePresetFromPromptAnthropic(
   const toolContext = options.toolContext;
   const toolsEnabled = tools.length > 0 && toolContext;
 
-  // 1. Build the preset tool definition (forced tool use for structured output)
+  // Build the preset tool definition (forced tool use for structured output)
   const presetToolDef = {
     name: "preset_export_data",
     description: "Generate structured character preset data",
     input_schema: buildPresetResponseSchema(),
   };
 
-  // 2. Build initial messages
   const messages: Array<Record<string, unknown>> = [{ role: "user", content: buildPresetPrompt(params) }];
 
-  // 3. Build tools list: preset schema tool + any search tools
   const allTools: Array<Record<string, unknown>> = [presetToolDef];
   if (toolsEnabled) {
     allTools.push(...tools);
@@ -91,7 +88,6 @@ export async function generatePresetFromPromptAnthropic(
   let toolRounds = 0;
 
   while (true) {
-    // 4. Build request body
     const body: Record<string, unknown> = {
       model: options.model,
       max_tokens: 8192,
@@ -102,7 +98,6 @@ export async function generatePresetFromPromptAnthropic(
       temperature: options.temperature ?? 1.0,
     };
 
-    // 5. Send the request
     const response = await fetch(ANTHROPIC_MESSAGES_URL, {
       method: "POST",
       headers: {
@@ -141,14 +136,12 @@ export async function generatePresetFromPromptAnthropic(
       };
     }
 
-    // 6. Check for tool_use blocks
     const toolUseBlocks = result.content.filter(
       (block) => block.type === "tool_use",
     ) as unknown as AnthropicToolCallBlock[];
 
     const textBlocks = result.content.filter((block) => block.type === "text");
 
-    // 7. Handle tool calls (search tools, not the preset schema tool)
     const searchToolCalls = toolUseBlocks.filter((tc) => tc.name !== "preset_export_data");
 
     if (searchToolCalls.length > 0) {
@@ -167,13 +160,11 @@ export async function generatePresetFromPromptAnthropic(
         };
       }
 
-      // Add assistant message with all content blocks
       messages.push({
         role: "assistant",
         content: result.content,
       });
 
-      // Build user message with tool results
       const toolResultBlocks: Array<Record<string, unknown>> = [];
 
       for (const toolCall of searchToolCalls) {
@@ -214,7 +205,6 @@ export async function generatePresetFromPromptAnthropic(
       continue;
     }
 
-    // 8. Check for the preset_export_data tool call (structured output)
     const presetToolCall = toolUseBlocks.find((tc) => tc.name === "preset_export_data");
 
     if (presetToolCall) {
@@ -271,7 +261,7 @@ export async function generatePresetFromPromptAnthropic(
       return { preset };
     }
 
-    // 9. If no tool_use blocks, try to parse text content as JSON (fallback)
+    // If no tool_use blocks, try to parse text content as JSON (fallback)
     const responseText = textBlocks
       .map((b) => (b as { text?: string }).text ?? "")
       .join("")

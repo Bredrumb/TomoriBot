@@ -5,11 +5,9 @@ import { ContextItemTag } from "@/types/misc/context";
  * Estimates the input token count from a list of context items.
  *
  * Uses a 4-characters-per-token approximation applied only to text parts.
- * Image and video parts are excluded — their token cost is absorbed by the
+ * Image and video parts are excluded, so their token cost is absorbed by the
  * 10% safety margin in {@link truncateDialogueHistory}.
  *
- * @param items - Structured context items to estimate
- * @returns Estimated token count
  */
 function estimateInputTokens(items: StructuredContextItem[]): number {
   let totalChars = 0;
@@ -49,11 +47,10 @@ export function truncateDialogueHistory(
   contextLength: number,
   maxCompletionTokens: number,
 ): TruncationResult {
-  // 1. Calculate the safe input budget: reserve maxCompletionTokens for output,
+  // Calculate the safe input budget: reserve maxCompletionTokens for output,
   //    then apply a 10% margin to absorb tokenizer estimation error
   const safeInputBudget = Math.floor((contextLength - maxCompletionTokens) * 0.9);
 
-  // 2. Work on a mutable copy to avoid modifying the caller's array
   const items = [...contextItems];
   let historyPairsDropped = 0;
   const sampleItemsDropped = 0;
@@ -86,7 +83,6 @@ export function truncateDialogueHistory(
       return false;
     }
 
-    // Find the next history model turn, but do not cross over the protected newest user turn.
     let followingModelIdx = -1;
     for (let i = oldestDroppableUserIdx + 1; i < items.length; i++) {
       if (i === newestDialogueUserIdx) {
@@ -107,7 +103,7 @@ export function truncateDialogueHistory(
     return true;
   };
 
-  // 3. Iteratively drop context until within budget (or no droppable content remains)
+  // Iteratively drop context until within budget (or no droppable content remains)
   while (estimateInputTokens(items) > safeInputBudget) {
     if (dropOldestDroppableHistoryExchange()) {
       continue;

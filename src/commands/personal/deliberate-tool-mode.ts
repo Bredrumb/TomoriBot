@@ -47,7 +47,7 @@ export async function execute(
   const selectedMode = interaction.options.getString("mode", true) as PersonalDeliberateToolMode;
 
   try {
-    // 1. Persist through the repository layer, which validates the field,
+    // Persist through the repository layer, which validates the field,
     //    writes the row, and invalidates the user cache on success. A loaded
     //    user row always carries its PK; `?? -1` only narrows the optional type,
     //    and a -1 id simply yields a null (no-row) update → the failure path below.
@@ -55,7 +55,7 @@ export async function execute(
       personal_deliberate_tool_mode: selectedMode,
     });
 
-    // 2. A null result means the write (or its validation) failed — surface the
+    // A null result means the write (or its validation) failed, so surface the
     //    generic update-failed embed.
     if (!updatedUser) {
       const context: ErrorContext = {

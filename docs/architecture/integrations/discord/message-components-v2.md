@@ -596,9 +596,9 @@ When sent in a message, pingable mentions (@user, @role, etc) present in this co
 
 ### TomoriBot convention: container titles
 
-TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown **H2 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine) — do not embed `##` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
+TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown **H3 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine) — do not embed `###` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
 
-Memory and scheduled-task notices use `buildNoticeContainer` in `src/utils/discord/ui/interactionCore.ts`. The old embed title maps to the H2 title, the old embed description maps to a Text Display, and the old embed footer maps to muted `-#` subtext after a separator. When the memory/task body is truncated, the Secondary "Expand" button is rendered as an Action Row inside the same container; the ephemeral full-content reveal remains a separate classic embed reply.
+Memory and scheduled-task notices use `buildNoticeContainer` in `src/utils/discord/ui/interactionCore.ts`. The old embed title maps to the H3 title, the old embed description maps to a Text Display, and the old embed footer maps to muted `-#` subtext after a separator. When the memory/task body is truncated, the Secondary "Expand" button is rendered as an Action Row inside the same container; the ephemeral full-content reveal remains a separate classic embed reply.
 
 ---
 
@@ -741,6 +741,78 @@ Implementation notes:
 - Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
 - Re-fetching a generated image by message/media ID (for image-to-image, inpaint, or vision analysis) must scan `message.components` for `MediaGallery`/`Thumbnail`/`File` media, not just top-level attachments/embeds — the generated file is referenced only inside the component. This discovery is centralized in `collectImageUrlsFromMessage` (`src/utils/image/imageExtractor.ts`), which reuses `appendComponentMediaFromMessage` from `src/utils/chat/contextMedia.ts`. `generate_image`, `generate_image_nai`, and `analyze_image` all go through it, so a Components V2 image found in context can also be reloaded by any tool that accepts a media reference.
 
+### Anchor message workflow: one message
+
+A same-visibility anchor workflow is one ephemeral Components V2 message for its complete
+lifecycle. Provider or persona cards, page navigation, loading states, secondary selectors,
+validation, progress, success, errors, timeouts, and final private controls all replace or
+edit that anchor message. A modal is not a message and does not change this count.
+
+Both entry points behave identically here: `runPersonaPickerWorkflow(...)` for persona
+pickers, and `beginAnchorPrivateWorkflow(...)` for everything else (imported from
+`src/utils/discord/ui/anchorWorkflow.ts`, which also exports neutral `Anchor*` aliases
+for the types named below). Each captures its message ID and exposes a
+`PersonaWorkflowMessageController` through selection, modal, in-place, and nested-button
+phases. Every controller operation verifies that it still targets that ID:
+
+- `replace(payload)` performs a full state transition and clears stale attachments unless
+  `attachments` is supplied explicitly;
+- `edit(payload)` performs an incremental edit and retains attachments when the field is
+  omitted;
+- `fetchMessage()` returns only the verified anchor message;
+- `disableControls()` preserves the visible state but disables interactive components;
+- `delete()` closes the workflow and prevents later edits.
+
+The controller accepts only `PersonaWorkflowComponentsV2Payload`. Its type and runtime
+guard both require `components` plus `MessageFlags.IsComponentsV2`, and reject legacy
+`content` or `embeds`. `files`, attachment retention, and explicit attachment clearing are
+supported. Operations return the edited `Message` when a collector needs it.
+
+In-place update failures are represented by `PersonaWorkflowUpdateError` codes such as
+`message-mismatch`, `non-message-backed-interaction`, `already-acknowledged`,
+`anchor-message-unavailable`, and `discord-update-failed`. They are logged and returned
+or thrown; the controller never silently falls back to another ephemeral `reply`,
+`followUp`, or `webhook.send`.
+
+#### Attachment lifecycle
+
+Persona cards can reference local avatars through `attachment://avatar_<index>.png`. A
+later status or selector normally does not reference those files, so `replace` supplies an
+empty attachment set automatically and removes the stale avatars. A destination that still
+uses an existing attachment calls `edit` or supplies the retained attachment IDs. A
+destination with new files passes both `files` and matching `attachment://...` references in
+its Components V2 tree.
+
+#### Explicit visibility change
+
+The only normal two-message policy is `separate-public`. Calling
+`selection.beginSeparatePublicReply(compactPrivatePayload)` first updates the selected
+button and compacts the anchor private picker. The returned phase can then create exactly
+one public follow-up. Its public payload type forbids the ephemeral option, and a second
+`reply()` call fails with `public-reply-already-sent`.
+
+This policy is used by intentionally public results such as `/stats persona` and persona
+`/stats generate`. A private workflow must use the default `replace-picker` policy instead.
+
+#### In-place modal range bridge
+
+Discord modal string selects hold at most 25 options. Persona workflows keep larger sets on
+the anchor message:
+
+1. With at most 25 preloaded options, the selected persona button opens the modal directly.
+2. With more than 25 options, that button updates the anchor message to localized range
+   buttons (`1-25`, `26-50`, and so on).
+3. The chosen range button opens a modal containing only that slice. The submitted modal
+   phase exposes `optionOffset` for converting page-local indexes to absolute indexes.
+4. Previous/next range-page navigation, cancel, timeout, and retry all replace the same
+   message.
+
+When options require asynchronous loading, `openModal(async () => options)` first
+update-defers the persona button and displays an in-place loading state. For a small result it
+then displays a new **Open Form** button; for a large result it displays the range selector.
+The fresh button performs `showModal()` as its first acknowledgment. The workflow never
+defers a button and then attempts to open a modal from that already-acknowledged interaction.
+
 ### Migration guidance
 
 When modernizing an embed workflow to Components V2, migrate the complete reply flow together:
@@ -748,6 +820,7 @@ When modernizing an embed workflow to Components V2, migrate the complete reply 
 - Initial deferred reply edits, "processing" messages, success messages, timeout messages, cancellation messages, and post-processing errors should all use Components V2 components with `MessageFlags.IsComponentsV2`.
 - Files attached to V2 messages must be referenced by `MediaGallery`, `Thumbnail`, or `File`; an unreferenced attachment is not displayed.
 - Shared helpers such as status containers are preferred for repeated states. Local builders are acceptable for command-specific payloads, but do not mix them with legacy embeds on the same original interaction reply after the V2 state has been sent.
+- Persona-picker commands must use `runPersonaPickerWorkflow(...)`; direct use of the low-level persona renderer is mechanically rejected by `tests/unit/checks/personaWorkflowBoundary.test.ts`.
 
 ---
 

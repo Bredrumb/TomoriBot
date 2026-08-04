@@ -3,7 +3,7 @@ import type { CompactSummaryMode } from "@/types/misc/compact";
 import { log } from "@/utils/misc/logger";
 import type { ConversationContext } from "./types";
 
-export function buildConversationPrompt(params: {
+function buildConversationPrompt(params: {
   conversationText: string;
   imageReferences: ConversationContext["imageReferences"];
   supplementaryContext: string;
@@ -12,7 +12,7 @@ export function buildConversationPrompt(params: {
   return buildPrompt({ ...params, finalInstruction: "\nPlease keep the summary under 3500 characters." });
 }
 
-export function buildRoleplayPrompt(params: {
+function buildRoleplayPrompt(params: {
   conversationText: string;
   imageReferences: ConversationContext["imageReferences"];
   supplementaryContext: string;

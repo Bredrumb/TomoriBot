@@ -1,9 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildDegradationAttempts,
+  buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
   extractRejectedParams,
+  isMultimodalRejectionError,
+  messagesContainImageBlocks,
+  stripImageBlocksWithNotice,
 } from "@/providers/utils/paramDegradation";
 
 describe("extractRejectedParams", () => {
@@ -78,6 +82,29 @@ describe("buildDegradationAttempts", () => {
     }
   });
 
+  it("never drops a provider-mandatory reply-shaping key such as thinking", () => {
+    // A rung that drops `thinking` while keeping `tools` yields a tool call with no
+    // reasoning_content, which DeepSeek then rejects when a later request replays that turn.
+    const attempts = buildDegradationAttempts(
+      {
+        model: "deepseek-chat",
+        messages: [],
+        stream: true,
+        stream_options: { include_usage: true },
+        thinking: { type: "enabled" },
+        tools: [{ type: "function" }],
+        top_k: 40,
+        min_p: 0.05,
+      },
+      { mandatoryKeys: new Set(["model", "messages", "stream", "thinking"]) },
+    );
+
+    expect(attempts.map((attempt) => attempt.label)).not.toContain("probe_drop_thinking");
+    for (const attempt of attempts) {
+      expect(attempt.body).toHaveProperty("thinking");
+    }
+  });
+
   it("deduplicates identical serialized bodies", () => {
     const attempts = buildDegradationAttempts(
       { model: "example/model", messages: [], stream: true },
@@ -98,6 +125,120 @@ describe("buildTargetedAttempt", () => {
 
     expect(attempt.label).toBe("targeted_drop_min_p+logit_bias");
     expect(attempt.body).toEqual({ model: "example/model", messages: [], stream: true });
+  });
+});
+
+describe("isMultimodalRejectionError", () => {
+  it("recognizes the vLLM missing --enable-multimodal rejection", () => {
+    expect(
+      isMultimodalRejectionError(
+        "ValueError: Received multimodal data but multimodal processing is not enabled. Use --enable-multimodal flag to enable multimodal processing.",
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    "This model does not support image input",
+    "image inputs are not supported for this endpoint",
+    "Vision is not enabled for this deployment",
+  ])("recognizes other no-vision phrasings: %s", (message) => {
+    expect(isMultimodalRejectionError(message)).toBe(true);
+  });
+
+  it.each([
+    "The min_p and logit_bias sampling parameters are not yet supported",
+    "Bad gateway",
+    "multimodal model ready",
+  ])("ignores unrelated errors: %s", (message) => {
+    expect(isMultimodalRejectionError(message)).toBe(false);
+  });
+});
+
+describe("stripImageBlocksWithNotice", () => {
+  it("replaces image blocks with a single notice while keeping text blocks", () => {
+    const stripped = stripImageBlocksWithNotice([
+      {
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } },
+          { type: "text", text: "what is this?" },
+        ],
+      },
+    ]);
+
+    const content = stripped[0]?.content as Array<Record<string, unknown>>;
+    expect(content).toHaveLength(2);
+    expect(content[0]?.type).toBe("text");
+    expect(String(content[0]?.text)).toContain("An attached image was removed");
+    expect(content[1]).toEqual({ type: "text", text: "what is this?" });
+  });
+
+  it("collapses multiple removed images into one counted notice", () => {
+    const stripped = stripImageBlocksWithNotice([
+      {
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: "a" } },
+          { type: "image", uri: "b" },
+        ],
+      },
+    ]);
+
+    const content = stripped[0]?.content as Array<Record<string, unknown>>;
+    expect(content).toHaveLength(1);
+    expect(String(content[0]?.text)).toContain("2 attached images were removed");
+  });
+
+  it("returns messages without image blocks unchanged", () => {
+    const messages = [
+      { role: "system", content: "instructions" },
+      { role: "user", content: [{ type: "text", text: "hello" }] },
+    ];
+
+    expect(stripImageBlocksWithNotice(messages)).toEqual(messages);
+  });
+});
+
+describe("messagesContainImageBlocks", () => {
+  it("detects image blocks in array content", () => {
+    expect(messagesContainImageBlocks([{ role: "user", content: [{ type: "image_url" }] }])).toBe(true);
+  });
+
+  it("returns false for string content and text-only arrays", () => {
+    expect(
+      messagesContainImageBlocks([
+        { role: "system", content: "instructions" },
+        { role: "user", content: [{ type: "text", text: "hello" }] },
+      ]),
+    ).toBe(false);
+  });
+});
+
+describe("buildImageStripAttempt", () => {
+  it("builds a labeled attempt with notices and preserves other body keys", () => {
+    const attempt = buildImageStripAttempt({
+      model: "example/model",
+      messages: [{ role: "user", content: [{ type: "image_url" }] }],
+      stream: true,
+      temperature: 0.8,
+    });
+
+    expect(attempt?.label).toBe("targeted_strip_images");
+    expect(attempt?.body.temperature).toBe(0.8);
+    const content = (attempt?.body.messages as Array<Record<string, unknown>>)[0]?.content as Array<
+      Record<string, unknown>
+    >;
+    expect(content[0]?.type).toBe("text");
+  });
+
+  it("returns null when the body carries no image blocks", () => {
+    expect(
+      buildImageStripAttempt({
+        model: "example/model",
+        messages: [{ role: "user", content: "text only" }],
+        stream: true,
+      }),
+    ).toBeNull();
   });
 });
 

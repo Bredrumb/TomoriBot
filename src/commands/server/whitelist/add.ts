@@ -53,10 +53,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
             value: CooldownType.SERVER_WIDE,
           },
           // Strict Server-Wide removed: doesn't make sense for per-channel whitelist overrides
-          // {
-          // 	name: localizer("en-US", "commands.config.cooldown.type.choice_strict_server_wide"),
-          // 	value: CooldownType.STRICT_SERVER_WIDE,
-          // },
         ),
     )
     .addIntegerOption((option) =>
@@ -85,7 +81,6 @@ export async function execute(
   };
 
   try {
-    // 1. Validate guild context
     if (!interaction.guild || !interaction.guildId) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -95,10 +90,9 @@ export async function execute(
       return;
     }
 
-    // 1.5. Defer the interaction before async work to prevent timeout
+    // Defer the interaction before async work to prevent timeout
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 2. Get Tomori state for server
     const tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -112,13 +106,11 @@ export async function execute(
     errorContext.serverId = tomoriState.server_id;
     errorContext.personaId = tomoriState.persona_id;
 
-    // 3. Get command parameters
     const channel = interaction.options.getChannel("channel", true);
     const requestedCooldownType = interaction.options.getInteger("cooldown_type", false);
     const requestedCooldownLength = interaction.options.getInteger("cooldown_length", false);
     const hasOverrideInput = requestedCooldownType !== null || requestedCooldownLength !== null;
 
-    // 4. Validate channel type
     if (channel.type !== ChannelType.GuildText) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -128,7 +120,6 @@ export async function execute(
       return;
     }
 
-    // 5. Validate cooldown type (0-3)
     if (requestedCooldownType !== null && (requestedCooldownType < 0 || requestedCooldownType > 3)) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -138,7 +129,6 @@ export async function execute(
       return;
     }
 
-    // 6. Validate cooldown length (0-86400)
     if (requestedCooldownLength !== null && (requestedCooldownLength < 0 || requestedCooldownLength > 86400)) {
       await replyInfoEmbed(interaction, locale, {
         color: ColorCode.ERROR,
@@ -152,7 +142,6 @@ export async function execute(
       return;
     }
 
-    // 7. Check if channel already has these exact settings
     const existingEntry = await whitelistRepository.getChannelWhitelist(tomoriState.server_id, channel.id);
 
     const currentCooldownType =
@@ -186,13 +175,10 @@ export async function execute(
       return;
     }
 
-    // 8. Upsert channel whitelist
     await whitelistRepository.upsertChannelWhitelist(tomoriState.server_id, channel.id, cooldownType, cooldownLength);
 
-    // 9. Invalidate whitelist cache for this server
     invalidateWhitelistCache(interaction.guildId);
 
-    // 10. Send success message
     if (cooldownType === null || cooldownLength === null) {
       await replyInfoEmbed(
         interaction,
@@ -213,7 +199,6 @@ export async function execute(
         `commands.config.cooldown.type.choice_${getCooldownTypeKey(cooldownType)}`,
       );
 
-      // Use different message for instant cooldown (length = 0)
       if (cooldownLength === 0) {
         await replyInfoEmbed(
           interaction,
@@ -269,8 +254,6 @@ export async function execute(
 }
 
 /**
- * Get the locale key suffix for a cooldown type
- * @param cooldownType - The cooldown type
  * @returns The locale key suffix (e.g., "off", "per_user", "per_channel")
  */
 function getCooldownTypeKey(cooldownType: CooldownType): string {
@@ -283,8 +266,6 @@ function getCooldownTypeKey(cooldownType: CooldownType): string {
       return "per_channel";
     case CooldownType.SERVER_WIDE:
       return "server_wide";
-    // case CooldownType.STRICT_SERVER_WIDE:
-    // 	return "strict_server_wide";
     default:
       return "off";
   }

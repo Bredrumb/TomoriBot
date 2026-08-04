@@ -1,5 +1,5 @@
 /**
- * PersonalMemoryRepository — manages the `personal_memories` table.
+ * PersonalMemoryRepository: manages the `personal_memories` table.
  *
  * Personal memories are long-term facts Tomori learns about a specific user,
  * scoped to a persona lineage (or lineage 0 for global cross-persona memories).
@@ -15,14 +15,12 @@ import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
 /** Portable personal memory export shape (expanded in Phase 6 #16.7). */
-export type PersonalMemoryExportShape = {
+type PersonalMemoryExportShape = {
   user_disc_id: string;
   memories: Array<{ content: string; tags: string[]; persona_lineage_id: number }>;
 };
 
-export class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
+class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape> {
   /**
    * Loads personal memories for a user scoped to a persona lineage.
    * When includeGlobalMemories is true (default), lineage-0 memories are also included.
@@ -75,7 +73,33 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
+  /**
+   * Returns the set of persona lineage ids for which this user has at least one
+   * personal memory. Batched eligibility source for the persona-scoped `/memory
+   * personal` picker filters, which load with `includeGlobalMemories = false`.
+   *
+   * Lineage `0` (global) is excluded on purpose: it is the command's separate
+   * global branch, so a global memory must never make a specific persona look
+   * eligible. This mirrors `loadForUserLineage(userId, lineageId, false)`, which
+   * returns a non-empty array exactly for the non-zero lineages in this set.
+   *
+   * @param userId - Internal user DB ID
+   * @returns Set of eligible non-zero `persona_lineage_id` values.
+   */
+  async lineageIdsWithMemories(userId: number): Promise<Set<number>> {
+    try {
+      const rows = await sql<Array<{ persona_lineage_id: number | string }>>`
+        SELECT DISTINCT persona_lineage_id
+        FROM personal_memories
+        WHERE user_id = ${userId}
+          AND persona_lineage_id <> 0
+      `;
+      return new Set(rows.map((row) => Number(row.persona_lineage_id)));
+    } catch (error) {
+      log.error(`Error loading lineage ids with personal memories for user ${userId}:`, error);
+      return new Set();
+    }
+  }
 
   async edit(personalMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {
     try {
@@ -306,8 +330,6 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     }
   }
 
-  // ── limit checks ───────────────────────────────────────────────────────────
-
   /**
    * Check if a user has reached their personal memory limit.
    *
@@ -360,8 +382,6 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Personal memory export is handled by ImportExportRepository.
    * Stub satisfies IRepository contract pending Phase 6 #16.7.
@@ -381,5 +401,5 @@ export class PersonalMemoryRepository implements IRepository<PersonalMemoryExpor
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const personalMemoryRepository = new PersonalMemoryRepository();

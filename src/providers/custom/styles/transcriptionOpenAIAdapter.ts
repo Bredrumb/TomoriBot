@@ -8,7 +8,7 @@ const OPENAI_STT_TIMEOUT_MS =
     ? Number.parseInt(process.env.OPENAI_STT_TIMEOUT_MS ?? "", 10)
     : 60_000;
 
-export type OpenAITranscriptionErrorKind = "request_failed" | "timeout" | "empty_transcript" | "invalid_response";
+type OpenAITranscriptionErrorKind = "request_failed" | "timeout" | "empty_transcript" | "invalid_response";
 
 export interface OpenAITranscriptionResult {
   success: boolean;
@@ -43,7 +43,6 @@ export async function transcribeViaOpenAIAdapter(
   const languageHint = (endpoint.extra_config.language as string | undefined) ?? null;
   const endpointUrl = endpoint.endpoint_url.replace(/\/+$/, "");
 
-  // Build multipart form per the OpenAI transcriptions spec.
   const form = new FormData();
   form.append(
     "file",
@@ -91,9 +90,7 @@ export async function transcribeViaOpenAIAdapter(
       const errorBody = (await response.json()) as { error?: string | { message?: string } };
       const msg = typeof errorBody.error === "string" ? errorBody.error : (errorBody.error?.message ?? null);
       if (msg) errorDetails += `: ${msg}`;
-    } catch {
-      // Ignore JSON parse failures on error responses.
-    }
+    } catch {}
     log.warn(`[OpenAISTT] Transcription endpoint returned error: ${errorDetails}`);
     return { success: false, errorKind: "request_failed", details: errorDetails };
   }

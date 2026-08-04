@@ -33,3 +33,4 @@ conventions, then jump to the guide for your task.
 
 - [`testing-db-changes.md`](./testing-db-changes)
 - [`testing-chat-changes.md`](./testing-chat-changes)
+- [`testing-module-mocks.md`](./testing-module-mocks)

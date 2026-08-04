@@ -1,5 +1,3 @@
-// locales/ja/commands/config.ts
-
 export default {
   config: {
     options: {
@@ -566,19 +564,23 @@ export default {
       provider_invalid: `エラー: 無効なAPIプロバイダーが選択されました。利用可能なオプションから選択してください。`,
       preset_not_found: `エラー: 選択されたペルソナがデータベースに見つかりませんでした。もう一度お試しください。`,
       success_title: `🟢 設定完了！`,
-      success_desc: `このサーバー用に設定が完了しました。私の設定を変更するには、\`/config\`、\`/server\`、\`/persona\`、\`/memory\`コマンドを使用してください。任意ですが推奨：\`/server initialize\` コマンドで絵文字・スタンプのメタデータを最適化できます。データのエクスポートやリセットは\`/memory personal export\`、\`/memory server export\`、\`/personal config\`、\`/server config\`でいつでも可能です。概要は以下の通りです:`,
-      success_desc_with_model: `このサーバー用に設定が完了しました。使用モデルは \`{model_name}\`（このプロバイダーのデフォルト）です。私の設定を変更するには、\`/config\`、\`/server\`、\`/persona\`、\`/memory\`コマンドを使用してください。任意ですが推奨：\`/server initialize\` コマンドで絵文字・スタンプのメタデータを最適化できます。データのエクスポートやリセットは\`/memory personal export\`、\`/memory server export\`、\`/personal config\`、\`/server config\`でいつでも可能です。概要は以下の通りです:`,
-      success_desc_byok: `このサーバーはユーザーBYOKモードで設定されました。ユーザー発言に対する応答では、このモードを無効にするまで各メンバーの個人プロバイダーが必要になります。任意ですが推奨：\`/server initialize\` コマンドで絵文字・スタンプのメタデータを最適化できます。概要は以下の通りです:`,
-      success_desc_custom_endpoint: `このサーバーのセットアップは完了しましたが、まだサーバー側のテキストプロバイダーは有効化されていません。次にカスタムエンドポイントの登録を完了すると、そのエンドポイントで応答できるようになります。概要は以下の通りです:`,
-      success_desc_dm: `このダイレクトメッセージ用に設定が完了しました。データのエクスポートやリセットは\`/memory personal export\`と\`/personal config\`でいつでも可能です。概要は以下の通りです:`,
-      success_desc_dm_with_model: `このダイレクトメッセージ用に設定が完了しました。使用モデルは \`{model_name}\`（このプロバイダーのデフォルト）です。データのエクスポートやリセットは\`/memory personal export\`と\`/personal config\`でいつでも可能です。概要は以下の通りです:`,
-      next_steps_title: `🟢 私に何ができる？`,
-      next_steps_description: `{helpFeatures}で全機能を確認するか、チャットで直接聞いてみてください！使えるスラッシュコマンドも教えられます。`,
-      novelai_expressions_warning_field: `⚠️ 表現機能の無効化`,
-      novelai_expressions_warning_value: `NovelAIのコンテキストを安定させるため、絵文字とスタンプの使用が自動的に無効化されました。でいつでも再有効化できます。`,
-      zai_tos_warning_field: `⚠️ Z.ai利用規約について`,
+      success_desc: `\`{persona}\` として、このサーバーの準備が整いました！`,
+      success_desc_with_model: `このサーバーの準備が整いました！\`{provider}\` のデフォルトモデル \`{model_name}\` を使い、\`{persona}\` として応答します。`,
+      success_desc_byok: `このサーバーは User BYOK モードで、\`{persona}\` として準備が整いました！BYOKをオフにするまで、各メンバーは自分のプロバイダーで応答します。`,
+      success_desc_custom_endpoint: `このサーバーでは \`{persona}\` としてもう少しで準備完了です！まだ有効なテキストプロバイダーがありません。下のカスタムエンドポイントの手順を完了すると応答できます。`,
+      success_desc_dm: `このDMでは \`{persona}\` として準備が整いました！`,
+      success_desc_dm_with_model: `このDMでは \`{persona}\` として準備が整いました！\`{provider}\` のデフォルトモデル \`{model_name}\` で応答します。`,
+      next_steps_title: `➡️ おすすめの次のステップ`,
+      next_steps_value: `- **チャットでメンションして** 話しかけてください！\n- \`/persona\` で私の名前・見た目・性格を変えられます。\n- \`/config\` で私のふるまいや使える機能を調整できます。\n- \`/memory\` であなたやこのサーバーについて覚えてほしいことを教えられます。\n- \`/server initialize\` を実行すると、このサーバーの絵文字やスタンプを使えるようになります。`,
+      next_steps_value_dm: `- **ここで直接メッセージを送れば** 話しかけられます！\n- \`/persona\` で私の名前・見た目・性格を変えられます。\n- \`/config\` で私のふるまいや使える機能を調整できます。\n- \`/memory\` で私に覚えてほしいことを教えられます。`,
+      learn_more_title: `📖 もっと詳しく`,
+      learn_more_value: `[公式Wiki](https://docs.tomoribot.app/ja/features/)を読むか、{helpFeatures} を使って、私にできることをもっと知ってください！\n- [マルチペルソナ](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/) = 見た目・話し方・トリガーを自由に設定\n- [チャットとトリガー](https://docs.tomoribot.app/ja/features/chatting-personality/chatting-and-triggers/) = いつ・どう会話に入るかを制御\n- [メモリー](https://docs.tomoribot.app/ja/features/knowledge/memory/) = 人・事実・文脈を覚えます\n- [パーソナライゼーション](https://docs.tomoribot.app/ja/features/knowledge/personalization/) = あなたのことを教えると、あなたの望む形で接します\n- [メディア生成](https://docs.tomoribot.app/ja/features/capabilities/media-generation/) = 画像・動画・音声を作れます\n- [ツールと拡張](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/) = ウェブ検索・リンク読み取り・カスタムツール`,
+      heads_up_title: `⚠️ いくつかの注意点`,
+      novelai_expressions_warning_field: `表現機能の無効化`,
+      novelai_expressions_warning_value: `NovelAIのコンテキストを安定させるため、絵文字とスタンプの使用が自動的に無効化されました。\`/capabilities manage\` でいつでも再有効化できます。`,
+      zai_tos_warning_field: `Z.ai利用規約について`,
       zai_tos_warning_value: `Z.aiの利用規約が更新され、コーディング/エージェントのユースケースのみが許可されるようになりました。Z.aiを一般チャットに使用する場合は自己責任となり、規約に違反する可能性があります。`,
-      custom_bearer_hint_field: `🔑 Bearerトークン`,
+      custom_bearer_hint_field: `Bearerトークン`,
       custom_bearer_hint_value: `エンドポイントに認証が必要な場合は、{apiKeySet}でBearerトークンを追加してください。`,
       preset_field: `人格プリセット`,
       name_field: `私の名前`,
@@ -599,7 +601,7 @@ export default {
       broken_state_title: `設定が破損しています`,
       broken_state_description: `このサーバーにはペルソナが存在しますが、設定が不完全です。サーバー設定またはAIモデルの参照が見つからないか、削除されています。
 
-{model_text_command} で有効なモデルを割り当てるか、{provider_add_command} で新しいプロバイダーを登録してください。問題が解決しない場合は、サーバー管理者にお問い合わせください。`,
+{model_text_command} で有効なモデルを割り当てるか、{provider_add_command} で新しいプロバイダーを登録してください。`,
       already_setup_description: `このサーバーでは既に設定が完了しています。設定を変更するには、\`/config\`、\`/persona\`、\`/memory\`、\`/server\`などの他のコマンドを使用してください。
 
 				プロバイダーを変更したい場合は、\`/provider add\`で新しいデフォルトのテキストプロバイダーを登録して有効化してください。`,
@@ -714,7 +716,7 @@ export default {
         success_title: `システムプロンプトが更新されました`,
         success_description: `カスタムシステムプロンプトを設定しました：
 \`\`\`
-{preview}...
+{preview}
 \`\`\``,
       },
       clear: {
@@ -725,9 +727,12 @@ export default {
 {defaultPrompt}
 \`\`\``,
         success_title: `システムプロンプトがクリアされました`,
-        success_description: `カスタムシステムプロンプトをクリアしました。現在はデフォルトのプロンプトを使用します：
+        success_description: `カスタムシステムプロンプトをクリアしました。現在はデフォルトのプロンプトを使用します。`,
+        success_description_with_prompt: `カスタムシステムプロンプトをクリアしました。現在はデフォルトのプロンプトを使用します。
+
+削除されたカスタムプロンプトです。控えが必要な場合はコピーしてください：
 \`\`\`
-{defaultPrompt}
+{removed_prompt}
 \`\`\``,
       },
       preset: {
@@ -739,7 +744,7 @@ export default {
         success_description: `システムプロンプトプリセットを適用しました：**{presetName}**
 プレビュー：
 \`\`\`
-{preview}...
+{preview}
 \`\`\``,
         no_presets_title: `プリセットがありません`,
         no_presets_description: `システムプロンプトプリセットが見つかりません。ボット管理者にお問い合わせください。`,

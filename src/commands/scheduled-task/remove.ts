@@ -79,12 +79,6 @@ async function performReminderRemoval(
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.scheduled-task.remove.description"));
 
-/**
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
- */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -119,7 +113,6 @@ export async function execute(
     const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
     const state = tomoriState;
 
-    // 1. Load all reminders for this server, tagged with their owning persona name
     const reminders = await serverScheduleRepository.loadReminderSelections(
       tomoriState.server_id,
       hasManagePermission ? undefined : userData.user_id,
@@ -135,7 +128,7 @@ export async function execute(
       return;
     }
 
-    // 2. Build select options — persona_id NULL means the main persona owns the reminder
+    // Build select options: persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder: ReminderSelectionRow, index: number) => {
       const personaName = reminder.persona_nickname ?? state.persona_nickname;
       const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
@@ -189,7 +182,6 @@ export async function execute(
       };
     });
 
-    // 3. Prompt user to pick a reminder to remove
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.scheduled-task.remove.modal_title",
@@ -235,7 +227,6 @@ export async function execute(
       return;
     }
 
-    // 4. Delete and show result
     const removalSucceeded = await performReminderRemoval(selectedReminder, modalSubmitInteraction, locale, true);
     if (!removalSucceeded) {
       return;

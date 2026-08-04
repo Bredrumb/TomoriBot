@@ -455,7 +455,7 @@ export async function resolveAvatarByIdentity(
   throw new Error(`No user${personaNameHint} found matching "${trimmedIdentity}"`);
 }
 
-export async function resolveAvatarByDiscordId(
+async function resolveAvatarByDiscordId(
   id: string,
   context: ToolContext,
   options?: Partial<AvatarResolverOptions>,

@@ -22,7 +22,7 @@ export function isSilentSpeakerGuardStop(requesterId: string | undefined, state:
   return requesterId === "speaker_guard" && state.messageSentCount === 0 && !state.accumulatedText.trim();
 }
 
-export function getStopReasonFromRequesterId(requesterId?: string): StreamStopReason {
+function getStopReasonFromRequesterId(requesterId?: string): StreamStopReason {
   switch (requesterId) {
     case undefined:
     case "system":

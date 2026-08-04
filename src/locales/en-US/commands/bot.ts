@@ -1,5 +1,3 @@
-// locales/en-US/commands/bot.ts
-
 export default {
   bot: {
     generate: {

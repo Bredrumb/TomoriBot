@@ -1,6 +1,6 @@
 /**
- * personalCardGatherer.ts — data-gathering layer for the Personal "Wrapped"
- * infographic card (plans/stat-tracking.md §10, Phase 3).
+ * personalCardGatherer.ts: data-gathering layer for the Personal "Wrapped"
+ * infographic card.
  *
  * This is the ONLY file in the infographic stack that touches the DB.
  * `gatherPersonalCardData` calls the StatsRepository read methods and returns a
@@ -10,7 +10,7 @@
  * - AVATARS: user and favorite-persona references are resolved via
  *   `loadStoredPersonaAvatarDataUri` (handles both local dev paths and remote
  *   HTTP(S) URLs) and base64-encoded for the card's embedded `<img>` data URI.
- *   Fetch failure is graceful — returns null so the renderer shows a placeholder.
+ *   Fetch failure is graceful, so returns null so the renderer shows a placeholder.
  * - PALETTE: the first favorite persona avatar is sampled into an accessible,
  *   light-mode card palette. A neutral fallback keeps cards readable if it is
  *   unavailable or cannot be decoded.
@@ -33,13 +33,11 @@ import type { PersonalCardData, PersonalFavoritePersona } from "@/utils/stats/st
  */
 export const extractPersonalCardPalette = extractCardPalette;
 
-// ── Main gather function ───────────────────────────────────────────────────────
-
 /** Arguments for `gatherPersonalCardData`. */
 export interface GatherPersonalCardArgs {
   /** Internal `users` FK (not the Discord snowflake). */
   userId: number;
-  /** Internal `servers` FK — passed for "this server" scope; omit for global. */
+  /** Internal `servers` FK: passed for "this server" scope; omit for global. */
   serverId?: number;
   /** Discord guild snowflake ID, used to resolve persona names/avatars from cache. */
   guildDiscId: string;
@@ -49,7 +47,7 @@ export interface GatherPersonalCardArgs {
   userAvatarUrl?: string | null;
   /** BCP-47 locale passed through to `PersonalCardData`. */
   locale: string;
-  /** Selected time window — drives gating and window floor. */
+  /** Selected time window, so drives gating and window floor. */
   timeframe: Timeframe;
 }
 

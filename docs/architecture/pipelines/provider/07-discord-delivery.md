@@ -51,8 +51,18 @@ payload. It handles:
   `STREAMING_LIMITS.MAX_FLUSH_COUNT` is also enforced here with a user-facing embed.
 - **Webhook path** — when `context.webhook` and `context.personaUsername` are set (alter persona
   mode), the message is sent via `sendWebhookMessageWithIdentity()` with the persona's name and
-  avatar. For the *first* message of an alter persona response that has a `replyToMessage`, a
-  standalone reply notice is sent first via `sendWebhookReplyNotice()`.
+  avatar. Webhooks cannot use Discord's native reply, so for the *first* message of any webhook
+  response that has a `replyToMessage`, a standalone reply notice is sent first via
+  `sendWebhookReplyNotice()`. This covers the main persona too whenever a sprite pushes it onto the
+  webhook path — the notice is gated on webhook delivery, not on `is_alter`. Sprite identity
+  overrides (carrying a `spriteRecord`) still get the notice since the persona is speaking as itself;
+  **copied** identities (impersonating a user or another persona) are excluded, because a notice
+  posted under the disguise would attribute the reply to the wrong speaker.
+- **Delivered-identity recording** — after every successful send, the identity Discord actually
+  saw is recorded per channel in `channelDeliveryContinuity.ts`: the webhook identity on a
+  webhook send, or a cleared marker on an ordinary bot send. Post-turn artifacts (stickers, the
+  "Fallback Used" notice) read it back so they post as the same author and group with the
+  message they follow, instead of splitting off under the persona's default name.
 - **Render-modifier identity override** — when stage 06 resolves `SourcePersona (modifier): text`,
   the payload carries `identityOverride`. The UI updater lazily creates or reuses the managed
   channel webhook even for the main persona. Ordinary sprite matches send with the clean username
@@ -73,6 +83,10 @@ payload. It handles:
   `@everyone` / `@here` pings while allowing user and role mentions.
 - **State tracking** — on a successful send: `state.messageSentCount++`, `state.accumulatedText`
   is appended, and `state.firstReplyUrl` is set on the first message sent (used in thought-log embeds).
+  The message's `{ messageId, channelId, isWebhook }` is also appended to
+  `context.deliveredMessageRefs` when that shared sink is present, so a later fallback attempt can
+  delete this attempt's partial output if it is superseded (see
+  [06.3 Generation Turn](../chat/06-per-turn/03-run-generation-turn) → superseded-message cleanup).
   For render-modifier payloads, `state.accumulatedText` is prefixed with the model-facing
   source-first label (`SourcePersona (modifier): `) — which may differ from the visible webhook
   username (clean name for sprites, flipped name for copied identities) — so result capture,
@@ -82,6 +96,33 @@ payload. It handles:
   retry.
 - **Progress notification** — `context.onStreamProgress?.()` is called after a successful send,
   resetting the rolling SDK timeout in the tool-loop pipeline.
+
+## Rendered Markdown tables
+
+`sendRenderedMarkdownTable()` bypasses `chunkMessage()` entirely: the table is rasterized by
+`renderMarkdownTableToPng()` and sent as a PNG attachment, because Discord's Markdown dialect has
+no table support and raw pipe rows render as unaligned text.
+
+The message carries a single **Show Markdown** button (`createShowMarkdownButtonRow`,
+`src/utils/discord/markdownTableButton.ts`), following the same collector pattern as the
+`Fallback Used` notice:
+
+- Pressing it replies **ephemerally** with the table's original Markdown inside a
+  ` ```markdown ` fence, so a viewer can copy the source the image was rendered from.
+- Source text is read from `markdownTableCache` (keyed by message ID) on each press rather than
+  captured in the collector closure, so the collector does not pin every rendered table's source in
+  memory. A press after the cache TTL replies with `genai.markdown_table.source_expired`.
+- Tables too long for a Discord message go out as a `table.md` attachment instead of being
+  truncated — half a table defeats the copy/paste the button exists for.
+- The button is disabled when the collector window (`MARKDOWN_TABLE_BUTTON_TIMEOUT_MS`) closes.
+  Webhook-authored messages are edited through the authoring webhook, since the bot token cannot
+  edit them.
+
+Delivering the button required `StreamSendPayload.components`, which `StreamUiUpdater` forwards on
+all four send paths (webhook, webhook recovery, reply, and channel send).
+
+Stage 05 guarantees the table arrives here as one intact block — see
+[`05-buffer-management.md`](05-buffer-management.md) § Markdown table atomicity.
 
 ## Chunking behavior (`chunkMessage`)
 
@@ -200,6 +241,7 @@ After this stage (per successful send):
 | Typing simulation (`sendChunksWithTyping`, `interruptibleDelay`) | Internal — typing simulation timing constants are configurable via `DISCORD_STREAMING_CONSTANTS`; the `HumanizerDegree` DB field is the user-facing control. |
 | `STREAMING_LIMITS.MAX_FLUSH_COUNT` | `src/utils/security/rateLimiter.ts`. Internal — an operational safety cap, not a plugin seam. The server-configured `send_message_limit` is the user-facing control. |
 | Aggregated-mode buffer (`pendingAggregatedText`, `flushAggregatedTextBuffer`) | Internal — aggregated delivery is driven by `HumanizerDegree.NONE`; not designed for external control. |
+| `StreamSendPayload.components` | `src/utils/discord/stream/uiUpdater.ts`. The seam for attaching interactive rows to a streamed message; currently only the rendered table's "Show Markdown" button uses it. A plugin adding message-level controls would extend here. → plugin plan candidate |
 
 ## Configuration
 
@@ -213,6 +255,7 @@ After this stage (per successful send):
 | `DISCORD_STREAMING_CONSTANTS` | `THINKING_PAUSE_CHANCE` | `0.25` | Probability of an extra "thinking" pause between chunks |
 | `DISCORD_STREAMING_CONSTANTS` | `MIN_RANDOM_PAUSE_MS` / `MAX_RANDOM_PAUSE_MS` | `250` / `1500` ms | Thinking pause duration range |
 | `STREAMING_LIMITS.MAX_FLUSH_COUNT` | `src/utils/security/rateLimiter.ts` | (see file) | Absolute safety cap on messages per stream |
+| Env var | `MARKDOWN_TABLE_BUTTON_TIMEOUT_MS` | `7 200 000` ms (2 h) | How long a rendered table's "Show Markdown" button stays interactive; matches the `MARKDOWN_TABLE_CACHE_TTL_MINUTES` default so the button never outlives its cached source |
 
 ## Related docs
 
@@ -221,6 +264,7 @@ After this stage (per successful send):
 - Webhook persona dispatch: `src/utils/discord/webhook/personaDispatch.ts`
 - Reply notice: `src/utils/discord/webhookReply.ts`
 - Message chunking: `src/utils/text/processors/chunkProcessor.ts`
+- Rendered table button: `src/utils/discord/markdownTableButton.ts`
 - `HumanizerDegree` enum: `src/types/db/schema.ts`
 - `DISCORD_STREAMING_CONSTANTS`: `src/types/stream/types.ts:15`
 - Multi-persona webhook behavior: `docs/architecture/subsystems/multi-persona.md` (webhook-persona pipeline TBD)

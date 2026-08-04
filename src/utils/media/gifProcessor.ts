@@ -10,14 +10,10 @@ import { log } from "../misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 
-// ========================================
-// GIF Processing Configuration Constants
-// ========================================
-
 /** Maximum width for resized keyframe images (pixels). Images maintain aspect ratio and won't be upscaled. */
 const MAX_KEYFRAME_WIDTH = 800;
 
-/** JPEG compression quality (0–100) for extracted GIF keyframes. Higher = better quality, larger payload. */
+/** JPEG compression quality (0-100) for extracted GIF keyframes. Higher = better quality, larger payload. */
 const JPEG_QUALITY = (() => {
   const parsed = Number.parseInt(process.env.GIF_JPEG_QUALITY || "80", 10);
   return Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : 80;
@@ -73,7 +69,6 @@ export interface GifProcessorConfig {
   timeoutMs?: number;
 }
 
-// Default configuration values (using constants defined above)
 const DEFAULT_CONFIG: Required<GifProcessorConfig> = {
   maxWidth: MAX_KEYFRAME_WIDTH,
   jpegQuality: JPEG_QUALITY,
@@ -83,7 +78,6 @@ const DEFAULT_CONFIG: Required<GifProcessorConfig> = {
 };
 
 /**
- * Extract keyframes from an animated GIF
  *
  * Algorithm:
  * 1. Always includes first frame (index 0)
@@ -100,7 +94,6 @@ export async function extractGifKeyframes(
   gifSource: string | Buffer,
   config: GifProcessorConfig = {},
 ): Promise<ProcessedGifFrame[]> {
-  // 1. Merge with default configuration
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
 
   const startTime = Date.now();
@@ -110,14 +103,12 @@ export async function extractGifKeyframes(
   );
 
   try {
-    // 2. Create timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
         reject(new Error(`GIF processing timeout after ${finalConfig.timeoutMs}ms`));
       }, finalConfig.timeoutMs);
     });
 
-    // 3. Extract frames with timeout
     const extractionPromise = extractFramesInternal(gifSource, finalConfig);
     const frames = await Promise.race([extractionPromise, timeoutPromise]);
 
@@ -140,7 +131,6 @@ async function extractFramesInternal(
   gifSource: string | Buffer,
   config: Required<GifProcessorConfig>,
 ): Promise<ProcessedGifFrame[]> {
-  // 1. Fetch GIF data if source is a URL
   let gifBuffer: Buffer;
   if (typeof gifSource === "string") {
     log.info(`GIF Processor: Fetching GIF from URL: ${gifSource}`);
@@ -157,7 +147,6 @@ async function extractFramesInternal(
     gifBuffer = gifSource;
   }
 
-  // 2. Parse and decompress the GIF
   // parseGIF expects ArrayBuffer, convert Buffer to ArrayBuffer
   const uint8Array = new Uint8Array(gifBuffer);
   const gif = parseGIF(uint8Array.buffer);
@@ -166,19 +155,16 @@ async function extractFramesInternal(
   const totalFrames = allFramesData.length;
   log.info(`GIF Processor: Total frames in GIF: ${totalFrames}`);
 
-  // 3. Handle single-frame GIF (static image)
   if (totalFrames === 1) {
     log.info("GIF Processor: Single-frame GIF detected, processing as static image");
     const processedFrame = await processFrame(allFramesData[0], 0, 1, 0, totalFrames, config);
     return [processedFrame];
   }
 
-  // 4. Calculate which frames to extract
   const frameIndices = calculateKeyframeIndices(totalFrames, config.frameInterval, config.maxKeyframes);
 
   log.info(`GIF Processor: Selected ${frameIndices.length} keyframes: [${frameIndices.join(", ")}]`);
 
-  // 5. Process selected frames
   const processedFrames: ProcessedGifFrame[] = [];
   for (let i = 0; i < frameIndices.length; i++) {
     const frameIndex = frameIndices[i];
@@ -195,7 +181,6 @@ async function extractFramesInternal(
  * Always includes first and last frame, plus every Nth frame in between
  *
  * @param totalFrames - Total number of frames in the GIF
- * @param interval - Extract every Nth frame
  * @param maxFrames - Maximum number of keyframes to return
  * @returns Array of frame indices to extract (sorted)
  */
@@ -208,17 +193,13 @@ function calculateKeyframeIndices(totalFrames: number, interval: number, maxFram
   // Always include last frame
   indices.add(totalFrames - 1);
 
-  // Add every Nth frame
   for (let i = interval; i < totalFrames - 1; i += interval) {
     indices.add(i);
   }
 
-  // Convert to sorted array
   const sortedIndices = Array.from(indices).sort((a, b) => a - b);
 
-  // If we have too many frames, reduce by increasing the interval
   if (sortedIndices.length > maxFrames) {
-    // Keep first and last, then evenly distribute remaining frames
     const result = [0, totalFrames - 1];
     const remainingSlots = maxFrames - 2;
     const step = Math.floor((sortedIndices.length - 2) / remainingSlots);
@@ -237,13 +218,9 @@ function calculateKeyframeIndices(totalFrames: number, interval: number, maxFram
 /**
  * Process a single GIF frame: convert to JPEG and compress
  *
- * @param frameData - Frame data from gifuct-js
- * @param frameNumber - Sequential frame number in the output (0-indexed)
  * @param totalOutputFrames - Total number of frames in the output (keyframes)
  * @param originalFrameIndex - Original frame index in the source GIF
  * @param totalSourceFrames - Total number of frames in the original source GIF
- * @param config - Processing configuration
- * @returns Processed frame with base64 data
  */
 async function processFrame(
   frameData: {
@@ -256,13 +233,10 @@ async function processFrame(
   totalSourceFrames: number,
   config: Required<GifProcessorConfig>,
 ): Promise<ProcessedGifFrame> {
-  // 1. Convert RGBA pixel data to raw buffer
   // gifuct-js provides patch as Uint8ClampedArray with RGBA pixel data
   const { patch, dims } = frameData;
   const frameBuffer = Buffer.from(patch.buffer);
 
-  // 2. Process with sharp: resize and convert to JPEG
-  // Create Sharp instance from raw RGBA pixel data
   const processedBuffer = await sharp(frameBuffer, {
     raw: {
       width: dims.width,
@@ -280,10 +254,8 @@ async function processFrame(
     })
     .toBuffer();
 
-  // 3. Convert to base64
   const base64Data = processedBuffer.toString("base64");
 
-  // 4. Log compression stats
   const originalSize = frameBuffer.length;
   const compressedSize = processedBuffer.length;
   const compressionRatio = ((1 - compressedSize / originalSize) * 100).toFixed(1);

@@ -12,7 +12,7 @@ variable "azure_subscription_id" {
 variable "azure_location" {
   description = "Azure region for all regional resources."
   type        = string
-  default     = "eastus"
+  default     = "japanwest"
 }
 
 variable "environment" {
@@ -47,16 +47,10 @@ variable "vm_subnet_address_prefix" {
   default     = "10.80.1.0/24"
 }
 
-variable "ssh_source_address_prefix" {
-  description = "Source address prefix allowed to SSH to the VM. Use an IP/CIDR to restrict administration."
-  type        = string
-  default     = "*"
-}
-
 # --- VM ---
 
 variable "vm_admin_ssh_public_key" {
-  description = "Public half of the dedicated Phase 0 deploy keypair used for azureuser SSH."
+  description = "Provisioning-only public key required by Azure. Public SSH is disabled; CI never receives the private key."
   type        = string
 
   validation {
@@ -84,6 +78,28 @@ variable "vm_size" {
   validation {
     condition     = var.vm_size == "Standard_B2ats_v2"
     error_message = "vm_size is pinned to Standard_B2ats_v2 by the Azure migration locked design decisions."
+  }
+}
+
+# --- Azure Monitor ---
+
+variable "vm_insights_data_collection_rule_id" {
+  description = "Existing Azure Monitor data collection rule resource ID that sends VM Insights guest metrics to the TomoriBot Log Analytics workspace."
+  type        = string
+
+  validation {
+    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.Insights/dataCollectionRules/[^/]+$", var.vm_insights_data_collection_rule_id))
+    error_message = "vm_insights_data_collection_rule_id must be a complete Azure data collection rule resource ID."
+  }
+}
+
+variable "application_logs_data_collection_rule_id" {
+  description = "Existing Azure Monitor data collection rule resource ID that ingests TomoriBot application logs and cache metrics."
+  type        = string
+
+  validation {
+    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.Insights/dataCollectionRules/[^/]+$", var.application_logs_data_collection_rule_id))
+    error_message = "application_logs_data_collection_rule_id must be a complete Azure data collection rule resource ID."
   }
 }
 
@@ -152,16 +168,12 @@ variable "postgres_backup_retention_days" {
   default     = 7
 }
 
-variable "admin_ip" {
-  description = "Optional single IPv4 address allowed through the PostgreSQL firewall for Eli/admin access."
+variable "grafana_egress_ip" {
+  description = "Exact public IPv4 address of the operator-managed Grafana datasource. Produces one exact-address PostgreSQL firewall rule."
   type        = string
-  default     = null
 
   validation {
-    condition = (
-      var.admin_ip == null ||
-      can(regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", var.admin_ip))
-    )
-    error_message = "admin_ip must be null or a single IPv4 address."
+    condition     = can(regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", var.grafana_egress_ip)) && var.grafana_egress_ip != "0.0.0.0"
+    error_message = "grafana_egress_ip must be one explicit non-zero IPv4 address."
   }
 }

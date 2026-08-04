@@ -22,7 +22,7 @@ import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { ModalComponent, SelectOption } from "@/types/discord/modal";
 import { buildUserSavedProviderConfigFromExistingOrDefaults } from "@/utils/provider/savedProviderConfig";
-import { isCustomProvider } from "@/utils/discord/customProviderModal";
+import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { activatePersonalProviderTextModel } from "@/utils/provider/providerActivation";
 

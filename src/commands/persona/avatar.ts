@@ -12,8 +12,8 @@ import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithPaginatedModal, safeSelectOptionText } from "../../utils/discord/interactionHelper";
 import type { UserRow, ErrorContext, TomoriState } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
-import { safeDownload } from "../../utils/security/safeDownload";
-import { memoryGuard, reserveAvatarQuota } from "../../utils/security/rateLimiter";
+import { safeDownload, type SafeDownloadResult } from "../../utils/security/safeDownload";
+import { memoryGuard, PERSONA_LIMITS, reserveAvatarQuota } from "../../utils/security/rateLimiter";
 import { personaRepository } from "@/utils/db/repositories";
 import { convertToPNG } from "../../utils/image/imageProcessor";
 import { deletePersonaAvatarFromStorage, uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
@@ -41,8 +41,6 @@ export async function forkPointerForAvatarChange(
 
 /**
  * Configure the avatar subcommand
- * @param subcommand - SlashCommandSubcommandBuilder instance
- * @returns Configured subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("avatar").setDescription(localizer("en-US", "commands.persona.avatar.description"));
@@ -59,8 +57,7 @@ function validateImage(attachment: AvatarAttachment): {
   const contentType = "contentType" in attachment ? attachment.contentType : attachment.content_type;
   const filename = "name" in attachment ? attachment.name : attachment.filename;
 
-  // 1. Check file size (Discord's limit is 8MB for bots)
-  const maxSize = 8 * 1024 * 1024; // 8MB in bytes
+  const maxSize = PERSONA_LIMITS.MAX_AVATAR_SIZE_MB * 1024 * 1024;
   if (attachment.size > maxSize) {
     return {
       isValid: false,
@@ -68,7 +65,6 @@ function validateImage(attachment: AvatarAttachment): {
     };
   }
 
-  // 2. Check content type
   const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif"];
   if (!contentType || !allowedTypes.includes(contentType)) {
     return {
@@ -77,7 +73,8 @@ function validateImage(attachment: AvatarAttachment): {
     };
   }
 
-  // 3. Check file extension as backup validation
+  // Discord metadata is caller-controlled, so the filename extension provides a
+  // second format check before the file reaches image decoding.
   const allowedExtensions = [".png", ".jpg", ".jpeg", ".gif"];
   const fileExtension = filename?.toLowerCase().split(".").pop();
   if (!fileExtension || !allowedExtensions.includes(`.${fileExtension}`)) {
@@ -91,27 +88,22 @@ function validateImage(attachment: AvatarAttachment): {
 }
 
 /**
- * Converts an image attachment to a base64 data URI with timeout protection
- * @param attachment - Discord attachment to convert
- * @returns Promise resolving to SafeDownloadResult-like object with dataUri or error
+ * Downloads an image attachment into a buffer with timeout protection
+ * @param attachment - Discord attachment to download
+ * @returns Promise resolving to SafeDownloadResult-like object with buffer or error
  */
-async function attachmentToBase64DataUri(attachment: AvatarAttachment): Promise<{
+async function downloadAttachmentBuffer(attachment: AvatarAttachment): Promise<{
   success: boolean;
-  dataUri?: string;
   buffer?: Buffer;
-  error?: "size_exceeded" | "timeout" | "network_error" | "invalid_response";
+  error?: SafeDownloadResult["error"];
   details?: string;
 }> {
-  const contentType = "contentType" in attachment ? attachment.contentType : attachment.content_type;
-
-  // 1. Use safeDownload with 15s timeout and 8MB size limit
   const downloadResult = await safeDownload(attachment.url, {
-    maxSizeMB: 8,
+    maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
     timeoutMs: 15000, // 15 seconds
     knownSize: attachment.size,
   });
 
-  // 2. If download failed, return error
   if (!downloadResult.success) {
     return {
       success: false,
@@ -120,14 +112,8 @@ async function attachmentToBase64DataUri(attachment: AvatarAttachment): Promise<
     };
   }
 
-  // 3. Convert buffer to base64 data URI
-  const base64 = downloadResult.buffer?.toString("base64");
-  const mimeType = contentType || "image/png";
-  const dataUri = `data:${mimeType};base64,${base64}`;
-
   return {
     success: true,
-    dataUri,
     buffer: downloadResult.buffer,
   };
 }
@@ -146,20 +132,17 @@ async function updateGuildAvatar(
   error?: "timeout" | "api_error";
   details?: string;
 }> {
-  // 1. Setup timeout controller (15s)
+  // Setup timeout controller (15s)
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    // 2. Prepare the API endpoint
     const endpoint = `https://discord.com/api/v10/guilds/${guildId}/members/@me`;
 
-    // 3. Prepare the payload
     const payload = {
       avatar: avatarDataUri,
     };
 
-    // 4. Make the API call with timeout
     const response = await fetch(endpoint, {
       method: "PATCH",
       headers: {
@@ -190,7 +173,6 @@ async function updateGuildAvatar(
   } catch (error) {
     clearTimeout(timeoutId);
 
-    // Handle abort (timeout)
     if (error instanceof Error && error.name === "AbortError") {
       log.warn("Discord API call timed out after 15s", {
         metadata: { guildId },
@@ -202,7 +184,6 @@ async function updateGuildAvatar(
       };
     }
 
-    // Handle other errors
     await log.error("Error updating guild avatar via Discord API", error, {
       errorType: "DiscordApiError",
       metadata: { guildId },
@@ -217,10 +198,6 @@ async function updateGuildAvatar(
 
 /**
  * Sets or removes TomoriBot's custom avatar for the current guild
- * @param client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -228,7 +205,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -238,7 +214,7 @@ export async function execute(
     return;
   }
 
-  // 2. Require Manage Server permission (persona category is not manager-only at the loader level)
+  // Require Manage Server permission (persona category is not manager-only at the loader level)
   if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.persona.avatar.no_permission_title",
@@ -253,7 +229,6 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
 
   try {
-    // 3. Load personas and prompt user to choose target persona
     const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
     const personaSelectOptions: SelectOption[] = allPersonas
       .filter((persona) => persona.persona_id !== undefined)
@@ -321,10 +296,9 @@ export async function execute(
     }
     const selectedPersonaDbId = selectedPersona.persona_id;
 
-    // 4. Defer the reply to prevent timeout during image processing
+    // Defer the reply to prevent timeout during image processing
     await responseInteraction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 5. Memory guard check (defense-in-depth)
     const memCheck = memoryGuard.checkMemory();
     if (memCheck.status === "critical") {
       await responseInteraction.editReply({
@@ -351,7 +325,7 @@ export async function execute(
       selectedPersona = { ...selectedPersona, is_pointer: false };
     }
 
-    // 6. Reserve avatar quota (atomic check+increment for per-server DDoS protection)
+    // Reserve avatar quota (atomic check+increment for per-server DDoS protection)
     const quotaReserve = reserveAvatarQuota(interaction.guild.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
@@ -371,11 +345,9 @@ export async function execute(
       return;
     }
 
-    // 7. Resolve the optional modal upload
     const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
     const isMainPersona = !selectedPersona.is_alter;
 
-    // 8. Handle avatar removal (no attachment provided)
     if (!imageAttachment) {
       if (isMainPersona) {
         const result = await updateGuildAvatar(interaction.guild.id, null);
@@ -421,7 +393,6 @@ export async function execute(
       return;
     }
 
-    // 9. Validate the image attachment
     const validation = validateImage(imageAttachment);
     if (!validation.isValid) {
       let errorKey = "invalid_image_description";
@@ -438,13 +409,14 @@ export async function execute(
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.persona.avatar.invalid_image_title",
         descriptionKey: `commands.persona.avatar.${errorKey}`,
+        descriptionVars: { max_size: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB.toString() },
         color: ColorCode.ERROR,
       });
       return;
     }
 
-    // 10. Convert image to base64 data URI with timeout protection
-    const downloadResult = await attachmentToBase64DataUri(imageAttachment);
+    // Download the image into a buffer with timeout protection
+    const downloadResult = await downloadAttachmentBuffer(imageAttachment);
     if (!downloadResult.success) {
       let errorKey: string;
       if (downloadResult.error === "size_exceeded") {
@@ -458,6 +430,7 @@ export async function execute(
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "commands.persona.avatar.invalid_image_title",
         descriptionKey: errorKey,
+        descriptionVars: { max_size: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB.toString() },
         color: ColorCode.ERROR,
       });
       return;
@@ -465,9 +438,27 @@ export async function execute(
 
     if (isMainPersona) {
       // biome-ignore lint/style/noNonNullAssertion: Download result is checked in success condition
-      const avatarDataUri = downloadResult.dataUri!;
+      const downloadedBuffer = downloadResult.buffer!;
 
-      // 11. Update guild avatar for main persona via Discord API with timeout protection
+      // Re-encode to PNG before uploading. Discord returns 200 OK for
+      // structurally corrupt files (e.g. exported preset PNGs with a bad tEXt
+      // chunk length) but stores an unservable asset, so the CDN 415s and clients
+      // silently keep the old avatar. Re-encoding guarantees a clean PNG, same
+      // as the alter path below.
+      let pngBuffer: Buffer;
+      try {
+        pngBuffer = await convertToPNG(downloadedBuffer);
+      } catch (error) {
+        log.warn("Failed to convert selected main avatar image to PNG", error);
+        await replyInfoEmbed(responseInteraction, locale, {
+          titleKey: "commands.persona.avatar.conversion_error_title",
+          descriptionKey: "commands.persona.avatar.conversion_error_description",
+          color: ColorCode.ERROR,
+        });
+        return;
+      }
+      const avatarDataUri = `data:image/png;base64,${pngBuffer.toString("base64")}`;
+
       const updateResult = await updateGuildAvatar(interaction.guild.id, avatarDataUri);
 
       if (updateResult.success) {
@@ -493,7 +484,7 @@ export async function execute(
         });
       }
     } else {
-      // 11. Alter persona path:
+      // Alter persona path:
       // - production: upload avatar to S3 and store URL
       // - non-production: update/create persona webhooks and store permanent webhook avatar URL
       let persistedAvatarUrl: string | null = null;

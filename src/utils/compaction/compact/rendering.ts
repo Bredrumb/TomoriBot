@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder } from "discord.js";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import type { SendableChannel } from "./types";
+import type {} from "./types";
 
 export function buildConversationEmbed(
   locale: string,
@@ -62,13 +62,6 @@ export function isDiscordThreadChannel(channel: unknown): boolean {
     channelType === ChannelType.PrivateThread ||
     channelType === ChannelType.AnnouncementThread
   );
-}
-
-export async function sendEmbedsInChunks(channel: SendableChannel, embeds: EmbedBuilder[]): Promise<void> {
-  const chunkSize = 10;
-  for (let index = 0; index < embeds.length; index += chunkSize) {
-    await channel.send({ embeds: embeds.slice(index, index + chunkSize) });
-  }
 }
 
 export function buildManualEmbed(

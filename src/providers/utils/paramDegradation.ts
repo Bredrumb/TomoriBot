@@ -9,7 +9,7 @@
  */
 
 /** Preferred order for probing request parameters that a backend may reject. */
-export const PARAM_DROP_PRIORITY = [
+const PARAM_DROP_PRIORITY = [
   "top_p",
   "top_k",
   "min_p",
@@ -48,7 +48,7 @@ export interface DegradableErrorInput {
 }
 
 /** Provider hook for recognizing additional errors without forking the shared logic. */
-export type ExtraDegradationClassifier = (error: DegradableErrorInput) => boolean;
+type ExtraDegradationClassifier = (error: DegradableErrorInput) => boolean;
 
 export interface ClassifyDegradableErrorOptions extends DegradableErrorInput {
   extraClassifiers?: readonly ExtraDegradationClassifier[];
@@ -185,6 +185,90 @@ export function buildDegradationAttempts(
   addAttempt("minimal_payload", minimalBody);
 
   return attempts;
+}
+
+/**
+ * Detect endpoint errors that reject image/multimodal message content rather
+ * than a sampler parameter. Covers vLLM deployments launched without
+ * `--enable-multimodal` (surfaced as a 500) and common "no vision support"
+ * phrasings from other OpenAI-compatible backends.
+ */
+export function isMultimodalRejectionError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("multimodal") &&
+    (normalized.includes("not enabled") ||
+      normalized.includes("not supported") ||
+      normalized.includes("--enable-multimodal"))
+  ) {
+    return true;
+  }
+  return (
+    /does not support image/i.test(message) ||
+    /image (?:input|content)s? (?:is|are) not supported/i.test(message) ||
+    /vision is not (?:enabled|supported)/i.test(message)
+  );
+}
+
+/** True when any OpenAI-format message carries an image content block. */
+export function messagesContainImageBlocks(messages: readonly unknown[]): boolean {
+  return messages.some((message) => {
+    if (typeof message !== "object" || message === null) return false;
+    const content = (message as Record<string, unknown>).content;
+    return Array.isArray(content) && content.some(isImageContentBlock);
+  });
+}
+
+/**
+ * Replace image content blocks in OpenAI-format messages with a single text
+ * notice per message. Unlike a silent filter, the notice keeps the model aware
+ * an image existed so it neither hallucinates its contents nor ignores that
+ * the user attached one. Messages without image blocks are returned unchanged.
+ */
+export function stripImageBlocksWithNotice(messages: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return messages.map((message) => {
+    const content = message.content;
+    if (!Array.isArray(content)) return message;
+
+    let removedCount = 0;
+    let noticeIndex = -1;
+    const filteredContent: unknown[] = [];
+    for (const block of content) {
+      if (isImageContentBlock(block)) {
+        if (noticeIndex === -1) noticeIndex = filteredContent.length;
+        removedCount += 1;
+        continue;
+      }
+      filteredContent.push(block);
+    }
+    if (removedCount === 0) return message;
+
+    const countLabel = removedCount === 1 ? "An attached image was" : `${removedCount} attached images were`;
+    filteredContent.splice(noticeIndex, 0, {
+      type: "text",
+      text: `[System: ${countLabel} removed because this endpoint rejected image input. Do not guess or claim to see the image contents.]`,
+    });
+    return { ...message, content: filteredContent };
+  });
+}
+
+/**
+ * Build one targeted retry that strips image blocks from the current body,
+ * or null when the body carries no image content worth stripping.
+ */
+export function buildImageStripAttempt(currentBody: Record<string, unknown>): DegradationAttempt | null {
+  const messages = currentBody.messages;
+  if (!Array.isArray(messages) || !messagesContainImageBlocks(messages)) return null;
+  return {
+    label: "targeted_strip_images",
+    body: { ...currentBody, messages: stripImageBlocksWithNotice(messages as Array<Record<string, unknown>>) },
+  };
+}
+
+function isImageContentBlock(block: unknown): boolean {
+  if (typeof block !== "object" || block === null) return false;
+  const type = (block as Record<string, unknown>).type;
+  return type === "image_url" || type === "image";
 }
 
 /** Build one targeted retry that drops every message-named parameter at once. */

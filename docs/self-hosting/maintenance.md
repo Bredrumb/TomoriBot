@@ -99,7 +99,7 @@ Host-side scripts such as `bun run backup`, `bun run update`, and `bun run nuke-
 automatically run through Docker. To run host scripts against the Compose database instead,
 run them on the host with Bun plus the PostgreSQL client tools installed, and set:
 
-```env
+```dotenv
 POSTGRES_HOST=localhost
 POSTGRES_PORT=15432
 POSTGRES_USER=tomori

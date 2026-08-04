@@ -20,9 +20,6 @@ export const MAX_PROMPT_PREVIEW = Number.parseInt(process.env.SYSPROMPT_SHOW_MAX
 
 /**
  * Returns a user-friendly label for a privacy level.
- * @param locale - User locale
- * @param level - Privacy level value
- * @returns Localized privacy label
  */
 export function getPrivacyLevelLabel(locale: string, level: PrivacyLevel): string {
   switch (level) {
@@ -40,9 +37,6 @@ export function getPrivacyLevelLabel(locale: string, level: PrivacyLevel): strin
 /**
  * Returns a localized label for a CooldownType value.
  * Reuses the choice labels defined in commands.server.cooldown.
- * @param locale - User locale
- * @param type - CooldownType enum value
- * @returns Localized cooldown type label
  */
 export function getCooldownTypeLabel(locale: string, type: CooldownType): string {
   switch (type) {
@@ -88,8 +82,6 @@ export function formatOmittedSamplingParams(
 /**
  * Formats an array of strings as a numbered list, truncating each item.
  * All items are included (nothing omitted).
- * @param items - Array of strings to format
- * @param locale - User locale
  * @param truncateLength - Max chars per item before truncation
  * @returns Formatted numbered list, or localized "None" if empty
  */
@@ -107,8 +99,6 @@ export function formatNumberedList(items: string[], locale: string, truncateLeng
 /**
  * Formats an array of strings as a bullet list, truncating each item.
  * All items are included (nothing omitted).
- * @param items - Array of strings to format
- * @param locale - User locale
  * @param truncateLength - Max chars per item before truncation
  * @returns Formatted bullet list, or localized "None" if empty
  */
@@ -125,9 +115,6 @@ export function formatBulletList(items: string[], locale: string, truncateLength
 
 /**
  * Formats sample dialogue pairs as a numbered list with truncation on each side.
- * @param dialoguesIn - User/input dialogue examples
- * @param dialoguesOut - Persona/output dialogue examples
- * @param locale - User locale
  * @param truncateLength - Max chars per dialogue side before truncation
  * @returns Formatted list, or localized "None" if empty
  */
@@ -183,8 +170,6 @@ export function formatFallbackChain(
 /**
  * Formats the list of server or user custom endpoints as a numbered list.
  * URL is never shown per privacy rules; shows label, capability, api_style, and auth status.
- * @param endpoints - Array of custom endpoint rows
- * @param locale - User locale
  * @returns Formatted list, or localized "None" if empty
  */
 export function formatCustomEndpoints(endpoints: CustomEndpointRow[], locale: string): string {

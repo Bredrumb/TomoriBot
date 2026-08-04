@@ -1,5 +1,5 @@
 /**
- * ToolRepository — manages guild MCP server configurations.
+ * ToolRepository: manages guild MCP server configurations.
  *
  * Owns the `guild_mcp_servers` table. The Brave API key status read lives
  * here too since it gates tool availability.
@@ -16,19 +16,12 @@ import { invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache
 import type { IRepository } from "./IRepository";
 
 /** Portable tool config export shape (expanded in Phase 6 #16.7). */
-export type ToolExportShape = {
+type ToolExportShape = {
   server_disc_id: string;
   mcp_servers: Array<{ name: string; url: string; server_type: string }>;
 };
 
-export class ToolRepository implements IRepository<ToolExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
-  /**
-   * Loads all MCP server configs for a guild.
-   *
-   * @param serverId - Internal server DB ID
-   */
+class ToolRepository implements IRepository<ToolExportShape> {
   async loadMcpServers(serverId: number): Promise<GuildMcpServerRow[]> {
     return this.sqlLoadGuildMcpServers(serverId);
   }
@@ -44,7 +37,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
   /**
    * Returns the count of registered MCP servers for a guild.
    *
-   * @param serverId - Internal server DB ID
    */
   async countMcpServers(serverId: number): Promise<number> {
     return this.sqlCountGuildMcpServers(serverId);
@@ -53,7 +45,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
   /**
    * Returns true if a Brave Search API key is configured for the server.
    *
-   * @param serverId - Internal server DB ID
    */
   async getBraveApiKeyStatus(serverId: number): Promise<boolean> {
     return this.sqlGetBraveApiKeyStatus(serverId);
@@ -69,15 +60,10 @@ export class ToolRepository implements IRepository<ToolExportShape> {
     return this.sqlDecryptGuildMcpAuthToken(row);
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Registers a new MCP server for a guild.
    * Invalidates the guild MCP config cache and tomori state cache after write.
    *
-   * @param serverId    - Internal server DB ID
-   * @param name        - Human-readable server name
-   * @param url         - MCP server URL
    * @param authToken   - Optional auth token (stored encrypted)
    * @param serverType  - MCP server type for tool deduplication
    * @param serverDiscId - Discord server snowflake (required for cache invalidation)
@@ -103,8 +89,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
    * Deletes an MCP server from a guild by name.
    * Invalidates caches after write.
    *
-   * @param serverId     - Internal server DB ID
-   * @param name         - Server name to delete
    * @param serverDiscId - Discord server snowflake (required for tomori state cache invalidation)
    */
   async deleteMcpServer(serverId: number, name: string, serverDiscId: string): Promise<boolean> {
@@ -120,9 +104,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
    * Enables or disables an MCP server for a guild.
    * Invalidates caches after write.
    *
-   * @param serverId     - Internal server DB ID
-   * @param name         - Server name to toggle
-   * @param enabled      - New enabled state
    * @param serverDiscId - Discord server snowflake (required for tomori state cache invalidation)
    */
   async updateMcpServerEnabled(
@@ -138,8 +119,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
     }
     return ok;
   }
-
-  // ── private SQL ────────────────────────────────────────────────────────────
 
   private async sqlLoadGuildMcpServers(serverId: number): Promise<GuildMcpServerRow[]> {
     try {
@@ -325,8 +304,6 @@ export class ToolRepository implements IRepository<ToolExportShape> {
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Tool config export is handled by ImportExportRepository.
    * Stub satisfies IRepository contract pending Phase 6 #16.7.
@@ -346,5 +323,5 @@ export class ToolRepository implements IRepository<ToolExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const toolRepository = new ToolRepository();

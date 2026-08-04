@@ -159,7 +159,7 @@ describe("OpenAICompatibleStreamAdapter parameter degradation", () => {
     globalThis.fetch = (async (_input, init) => {
       requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
       if (requestBodies.length === 1) {
-        // Wording that matches none of the classifier substrings — only the
+        // Wording that matches none of the classifier substrings, so only the
         // targeted param extraction can justify this retry.
         return new Response("min_p cannot be used with this model", { status: 400, statusText: "Bad Request" });
       }

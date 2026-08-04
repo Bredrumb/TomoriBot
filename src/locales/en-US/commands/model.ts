@@ -1,10 +1,9 @@
-// locales/en-US/commands/model.ts
-
 export default {
   model: {
     providerPicker: {
       title: `Select Provider`,
       description: `Choose which saved provider to use for this model slot.`,
+      current_selection: `Currently using \`{model}\` in \`{provider}\`.`,
       placeholder: `Choose a saved provider...`,
       no_providers_title: `No Saved Providers`,
       no_providers_description: `No saved providers are available for this capability. Add one with \`/provider add\` first.`,
@@ -304,14 +303,14 @@ Runtime-ready for the current model: **{runtime_ready_count}**`,
     parameters: {
       description: `Update saved sampler settings for a provider.`,
       provider_description: `Optional provider to update. Defaults to the active text provider.`,
-      temperature_description: `Temperature override for this provider (0-2).`,
-      top_p_description: `Top-P override for this provider (0-1).`,
-      top_k_description: `Top-K override for this provider (0-256).`,
-      frequency_penalty_description: `Frequency penalty override for this provider (-2 to 2).`,
-      presence_penalty_description: `Presence penalty override for this provider (-2 to 2).`,
-      min_p_description: `Min-P override for this provider (0-1).`,
-      thinking_level_description: `Thinking level override for this provider.`,
-      max_output_tokens_description: `Max output tokens for this provider (1-131072). Leave unset to use the provider default.`,
+      temperature_description: `Temperature override for this provider (0-2, default: 1.0).`,
+      top_p_description: `Top-P override for this provider (0-1, default: 0.95).`,
+      top_k_description: `Top-K override for this provider (0-256, default: 0).`,
+      frequency_penalty_description: `Frequency penalty override for this provider (-2 to 2, default: 0.0).`,
+      presence_penalty_description: `Presence penalty override for this provider (-2 to 2, default: 0.0).`,
+      min_p_description: `Min-P override for this provider (0-1, default: 0.05).`,
+      thinking_level_description: `Thinking level override for this provider (default: Auto).`,
+      max_output_tokens_description: `Max output tokens for this provider (1-131072, default: provider default).`,
       sampler_temperature_label: `Temperature`,
       sampler_top_p_label: `Top-P`,
       sampler_top_k_label: `Top-K`,

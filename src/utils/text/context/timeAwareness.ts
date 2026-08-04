@@ -7,36 +7,43 @@ function readIntEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-export const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 3);
-export const TIME_AWARENESS_GRACE_TRIGGERS = readIntEnv("TIME_AWARENESS_GRACE_TRIGGERS", 3);
+const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 7);
+
+/**
+ * How many messages deep the reunion note is injected. Depth 1 (the original
+ * value) put it directly above the newest message, where it competed with the
+ * user's actual prompt for the model's attention; depth 3 matches the verbatim
+ * tool-calling nudge and keeps it advisory rather than imperative.
+ */
+export const TIME_AWARENESS_NOTE_DEPTH = readIntEnv("TIME_AWARENESS_NOTE_DEPTH", 3);
 
 export const SPACER_TEMPLATE =
   "[System: The messages above were sent on {date} ({relative}, server time). Use the {message_metadata_tool} tool to learn the exact times of each message, if needed.]";
 
 export interface BuildReunionNoteArgs {
   lastPreviousDayAt: Date | null;
-  todayCount: number;
+  seenToday: boolean;
   personalOffset?: number | null;
   serverOffset?: number | null;
   displayName: string;
-  isUserImpersonation?: boolean;
   nowMs?: number;
   reunionDays?: number;
-  graceTriggers?: number;
 }
 
 /**
- * Builds the short-lived persona-reunion note. The note remains truthful for
- * the entire grace window, including turns after the first response today.
+ * Builds the one-shot persona-reunion note as raw text. The dialogue-history
+ * consumer wraps it in `[System: ...]`.
+ *
+ * @returns The note body, or null when no reunion applies to this person.
  */
 export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
   const reunionDays = args.reunionDays ?? TIME_AWARENESS_REUNION_DAYS;
-  const graceTriggers = args.graceTriggers ?? TIME_AWARENESS_GRACE_TRIGGERS;
-  if (args.isUserImpersonation || args.todayCount >= graceTriggers) return null;
+  if (args.seenToday) return null;
 
   const offsetHours = resolvePersonalTimezoneOffset(args.personalOffset, args.serverOffset);
+
   if (args.lastPreviousDayAt === null) {
-    return `[System: ${args.displayName} is talking to you for the very first time! If you haven't already, welcome them naturally and ask something friendly to get to know them.]`;
+    return `${args.displayName} is talking to you for the very first time! Welcome them naturally and ask something friendly to get to know them.`;
   }
 
   const nowMs = args.nowMs ?? Date.now();
@@ -46,7 +53,7 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
   if (dayGap < reunionDays) return null;
 
   const lastDate = formatDateWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
-  return `[System: ${args.displayName} is talking to you again for the first time since ${lastDate}. It's been ${dayGap} days! If you haven't already, acknowledge their return naturally and ask what they've been up to.]`;
+  return `${args.displayName} is talking to you again for the first time since ${lastDate}. It's been ${dayGap} days! Acknowledge their return naturally and ask what they've been up to.`;
 }
 
 /**

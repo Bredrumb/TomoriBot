@@ -71,20 +71,20 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       allPersonas,
     });
     incoming.shouldSurfaceUserErrors = shouldSurfaceNoStateError;
-    // Surface the "not set up" error when the user directly triggered Tomori,
-    // rather than failing silently — validateDirectChatTrigger handles null state.
-    await validateDirectChatTrigger({
-      client,
-      message,
-      guild,
-      allPersonas,
-      tomoriState: null,
-      isDMChannel,
-      isManuallyTriggered: shouldSurfaceNoStateError && incoming.isManuallyTriggered,
-      userDiscId,
-      serverDiscId,
-      locale: admission.locale ?? "en-US",
-    });
+    if (shouldSurfaceNoStateError) {
+      await validateDirectChatTrigger({
+        client,
+        message,
+        guild,
+        allPersonas,
+        tomoriState: null,
+        isDMChannel,
+        isManuallyTriggered: incoming.isManuallyTriggered,
+        userDiscId,
+        serverDiscId,
+        locale: admission.locale ?? "en-US",
+      });
+    }
     log.info(`No persona state available for message ${message.id} in server ${serverDiscId}.`);
     return { lockedTurn, turns: [] };
   }
@@ -151,8 +151,8 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     isManuallyTriggered: incoming.isManuallyTriggered,
     isSelfMessage,
     isAutochatOverride,
-    guildDiscId: guild?.id ?? message.author.id,
-    fallbackUserDiscId: message.author.id,
+    guildDiscId: serverDiscId,
+    fallbackUserDiscId: userDiscId,
     message,
     memberRoleDiscIds: incoming.manualTriggerInvoker?.member
       ? incoming.manualTriggerInvoker.member.roles.cache.map((role) => role.id)
@@ -163,7 +163,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     userId: userRow.user_id,
     allPersonas,
   });
-  // Reminder turns are system-initiated — the role whitelist guards against unauthorized
+  // Reminder turns are system-initiated because the role whitelist guards against unauthorized
   // users triggering Tomori, but reminders were authorized at creation time. The channel
   // whitelist (is this channel allowed at all?) still applies via whitelistStatus.isTriggerAllowed,
   // but role-based rejection that derives from the last message author is skipped.
@@ -350,7 +350,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
 
   // Scene turns are a scripted persona-to-persona chain: each speaker responds to the
   // PREVIOUS speaker, so {{user}} (which resolves to triggererName) should be that prior
-  // persona rather than the command invoker — matching how a normal self-reply queue
+  // persona rather than the command invoker: matching how a normal self-reply queue
   // resolves the triggerer to the last persona in the chain. Turn 0 has no prior speaker
   // and keeps the invoker as the entity being responded to.
   if (incoming.sceneTurn && incoming.sceneTurn.turnIndex > 0) {
@@ -698,7 +698,7 @@ async function enforceTurnGuards(
 
   if (!incoming.isStopResponse && !incoming.isPersonaJob && !isSelfMessage && textCredentialSource !== "personal") {
     const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
-      serverDiscId: message.guild?.id ?? message.author.id,
+      serverDiscId,
       userDiscId: admission.cooldownUserDiscId ?? userDiscId,
       channelId: message.channelId,
       cooldownType: tomoriState.config.cooldown_type ?? CooldownType.OFF,
@@ -715,7 +715,7 @@ async function enforceTurnGuards(
     if (rejectedByCooldown) return false;
 
     await setMessageTriggerCooldownForAdmission({
-      serverDiscId: message.guild?.id ?? message.author.id,
+      serverDiscId,
       userDiscId: admission.cooldownUserDiscId ?? userDiscId,
       channelId: message.channelId,
       cooldownType: tomoriState.config.cooldown_type ?? CooldownType.OFF,

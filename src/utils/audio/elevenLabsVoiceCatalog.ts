@@ -1,6 +1,6 @@
 import { ELEVENLABS_API_BASE_URL, getElevenLabsTtsConfig } from "@/utils/audio/elevenLabsShared";
 
-export type ElevenLabsVoiceCatalogErrorKind = "missing_api_key" | "timeout" | "request_failed" | "invalid_response";
+type ElevenLabsVoiceCatalogErrorKind = "missing_api_key" | "timeout" | "request_failed" | "invalid_response";
 
 export interface ElevenLabsVoiceCatalogEntry {
   voiceId: string;

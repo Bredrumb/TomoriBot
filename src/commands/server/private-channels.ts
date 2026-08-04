@@ -277,9 +277,7 @@ async function executeMultiPage(
       embeds: [buildPageSelectEmbed(locale, availableChannels.length, totalPages, selectedIds.size)],
       components: [],
     });
-  } catch {
-    // Best effort cleanup.
-  }
+  } catch {}
 }
 
 function buildCheckboxGroups(

@@ -306,7 +306,7 @@ Manage saved provider configurations
 
 | Command | Summary |
 |---|---|
-| `/provider add` | Add or update a saved provider configuration and activate its default text model. |
+| `/provider add` | Add or update a saved provider configuration and activate its saved text model. |
 | `/provider api-key rotation` | Manage API key rotation for load balancing and failover. |
 | `/provider custom-endpoint add` | Register a model under a custom endpoint label (reuse the label to add more). |
 | `/provider custom-endpoint edit` | Edit fields on a registered custom endpoint. |
@@ -424,7 +424,7 @@ Tool commands.
 | `/tool estimate cost` | Estimate API costs for paid AI providers |
 | `/tool ping` | Check the bot's latency. |
 | `/tool prompt snapshot` | Dump the exact LLM prompt for a persona to a file for debugging. |
-| `/tool refresh` | Clears the recent conversation history. |
+| `/tool refresh` | Clear conversation history (this channel only). |
 | `/tool status` | Show current personal, server, or persona status. |
 
 ## `/update`

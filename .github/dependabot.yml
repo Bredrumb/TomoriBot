@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Singapore"
+    # Disable routine version-update PRs while retaining security updates.
+    open-pull-requests-limit: 0
+    commit-message:
+      # Trailing whitespace prevents Dependabot from inserting a colon.
+      prefix: "Dependency | "
+
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:30"
+      timezone: "Asia/Singapore"
+    # Disable routine version-update PRs while retaining security updates.
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "Dependency | "

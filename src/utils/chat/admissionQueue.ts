@@ -202,7 +202,7 @@ async function evaluateLockedChannelAdmission(args: {
     const tempUserRow = await getCachedUserRow(userDiscId);
     const cooldownLocale = tempUserRow?.language_pref ?? channelScope.guild?.preferredLocale ?? "en-US";
     const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
-      serverDiscId: channelScope.guild?.id ?? message.author.id,
+      serverDiscId: channelScope.serverDiscId,
       userDiscId: cooldownUserDiscId,
       channelId: message.channelId,
       cooldownType: earlyTomoriState.config.cooldown_type ?? CooldownType.OFF,
@@ -243,6 +243,7 @@ async function evaluateLockedChannelAdmission(args: {
       injectedContextItems: incoming.injectedContextItems,
       forcedMentions: incoming.forcedMentions,
       manualTriggerInvoker: incoming.manualTriggerInvoker,
+      systemTriggerIdentity: incoming.systemTriggerIdentity,
       reminderRecipientID: incoming.reminderRecipientID,
       reminderData: incoming.reminderData,
       onGenerationResult: incoming.onGenerationResult,
@@ -386,8 +387,8 @@ async function evaluateEarlyAccessState(args: {
     isManuallyTriggered: args.incoming.isManuallyTriggered,
     isSelfMessage: args.isSelfMessage,
     isAutochatOverride: isAutochatOverrideChannel(args.tomoriState.config, args.channelIds.effectiveChannelId),
-    guildDiscId: args.channelScope.guild.id,
-    fallbackUserDiscId: args.incoming.message.author.id,
+    guildDiscId: args.channelScope.serverDiscId,
+    fallbackUserDiscId: args.userDiscId,
     message: args.incoming.message,
     memberRoleDiscIds: args.incoming.manualTriggerInvoker?.member
       ? args.incoming.manualTriggerInvoker.member.roles.cache.map((role) => role.id)

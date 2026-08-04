@@ -1,5 +1,5 @@
 /**
- * Regression harness — StatRepository (stat_counters) write/buffer + aggregation.
+ * Regression harness: StatRepository (stat_counters) write/buffer + aggregation.
  *
  * Covers plan §11: buffered additive UPSERT, per-tuple collapsing, per-user grain,
  * persona-agnostic sentinel, token accumulation + cost read, shutdown drain, the
@@ -15,7 +15,7 @@ import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 const TEST_MODEL = "_rt_stat_model";
 const REUNION_OTHER_SERVER_DISC_ID = "_rt_stat_reunion_other_server";
 
-/** YYYY-MM-DD for `n` days before today (UTC) — matches StatRepository's bucket grain. */
+/** YYYY-MM-DD for `n` days before today (UTC): matches StatRepository's bucket grain. */
 function dayOffset(n: number): string {
   return new Date(Date.now() - n * 86_400_000).toISOString().split("T")[0];
 }
@@ -51,7 +51,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await cleanupFixtures(testSql);
   });
 
-  // Clean slate each test: drain any leftover buffer, then clear fixture rows.
   beforeEach(async () => {
     await statRepository.flush();
     await testSql`DELETE FROM stat_counters WHERE server_id = ${refs.serverId}`;
@@ -71,8 +70,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     `;
     return row ? Number(row.count) : 0;
   }
-
-  // ── write path / buffer ─────────────────────────────────────────────────────
 
   it("recordStat then flush produces one row with the delta", async () => {
     statRepository.recordStat({
@@ -94,7 +91,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
         metric: "message_sent",
       });
     }
-    // All five increments collapse into a single buffer entry before flush.
     expect(statRepository.bufferedEntryCount).toBe(1);
     await statRepository.flush();
     expect(await readCount("message_sent", "", lineageA, refs.userId)).toBe(5);
@@ -120,7 +116,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
   });
 
   it("persona-agnostic metric (command_used) writes the lineage-0 sentinel", async () => {
-    // Even when a caller passes a lineage, command_used is normalized to 0.
     statRepository.recordStat({
       serverId: refs.serverId,
       userId: refs.userId,
@@ -230,9 +225,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(statRepository.bufferedEntryCount).toBe(before);
   });
 
-  // ── aggregation reads ──────────────────────────────────────────────────────
-
-  it("getUserPersonaReunionInfo reads prior activity and today's grace count across servers", async () => {
+  it("getUserPersonaReunionInfo reads prior activity and today's delivery state across servers", async () => {
     const previousAt = new Date(`${dayOffset(4)}T18:30:00Z`);
     const [otherServer] = await testSql<{ server_id: number }[]>`
       INSERT INTO servers (server_disc_id)
@@ -243,15 +236,58 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
       INSERT INTO stat_counters
         (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
       VALUES
-        (${otherServer.server_id}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(4)}::date, 2,
+        (${otherServer.server_id}, ${refs.userId}, ${lineageA}, 'presence_seen', '', ${dayOffset(4)}::date, 2,
          ${previousAt}, ${previousAt}),
-        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(0)}::date, 3,
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'presence_seen', '', ${dayOffset(0)}::date, 3,
          NOW(), NOW())
     `;
 
     const reunion = await statRepository.getUserPersonaReunionInfo(refs.userId, lineageA);
-    expect(reunion.lastPreviousDayAt?.toISOString()).toBe(previousAt.toISOString());
-    expect(reunion.todayCount).toBe(3);
+    expect(reunion?.lastPreviousDayAt?.toISOString()).toBe(previousAt.toISOString());
+    expect(reunion?.seenToday).toBe(true);
+  });
+
+  it("getUserPersonaReunionInfo keeps legacy history but only presence consumes today's reunion", async () => {
+    const legacyAt = new Date(`${dayOffset(9)}T08:00:00Z`);
+    const presenceAt = new Date(`${dayOffset(2)}T08:00:00Z`);
+    await testSql`
+      INSERT INTO stat_counters
+        (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at)
+      VALUES
+        -- Relationship that predates the presence metric: the gap must still resolve.
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(9)}::date, 5,
+         ${legacyAt}, ${legacyAt}),
+        -- Today's message_sent must not consume the one-shot reunion.
+        (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', '', ${dayOffset(0)}::date, 4,
+         NOW(), NOW()),
+        (${refs.serverId}, ${altUserId}, ${lineageA}, 'presence_seen', '', ${dayOffset(2)}::date, 1,
+         ${presenceAt}, ${presenceAt})
+    `;
+
+    const reunion = await statRepository.getUserPersonaReunionInfo(refs.userId, lineageA);
+    expect(reunion?.lastPreviousDayAt?.toISOString()).toBe(legacyAt.toISOString());
+    expect(reunion?.seenToday).toBe(false);
+
+    const alternate = await statRepository.getUserPersonaReunionInfo(altUserId, lineageA);
+    expect(alternate?.lastPreviousDayAt?.toISOString()).toBe(presenceAt.toISOString());
+
+    const empty = await statRepository.getUserPersonaReunionInfo(refs.userId, lineageB);
+    expect(empty).toEqual({ lastPreviousDayAt: null, seenToday: false });
+  });
+
+  it("recordPresenceSeen persists immediately without entering the telemetry buffer", async () => {
+    const before = statRepository.bufferedEntryCount;
+    expect(
+      await statRepository.recordPresenceSeen({
+        serverId: refs.serverId,
+        userId: refs.userId,
+        lineageId: lineageA,
+      }),
+    ).toBe(true);
+
+    expect(statRepository.bufferedEntryCount).toBe(before);
+    expect(await readCount("presence_seen", "", lineageA, refs.userId)).toBe(1);
+    expect((await statRepository.getUserPersonaReunionInfo(refs.userId, lineageA))?.seenToday).toBe(true);
   });
 
   it("getFavoritePersona ranks by message share and computes loyalty %", async () => {
@@ -343,9 +379,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
       userId: refs.userId,
       lineageId: lineageA,
       metric: "sprite_shown",
-      metricKey: "yuki", // identity sprite — present in the leaderboard, absent from emotions
+      metricKey: "yuki", // identity sprite: present in the leaderboard, absent from emotions
     });
-    // Two casing variants of the same tag exercise the LOWER() + GROUP BY collapse.
     statRepository.recordStat({
       serverId: refs.serverId,
       userId: refs.userId,
@@ -363,19 +398,16 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await statRepository.flush();
 
     const emotions = await statRepository.getEmotionBreakdown({ serverId: refs.serverId });
-    // "happy" + "Happy" collapse to a single lower-cased entry with summed count 2.
     expect(emotions.find((e) => e.emotion === "happy")?.count).toBe(2);
     // The identity sprite never produced a sprite_emotion row, so it is not an emotion.
     expect(emotions.find((e) => e.emotion === "yuki")).toBeUndefined();
 
-    // Both sprites still count toward the standalone leaderboard.
     const sprites = await statRepository.getMetricKeyBreakdown({ metric: "sprite_shown", serverId: refs.serverId });
     expect(sprites.find((s) => s.key === "happy")?.count).toBe(1);
     expect(sprites.find((s) => s.key === "yuki")?.count).toBe(1);
   });
 
   it("windowed reads (bucket >= from) sum only in-window rows", async () => {
-    // Direct inserts let us control the bucket date (recordStat always uses today).
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
       VALUES
@@ -420,20 +452,17 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
         (${refs.serverId}, ${refs.userId}, ${lineageA}, 'active_hour', '9',  '2024-01-02'::date, 1)
     `;
     const grid = await statRepository.getActivityHeatmap({ userId: refs.userId });
-    // The two Mondays at 14:00 sum into one joint cell; Tuesday 09:00 is its own.
     expect(grid[1][14]).toBe(5);
     expect(grid[2][9]).toBe(1);
-    // Grid is fully populated — untouched cells are present and zero.
     expect(grid[0][0]).toBe(0);
     expect(grid[6][23]).toBe(0);
-    // Total across every cell equals the seeded total (no rows lost/duplicated).
     const total = Object.values(grid).reduce((sum, row) => sum + Object.values(row).reduce((a, b) => a + b, 0), 0);
     expect(total).toBe(6);
   });
 
   it("getActivityHeatmap timezone offset crossing midnight rolls into the previous weekday's cell", async () => {
     // Seed Tuesday (2024-01-02 = dow 2) at 01:00 UTC. With a UTC-2 personal offset
-    // the local time is 23:00 MONDAY — the hour roll must move the weekday too.
+    // the local time is 23:00 MONDAY, so the hour roll must move the weekday too.
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
       VALUES
@@ -448,7 +477,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
 
   it("getActivityHeatmap timezone offset wraps across the week boundary", async () => {
     // Sunday (2024-01-07 = dow 0) at 00:00 UTC with a UTC-1 offset is 23:00 SATURDAY
-    // of the prior week — the week-hour index must wrap mod 168 (0 → 167).
+    // of the prior week, so the week-hour index must wrap mod 168 (0 → 167).
     await testSql`
       INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
       VALUES
@@ -474,8 +503,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     expect(streak.longestStreak).toBe(3);
     expect(streak.lastActiveDate).toBe(dayOffset(0));
   });
-
-  // ── generation + read-existing aggregation ─────────────────────────────────
 
   it("getGenerationTotals reads canonical stat_counters telemetry with user scope", async () => {
     statRepository.recordStat({

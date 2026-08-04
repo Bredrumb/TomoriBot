@@ -1,5 +1,5 @@
 /**
- * UserRepository — manages the `users` and `personalization_blacklist` tables.
+ * UserRepository: manages the `users` and `personalization_blacklist` tables.
  *
  * Export contract: toExportShape / fromExportShape are required by IRepository
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
@@ -10,14 +10,14 @@ import { PrivacyLevel as PrivacyLevelValue, userSchema } from "@/types/db/schema
 import type { PersonalSettingsExportData } from "@/types/db/dataExport";
 import { personalSettingsExportDataSchema } from "@/types/db/dataExport";
 import { getCachedUserRow, invalidateUserCache, invalidateUserBlacklistCache } from "@/utils/cache/userCache";
-import { sql, withCachedPlanRetry } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { validateUserFields } from "@/utils/db/sqlSecurity";
 import { log } from "@/utils/misc/logger";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import type { IRepository } from "./IRepository";
 
 /** Export shape for a single user's portable settings. */
-export type UserExportShape = PersonalSettingsExportData;
+type UserExportShape = PersonalSettingsExportData;
 
 const USER_PERSONALIZATION_FIELD_NAMES = [
   "shortterm_cache_crossserver_opt_in",
@@ -31,8 +31,6 @@ type UserPersonalizationField = (typeof USER_PERSONALIZATION_FIELD_NAMES)[number
 type UserPersonalizationPatch = Partial<Pick<UserPersonalizationConfigsRow, UserPersonalizationField>>;
 
 const USER_PERSONALIZATION_FIELDS = new Set<string>(USER_PERSONALIZATION_FIELD_NAMES);
-
-// ── Personal spotlight types ───────────────────────────────────────────────────
 
 type PersonalSpotlightAggregateRow = {
   server_id: number | string | bigint;
@@ -56,18 +54,47 @@ export interface PersonalSpotlightStatus {
   updatedAt: Date | null;
 }
 
-export class UserRepository implements IRepository<UserExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
+export type ContextReferenceEligibilityEvidence = {
+  hasServerActivity: boolean;
+  hasPersonalMemories: boolean;
+  hasPendingTasks: boolean;
+};
 
+export const CONTEXT_REFERENCE_ELIGIBILITY_POLICY_VERSION = 1 as const;
+
+export interface ContextReferenceCandidate {
+  userRow: UserRow;
+  evidence: ContextReferenceEligibilityEvidence;
+}
+
+/** Auto-created identity/default rows are not enough to load a user by alias. */
+export function isEligibleContextReferenceUserV1(
+  user: UserRow,
+  evidence: ContextReferenceEligibilityEvidence,
+): boolean {
+  return (
+    evidence.hasServerActivity ||
+    evidence.hasPersonalMemories ||
+    evidence.hasPendingTasks ||
+    user.shortterm_cache_crossserver_opt_in ||
+    user.physical_appearance_tags.some((tag) => tag.trim().length > 0) ||
+    Boolean(user.nai_char_ref_url?.trim()) ||
+    Boolean(user.impersonation_prompt?.trim()) ||
+    user.personal_dtm !== "follow" ||
+    user.personal_deliberate_tool_mode !== "follow" ||
+    user.timezone_offset != null ||
+    user.privacy_level !== PrivacyLevelValue.MINIMAL
+  );
+}
+
+class UserRepository implements IRepository<UserExportShape> {
   /**
-   * Loads a user row by Discord ID.
    *
-   * @param userDiscId - Discord user snowflake
    * @returns UserRow or null if not found
    */
   async loadByDiscordId(userDiscId: string): Promise<UserRow | null> {
-    return await withCachedPlanRetry(async () => {
-      try {
+    try {
+      return await withTransientDbRetry(async () => {
         const rows = await sql`
           SELECT
             u.user_id,
@@ -96,11 +123,11 @@ export class UserRepository implements IRepository<UserExportShape> {
         }
 
         return this.parseUserRow(rows[0], `ID ${userDiscId}`);
-      } catch (error) {
-        log.error(`Error loading user row for ID ${userDiscId}:`, error);
-        return null;
-      }
-    }, `load user row for ID ${userDiscId}`);
+      }, `load user row for ID ${userDiscId}`);
+    } catch (error) {
+      log.error(`Error loading user row for ID ${userDiscId}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -110,15 +137,14 @@ export class UserRepository implements IRepository<UserExportShape> {
    * @returns Array of matching UserRow objects
    */
   async findByNormalizedNickname(normalizedNickname: string): Promise<UserRow[]> {
-    return (
-      (await withCachedPlanRetry(async () => {
-        try {
-          const nickname = normalizedNickname.trim().toLowerCase().replace(/\s+/g, " ");
-          if (!nickname) {
-            return [];
-          }
+    try {
+      return await withTransientDbRetry(async () => {
+        const nickname = normalizedNickname.trim().toLowerCase().replace(/\s+/g, " ");
+        if (!nickname) {
+          return [];
+        }
 
-          const rows = await sql`
+        const rows = await sql`
             SELECT
               u.user_id,
               u.user_disc_id,
@@ -140,26 +166,116 @@ export class UserRepository implements IRepository<UserExportShape> {
             WHERE regexp_replace(lower(trim(u.user_nickname)), '[[:space:]]+', ' ', 'g') = ${nickname}
           `;
 
-          const parsedUsers: UserRow[] = [];
-          for (const row of rows) {
-            const parsedUser = this.parseUserRow(row, `nickname "${normalizedNickname}"`);
-            if (parsedUser) parsedUsers.push(parsedUser);
-          }
-
-          return parsedUsers;
-        } catch (error) {
-          log.error(`Error loading user rows for nickname "${normalizedNickname}":`, error);
-          return [];
+        const parsedUsers: UserRow[] = [];
+        for (const row of rows) {
+          const parsedUser = this.parseUserRow(row, `nickname "${normalizedNickname}"`);
+          if (parsedUser) parsedUsers.push(parsedUser);
         }
-      }, `load user rows for nickname ${normalizedNickname}`)) ?? []
-    );
+
+        return parsedUsers;
+      }, `load user rows for nickname ${normalizedNickname}`);
+    } catch (error) {
+      log.error(`Error loading user rows for nickname "${normalizedNickname}":`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Loads bounded reference candidates plus the evidence needed by eligibility
+   * policy v1. The participant pipeline owns the policy decision so injected
+   * sources and repository results follow the same pure contract.
+   */
+  async loadContextReferenceCandidates(params: {
+    serverDiscId: string;
+    candidateDiscordIds: string[];
+    normalizedHistoryText: string;
+  }): Promise<ContextReferenceCandidate[]> {
+    try {
+      return await withTransientDbRetry(async () => {
+        const candidateDiscordIds = Array.from(new Set(params.candidateDiscordIds));
+        const normalizedHistoryText = params.normalizedHistoryText.trim().toLowerCase().replace(/\s+/g, " ");
+        const rows = await sql`
+            WITH context_reference_candidates AS (
+              SELECT
+                u.user_id,
+                u.user_disc_id,
+                u.user_nickname,
+                u.language_pref,
+                u.registration_locale,
+                u.privacy_level,
+                u.personal_deliberate_tool_mode,
+                u.timezone_offset,
+                u.created_at,
+                u.updated_at,
+                COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
+                COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
+                upc.nai_char_ref_url,
+                upc.impersonation_prompt,
+                COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
+                EXISTS (
+                  SELECT 1
+                  FROM stat_counters sc
+                  JOIN servers s ON s.server_id = sc.server_id
+                  WHERE sc.user_id = u.user_id
+                    AND s.server_disc_id = ${params.serverDiscId}
+                    AND sc.metric IN ('message_sent', 'command_used')
+                    AND sc.count > 0
+                ) AS has_server_activity,
+                EXISTS (
+                  SELECT 1
+                  FROM personal_memories pm
+                  WHERE pm.user_id = u.user_id
+                ) AS has_personal_memories,
+                EXISTS (
+                  SELECT 1
+                  FROM reminders r
+                  WHERE (r.user_discord_id = u.user_disc_id OR r.created_by_user_id = u.user_id)
+                    AND r.reminder_time > CURRENT_TIMESTAMP
+                ) AS has_pending_tasks
+              FROM users u
+              LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+            )
+            SELECT *
+            FROM context_reference_candidates
+            WHERE (
+              user_disc_id = ANY(${sql.array(candidateDiscordIds, "TEXT")})
+              OR has_server_activity
+              OR (
+                ${normalizedHistoryText} <> ''
+                AND position(
+                  regexp_replace(lower(trim(user_nickname)), '[[:space:]]+', ' ', 'g')
+                  IN ${normalizedHistoryText}
+                ) > 0
+              )
+            )
+          `;
+
+        const candidates: ContextReferenceCandidate[] = [];
+        for (const row of rows) {
+          const parsedUser = this.parseUserRow(row, `context reference candidate ${row.user_disc_id}`);
+          if (parsedUser) {
+            candidates.push({
+              userRow: parsedUser,
+              evidence: {
+                hasServerActivity: row.has_server_activity === true,
+                hasPersonalMemories: row.has_personal_memories === true,
+                hasPendingTasks: row.has_pending_tasks === true,
+              },
+            });
+          }
+        }
+        return candidates;
+      }, `load context reference candidates for server ${params.serverDiscId}`);
+    } catch (error) {
+      log.error("Error loading context reference candidates:", error);
+      return [];
+    }
   }
 
   /**
    * Returns the user's privacy level (0 = MINIMAL, 1 = PARTIAL, 2 = FULL).
    * Defaults to MINIMAL if user not found.
    *
-   * @param userDiscId - Discord user snowflake
    */
   async getPrivacyLevel(userDiscId: string): Promise<PrivacyLevel> {
     try {
@@ -192,7 +308,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Returns true if the user has opted out of all personalization (privacy level FULL).
    *
    * @deprecated Use getPrivacyLevel() for granular checks.
-   * @param userDiscId - Discord user snowflake
    */
   async isPrivacyOptedOut(userDiscId: string): Promise<boolean> {
     const level = await this.getPrivacyLevel(userDiscId);
@@ -202,7 +317,6 @@ export class UserRepository implements IRepository<UserExportShape> {
   /**
    * Returns the user's cross-server short-term memory sharing preference.
    *
-   * @param userDiscId - Discord user snowflake
    */
   async getCrossServerShmOptIn(userDiscId: string): Promise<boolean> {
     try {
@@ -228,8 +342,6 @@ export class UserRepository implements IRepository<UserExportShape> {
   /**
    * Returns true if the user is blacklisted from a specific server.
    *
-   * @param serverDiscId - Discord server snowflake
-   * @param userDiscId   - Discord user snowflake
    */
   async isBlacklisted(serverDiscId: string, userDiscId: string): Promise<boolean> {
     try {
@@ -254,7 +366,6 @@ export class UserRepository implements IRepository<UserExportShape> {
   /**
    * Returns the list of blacklisted user Discord IDs for a server.
    *
-   * @param serverId - Internal server DB ID
    */
   async getBlacklistedMemberIds(serverId: number): Promise<string[]> {
     try {
@@ -277,14 +388,10 @@ export class UserRepository implements IRepository<UserExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
-   * Registers a user (upsert — preserves existing nickname and preferences on conflict).
+   * Registers a user (upsert: preserves existing nickname and preferences on conflict).
    * Invalidates the user cache after write.
    *
-   * @param userDiscId  - Discord user snowflake
-   * @param displayName - Displayed nickname from Discord
    * @param language    - Registration locale
    * @returns UserRow on success, null on failure
    */
@@ -295,11 +402,8 @@ export class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
-   * Sets the user's global privacy level.
    * Invalidates the user cache after write.
    *
-   * @param userDiscId - Discord user snowflake
-   * @param level      - Privacy level to set
    * @returns Updated UserRow or null on failure
    */
   async setPrivacyLevel(userDiscId: string, level: PrivacyLevel): Promise<UserRow | null> {
@@ -320,7 +424,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Toggles cross-server short-term memory opt-in for a user.
    * Invalidates the user cache after write.
    *
-   * @param userDiscId - Discord user snowflake
    * @returns New opt-in state
    */
   async toggleCrossServerShmOptIn(userDiscId: string): Promise<boolean> {
@@ -353,9 +456,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Updates arbitrary user fields. Validates against the user schema before writing.
    * Invalidates the user cache after write.
    *
-   * @param userId   - Internal user DB ID
-   * @param userData - Partial UserRow with fields to update
-   * @returns Updated UserRow or null on failure
    */
   async update(userId: number, userData: Partial<UserRow>): Promise<UserRow | null> {
     const user = await this.updateUserRow(userId, userData);
@@ -367,8 +467,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Removes a user's blacklist entry in a specific server.
    * Invalidates only the per-server blacklist cache slot.
    *
-   * @param serverId   - Internal server DB ID
-   * @param userDiscId - Discord user snowflake
    * @returns true on success
    */
   async removeBlacklistEntry(serverId: number, userDiscId: string, serverDiscId: string): Promise<boolean> {
@@ -410,15 +508,10 @@ export class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
-  // ── Personal spotlight ────────────────────────────────────────────────────
-
   /**
    * Upserts a personal spotlight for a user in a channel, replacing all persona
    * associations atomically.
    *
-   * @param serverId            - Internal server DB ID
-   * @param userId              - Internal user DB ID
-   * @param channelDiscId       - Discord channel snowflake
    * @param personaIds          - Tomori IDs to allow in the spotlight
    * @param autoTriggerPersonaId - Tomori ID to auto-trigger, or null
    * @param expiresAt           - Expiry timestamp, or null for permanent
@@ -495,9 +588,6 @@ export class UserRepository implements IRepository<UserExportShape> {
   /**
    * Deletes a personal spotlight entry for a user in a specific channel.
    *
-   * @param serverId      - Internal server DB ID
-   * @param userId        - Internal user DB ID
-   * @param channelDiscId - Discord channel snowflake
    * @returns true if a row was deleted
    */
   async removePersonalSpotlight(serverId: number, userId: number, channelDiscId: string): Promise<boolean> {
@@ -515,9 +605,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Loads the current personal spotlight status for a user in a channel, pruning
    * expired entries and orphaned spotlights (no remaining personas) first.
    *
-   * @param serverId      - Internal server DB ID
-   * @param userId        - Internal user DB ID
-   * @param channelDiscId - Discord channel snowflake
    * @returns PersonalSpotlightStatus or null if none active
    */
   async getPersonalSpotlightStatus(
@@ -567,7 +654,7 @@ export class UserRepository implements IRepository<UserExportShape> {
       return status;
     }
 
-    // Orphaned spotlight — remove it so it doesn't accumulate
+    // Orphaned spotlight: remove it so it doesn't accumulate
     await this.removePersonalSpotlight(serverId, userId, channelDiscId);
     return null;
   }
@@ -576,8 +663,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Returns all active personal spotlights for a user in a server, pruning expired
    * and orphaned entries first.
    *
-   * @param serverId - Internal server DB ID
-   * @param userId   - Internal user DB ID
    * @returns Sorted array of active PersonalSpotlightStatus entries
    */
   async getActivePersonalSpotlightsForUser(serverId: number, userId: number): Promise<PersonalSpotlightStatus[]> {
@@ -642,10 +727,9 @@ export class UserRepository implements IRepository<UserExportShape> {
 
   /**
    * Returns true if the given personaId is permitted by the spotlight status.
-   * A null spotlight means no restriction — all personas are allowed.
+   * A null spotlight means no restriction: all personas are allowed.
    *
    * @param spotlightStatus - Current spotlight, or null/undefined if none
-   * @param personaId        - Persona DB ID to check
    */
   isPersonaAllowedByPersonalSpotlight(
     spotlightStatus: PersonalSpotlightStatus | null | undefined,
@@ -666,7 +750,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Filters a persona array to only those allowed by the given spotlight status.
    * Returns all personas unchanged when spotlightStatus is null/undefined.
    *
-   * @param personas        - Array of persona-like objects with optional persona_id
    * @param spotlightStatus - Current spotlight filter, or null/undefined
    */
   filterPersonasByPersonalSpotlight<T extends { persona_id?: number | null | undefined }>(
@@ -679,8 +762,6 @@ export class UserRepository implements IRepository<UserExportShape> {
 
     return personas.filter((persona) => this.isPersonaAllowedByPersonalSpotlight(spotlightStatus, persona.persona_id));
   }
-
-  // ── Personal spotlight private helpers ───────────────────────────────────
 
   private normalizeNumber(value: number | string | bigint | null | undefined): number | null {
     if (typeof value === "number") {
@@ -800,13 +881,10 @@ export class UserRepository implements IRepository<UserExportShape> {
     `;
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Exports a user's portable settings for data portability (GDPR etc.).
    * The ownerId is the Discord snowflake of the user.
    *
-   * @param ownerId - Discord user snowflake
    * @returns UserExportShape or null if the user has no data
    */
   async toExportShape(ownerId: string | number): Promise<UserExportShape | null> {
@@ -831,8 +909,6 @@ export class UserRepository implements IRepository<UserExportShape> {
    * Identity fields stay on users; personalization fields write to user_personalization_configs.
    * Creates the user row first if it doesn't exist.
    *
-   * @param ownerId - Discord user snowflake
-   * @param data    - Previously exported UserExportShape
    * @returns true on success, false on validation or write failure
    */
   async fromExportShape(ownerId: string | number, data: UserExportShape): Promise<boolean> {
@@ -873,8 +949,6 @@ export class UserRepository implements IRepository<UserExportShape> {
       return false;
     }
   }
-
-  // ── user_personalization_configs upsert ──────────────────────────
 
   private async sqlUpsertUserPersonalizationConfigs(
     userId: number,
@@ -1180,5 +1254,5 @@ export class UserRepository implements IRepository<UserExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const userRepository = new UserRepository();

@@ -54,10 +54,14 @@ All mutations apply only when `data.type` starts with `"context_restart_"`.
   by `manage_message` / `interact_with_recent_message`.
 - Appends a tail directive message block via `buildTailDirectiveMessage` +
   `buildRevealedMessageMetadataTailDirective` to `contextItems` when the
-  directive is non-empty.
+  directive is non-empty. The directive also instructs the model not to call
+  `reveal_message_metadata` again this turn: tool prompt macros expand once at
+  context-build time, so the system prompt still documents the tool after the
+  reveal, and the directive is the only layer the restarted iteration re-reads.
 - Sets `streamingContext.disableMessageMetadataContext = true` to prevent
   the context-build pipeline from re-injecting the same metadata on a
-  subsequent turn.
+  subsequent turn, and to make the tool's own availability and execution
+  guards reject a second reveal in this turn.
 
 **All restart types:**
 - Appends `data.enhanced_context_item` to `contextItems` when present — this

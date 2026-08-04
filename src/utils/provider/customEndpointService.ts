@@ -14,7 +14,7 @@ import type {
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { configRepository, llmModelRepo, llmOverrideRepo, llmProviderRepo } from "@/utils/db/repositories";
 
-import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/discord/customProviderModal";
+import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/provider/legacyCustomProvider";
 import {
   buildSavedProviderConfigFromExistingOrDefaults,
   buildUserSavedProviderConfigFromExistingOrDefaults,
@@ -400,7 +400,6 @@ async function clearServerScopedLiveReferences(
   switch (capability) {
     case "text":
       if (scope.baseConfig.llm_id === modelId) {
-        // Promote to a sibling model when one exists; otherwise clear the slot.
         modelPatch.llm_id = siblingModelId;
         modelPatch.custom_endpoint_url = null;
         modelPatch.custom_model_name = null;
@@ -514,12 +513,11 @@ export async function registerCustomEndpoint(
   const existingConfig = await getExistingSavedConfig(input.scope, provider);
   const isEdit = input.editingEndpointId != null;
 
-  // 1. On the edit path, recover the row being edited (model link, prior auth/default flags).
   const editingRow = isEdit
     ? ((await llmProviderRepo.loadCustomEndpointsByIds([input.editingEndpointId as number]))[0] ?? null)
     : null;
 
-  // 2. Determine sibling metadata for inherited auth. Add registrations are activated immediately;
+  // Determine sibling metadata for inherited auth. Add registrations are activated immediately;
   //    edit registrations preserve the row's existing default flag and active model selection.
   const allEndpoints =
     input.scope.kind === "server"
@@ -534,7 +532,6 @@ export async function registerCustomEndpoint(
   const shouldActivateNewRegistration = !isEdit;
   const shouldBeDefault = isEdit ? (editingRow?.is_default ?? false) : false;
 
-  // 3. Insert (add) or update-in-place (edit) the synthetic model row.
   const modelId = await writeSyntheticCapabilityModel(provider, input, editingRow?.model_ref_id ?? null);
 
   // Auth is shared per label (one stored key). A new sibling inherits requires_auth from an existing
@@ -579,8 +576,8 @@ export async function registerCustomEndpoint(
     return null;
   }
 
-  // 4. Add registrations become the active model for their capability. Edit registrations keep the
-  //    existing active slot unless that provider did not have one yet.
+  // New registrations become active immediately. Edits preserve the existing
+  // active slot unless the provider did not have one yet.
   const currentActive = existingConfig ? getCapabilityModelId(existingConfig, input.capability) : null;
   const activeId = shouldActivateNewRegistration ? modelId : (currentActive ?? modelId);
   const currentVision = existingConfig?.vision_llm_id ?? null;
@@ -676,13 +673,12 @@ export async function setActiveCustomEndpoint(params: {
  * Resolves the custom endpoint row backing a provider for a capability.
  *
  * When an active model id is supplied, the specific endpoint owning that synthetic model is
- * returned — this is how the runtime picks the right row when several models share a label+capability.
+ * returned: this is how the runtime picks the right row when several models share a label+capability.
  * When omitted (or no match, e.g. legacy rows whose model_ref_id was not backfilled), it falls back
  * to the most-recently-updated endpoint for the label+capability. Speech/transcription always use
  * the fallback since they have no synthetic model.
  *
  * @param provider      - Internal custom provider name
- * @param capability    - Endpoint capability
  * @param activeModelId - Optional id of the currently-active synthetic model for this capability
  */
 export async function resolveCustomEndpointForProvider(
@@ -729,7 +725,7 @@ export async function removeCustomEndpointRegistration(params: {
   const provider = getInternalProviderName(params.scope, params.label);
   const existingConfig = await getExistingSavedConfig(params.scope, provider);
 
-  // 1. Delete the specific endpoint row (one model among possibly several under this label+capability).
+  // Delete the specific endpoint row (one model among possibly several under this label+capability).
   const deleted =
     params.scope.kind === "server"
       ? await llmProviderRepo.deleteCustomEndpointById(params.customEndpointId, {
@@ -742,7 +738,7 @@ export async function removeCustomEndpointRegistration(params: {
     return false;
   }
 
-  // 2. Load remaining endpoints under the same label to find a sibling to auto-promote to when the
+  // Load remaining endpoints under the same label to find a sibling to auto-promote to when the
   //    removed model was the active one. Prefer the default-flagged sibling, then first available.
   const remaining =
     params.scope.kind === "server"
@@ -755,18 +751,17 @@ export async function removeCustomEndpointRegistration(params: {
   const siblingModelId =
     (sameLabelCapabilityRemaining.find((e) => e.is_default) ?? sameLabelCapabilityRemaining[0])?.model_ref_id ?? null;
 
-  // 3. Clear live server config + channel/persona overrides that pointed at this exact model,
+  // Clear live server config + channel/persona overrides that pointed at this exact model,
   //    auto-promoting to the sibling when one exists.
   if (params.scope.kind === "server") {
     await clearServerScopedLiveReferences(params.scope, params.capability, params.modelRefId, siblingModelId);
   }
 
-  // 4. Delete the synthetic model row this endpoint owned.
   if (params.modelRefId != null) {
     await llmModelRepo.deleteSyntheticCustomCapabilityModelById(params.modelRefId, params.capability);
   }
 
-  // 5. If no models remain for the whole label, drop the saved provider config entirely.
+  // If no models remain for the whole label, drop the saved provider config entirely.
   if (sameLabelRemaining.length === 0) {
     if (params.scope.kind === "server") {
       await llmProviderRepo.deleteSavedProviderConfig(params.scope.ownerId, provider, {
@@ -778,7 +773,7 @@ export async function removeCustomEndpointRegistration(params: {
     return true;
   }
 
-  // 6. Otherwise, update the saved config's active slot for this capability. If it pointed at the
+  // Otherwise, update the saved config's active slot for this capability. If it pointed at the
   //    removed model, promote to the sibling; null only when no sibling exists.
   if (!existingConfig || params.modelRefId == null) {
     return true;
@@ -825,7 +820,6 @@ export async function cleanupCustomProviderArtifacts(provider: string): Promise<
 
   const matchingEndpoints = registeredEndpoints.filter((endpoint) => endpoint.label === parsed.label);
 
-  // Delete each model row under the label (a label+capability may now own several).
   for (const endpoint of matchingEndpoints) {
     if (endpoint.custom_endpoint_id != null) {
       await llmProviderRepo.deleteCustomEndpointById(endpoint.custom_endpoint_id, {

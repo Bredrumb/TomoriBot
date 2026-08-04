@@ -66,6 +66,39 @@ Key conventions:
 - Choice label:
   - `commands.{category}.{path}.{option_name}_choice_{choice_value}`
 
+## Tip-item keys (`genai.tips.*`)
+
+User-facing hints ("Tips") are stored as **atomic, single-sentence** keys under `genai.tips.*`
+(defined in `providers.ts`, which exports the `genai` tree). Each key is one self-contained bullet —
+never a multi-hint paragraph:
+
+```ts
+genai: {
+  tips: {
+    title: "💡 Tip",
+    wait_and_retry: "Please wait a few minutes before trying again.",
+    openrouter_models: "Browse the [OpenRouter model list](https://openrouter.ai/models) and switch models with `/openrouter model add`.",
+    // ...one key per bullet
+  },
+}
+```
+
+Callers compose the bullet list by passing an ordered `tipKeys` array to `createTipEmbed()` (see
+[Tip embeds](./utils.md#tip-embeds)), including or omitting keys per branch. This is why tips are
+atomic: a conditional hint (e.g. an OpenRouter-only tip) is added by including its key in one branch,
+not by duplicating a whole paragraph string. Descriptions render markdown and hyperlinks.
+
+`genai.tips.support_server` is the one reserved key: `createTipEmbed()` appends it as the closing
+bullet of every rendered tip embed so the Official Support Server link is always offered. Do not put
+it in a caller's `tipKeys` array.
+
+When adding a tip:
+
+1. Add the atomic key under `genai.tips` in both `src/locales/en-US/providers.ts` and
+   `src/locales/ja/providers.ts`.
+2. Reference it by dot-path from the calling `tipKeys` array — do not inline hint text in code.
+3. Run `bun run check-locales` for parity.
+
 ## User Language Preference
 
 - User preference is stored in `users.language_pref`.

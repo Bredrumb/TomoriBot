@@ -42,6 +42,11 @@ export interface ManualTriggerInvoker {
   member?: GuildMember | null;
 }
 
+export interface SystemTriggerIdentity {
+  serverDiscId: string;
+  userDiscId: string;
+}
+
 export interface SceneTurnSpeaker {
   personaId: number;
   personaName: string;
@@ -55,7 +60,7 @@ export interface SceneTurnMetadata {
   additionalInstructions?: string;
 }
 
-/** Public input to tomoriChat() — optional fields apply defaults in normalizeChatInvocation. */
+/** Public input to tomoriChat(): optional fields apply defaults in normalizeChatInvocation. */
 export interface TomoriChatInput {
   client: Client;
   message: Message;
@@ -85,6 +90,7 @@ export interface TomoriChatInput {
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
+  systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
   onGenerationResult?: ChatGenerationResultHandler;
@@ -120,6 +126,7 @@ export interface ChatIncoming {
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
+  systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
   onGenerationResult?: ChatGenerationResultHandler;
@@ -128,7 +135,7 @@ export interface ChatIncoming {
 
 export type ChatAdmissionDisposition = "run" | "ignore" | "queued" | "blocked" | "error";
 
-export interface ChatAdmissionBase {
+interface ChatAdmissionBase {
   incoming: ChatIncoming;
   disposition: ChatAdmissionDisposition;
   locale: string;
@@ -227,6 +234,11 @@ export interface ChatTurnContext {
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
   allPersonas: TomoriState[];
+  /**
+   * Direct-triggerer presence and any one-shot claim awaiting the post-turn
+   * success decision. Both phases live in `@/utils/chat/reunionPresence`.
+   */
+  reunionPresence: ReunionPresenceScope | null;
   currentPersona: TomoriState;
   tomoriState: TomoriState;
   requestSnapshot: RequestSnapshot;
@@ -276,7 +288,7 @@ export interface ChatResponseSink {
   finalize(result: GenerationTurnResult): Promise<void>;
 }
 
-export interface ChatPersonaResponse {
+interface ChatPersonaResponse {
   text: string;
   personaName: string;
   personaId?: number;

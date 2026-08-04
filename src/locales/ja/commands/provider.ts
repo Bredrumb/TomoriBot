@@ -1,10 +1,8 @@
-// locales/ja/commands/provider.ts
-
 export default {
   provider: {
     description: `保存されたプロバイダー設定を管理`,
     add: {
-      description: `保存済みプロバイダー設定を追加または更新し、デフォルトのテキストモデルを有効化します。`,
+      description: `保存済みプロバイダー設定を追加または更新し、保存されたテキストモデルを有効化します。`,
       modal_title: `保存済みプロバイダーを追加`,
       success_title: `プロバイダーを保存しました`,
       success: `**{provider}** の認証情報を保存し、現在のテキストモデルを \`{model_name}\` に設定しました。その他の機能は \`/model embedding|image|video|vision\` で設定できます。`,

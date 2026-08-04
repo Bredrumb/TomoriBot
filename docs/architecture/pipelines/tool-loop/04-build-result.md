@@ -63,6 +63,12 @@ metadata alongside its response. `mergeDetails` appends it as:
 
 If `detailsText` is empty or whitespace-only, `responseText` is used unchanged.
 
+The merged string is a **short-term-memory payload, not a transcript**: the scene
+metadata was drained out of the visible buffer and never sent to Discord.
+Consumers that need "what the channel actually saw" (notably expression stats)
+must read `StreamResult.accumulatedText` per stream segment instead, as
+[post-turn effects](../chat/06-per-turn/04-post-turn-effects) does.
+
 ### `personaResponses` assembly
 
 When the merged text is non-empty, a single `ChatPersonaResponse` is emitted:

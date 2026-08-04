@@ -1,5 +1,3 @@
-// locales/en-US/general.ts
-
 export default {
   general: {
     yes: `Yes`,
@@ -8,7 +6,7 @@ export default {
     unknown: `Unknown`,
     scoped_openrouter_model_description: `Added via /openrouter model`,
     openrouter_model_moved_title: `Functionality Moved`,
-    openrouter_model_moved_description: `Direct \`other-model\` selection moved to the OpenRouter model registry. Add the exact model codename with {add_command}, remove old registrations with {remove_command}, then pick that registered model from the normal OpenRouter model list.`,
+    openrouter_model_moved_description: `\`other-model\` selection has been moved to {add_command}. After using it, use \`/model text\` again to select it.`,
     defaults: {
       bot_name: `Tomori`,
     },
@@ -42,6 +40,11 @@ export default {
       cancel_description: `The command has been cancelled.`,
       timeout_title: `⏰ Command Timed Out`,
       timeout_description: `You didn't respond in time. Please try again.`,
+      selector_opened_title: `Selector Opened`,
+      selector_opened_description: `The selection form is open. Submit it to continue, or dismiss it to cancel.`,
+    },
+    text_preview: {
+      truncated_footer: `Showing the first {shown} of {total} characters.`,
     },
     pagination: {
       page_info: `Page {current} of {total}`,
@@ -58,6 +61,28 @@ export default {
       reloading_persona_picker: `Refreshing the persona picker...`,
       persona_no_attributes: `No attributes configured yet.`,
       persona_select_button: `Select`,
+    },
+    persona_workflow: {
+      loading_title: `Preparing Your Selection`,
+      loading_description: `Loading the available options...`,
+      modal_ready_title: `Ready to Continue`,
+      modal_ready_description: `Open the form to continue with your selection.`,
+      open_modal_button: `Open Form`,
+      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
+      // below is interpolated in, so remove/edit variants of a family reuse it.
+      filtered_notice: `Only showing personas that have {items}.`,
+      items: {
+        attributes: `attributes`,
+        sample_dialogues: `sample dialogues`,
+        trigger_words: `trigger words`,
+        persona_prompts: `persona prompts`,
+        voice_designs: `voice designs`,
+        documents: `documents`,
+        chat_history: `chat history`,
+        server_memories: `server memories`,
+        personal_memories: `personal memories`,
+        sprites: `sprites`,
+      },
     },
     errors: {
       guild_only_title: `Server Only Command`,
@@ -163,11 +188,11 @@ export default {
       rejoin_title: `I'm Back!`,
       rejoin_description: `Looks like I was re-added to this server. Existing settings and personas are still intact. Use \`/config\`, \`/persona\`, \`/memory\`, \`/server\`, and \`/provider add\` to review or change them.
 
-			View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
+View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
       setup_prompt_title: `Successfully Added`,
-      setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or https://docs.tomoribot.app/introduction/quickstart/ for the short guide.
+      setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or read the official [short guide](https://docs.tomoribot.app/introduction/quickstart/).
 
-			Use \`/help api-key\` if you need provider key instructions. View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
+Use \`/help api-key\` if you need provider key instructions. View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
     },
   },
   reminders: {
@@ -198,9 +223,11 @@ Repeat: {repeat_text}`,
     task_update_repeat_minutes: `every {repetition_interval_minutes} minute(s)`,
     expand_task_button: `Show Full Task`,
     expand_task_title: `Full Task Content`,
-    reminder_triggered_title: `🔵 Reminder Triggered`,
-    task_triggered_title: `🔵 Task Triggered`,
-    triggered_description: `{reminder_purpose}`,
-    triggered_footer: `An error occurred during generation, so the raw reminder has been sent instead`,
+    reminder_triggered_title: `🟡 Reminder Triggered (Delivery Failed)`,
+    task_triggered_title: `🟡 Task Triggered (Delivery Failed)`,
+    triggered_description: `**Scheduled item ID:** \`{reminder_id}\`\n**Original content:**`,
+    triggered_footer_one_time: `Generation kept failing, so the scheduled content is shown unchanged. This one-time schedule is complete and has been removed.`,
+    triggered_footer_recurring_retained: `Generation kept failing, so the scheduled content is shown unchanged. The next occurrence remains on its original cadence. Use \`/scheduled-task edit\` or \`/scheduled-task remove\` to manage it.`,
+    triggered_footer_recurring_removed: `Generation kept failing and the next occurrence could not be preserved. This recurring schedule has been removed; create it again once the problem is fixed.`,
   },
 };

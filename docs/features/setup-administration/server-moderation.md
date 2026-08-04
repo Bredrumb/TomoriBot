@@ -58,8 +58,10 @@ are posted — useful for auditing what she's doing (including which trigger exp
 
 ## Welcome Greetings
 
-`/server welcome` configures an automated greeting for new members in a chosen channel.
-Remove it to stop greetings.
+`/server welcome-channel set` configures an automated greeting for new members in a chosen
+channel. By default, Tomori waits one minute before greeting them so server onboarding can
+finish. Instance operators can tune this grace period with `WELCOME_DELAY_MS`. Use
+`/server welcome-channel remove` to stop greetings.
 
 ## Expressions
 

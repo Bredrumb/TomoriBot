@@ -1,5 +1,5 @@
 /**
- * PersonaRepository — manages the `personas` and persona resolution tables.
+ * PersonaRepository: manages the `personas` and persona resolution tables.
  *
  * Owns TomoriState loading (composite persona + config + memories read) and
  * all writes to the `personas` table. Configuration writes live in
@@ -34,7 +34,7 @@ import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedLLM } from "@/utils/cache/llmCache";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
-import { sql, withCachedPlanRetry } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { validateTomoriFields } from "@/utils/db/sqlSecurity";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
@@ -45,17 +45,15 @@ import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
-// ── persona config table row shapes ─────────────────────────────────
-
 /** Row shape for persona_context_note_configs (Phase 6). */
-export type PersonaContextNoteConfigsRow = {
+type PersonaContextNoteConfigsRow = {
   persona_id: number;
   context_note: string | null;
   context_note_depth: number;
 };
 
 /** Row shape for persona_voice_configs (Phase 6). */
-export type PersonaVoiceConfigsRow = {
+type PersonaVoiceConfigsRow = {
   persona_id: number;
   speech_voice_sample_id: number | null;
   speech_voice_id: string | null;
@@ -64,14 +62,14 @@ export type PersonaVoiceConfigsRow = {
 };
 
 /** Row shape for persona_imagegen_configs (Phase 6). */
-export type PersonaImagegenConfigsRow = {
+type PersonaImagegenConfigsRow = {
   persona_id: number;
   physical_appearance_tags: string[];
   nai_char_ref_url: string | null;
 };
 
 /** Row shape for persona_textgen_configs (Phase 6). */
-export type PersonaTextgenConfigsRow = {
+type PersonaTextgenConfigsRow = {
   persona_id: number;
   nai_attg_author: string | null;
   nai_attg_title: string | null;
@@ -86,7 +84,7 @@ type PersonaScopedConfigFields = Omit<PersonaContextNoteConfigsRow, "persona_id"
   Omit<PersonaTextgenConfigsRow, "persona_id">;
 
 /** Per-persona config bundle (Stage A). */
-export type PersonaConfigBundle = {
+type PersonaConfigBundle = {
   persona_id: number;
   persona_nickname: string;
   persona_lineage_id: number | null;
@@ -100,7 +98,7 @@ export type PersonaConfigBundle = {
  * Export shape for PersonaRepository.
  * Contains all personas and their Phase 6 config bundles for a server.
  */
-export type PersonaExportShape = {
+type PersonaExportShape = {
   personas: PersonaConfigBundle[];
 };
 
@@ -180,7 +178,7 @@ const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
 ]);
 
 /**
- * A main persona whose Discord guild avatar is out of date with its preset —
+ * A main persona whose Discord guild avatar is out of date with its preset:
  * the unit of work consumed by the background preset-avatar fan-out reconciler.
  */
 export type UnsyncedMainPointer = {
@@ -190,12 +188,10 @@ export type UnsyncedMainPointer = {
   preset_avatar_hash: string;
 };
 
-export class PersonaRepository implements IRepository<PersonaExportShape> {
+class PersonaRepository implements IRepository<PersonaExportShape> {
   private static readonly FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
     (process.env.FALLBACK_DEBUG_ENABLED ?? "").trim().toLowerCase(),
   );
-
-  // ── reads ──────────────────────────────────────────────────────────────────
 
   /**
    * Loads the full composite TomoriState for a server's main persona.
@@ -305,8 +301,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── writes ─────────────────────────────────────────────────────────────────
-
   /**
    * Updates arbitrary fields on a Tomori row.
    * Invalidates the server's tomori state cache after write.
@@ -328,8 +322,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
     return row;
   }
-
-  // ── persona operations ─────────────────────────────────────────────────────
 
   async replaceAttributes(personaId: number, attributes: string[], publicFlags?: boolean[]): Promise<boolean> {
     try {
@@ -1197,7 +1189,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Records that a server's main persona guild avatar is now in sync with its
-   * preset — call this immediately after a SUCCESSFUL guild-avatar PATCH at an
+   * preset; call this immediately after a SUCCESSFUL guild-avatar PATCH at an
    * apply site (`/config setup`, `/persona default`). It stamps
    * `applied_avatar_hash = preset_avatar_hash` so the background fan-out
    * reconciler skips this persona until the catalog art actually changes again
@@ -1234,7 +1226,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Loads every server whose active main persona is an unforked preset pointer
    * and whose last-applied avatar hash differs from its preset's current avatar
-   * hash — exactly the work set for the background preset-avatar fan-out
+   * hash: exactly the work set for the background preset-avatar fan-out
    * reconciler. Materialized personas (`is_pointer = false`) and presets without
    * a seeded avatar are excluded by the join/predicates.
    *
@@ -1287,7 +1279,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * Errors propagate so the caller can log and retry on the next boot.
    *
    * @param personaId        - Internal persona DB ID
-   * @param presetAvatarHash - The preset avatar hash to record as applied
    */
   async stampPointerAvatarHash(personaId: number, presetAvatarHash: string): Promise<void> {
     await sql`
@@ -1394,7 +1385,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Replace the persona's trigger_words list with the given remaining set.
-   * Upserts into `persona_configs` — if no row exists yet, one is created
+   * Upserts into `persona_configs`, so if no row exists yet, one is created
    * (matches addTrigger's behavior; the caller no longer needs a guarantor INSERT).
    *
    * @param personaId          - Internal persona DB ID
@@ -1458,8 +1449,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return false;
     }
   }
-
-  // ── limit checks ───────────────────────────────────────────────────────────
 
   /**
    * Check if a server has reached its trigger word limit.
@@ -1613,8 +1602,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Exports all personas and their Phase 6 config bundles for a server.
    *
@@ -1686,8 +1673,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── resolve internal server ID ──────────────────────────────────
-
   private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
       SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
@@ -1712,8 +1697,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return [];
     }
   }
-
-  // ── persona config table reads ──────────────────────────────────
 
   private async sqlLoadPersonaContextNoteConfigs(personaId: number): Promise<PersonaContextNoteConfigsRow | null> {
     try {
@@ -1767,8 +1750,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       return null;
     }
   }
-
-  // ── persona config table upserts (new tables) ───────────────────
 
   private async sqlUpsertPersonaContextNoteConfigs(row: PersonaContextNoteConfigsRow): Promise<void> {
     await sql`
@@ -1827,8 +1808,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         updated_at      = NOW()
       `;
   }
-
-  // ── private helpers: row normalization ────────────────────────────────────
 
   /**
    * Converts a Postgres bytea hex-string representation (e.g., "\\xDEADBEEF") to Buffer.
@@ -1902,8 +1881,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
     return row;
   }
-
-  // ── private SQL: config loading ───────────────────────────────────────────
 
   /**
    * Shared SELECT column list for all split-table config joins.
@@ -2137,8 +2114,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     return parsedConfig.data;
   }
 
-  // ── private SQL: preset pointer helpers ───────────────────────────────────
-
   async materializeIfPointer(personaId: number): Promise<boolean> {
     try {
       return await sql.transaction((tx) => this.materializeIfPointerWithClient(personaId, tx));
@@ -2209,7 +2184,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     await this.copyPresetSpritesWithClient(client, personaId, pointerLineageId, pointerLanguage);
     // Freeze the alter avatar by reference too: a pointer alter live-resolves the
     // shared preset avatar, so once it materializes it must keep that exact
-    // reference (still the immutable presets/ URL — no byte duplication, and the
+    // reference (still the immutable presets/ URL: no byte duplication, and the
     // delete guard still protects it). Mains deliver via the guild avatar, so
     // only fill this for alters that have no avatar of their own.
     if (preset.preset_avatar_shared_url) {
@@ -2318,7 +2293,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    *
    * An unforked pointer ALTER with no avatar of its own live-resolves the shared
    * preset avatar (`preset_avatar_shared_url`), so catalog avatar edits fan out
-   * to it on the next reseed — exactly like preset sprites/triggers/prompt. The
+   * to it on the next reseed; exactly like preset sprites/triggers/prompt. The
    * resolution happens once at load time, so every downstream avatar consumer
    * reads it from the cache with no hot-path query, and the existing pointer
    * cache invalidation refreshes it after a seed update. Main personas deliver
@@ -2419,8 +2394,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     `;
   }
 
-  // ── private SQL: persona reads ────────────────────────────────────────────
-
   private withPersonaSplitConfigFields(row: Record<string, unknown>): TomoriRow & PersonaScopedConfigFields {
     return {
       ...row,
@@ -2444,7 +2417,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async loadTomoriState(serverDiscId: string): Promise<TomoriState | null> {
     try {
-      // 1. Load main persona row using server Discord ID
       const tomoriRows = await sql`
         SELECT
           t.*,
@@ -2478,7 +2450,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       }
       const tomoriData = this.withPersonaSplitConfigFields(tomoriRows[0] as Record<string, unknown>);
 
-      // 2. Load associated config using server_id (server-scoped config)
+      // Load associated config using server_id (server-scoped config)
       // biome-ignore lint/style/noNonNullAssertion: Row existence checked above, ID is guaranteed by DB schema.
       const personaId = tomoriData.persona_id!;
       const serverId = tomoriData.server_id;
@@ -2497,7 +2469,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         return null;
       }
 
-      // 3. Load LLM data using the llm_id from the config (with cache fallback).
+      // Load LLM data using the llm_id from the config (with cache fallback).
       // BYOK-only servers may intentionally leave llm_id NULL until a personal provider is overlaid.
       let llmData: LlmRow;
       if (!configData.llm_id) {
@@ -2524,7 +2496,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 4. Load persona-scoped trigger words + optional persona prompt
       const personaConfigRows = await sql`
         SELECT *
         FROM persona_configs
@@ -2541,7 +2512,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 5. Load server memories scoped by persona lineage.
       const rawLineageId = tomoriData.persona_lineage_id;
       const parsedPersonaLineageId =
         typeof rawLineageId === "bigint"
@@ -2561,7 +2531,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // Extract memory content strings into an array
       const serverMemories = serverMemoriesRows.map((row: { content: string }) => row.content);
 
-      // 6. Load autochat runtime counters for this persona (default to 0 if row not yet created).
+      // Load autochat runtime counters for this persona (default to 0 if row not yet created).
       const autochRuntimeRows = await sql`
         SELECT autoch_counter, autoch_next_target
         FROM persona_autoch_runtime_state
@@ -2576,7 +2546,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             }
           : { autoch_counter: 0, autoch_next_target: 0 };
 
-      // 7. Load API key rotation pool for this server (if any)
+      // Load API key rotation pool for this server (if any)
       const rotationKeysRows = await sql`
         SELECT
           akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
@@ -2590,7 +2560,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
       `;
 
-      // Validate rotation keys
       const rotationKeys: ApiKeyRotationRow[] = [];
       for (const row of rotationKeysRows) {
         const parsed = apiKeyRotationSchema.safeParse(row);
@@ -2602,7 +2571,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 8. Load active NAI preset if one is configured for this server
       let naiPreset: NaiPresetRow | undefined;
       const presetName = configData.nai_preset_name;
       if (presetName) {
@@ -2621,7 +2589,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      // 9. Resolve fallback model chain — prefer fallback_model_refs (new), fall back to fallback_llm_ids (legacy)
+      // Resolve fallback model chain: prefer fallback_model_refs (new), fall back to fallback_llm_ids (legacy)
       const rawFallbackIds = configData.fallback_llm_ids;
       const fallbackLlmIds = configData.fallback_llm_ids;
       const fallbackLlms = fallbackLlmIds.length > 0 ? await llmModelRepo.getLlmsByIds(fallbackLlmIds) : [];
@@ -2631,7 +2599,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         );
       }
 
-      // 8b. Build typed fallback_chain from fallback_model_refs (supports both llm and custom_endpoint refs)
+      // Build typed fallback_chain from fallback_model_refs (supports both llm and custom_endpoint refs)
       const modelRefs = configData.fallback_model_refs ?? [];
       let fallbackChain: FallbackEntry[] | undefined;
       if (modelRefs.length > 0) {
@@ -2660,7 +2628,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         if (resolved.length > 0) fallbackChain = resolved;
       }
 
-      // 10. Load vision model if configured (for non-vision chat model image analysis delegation)
+      // Load vision model if configured (for non-vision chat model image analysis delegation)
       let visionLlm: LlmRow | undefined;
       if (configData.vision_llm_id) {
         visionLlm = getCachedLLM(configData.vision_llm_id) as LlmRow | undefined;
@@ -2700,7 +2668,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // stream buffer, context templates) sees the persona-scoped value unchanged.
       const humanizerOverride = personaConfig?.humanizer_degree ?? null;
 
-      // 11. Combine and validate the full state
+      // Combine and validate the full state
       const combinedState = {
         ...tomoriData,
         // Pointer alters live-resolve the shared preset avatar (see helper).
@@ -2740,11 +2708,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 
   private async loadAllPersonasForServer(serverDiscId: string): Promise<TomoriState[]> {
-    return (
-      (await withCachedPlanRetry(async () => {
-        try {
-          // 1. Load all Tomori persona rows for this server (main first, then alters)
-          const tomoriRows = await sql`
+    try {
+      return await withTransientDbRetry(async () => {
+        // Load all Tomori persona rows for this server (main first, then alters)
+        const tomoriRows = await sql`
             SELECT
               t.*,
               pcnc.context_note AS split_context_note,
@@ -2770,104 +2737,102 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
           `;
 
-          if (!tomoriRows.length) {
-            log.warn(`No personas found for server ${serverDiscId}`);
-            return [];
-          }
+        if (!tomoriRows.length) {
+          log.warn(`No personas found for server ${serverDiscId}`);
+          return [];
+        }
 
-          const typedTomoriRows: Array<TomoriRow & PersonaScopedConfigFields> = tomoriRows.map((row: unknown) =>
-            this.withPersonaSplitConfigFields(row as Record<string, unknown>),
-          );
-          const serverId = typedTomoriRows[0].server_id;
-          const pointerPresetsByPersonaId = await this.loadPointerPresetsForRows(typedTomoriRows);
+        const typedTomoriRows: Array<TomoriRow & PersonaScopedConfigFields> = tomoriRows.map((row: unknown) =>
+          this.withPersonaSplitConfigFields(row as Record<string, unknown>),
+        );
+        const serverId = typedTomoriRows[0].server_id;
+        const pointerPresetsByPersonaId = await this.loadPointerPresetsForRows(typedTomoriRows);
 
-          // 2. Load server-scoped config once (fallback to main persona config)
-          let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
+        // Load server-scoped config once (fallback to main persona config)
+        let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
 
-          if (!configData) {
-            const mainTomoriRow = typedTomoriRows.find((row) => row.is_alter === false) ?? typedTomoriRows[0];
-            const fallbackTomoriId = mainTomoriRow?.persona_id;
-            if (fallbackTomoriId) {
-              log.warn(
-                `No server-scoped config found for server ${serverDiscId}; falling back to persona_id ${fallbackTomoriId}`,
-              );
-              configData = await this.sqlLoadTomoriConfigByTomoriId(fallbackTomoriId);
-            }
-          }
-
-          if (!configData) {
-            log.error(`No config found for server ${serverDiscId}; cannot build persona states`);
-            return [];
-          }
-
-          // 3. Resolve server-scoped fallback chain once (shared across all personas for this server).
-          const rawFallbackIds = configData.fallback_llm_ids;
-          const fallbackLlmIds = configData.fallback_llm_ids;
-          const fallbackLlms = fallbackLlmIds.length > 0 ? await llmModelRepo.getLlmsByIds(fallbackLlmIds) : [];
-          if (PersonaRepository.FALLBACK_DEBUG_ENABLED) {
-            log.info(
-              `[FallbackDebug][loadAllPersonasForServer] server_disc_id=${serverDiscId} server_id=${serverId} raw_fallback_ids=${JSON.stringify(rawFallbackIds)} parsed_fallback_ids=[${fallbackLlmIds.join(", ")}] resolved_fallbacks=[${fallbackLlms.map((llm) => `${llm.llm_id}:${llm.llm_codename}`).join(", ")}]`,
+        if (!configData) {
+          const mainTomoriRow = typedTomoriRows.find((row) => row.is_alter === false) ?? typedTomoriRows[0];
+          const fallbackTomoriId = mainTomoriRow?.persona_id;
+          if (fallbackTomoriId) {
+            log.warn(
+              `No server-scoped config found for server ${serverDiscId}; falling back to persona_id ${fallbackTomoriId}`,
             );
+            configData = await this.sqlLoadTomoriConfigByTomoriId(fallbackTomoriId);
           }
+        }
 
-          // 3b. Build typed fallback_chain from fallback_model_refs
-          const modelRefs = configData.fallback_model_refs ?? [];
-          let fallbackChain: FallbackEntry[] | undefined;
-          if (modelRefs.length > 0) {
-            const llmRefIds = modelRefs
-              .filter((r: FallbackModelRef) => r.type === "llm")
-              .map((r: FallbackModelRef) => r.id);
-            const epRefIds = modelRefs
-              .filter((r: FallbackModelRef) => r.type === "custom_endpoint")
-              .map((r: FallbackModelRef) => r.id);
-            const [refLlms, refEndpoints] = await Promise.all([
-              llmRefIds.length > 0 ? llmModelRepo.getLlmsByIds(llmRefIds) : Promise.resolve([]),
-              epRefIds.length > 0 ? llmProviderRepo.loadCustomEndpointsByIds(epRefIds) : Promise.resolve([]),
-            ]);
-            const llmMap = new Map(refLlms.map((m) => [m.llm_id as number, m]));
-            const epMap = new Map(refEndpoints.map((e) => [e.custom_endpoint_id as number, e]));
-            const resolved = modelRefs
-              .map((ref: FallbackModelRef) => {
-                if (ref.type === "llm") {
-                  const model = llmMap.get(ref.id);
-                  return model ? ({ kind: "llm", model } as FallbackEntry) : null;
-                }
-                const endpoint = epMap.get(ref.id);
-                return endpoint ? ({ kind: "custom_endpoint", endpoint } as FallbackEntry) : null;
-              })
-              .filter((e): e is FallbackEntry => e !== null);
-            if (resolved.length > 0) fallbackChain = resolved;
-          }
+        if (!configData) {
+          log.error(`No config found for server ${serverDiscId}; cannot build persona states`);
+          return [];
+        }
 
-          // 4. Load LLM data once (with cache fallback). BYOK-only servers may intentionally
-          // omit the server text model until a member overlays a personal provider.
-          let llmData: LlmRow;
-          if (!configData.llm_id) {
-            llmData = getUnconfiguredLlm();
-          } else {
-            const cachedLlm = getCachedLLM(configData.llm_id);
-            if (!cachedLlm) {
-              log.info(`Cache miss for LLM ID ${configData.llm_id}, querying database`);
-              const llmRows = await sql`
+        // Resolve server-scoped fallback chain once (shared across all personas for this server).
+        const rawFallbackIds = configData.fallback_llm_ids;
+        const fallbackLlmIds = configData.fallback_llm_ids;
+        const fallbackLlms = fallbackLlmIds.length > 0 ? await llmModelRepo.getLlmsByIds(fallbackLlmIds) : [];
+        if (PersonaRepository.FALLBACK_DEBUG_ENABLED) {
+          log.info(
+            `[FallbackDebug][loadAllPersonasForServer] server_disc_id=${serverDiscId} server_id=${serverId} raw_fallback_ids=${JSON.stringify(rawFallbackIds)} parsed_fallback_ids=[${fallbackLlmIds.join(", ")}] resolved_fallbacks=[${fallbackLlms.map((llm) => `${llm.llm_id}:${llm.llm_codename}`).join(", ")}]`,
+          );
+        }
+
+        const modelRefs = configData.fallback_model_refs ?? [];
+        let fallbackChain: FallbackEntry[] | undefined;
+        if (modelRefs.length > 0) {
+          const llmRefIds = modelRefs
+            .filter((r: FallbackModelRef) => r.type === "llm")
+            .map((r: FallbackModelRef) => r.id);
+          const epRefIds = modelRefs
+            .filter((r: FallbackModelRef) => r.type === "custom_endpoint")
+            .map((r: FallbackModelRef) => r.id);
+          const [refLlms, refEndpoints] = await Promise.all([
+            llmRefIds.length > 0 ? llmModelRepo.getLlmsByIds(llmRefIds) : Promise.resolve([]),
+            epRefIds.length > 0 ? llmProviderRepo.loadCustomEndpointsByIds(epRefIds) : Promise.resolve([]),
+          ]);
+          const llmMap = new Map(refLlms.map((m) => [m.llm_id as number, m]));
+          const epMap = new Map(refEndpoints.map((e) => [e.custom_endpoint_id as number, e]));
+          const resolved = modelRefs
+            .map((ref: FallbackModelRef) => {
+              if (ref.type === "llm") {
+                const model = llmMap.get(ref.id);
+                return model ? ({ kind: "llm", model } as FallbackEntry) : null;
+              }
+              const endpoint = epMap.get(ref.id);
+              return endpoint ? ({ kind: "custom_endpoint", endpoint } as FallbackEntry) : null;
+            })
+            .filter((e): e is FallbackEntry => e !== null);
+          if (resolved.length > 0) fallbackChain = resolved;
+        }
+
+        // Load LLM data once (with cache fallback). BYOK-only servers may intentionally
+        // omit the server text model until a member overlays a personal provider.
+        let llmData: LlmRow;
+        if (!configData.llm_id) {
+          llmData = getUnconfiguredLlm();
+        } else {
+          const cachedLlm = getCachedLLM(configData.llm_id);
+          if (!cachedLlm) {
+            log.info(`Cache miss for LLM ID ${configData.llm_id}, querying database`);
+            const llmRows = await sql`
                 SELECT * FROM llms
                 WHERE llm_id = ${configData.llm_id}
                 LIMIT 1
               `;
 
-              if (!llmRows.length) {
-                log.error(
-                  `Found persona config but no LLM data for server ${serverDiscId}, llm_id: ${configData.llm_id}`,
-                );
-                return [];
-              }
-              llmData = llmRows[0] as LlmRow;
-            } else {
-              llmData = cachedLlm as LlmRow;
+            if (!llmRows.length) {
+              log.error(
+                `Found persona config but no LLM data for server ${serverDiscId}, llm_id: ${configData.llm_id}`,
+              );
+              return [];
             }
+            llmData = llmRows[0] as LlmRow;
+          } else {
+            llmData = cachedLlm as LlmRow;
           }
+        }
 
-          // 5. Load rotation keys once (server-scoped)
-          const rotationKeysRows = await sql`
+        const rotationKeysRows = await sql`
             SELECT
               akr.rotation_key_id, akr.server_id, akr.provider, akr.api_key, akr.key_version,
               akr.is_main_key_pointer, akr.is_enabled, akr.created_at, akr.updated_at,
@@ -2880,254 +2845,253 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
             ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
           `;
 
-          const rotationKeys: ApiKeyRotationRow[] = [];
-          for (const row of rotationKeysRows) {
-            const parsed = apiKeyRotationSchema.safeParse(row);
-            if (parsed.success) {
-              rotationKeys.push(parsed.data);
-            } else {
-              const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
-              log.warn(`Invalid rotation key row for server ${serverDiscId}:\n${errorDetails}`);
-            }
+        const rotationKeys: ApiKeyRotationRow[] = [];
+        for (const row of rotationKeysRows) {
+          const parsed = apiKeyRotationSchema.safeParse(row);
+          if (parsed.success) {
+            rotationKeys.push(parsed.data);
+          } else {
+            const errorDetails = JSON.stringify(parsed.error.flatten(), null, 2);
+            log.warn(`Invalid rotation key row for server ${serverDiscId}:\n${errorDetails}`);
           }
+        }
 
-          // 6. Load persona configs for all personas in this server
-          const personaConfigRows = await sql`
+        const personaConfigRows = await sql`
             SELECT pc.*
             FROM persona_configs pc
             JOIN personas t ON t.persona_id = pc.persona_id
             WHERE t.server_id = ${serverId}
           `;
-          const personaConfigMap = new Map<number, PersonaConfigRow>();
-          for (const row of personaConfigRows) {
-            const parsed = personaConfigSchema.safeParse(row);
-            if (parsed.success) {
-              personaConfigMap.set(parsed.data.persona_id, parsed.data);
-            } else {
-              log.warn(`Invalid persona config row for server ${serverDiscId}:`, parsed.error.flatten());
-            }
+        const personaConfigMap = new Map<number, PersonaConfigRow>();
+        for (const row of personaConfigRows) {
+          const parsed = personaConfigSchema.safeParse(row);
+          if (parsed.success) {
+            personaConfigMap.set(parsed.data.persona_id, parsed.data);
+          } else {
+            log.warn(`Invalid persona config row for server ${serverDiscId}:`, parsed.error.flatten());
           }
+        }
 
-          // 7. Load server memories once, grouped by persona_lineage_id
-          const memoryRows = await sql<
-            Array<{
-              persona_lineage_id: number | string | bigint | null;
-              content: string;
-            }>
-          >`
+        const memoryRows = await sql<
+          Array<{
+            persona_lineage_id: number | string | bigint | null;
+            content: string;
+          }>
+        >`
             SELECT persona_lineage_id, content
             FROM server_memories
             WHERE server_id = ${serverId}
             ORDER BY created_at DESC
           `;
-          const memoriesByLineage = new Map<number, string[]>();
-          for (const row of memoryRows) {
-            const lineageId =
-              typeof row.persona_lineage_id === "bigint"
+        const memoriesByLineage = new Map<number, string[]>();
+        for (const row of memoryRows) {
+          const lineageId =
+            typeof row.persona_lineage_id === "bigint"
+              ? Number(row.persona_lineage_id)
+              : typeof row.persona_lineage_id === "string"
                 ? Number(row.persona_lineage_id)
-                : typeof row.persona_lineage_id === "string"
-                  ? Number(row.persona_lineage_id)
-                  : row.persona_lineage_id;
-            if (typeof lineageId !== "number" || !Number.isFinite(lineageId) || lineageId < 0) {
-              log.warn(`Skipping server memory with invalid persona_lineage_id for server ${serverDiscId}`);
-              continue;
-            }
-            const existing = memoriesByLineage.get(lineageId) ?? [];
-            existing.push(row.content);
-            memoriesByLineage.set(lineageId, existing);
+                : row.persona_lineage_id;
+          if (typeof lineageId !== "number" || !Number.isFinite(lineageId) || lineageId < 0) {
+            log.warn(`Skipping server memory with invalid persona_lineage_id for server ${serverDiscId}`);
+            continue;
           }
+          const existing = memoriesByLineage.get(lineageId) ?? [];
+          existing.push(row.content);
+          memoriesByLineage.set(lineageId, existing);
+        }
 
-          // 8. Batch-load autochat runtime counters for all personas in this server.
-          const personaIds: number[] = typedTomoriRows
-            .map((r: TomoriRow & PersonaScopedConfigFields) => r.persona_id)
-            .filter((id): id is number => typeof id === "number");
-          const personaAttributeRows =
-            personaIds.length > 0
-              ? await sql`
+        // Batch-load autochat runtime counters for all personas in this server.
+        const personaIds: number[] = typedTomoriRows
+          .map((r: TomoriRow & PersonaScopedConfigFields) => r.persona_id)
+          .filter((id): id is number => typeof id === "number");
+        const personaAttributeRows =
+          personaIds.length > 0
+            ? await sql`
                 SELECT attribute_id, persona_id, attribute_order, attribute_text, is_public, created_at, updated_at
                 FROM persona_attributes
                 WHERE persona_id = ANY(${sql.array(personaIds, "int4")})
                 ORDER BY persona_id, attribute_order
               `
-              : [];
-          const attributesByPersonaId = new Map<number, PersonaAttributeRow[]>();
-          for (const row of personaAttributeRows) {
-            const personaId = row.persona_id as number;
-            const parsedAttribute: PersonaAttributeRow = {
-              attribute_id: row.attribute_id as number,
-              persona_id: personaId,
-              attribute_order: row.attribute_order as number,
-              attribute_text: row.attribute_text as string,
-              is_public: (row.is_public as boolean) ?? false,
-              created_at: row.created_at as Date | undefined,
-              updated_at: row.updated_at as Date | undefined,
-            };
-            const existing = attributesByPersonaId.get(personaId) ?? [];
-            existing.push(parsedAttribute);
-            attributesByPersonaId.set(personaId, existing);
-          }
+            : [];
+        const attributesByPersonaId = new Map<number, PersonaAttributeRow[]>();
+        for (const row of personaAttributeRows) {
+          const personaId = row.persona_id as number;
+          const parsedAttribute: PersonaAttributeRow = {
+            attribute_id: row.attribute_id as number,
+            persona_id: personaId,
+            attribute_order: row.attribute_order as number,
+            attribute_text: row.attribute_text as string,
+            is_public: (row.is_public as boolean) ?? false,
+            created_at: row.created_at as Date | undefined,
+            updated_at: row.updated_at as Date | undefined,
+          };
+          const existing = attributesByPersonaId.get(personaId) ?? [];
+          existing.push(parsedAttribute);
+          attributesByPersonaId.set(personaId, existing);
+        }
 
-          const autochRuntimeRows =
-            personaIds.length > 0
-              ? await sql`
+        const autochRuntimeRows =
+          personaIds.length > 0
+            ? await sql`
                 SELECT persona_id, autoch_counter, autoch_next_target
                 FROM persona_autoch_runtime_state
                 WHERE persona_id = ANY(${sql.array(personaIds, "int4")})
               `
-              : [];
-          const autochRuntimeByPersonaId = new Map<
-            number,
-            Pick<PersonaAutochRuntimeStateRow, "autoch_counter" | "autoch_next_target">
-          >();
-          for (const row of autochRuntimeRows) {
-            autochRuntimeByPersonaId.set(row.persona_id as number, {
-              autoch_counter: (row.autoch_counter as number) ?? 0,
-              autoch_next_target: (row.autoch_next_target as number) ?? 0,
-            });
-          }
+            : [];
+        const autochRuntimeByPersonaId = new Map<
+          number,
+          Pick<PersonaAutochRuntimeStateRow, "autoch_counter" | "autoch_next_target">
+        >();
+        for (const row of autochRuntimeRows) {
+          autochRuntimeByPersonaId.set(row.persona_id as number, {
+            autoch_counter: (row.autoch_counter as number) ?? 0,
+            autoch_next_target: (row.autoch_next_target as number) ?? 0,
+          });
+        }
 
-          // 9. Load vision model if configured (server-scoped, loaded once for all personas)
-          let visionLlm: LlmRow | undefined;
-          if (configData.vision_llm_id) {
-            visionLlm = getCachedLLM(configData.vision_llm_id) as LlmRow | undefined;
-            if (!visionLlm) {
-              const visionLlmRows = await sql`
+        // Load vision model if configured (server-scoped, loaded once for all personas)
+        let visionLlm: LlmRow | undefined;
+        if (configData.vision_llm_id) {
+          visionLlm = getCachedLLM(configData.vision_llm_id) as LlmRow | undefined;
+          if (!visionLlm) {
+            const visionLlmRows = await sql`
                 SELECT * FROM llms WHERE llm_id = ${configData.vision_llm_id} LIMIT 1
               `;
-              if (visionLlmRows.length) {
-                visionLlm = visionLlmRows[0] as LlmRow;
-              }
+            if (visionLlmRows.length) {
+              visionLlm = visionLlmRows[0] as LlmRow;
             }
           }
+        }
 
-          // 10. Build persona states
-          const personas: TomoriState[] = [];
-          for (const tomoriRow of typedTomoriRows) {
-            const personaId = tomoriRow.persona_id;
-            if (!personaId) {
-              log.warn(`Skipping persona with missing persona_id for server ${serverDiscId}`);
-              continue;
-            }
+        const personas: TomoriState[] = [];
+        for (const tomoriRow of typedTomoriRows) {
+          const personaId = tomoriRow.persona_id;
+          if (!personaId) {
+            log.warn(`Skipping persona with missing persona_id for server ${serverDiscId}`);
+            continue;
+          }
 
-            const personaConfig = personaConfigMap.get(personaId);
+          const personaConfig = personaConfigMap.get(personaId);
 
-            // Resolve persona-specific LLM override if set (cache first, DB fallback)
-            let personaLlm: LlmRow | undefined;
-            if (personaConfig?.llm_id) {
-              personaLlm = getCachedLLM(personaConfig.llm_id) as LlmRow | undefined;
-              if (!personaLlm) {
-                const personaLlmRows = await sql`
+          // Resolve persona-specific LLM override if set (cache first, DB fallback)
+          let personaLlm: LlmRow | undefined;
+          if (personaConfig?.llm_id) {
+            personaLlm = getCachedLLM(personaConfig.llm_id) as LlmRow | undefined;
+            if (!personaLlm) {
+              const personaLlmRows = await sql`
                   SELECT * FROM llms WHERE llm_id = ${personaConfig.llm_id} LIMIT 1
                 `;
-                if (personaLlmRows.length) {
-                  personaLlm = personaLlmRows[0] as LlmRow;
-                }
+              if (personaLlmRows.length) {
+                personaLlm = personaLlmRows[0] as LlmRow;
               }
             }
+          }
 
-            const rawPersonaLineageId = tomoriRow.persona_lineage_id;
-            const parsedPersonaLineageId =
-              typeof rawPersonaLineageId === "bigint"
+          const rawPersonaLineageId = tomoriRow.persona_lineage_id;
+          const parsedPersonaLineageId =
+            typeof rawPersonaLineageId === "bigint"
+              ? Number(rawPersonaLineageId)
+              : typeof rawPersonaLineageId === "string"
                 ? Number(rawPersonaLineageId)
-                : typeof rawPersonaLineageId === "string"
-                  ? Number(rawPersonaLineageId)
-                  : (rawPersonaLineageId ?? 0);
-            const personaLineageId = Number.isFinite(parsedPersonaLineageId) ? parsedPersonaLineageId : 0;
-            // Personas sharing lineage intentionally share server memories.
-            const serverMemories = memoriesByLineage.get(personaLineageId) ?? [];
+                : (rawPersonaLineageId ?? 0);
+          const personaLineageId = Number.isFinite(parsedPersonaLineageId) ? parsedPersonaLineageId : 0;
+          // Personas sharing lineage intentionally share server memories.
+          const serverMemories = memoriesByLineage.get(personaLineageId) ?? [];
 
-            const autochRuntime = autochRuntimeByPersonaId.get(personaId) ?? {
-              autoch_counter: 0,
-              autoch_next_target: 0,
-            };
-            const pointerPreset = pointerPresetsByPersonaId.get(personaId);
-            const personaAttributes = pointerPreset
-              ? this.buildPresetAttributeRows(personaId, pointerPreset)
-              : (attributesByPersonaId.get(personaId) ?? []);
-            const attributeList = pointerPreset
-              ? pointerPreset.preset_attribute_list
-              : personaAttributes.length > 0
-                ? personaAttributes.map((attribute) => attribute.attribute_text)
-                : ((tomoriRow.attribute_list as string[] | undefined) ?? []);
-            const sampleDialoguesIn = pointerPreset
-              ? pointerPreset.preset_sample_dialogues_in
-              : ((tomoriRow.sample_dialogues_in as string[] | undefined) ?? []);
-            const sampleDialoguesOut = pointerPreset
-              ? pointerPreset.preset_sample_dialogues_out
-              : ((tomoriRow.sample_dialogues_out as string[] | undefined) ?? []);
-            // A live pointer resolves trigger_words from its preset (mirrors
-            // persona_prompt below), so preset edits propagate until the first
-            // content edit forks the persona. Once forked, `pointerPreset` is
-            // undefined and the persona's own persona_configs triggers are used.
-            const triggerWords = pointerPreset
-              ? resolvePresetTriggerWords(pointerPreset)
-              : (personaConfig?.trigger_words ?? []);
-            const personaPrompt = pointerPreset
-              ? resolvePresetPersonaPrompt(pointerPreset)
-              : (personaConfig?.persona_prompt ?? null);
+          const autochRuntime = autochRuntimeByPersonaId.get(personaId) ?? {
+            autoch_counter: 0,
+            autoch_next_target: 0,
+          };
+          const pointerPreset = pointerPresetsByPersonaId.get(personaId);
+          const personaAttributes = pointerPreset
+            ? this.buildPresetAttributeRows(personaId, pointerPreset)
+            : (attributesByPersonaId.get(personaId) ?? []);
+          const attributeList = pointerPreset
+            ? pointerPreset.preset_attribute_list
+            : personaAttributes.length > 0
+              ? personaAttributes.map((attribute) => attribute.attribute_text)
+              : ((tomoriRow.attribute_list as string[] | undefined) ?? []);
+          const sampleDialoguesIn = pointerPreset
+            ? pointerPreset.preset_sample_dialogues_in
+            : ((tomoriRow.sample_dialogues_in as string[] | undefined) ?? []);
+          const sampleDialoguesOut = pointerPreset
+            ? pointerPreset.preset_sample_dialogues_out
+            : ((tomoriRow.sample_dialogues_out as string[] | undefined) ?? []);
+          // A live pointer resolves trigger_words from its preset (mirrors
+          // persona_prompt below), so preset edits propagate until the first
+          // content edit forks the persona. Once forked, `pointerPreset` is
+          // undefined and the persona's own persona_configs triggers are used.
+          const triggerWords = pointerPreset
+            ? resolvePresetTriggerWords(pointerPreset)
+            : (personaConfig?.trigger_words ?? []);
+          const personaPrompt = pointerPreset
+            ? resolvePresetPersonaPrompt(pointerPreset)
+            : (personaConfig?.persona_prompt ?? null);
 
-            // Per-persona humanizer override: overlay onto a copy of the shared server
-            // config so only this persona's state sees the overridden degree. Each
-            // state is Zod-parsed below, so the shared configData base stays untouched.
-            const humanizerOverride = personaConfig?.humanizer_degree ?? null;
+          // Per-persona humanizer override: overlay onto a copy of the shared server
+          // config so only this persona's state sees the overridden degree. Each
+          // state is Zod-parsed below, so the shared configData base stays untouched.
+          const humanizerOverride = personaConfig?.humanizer_degree ?? null;
 
-            const combinedState = {
-              ...tomoriRow,
-              // Pointer alters live-resolve the shared preset avatar (see helper).
-              webhook_avatar_url: this.resolvePointerAlterAvatarUrl(tomoriRow, pointerPreset),
-              attribute_list: attributeList,
-              sample_dialogues_in: sampleDialoguesIn,
-              sample_dialogues_out: sampleDialoguesOut,
-              persona_attributes: personaAttributes,
-              config: humanizerOverride !== null ? { ...configData, humanizer_degree: humanizerOverride } : configData,
-              llm: llmData,
-              trigger_words: triggerWords,
-              persona_prompt: personaPrompt,
-              reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
-              punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
-              humanizer_degree_override: humanizerOverride,
-              server_memories: serverMemories,
-              rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
-              ...autochRuntime,
-              vision_llm: visionLlm,
-              fallback_llms: fallbackLlms.length > 0 ? fallbackLlms : undefined,
-              fallback_chain: fallbackChain,
-              persona_llm: personaLlm,
-            };
+          const combinedState = {
+            ...tomoriRow,
+            // Pointer alters live-resolve the shared preset avatar (see helper).
+            webhook_avatar_url: this.resolvePointerAlterAvatarUrl(tomoriRow, pointerPreset),
+            attribute_list: attributeList,
+            sample_dialogues_in: sampleDialoguesIn,
+            sample_dialogues_out: sampleDialoguesOut,
+            persona_attributes: personaAttributes,
+            config: humanizerOverride !== null ? { ...configData, humanizer_degree: humanizerOverride } : configData,
+            llm: llmData,
+            trigger_words: triggerWords,
+            persona_prompt: personaPrompt,
+            reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
+            punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
+            humanizer_degree_override: humanizerOverride,
+            server_memories: serverMemories,
+            rotation_keys: rotationKeys.length > 0 ? rotationKeys : undefined,
+            ...autochRuntime,
+            vision_llm: visionLlm,
+            fallback_llms: fallbackLlms.length > 0 ? fallbackLlms : undefined,
+            fallback_chain: fallbackChain,
+            persona_llm: personaLlm,
+          };
 
-            const parsedState = tomoriStateSchema.safeParse(combinedState);
-            if (!parsedState.success) {
-              log.error(
-                `Failed to validate persona state for server ${serverDiscId}, persona_id ${personaId}:`,
-                parsedState.error.flatten(),
-              );
-              continue;
-            }
-
-            personas.push(parsedState.data);
+          const parsedState = tomoriStateSchema.safeParse(combinedState);
+          if (!parsedState.success) {
+            log.error(
+              `Failed to validate persona state for server ${serverDiscId}, persona_id ${personaId}:`,
+              parsedState.error.flatten(),
+            );
+            continue;
           }
 
-          if (personas.length === 0) {
-            log.warn(`No valid personas found for server ${serverDiscId}`);
-            return [];
-          }
-
-          // Collapse shared trigger words to a single owner before returning, so a
-          // word every preset bundles (e.g. "tomori") routes to one persona instead
-          // of firing every alter at once. See applyTriggerWordOwnership.
-          this.applyTriggerWordOwnership(personas);
-
-          return personas;
-        } catch (error) {
-          log.error(`Error loading all personas for server ${serverDiscId}:`, error);
-          // Throw a typed error so the cache layer can distinguish
-          // "DB unreachable" from "server genuinely has no data" (which returns [])
-          throw new DatabaseUnavailableError(
-            `Failed to load personas for server ${serverDiscId}: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          personas.push(parsedState.data);
         }
-      }, `load all personas for server ${serverDiscId}`)) ?? []
-    );
+
+        if (personas.length === 0) {
+          log.warn(`No valid personas found for server ${serverDiscId}`);
+          return [];
+        }
+
+        // Collapse shared trigger words to a single owner before returning, so a
+        // word every preset bundles (e.g. "tomori") routes to one persona instead
+        // of firing every alter at once. See applyTriggerWordOwnership.
+        this.applyTriggerWordOwnership(personas);
+
+        return personas;
+      }, `load all personas for server ${serverDiscId}`);
+    } catch (error) {
+      log.error(`Error loading all personas for server ${serverDiscId}:`, error);
+      // Wrapping happens outside withTransientDbRetry: the helper matches on the driver's
+      // error code, which a DatabaseUnavailableError would hide, so wrapping any earlier
+      // silently disables the retry.
+      // Throw a typed error so the cache layer can distinguish
+      // "DB unreachable" from "server genuinely has no data" (which returns [])
+      throw new DatabaseUnavailableError(
+        `Failed to load personas for server ${serverDiscId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**
@@ -3139,10 +3103,10 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * same word would route to the main persona AND every alter at once. Here we
    * award each trigger to exactly one persona by priority:
    *
-   *   1. Main persona(s) (`is_alter = false`) — they additionally reserve the
+   *   1. Main persona(s) (`is_alter = false`): they additionally reserve the
    *      configured base trigger words even if their stored list omits them, so
    *      an alter can never steal the bot's own name regardless of server locale.
-   *   2. Alters in creation order (ascending `persona_id`) — first created wins a
+   *   2. Alters in creation order (ascending `persona_id`): first created wins a
    *      contested word; later personas drop it.
    *
    * Each persona keeps only the triggers no higher-priority persona already owns;
@@ -3153,7 +3117,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
    * @param personas - Assembled persona states for one server.
    */
   private applyTriggerWordOwnership(personas: TomoriState[]): void {
-    // 1. Seed the claimed set with base trigger words for both shipped locales so
+    // Seed the claimed set with base trigger words for both shipped locales so
     //    the main persona implicitly owns the bot's name in any language.
     const claimedTriggerKeys = new Set<string>();
     for (const baseWord of [...getBaseTriggerWords("en-US"), ...getBaseTriggerWords("ja")]) {
@@ -3163,7 +3127,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       }
     }
 
-    // 2. Visit personas in ownership priority: main first, then alters oldest-first.
+    // Visit personas in ownership priority: main first, then alters oldest-first.
     const personasByOwnershipPriority = [...personas].sort((a, b) => {
       if (a.is_alter !== b.is_alter) {
         return a.is_alter ? 1 : -1;
@@ -3172,7 +3136,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     });
 
     for (const persona of personasByOwnershipPriority) {
-      // 2a. Alters drop any trigger a higher-priority persona already owns; the
+      // Alters drop any trigger a higher-priority persona already owns; the
       //     main persona keeps its full list unchanged.
       if (persona.is_alter) {
         persona.trigger_words = selectUnclaimedTriggerWords(persona.trigger_words ?? [], claimedTriggerKeys, {
@@ -3180,7 +3144,7 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         });
       }
 
-      // 2b. Claim whatever this persona kept so later personas can't reuse it.
+      // Claim whatever this persona kept so later personas can't reuse it.
       for (const trigger of persona.trigger_words ?? []) {
         const normalizedTrigger = normalizeTriggerWord(trigger);
         if (normalizedTrigger.length > 0) {
@@ -3216,15 +3180,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  // ── private SQL: tomori writes ────────────────────────────────────────────
-
   private async updateTomori(personaId: number, tomoriData: Partial<TomoriRow>): Promise<TomoriRow | null> {
     try {
       // Validate the partial data with Zod (Rule #7)
       const validTomoriData = tomoriSchema.partial().parse(tomoriData);
 
       // Extract field names and values for the SQL query.
-      // Filter to only keys present in the original input — Zod injects defaults
+      // Filter to only keys present in the original input, because Zod injects defaults
       // for all schema fields with .default(), which would incorrectly expand the
       // SET clause (e.g. attribute_list: [] would overwrite existing data).
       const fields = Object.keys(validTomoriData).filter((key) => key !== "persona_id" && key in tomoriData);
@@ -3237,11 +3199,11 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
       // Security validation: Ensure all field names are whitelisted to prevent SQL injection
       validateTomoriFields(fields);
 
-      // 1. Prepare arrays for placeholders and values
+      // Prepare arrays for placeholders and values
       const setParts: string[] = [];
       const values: SqlParameterArray = [];
 
-      // 2. Iterate through fields to build SET clause parts and collect values.
+      // Iterate through fields to build SET clause parts and collect values.
       // sql.unsafe() cannot infer PostgreSQL column types, so JavaScript arrays
       // must be manually serialized to PostgreSQL array literals (e.g. {"a","b"}).
       fields.forEach((field, index) => {
@@ -3256,14 +3218,13 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       });
 
-      // 3. Join the SET parts
+      // Join the SET parts
       const setClause = setParts.join(", ");
 
-      // 4. Add the personaId as the last parameter for the WHERE clause
       const finalPlaceholderIndex = values.length + 1;
       values.push(personaId);
 
-      // 5. Execute the UPDATE using sql.unsafe() with the values array (not spread —
+      // Execute the UPDATE using sql.unsafe() with the values array (not spread, because
       // Bun SQL expects a single array argument, not individual arguments).
       const result = await sql.unsafe(
         `
@@ -3288,7 +3249,6 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
         return null;
       }
 
-      // Validate the returned data for type safety
       const updatedTomori = tomoriSchema.safeParse(result[0]);
       if (!updatedTomori.success) {
         const context: ErrorContext = {
@@ -3318,5 +3278,5 @@ export class PersonaRepository implements IRepository<PersonaExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const personaRepository = new PersonaRepository();

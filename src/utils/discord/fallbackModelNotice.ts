@@ -4,6 +4,8 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed, truncateForEmbedDescription } from "@/utils/discord/embedHelper";
 import { isNoticeEmbedVisible, routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
+import { resolveManagedChannelWebhook } from "@/utils/discord/webhook/webhookCore";
+import { getChannelDeliveredWebhookIdentity } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -104,7 +106,7 @@ export async function sendFallbackModelUsageNotice({
     const buttonRow = createFallbackDetailsButton(context.locale);
     const disabledButtonRow = createFallbackDetailsButton(context.locale, true);
 
-    // Resolve thread ID — webhooks targeting a parent channel need it to post into a thread.
+    // Resolve thread ID: webhooks targeting a parent channel need it to post into a thread.
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
@@ -112,17 +114,29 @@ export async function sendFallbackModelUsageNotice({
 
     let noticeMessage: Message;
 
-    if (context.webhook && context.personaUsername) {
-      // Send through the persona/user-impersonation webhook so the button appears
-      // as belonging to the same identity that delivered the AI response.
+    // Post as whoever actually delivered the last message so the button groups with it rather
+    // than splitting off under a different author. The recorded username is reused verbatim:
+    // it may be the decorated `Persona (sprite)` form chosen by the group-break alternation,
+    // and rebuilding the persona's default identity here would produce a different name and
+    // cause the split. A null identity means the last delivery was an ordinary bot message, so
+    // the notice goes out as the bot too.
+    // The main persona has no pre-resolved `context.webhook` (it normally replies as the bot),
+    // so when a sprite put it on the webhook path the webhook is resolved lazily here: the
+    // lookup is cached, so this costs nothing on the common path.
+    const deliveredIdentity = getChannelDeliveredWebhookIdentity(context.channel.id);
+    const noticeWebhook = deliveredIdentity
+      ? (context.webhook ?? (await resolveManagedChannelWebhook(context.channel)))
+      : undefined;
+
+    if (deliveredIdentity && noticeWebhook) {
       noticeMessage = await sendWebhookMessageWithIdentity(
-        context.webhook,
+        noticeWebhook,
         {
           components: [buttonRow],
           ...(threadId ? { threadId } : {}),
         },
-        { username: context.personaUsername, avatarUrl: context.personaAvatarUrl },
-        threadId ?? context.webhook.channelId ?? context.webhook.id,
+        deliveredIdentity,
+        threadId ?? noticeWebhook.channelId ?? noticeWebhook.id,
       );
     } else {
       noticeMessage = await context.channel.send({ components: [buttonRow] });

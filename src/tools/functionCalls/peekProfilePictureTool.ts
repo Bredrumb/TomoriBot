@@ -6,6 +6,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import type { Part } from "@google/genai";
+import { escapeMarkdown } from "discord.js";
 import { log } from "../../utils/misc/logger";
 import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
@@ -82,7 +83,6 @@ export class PeekProfilePictureTool extends BaseTool {
   /**
    * Check if profile picture tool is available for the given provider.
    * Availability is provider-agnostic; model vision support is handled by `isAvailableForContext()`.
-   * @param _provider - LLM provider name
    * @returns True (availability gated by isAvailableForContext)
    */
   isAvailableFor(_provider: string): boolean {
@@ -91,8 +91,6 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Enhanced availability check that considers context flags and model vision capabilities
-   * @param provider - LLM provider name
-   * @param context - Tool context that may contain disable flags and tomoriState
    * @returns True if tool should be available
    */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
@@ -101,13 +99,11 @@ export class PeekProfilePictureTool extends BaseTool {
       return false;
     }
 
-    // Require context with tomoriState
     if (!context?.tomoriState) {
       log.warn("PeekProfilePictureTool: No tomoriState in context, defaulting to unavailable");
       return false;
     }
 
-    // Check if model has vision capabilities OR a dedicated vision model is configured.
     // A non-vision primary model with a vision_llm set will redirect analysis to
     // the vision model instead of using an enhanced context restart.
     const hasVision = context.tomoriState.llm.sees_images;
@@ -120,7 +116,6 @@ export class PeekProfilePictureTool extends BaseTool {
       return false;
     }
 
-    // Check for profile picture processing disable flag in context
     if (context?.streamContext?.disableProfilePictureProcessing) {
       log.info("PeekProfilePictureTool: Temporarily disabled during enhanced context restart");
       return false;
@@ -132,11 +127,9 @@ export class PeekProfilePictureTool extends BaseTool {
   /**
    * Execute profile picture processing
    * @param args - Arguments containing target_identity and optional reason
-   * @param context - Tool execution context
    * @returns Promise resolving to tool result with processed image data
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Check if profile picture processing is temporarily disabled during enhanced context restart
     if (context.streamContext?.disableProfilePictureProcessing) {
       log.info(
         "PeekProfilePictureTool: Execution blocked - Profile picture processing temporarily disabled during enhanced context restart",
@@ -152,7 +145,6 @@ export class PeekProfilePictureTool extends BaseTool {
       };
     }
 
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -203,7 +195,6 @@ export class PeekProfilePictureTool extends BaseTool {
 
       log.success(`Profile picture fetched for ${targetIdentity} (Username: ${avatarData.username})`);
 
-      // Build display text with optional server nickname
       let userDisplayText = avatarData.username;
       if (avatarData.serverNickname) {
         userDisplayText += ` (Nickname: ${avatarData.serverNickname})`;
@@ -215,18 +206,6 @@ export class PeekProfilePictureTool extends BaseTool {
       // vision model is configured, call the vision model directly with the avatar image
       // and return a text description. The primary model then responds to that description.
       if (!context.tomoriState.llm.sees_images && context.tomoriState.vision_llm) {
-        await sendToolProgressNotice(
-          context,
-          "image_analysis",
-          {
-            titleKey: "tools.vision.analyzing_title",
-            descriptionKey: "tools.vision.analyzing_description",
-            footerKey: "tools.vision.analyzing_footer",
-            color: ColorCode.INFO,
-          },
-          "PeekProfilePictureTool",
-        );
-
         return await this.redirectToVisionModel(preparedImages, targetTypeLabel, userDisplayText, reason, context);
       }
 
@@ -247,8 +226,6 @@ export class PeekProfilePictureTool extends BaseTool {
           ? `[System: This message contains profile picture and profile banner content from a previous avatar analysis request you made for ${targetTypeLabel}: ${userDisplayText}]`
           : `[System: This message contains profile picture content from a previous avatar analysis request you made for ${targetTypeLabel}: ${userDisplayText}]`;
 
-      // Create artificial user message containing the profile picture Part
-      // This will be added to the context for the restart
       // Special marker 'enhancedContext: true' indicates this should be processed by provider
       const imageContextItem: StructuredContextItem = {
         role: "user",
@@ -279,7 +256,6 @@ export class PeekProfilePictureTool extends BaseTool {
         ],
       };
 
-      // Return completely clean response following BraveSearchHandler pattern
       // Store image data externally and return clean text only
       // This prevents rate limit issues while still triggering enhanced context restart
 
@@ -310,7 +286,6 @@ export class PeekProfilePictureTool extends BaseTool {
     } catch (error) {
       log.error(`Profile picture processing failed for identity: ${targetIdentity}`, error as Error);
 
-      // Categorize errors for better user experience
       let errorMessage = "Failed to process the user's profile picture.";
       let errorStatus = "profile_processing_failed";
 
@@ -355,11 +330,7 @@ export class PeekProfilePictureTool extends BaseTool {
    * Used when the primary chat model cannot see images but a vision_llm is configured.
    * Calls the vision model's API directly with the resolved profile images and returns a text description.
    * @param images - Base64-encoded profile image inputs
-   * @param targetTypeLabel - "user", "webhook", or "persona"
    * @param userDisplayText - Display name (with optional nickname)
-   * @param reason - Original reason for the request
-   * @param context - Tool execution context
-   * @returns Promise resolving to a text-description ToolResult
    */
   private async redirectToVisionModel(
     images: PreparedProfileImage[],
@@ -385,9 +356,24 @@ export class PeekProfilePictureTool extends BaseTool {
       };
     }
 
+    await sendToolProgressNotice(
+      context,
+      "image_analysis",
+      {
+        titleKey: "tools.vision.analyzing_title",
+        descriptionKey: "tools.vision.analyzing_description",
+        descriptionVars: {
+          model: escapeMarkdown(visionLlm.llm_codename),
+        },
+        footerKey: "tools.vision.analyzing_footer",
+        color: ColorCode.INFO,
+      },
+      "PeekProfilePictureTool",
+    );
+
     const apiKey = creds.apiKey;
 
-    // 2. Resolve API model name and provider from the vision LLM row
+    // Resolve API model name and provider from the vision LLM row
     const provider = visionLlm.llm_provider.toLowerCase();
     const apiModelName =
       provider === "zai" || provider === "zaicoding"
@@ -401,7 +387,7 @@ export class PeekProfilePictureTool extends BaseTool {
       `PeekProfilePictureTool: Redirecting avatar analysis to vision model ${provider}/${apiModelName} (primary model is non-vision)`,
     );
 
-    // 3. Route to the appropriate API based on provider family
+    // Route to the appropriate API based on provider family
     let analysisResult: string;
 
     if (provider === "google") {
@@ -434,7 +420,6 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Resolve the chat completions endpoint URL for a given provider.
-   * @param provider - Lowercase provider name
    * @param context - Tool context (for custom endpoint URL)
    * @returns Chat completions URL
    */
@@ -452,11 +437,8 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Call the Google GenAI vision API with one or more profile images.
-   * @param apiKey - Decrypted Google API key
    * @param model - Model name (e.g., "gemini-2.0-flash")
    * @param images - Base64-encoded profile image inputs
-   * @param prompt - Analysis prompt
-   * @returns Text description from the vision model
    */
   private async callGoogleVisionWithBase64(
     apiKey: string,
@@ -493,12 +475,8 @@ export class PeekProfilePictureTool extends BaseTool {
 
   /**
    * Call an OpenAI-compatible vision API with one or more profile images.
-   * @param apiKey - Decrypted API key
-   * @param model - Model name
    * @param endpointUrl - Chat completions endpoint URL
    * @param images - Base64-encoded profile image inputs
-   * @param prompt - Analysis prompt
-   * @returns Text description from the vision model
    */
   private async callOpenAICompatibleVisionWithBase64(
     apiKey: string,
@@ -573,7 +551,7 @@ export class PeekProfilePictureTool extends BaseTool {
    */
   private async fetchAndConvertImageToBase64(avatarUrl: string): Promise<string> {
     try {
-      // Data URIs (e.g. local preset avatars) are already base64-encoded — decode directly.
+      // Data URIs (e.g. local preset avatars) are already base64-encoded, so decode directly.
       if (avatarUrl.startsWith("data:")) {
         const markerIndex = avatarUrl.indexOf("base64,");
         if (markerIndex === -1) {
@@ -582,7 +560,6 @@ export class PeekProfilePictureTool extends BaseTool {
         return avatarUrl.slice(markerIndex + "base64,".length).trim();
       }
 
-      // Fetch the image from Discord CDN with bounded download checks
       const response = await safeDownload(avatarUrl, {
         maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
         timeoutMs: 15_000,
@@ -592,7 +569,6 @@ export class PeekProfilePictureTool extends BaseTool {
         throw new Error(`Failed to fetch avatar image: ${response.details ?? response.error ?? "unknown error"}`);
       }
 
-      // Convert array buffer to base64
       const base64String = response.buffer.toString("base64");
 
       return base64String;
@@ -606,26 +582,15 @@ export class PeekProfilePictureTool extends BaseTool {
     }
   }
 
-  /**
-   * Get and remove a pending enhanced context item
-   * Used by tomoriChat during restart processing
-   * @param pendingContextKey - Opaque key to get pending context for
-   * @returns Enhanced context item if found, undefined otherwise
-   */
+  /** Removes the item after retrieval so a restart cannot replay stale image context. */
   static getPendingEnhancedContext(pendingContextKey: string): StructuredContextItem | undefined {
     const contextItem = PeekProfilePictureTool.pendingEnhancedContextItems.get(pendingContextKey);
     if (contextItem) {
-      // Remove from map to prevent memory leaks
       PeekProfilePictureTool.pendingEnhancedContextItems.delete(pendingContextKey);
     }
     return contextItem;
   }
 
-  /**
-   * Check if a user has pending enhanced context
-   * @param pendingContextKey - Opaque key to check
-   * @returns True if user has pending enhanced context
-   */
   static hasPendingEnhancedContext(pendingContextKey: string): boolean {
     return PeekProfilePictureTool.pendingEnhancedContextItems.has(pendingContextKey);
   }

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "src/db/initializeCli.ts",
+        "src/commands/**/*.ts",
+        "src/events/*/*.ts",
+        "src/locales/*/*.ts",
+        "src/providers/*/{providerInfo.ts,*Provider.ts}",
+        "src/tools/functionCalls/**/*.ts",
+        "src/tools/{fetchUrl/fetchUrlTool.ts,webSearch/webSearchTool.ts}",
+        "scripts/**/*.ts",
+        "tests/**/*.test.ts"
+      ],
+      "project": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+      "ignoreFiles": ["src/db/seed/catalog/personas/prideful/en-US.ts"]
+    },
+    "apps/docs": {
+      "entry": ["src/components/FeatureCard.astro", "src/routeData.ts"],
+      "project": ["src/**/*.{astro,mdx,ts}"]
+    }
+  }
+}

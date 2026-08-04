@@ -18,10 +18,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /help setup command
  * Displays first-time setup guide for TomoriBot
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -30,7 +26,6 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // Get command mentions for cross-references
     const helpApikeyMention = commandRegistry.getCommandMention("help", "api-key");
     const configSetupMention = commandRegistry.getCommandMention("config", "setup");
     const serverInitializeExpressionsMention = commandRegistry.getCommandMention("server", "initialize", "expressions");
@@ -48,7 +43,6 @@ export async function execute(
     const supportServerMention = commandRegistry.getCommandMention("support", "discord");
     const configApiKeySetMention = commandRegistry.getCommandMention("provider", "add");
 
-    // Use replySummaryEmbed to show structured setup guide
     await replySummaryEmbed(
       interaction,
       locale,
@@ -109,7 +103,6 @@ export async function execute(
       MessageFlags.Ephemeral,
     );
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
@@ -120,7 +113,6 @@ export async function execute(
     };
     await log.error("Error executing /help setup command", error as Error, context);
 
-    // Inform user of error (ephemeral)
     const errorMessage = localizer(locale, "general.errors.unknown_error_description");
     try {
       if (interaction.replied || interaction.deferred) {
@@ -135,7 +127,6 @@ export async function execute(
         });
       }
     } catch (replyError) {
-      // Log if even the error reply fails
       log.error("Failed to send error reply for /help setup", replyError, context);
     }
   }

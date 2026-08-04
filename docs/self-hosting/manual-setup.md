@@ -148,7 +148,7 @@ SHOW config_file;
 Enable the extension in `postgresql.conf` — append to `shared_preload_libraries` if it
 already lists other libraries:
 
-```conf
+```ini
 shared_preload_libraries = 'pg_cron'   # e.g. 'pg_stat_statements,pg_cron'
 cron.database_name = 'your_dbname'
 ```

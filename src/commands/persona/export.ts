@@ -39,10 +39,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'export' command
  * Exports TomoriBot's personality to a PNG file and sends it to the channel
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   client: Client,
@@ -53,7 +49,6 @@ export async function execute(
   let responseInteraction: ChatInputCommandInteraction | ModalSubmitInteraction = interaction;
 
   try {
-    // 1. Resolve target persona via selector
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = allPersonas
@@ -124,10 +119,9 @@ export async function execute(
       return;
     }
 
-    // 2. Defer reply while we process (not ephemeral for transparency)
+    // Defer reply while we process (not ephemeral for transparency)
     await responseInteraction.deferReply();
 
-    // 3. Export selected persona data from database
     const exportResult = await presetRepository.exportPresetData(serverDiscId, selectedPersona.persona_id);
 
     if (!exportResult.success) {
@@ -142,7 +136,6 @@ export async function execute(
       return;
     }
 
-    // Type is now narrowed to success variant
     const presetData = exportResult.data;
     if (exportJson) {
       const nickname = presetData.data.tomori_nickname;
@@ -197,7 +190,7 @@ export async function execute(
       return;
     }
 
-    // 4. Resolve avatar image (alter persona avatar when available, otherwise server avatar)
+    // Resolve avatar image (alter persona avatar when available, otherwise server avatar)
     let avatarBuffer: Buffer;
     try {
       let selectedAvatarBuffer: Buffer | null = null;
@@ -236,7 +229,6 @@ export async function execute(
       return;
     }
 
-    // 5. Embed metadata into PNG
     let pngWithMetadata: Buffer;
     try {
       pngWithMetadata = embedMetadataInPNG(avatarBuffer, presetData);
@@ -256,7 +248,6 @@ export async function execute(
       return;
     }
 
-    // 6. Create filename with nickname and timestamp
     const nickname = presetData.data.tomori_nickname;
     const sanitizedNickname = sanitizeAttachmentFilenamePart(nickname, {
       fallback: "persona",
@@ -265,12 +256,11 @@ export async function execute(
     const timestamp = Date.now();
     const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
 
-    // 7. Create attachment
     const attachment = new AttachmentBuilder(pngWithMetadata, {
       name: filename,
     });
 
-    // 8. Send to channel with embedded image (visible to everyone for transparency)
+    // Send to channel with embedded image (visible to everyone for transparency)
     await responseInteraction.editReply({
       embeds: [
         new EmbedBuilder()
@@ -293,7 +283,6 @@ export async function execute(
       metadata: { commandName: "preset export" },
     });
 
-    // If we haven't replied yet, reply with error
     if (!responseInteraction.replied && !responseInteraction.deferred) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.unknown_error_title",

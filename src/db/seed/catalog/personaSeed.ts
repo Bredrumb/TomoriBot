@@ -111,7 +111,7 @@ export function validatePersonas(): string[] {
   return errors;
 }
 
-export function buildPersonaSeedStatements(): string[] {
+function buildPersonaSeedStatements(): string[] {
   const rows = rowsOf();
 
   const backfillValues = rows

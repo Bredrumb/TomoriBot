@@ -1397,9 +1397,9 @@ function resolveComfyUiVideoDurationSeconds(durationSeconds: number | undefined)
 }
 
 function resolveComfyUiVideoFps(requestedFps: number | undefined): number {
-  // 1. Honor a user-supplied FPS (from the /generate video modal) when valid,
+  // Honor a user-supplied FPS (from the /generate video modal) when valid,
   //    mirroring how resolveComfyUiVideoDurationSeconds() prioritizes the request.
-  // 2. Otherwise fall back through the operator env overrides to the built-in default.
+  // Otherwise fall back through the operator env overrides to the built-in default.
   const requested =
     typeof requestedFps === "number" && Number.isFinite(requestedFps) && requestedFps > 0
       ? requestedFps

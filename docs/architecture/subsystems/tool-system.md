@@ -18,6 +18,17 @@ Runtime validation remains required. Assembly prevents the LLM from seeing unsup
 
 Image generation progress notices are also backend-aware. They only announce default negative tags when a negative-prompt channel is active, always include the image-tags setup hint, list saved user/persona image tags detected in the current context, and call out avatar references separately from message image references.
 
+## Participant-backed targets
+
+Participant-aware tools resolve users and personas from the `ParticipantTargetIndex` attached
+to the prepared participant context item. The index is built from typed identities and
+purpose-filtered aliases; tools do not reconstruct targets from prompt text, transport maps,
+or display-name joins. Existing `conversationUsers` metadata is a projection of the same
+index, so tool targets, streamed mentions, tool-reply mentions, and copied identities retain
+one collision policy and primary-name tie-break behavior.
+
+`analyze_image` resolves images from the requested Discord message first. If that message is a text-only reply, it falls back one level to the directly referenced message so it can analyze the image being discussed. The tool also applies the configurable `VISION_ANALYSIS_TIMEOUT_MS` deadline (default 60 seconds) across image downloads and vision-provider inference so a stalled vision request returns a failed tool result before the outer chat timeout.
+
 ## Persona User Blocking
 
 `block_user` and `unblock_user` are built-in Discord tools gated by `user_blocking_enabled` in `/capabilities manage`. They write to `persona_user_blocks`, scoped to the active persona rather than the whole server.
@@ -28,11 +39,19 @@ Image generation progress notices are also backend-aware. They only announce def
 
 `web_search` is the LLM-visible web search surface. Its dispatcher routes through internal engines and keeps engine-specific tool names hidden. The assembled schema guarantees the category enum for the current turn, so the tool description should not use fail-first language such as "this category may be unavailable" for advertised enum values.
 
-`fetch_url` is the LLM-visible URL-reading surface. It validates the requested target before dispatch and blocks localhost/private/internal/reserved URLs unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`; the localized failure message names the default `FETCH_URL_ALLOW_PRIVATE_NETWORK=false` setting so TomoriBot can explain why the fetch failed. Its dispatcher chain is configured by `FETCH_URL_ENGINE_ORDER`, currently supporting optional `crawl4ai` followed by mandatory `mcp_fetch` fallback. Unknown names are ignored, duplicates are collapsed, and `mcp_fetch` is always appended. `Crawl4aiEngine` is available only when `CRAWL4AI_BASE_URL` is set and `/health` is reachable. `McpFetchEngine` calls the bundled MCP `fetch` server internally through `FetchHandler.executeFetchInternal()`, so the old formatting, pagination, error envelopes, metadata, progress notice, and URL-size validation behavior are preserved while the raw global MCP `fetch` function is hidden from the LLM.
+`fetch_url` is the LLM-visible URL-reading surface. It validates the requested target before dispatch and, in production, blocks localhost/private/internal/reserved URLs unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`. Outside production (`RUN_ENV` != `production`) this guard auto-relaxes so local development can reach private endpoints with no configuration, mirroring the production-gated model of `validateRemoteUrl`. Cloud instance-metadata and link-local addresses (`169.254.0.0/16`, IPv6 link-local, AWS IPv6 IMDS) are additionally blocked by an always-on denylist (`src/utils/security/cloudMetadata.ts`) that neither the dev auto-relax nor the opt-in can bypass; it runs in both this pre-dispatch gate and the `validateRemoteUrl` connection/redirect gate. The localized failure message names the `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` opt-in so TomoriBot can explain why a production fetch failed. The mandatory `safe_http` engine performs DNS validation and pinning, manually follows a bounded number of redirects, revalidates every hop, and limits the downloaded byte count before converting HTML to Markdown. The legacy `mcp_fetch` engine name is accepted as an alias for `safe_http`, but network fetching is no longer delegated to the Python MCP process. Crawl4AI may be listed in `FETCH_URL_ENGINE_ORDER` but is only admitted where private-network fetching is permitted — any non-production runtime, or production with an explicit `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` opt-in; it is never part of the secure production default chain.
+
+Successful `safe_http` results place the formatted URL and Markdown in `ToolResult.data.summary`, because the streaming tool loop serializes successful `data` into provider history. OpenAI-compatible builders emit that function response once as a `tool` message; they add a synthetic `user` message only when image metadata needs a user-role carrier.
 
 ## Guild MCP Replacements
 
 Guild MCP tools are appended after built-in and global MCP filtering, then collision-checked. If a guild enables a `url_fetcher` MCP server with at least one function, TomoriBot hides bundled `fetch_url` for that guild so the LLM receives one URL-fetch surface. Prompt macro resolution follows the same rule: `{url_fetch_tool}` prefers guild `url_fetcher` functions, then falls back to `fetch_url`.
+
+### Connection resilience
+
+Guild MCP servers are connected lazily and pooled (`guildMcpManager`), on the critical path of tool-gathering before each generation. Each connect attempt tries transports in order — Smithery Connect (for `*.run.tools`), then StreamableHTTP, then SSE — using a **fresh MCP client per attempt** (reusing one client across attempts triggers the SDK's "Already connected to a transport" error and breaks the fallback). Every attempt is bounded by `GUILD_MCP_CONNECT_TIMEOUT_MS`.
+
+A **circuit breaker** quarantines any server that fails to connect for `GUILD_MCP_FAILURE_COOLDOWN_MS` (default 5 min), so a single unreachable server cannot re-pay its full connect timeout on every generation — and every fallback-model attempt — which would otherwise blow the stream inactivity budget and stall chat for that guild. The quarantine is cleared early on a successful connect or when the server is removed/disabled.
 
 ## NovelAI
 

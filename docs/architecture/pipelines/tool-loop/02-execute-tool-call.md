@@ -90,6 +90,17 @@ Steps in execution order:
 
 5. **`ToolRegistry.executeTool` with timeout + kill race** — actual dispatch,
    wrapped in a `Promise.race` against two cancellation promises:
+
+   Before dispatch, the registry runs two separate availability gates whose
+   rejection text differs because `error` is fed back to the model:
+   - `tool.isAvailableFor(provider)` — static provider support. Rejection is
+     logged at `error` level and reported as *not available for provider X*.
+   - `tool.isAvailableForContext(provider, context)` — live turn state
+     (per-turn dedup flags, model capabilities, configured server slots).
+     Rejection is logged at `warn` level and reported as *not available for
+     the current turn*, with an instruction not to retry it this turn. It must
+     never be reported as a provider capability gap.
+
    - **Timeout promise** — resolves after `TOOL_EXECUTION_TIMEOUT_MS` (default
      5 min) with a synthetic `{ success: false, error: "timed out" }` result.
      The timer is fresh per tool call, so a chain of fast tools is unaffected.
@@ -147,7 +158,9 @@ Steps in execution order:
     assistant tool-call turn on the follow-up call, so the model knows it
     already said that text and does not repeat it. Each iteration's entry
     carries only that iteration's text (stream state is fresh per
-    `streamOnce` call).
+    `streamOnce` call). After the history entry is accepted, the outer loop
+    clears the same text from `accumulatedModelParts`; otherwise OpenAI-style
+    providers would also append it as a trailing assistant prefill.
 
 13. **Return `{kind: "history"}`** with `historyEntry` (the paired
     `functionCall` + `functionResponse` + optional `imageMetadata` +

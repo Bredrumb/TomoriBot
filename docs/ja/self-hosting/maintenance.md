@@ -81,7 +81,7 @@ docker compose up -d
 
 `bun run backup`、`bun run update`、`bun run nuke-db` などのホスト側のスクリプトは、Docker経由では自動的に実行されません。代わりにComposeデータベースに対してホストスクリプトを実行するには、BunとPostgreSQLクライアントツールがインストールされたホスト上で実行し、以下のように設定します。
 
-```env
+```dotenv
 POSTGRES_HOST=localhost
 POSTGRES_PORT=15432
 POSTGRES_USER=tomori

@@ -9,7 +9,8 @@ import {
 } from "@/utils/chat/channelQueue";
 import { buildChatTurnContext } from "@/utils/chat/contextPipeline";
 import { runGenerationTurn } from "@/utils/chat/generationTurn";
-import type { ChatAdmissionDisposition, TomoriChatInput } from "@/utils/chat/types";
+import type { ChatAdmissionDisposition, ChatIncoming, TomoriChatInput } from "@/utils/chat/types";
+import { enrichErrorContext, runWithErrorContext } from "@/utils/misc/errorContextStore";
 import { runPostTurnEffects, shouldRetryEmptyResponse } from "@/utils/chat/postTurnEffects";
 import { createChatResponseSink, handleStopResponse } from "@/utils/chat/responseEmitter";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
@@ -33,12 +34,34 @@ export {
 export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionDisposition> {
   const incoming = normalizeChatInvocation(input);
 
+  return runWithErrorContext(
+    {
+      source: "chat",
+      userDiscId: incoming.message.author.id,
+      serverDiscId: incoming.message.guildId,
+      channelDiscId: incoming.message.channelId,
+    },
+    () => runAdmittedChatTurn(incoming),
+  );
+}
+
+async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissionDisposition> {
   const admission = await evaluateChatAdmission(incoming);
+
   if (admission.disposition !== "run") {
     await handleChatDisposition(admission);
     await incoming.onQueueDiscard?.("admission_rejected");
     return admission.disposition;
   }
+
+  // Admission is where the Discord snowflakes become database rows, so upgrade the ambient
+  // identity here: everything downstream (providers, tools, humanizer) logs with real IDs.
+  enrichErrorContext({
+    serverId: admission.tomoriState?.server_id,
+    personaId: admission.tomoriState?.persona_id,
+    userId: admission.userRow?.user_id,
+    userDiscId: admission.userDiscId,
+  });
 
   await runWithChannelLock(
     admission,
@@ -100,6 +123,7 @@ export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionD
           injectedContextItems: queued.injectedContextItems,
           forcedMentions: queued.forcedMentions,
           manualTriggerInvoker: queued.manualTriggerInvoker,
+          systemTriggerIdentity: queued.systemTriggerIdentity,
           manualStreamingContextOverrides: queued.manualStreamingContextOverrides,
           sceneTurn: queued.sceneTurn,
           onGenerationResult: queued.onGenerationResult,
@@ -111,7 +135,7 @@ export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionD
   return "run";
 }
 
-/** Thin event-dispatch adapter — satisfies EventFunction(client, ...args) called by the event loader. */
+/** Thin event-dispatch adapter: satisfies EventFunction(client, ...args) called by the event loader. */
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
   await tomoriChat({ client, message, isFromQueue: false });
 }

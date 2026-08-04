@@ -25,6 +25,10 @@ non-runnable dispositions.
   proceed to stage 04. Eagerly populated fields:
   - `serverDiscId`, `userDiscId`, `cooldownUserDiscId`
   - `isDMChannel`, `guild`
+
+  `serverDiscId` is the key every downstream persona/config lookup uses. In a
+  guild it is `guild.id`; in a DM it is the synthetic per-user server, resolved
+  from `DMChannel.recipientId`. See "DM server-key resolution" below.
   - `tomoriState`, `allPersonas` (main persona + sibling personas)
 - **`NonRunnableChatAdmission { disposition, reason, error? }`** — terminate
   at stage 03. Disposition variants:
@@ -59,6 +63,30 @@ non-runnable dispositions.
   manually triggered, sets `incoming.isPersonaJob = true` so downstream stages
   can distinguish persona-driven self-replies from user messages.
 
+## DM server-key resolution
+
+DMs have no guild, so TomoriBot gives each DM a synthetic server whose
+`server_disc_id` is the human's Discord ID. `resolveAdmissionChannelScope`
+derives that key from `DMChannel.recipientId`, which is a property of the
+channel and therefore independent of who authored the trigger message.
+
+Scheduled reminder/task turns additionally provide `systemTriggerIdentity`
+from the reminder row's joined `servers` record. This authoritative identity
+wins in DMs because cached or partial Discord channel metadata may not contain
+a usable recipient even though the persisted schedule still has the correct
+private-server owner.
+
+This matters because system-initiated turns do not supply a user-authored
+trigger. Reminders (`reminderProcessor`) and boomerang follow-ups
+(`postTurnEffects`) pass the channel's most recent message, which in an active
+DM is frequently one of Tomori's own. Keying off the message author there would
+resolve the DM to the bot's ID, find no server row, and report a configured DM
+as needing `/config setup`. Guilds are immune because `guild.id` never depends
+on authorship.
+
+`userDiscId` follows the same rule: in a DM, a trigger message authored by the
+client user falls back to the recipient rather than to the bot.
+
 ## Invariants
 
 After this stage runs:
@@ -67,6 +95,9 @@ After this stage runs:
 - Privacy-level `FULL` users are blocked unconditionally (except for
   self-reminders and manual triggers).
 - DM channels never carry a guild; guild text/thread/voice channels always do.
+- In a DM, `serverDiscId` is the persisted system-trigger identity when one is
+  supplied; otherwise it is the channel recipient's ID regardless of who
+  authored the trigger message.
 - An audio transcript that succeeded leaves a `voice_transcript` cache entry
   keyed by message ID (legacy mode) or a posted webhook message (chat mode),
   not both.

@@ -6,7 +6,7 @@ import type {
 
 const MAX_OPTIONS_PER_GROUP = 10;
 export const MAX_OPENROUTER_MODEL_GROUPS = 5;
-export const OPENROUTER_MODEL_REMOVE_CHECKBOX_PREFIX = "openrouter_model_remove_group";
+const OPENROUTER_MODEL_REMOVE_CHECKBOX_PREFIX = "openrouter_model_remove_group";
 
 function truncateModalText(value: string | null | undefined, maxLength = 100): string {
   const normalized = (value ?? "").replace(/\s+/g, " ").trim();

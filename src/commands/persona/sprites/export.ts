@@ -37,7 +37,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the `/persona sprites export` command.
  * @param _client - Discord client (unused; storage handles image resolution)
- * @param interaction - The chat input command interaction
  * @param userData - Invoking user's row (for locale fallback)
  * @param locale - Resolved locale
  */
@@ -51,7 +50,7 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
 
   try {
-    // 1. Sprites are server-scoped; in DMs the user id stands in for the server.
+    // Sprites are server-scoped; in DMs the user id stands in for the server.
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions = buildPersonaSelectOptions(allPersonas, locale);
@@ -65,7 +64,7 @@ export async function execute(
       return;
     }
 
-    // 2. Ask which persona to export sprites from (modal handles the 3s ack).
+    // Ask which persona to export sprites from (modal handles the 3s ack).
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.persona.sprites.export.modal_title",
@@ -99,7 +98,7 @@ export async function execute(
     }
     const personaId = selectedPersona.persona_id;
 
-    // 3. Defer publicly: an export is meant to be shared in-channel, mirroring
+    // Defer publicly: an export is meant to be shared in-channel, mirroring
     //    `/persona export`.
     if (!responseInteraction.deferred && !responseInteraction.replied) {
       await responseInteraction.deferReply();
@@ -118,7 +117,7 @@ export async function execute(
       return;
     }
 
-    // 4. Defense-in-depth: loading many images at once is the memory-heavy step.
+    // Defense-in-depth: loading many images at once is the memory-heavy step.
     const memoryCheck = memoryGuard.checkMemory();
     if (memoryCheck.status === "critical") {
       await responseInteraction.editReply({
@@ -132,7 +131,7 @@ export async function execute(
       return;
     }
 
-    // 5. Resolve each sprite's stored image to a normalized PNG buffer. Sprites
+    // Resolve each sprite's stored image to a normalized PNG buffer. Sprites
     //    whose image can no longer be loaded are skipped (and reported) rather
     //    than failing the whole export.
     const buildEntries: SpriteArchiveBuildEntry[] = [];
@@ -166,7 +165,6 @@ export async function execute(
       return;
     }
 
-    // 6. Build the archive and attach it.
     const archive = await buildSpriteArchive({
       personaNickname: selectedPersona.persona_nickname,
       personaId,
@@ -180,8 +178,6 @@ export async function execute(
     const filename = `${sanitizedNickname}-sprites-${Date.now()}.zip`;
     const attachment = new AttachmentBuilder(archive.buffer, { name: filename });
 
-    // 7. Success embed; warn-colored when some images had to be skipped so the
-    //    sharer knows the archive is incomplete.
     const descriptionKey =
       skippedCount > 0
         ? "commands.persona.sprites.export.success_partial_description"
@@ -234,11 +230,6 @@ export async function execute(
   }
 }
 
-/**
- * Builds persona select options for the export modal.
- * @param personas - All personas for the server
- * @param locale - Resolved locale for option descriptions
- */
 function buildPersonaSelectOptions(personas: TomoriState[], locale: string): SelectOption[] {
   return personas
     .filter((persona) => persona.persona_id !== undefined)

@@ -21,6 +21,20 @@ externally — notably the reminder processor (`src/timers/reminderProcessor.ts`
 treat it as in-flight (queued), or leave it for the next reconcile cycle
 (ignore/blocked/error). The Discord `messageCreate` handler discards the value.
 
+Reminder redelivery is capped at `REMINDER_DELIVERY_MAX_RETRIES` (default 5)
+attempts spaced `REMINDER_DELIVERY_RETRY_DELAY_MS` apart; on exhaustion the
+scheduled content is surfaced through a plain fallback embed. Automated
+attempts suppress ordinary user-facing generation/admission errors, so this
+final fallback is the only failure notice. One-time schedules are then removed;
+recurring schedules advance from their canonical occurrence time and retain
+their original cadence. Human reminders include a real content mention while
+self-tasks do not.
+
+Retries persist `next_attempt_at` and `delivery_retry_count` without replacing
+`reminder_time`. Keeping the retry lease separate prevents a five-minute retry
+window from shifting every future occurrence by five minutes and preserves the
+retry budget across restarts.
+
 ## Input
 
 `NonRunnableChatAdmission` (from stage 02, when `disposition !== "run"`).

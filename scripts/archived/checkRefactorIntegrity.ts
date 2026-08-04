@@ -40,7 +40,7 @@ const knownLargeImplementationPaths = new Set([
   "src/utils/db/repositoryWriteSql.ts",
   "src/utils/text/contextBuilder.ts",
   "src/utils/discord/streamOrchestrator.ts",
-  // Phase 5.5c facade-rename targets — added so the existing
+  // Phase 5.5c facade-rename targets: added so the existing
   // "thin facade to large file" finding fires until they're truly decomposed.
   "src/utils/text/context/core/builderImplementation.ts",
   "src/utils/discord/stream/core/orchestratorImplementation.ts",
@@ -237,7 +237,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
     }
   }
 
-  // ── Phase 5.5e check: surviving SQL siblings ──────────────────────────────
   // Any *ReadSql.ts or *WriteSql.ts file anywhere under src/utils/db/ is a
   // regression: all SQL must be inlined as private methods on the owning
   // Repository class. These sibling files were deleted in Phase 5.5e Stage C.
@@ -254,7 +253,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
     }
   }
 
-  // ── Phase 5.5e check: cohabiting siblings ─────────────────────────────────
   // In src/utils/db/repositories/, every file must be a Repository class,
   // the index barrel, or the IRepository interface. Any other .ts file at
   // that depth is a domain file that leaked into the repository layer.
@@ -262,7 +260,6 @@ function collectFindings(files: SourceFile[]): Finding[] {
   const allowedRepoFilenames = /^(index|IRepository|.*Repository)\.ts$/;
   for (const file of files) {
     if (!file.repoPath.startsWith(repoDir)) continue;
-    // Only check files directly in repositories/ (not deeper subfolders)
     const remainder = file.repoPath.slice(repoDir.length);
     if (remainder.includes("/")) continue;
     if (!allowedRepoFilenames.test(basename(file.absPath))) {

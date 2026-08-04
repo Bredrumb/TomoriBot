@@ -48,12 +48,11 @@ export interface TomoriSecrets {
   CHARREF_S3_REGION?: string;
   CHARREF_S3_PREFIX?: string;
   CHARREF_PUBLIC_BASE_URL?: string;
-  // Matrix Appservice Bridge (optional — leave unset to disable the bridge entirely)
   MATRIX_HOMESERVER_URL?: string; // e.g., http://localhost:8448 or https://your-hs.example.com
   MATRIX_ACCESS_TOKEN?: string; // Appservice token (as_token) used to authenticate to the homeserver
   MATRIX_BOT_USER_ID?: string; // e.g., @tomoribot:yourdomain.com
   MATRIX_SERVER_NAME?: string; // Homeserver domain (e.g., localhost or yourdomain.com)
-  MATRIX_HS_TOKEN?: string; // Homeserver token (hs_token) — homeserver sends this to verify its identity
+  MATRIX_HS_TOKEN?: string; // Homeserver token (hs_token): homeserver sends this to verify its identity
   MATRIX_APPSERVICE_PUBLIC_URL?: string; // Optional callback URL used in appservice registration for remote homeservers
   TOPGG_TOKEN?: string; // Optional: Top.gg API token for posting server stats
   CONTAINER_MEMORY_LIMIT_MB?: string; // Optional: Container memory limit in MB (default: 1024)
@@ -73,7 +72,7 @@ export interface TomoriSecrets {
  * - Azure compose mounts the JSON secret at /run/secrets/tomoribot.json and sets SECRET_FILE to that path
  * - Cloud Run mounts the secret at /run/secrets/<secret_id> and sets GCP_SECRET_FILE to that path
  * - File content is identical JSON shape to the AWS secret string
- * - No SDK call needed — plain fs.readFileSync
+ * - No SDK call needed: plain fs.readFileSync
  *
  * AWS Configuration:
  * - AWS_REGION environment variable (defaults to "us-east-1")
@@ -99,7 +98,6 @@ export interface TomoriSecrets {
  * process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
  */
 export async function getAppSecrets(): Promise<TomoriSecrets> {
-  // Default to 'development' if RUN_ENV is not set (safe for local users)
   const runEnv = process.env.RUN_ENV || "development";
   const isProduction = runEnv === "production";
   const isTestProduction = process.env.TEST_PRODUCTION === "true";
@@ -126,7 +124,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Optional fields — read from process.env matching the same keys as the JSON secret blob
+    // Optional fields: read from process.env matching the same keys as the JSON secret blob
     const optionalEnvFields: (keyof TomoriSecrets)[] = [
       "DISCORD_WEBHOOK_URL",
       "AVATAR_GCS_BUCKET",
@@ -163,7 +161,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Validate required fields
     validateRequiredSecrets(secrets);
 
     return secrets;
@@ -175,7 +172,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   if (secretFile) {
     log.info(`Reading secrets from mounted JSON secret file: ${secretFile}`);
     try {
-      // 1. Read and parse the JSON blob written by the platform secret mount
+      // Read and parse the JSON blob written by the platform secret mount
       const fileContent = await Bun.file(secretFile).text();
       if (!fileContent) {
         throw new Error(`Secret file "${secretFile}" is empty. Ensure the secret version is populated.`);
@@ -183,7 +180,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
 
       const rawSecrets = JSON.parse(fileContent);
 
-      // 2. Build TomoriSecrets object from the parsed JSON
       const secrets: TomoriSecrets = {
         DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
         POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
@@ -194,7 +190,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
       };
 
-      // 3. Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
+      // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
       for (const key of Object.keys(rawSecrets)) {
         if (key.startsWith("CRYPTO_SECRET_V")) {
           secrets[key] = rawSecrets[key];
@@ -202,7 +198,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // 4. Optional fields — same shape as AWS secret blob
+      // Optional fields: same shape as AWS secret blob
       const optionalFields: (keyof TomoriSecrets)[] = [
         "DISCORD_WEBHOOK_URL",
         "AVATAR_GCS_BUCKET",
@@ -239,7 +235,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // 5. Validate required fields
       validateRequiredSecrets(secrets);
 
       log.info("Successfully loaded secrets from mounted JSON secret file");
@@ -252,7 +247,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         );
       }
 
-      // Re-throw with context for file-not-found and other I/O errors
       log.error(
         "Failed to read secrets from mounted JSON secret file",
         error instanceof Error ? error : new Error(String(error)),
@@ -267,24 +261,20 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   log.info(`Fetching secrets from AWS Secrets Manager (production mode, region: ${awsRegion})`);
 
   try {
-    // 1. Create AWS Secrets Manager client with configurable region
     const client = new SecretsManagerClient({ region: awsRegion });
 
-    // 2. Fetch secret value
     const command = new GetSecretValueCommand({
       SecretId: "tomoribot/production",
     });
 
     const response = await client.send(command);
 
-    // 3. Parse SecretString as JSON
     if (!response.SecretString) {
       throw new Error("AWS Secrets Manager returned empty SecretString. Ensure the secret contains a JSON object.");
     }
 
     const rawSecrets = JSON.parse(response.SecretString);
 
-    // 4. Build TomoriSecrets object
     const secrets: TomoriSecrets = {
       DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
       POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
@@ -295,7 +285,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
     };
 
-    // 5. Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
+    // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
     // This allows for unlimited key rotation versions
     for (const key of Object.keys(rawSecrets)) {
       if (key.startsWith("CRYPTO_SECRET_V")) {
@@ -304,7 +294,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // 6. Optional fields
     const optionalFields: (keyof TomoriSecrets)[] = [
       "DISCORD_WEBHOOK_URL",
       "AVATAR_GCS_BUCKET",
@@ -341,7 +330,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // 7. Validate required fields
     validateRequiredSecrets(secrets);
 
     log.info("Successfully loaded secrets from AWS Secrets Manager");
@@ -372,7 +360,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Re-throw with context
     log.error(
       "Failed to fetch secrets from AWS Secrets Manager",
       error instanceof Error ? error : new Error(String(error)),

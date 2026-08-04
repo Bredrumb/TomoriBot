@@ -5,7 +5,7 @@
 <div align="center">
 
   <a href="https://github.com/Bredrumb/TomoriBot">
-    <img src="assets/img/tomoricon.png" alt="Logo" width="80" height="80">
+    <img src="assets/img/icons/tomoricon.svg" alt="Logo" width="80" height="80">
   </a>
 
 <h3 align="center">TomoriBot</h3>
@@ -110,26 +110,26 @@ TomoriBotを気に入っていただけたら、GitHubで⭐を付けるか、Ko
 
 TomoriBotは、幅広いLLMプロバイダー、画像生成API、音声サービス、検索ツールを標準でサポートしています。Google Gemini、OpenRouter、Anthropic、NovelAI、Nvidia、Deepseekなどの人気プロバイダーが含まれます。
 
-**[対応プロバイダーの完全なリストはこちら](docs/features/setup-administration/providers-and-models.md#supported-providers)**
+**[対応プロバイダーの完全なリストはこちら](https://docs.tomoribot.app/ja/features/setup-administration/providers-and-models/#サポートされているプロバイダー)**
 
 ## ローカル・セルフホスト型エンドポイント
 
 APIに加えて、TomoriBotを自分でホストするモデルに接続することもできます。ローカルLLM（Ollama、KoboldCPP、LM Studio、vLLMなど）、ComfyUIによるローカル画像/動画生成、ローカルTTS・STTエンドポイント、さらにローカルのSearXNGやブラウザWeb取得用のDockerサイドカーに対応しています。
 
-**[ローカル・セルフホスト型エンドポイントのガイドはこちら](docs/self-hosting/local-endpoints/README.mdx)**
+**[ローカル・セルフホスト型エンドポイントのガイドはこちら](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/)**
 
 ## セキュリティと脅威モデル
 
 TomoriBotは暗号化とセキュリティのベストプラクティスを採用し、データとAPIキーを完全に安全に保ちます（設定可能なメンバー/サーバーごとのレート制限であなたの財布も守ります）。セルフホスティング時には完全なコントロールとプライバシーが得られます。
 
-**[セキュリティと脅威モデルの完全なガイドはこちら](docs/wiki/threat-models.md)**
+**[セキュリティと脅威モデルの全文はこちら](https://docs.tomoribot.app/ja/wiki/threat-models/)**
 
 
 ## プロンプトカスタマイズ用ツールマクロ
 
 TomoriBotには多彩なビルトインツール（Web検索、メモリー管理、画像生成、クロスチャンネルメッセージングなど）が備わっており、プロンプト内でマクロとして直接参照できます。
 
-**[ビルトインツールリファレンスの全文はこちら](docs/features/capabilities/tools-and-extensions.md)**
+**[ビルトインツールリファレンスの全文はこちら](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/)**
 
 ### ツールを使ったサンプルプロンプト
 
@@ -173,7 +173,7 @@ TomoriBotには多彩なビルトインツール（Web検索、メモリー管�
    cd TomoriBot
    ```
 
-2. **セットアップウィザードを実行**
+2. **セットアップウィザードを実行**（詳細は**[セットアップウィザードガイド](https://docs.tomoribot.app/ja/self-hosting/setup-wizard/)**を参照）
    ```sh
    bun run setup
    ```
@@ -184,35 +184,6 @@ TomoriBotには多彩なビルトインツール（Web検索、メモリー管�
     ```
 
 `TomoriBot up and running!`と表示されたら、Discordで`/config setup`を実行してください。
-
-### セットアップに関する補足
-
-セットアップウィザードは、ローカル/バンドル版DockerのPostgreSQLの切り替え、データベースの初期化、暗号化シークレット、そしてオプションの追加機能（`pgvector`、`pg_cron`、トークナイザーアセット、URL Fetch MCPパッケージ）を自動的に処理します。サイドカー統合（SearXNG、Crawl4AI、音声、Grafana、Matrix）や手動フォールバック手順を含む詳細については、**[セットアップウィザードガイド](https://docs.tomoribot.app/self-hosting/setup-wizard/)**を参照してください。
-
-### オプションのサイドカー
-
-Web検索用のSearXNG、ブラウザレンダリングによるページ取得用のCrawl4AI、ローカルTTS/STTサーバーなどのオプションのサイドカーサービスをボットと一緒に実行したい場合は、`bun run dev`の代わりに`bun run launch`を使用します：
-
-```sh
-bun run launch
-
-# SearXNGとCrawl4AIのDockerサイドカーを併用
-bun run launch --searxng --crawl4ai
-
-# 音声セットアップ手順に従った後、ローカルTTSサーバーを併用
-bun run launch --qwen3tts
-
-# 利用可能なフラグをすべて表示
-bun run launch --help
-```
-
-利用可能なフラグ： `--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--whisperx`、`--help`
-
-Dockerサイドカー（`--searxng`、`--crawl4ai`）は初回実行時に作成され、以降の実行では再利用されます。手動での`docker run`は不要です。Python製のTTS/STTサイドカーは、事前に一度venvをセットアップしておく必要があります。`docs/self-hosting/local-endpoints/text-to-speech/`および`docs/self-hosting/local-endpoints/speech-to-text/`の各セットアップガイドを参照してください。
-
-**ホットリロード**が適用されるのはボット（`src/`）のみです。サイドカーサーバーはファイル変更の影響を受けず、手動で停止するまで動作し続けます。
-
-**Ctrl+C**でボットとPython製サイドカープロセスが停止します。Dockerコンテナ（`--searxng`、`--crawl4ai`）は意図的に起動したまま残されます。終了時は`docker stop searxng` / `docker stop crawl4ai`で手動停止してください。
 
 ## B. Docker Composeセットアップ
 
@@ -232,11 +203,28 @@ docker compose up --build
 
 以降の起動では、コードや依存関係を変更していない限り`docker compose up`だけで十分です。
 
-**注意：** Docker Composeはデータベース接続を自動的に設定します。PostgreSQLサービスは開発モード（SSLなし）で実行され、内部Dockerネットワークに接続します。
+## C. オプションのサイドカー・サーバー
 
-### オプションのDockerサイドカー
+TomoriBotは、どちらのセットアップ方法でも併用できるオプトイン方式のサイドカー/サーバーサービスをサポートしており、ツールの強化やローカルモニタリングに利用できます。Web検索用のSearXNG、ブラウザレンダリングによるページ取得用のCrawl4AI、ローカルTTS/STT音声サーバー、Grafanaダッシュボードが含まれます。
 
-TomoriBotは、ツールの強化やローカルモニタリングのために、オプションのDockerサイドカーをサポートしています。すべてのサイドカーはDocker Composeのプロファイルでオプトイン方式です：
+**ローカルBunセットアップ（A）の場合**は、`bun run dev`の代わりに`bun run launch`を使用します。実行例：
+
+```sh
+# SearXNGとCrawl4AIのDockerサイドカーを併用
+bun run launch --searxng --crawl4ai
+
+# 音声セットアップ手順に従った後、ローカルTTSサーバーを併用
+bun run launch --qwen3tts
+
+# 利用可能なフラグをすべて表示
+bun run launch --help
+```
+
+利用可能なフラグ： `--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--whisperx`、`--help`
+
+**Ctrl+C**でボットとPython製サイドカープロセスが停止します。Dockerコンテナ（`--searxng`、`--crawl4ai`）は意図的に起動したまま残されます。終了時は`docker stop searxng` / `docker stop crawl4ai`で手動停止してください。
+
+**Docker Composeセットアップ（B）の場合**は、代わりにComposeプロファイルでサイドカーをオプトインします：
 
 ```sh
 # + SearXNG Web検索（自ホスト型メタ検索）
@@ -251,18 +239,37 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 詳細なセットアップ手順については、以下のガイドを参照してください：
 
-- **[SearXNG Web検索サイドカー](docs/self-hosting/local-endpoints/setup-searxng.md)** - `web_search`ツールで単一エンジンのAPI制限を回避するための自ホスト型メタ検索インスタンス。
-- **[Crawl4AIサイドカー](docs/self-hosting/local-endpoints/setup-crawl4ai.md)** - `fetch_url`ツールでJavaScriptの多いWebページを取得・処理するためのブラウザレンダリングサイドカー。
-- **[ローカルGrafanaモニタリング](docs/self-hosting/local-monitoring.md)** - TomoriBotのパフォーマンスとデータベースメトリクスを監視するためのローカルGrafanaダッシュボードの立ち上げ方法。
+- **[SearXNG Web検索サイドカー](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-searxng/)** - `web_search`ツールで単一エンジンのAPI制限を回避するための自ホスト型メタ検索インスタンス。
+- **[Crawl4AIサイドカー](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-crawl4ai/)** - `fetch_url`ツールでJavaScriptの多いWebページを取得・処理するためのブラウザレンダリングサイドカー。
+- **[テキスト読み上げ（TTS）](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/text-to-speech/)** / **[音声認識（STT）](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/speech-to-text/)** - TomoriBotのボイスメッセージ用のPython製音声サーバー。事前に一度venvのセットアップが必要です。
+- **[ローカルGrafanaモニタリング](https://docs.tomoribot.app/ja/self-hosting/local-monitoring/)** - TomoriBotのパフォーマンスとデータベースメトリクスを監視するためのローカルGrafanaダッシュボードの立ち上げ方法。
 
-> Docker Composeの代わりに`bun run dev`を使う場合は、`bun run launch --searxng --crawl4ai`を使ってください。Dockerコンテナのライフサイクルを自動で処理してくれます。上記の[オプションのサイドカー](#オプションのサイドカー)セクションを参照してください。
+# TomoriBotの更新
 
-### メンテナンスと更新
+セルフホストしているインスタンスを最新バージョンに更新するには、まずボットを停止し（バックアップとマイグレーションが静かなデータベースに対して実行されるように）、バックアップ優先の更新コマンドを実行します：
 
-ホスト側のメンテナンススクリプト（`bun run update`、`bun run backup`、`bun run restore-backup`、`bun run nuke-db`、`bun run rotate-keys`など）、バックアップ優先の更新手順、そしてローカル/Docker Compose両方のデプロイにおけるデータベースのバックアップ/復元は、すべて以下のガイドにまとめられています：
+```sh
+bun run update
+```
 
-- **[メンテナンスとバックアップ](docs/self-hosting/maintenance.md)** - メンテナンススクリプト、更新、データベースのバックアップ/復元。
-- **[安全なマイグレーション](docs/self-hosting/safe-migration.md)** - 新しいバージョンをプルする前にデータを保護する方法。
+このコマンドは以下の手順を順番に実行し、いずれかの手順が失敗した場合は即座に停止します：
+
+1. **`bun run backup`** - コードに触れる*前に*データベースの完全バックアップを取得します。バックアップに失敗した場合、デプロイに一切変更を加えずに更新を中断します。
+2. **`git pull --rebase --autostash`** - ローカルの変更を自動的にスタッシュ・再適用しながら最新のコードをプルします。ファイルが競合した場合は、競合解決の手順を段階的に表示して終了するため、中途半端に適用されることはありません。
+3. **`bun install --frozen-lockfile`** - 更新されたロックファイルに固定されたとおりに依存関係をインストールします。
+
+その後、`bun run dev`、`bun run launch`、またはプロセスマネージャーでTomoriBotを再起動してください。未適用のデータベースマイグレーションは起動時に自動的に適用されます。
+
+便利なフラグ：
+
+| フラグ | 効果 |
+|---|---|
+| `--build` | 依存関係のインストール後に`bun run build`も実行します |
+| `--docker` | Docker Compose用：手順3を`docker compose build` + `docker compose up -d`に置き換えます |
+| `--skip-backup` | 更新前のバックアップをスキップします（非推奨） |
+| `--yes` | 開始前の確認プロンプトをスキップします |
+
+その他のホスト側メンテナンススクリプト（`bun run backup`、`bun run restore-backup`、`bun run nuke-db`、`bun run rotate-keys`など）と、ローカル/Docker Compose両方のデプロイにおけるデータベースのバックアップ/復元はすべて[ドキュメント](https://docs.tomoribot.app/ja/self-hosting/maintenance/)にまとめられています。なお、TomoriBotは`/backups/`にデータを自動でローカルバックアップしています。
 
 <!-- AFTER SETUP -->
 ## 招待・セットアップ後
@@ -275,7 +282,7 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 - `/memory server add` / `/memory server remove` - サーバー全体のメモリーの追加/削除
 - `/server whitelist` / `/server user-blacklist` - TomoriBotの権限の追加/削除
 
-すべてのスラッシュコマンドについては、**[コマンドリファレンス](docs/features/command-reference.md)**の全文を参照してください。
+すべてのスラッシュコマンドについては、**[コマンドリファレンス](https://docs.tomoribot.app/ja/features/command-reference/)**の全文を参照してください。
 
 ### チャットでのやり取り
 
@@ -306,7 +313,7 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 - [ ] 設定用Webダッシュボード
 - [x] 独自のTomoriBotをホストしたい技術的でないユーザー向けの「簡単インストール」ファイルの作成
 
-提案された機能と既知の問題の完全なリストについては、[open issues](https://github.com/Bredrumb/TomoriBot/issues)を参照してください。
+提案された機能と既知の問題の完全なリストについては、[公式GitHubプロジェクト](https://github.com/users/Bredrumb/projects/1/views/1)を参照してください。
 
 <!-- CONTRIBUTING -->
 ## コントリビュート
@@ -337,7 +344,7 @@ TomoriBotはまだベータ版のため、どんなコントリビュートで�
 
 ### 新機能をコントリビュートするには
 
-TomoriBot貢献者向けWikiはまだ開発中ですが、`/docs/`にはTomoriBotのアーキテクチャをより深く理解するのに役立つ包括的なドキュメントが既にあります。新機能のプルリクエストを送信する前に、`bun run check`、`bun run lint`、`bun run check-locales`、`bun run db:lifecycle`がエラーを返さないことを確認してください。
+TomoriBot貢献者向けWikiはまだ開発中ですが、包括的なドキュメントが既に**[こちら](https://docs.tomoribot.app/contributing/)**にあります。プルリクエストを開く前に、[コントリビュートガイドライン](.github/CONTRIBUTING.md)（英語）に従ってください。ブランチ運用、品質ゲートのチェック、そして事前相談なしで歓迎されるコントリビュートの範囲がまとめられています。
 
 <!-- LEGAL -->
 ## 法的事項とライセンス
@@ -349,7 +356,9 @@ TomoriBot貢献者向けWikiはまだ開発中ですが、`/docs/`にはTomoriBo
 これらのドキュメントは、Discord内で`/legal terms`および`/legal privacy`コマンドを使用してもアクセスできます。TomoriBotをセルフホスティングしている場合、これらのドキュメントは参考テンプレートとして機能します。あなたは自分自身のデータを管理し、[**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE)の下でのデプロイのコンプライアンスに責任を負います。
 
 <!-- CONTACT -->
-## 連絡先
+## 連絡先とリンク
+
+**公式ウェブサイト**: [https://docs.tomoribot.app](https://docs.tomoribot.app/ja/)
 
 **プロジェクトリンク**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

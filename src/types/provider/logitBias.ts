@@ -4,8 +4,8 @@ import { z } from "zod";
 export const LOGIT_BIAS_MIN = -100;
 export const LOGIT_BIAS_MAX = 100;
 export const LOGIT_BIAS_TEXT_MAX_LENGTH = 200;
-export const LOGIT_BIAS_TOKENIZATION_MAX = 16;
-export const LOGIT_BIAS_TOKEN_ID_MAX = 512;
+const LOGIT_BIAS_TOKENIZATION_MAX = 16;
+const LOGIT_BIAS_TOKEN_ID_MAX = 512;
 
 const LOGIT_BIAS_KIND_VALUES = ["text", "token_id"] as const;
 const logitBiasKindSchema = z.enum(LOGIT_BIAS_KIND_VALUES);
@@ -31,7 +31,7 @@ function normalizeTokenIds(value: unknown): string[] {
   return normalized;
 }
 
-export const logitBiasTokenizationSchema = z.object({
+const logitBiasTokenizationSchema = z.object({
   tokenizer_key: z.string().trim().min(1).max(100),
   token_ids: z.preprocess(
     (value) => normalizeTokenIds(value),
@@ -53,7 +53,6 @@ export const logitBiasEntrySchema = z.object({
 });
 
 export type LogitBiasEntry = z.infer<typeof logitBiasEntrySchema>;
-export type LogitBiasEntryKind = z.infer<typeof logitBiasKindSchema>;
 
 function parseArrayLike(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
@@ -68,7 +67,7 @@ function parseArrayLike(value: unknown): unknown[] {
   return [];
 }
 
-export function normalizeLogitBiasTokenizations(value: unknown): LogitBiasTokenization[] {
+function normalizeLogitBiasTokenizations(value: unknown): LogitBiasTokenization[] {
   const tokenizations = parseArrayLike(value);
   const normalized: LogitBiasTokenization[] = [];
   const seen = new Set<string>();

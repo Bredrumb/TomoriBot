@@ -8,6 +8,7 @@ import {
   normalizeOpenAICompatibleProviderError,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { streamOpenAICompatibleSseChunks } from "@/providers/openaiCompatible/openaiCompatibleSse";
+import { logRawProviderError } from "@/utils/provider/providerErrorLogging";
 import type {
   OpenAICompatibleAccumulatedToolCall,
   OpenAICompatibleStreamAdapterOptions,
@@ -17,10 +18,13 @@ import type {
 } from "@/providers/openaiCompatible/openaiCompatibleTypes";
 import {
   buildDegradationAttempts,
+  buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
   extractRejectedParams,
+  isMultimodalRejectionError,
   MAX_TARGETED_DEGRADATION_ATTEMPTS,
+  stripImageBlocksWithNotice,
   type DegradableErrorInput,
   type DegradableErrorKind,
 } from "@/providers/utils/paramDegradation";
@@ -95,9 +99,9 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.accumulatedReasoningContent = "";
     this.pendingThinkBlockThoughtText = "";
     this.reasoningContentSpillGuard.reset();
-    // 1. Build a persona-label matcher used as a fallback `</think>` closer.
+    // Build a persona-label matcher used as a fallback `</think>` closer.
     //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
-    //    (half/full-width colon). Required at a line boundary to keep false positives low —
+    //    (half/full-width colon). Required at a line boundary to keep false positives low because
     //    mid-sentence mentions like "as Nerine would" won't trigger.
     const personaName = context.tomoriState.persona_nickname?.trim();
     const personaSpeakerLabelRegex = personaName
@@ -131,6 +135,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       currentTurnModelParts: context.currentTurnModelParts,
       functionInteractionHistory: context.functionInteractionHistory,
       seesImages: openAICompatibleConfig.seesImages ?? false,
+      requiresReasoningContentReplay: this.options.requiresReasoningContentReplay,
       supportsSystemRole,
     });
 
@@ -267,7 +272,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
 
       const fetchImpl = this.options.providerName === "custom" ? fetchUserRemoteUrl : fetch;
       const attempts = buildDegradationAttempts(requestBody, {
-        mandatoryKeys: new Set(["model", "messages", "stream"]),
+        mandatoryKeys: new Set(["model", "messages", "stream", ...(this.options.mandatoryBodyKeys ?? [])]),
+        stripImages: (attemptMessages) =>
+          Array.isArray(attemptMessages)
+            ? stripImageBlocksWithNotice(attemptMessages as Array<Record<string, unknown>>)
+            : attemptMessages,
       });
       const attemptedSerializedBodies = new Set<string>();
       let targetedAttemptCount = 0;
@@ -295,6 +304,37 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         }
         attempts.splice(currentIndex + 1, 0, targetedAttempt);
         targetedAttemptCount += 1;
+        return true;
+      };
+      // A multimodal rejection (e.g. vLLM without --enable-multimodal returns a
+      // 500) means every payload that still carries image blocks will fail the
+      // same way, so jump straight to the image-strip attempt instead of walking
+      // the sampler-probe rungs first. The strip injects a text notice per
+      // message so the model stays aware images were attached.
+      let imageStripAttemptQueued = false;
+      const queueImageStripAttempt = (
+        currentIndex: number,
+        currentBody: Record<string, unknown>,
+        errorMessage: string,
+      ): boolean => {
+        if (imageStripAttemptQueued || !isMultimodalRejectionError(errorMessage)) {
+          return false;
+        }
+
+        const imageStripAttempt = buildImageStripAttempt(currentBody);
+        if (!imageStripAttempt) return false;
+
+        const serialized = JSON.stringify(imageStripAttempt.body);
+        if (attemptedSerializedBodies.has(serialized)) return false;
+
+        const duplicateIndex = attempts.findIndex(
+          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+        );
+        if (duplicateIndex !== -1) {
+          attempts.splice(duplicateIndex, 1);
+        }
+        attempts.splice(currentIndex + 1, 0, imageStripAttempt);
+        imageStripAttemptQueued = true;
         return true;
       };
       let completedAttempt = false;
@@ -340,18 +380,19 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
           if (!response.ok) {
             const responseErrorText = await response.text();
             // A message that names a droppable request param is sufficient evidence on
-            // its own — retry even when the generic status/wording classifier misses.
+            // its own, so retry even when the generic status/wording classifier misses.
             // `degradeOn502` stays off: a direct provider's 502 is an outage, not a
             // parameter incompatibility, and should fail fast into key/model fallback.
             const queuedTargeted = queueTargetedAttempt(i, attempt.body, responseErrorText);
+            const queuedImageStrip = queueImageStripAttempt(i, attempt.body, responseErrorText);
             const degradationKind = classifyDegradableError({
               statusCode: response.status,
               message: responseErrorText,
               extraClassifiers,
             });
-            if ((degradationKind || queuedTargeted) && i < attempts.length - 1) {
+            if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
               log.warn(
-                `${this.options.adapterName}: Endpoint returned ${degradationKind ? this.describeDegradationKind(degradationKind) : "an error naming request parameters"} on attempt '${attempt.label}', trying fallback payload`,
+                `${this.options.adapterName}: Endpoint returned ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} on attempt '${attempt.label}', trying fallback payload`,
                 { model: config.model, errorMessage: responseErrorText },
               );
               continue;
@@ -374,13 +415,14 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
               // Same rule as the fetch path: a message naming droppable params
               // justifies a retry even without a generic classifier match.
               const queuedTargeted = queueTargetedAttempt(i, attempt.body, midStreamError.message);
+              const queuedImageStrip = queueImageStripAttempt(i, attempt.body, midStreamError.message);
               const degradationKind = classifyDegradableError({
                 ...midStreamError,
                 extraClassifiers,
               });
-              if ((degradationKind || queuedTargeted) && i < attempts.length - 1) {
+              if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
                 log.warn(
-                  `${this.options.adapterName}: Received ${degradationKind ? this.describeDegradationKind(degradationKind) : "an error naming request parameters"} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                  `${this.options.adapterName}: Received ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
                   { model: config.model, errorMessage: midStreamError.message },
                 );
                 currentController.abort();
@@ -674,26 +716,8 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     });
   }
 
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null {
-    const openAIChunk = chunk.data as OpenAICompatibleStreamChunk;
-    const choice = openAIChunk.choices?.[0];
-    if (!choice?.delta?.tool_calls || choice.delta.tool_calls.length === 0) {
-      return null;
-    }
-
-    const toolCall = choice.delta.tool_calls[0];
-    if (!toolCall.function) {
-      return null;
-    }
-
-    return {
-      name: toolCall.function.name || "",
-      args: toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {},
-    };
-  }
-
   handleProviderError(error: unknown): ProviderError {
-    log.error(`${this.options.adapterName}: Provider error`, error as Error);
+    logRawProviderError(this.options.adapterName, error);
     return normalizeOpenAICompatibleProviderError(error, {
       errorMessagePrefix: this.options.errorMessagePrefix,
     });
@@ -757,6 +781,13 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       case "provider_specific":
         return "provider-specific parameter rejection";
     }
+  }
+
+  /** Log label for whichever signal made the failed attempt eligible for a retry. */
+  private describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
+    if (kind) return this.describeDegradationKind(kind);
+    if (queuedImageStrip) return "a multimodal/image-input rejection";
+    return "an error naming request parameters";
   }
 
   private stripThinkBlocksFromChunkContent(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {

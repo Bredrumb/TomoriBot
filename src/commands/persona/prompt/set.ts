@@ -1,17 +1,15 @@
-import type {
-  ButtonInteraction,
-  ChatInputCommandInteraction,
-  Client,
-  ModalSubmitInteraction,
-  SlashCommandSubcommandBuilder,
-} from "discord.js";
+import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
 import type { UserRow, TomoriState } from "@/types/db/schema";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { acknowledgeModalSubmitForRefresh, promptWithRawModal } from "@/utils/discord/ui/modals";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { localizer } from "@/utils/text/localizer";
@@ -76,9 +74,10 @@ export async function execute(
   }
 
   let tomoriState: TomoriState | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
-  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
   try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
@@ -102,135 +101,120 @@ export async function execute(
       return;
     }
 
-    const avatarSessionCache: AvatarSessionCache = new Map();
-    while (true) {
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        avatarSessionCache,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
-      });
+    await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      async onSelected(selection) {
+        workflowState.message = selection.message;
+        const selectedPersona = selection.persona;
 
-      if (!personaSelection.success) {
-        return;
-      }
-      if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-        return;
-      }
+        if (!selectedPersona.persona_id) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      personaSelectionInteraction = personaSelection.interaction;
-      const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-
-      if (!selectedPersona?.persona_id) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "general.errors.invalid_option_title",
-          "general.errors.invalid_option_description",
-          ColorCode.ERROR,
-          undefined,
-          "general.pagination.reloading_persona_picker",
+        const existingPromptParts = splitPromptIntoModalParts(
+          resolvePrefillPrompt(selectedPersona),
+          PERSONA_PROMPT_INPUT_IDS.length,
+          PERSONA_PROMPT_PART_MAX_LENGTH,
         );
-        continue;
-      }
 
-      const existingPromptParts = splitPromptIntoModalParts(
-        resolvePrefillPrompt(selectedPersona),
-        PERSONA_PROMPT_INPUT_IDS.length,
-        PERSONA_PROMPT_PART_MAX_LENGTH,
-      );
-
-      const modalResult = await promptWithRawModal(personaSelectionInteraction, locale, {
-        modalCustomId: MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.teach.personaprompt.modal_title",
-        components: [
-          {
-            customId: PERSONA_PROMPT_INPUT_IDS[0],
-            labelKey: "commands.teach.personaprompt.part1_label",
-            descriptionKey: "commands.teach.personaprompt.part1_description",
-            placeholder: "commands.teach.personaprompt.part1_placeholder",
-            style: TextInputStyle.Paragraph,
-            required: false,
-            maxLength: PERSONA_PROMPT_PART_MAX_LENGTH,
-            value: existingPromptParts[0] || undefined,
-          },
-          {
-            customId: PERSONA_PROMPT_INPUT_IDS[1],
-            labelKey: "commands.teach.personaprompt.part2_label",
-            placeholder: "commands.teach.personaprompt.part2_placeholder",
-            style: TextInputStyle.Paragraph,
-            required: false,
-            maxLength: PERSONA_PROMPT_PART_MAX_LENGTH,
-            value: existingPromptParts[1] || undefined,
-          },
-          {
-            customId: PERSONA_PROMPT_INPUT_IDS[2],
-            labelKey: "commands.teach.personaprompt.part3_label",
-            placeholder: "commands.teach.personaprompt.part3_placeholder",
-            style: TextInputStyle.Paragraph,
-            required: false,
-            maxLength: PERSONA_PROMPT_PART_MAX_LENGTH,
-            value: existingPromptParts[2] || undefined,
-          },
-          {
-            customId: PERSONA_PROMPT_INPUT_IDS[3],
-            labelKey: "commands.teach.personaprompt.part4_label",
-            placeholder: "commands.teach.personaprompt.part4_placeholder",
-            style: TextInputStyle.Paragraph,
-            required: false,
-            maxLength: PERSONA_PROMPT_PART_MAX_LENGTH,
-            value: existingPromptParts[3] || undefined,
-          },
-        ],
-      });
-
-      if (modalResult.outcome !== "submit") {
-        log.info(`Teach personaprompt modal ${modalResult.outcome} for user ${interaction.user.id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      modalSubmitInteraction = modalResult.interaction;
-      const personaPrompt = combineModalPromptParts(
-        PERSONA_PROMPT_INPUT_IDS.map((inputId) => modalResult.values?.[inputId] || ""),
-        PERSONA_PROMPT_PART_MAX_LENGTH,
-      );
-      if (!modalSubmitInteraction) {
-        return;
-      }
-
-      const ok = await personaRepository.setPrompt(selectedPersona.persona_id, personaPrompt || "");
-      if (!ok) {
-        await replyInfoEmbed(modalSubmitInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
+        const modalResult = await selection.openModal({
+          modalCustomId: MODAL_CUSTOM_ID,
+          modalTitleKey: "commands.teach.personaprompt.modal_title",
+          components: [
+            {
+              customId: PERSONA_PROMPT_INPUT_IDS[0],
+              labelKey: "commands.teach.personaprompt.part1_label",
+              descriptionKey: "commands.teach.personaprompt.part1_description",
+              placeholder: "commands.teach.personaprompt.part1_placeholder",
+              style: TextInputStyle.Paragraph,
+              required: false,
+              maxLength: PERSONA_PROMPT_PART_MAX_LENGTH,
+              value: existingPromptParts[0] || undefined,
+            },
+            {
+              customId: PERSONA_PROMPT_INPUT_IDS[1],
+              labelKey: "commands.teach.personaprompt.part2_label",
+              placeholder: "commands.teach.personaprompt.part2_placeholder",
+              style: TextInputStyle.Paragraph,
+              required: false,
+              maxLength: PERSONA_PROMPT_PART_MAX_LENGTH,
+              value: existingPromptParts[1] || undefined,
+            },
+            {
+              customId: PERSONA_PROMPT_INPUT_IDS[2],
+              labelKey: "commands.teach.personaprompt.part3_label",
+              placeholder: "commands.teach.personaprompt.part3_placeholder",
+              style: TextInputStyle.Paragraph,
+              required: false,
+              maxLength: PERSONA_PROMPT_PART_MAX_LENGTH,
+              value: existingPromptParts[2] || undefined,
+            },
+            {
+              customId: PERSONA_PROMPT_INPUT_IDS[3],
+              labelKey: "commands.teach.personaprompt.part4_label",
+              placeholder: "commands.teach.personaprompt.part4_placeholder",
+              style: TextInputStyle.Paragraph,
+              required: false,
+              maxLength: PERSONA_PROMPT_PART_MAX_LENGTH,
+              value: existingPromptParts[3] || undefined,
+            },
+          ],
         });
-        continue;
-      }
 
-      invalidateTomoriStateCache(serverDiscId);
+        if (modalResult.outcome !== "submitted") {
+          log.info(`Teach personaprompt modal ${modalResult.outcome} for user ${interaction.user.id}`);
+          return modalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+        }
 
-      await acknowledgeModalSubmitForRefresh(modalSubmitInteraction);
-      await replyComponentsV2Status(
-        interaction,
-        locale,
-        personaPrompt ? "commands.teach.personaprompt.success_title" : "commands.forget.personaprompt.success_title",
-        personaPrompt
-          ? "commands.teach.personaprompt.success_description"
-          : "commands.forget.personaprompt.success_description",
-        ColorCode.SUCCESS,
-        { persona_name: selectedPersona.persona_nickname },
-        "general.pagination.reloading_persona_picker",
-      );
-    }
+        const work = await modalResult.phase.beginInPlaceWork();
+        const personaPrompt = combineModalPromptParts(
+          PERSONA_PROMPT_INPUT_IDS.map((inputId) => modalResult.phase.values[inputId] || ""),
+          PERSONA_PROMPT_PART_MAX_LENGTH,
+        );
+        const ok = await personaRepository.setPrompt(selectedPersona.persona_id, personaPrompt || "");
+        if (!ok) {
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.update_failed_title",
+              descriptionKey: "general.errors.update_failed_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+
+        selectedPersona.persona_prompt = personaPrompt || null;
+        invalidateTomoriStateCache(serverDiscId);
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: personaPrompt
+              ? "commands.teach.personaprompt.success_title"
+              : "commands.forget.personaprompt.success_title",
+            descriptionKey: personaPrompt
+              ? "commands.teach.personaprompt.success_description"
+              : "commands.forget.personaprompt.success_description",
+            descriptionVars: { persona_name: selectedPersona.persona_nickname },
+            footerKey: "general.pagination.reloading_persona_picker",
+            color: ColorCode.SUCCESS,
+          }),
+        );
+        return retryPersonaWorkflow();
+      },
+    });
   } catch (error) {
     await log.error("Error in /teach personaprompt command", error, {
       serverId: tomoriState?.server_id,
@@ -243,16 +227,22 @@ export async function execute(
       },
     });
 
-    const errorReplyTarget =
-      modalSubmitInteraction ??
-      (personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction);
-    await replyInfoEmbed(errorReplyTarget, locale, {
-      titleKey: "general.errors.unknown_error_title",
-      descriptionKey: "general.errors.unknown_error_description",
-      color: ColorCode.ERROR,
-      flags: MessageFlags.Ephemeral,
-    });
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+    } else {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "general.errors.unknown_error_title",
+        descriptionKey: "general.errors.unknown_error_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   }
 }

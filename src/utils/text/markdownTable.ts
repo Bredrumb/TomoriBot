@@ -329,8 +329,29 @@ export function hasTrailingIncompleteMarkdownTable(text: string): boolean {
   return scanMarkdownTables(text, false).incompleteTail;
 }
 
-export function isRenderedMarkdownTableAttachmentName(name: string | null | undefined): boolean {
-  if (!name) return false;
-  const normalized = name.toLowerCase();
-  return normalized.startsWith(MARKDOWN_TABLE_ATTACHMENT_PREFIX) && normalized.endsWith(".png");
+/**
+ * Finds the markdown table block that the given offset falls strictly inside.
+ *
+ * Used by the stream buffer to keep a table atomic: any cut landing between a table's
+ * first and last character would split it into two segments, and only the fragment that
+ * still parses as a table gets rendered; the rest leaks out as raw pipe-delimited text.
+ *
+ * EOF is treated as terminating a block here (unlike {@link hasTrailingIncompleteMarkdownTable})
+ * so a table that is still streaming is protected from a cut just as much as a finished one.
+ *
+ * @param index - Absolute offset a caller intends to cut at
+ * @returns The enclosing table's `[start, end)` range, or null when the offset is at a
+ *   block boundary or outside every table
+ */
+export function findMarkdownTableBlockAt(text: string, index: number): { start: number; end: number } | null {
+  const { tables } = scanMarkdownTables(text, true);
+
+  for (const table of tables) {
+    // Boundaries are safe cut points: only offsets strictly interior split a table.
+    if (index > table.start && index < table.end) {
+      return { start: table.start, end: table.end };
+    }
+  }
+
+  return null;
 }

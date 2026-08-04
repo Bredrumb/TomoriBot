@@ -45,7 +45,7 @@ export interface OpenAICompatibleAccumulatedToolCall {
   functionArguments: string;
 }
 
-export interface OpenAICompatibleParameterSchema extends Record<string, unknown> {
+interface OpenAICompatibleParameterSchema extends Record<string, unknown> {
   type: ToolParameterType;
   description?: string;
   enum?: string[];
@@ -79,13 +79,13 @@ export interface OpenAICompatibleStreamConfig extends StreamConfig {
   logitBias?: Record<string, number>;
 }
 
-export interface OpenAICompatibleRequestMutationArgs {
+interface OpenAICompatibleRequestMutationArgs {
   requestBody: Record<string, unknown>;
   config: OpenAICompatibleStreamConfig;
   context: StreamContext;
 }
 
-export interface OpenAICompatibleHeaderMutationArgs {
+interface OpenAICompatibleHeaderMutationArgs {
   headers: Record<string, string>;
   config: OpenAICompatibleStreamConfig;
   context: StreamContext;
@@ -109,6 +109,23 @@ export interface OpenAICompatibleStreamAdapterOptions {
    */
   includePersonaSpeakerStop?: boolean;
   preserveReasoningContent?: boolean;
+  /**
+   * When `true`, replayed assistant tool-call turns always carry a `reasoning_content` key,
+   * empty string included. Separate from {@link preserveReasoningContent} (which only governs
+   * capture) because DeepSeek is so far the only endpoint proven to require the key's presence
+   * and to accept an empty value.
+   */
+  requiresReasoningContentReplay?: boolean;
+  /**
+   * Request-body keys the degradation ladder must never drop, on top of the shared
+   * `model`/`messages`/`stream`.
+   *
+   * The ladder assumes a dropped key only affects the attempt that drops it, which holds for
+   * sampler knobs but not for keys that change the shape of the reply. `thinking` is the case
+   * that matters: a rung that drops it still calls tools, and the resulting tool call has no
+   * `reasoning_content` to capture, which a later full-strength request then cannot replay.
+   */
+  mandatoryBodyKeys?: readonly string[];
   /** Set to `false` to disable stripping `<think>` blocks from content. Defaults to `true`. */
   stripThinkBlocksFromContent?: boolean;
   /** Set to `false` to discard stripped `<think>` content instead of routing it to the thought log. Defaults to `true`. */

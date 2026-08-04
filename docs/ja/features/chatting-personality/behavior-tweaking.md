@@ -21,7 +21,7 @@ sidebar:
 
 - `/config system-prompt set`：カスタムのシステム指示を設定します（最大16,000文字）。
 - `/config system-prompt preset`：用意されたシステムプロンプトのプリセットから選択します。
-- `/config system-prompt remove`：デフォルトにリセットします。
+- `/config system-prompt remove`：デフォルトにリセットします。確認メッセージには削除されたプロンプトが表示されるため、誤ってクリアした場合でもコピーして復元できます。
 
 [SillyTavernサポート](/ja/features/integrations/sillytavern-support/)のプリセットが有効な場合、内蔵のフォールバックシステムプロンプトは置き換えられますが、ここで設定したカスタムプロンプトは引き続き送信されます。
 

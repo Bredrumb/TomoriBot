@@ -112,7 +112,7 @@ describe("update_task helpers", () => {
     if (!serverFrame.ok) return;
     expect(serverFrame.newReminderTime?.toISOString()).toBe("2099-01-01T01:00:00.000Z");
 
-    // With utc_offset: 09:00 at Alice's UTC-5 is 14:00 UTC — server offset must NOT apply
+    // With utc_offset: 09:00 at Alice's UTC-5 is 14:00 UTC, so server offset must NOT apply
     const userFrame = parseUpdateTaskArguments(
       {
         reminder_id: 5,

@@ -11,7 +11,9 @@ This document summarizes the current PostgreSQL schema used by TomoriBot.
 
 ## Data Access Boundary
 
-The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repository classes implement the shared `IRepository<TExport>` contract:
+The Phase 2 data-access layer lives under `src/utils/db/repositories/`. Most domains expose repository
+instances that implement the shared `IRepository<TExport>` contract. Quota and speech expose module-level
+functions because callers use only their focused operations:
 
 | Repository | Domain |
 |---|---|
@@ -36,18 +38,26 @@ The Phase 2 repository layer lives under `src/utils/db/repositories/`. Repositor
 | `ServerMemoryRepository` | Server-wide shared memories |
 | `ServerRepository` | Server identity: setup, emojis/stickers, webhooks, blacklist |
 | `ServerScheduleRepository` | Reminder + random-trigger scheduling |
-| `ShortTermMemoryRepository` | Short-term per-channel/user conversation memory |
 | `SpeechRepository` | Speech (TTS/STT) server configuration |
 | `StatRepository` | Buffered usage-stat counters + read/aggregation (`stat_counters`) |
 | `ToolRepository` | Tool configurations and API key status |
 | `UserRepository` | User registration, privacy, personalization, spotlight |
 | `WhitelistRepository` | Channel, persona, and role whitelist rules |
 
-Application code imports repository instances from `src/utils/db/repositories/index.ts`. That file re-exports repository instances and a small set of shared types; it contains no free functions. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have been removed.
+Application code imports shared repository instances from `src/utils/db/repositories/index.ts`. Focused
+quota and speech callers import their operations directly from the owning module. Short-term conversation
+memory is owned directly by `src/utils/cache/shortTermMemoryCache.ts`; its unused repository wrapper was
+removed. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have
+also been removed.
 
 ### SQL convention
 
-All SQL is inlined as `private` methods directly on the owning Repository class. Separate `*ReadSql.ts` / `*WriteSql.ts` sibling files are forbidden — `checkRefactorIntegrity.ts` will flag any surviving SQL sibling at gate time. If inlining SQL pushes a Repository file past ~1,000 lines, that signals the domain is too broad: **split the Repository itself** (e.g. `LlmRepository` → `LlmModelRepository` + `LlmProviderRepository` + `LlmOverrideRepository`) rather than externalising SQL. Size is the signal; the split must follow a coherent domain boundary.
+SQL stays in its owning repository module, either in `private` class methods or focused module-level
+functions. Separate `*ReadSql.ts` / `*WriteSql.ts` sibling files are forbidden —
+`checkRefactorIntegrity.ts` will flag any surviving SQL sibling at gate time. If inlining SQL pushes a
+Repository file past ~1,000 lines, that signals the domain is too broad: **split the Repository itself**
+(e.g. `LlmRepository` → `LlmModelRepository` + `LlmProviderRepository` + `LlmOverrideRepository`) rather
+than externalising SQL. Size is the signal; the split must follow a coherent domain boundary.
 
 ## Main Tables (Current)
 
@@ -143,6 +153,12 @@ All SQL is inlined as `private` methods directly on the owning Repository class.
 - `openrouter_image_model_registrations`
 - `openrouter_video_model_registrations`
 
+The `reminders` table keeps the canonical next occurrence in `reminder_time`.
+`next_attempt_at` is a nullable delivery-retry lease and
+`delivery_retry_count` persists the current occurrence's retry budget. Successful
+delivery, manual edits, and recurring fallback advancement clear both retry
+fields, so retry delays never shift the recurring cadence.
+
 ### Quota system
 
 - `image_quota_configs`
@@ -215,7 +231,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_member_permissions_configs.self_teaching_enabled` and `server_member_permissions_configs.personal_memories_enabled` are exposed in `/capabilities manage` because they gate core bot behavior, but they remain in the member-permissions split table with the other teaching/privacy toggles.
 - `server_capabilities_configs.videogen_enabled` gates both slash-command and tool-driven video generation exposure. The DB default is `false`, so video generation starts disabled until explicitly enabled.
 - `server_capabilities_configs.user_blocking_enabled` gates the `block_user` and `unblock_user` built-in tools. The DB default is `true`.
-- `server_capabilities_configs.time_awareness_enabled` gates reunion notes and server-calendar date spacers in dialogue context. The DB default is `true`; `/capabilities manage` exposes it as **Better Time Awareness**.
+- `server_capabilities_configs.time_awareness_enabled` gates reunion notes, their `presence_seen` writes, and server-calendar date spacers in dialogue context. The DB default is `true`; `/capabilities manage` exposes it as **Better Time Awareness**.
 - `server_capabilities_configs.verbatim_tool_calling_enabled` gates the Custom-provider-only text parser that converts strict code-span tool calls into normal tool-loop calls. The DB default is `false`.
 - `persona_user_blocks` stores active persona-scoped mutes/blocks keyed by `(server_id, persona_id, user_disc_id)`, with `block_type` (`mute` or `block`), `reason`, and `expires_at`. Expired rows are ignored by repository reads. The table is intentionally separate from `personalization_blacklist`.
 - `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null.
@@ -319,10 +335,17 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 ### Logit bias snapshot storage
 
 - `saved_provider_configs.llm_logit_biases` mirrors `server_chat_configs.llm_logit_biases` so provider snapshots can restore both the original text entries and any cached tokenizer-family resolutions.
-- This keeps provider activation compatible with text-first logit-bias UX across model changes while `/provider add` seeds saved-provider defaults and activates that provider's default text model.
+- This keeps provider activation compatible with text-first logit-bias UX across model changes. `/provider add`
+  preserves an existing active text-model choice when credentials are updated, but replaces a missing,
+  deprecated, or cross-provider saved reference with that provider's current default before activation.
 
 ### Provider snapshot model storage
 
+- `saved_provider_configs.diffusion_model_id` and `nai_diffusion_model_id` follow the same refresh rule
+  as the text model: `shouldRefreshSavedDiffusionModel` replaces a missing, deprecated, or cross-provider
+  reference with the provider's current default while preserving a deliberate, still-active choice. Both
+  columns index `image_diffusion_models`, so both are checked. The rule only runs when a provider config is
+  rebuilt (credential set/update, provider switch), not on every generation.
 - `saved_provider_configs.video_model_id` mirrors the last saved video model for that provider so capability-specific cleanup and future migrations can reason about prior selections; Phase 1 provider switching does not automatically restore video model slots.
 - `saved_provider_configs.provider` and `user_saved_provider_configs.provider` may now hold internal custom provider IDs (`custom:s<server_id>:<label>` / `custom:u<user_id>:<label>`) so labeled custom endpoints can coexist side-by-side without colliding with each other or with classic providers.
 - Phase 6 Step #16 audited `saved_provider_configs` for runtime telemetry analogous to key-rotation counters/errors. None was found: `consecutive_failures` does not exist on this table, and the remaining fields are credentials or provider/model/sampler snapshots. No runtime-state split is pending for saved provider configs.
@@ -357,7 +380,25 @@ Key behaviors:
 - **Buffered writes.** `StatRepository.recordStat(...)` accumulates deltas in an in-memory `Map` keyed by the PK tuple; `flush()` drains a snapshot as one multi-row additive UPSERT (`count = count + EXCLUDED.count`). Interval, size-cap, dashboard/card, and shutdown callers share one in-flight promise, so shutdown waits for an active transaction and then drains entries recorded while it ran. Flush triggers: interval (`STAT_FLUSH_INTERVAL_MS`), size cap (`STAT_FLUSH_MAX_BUFFER`), explicit dashboard/card reads, and graceful shutdown (`statRepository.shutdown()` from the SIGINT/SIGTERM handler). A hard crash loses only the unflushed buffer — accepted tradeoff for aggregate telemetry. Kill switch: `STAT_TRACKING_ENABLED`.
 - **No mutating-column indexes.** Secondary indexes cover only the stable dimension columns; `count` / `last_at` are never indexed so hot counter rows keep Postgres HOT updates. "Top N" is sorted at read time.
 - **Reads** (`getFavoritePersona`, `getTopCommands` / `getUnusedCommands`, `getModelBreakdown`, `getEstimatedCost`, `getActivityHistogram`, `getStreak`, `getGenerationTotals`) are windowed by `bucket >= from` + `SUM` and hit the DB directly (no read cache in Phase 1). `getGenerationTotals` sums the canonical `text_generated` / `image_generated` / `video_generated` metrics (image/video summed across their per-model `metric_key`); quota tables remain enforcement-only. `audio_generated` is recorded (keyed by TTS backend) but not yet surfaced by `getGenerationTotals`. `getConditioningTotals` is the sole read-existing wrapper and aggregates `conditioning_history`.
-- **Instrumented chokepoints:** `command_used` (command dispatch), `message_sent` / `active_hour` / `model_used` / `tokens_in` / `tokens_out` / `emoji_used` / `sprite_shown` / `text_generated` / `user_impersonation_triggered` (post-turn effects), `tool_used` (single tool-dispatch chokepoint; per-tool breakdown via `metric_key`), `image_generated` / `video_generated` (successful generation paths, keyed by model codename for a per-model breakdown; totals still sum over keys), and `audio_generated` (successful voice-message paths, keyed by TTS backend — `elevenlabs` / `tts-clone` / `tts-voice-design`; `tool_used` still counts the `generate_voice_message` call). `user_impersonation_triggered` is written once per completed impersonation turn: `user_id` is the triggering actor, `persona_lineage_id` is the answering Tomori persona, and `metric_key` is the impersonated Discord user ID. It is retained for future reads but is not currently surfaced by `/stats` or `/stats generate`. `tokens_in` / `tokens_out` prefer **real provider usage** when surfaced: the orchestrator normalizes each provider's reported usage (`normalizeProviderUsage`) onto `StreamResult.usage`, and `recordUsageStats` sums it across the turn's stream segments (one per tool-loop request, each billed separately). Real usage flows for OpenRouter, OpenAI-compatible (DeepSeek/Z.AI/NVIDIA/Custom), Anthropic, and Gemini (Google/Vertex/VertexExpress). When no segment reports usage (e.g. NovelAI), tokens fall back to the **character estimate** (the Track-A fallback shared with `/tool estimate cost` via `@/utils/text/tokenEstimate` — input from the built context, output from the response text; over-counts dense languages, rough only). Either path uses the identical metric shape, so cost reads are unchanged. `emoji_used` counts resolved `<:name:id>` tags scanned from the final persona text; `sprite_shown` is surfaced from the stream via `StreamResult.spritesShown` (the stream layer has no internal user id, so attribution happens post-turn). `sticker_used` is emitted at the tool-dispatch chokepoint alongside `tool_used`, keyed by the canonical resolved sticker name from the tool result (per-sticker breakdown; `tool_used` still counts the call). Still reserved (no dedicated emit): the split-out `web_search` / `memory_taught` / `reminder_set` metrics, currently captured under `tool_used` by name.
+- **Never-used commands need a dimension table.** `command_used` only gains a row once a command is invoked, so unused commands are *absent* from `stat_counters` and no query over it alone can list them. The `command_catalog` table (below) supplies the full command universe to `LEFT JOIN` against.
+- **Instrumented chokepoints:** `command_used` (command dispatch), `message_sent` / `active_hour` / `model_used` / `tokens_in` / `tokens_out` / `emoji_used` / `sprite_shown` / `text_generated` / `user_impersonation_triggered` (post-turn effects), `tool_used` (single tool-dispatch chokepoint; per-tool breakdown via `metric_key`), `image_generated` / `video_generated` (successful generation paths, keyed by model codename for a per-model breakdown; totals still sum over keys), and `audio_generated` (successful voice-message paths, keyed by TTS backend — `elevenlabs` / `tts-clone` / `tts-voice-design`; `tool_used` still counts the `generate_voice_message` call). `user_impersonation_triggered` is written once per completed impersonation turn: `user_id` is the triggering actor, `persona_lineage_id` is the answering Tomori persona, and `metric_key` is the impersonated Discord user ID. It is retained for future reads but is not currently surfaced by `/stats` or `/stats generate`. `tokens_in` / `tokens_out` prefer **real provider usage** when surfaced: the orchestrator normalizes each provider's reported usage (`normalizeProviderUsage`) onto `StreamResult.usage`, and `recordUsageStats` sums it across the turn's stream segments (one per tool-loop request, each billed separately). Real usage flows for OpenRouter, OpenAI-compatible (DeepSeek/Z.AI/NVIDIA/Custom), Anthropic, and Gemini (Google/Vertex/VertexExpress). When no segment reports usage (e.g. NovelAI), tokens fall back to the **character estimate** (the Track-A fallback shared with `/tool estimate cost` via `@/utils/text/tokenEstimate` — input from the built context, output from the response text; over-counts dense languages, rough only). Either path uses the identical metric shape, so cost reads are unchanged. Expression metrics are **delivery-gated** (they count what Discord accepted, not what the model produced): `emoji_used` counts resolved `<:name:id>` tags scanned from each stream segment's `StreamResult.accumulatedText`, which is appended only after a successful send, *not* from `personaResponses[].text`, whose appended `[Scene Metadata]` block (drained out of `<details>`) never reaches the channel; `sprite_shown` is surfaced from the stream via `StreamResult.spritesShown` (the stream layer has no internal user id, so attribution happens post-turn). `sticker_used` is emitted on confirmed delivery in `postTurnEffects.recordStickerDelivery`, keyed by the canonical resolved sticker name (per-sticker breakdown; the `tool_used` row at tool dispatch still counts the *call*, so a selected-but-undelivered sticker shows there and nowhere else). Still reserved (no dedicated emit): the split-out `web_search` / `memory_taught` / `reminder_set` metrics, currently captured under `tool_used` by name.
+- **`presence_seen` is behavioral, not telemetry.** It is a two-phase write owned by `@/utils/chat/reunionPresence`: the direct triggerer's scope and one-shot claim are resolved at context build (`resolveReunionNote`), then a successful response is committed post-turn (`recordReunionPresence`). It is the only metric recorded in DMs because it answers "when did this persona last interact with this person", which drives reunion notes (see [dialogue history](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)). The write bypasses the telemetry buffer so another channel immediately observes it. Failed, empty, passive-bystander, and claim-suppressed turns do not consume a reunion. No `/stats` read surfaces `presence_seen`.
+
+### Command catalog (command dimension table, migration 049)
+
+`command_catalog` is the **dimension table** that materializes the full universe of registered commands so telemetry consumers can report *never-used* commands. It exists because `stat_counters` is a fact table: a command with zero uses has no `command_used` row, so a leaderboard built from `stat_counters` alone silently omits it. Global (no `server_id`) — the command set is the same everywhere the bot runs.
+
+| Column | Notes |
+|---|---|
+| `command_name` | `TEXT PRIMARY KEY`. The **space-joined full path** — identical to `stat_counters.metric_key` for `command_used` (e.g. `update`, `config humanizer`, `server welcome-channel set`), so the two tables `LEFT JOIN` with no remapping. |
+| `category` | Top-level command/category name (first path segment). |
+| `first_seen_at` / `last_synced_at` | Insert time (preserved across syncs) and last reconciliation time. |
+
+Key behaviors:
+
+- **Self-populated, never hardcoded.** The `04_syncCommandCatalog` `clientReady` handler calls `getCommandCatalogEntries(executionMap)` (in `commandLoader.ts`), which flattens the already-loaded command map into the space-joined paths, then hands them to `StatRepository.syncCommandCatalog(...)`. Code is the source of truth, so the catalog cannot drift from the registered commands.
+- **Upsert-then-prune, transactional.** One transaction upserts every current command (refreshing `category` + `last_synced_at`, preserving `first_seen_at`) then deletes rows no longer registered, so renamed/removed commands drop out automatically. An empty input list skips the prune, so a transient loader failure can never wipe the catalog.
+- **Primary consumer:** the Grafana "least-used / never-used commands" panel, which `LEFT JOIN`s `command_catalog` against the `command_used` metric and reports `COALESCE(SUM(count), 0)`, surfacing zero-use commands at the top. In-app, `StatRepository.getUnusedCommands(allCommands, ...)` performs the same set difference with the command list passed from the registry.
 
 ## Migration System (Phase 6+)
 

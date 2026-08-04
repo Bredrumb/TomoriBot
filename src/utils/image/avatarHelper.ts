@@ -4,7 +4,6 @@
  */
 
 import type { Client, Guild } from "discord.js";
-import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { TomoriPresetRow } from "../../types/db/schema";
@@ -23,7 +22,7 @@ const IMAGE_EXTENSION_RE = /\.(png|jpg|jpeg|webp|gif)$/i;
  * Resolves an avatar path to a Buffer.
  * If the path has a known image extension it is read directly.
  * Otherwise the path is treated as a directory and the first image file
- * found (alphabetically) is used — so the filename inside the folder
+ * found (alphabetically) is used so the filename inside the folder
  * does not need to be predetermined.
  */
 export async function resolveAvatarPath(avatarPath: string): Promise<Buffer> {
@@ -44,21 +43,16 @@ export async function resolveAvatarPath(avatarPath: string): Promise<Buffer> {
 /**
  * Gets TomoriBot's server-specific avatar or falls back to bot's default avatar
  * @param guild - Discord Guild object (can be null for DM contexts)
- * @param client - Discord Client instance
- * @returns Promise resolving to PNG image as Buffer
  * @throws Error if avatar cannot be fetched or processed
  */
 export async function getServerAvatar(guild: Guild | null, client: Client): Promise<Buffer> {
   try {
     let avatarUrl: string | null = null;
 
-    // 1. Try to get TomoriBot's guild-specific avatar first
     if (guild && client.user) {
       try {
-        // Fetch the bot's member object in this guild
         const botMember = await guild.members.fetch(client.user.id);
 
-        // displayAvatarURL() prioritizes guild-specific avatar over global avatar
         avatarUrl = botMember.displayAvatarURL({
           size: 1024,
           extension: "png",
@@ -69,14 +63,12 @@ export async function getServerAvatar(guild: Guild | null, client: Client): Prom
           `Using TomoriBot's ${botMember.avatar ? "server-specific" : "global"} avatar for server: ${guild.name} (${guild.id})`,
         );
       } catch (error) {
-        // If fetching bot member fails, fall through to default avatar
         log.warn(
           `Could not fetch bot member for guild ${guild.id}: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       }
     }
 
-    // 2. Fall back to bot's default/global avatar if no guild-specific avatar
     if (!avatarUrl && client.user) {
       avatarUrl = client.user.displayAvatarURL({
         size: 1024,
@@ -86,12 +78,10 @@ export async function getServerAvatar(guild: Guild | null, client: Client): Prom
       log.info("Using bot's default/global avatar");
     }
 
-    // 3. Validate we have an avatar URL
     if (!avatarUrl) {
       throw new Error("Could not determine avatar URL");
     }
 
-    // 4. Download the avatar image
     log.info(`Downloading avatar from: ${avatarUrl}`);
     const response = await safeDownload(avatarUrl, {
       maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
@@ -104,7 +94,6 @@ export async function getServerAvatar(guild: Guild | null, client: Client): Prom
 
     const imageBuffer = response.buffer;
 
-    // 6. Verify it's a valid PNG
     if (!isPNGFormat(imageBuffer)) {
       log.warn("Downloaded avatar is not in PNG format, attempting conversion");
       // Note: Discord should always return PNG when we request it with extension: 'png'
@@ -121,16 +110,12 @@ export async function getServerAvatar(guild: Guild | null, client: Client): Prom
 
 /**
  * Checks if a buffer contains a valid PNG file
- * @param buffer - Buffer to check
- * @returns True if buffer starts with PNG signature
  */
-export function isPNGFormat(buffer: Buffer): boolean {
-  // 1. Check if buffer is long enough
+function isPNGFormat(buffer: Buffer): boolean {
   if (buffer.length < PNG_SIGNATURE.length) {
     return false;
   }
 
-  // 2. Compare first 8 bytes with PNG signature
   for (let i = 0; i < PNG_SIGNATURE.length; i++) {
     if (buffer[i] !== PNG_SIGNATURE[i]) {
       return false;
@@ -143,8 +128,6 @@ export function isPNGFormat(buffer: Buffer): boolean {
 /**
  * Downloads an image from a URL and returns it as a Buffer
  * Generic utility for downloading any image, not just avatars
- * @param imageUrl - URL of the image to download
- * @returns Promise resolving to image as Buffer
  * @throws Error if download fails
  */
 export async function downloadImage(imageUrl: string): Promise<Buffer> {
@@ -172,9 +155,7 @@ export async function downloadImage(imageUrl: string): Promise<Buffer> {
 
 /**
  * Validates that a buffer is a valid PNG file with reasonable size
- * @param buffer - Buffer to validate
  * @param maxSizeBytes - Maximum allowed file size (default: 10MB)
- * @returns Validation result object
  */
 export function validatePNGBuffer(
   buffer: Buffer,
@@ -183,7 +164,6 @@ export function validatePNGBuffer(
   isValid: boolean;
   error?: string;
 } {
-  // 1. Check if buffer exists
   if (!buffer || buffer.length === 0) {
     return {
       isValid: false,
@@ -191,7 +171,6 @@ export function validatePNGBuffer(
     };
   }
 
-  // 2. Check file size
   if (buffer.length > maxSizeBytes) {
     return {
       isValid: false,
@@ -199,7 +178,6 @@ export function validatePNGBuffer(
     };
   }
 
-  // 3. Verify PNG format
   if (!isPNGFormat(buffer)) {
     return {
       isValid: false,
@@ -220,7 +198,7 @@ const presetAvatarCache = new Map<number, string | null>();
 
 type PresetAvatarInput = Pick<TomoriPresetRow, "persona_preset_id" | "persona_preset_name" | "preset_avatar_path">;
 
-export function decodeBase64DataUri(dataUri: string): Buffer | null {
+function decodeBase64DataUri(dataUri: string): Buffer | null {
   const base64Marker = "base64,";
   const markerIndex = dataUri.indexOf(base64Marker);
   if (markerIndex === -1) {
@@ -237,10 +215,6 @@ export function decodeBase64DataUri(dataUri: string): Buffer | null {
   } catch {
     return null;
   }
-}
-
-export function hashAvatarBuffer(buffer: Buffer): string {
-  return createHash("sha256").update(buffer).digest("hex");
 }
 
 export async function getPresetAvatarBuffer(preset: PresetAvatarInput): Promise<Buffer | null> {
@@ -265,36 +239,26 @@ export async function getPresetAvatarBuffer(preset: PresetAvatarInput): Promise<
   }
 }
 
-export async function getPresetAvatarHash(preset: PresetAvatarInput): Promise<string | null> {
-  const avatarBuffer = await getPresetAvatarBuffer(preset);
-  return avatarBuffer ? hashAvatarBuffer(avatarBuffer) : null;
-}
-
 /**
  * Initializes the preset avatar cache by loading all preset avatars into memory
  * This should be called once at bot startup for optimal performance
- * @param presets - Array of preset rows from the database
  */
 export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): Promise<void> {
   try {
     log.info("Initializing preset avatar cache...");
 
-    // 1. Clear existing cache
+    // Clear existing cache
     presetAvatarCache.clear();
 
-    // 2. Load each preset's avatar (if it has one)
     for (const preset of presets) {
-      // Skip if no avatar path is set
       if (!preset.preset_avatar_path) {
         presetAvatarCache.set(preset.persona_preset_id, null);
         continue;
       }
 
       try {
-        // 3. Read the image file (resolves directory paths automatically)
         const imageBuffer = await resolveAvatarPath(preset.preset_avatar_path);
 
-        // 5. Validate it's a PNG
         const validation = validatePNGBuffer(imageBuffer);
         if (!validation.isValid) {
           log.warn(`Invalid PNG for preset "${preset.persona_preset_name}": ${validation.error}`);
@@ -302,11 +266,10 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
           continue;
         }
 
-        // 6. Convert to base64 data URI
         const base64 = imageBuffer.toString("base64");
         const dataUri = `data:image/png;base64,${base64}`;
 
-        // 7. Cache it
+        // Cache it
         presetAvatarCache.set(preset.persona_preset_id, dataUri);
         log.success(
           `Cached avatar for preset "${preset.persona_preset_name}" (${(imageBuffer.length / 1024).toFixed(2)} KB)`,
@@ -330,7 +293,6 @@ export async function initializePresetAvatarCache(presets: TomoriPresetRow[]): P
 /**
  * Gets a cached preset avatar as a base64 data URI
  * Returns null if preset has no avatar or if avatar failed to load
- * @param presetId - ID of the preset to get avatar for
  * @returns Base64 data URI string or null
  */
 export function getCachedPresetAvatar(presetId: number): string | null {

@@ -42,7 +42,7 @@ This is a current map of shared utility modules under `src/utils/`.
 - `sqlSecurity.ts`: query parameterisation helpers
 - `sqlSplitter.ts`: SQL file parsing utilities
 - `ragAvailability.ts`: pgvector / RAG feature detection
-- `repositories/`: 23 domain-owned Repository classes + `index.ts` (instance + type re-exports only). All SQL is inlined as `private` methods on each Repository class — no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. `ErrorLogRepository` is a thin shim used by `logger.ts` to insert into `error_logs` without creating a circular import. See `docs/architecture/subsystems/database-schema.md` for the full repository table and SQL convention.
+- `repositories/`: 28 domain-owned repository modules + `index.ts` (shared instance + type re-exports only). SQL remains in its owning module; no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. `ErrorLogRepository` is a thin shim used by `logger.ts` to insert into `error_logs` without creating a circular import. See `docs/architecture/subsystems/database-schema.md` for the full repository table and SQL convention.
 
 ### `utils/discord`
 
@@ -51,7 +51,30 @@ This is a current map of shared utility modules under `src/utils/`.
 - `interactionHelper.ts`: compatibility barrel for grouped UI helpers in `utils/discord/ui/`; new code imports the owned UI module directly
 - `streamOrchestrator.ts`: public stream orchestration entry point backed by responsibility modules in `utils/discord/stream/`
 - `webhookManager.ts`: compatibility barrel for grouped webhook helpers in `utils/discord/webhook/`; new code imports the owned webhook module directly
-- `embedHelper.ts`, `historyFetcher.ts`, `historyFormatter.ts`
+- `embedHelper.ts`: shared embed builders (`createStandardEmbed`, `createSummaryEmbed`, `createTipEmbed`, `sendStandardEmbed`) — see [Tip embeds](#tip-embeds) below
+- `historyFetcher.ts`, `historyFormatter.ts`
+
+#### Tip embeds
+
+`createTipEmbed(locale, tipKeys, tipVars?)` in `embedHelper.ts` builds the reusable green **💡 Tip**
+embed shown alongside an error/info embed (e.g. by `stream/errorUi.ts` and `ui/interactionCore.ts`).
+
+- Each entry in `tipKeys` is an **atomic** locale key resolved independently and rendered as its own
+  dashed bullet (`- item`). Keys live under `genai.tips.*` (see the Localization doc's
+  [Tip-item keys](./localization.md#tip-item-keys-genaitips) convention).
+- Tips render as an embed **description**, not a footer, so markdown and hyperlinks render — that is
+  the reason tips moved out of error-embed footers.
+- **Conditional tips are the caller's job**: include or omit a key inline (e.g. an OpenRouter-only
+  item) instead of maintaining whole-paragraph tip strings per branch. Items that resolve to empty
+  text are dropped, and the function returns `null` when nothing resolves, so the caller can skip
+  attaching a tip embed entirely.
+- **The Official Support Server link is automatic**: `genai.tips.support_server` (exported as
+  `SUPPORT_SERVER_TIP_KEY`) is appended as the last bullet of every rendered tip embed. Callers must
+  not list it in `tipKeys` — it is filtered out if they do, so it can never be duplicated or
+  reordered. It is appended *after* the empty check, so a tip embed with no caller-supplied items
+  still returns `null` rather than degrading into a support-link-only embed.
+- Colored `ColorCode.SUCCESS` (green) to read as "helpful" and stay visibly distinct from the
+  red/yellow error embed above it; the description is truncated to Discord's embed-description limit.
 
 ### `utils/text`
 
@@ -91,6 +114,9 @@ This is a current map of shared utility modules under `src/utils/`.
 - `keyRotation.ts`: rotation workflows
 - `rateLimiter.ts`: upload quota cleanup scheduler
 - `safeDownload.ts`: constrained external content download
+- `remoteUrlSecurity.ts`: the single SSRF gate for user-supplied URLs (protocol/host policy, DNS resolution, blocklists)
+- `userRemoteFetch.ts`: DNS-pinned fetch with per-hop redirect revalidation, built on `remoteUrlSecurity.ts`
+- `cloudMetadata.ts`: always-on cloud instance-metadata / link-local denylist
 
 ### `utils/quota`
 
@@ -107,7 +133,8 @@ This is a current map of shared utility modules under `src/utils/`.
 - `mcpManager.ts`: MCP lifecycle
 - `mcpExecutor.ts`: MCP execution abstraction
 - `mcpConfig.ts`: MCP config loading
-- `mcpUrlSecurity.ts`: guild MCP URL parsing, DNS/IP validation, and SSRF hardening
+
+Guild MCP URL validation lives in `utils/security/remoteUrlSecurity.ts`, which guards every user-supplied URL rather than MCP alone.
 
 ### `utils/bridges`
 
@@ -117,7 +144,7 @@ This is a current map of shared utility modules under `src/utils/`.
 - `matrix/stateSync.ts`: Matrix link cache, typing state, reminder mention surface
 - `matrix/userMapping.ts`: Matrix display-name/ID maps and persona intent surface
 - `matrix/rooms.ts`: Matrix room join/config/encryption helpers
-- `matrix/matrixManager.ts`: thin Matrix public coordinator barrel
+- `matrix/index.ts`: public Matrix exports grouped from the responsibility modules
 
 New code should use `utils/bridges` for generic bridge helpers and `utils/bridges/matrix` for Matrix runtime operations.
 
@@ -134,8 +161,41 @@ New code should use `utils/bridges` for generic bridge helpers and `utils/bridge
 ### `utils/misc`
 
 - `logger.ts`: structured logging facade
+- `errorContextStore.ts`: ambient error identity (see below)
 - `ioHelper.ts`: filesystem traversal helpers
 - `healthTracker.ts`: runtime health signals used by `/health`
+
+#### Ambient error context
+
+`log.error()` and `log.warn()` accept an optional `ErrorContext`, but most call sites are far from
+the code that knows which server or user they belong to. Threading that identity through every
+signature is impractical, so `errorContextStore.ts` carries it out of band using an
+`AsyncLocalStorage` scope.
+
+The four entry points that begin a unit of work open a scope:
+
+| Entry point | Opened in | `source` |
+|---|---|---|
+| Message chat turn | `events/messageCreate/tomoriChat.ts` | `chat` |
+| Slash command | `events/interactionCreate/handleCommands.ts` | `command` |
+| Scheduled reminder/task | `timers/reminderProcessor.ts` | `reminder` |
+| Random trigger | `timers/randomTriggerProcessor.ts` | `random_trigger` |
+
+Everything reached from inside a scope, at any await depth, logs with that identity attached. A
+provider adapter deep in a stream needs no plumbing to produce an attributable error record.
+
+- `runWithErrorContext(identity, fn)` opens a scope. Nested scopes inherit and override.
+- `enrichErrorContext(patch)` upgrades the active scope once more IDs are known. Entry points seed
+  Discord snowflakes; database row IDs are added after admission or user lookup resolves them.
+- `resolveErrorContext(explicit)` is called by the logger. An explicit context wins per field, so a
+  call site that names its own IDs stays authoritative.
+
+Typed `ErrorContext` fields (`serverId`, `userId`, `personaId`) are database row IDs. Discord
+snowflakes travel in `metadata` (`serverDiscId`, `userDiscId`, `channelDiscId`) alongside `source`
+and `sourceDetail`, which identify the unit of work.
+
+Timers and event handlers started *outside* a scope are unaffected, so background work that belongs
+to no server stays unattributed rather than inheriting a stale identity.
 
 ## Usage Guidance
 

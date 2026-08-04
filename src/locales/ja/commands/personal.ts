@@ -1,5 +1,3 @@
-// locales/ja/commands/personal.ts
-
 export default {
   personal: {
     description: `あなたの個人的な設定を管理します`,
