@@ -1,9 +1,11 @@
 import type {
+  CustomEndpointRow,
   PersonalProviderCapability,
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 
 export interface ProviderModelSelection {
   model: string;
@@ -95,11 +97,12 @@ export async function resolveActivePersonalProviderModelSelections(
 export function withPersonalTextPrimary(
   row: UserSavedProviderConfigRow,
   llmId: number | null,
+  endpoints: Iterable<Pick<CustomEndpointRow, "custom_endpoint_id" | "model_ref_id">> = [],
 ): UserSavedProviderConfigUpsert {
   return {
     ...row,
     llm_id: llmId,
-    fallback_model_refs: row.fallback_model_refs.filter((ref) => !(ref.type === "llm" && ref.id === llmId)),
+    fallback_model_refs: prunePrimaryFallbackRefs(row.fallback_model_refs, llmId, endpoints),
   };
 }
 

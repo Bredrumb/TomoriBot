@@ -1,4 +1,10 @@
-import type { PersonalProviderCapability, TomoriState, UserSavedProviderConfigRow } from "@/types/db/schema";
+import type {
+  FallbackEntry,
+  FallbackModelRef,
+  PersonalProviderCapability,
+  TomoriState,
+  UserSavedProviderConfigRow,
+} from "@/types/db/schema";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 
@@ -29,6 +35,31 @@ function collectActiveConfigs(
   }
 
   return active;
+}
+
+async function resolvePersonalFallbackChain(refs: FallbackModelRef[], userId: number): Promise<FallbackEntry[]> {
+  const llmRefIds = refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
+  const endpointRefIds = refs.filter((ref) => ref.type === "custom_endpoint").map((ref) => ref.id);
+  const [llms, endpoints] = await Promise.all([
+    llmRefIds.length > 0 ? llmModelRepo.getLlmsByIds(llmRefIds) : Promise.resolve([]),
+    endpointRefIds.length > 0 ? llmProviderRepo.loadCustomEndpointsByIds(endpointRefIds) : Promise.resolve([]),
+  ]);
+  const llmMap = new Map(llms.map((model) => [model.llm_id as number, model]));
+  const endpointMap = new Map(
+    endpoints
+      .filter((endpoint) => endpoint.user_id === userId && endpoint.server_id == null)
+      .map((endpoint) => [endpoint.custom_endpoint_id as number, endpoint]),
+  );
+
+  return refs.flatMap((ref): FallbackEntry[] => {
+    if (ref.type === "llm") {
+      const model = llmMap.get(ref.id);
+      return model ? [{ kind: "llm", model }] : [];
+    }
+
+    const endpoint = endpointMap.get(ref.id);
+    return endpoint ? [{ kind: "custom_endpoint", endpoint }] : [];
+  });
 }
 
 export async function applyPersonalProviderSelectionsToTomoriState(
@@ -69,7 +100,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     const personalFallbackIds = (activeConfigs.text.fallback_model_refs ?? [])
       .filter((r) => r.type === "llm")
       .map((r) => r.id);
-    nextConfig.fallback_llm_ids = personalFallbackIds.length > 0 ? personalFallbackIds : nextConfig.fallback_llm_ids;
+    nextConfig.fallback_llm_ids = personalFallbackIds;
     // custom_endpoint_url/name/ctx are no longer on user saved configs; resolved from custom_endpoints at runtime
   }
 
@@ -105,23 +136,17 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     }
   }
 
-  // Load personal fallback LLMs for text capability (isolate personal provider fallback chain)
-  let nextFallbackLlms: typeof tomoriState.fallback_llms;
-  const personalFallbackRefIds = (activeConfigs.text?.fallback_model_refs ?? [])
-    .filter((r) => r.type === "llm")
-    .map((r) => r.id);
-  if (personalFallbackRefIds.length > 0) {
-    const personalFallbacks: typeof tomoriState.fallback_llms = [];
-    for (const llmId of personalFallbackRefIds) {
-      const fallbackLlm = await llmModelRepo.loadById(llmId);
-      if (fallbackLlm) {
-        personalFallbacks.push(fallbackLlm);
-      }
-    }
-    if (personalFallbacks.length > 0) {
-      nextFallbackLlms = personalFallbacks;
-    }
-  }
+  const personalFallbackChain = activeConfigs.text
+    ? await resolvePersonalFallbackChain(activeConfigs.text.fallback_model_refs ?? [], userId)
+    : null;
+  const nextFallbackChain = activeConfigs.text
+    ? personalFallbackChain && personalFallbackChain.length > 0
+      ? personalFallbackChain
+      : undefined
+    : tomoriState.fallback_chain;
+  const nextFallbackLlms = activeConfigs.text
+    ? personalFallbackChain?.flatMap((entry) => (entry.kind === "llm" ? [entry.model] : []))
+    : tomoriState.fallback_llms;
 
   return {
     tomoriState: {
@@ -129,9 +154,8 @@ export async function applyPersonalProviderSelectionsToTomoriState(
       config: nextConfig,
       llm: nextLlm,
       vision_llm: nextVisionLlm,
-      // Personal provider has isolated fallback chain; don't use server fallbacks
-      fallback_llms: nextFallbackLlms,
-      fallback_chain: undefined,
+      fallback_llms: nextFallbackLlms && nextFallbackLlms.length > 0 ? nextFallbackLlms : undefined,
+      fallback_chain: nextFallbackChain,
       rotation_keys: activeConfigs.text ? undefined : tomoriState.rotation_keys,
     },
     activeConfigs,

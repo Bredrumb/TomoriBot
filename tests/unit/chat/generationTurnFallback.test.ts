@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { Client, Message } from "discord.js";
-import type { LlmRow, TomoriState } from "@/types/db/schema";
+import type { CustomEndpointRow, LlmRow, TomoriState } from "@/types/db/schema";
 import type { ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { FallbackNoticeAttempt } from "@/utils/discord/fallbackModelNotice";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
@@ -39,6 +39,7 @@ const queuedResults: GenerationTurnResult[] = [];
 const queuedDeliveries: Array<Array<{ messageId: string; channelId: string; isWebhook: boolean }> | undefined> = [];
 const toolLoopCalls: Array<{ model: string; suppressUserErrors: boolean | undefined }> = [];
 const fallbackNoticeCalls: Array<{ failures: FallbackNoticeAttempt[]; successModel: LlmRow }> = [];
+const personalSavedConfigLoads: Array<{ userId: number; provider: string }> = [];
 const testStopRequests = new Map<string, { type: "stop" | "follow_up"; stopContext?: TestStopContext }>();
 
 type TestStopContext = {
@@ -123,6 +124,10 @@ scopedMock.module("@/utils/db/repositories", () => ({
   // a spread would drop them, so delegate and shadow only what this file drives.
   llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
     loadSavedProviderConfig: async () => null,
+    loadUserSavedProviderConfig: async (userId: number, provider: string) => {
+      personalSavedConfigLoads.push({ userId, provider });
+      return { api_key: Buffer.from("encrypted-key"), key_version: 1 };
+    },
   }),
   configRepository: overrideMembers(realRepositories.configRepository, {
     updateNsfwConfig: async () => true,
@@ -532,6 +537,7 @@ describe("runGenerationTurn fallback behavior", () => {
     queuedDeliveries.length = 0;
     toolLoopCalls.length = 0;
     fallbackNoticeCalls.length = 0;
+    personalSavedConfigLoads.length = 0;
 
     const { StreamOrchestrator } = await import("@/utils/discord/streamOrchestrator");
     StreamOrchestrator.clearStopRequest("channel_1");
@@ -592,6 +598,51 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls[0]?.successModel.llm_codename).toBe("fallback-model");
     expect(context.streamingContext.suppressUserErrors).toBe(false);
     expect(context.streamingContext.forceModelFallback).toBe(false);
+  });
+
+  it("uses personal saved credentials for a user-scoped custom endpoint fallback", async () => {
+    const primaryModel = makeLlm(1, "primary-model");
+    const context = makeContext(primaryModel, makeLlm(2, "unused-fallback"));
+    const endpoint = {
+      custom_endpoint_id: 5,
+      server_id: null,
+      user_id: 4,
+      label: "local",
+      capability: "text",
+      endpoint_url: "https://example.invalid/v1",
+      model_name: "personal-fallback",
+      model_ref_id: 9,
+      has_tools: false,
+      sees_images: false,
+      sees_videos: false,
+      supports_structoutput: false,
+      strict_role_alternation: false,
+      supports_prefix_completion: false,
+    } as CustomEndpointRow;
+    context.currentPersona.fallback_chain = [{ kind: "custom_endpoint", endpoint }];
+    queuedResults.push(
+      {
+        status: "error",
+        streamResults: [{ status: "error", data: { type: "rate_limit", code: "429", message: "rate limited" } }],
+        personaResponses: [],
+      },
+      {
+        status: "completed",
+        streamResults: [{ status: "completed", accumulatedText: "ok" }],
+        personaResponses: [{ personaName: "Tomori", text: "ok", personaId: 10, personaLineageId: 100 }],
+      },
+    );
+    const sink: ChatResponseSink = {
+      emitStreamResult: async () => undefined,
+      emitError: async () => undefined,
+      finalize: async () => undefined,
+    };
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["primary-model", "personal-fallback"]);
+    expect(personalSavedConfigLoads).toEqual([{ userId: 4, provider: "custom:u4:local" }]);
   });
 
   it("deletes the timed-out primary's partial message when a fallback succeeds", async () => {

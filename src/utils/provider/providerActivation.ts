@@ -7,6 +7,8 @@ import type {
 } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { isCustomProvider } from "@/utils/provider/customProviderUtils";
+import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 
@@ -44,11 +46,14 @@ export async function activateServerTextModelFromSavedConfig(params: {
   const promotedLlmId = selectedModel.llm_id;
   const normalizedProvider = params.savedConfig.provider.toLowerCase();
   const clearFallbacks = params.tomoriState.llm?.llm_provider?.toLowerCase() !== normalizedProvider;
+  const customEndpoints = isCustomProvider(normalizedProvider)
+    ? await llmProviderRepo.loadCustomEndpointsForServer(params.tomoriState.server_id)
+    : [];
   // A same-provider swap keeps the saved chain, which may already list the model being promoted.
   // That duplicate is dead weight at runtime and would block every later /model fallback edit.
   const fallbackModelRefs = clearFallbacks
     ? []
-    : (params.savedConfig.fallback_model_refs ?? []).filter((ref) => !(ref.type === "llm" && ref.id === promotedLlmId));
+    : prunePrimaryFallbackRefs(params.savedConfig.fallback_model_refs ?? [], promotedLlmId, customEndpoints);
   const fallbackLlmIds = extractFallbackLlmIds(fallbackModelRefs);
   const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
     params.savedConfig.llm_logit_biases ?? params.tomoriState.config.llm_logit_biases ?? [],
@@ -140,8 +145,11 @@ export async function activatePersonalProviderTextModel(params: {
     return { status: "missing_model" };
   }
 
+  const customEndpoints = isCustomProvider(params.provider)
+    ? await llmProviderRepo.loadCustomEndpointsForUser(params.userId)
+    : [];
   const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, "text", (row) =>
-    withPersonalTextPrimary(row, selectedModel.llm_id ?? null),
+    withPersonalTextPrimary(row, selectedModel.llm_id ?? null, customEndpoints),
   );
 
   return updated ? { status: "activated", modelName: selectedModel.llm_codename } : { status: "update_failed" };

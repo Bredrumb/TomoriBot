@@ -76,7 +76,11 @@ The transformation pipeline runs in this order:
    `"Tomori: Lilya: …"` (lore/default name + webhook nickname). `textConfig.botNameAliases`
    (`collectPersonaNameAliases`: `DEFAULT_BOTNAME` + the persona's `trigger_words`) supplies those
    extra names; the leaked-preamble and later-boundary passes stay scoped to the active name so
-   mid-prose `"Name:"` usages are preserved.
+   mid-prose `"Name:"` usages are preserved. Decorated `Name (modifier):` labels are less ambiguous,
+   so their opening and boundary safety-net forms accept the active name and aliases, ASCII or
+   full-width colons, and the same bold wrappers accepted for plain labels. Decorated labels remain
+   excluded from the leaked-preamble pass so a stranded mid-body label cannot delete preceding reply
+   text.
 
    The opening chain also matches **identity-macro labels** — `{bot}:`, `{{char}}:`, `{user}:` and
    their bold forms — because the model sometimes labels its turn with the template syntax instead

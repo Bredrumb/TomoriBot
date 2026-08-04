@@ -199,7 +199,7 @@ export default {
         success_description: `Your personal vision provider is now {provider} using \`{model}\`.`,
       },
       "toggle-models": {
-        description: `Enable or disable which personal capabilities override the server.`,
+        description: `Enable or disable which personal models override the server.`,
         modal_title: `Toggle Personal Provider Capabilities`,
         group_label: `Capabilities`,
         group_description: `Unchecked capabilities will use a server's default instead. Check to use your own provider.`,

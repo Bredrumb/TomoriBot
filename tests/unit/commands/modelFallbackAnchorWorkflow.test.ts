@@ -58,6 +58,7 @@ interface Scenario {
   existingRefs: FallbackRef[];
   /** llm_id of the primary chat model, for the conflict guard. */
   primaryLlmId: number;
+  customEndpointMode: boolean;
   writeSucceeds: boolean;
 }
 
@@ -70,7 +71,32 @@ function makeScenario(): Scenario {
     submitted: {},
     existingRefs: [],
     primaryLlmId: 1,
+    customEndpointMode: false,
     writeSucceeds: true,
+  };
+}
+
+function makeCustomEndpoint() {
+  return {
+    custom_endpoint_id: 5,
+    server_id: 7,
+    user_id: null,
+    label: "local",
+    capability: "text",
+    api_style: "openai-compatible",
+    endpoint_url: "https://example.invalid/v1",
+    model_name: "primary-model",
+    model_ref_id: scenario.primaryLlmId,
+    display_name: "Primary Custom Model",
+    requires_auth: true,
+    extra_config: {},
+    has_tools: false,
+    sees_images: false,
+    sees_videos: false,
+    supports_structoutput: false,
+    strict_role_alternation: false,
+    supports_prefix_completion: false,
+    is_default: true,
   };
 }
 
@@ -129,7 +155,9 @@ scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
 
 scopedMock.module("@/utils/provider/savedProviderConfig", () => ({
   ...realSavedProviderConfig,
-  loadSavedProvidersForCapability: async () => [{ provider: "provider-a" }],
+  loadSavedProvidersForCapability: async () => [
+    { provider: scenario.customEndpointMode ? "custom:s7:local" : "provider-a" },
+  ],
   loadUserSavedProvidersForCapability: async () => [{ provider: "provider-a" }],
 }));
 
@@ -151,8 +179,8 @@ scopedMock.module("@/utils/db/repositories", () => ({
     },
   }),
   llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
-    loadCustomEndpointsForServer: async () => [],
-    loadCustomEndpointsByIds: async () => [],
+    loadCustomEndpointsForServer: async () => (scenario.customEndpointMode ? [makeCustomEndpoint()] : []),
+    loadCustomEndpointsByIds: async () => (scenario.customEndpointMode ? [makeCustomEndpoint()] : []),
   }),
 }));
 
@@ -177,8 +205,9 @@ scopedMock.module("@/utils/provider/providerInfoRegistry", () => ({
 
 scopedMock.module("@/utils/provider/customProviderUtils", () => ({
   ...realCustomProviderUtils,
-  isCustomProvider: () => false,
-  parseCustomProvider: () => null,
+  isCustomProvider: () => scenario.customEndpointMode,
+  parseCustomProvider: () =>
+    scenario.customEndpointMode ? { raw: "custom:s7:local", label: "local", scope: "server", ownerId: 7 } : null,
 }));
 
 scopedMock.module("@/utils/discord/commandRegistry", () => ({
@@ -410,6 +439,30 @@ describe("/model fallback anchor workflow", () => {
     expect(replacements).not.toContainEqual(
       expect.objectContaining({ titleKey: "commands.model.fallback.primary_conflict_title" }),
     );
+  });
+
+  it("rejects a custom endpoint backed by the primary synthetic LLM", async () => {
+    scenario.customEndpointMode = true;
+    scenario.primaryLlmId = 42;
+    scenario.submitted = { fallback_slot_1: "ce:5" };
+
+    await runCommand();
+
+    expect(writtenRefs).toHaveLength(0);
+    expect(replacements).toContainEqual(
+      expect.objectContaining({ titleKey: "commands.model.fallback.primary_conflict_title" }),
+    );
+  });
+
+  it("silently prunes an inherited custom endpoint backed by the primary", async () => {
+    scenario.customEndpointMode = true;
+    scenario.primaryLlmId = 42;
+    scenario.existingRefs = [{ type: "custom_endpoint", id: 5 }];
+    scenario.submitted = { fallback_slot_2: "__none__" };
+
+    await runCommand();
+
+    expect(writtenRefs).toEqual([[]]);
   });
 
   it("renders the cleared terminal in place when every slot is emptied", async () => {

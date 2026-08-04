@@ -1,6 +1,6 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
-import { llmModelRepo } from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -8,6 +8,7 @@ import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, LlmRow, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import {
   assignPersonalCapabilityToProvider,
@@ -166,8 +167,11 @@ export async function execute(
       return;
     }
 
+    const customEndpoints = isCustomProvider(selectedProvider)
+      ? await llmProviderRepo.loadCustomEndpointsForUser(userData.user_id)
+      : [];
     const updated = await assignPersonalCapabilityToProvider(userData.user_id, selectedProvider, "text", (row) =>
-      withPersonalTextPrimary(row, selectedModel.llm_id ?? null),
+      withPersonalTextPrimary(row, selectedModel.llm_id ?? null, customEndpoints),
     );
     if (!updated) {
       await work.message.replace(

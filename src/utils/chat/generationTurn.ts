@@ -13,6 +13,7 @@ import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/util
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
+import { buildServerCustomProviderName, buildUserCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
 import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
@@ -378,8 +379,21 @@ async function createFallbackAttempt(
   disableAllTools: boolean,
 ): Promise<GenerationAttempt | null> {
   if (entry.kind === "custom_endpoint") {
-    const customProviderName = `custom:s${primaryState.server_id}:${entry.endpoint.label}`;
-    const savedConfig = await llmProviderRepo.loadSavedProviderConfig(primaryState.server_id, customProviderName);
+    const endpointUserId = entry.endpoint.user_id ?? null;
+    const endpointServerId = entry.endpoint.server_id ?? null;
+    const customProviderName = endpointUserId
+      ? buildUserCustomProviderName(endpointUserId, entry.endpoint.label)
+      : endpointServerId === primaryState.server_id
+        ? buildServerCustomProviderName(endpointServerId, entry.endpoint.label)
+        : null;
+    if (!customProviderName) {
+      log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: invalid owner scope.`);
+      return null;
+    }
+
+    const savedConfig = endpointUserId
+      ? await llmProviderRepo.loadUserSavedProviderConfig(endpointUserId, customProviderName)
+      : await llmProviderRepo.loadSavedProviderConfig(primaryState.server_id, customProviderName);
     if (!savedConfig?.api_key) {
       log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: no saved key.`);
       return null;
@@ -396,12 +410,15 @@ async function createFallbackAttempt(
       },
       llm: {
         ...primaryState.llm,
+        llm_id: entry.endpoint.model_ref_id ?? primaryState.llm.llm_id,
         llm_codename: entry.endpoint.model_name ?? entry.endpoint.label,
-        llm_provider: "custom",
+        llm_provider: customProviderName,
         has_tools: entry.endpoint.has_tools,
         sees_images: entry.endpoint.sees_images,
         sees_videos: entry.endpoint.sees_videos,
         supports_structoutput: entry.endpoint.supports_structoutput,
+        strict_role_alternation: entry.endpoint.strict_role_alternation,
+        supports_prefix_completion: entry.endpoint.supports_prefix_completion,
       },
     };
     return await createAttempt(`fallback ${fallbackIndex}: ${entry.endpoint.label}`, state, "custom", disableAllTools);

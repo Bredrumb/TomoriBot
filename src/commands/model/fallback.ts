@@ -18,6 +18,7 @@ import type {
 import type { SelectOption } from "@/types/discord/modal";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
+import { getFallbackModelRefKey, getPrimaryFallbackRefKeys } from "@/utils/provider/fallbackModelIdentity";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import {
   beginAnchorPrivateWorkflow,
@@ -412,7 +413,7 @@ export async function execute(
     const seen = new Set<string>();
     const dedupedRefs: FallbackModelRef[] = [];
     for (const ref of mergedRefs) {
-      const key = `${ref.type}:${ref.id}`;
+      const key = getFallbackModelRefKey(ref);
       if (!seen.has(key)) {
         seen.add(key);
         dedupedRefs.push(ref);
@@ -424,8 +425,8 @@ export async function execute(
     // promoted after this chain was saved) is dropped silently, since erroring on it would
     // reject every submission until the user found and cleared that untouched slot.
     const primaryLlmId = tomoriState.config.llm_id;
-    const primaryKey = primaryLlmId ? `llm:${primaryLlmId}` : null;
-    if (primaryKey && submittedKeys.has(primaryKey)) {
+    const primaryKeys = getPrimaryFallbackRefKeys(primaryLlmId, resolvedEndpointMap.values());
+    if ([...submittedKeys].some((key) => primaryKeys.has(key))) {
       await work.message.replace(
         buildPersonaWorkflowNotice({
           locale,
@@ -437,7 +438,7 @@ export async function execute(
       );
       return;
     }
-    const finalRefs = primaryKey ? dedupedRefs.filter((ref) => `${ref.type}:${ref.id}` !== primaryKey) : dedupedRefs;
+    const finalRefs = dedupedRefs.filter((ref) => !primaryKeys.has(getFallbackModelRefKey(ref)));
 
     if (FALLBACK_DEBUG_ENABLED) {
       log.info(

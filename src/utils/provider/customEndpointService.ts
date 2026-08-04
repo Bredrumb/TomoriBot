@@ -26,6 +26,7 @@ import {
   buildUserCustomProviderName,
   parseCustomProvider,
 } from "@/utils/provider/customProviderUtils";
+import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { encryptApiKey } from "@/utils/security/crypto";
@@ -244,6 +245,7 @@ function toPersonalModelCapability(capability: CustomEndpointCapability): Person
 async function activateServerCustomTextModel(params: {
   scope: Extract<RegistrationScope, { kind: "server" }>;
   provider: string;
+  endpoint: CustomEndpointRow;
   savedConfig: SavedProviderConfigRow | SavedProviderConfigUpsert;
   modelId: number;
 }): Promise<boolean> {
@@ -262,7 +264,7 @@ async function activateServerCustomTextModel(params: {
   // That duplicate is dead weight at runtime and would block every later /model fallback edit.
   const fallbackModelRefs = clearFallbacks
     ? []
-    : (params.savedConfig.fallback_model_refs ?? []).filter((ref) => !(ref.type === "llm" && ref.id === promotedLlmId));
+    : prunePrimaryFallbackRefs(params.savedConfig.fallback_model_refs ?? [], promotedLlmId, [params.endpoint]);
   const fallbackLlmIds = extractFallbackLlmIds(fallbackModelRefs);
   const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
     params.savedConfig.llm_logit_biases ?? params.scope.baseConfig.llm_logit_biases ?? [],
@@ -305,6 +307,7 @@ async function activateServerCustomTextModel(params: {
 async function activateServerCustomEndpointForCapability(params: {
   scope: Extract<RegistrationScope, { kind: "server" }>;
   provider: string;
+  endpoint: CustomEndpointRow;
   capability: CustomEndpointCapability;
   modelId: number | null;
   savedConfig: SavedProviderConfigRow | SavedProviderConfigUpsert;
@@ -321,6 +324,7 @@ async function activateServerCustomEndpointForCapability(params: {
     return await activateServerCustomTextModel({
       scope: params.scope,
       provider: params.provider,
+      endpoint: params.endpoint,
       savedConfig: params.savedConfig,
       modelId: params.modelId,
     });
@@ -343,6 +347,7 @@ async function activateServerCustomEndpointForCapability(params: {
 async function activatePersonalCustomEndpointForCapability(params: {
   userId: number;
   provider: string;
+  endpoint: CustomEndpointRow;
   capability: CustomEndpointCapability;
   modelId: number | null;
   seesImages: boolean;
@@ -359,7 +364,7 @@ async function activatePersonalCustomEndpointForCapability(params: {
   const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, capability, (row) => {
     switch (params.capability) {
       case "text":
-        return withPersonalTextPrimary(row, params.modelId);
+        return withPersonalTextPrimary(row, params.modelId, [params.endpoint]);
       case "embedding":
         return { ...row, embedding_model_id: params.modelId };
       case "image":
@@ -600,6 +605,10 @@ export async function registerCustomEndpoint(
     embedding_model_id: input.capability === "embedding" ? activeId : savedConfig.embedding_model_id,
     diffusion_model_id: input.capability === "image" ? activeId : savedConfig.diffusion_model_id,
     video_model_id: input.capability === "video" ? activeId : savedConfig.video_model_id,
+    fallback_model_refs:
+      input.capability === "text"
+        ? prunePrimaryFallbackRefs(savedConfig.fallback_model_refs ?? [], activeId, [customEndpoint])
+        : savedConfig.fallback_model_refs,
   };
 
   const writeOk = serverScope
@@ -628,6 +637,7 @@ export async function registerCustomEndpoint(
       ? await activateServerCustomEndpointForCapability({
           scope: serverScope,
           provider,
+          endpoint: customEndpoint,
           capability: input.capability,
           modelId,
           savedConfig: nextSavedConfig as SavedProviderConfigUpsert,
@@ -635,6 +645,7 @@ export async function registerCustomEndpoint(
       : await activatePersonalCustomEndpointForCapability({
           userId: input.scope.ownerId,
           provider,
+          endpoint: customEndpoint,
           capability: input.capability,
           modelId,
           seesImages: input.seesImages ?? false,

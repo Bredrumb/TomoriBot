@@ -24,7 +24,7 @@ export namespace ProviderFactory {
   let discoveryComplete = false;
 
   /**
-   * Discover all available providers by scanning src/providers/* directories
+   * Discover all available providers by scanning provider entrypoint files
    * This function is called lazily on first access to any provider
    */
   async function discoverProviders(): Promise<void> {
@@ -32,44 +32,34 @@ export namespace ProviderFactory {
       return;
     }
 
-    log.info("Discovering providers from src/providers/*...");
+    log.info("Discovering providers from src/providers/*/*Provider.ts...");
 
     try {
-      // Scan for provider directories using Bun.glob
-      const glob = new Glob("*/");
+      const glob = new Glob("*/*Provider.ts");
       const providersPath = path.join(import.meta.dir, "../../providers");
 
-      const providerDirs: string[] = [];
-      for await (const dir of glob.scan({
+      const providerEntries: Array<{ name: string; fileName: string }> = [];
+      for await (const providerPath of glob.scan({
         cwd: providersPath,
-        onlyFiles: false,
       })) {
-        providerDirs.push(dir);
+        const [providerName, fileName] = providerPath.replaceAll("\\", "/").split("/");
+        if (providerName && fileName === `${providerName}Provider.ts`) {
+          providerEntries.push({ name: providerName, fileName });
+        }
       }
 
-      if (providerDirs.length === 0) {
-        log.warn("No provider directories found in src/providers/");
+      if (providerEntries.length === 0) {
+        log.warn("No provider entrypoints found in src/providers/");
         discoveryComplete = true;
         return;
       }
 
-      log.info(`Found ${providerDirs.length} provider directories: ${providerDirs.join(", ")}`);
+      log.info(
+        `Found ${providerEntries.length} provider entrypoints: ${providerEntries.map(({ name }) => name).join(", ")}`,
+      );
 
-      // For each directory, check if it has a provider implementation file
-      for (const dir of providerDirs) {
-        const providerName = dir.replace(/\/$/, ""); // Remove trailing slash
-        const providerFileName = `${providerName}Provider.ts`;
-        const providerPath = path.join(providersPath, dir, providerFileName);
-
+      for (const { name: providerName, fileName: providerFileName } of providerEntries) {
         try {
-          const file = Bun.file(providerPath);
-          const exists = await file.exists();
-
-          if (!exists) {
-            log.warn(`Skipping ${providerName}: No ${providerFileName} found`);
-            continue;
-          }
-
           // Register the provider with a lazy loader
           const importPath = `../../providers/${providerName}/${providerFileName.replace(".ts", "")}`;
           providerRegistry.set(providerName, async () => {

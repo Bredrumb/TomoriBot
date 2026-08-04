@@ -72,6 +72,7 @@ interface Scenario {
   imageGenerationStyle: string;
   /** Saved fallback chain the updater sees on the row it is handed. */
   fallbackModelRefs: Array<{ type: string; id: number }>;
+  customPrimaryEndpointMode: boolean;
 }
 
 let scenario: Scenario;
@@ -83,6 +84,7 @@ function makeScenario(): Scenario {
     updateSucceeds: true,
     imageGenerationStyle: "standard",
     fallbackModelRefs: [],
+    customPrimaryEndpointMode: false,
   };
 }
 
@@ -184,6 +186,19 @@ scopedMock.module("@/utils/db/repositories", () => ({
     loadAvailableVideoGenerationModels: async () => videoModels,
     loadAvailableDiffusionModels: async () => diffusionModels,
     loadAvailableEmbeddingModels: async () => embeddingModels,
+  }),
+  llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
+    loadCustomEndpointsForUser: async () =>
+      scenario.customPrimaryEndpointMode
+        ? [
+            {
+              custom_endpoint_id: 5,
+              user_id: 4,
+              server_id: null,
+              model_ref_id: 11,
+            },
+          ]
+        : [],
   }),
 }));
 
@@ -473,6 +488,23 @@ describe("personal provider model-* anchor workflow", () => {
         { type: "llm", id: 12 },
         { type: "custom_endpoint", id: 11 },
       ],
+    });
+  });
+
+  it("model-text also drops the custom endpoint backing the promoted synthetic model", async () => {
+    scenario.providers = ["custom:u4:local"];
+    scenario.customPrimaryEndpointMode = true;
+    scenario.submittedValue = "text-model";
+    scenario.fallbackModelRefs = [
+      { type: "custom_endpoint", id: 5 },
+      { type: "llm", id: 12 },
+    ];
+
+    await runSubcommand("@/commands/personal/provider/model-text");
+
+    expect(assignCalls[0]?.result).toMatchObject({
+      llm_id: 11,
+      fallback_model_refs: [{ type: "llm", id: 12 }],
     });
   });
 

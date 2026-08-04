@@ -280,6 +280,61 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
+  /**
+   * Safety net for the decorated render-modifier grammar ("Tomori (silly):"). Only a label opening a
+   * segment is consumed by parseLeadingRenderModifier; one stranded mid-body because a buffer
+   * boundary shifted used to reach Discord as visible text.
+   */
+  describe("decorated render-modifier labels", () => {
+    it("strips a stranded mid-body label while keeping the reply before it", () => {
+      expect(stripLeakedOwnNameLabels("bet sending the vibes.\ntomori (silly): double message", "tomori")).toBe(
+        "bet sending the vibes.\ndouble message",
+      );
+    });
+
+    it("removes a decorated starter label", () => {
+      expect(stripLeakedOwnNameLabels("Tomori (shy): h-hello", "Tomori").trim()).toBe("h-hello");
+    });
+
+    it("removes a decorated alias starter without exposing it to the preamble branch", () => {
+      expect(stripLeakedOwnNameLabels("Tomori (angry): actual reply", "Lilya", ["Tomori"]).trim()).toBe("actual reply");
+    });
+
+    it("keeps an alias-decorated first line when a plain active-name label follows", () => {
+      expect(stripLeakedOwnNameLabels("Tomori (angry): first reply\nLilya: second reply", "Lilya", ["Tomori"])).toBe(
+        "first reply\nsecond reply",
+      );
+    });
+
+    it("matches full-width colons and bold decorated labels", () => {
+      expect(stripLeakedOwnNameLabels("Tomori (shy)： h-hello", "Tomori").trim()).toBe("h-hello");
+      expect(stripLeakedOwnNameLabels("**Tomori (shy):** h-hello", "Tomori").trim()).toBe("h-hello");
+      expect(stripLeakedOwnNameLabels("**Tomori (shy)**： h-hello", "Tomori").trim()).toBe("h-hello");
+    });
+
+    /**
+     * Opening decorated must land on branch A. On branch B the leaked-preamble pass cuts everything
+     * before the label it matches, which would delete the real reply preceding a stray one.
+     */
+    it("keeps text preceding a stranded label rather than treating it as a leaked preamble", () => {
+      const result = stripLeakedOwnNameLabels("first real line here.\nTomori (mad): second line", "Tomori");
+
+      expect(result).toContain("first real line here.");
+      expect(result).toContain("second line");
+      expect(result).not.toContain("(mad)");
+    });
+
+    it("leaves another character's decorated label alone so quoted dialogue survives", () => {
+      const text = "I don't think Ren would say\nRen (lovestruck): I love you!\nbecause that's weird";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+
+    it("does not strip a parenthetical that is not a label", () => {
+      const text = "Tomori (the one you know) is here";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+  });
+
   describe("preserves legitimate Name: usages", () => {
     it("does not strip a hyphen list item", () => {
       const text = "Power levels:\n- Tsukushi: 100\n- Bella: 80";

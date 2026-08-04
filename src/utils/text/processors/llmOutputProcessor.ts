@@ -6,6 +6,10 @@ import { replaceMentionHandles } from "./mentionProcessor";
 
 const PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV = "EMOJI_PRESERVE_UNRESOLVED_SHORTCODES";
 
+// Must agree with RENDER_MODIFIER_LIMIT in renderModifierParser.ts: a modifier the parser accepts
+// but this strip rejects would ship the label verbatim, which is the leak this net exists to catch.
+const RENDER_MODIFIER_LABEL_LIMIT = 64;
+
 function findMatchingBacktickRun(text: string, startIndex: number, delimiter: string): number {
   return text.indexOf(delimiter, startIndex);
 }
@@ -132,6 +136,27 @@ function buildNameLabelAlternation(names: string[]): string | null {
   return escapedForms.length > 0 ? `(?:${escapedForms.join("|")})` : null;
 }
 
+function buildDecoratedNameLabelAlternation(names: string[]): string | null {
+  const escapedForms: string[] = [];
+  const seen = new Set<string>();
+  const modifier = `\\([^()\\n\\r:：]{1,${RENDER_MODIFIER_LABEL_LIMIT}}\\)`;
+
+  for (const name of [...names].sort((a, b) => b.length - a.length)) {
+    const trimmed = name.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    const decorated = `${escapeRegExp(trimmed)}[ \\t]*${modifier}`;
+    escapedForms.push(
+      `\\*\\*${decorated}[ \\t]*[:：]\\*\\*`,
+      `\\*\\*${decorated}\\*\\*[ \\t]*[:：]`,
+      `${decorated}[ \\t]*[:：]`,
+    );
+  }
+
+  return escapedForms.length > 0 ? `(?:${escapedForms.join("|")})` : null;
+}
+
 /** Matches a bare identity macro in its single- or double-brace form (`{bot}`, `{{char}}`, `{user}`). */
 const IDENTITY_MACRO_SOURCE = "(?:\\{\\{\\s*(?:bot|char|user)\\s*\\}\\}|\\{\\s*(?:bot|char|user)\\s*\\})";
 
@@ -165,8 +190,10 @@ const IDENTITY_MACRO_LABEL_ALTERNATION = `(?:\\*\\*${IDENTITY_MACRO_SOURCE}:\\*\
  * `aliasNames` covers personas that answer to more than one name: e.g. a bundled persona whose
  * webhook nickname is "Lilya" but whose lore/default name is "Tomori". The model then opens with a
  * *chain* of labels ("Tomori: Lilya: <reply>"); the leading-chain loop consumes every self/alias
- * label so none leaks. Aliases only widen the *opening-chain* match, so the leaked-preamble and
- * later-boundary passes stay scoped to the active name to avoid over-stripping mid-text prose.
+ * label so none leaks. Plain aliases only widen the *opening-chain* match, so the leaked-preamble
+ * and later-boundary passes stay scoped to the active name to avoid over-stripping mid-text prose.
+ * Decorated alias labels also match at turn boundaries because their parenthetical grammar is
+ * unambiguous enough to remove without treating preceding text as leaked thought.
  *
  * Legitimate "Name: value" list items and inline prose are preserved throughout: see
  * stripBoundaryOwnNameLabels for the turn-boundary rules and list-marker guards.
@@ -183,12 +210,23 @@ export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNam
   // Own-name label in plain, "**Name:**", or "**Name**:" bold forms (reused across the helpers).
   // Scoped to the *active* name only, so the preamble/boundary passes never strip an alias from prose.
   const labelAlternation = `(?:\\*\\*${escapedName}:\\*\\*|\\*\\*${escapedName}\\*\\*:|${escapedName}:)`;
+  // Decorated render-modifier label ("Tomori (silly):"), the sprite/copied-identity grammar. Only a
+  // label opening a segment is consumed by parseLeadingRenderModifier, so a second one stranded
+  // mid-body (a buffer boundary shifted, so the segment never split) would otherwise ship verbatim.
+  // Deliberately kept OUT of the leaked-preamble alternation: that pass drops everything before the
+  // label it matches, which here would delete the real reply preceding the stray one.
+  const decoratedLabelAlternation =
+    buildDecoratedNameLabelAlternation([botName, ...aliasNames]) ??
+    `(?:${escapedName}[ \\t]*\\([^()\\n\\r:：]{1,${RENDER_MODIFIER_LABEL_LIMIT}}\\)[ \\t]*[:：])`;
+  const boundaryLabelAlternation = `(?:${decoratedLabelAlternation}|${labelAlternation})`;
   // Opening-chain label covers the active name plus any aliases (lore/default name, trigger names),
   // plus the identity-macro label forms: the model sometimes labels its turn "{bot}:"/"{{char}}:"
   // instead of using the resolved name. Macros widen the *opening-chain* match only, so mid-text
   // macros in a drafted preset survive untouched.
   const nameAlternation = buildNameLabelAlternation([botName, ...aliasNames]) ?? labelAlternation;
-  const leadingAlternation = `(?:${nameAlternation}|${IDENTITY_MACRO_LABEL_ALTERNATION})`;
+  // The decorated form joins the opening chain too: matching here sets openedWithLabel, which keeps
+  // a response that opens decorated on branch A instead of branch B's destructive preamble strip.
+  const leadingAlternation = `(?:${decoratedLabelAlternation}|${nameAlternation}|${IDENTITY_MACRO_LABEL_ALTERNATION})`;
 
   // Consume a leading chain of self/alias labels. Each iteration peels one label, so a multi-name
   //    leak ("Tomori: Lilya: hi") collapses fully. If at least one peels, the model opened its turn
@@ -205,7 +243,7 @@ export function stripLeakedOwnNameLabels(text: string, botName: string, aliasNam
     ? working // Real turn: leading self/alias chain dropped.
     : stripLeakedPreamble(text, labelAlternation); // Leaked preamble: drop everything before the turn.
 
-  return stripBoundaryOwnNameLabels(deleaked, labelAlternation);
+  return stripBoundaryOwnNameLabels(deleaked, boundaryLabelAlternation);
 }
 
 /**

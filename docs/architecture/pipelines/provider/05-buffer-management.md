@@ -56,6 +56,31 @@ this stage protect that:
   excluded from the counts for the same reason. A buffer that is nothing but a table is left
   untouched.
 
+### Parenthesis balance and multi-message splitting
+
+`hasIncompleteSemanticMarkers` counts only **unmatched openers**: the running total clamps at zero,
+so a `)` with no `(` before it is discarded rather than banked. Both halves of that matter, because a
+`true` here suppresses the newline break in `processStreamBufferContent` and defers the buffer to the
+final flush.
+
+- A net-negative total can never return to zero. The buffer only grows, and text is ordered, so no
+  later `(` can match a `)` that already passed. Counting orphan closers therefore stalled the split
+  permanently: one emoticon (`B)`, `:)`, `>:)`) merged the rest of the response into a single
+  message, and because only a *segment-opening* `Persona (sprite):` label is consumed by
+  `parseLeadingRenderModifier` (stage 06), every later label in that response shipped as visible
+  text.
+- Clamping also stops an orphan closer from offsetting a real opener back to a balanced-looking
+  total, which would let `"we won :) (barely"` split in the middle of an open parenthetical: exactly
+  what the hold exists to prevent.
+
+`stripLeakedOwnNameLabels` (stage 06) carries the matching safety net: a decorated
+`Persona (sprite):` label stranded mid-body is stripped at its turn boundary. That strip is scoped to
+the boundary and opening-chain passes, never the leaked-preamble pass, which drops everything before
+the label it matches and would delete the real reply preceding a stray one.
+
+The final auto-close pass uses the same clamped opener count. An orphan closer before a later opener,
+as in `B) (barely`, cannot mask the missing final `)` after streaming ends.
+
 ### Semantic block detection
 
 `drainThinkBlocksFromBuffer(state)` and `drainDetailsBlocksFromBuffer(state)` scan `state.buffer`

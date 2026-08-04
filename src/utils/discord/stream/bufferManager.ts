@@ -185,13 +185,18 @@ export function drainDetailsBlocksFromBuffer(state: StreamState): void {
 }
 
 export function hasIncompleteSemanticMarkers(buffer: string): boolean {
-  let parenDepth = 0;
+  // Only an unmatched OPENER is worth holding for: text is ordered, so a ")" that already passed
+  // can never be matched by a "(" that follows. Counting it would both stall forever (the buffer
+  // only grows, so a net-negative depth never returns to zero and every later flush defers to the
+  // final one) and let an emoticon cancel a genuinely open parenthetical, splitting mid-aside.
+  // Emoticons are the common source: "B)", ":)", ">:)".
+  let unclosedOpeners = 0;
   for (const char of buffer) {
-    if (char === "(") parenDepth++;
-    else if (char === ")") parenDepth--;
+    if (char === "(") unclosedOpeners++;
+    else if (char === ")" && unclosedOpeners > 0) unclosedOpeners--;
   }
-  if (parenDepth !== 0) {
-    log.info(`Stream: Buffer has unbalanced parentheses (depth: ${parenDepth})`);
+  if (unclosedOpeners > 0) {
+    log.info(`Stream: Buffer has unclosed parentheses (open: ${unclosedOpeners})`);
     return true;
   }
 
@@ -265,14 +270,14 @@ function appendUnbalancedMarkerClosers(buffer: string): string {
   let fixedBuffer = buffer;
   const fixes: string[] = [];
 
-  let parenDepth = 0;
+  let unclosedOpeners = 0;
   for (const char of fixedBuffer) {
-    if (char === "(") parenDepth++;
-    else if (char === ")") parenDepth--;
+    if (char === "(") unclosedOpeners++;
+    else if (char === ")" && unclosedOpeners > 0) unclosedOpeners--;
   }
-  if (parenDepth > 0) {
-    fixedBuffer += ")".repeat(parenDepth);
-    fixes.push(`${parenDepth} closing parentheses`);
+  if (unclosedOpeners > 0) {
+    fixedBuffer += ")".repeat(unclosedOpeners);
+    fixes.push(`${unclosedOpeners} closing parentheses`);
   }
 
   const regularQuoteCount = (fixedBuffer.match(/"/g) || []).length;

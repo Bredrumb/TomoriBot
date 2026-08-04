@@ -9,7 +9,7 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { ButtonStyle, ComponentType, MessageFlags } from "discord.js";
-import { configRepository, llmModelRepo, llmOverrideRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, llmOverrideRepo, llmProviderRepo } from "@/utils/db/repositories";
 
 import { getCachedTomoriState, getCachedAllPersonas, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
@@ -39,6 +39,7 @@ import {
 import type { UserRow, ErrorContext, LlmRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
+import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
@@ -671,16 +672,18 @@ export async function execute(
         selectedSavedConfig.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
         customModel,
       );
+      const customEndpoints = await llmProviderRepo.loadCustomEndpointsForServer(tomoriState.server_id);
       const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
-      const fallbackLlmIds = clearFallbacks
+      const savedFallbackRefs = clearFallbacks
         ? []
-        : (selectedSavedConfig.fallback_model_refs ?? [])
-            .filter((r) => r.type === "llm" && r.id !== customModel.llm_id)
-            .map((r) => r.id);
+        : prunePrimaryFallbackRefs(selectedSavedConfig.fallback_model_refs ?? [], customModel.llm_id, customEndpoints);
+      const fallbackLlmIds = savedFallbackRefs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
       // The live chain is cross-provider by design, so it is pruned rather than cleared: only
       // the model being promoted has to go, or it would block every later /model fallback edit.
-      const prunedFallbackRefs = (tomoriState.config.fallback_model_refs ?? []).filter(
-        (ref) => !(ref.type === "llm" && ref.id === customModel.llm_id),
+      const prunedFallbackRefs = prunePrimaryFallbackRefs(
+        tomoriState.config.fallback_model_refs ?? [],
+        customModel.llm_id,
+        customEndpoints,
       );
       const disabledParams = selectedSavedConfig.llm_disabled_params ?? [];
 

@@ -294,7 +294,7 @@ Manage your personal settings
 | `/personal provider model-video` | Pick the video model for one of your personal providers. |
 | `/personal provider model-vision` | Pick the vision model for one of your personal providers. |
 | `/personal provider remove` | Remove one of your saved personal providers. |
-| `/personal provider toggle-models` | Enable or disable which personal capabilities override the server. |
+| `/personal provider toggle-models` | Enable or disable which personal models override the server. |
 | `/personal spotlight manage` | Remove your active personal spotlights. Use /help spotlight to learn more. |
 | `/personal spotlight set` | Set a personal persona spotlight for one channel. Use /help spotlight to learn more. |
 | `/personal stm` | Configure STM (short-term memory) settings |
