@@ -121,7 +121,8 @@ export class StreamErrorUi {
     // Detect the provider and whether a fallback chain already exists: both gate conditional tips.
     const providerName = provider.getProviderInfo().name;
     const isOpenRouter = providerName === "openrouter";
-    const hasFallbackModels = (context.tomoriState.fallback_llms?.length ?? 0) > 0;
+    const hasFallbackModels =
+      (context.tomoriState.fallback_chain?.length ?? context.tomoriState.fallback_llms?.length ?? 0) > 0;
     const modelFallbackTip = hasFallbackModels ? [] : ["genai.tips.model_fallback"];
 
     // Specialized Error Conditions

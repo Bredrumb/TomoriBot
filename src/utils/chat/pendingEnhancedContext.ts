@@ -54,10 +54,6 @@ export function takeEnhancedContextItem(key: string): StructuredContextItem | un
   return entry.item;
 }
 
-export function clearStashedEnhancedContextItems(): void {
-  stash.clear();
-}
-
 function evictStaleEntries(now: number): void {
   for (const [key, entry] of stash) {
     if (now - entry.storedAt > STASH_TTL_MS) {

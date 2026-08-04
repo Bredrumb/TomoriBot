@@ -1,5 +1,4 @@
 import type {
-  FallbackModelRef,
   PersonalProviderCapability,
   SavedProviderConfigRow,
   SavedProviderConfigUpsert,
@@ -8,7 +7,7 @@ import type {
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
-import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
+import { buildFallbackModelPersistence } from "@/utils/provider/fallbackModelIdentity";
 import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 
@@ -22,10 +21,6 @@ export interface ActivationResult {
 export type OpenRouterActivationCapability = "text" | "embedding" | "image" | "video";
 
 type ServerSavedProviderConfig = SavedProviderConfigRow | SavedProviderConfigUpsert;
-
-function extractFallbackLlmIds(refs: FallbackModelRef[]): number[] {
-  return refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
-}
 
 export async function activateServerTextModelFromSavedConfig(params: {
   serverDiscId: string;
@@ -45,16 +40,16 @@ export async function activateServerTextModelFromSavedConfig(params: {
 
   const promotedLlmId = selectedModel.llm_id;
   const normalizedProvider = params.savedConfig.provider.toLowerCase();
-  const clearFallbacks = params.tomoriState.llm?.llm_provider?.toLowerCase() !== normalizedProvider;
   const customEndpoints = isCustomProvider(normalizedProvider)
     ? await llmProviderRepo.loadCustomEndpointsForServer(params.tomoriState.server_id)
     : [];
-  // A same-provider swap keeps the saved chain, which may already list the model being promoted.
-  // That duplicate is dead weight at runtime and would block every later /model fallback edit.
-  const fallbackModelRefs = clearFallbacks
-    ? []
-    : prunePrimaryFallbackRefs(params.savedConfig.fallback_model_refs ?? [], promotedLlmId, customEndpoints);
-  const fallbackLlmIds = extractFallbackLlmIds(fallbackModelRefs);
+  // The live chain is server-wide and may intentionally span providers. Switching the primary
+  // only removes entries that resolve to the promoted model.
+  const { fallbackModelRefs, fallbackLlmIds } = buildFallbackModelPersistence(
+    params.tomoriState.config.fallback_model_refs ?? [],
+    promotedLlmId,
+    customEndpoints,
+  );
   const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
     params.savedConfig.llm_logit_biases ?? params.tomoriState.config.llm_logit_biases ?? [],
     selectedModel,

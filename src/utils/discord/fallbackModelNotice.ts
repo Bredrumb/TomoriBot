@@ -55,6 +55,15 @@ function buildFailureList(locale: string, failures: FallbackNoticeAttempt[]): st
 }
 
 function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failures: FallbackNoticeAttempt[]): number {
+  const configuredChainIndex = context.tomoriState.fallback_chain?.findIndex((entry) =>
+    entry.kind === "llm"
+      ? entry.model.llm_id === successModel.llm_id
+      : entry.endpoint.model_ref_id === successModel.llm_id,
+  );
+  if (configuredChainIndex !== undefined && configuredChainIndex >= 0) {
+    return configuredChainIndex + 1;
+  }
+
   const configuredFallbackIndex =
     context.tomoriState.fallback_llms?.findIndex((llm) => llm.llm_id === successModel.llm_id) ?? -1;
 

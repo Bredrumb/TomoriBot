@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { CustomEndpointRow, FallbackModelRef } from "@/types/db/schema";
-import { getPrimaryFallbackRefKeys, prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
+import {
+  buildFallbackModelPersistence,
+  getPrimaryFallbackRefKeys,
+  prunePrimaryFallbackRefs,
+} from "@/utils/provider/fallbackModelIdentity";
 
 const endpoint = {
   custom_endpoint_id: 5,
@@ -24,5 +28,21 @@ describe("fallback model identity", () => {
       { type: "custom_endpoint", id: 42 },
       { type: "llm", id: 7 },
     ]);
+  });
+
+  it("derives the legacy LLM mirror from the same pruned cross-provider chain", () => {
+    const refs: FallbackModelRef[] = [
+      { type: "llm", id: 7 },
+      { type: "custom_endpoint", id: 9 },
+      { type: "llm", id: 42 },
+    ];
+
+    expect(buildFallbackModelPersistence(refs, 42)).toEqual({
+      fallbackModelRefs: [
+        { type: "llm", id: 7 },
+        { type: "custom_endpoint", id: 9 },
+      ],
+      fallbackLlmIds: [7],
+    });
   });
 });

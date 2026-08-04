@@ -32,3 +32,13 @@ export function prunePrimaryFallbackRefs(
   const primaryKeys = getPrimaryFallbackRefKeys(primaryLlmId, endpoints);
   return refs.filter((ref) => !primaryKeys.has(getFallbackModelRefKey(ref)));
 }
+
+export function buildFallbackModelPersistence(
+  refs: readonly FallbackModelRef[],
+  primaryLlmId: number | null | undefined,
+  endpoints: Iterable<FallbackIdentityEndpoint> = [],
+): { fallbackModelRefs: FallbackModelRef[]; fallbackLlmIds: number[] } {
+  const fallbackModelRefs = prunePrimaryFallbackRefs(refs, primaryLlmId, endpoints);
+  const fallbackLlmIds = fallbackModelRefs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
+  return { fallbackModelRefs, fallbackLlmIds };
+}

@@ -2,7 +2,6 @@ import type {
   CustomEndpointApiStyle,
   CustomEndpointCapability,
   CustomEndpointRow,
-  FallbackModelRef,
   PersonalProviderCapability,
   SavedProviderConfigUpsert,
   SavedProviderConfigRow,
@@ -26,7 +25,7 @@ import {
   buildUserCustomProviderName,
   parseCustomProvider,
 } from "@/utils/provider/customProviderUtils";
-import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
+import { buildFallbackModelPersistence, prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { encryptApiKey } from "@/utils/security/crypto";
@@ -225,10 +224,6 @@ function getCapabilityModelId(
   }
 }
 
-function extractFallbackLlmIds(refs: FallbackModelRef[]): number[] {
-  return refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
-}
-
 function toPersonalModelCapability(capability: CustomEndpointCapability): PersonalProviderCapability | null {
   switch (capability) {
     case "text":
@@ -244,7 +239,6 @@ function toPersonalModelCapability(capability: CustomEndpointCapability): Person
 
 async function activateServerCustomTextModel(params: {
   scope: Extract<RegistrationScope, { kind: "server" }>;
-  provider: string;
   endpoint: CustomEndpointRow;
   savedConfig: SavedProviderConfigRow | SavedProviderConfigUpsert;
   modelId: number;
@@ -254,18 +248,14 @@ async function activateServerCustomTextModel(params: {
     return false;
   }
 
-  const currentModel = params.scope.baseConfig.llm_id
-    ? await llmModelRepo.loadById(params.scope.baseConfig.llm_id)
-    : null;
   const promotedLlmId = selectedModel.llm_id;
-  const normalizedProvider = params.provider.toLowerCase();
-  const clearFallbacks = currentModel?.llm_provider?.toLowerCase() !== normalizedProvider;
-  // A same-provider swap keeps the saved chain, which may already list the model being promoted.
-  // That duplicate is dead weight at runtime and would block every later /model fallback edit.
-  const fallbackModelRefs = clearFallbacks
-    ? []
-    : prunePrimaryFallbackRefs(params.savedConfig.fallback_model_refs ?? [], promotedLlmId, [params.endpoint]);
-  const fallbackLlmIds = extractFallbackLlmIds(fallbackModelRefs);
+  // Registration activates the endpoint immediately, but it must not discard the server-wide
+  // cross-provider fallback chain that was active before registration.
+  const { fallbackModelRefs, fallbackLlmIds } = buildFallbackModelPersistence(
+    params.scope.baseConfig.fallback_model_refs ?? [],
+    promotedLlmId,
+    [params.endpoint],
+  );
   const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
     params.savedConfig.llm_logit_biases ?? params.scope.baseConfig.llm_logit_biases ?? [],
     selectedModel,
@@ -306,7 +296,6 @@ async function activateServerCustomTextModel(params: {
 
 async function activateServerCustomEndpointForCapability(params: {
   scope: Extract<RegistrationScope, { kind: "server" }>;
-  provider: string;
   endpoint: CustomEndpointRow;
   capability: CustomEndpointCapability;
   modelId: number | null;
@@ -323,7 +312,6 @@ async function activateServerCustomEndpointForCapability(params: {
   if (params.capability === "text") {
     return await activateServerCustomTextModel({
       scope: params.scope,
-      provider: params.provider,
       endpoint: params.endpoint,
       savedConfig: params.savedConfig,
       modelId: params.modelId,
@@ -636,7 +624,6 @@ export async function registerCustomEndpoint(
     const activated = serverScope
       ? await activateServerCustomEndpointForCapability({
           scope: serverScope,
-          provider,
           endpoint: customEndpoint,
           capability: input.capability,
           modelId,

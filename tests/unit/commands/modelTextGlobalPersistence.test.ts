@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
-import type { ErrorContext, LlmRow, NaiPresetRow, TomoriState, UserRow } from "@/types/db/schema";
+import type { ErrorContext, FallbackModelRef, LlmRow, NaiPresetRow, TomoriState, UserRow } from "@/types/db/schema";
 // Real namespaces captured at link time, before any `mock.module` below runs.
 // `mock.module` is process-global and never restored, so every factory spreads
 // the real surface and overrides only what this file controls.
@@ -27,6 +27,8 @@ interface Scenario {
   replaceResult: boolean;
   selectedModel: LlmRow;
   naiPresets: NaiPresetRow[];
+  liveFallbackRefs: FallbackModelRef[];
+  savedFallbackRefs: FallbackModelRef[];
 }
 
 interface InfoOptions {
@@ -46,6 +48,8 @@ const infoReplies: InfoOptions[] = [];
 const replacements: InfoOptions[] = [];
 const errorLogs: ErrorLog[] = [];
 const presetCalls: Array<{ serverId: number; preset: NaiPresetRow; model: string; serverDiscId: string }> = [];
+const modelConfigPatches: Array<Record<string, unknown>> = [];
+const chatConfigPatches: Array<Record<string, unknown>> = [];
 
 let scenario: Scenario;
 
@@ -83,15 +87,18 @@ const tomoriState = {
     llm_codename: "current-model",
     llm_provider: "current-provider",
   },
-  config: {
-    llm_id: 1,
-    llm_temperature: 1,
-    llm_top_p: 0.95,
-    llm_top_k: 0,
-    llm_frequency_penalty: 0,
-    llm_presence_penalty: 0,
-    llm_min_p: 0.05,
-    llm_logit_biases: [],
+  get config() {
+    return {
+      llm_id: 1,
+      llm_temperature: 1,
+      llm_top_p: 0.95,
+      llm_top_k: 0,
+      llm_frequency_penalty: 0,
+      llm_presence_penalty: 0,
+      llm_min_p: 0.05,
+      llm_logit_biases: [],
+      fallback_model_refs: scenario.liveFallbackRefs,
+    };
   },
 } as unknown as TomoriState;
 
@@ -104,6 +111,8 @@ function makeScenario(): Scenario {
     replaceResult: false,
     selectedModel: makeModel("next-model"),
     naiPresets: [],
+    liveFallbackRefs: [],
+    savedFallbackRefs: [],
   };
 }
 
@@ -142,7 +151,7 @@ scopedMock.module("@/utils/provider/savedProviderConfig", () => ({
       provider: scenario.selectedModel.llm_provider,
       api_key: "encrypted-key",
       llm_logit_biases: [],
-      fallback_model_refs: [],
+      fallback_model_refs: scenario.savedFallbackRefs,
       llm_disabled_params: [],
     },
   ],
@@ -159,12 +168,14 @@ scopedMock.module("@/utils/db/repositories", () => ({
     setPersonaLlmOverride: async () => true,
   }),
   configRepository: overrideMembers(realRepositories.configRepository, {
-    updateModelConfig: async () => {
+    updateModelConfig: async (_serverId: number, patch: Record<string, unknown>) => {
       chronology.push("repo.update-model");
+      modelConfigPatches.push(patch);
       return scenario.modelUpdated;
     },
-    updateChatConfig: async () => {
+    updateChatConfig: async (_serverId: number, patch: Record<string, unknown>) => {
       chronology.push("repo.update-chat");
+      chatConfigPatches.push(patch);
       return scenario.chatUpdated;
     },
     loadNaiPresets: async () => scenario.naiPresets,
@@ -349,9 +360,30 @@ beforeEach(() => {
   replacements.length = 0;
   errorLogs.length = 0;
   presetCalls.length = 0;
+  modelConfigPatches.length = 0;
+  chatConfigPatches.length = 0;
 });
 
 describe("/model text global persistence", () => {
+  it("preserves the live cross-provider chain and mirrors its pruned LLM refs", async () => {
+    scenario.liveFallbackRefs = [
+      { type: "llm", id: 7 },
+      { type: "custom_endpoint", id: 9 },
+      { type: "llm", id: 42 },
+    ];
+    scenario.savedFallbackRefs = [{ type: "llm", id: 99 }];
+
+    await runCommand();
+
+    expect(modelConfigPatches[0]).toMatchObject({ fallback_llm_ids: [7] });
+    expect(chatConfigPatches[0]).toMatchObject({
+      fallback_model_refs: [
+        { type: "llm", id: 7 },
+        { type: "custom_endpoint", id: 9 },
+      ],
+    });
+  });
+
   it("invalidates and fails when the regular-model chat-config write fails after the model write succeeds", async () => {
     scenario.chatUpdated = false;
 
