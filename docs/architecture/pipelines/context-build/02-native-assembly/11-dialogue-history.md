@@ -24,7 +24,7 @@ context items per message with three orthogonal concerns interleaved:
    deciding whether an image/video becomes a provider media part. The
    per-attempt resolver (`mediaResolver.ts`) later turns descriptors into
    final image/video parts, `{image_analysis_tool}` notices, plain blind-model
-   notices, or `increase_media_context` hints.
+   notices, or out-of-window notices.
 3. **Context-note injection** — if `context_note` is configured, inject
    `[System: ${note}]` at `context_note_depth` messages from the end of
    history. The default-off verbatim tool-calling workaround adds a separate
@@ -97,7 +97,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   - Duplicate images are dropped with logging only.
   - Capability-specific notices are not emitted here. `resolveMediaForModel`
     emits `{image_analysis_tool}` guidance, plain blind-model notices, and
-    `increase_media_context` hints per generation attempt.
+    out-of-window notices per generation attempt.
   - Intentional deviation from the pre-refactor behavior: out-of-window media
     now produces a plain "outside the current media context window and cannot
     be viewed" notice even for blind models. Blind notices still include the
@@ -105,6 +105,11 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
     example img2img/inpaint/image-to-video) can target the source message.
     Previously that blind + out-of-window combination emitted no line, which
     hid the fact that media existed at all.
+  - When the model *could* see the media but it fell outside the window, the
+    notice points at the reply escape hatch instead. There is no tool that
+    widens the window: `increase_media_context` was removed in favor of the
+    reply path, which re-fetches the referenced message directly and copies its
+    media onto the reply (always in-window), so it works at any history depth.
 - **Media attribution hint** — `[System: These images (Media IDs: X, Y) were
   sent by Z]`, with dedicated wording for reply-referenced media ("included in
   the message being replied to") and forwarded media ("attached to the
@@ -253,8 +258,8 @@ After this stage runs:
   `presence_seen` ticks, so a disabled server writes nothing.
 - At most one reunion note is injected, and it can describe only the direct triggerer.
 - `messageIdMap.register(...)` is called for every media reference the
-  LLM might ask about after resolution (so `increase_media_context`,
-  `image_analysis_tool`, and media-reference tools have stable IDs).
+  LLM might ask about after resolution (so `image_analysis_tool` and
+  media-reference tools have stable IDs).
 
 ## Configuration
 
@@ -305,7 +310,6 @@ the role mapping + text/media emission. → plugin plan candidate.
   [native-assembly README](/architecture/pipelines/context-build/02-native-assembly/#shared-helpers-used-across-contributors).
 - Message-ID map: → no dedicated doc; `messageIdMap.ts` helper only
 - Image-analysis tool: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
-- `increase_media_context` tool: tool registry (same source)
 - Memory-pressure media-window shrinking:
   → no dedicated doc; `src/utils/security/rateLimiter.ts` helper only
 - Humanizer transform: → `src/utils/text/processors/formatters.ts` helper

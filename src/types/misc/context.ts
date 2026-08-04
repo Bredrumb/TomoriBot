@@ -14,7 +14,6 @@ export interface MediaDescriptor {
   mediaId: string;
   isEmoji?: boolean;
   withinWindow: boolean;
-  extendBy?: number;
   isYouTubeLink?: boolean;
   filename?: string;
 }

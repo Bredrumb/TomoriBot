@@ -11,7 +11,8 @@ import { log } from "@/utils/misc/logger";
  *
  * - **Sprite group-break alternation**: adjacent *different* sprites must not share a
  *    username, or the second renders under the first one's avatar. Held per channel because
- *    grouping spans turns.
+ *    grouping spans turns, and reset whenever a foreign message lands between our own
+ *    deliveries, since Discord only ever groups a message with the one directly above it.
  * - **Last delivered webhook identity**: post-turn artifacts (stickers, the "Fallback Used"
  *    notice) should be posted as the identity that actually delivered the final message, so
  *    they group with it instead of splitting off under a different name.
@@ -46,6 +47,12 @@ interface ChannelDeliveryState {
    * as the bot, since that is what they would group with.
    */
   lastWebhookIdentity: ResolvedWebhookIdentity | null;
+  /**
+   * Message id of the most recent WEBHOOK delivery, or null when the last delivery was an
+   * ordinary bot message. Null blocks adjacency outright: a bot-user message is a different
+   * Discord author, so no webhook group can continue through it.
+   */
+  lastDeliveredMessageId: string | null;
   updatedAt: number;
 }
 
@@ -78,10 +85,37 @@ function getLiveEntry(channelId: string, now: number): ChannelDeliveryState {
     lastSpriteKey: null,
     groupParity: false,
     lastWebhookIdentity: null,
+    lastDeliveredMessageId: null,
     updatedAt: now,
   };
   channelDeliveryStates.set(channelId, fresh);
   return fresh;
+}
+
+/**
+ * Reports whether a message from someone else landed after our last webhook delivery, which
+ * means Discord has already broken the group and the next sprite cannot collide with anything.
+ *
+ * Compares snowflake magnitude rather than equality because `channel.lastMessageId` is
+ * maintained from the gateway `MESSAGE_CREATE` dispatch, which can lag a send we just made: an
+ * equality check would read our own back-to-back segments as non-adjacent and drop the group
+ * break that keeps them from merging. Snowflakes are time-ordered, so only a strictly greater
+ * id proves a later message exists; a lagging (smaller) read falls through to "adjacent", whose
+ * worst case is a redundant suffix rather than two sprites collapsing under one avatar.
+ */
+function hasForeignMessageSinceDelivery(
+  deliveredMessageId: string | null,
+  channelLastMessageId: string | null,
+): boolean {
+  if (deliveredMessageId === null) return true;
+  if (channelLastMessageId === null) return false;
+
+  try {
+    return BigInt(channelLastMessageId) > BigInt(deliveredMessageId);
+  } catch {
+    // A non-numeric id should be impossible, so assume adjacency and keep the group break.
+    return false;
+  }
 }
 
 /**
@@ -92,11 +126,26 @@ function getLiveEntry(channelId: string, now: number): ChannelDeliveryState {
  * same-sprite runs keep an identical username and still group naturally, while adjacent
  * different-sprite messages are guaranteed to differ.
  *
+ * The run restarts whenever anything else spoke since our last delivery (a user, another
+ * persona's webhook, our own bot-user fallback). Discord groups a message only with the one
+ * directly above it, so a broken group means the decorated name would be noise rather than a
+ * collision break.
+ *
+ * @param channelLastMessageId - The channel's current `lastMessageId`, used for the adjacency test
  */
-export function advanceChannelSpriteGroupParity(channelId: string, spriteKey: string): boolean {
+export function advanceChannelSpriteGroupParity(
+  channelId: string,
+  spriteKey: string,
+  channelLastMessageId: string | null,
+): boolean {
   const now = Date.now();
   const entry = getLiveEntry(channelId, now);
   entry.updatedAt = now;
+
+  if (hasForeignMessageSinceDelivery(entry.lastDeliveredMessageId, channelLastMessageId)) {
+    entry.lastSpriteKey = null;
+    entry.groupParity = false;
+  }
 
   // A null previous key means this sprite is the channel's first in the current window, so it
   // stays on the clean name, so there is nothing before it to collide with.
@@ -116,11 +165,17 @@ export function advanceChannelSpriteGroupParity(channelId: string, spriteKey: st
  * the clean name instead and split the group, which is exactly what this avoids.
  *
  * @param identity - Identity used for the send
+ * @param messageId - Id of the sent message, which anchors the sprite alternation's adjacency test
  */
-export function recordChannelDeliveredWebhookIdentity(channelId: string, identity: ResolvedWebhookIdentity): void {
+export function recordChannelDeliveredWebhookIdentity(
+  channelId: string,
+  identity: ResolvedWebhookIdentity,
+  messageId: string | null = null,
+): void {
   const now = Date.now();
   const entry = getLiveEntry(channelId, now);
   entry.lastWebhookIdentity = { ...identity };
+  entry.lastDeliveredMessageId = messageId;
   entry.updatedAt = now;
 }
 
@@ -134,6 +189,7 @@ export function recordChannelDeliveredBotMessage(channelId: string): void {
   const now = Date.now();
   const entry = getLiveEntry(channelId, now);
   entry.lastWebhookIdentity = null;
+  entry.lastDeliveredMessageId = null;
   entry.updatedAt = now;
 }
 

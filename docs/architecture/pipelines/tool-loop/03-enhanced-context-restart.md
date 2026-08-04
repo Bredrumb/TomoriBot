@@ -32,9 +32,22 @@ immediately after the registry dispatch. It only runs when `toolResult.success
   ```ts
   {
     type: "context_restart_<suffix>";   // e.g. "context_restart_message_metadata"
-    enhanced_context_item?: StructuredContextItem;
+    enhanced_context_item?: StructuredContextItem;  // inline payload
+    pending_context_key?: string;                   // stashed payload (takes precedence)
   }
   ```
+
+  A tool supplies its enrichment through exactly one of two transports:
+
+  | Transport | Use when |
+  |---|---|
+  | `enhanced_context_item` | The item is small (a URL, a directive, plain text). YouTube passes a link this way. |
+  | `pending_context_key` | The item carries bulk media. The tool calls `stashEnhancedContextItem()` (`src/utils/chat/pendingEnhancedContext.ts`) and returns only the key. |
+
+  The stash exists because `ToolResult.data` is retained: `ToolRegistry` keeps the last
+  1000 execution events, each holding a strong reference to its result. A base64 avatar
+  or a set of GIF keyframes placed in `data` would stay resident for the process
+  lifetime. `peek_profile_picture` and `process_gif` therefore use the stash.
 
 ## Output
 
@@ -64,8 +77,11 @@ All mutations apply only when `data.type` starts with `"context_restart_"`.
   guards reject a second reveal in this turn.
 
 **All restart types:**
-- Appends `data.enhanced_context_item` to `contextItems` when present — this
-  is the primary enrichment payload (e.g. YouTube transcript, fetched image).
+- Resolves the enrichment payload via `resolveEnhancedContextItem` and appends it to
+  `contextItems` when present. `pending_context_key` is drained first (and removed from
+  the stash so a later restart cannot replay stale media); `enhanced_context_item` is
+  used otherwise. A key that resolves to nothing logs a warning: the turn continues
+  without the media rather than failing, so the warning is the only signal.
 - Sets the type-matched disable flag on `streamingContext`:
 
   | `type` contains | Disable flag set |
@@ -98,6 +114,7 @@ After this stage runs (when it returns `true`):
 |---|---|
 | `context_restart_*` type namespace | The seam — a tool that needs to inject enriched context before the next generation returns a `context_restart_<suffix>` payload. Adding a new suffix requires a matching `type.includes(...)` check here and a new disable flag if re-fetch prevention is needed. → plugin plan candidate |
 | `enhanced_context_item` field | The enrichment contract — any `StructuredContextItem` can be injected; type determines how the provider interprets it |
+| `pending_context_key` + `stashEnhancedContextItem()` | The same contract for bulk media; keeps multi-MB payloads out of the retained tool-execution history. Bounded by `ENHANCED_CONTEXT_STASH_TTL_MS` / `ENHANCED_CONTEXT_STASH_MAX_ENTRIES` |
 | Disable flags on `StreamingContext` | Internal — flags are consumed by the context-build pipeline; adding a new flag requires both the restart handler and the context-build stage that checks it |
 
 ## Related docs

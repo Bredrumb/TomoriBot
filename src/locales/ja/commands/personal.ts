@@ -219,6 +219,8 @@ export default {
         description: `有効な個人テキストプロバイダーのフォールバックモデルを設定し、なしで各スロットをクリアできます。`,
         no_provider_title: `有効な個人テキストプロバイダーがありません`,
         no_provider_description: `先に \`/personal provider model-text\` と \`/personal provider toggle-models\` で個人テキストプロバイダーを有効化してください。`,
+        primary_conflict_title: `選択が無効です`,
+        primary_conflict_description: `選択したフォールバックモデルの一つ以上が、このプロバイダーの個人プライマリモデル \`{model}\` と一致しています。別のモデルを選択してください。`,
         success_title: `個人フォールバックを更新しました`,
         success_description: `個人 {provider} テキストプロバイダーのフォールバックモデルを更新しました。
 

@@ -674,7 +674,14 @@ export async function execute(
       const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
       const fallbackLlmIds = clearFallbacks
         ? []
-        : (selectedSavedConfig.fallback_model_refs ?? []).filter((r) => r.type === "llm").map((r) => r.id);
+        : (selectedSavedConfig.fallback_model_refs ?? [])
+            .filter((r) => r.type === "llm" && r.id !== customModel.llm_id)
+            .map((r) => r.id);
+      // The live chain is cross-provider by design, so it is pruned rather than cleared: only
+      // the model being promoted has to go, or it would block every later /model fallback edit.
+      const prunedFallbackRefs = (tomoriState.config.fallback_model_refs ?? []).filter(
+        (ref) => !(ref.type === "llm" && ref.id === customModel.llm_id),
+      );
       const disabledParams = selectedSavedConfig.llm_disabled_params ?? [];
 
       const [updatedModel, updatedChat] = await Promise.all([
@@ -699,6 +706,7 @@ export async function execute(
             selectedSavedConfig.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0,
           llm_min_p: selectedSavedConfig.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05,
           llm_logit_biases: resolvedLogitBiases.entries,
+          fallback_model_refs: prunedFallbackRefs,
         }),
       ]);
       // The split-table writes are not transactional. Invalidate after either
@@ -838,10 +846,18 @@ export async function execute(
       selectedSavedConfig?.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
       selectedModel,
     );
+    const promotedLlmId = selectedModel.llm_id;
     const clearFallbacks = tomoriState.llm?.llm_provider?.toLowerCase() !== selectedProvider;
     const fallbackLlmIds = clearFallbacks
       ? []
-      : (selectedSavedConfig?.fallback_model_refs ?? []).filter((r) => r.type === "llm").map((r) => r.id);
+      : (selectedSavedConfig?.fallback_model_refs ?? [])
+          .filter((r) => r.type === "llm" && r.id !== promotedLlmId)
+          .map((r) => r.id);
+    // The live chain is cross-provider by design, so it is pruned rather than cleared: only
+    // the model being promoted has to go, or it would block every later /model fallback edit.
+    const prunedFallbackRefs = (tomoriState.config.fallback_model_refs ?? []).filter(
+      (ref) => !(ref.type === "llm" && ref.id === promotedLlmId),
+    );
     const disabledParams = selectedSavedConfig?.llm_disabled_params ?? [];
 
     const [updatedModel, updatedChat] = await Promise.all([
@@ -866,6 +882,7 @@ export async function execute(
           selectedSavedConfig?.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty ?? 0.0,
         llm_min_p: selectedSavedConfig?.llm_min_p ?? tomoriState.config.llm_min_p ?? 0.05,
         llm_logit_biases: resolvedLogitBiases.entries,
+        fallback_model_refs: prunedFallbackRefs,
       }),
     ]);
     // Keep invalidation immediately after the primary split writes. This also

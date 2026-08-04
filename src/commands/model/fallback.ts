@@ -379,6 +379,8 @@ export async function execute(
 
     // Per-slot merge: blank = keep existing, __none__ = clear, value = update
     const mergedRefs: FallbackModelRef[] = [];
+    // Refs the user picked in this submission, as opposed to inherited from untouched slots.
+    const submittedKeys = new Set<string>();
     for (let i = 0; i < 5; i++) {
       const raw = (values[SLOT_IDS[i]] ?? "").trim();
 
@@ -390,30 +392,40 @@ export async function execute(
       } else if (raw.startsWith(CUSTOM_ENDPOINT_VALUE_PREFIX)) {
         // Custom endpoint selection
         const epId = Number.parseInt(raw.slice(CUSTOM_ENDPOINT_VALUE_PREFIX.length), 10);
-        if (!Number.isNaN(epId)) mergedRefs.push({ type: "custom_endpoint", id: epId });
+        if (!Number.isNaN(epId)) {
+          mergedRefs.push({ type: "custom_endpoint", id: epId });
+          submittedKeys.add(`custom_endpoint:${epId}`);
+        }
       } else {
         if (selectedProvider === "openrouter" && raw === "other-model") {
           await work.message.replace(buildOpenRouterMovedNotice(locale, "server"));
           return;
         }
         const match = availableModels.find((m) => m.llm_codename === raw);
-        if (match?.llm_id !== undefined) mergedRefs.push({ type: "llm", id: match.llm_id });
+        if (match?.llm_id !== undefined) {
+          mergedRefs.push({ type: "llm", id: match.llm_id });
+          submittedKeys.add(`llm:${match.llm_id}`);
+        }
       }
     }
 
     const seen = new Set<string>();
-    const finalRefs: FallbackModelRef[] = [];
+    const dedupedRefs: FallbackModelRef[] = [];
     for (const ref of mergedRefs) {
       const key = `${ref.type}:${ref.id}`;
       if (!seen.has(key)) {
         seen.add(key);
-        finalRefs.push(ref);
+        dedupedRefs.push(ref);
       }
     }
 
-    // Validate: no fallback can duplicate the primary model
+    // A fallback equal to the primary is meaningless, so it never survives the write. Only a
+    // pick made in this submission is worth an error; an inherited duplicate (the primary was
+    // promoted after this chain was saved) is dropped silently, since erroring on it would
+    // reject every submission until the user found and cleared that untouched slot.
     const primaryLlmId = tomoriState.config.llm_id;
-    if (primaryLlmId && finalRefs.some((r) => r.type === "llm" && r.id === primaryLlmId)) {
+    const primaryKey = primaryLlmId ? `llm:${primaryLlmId}` : null;
+    if (primaryKey && submittedKeys.has(primaryKey)) {
       await work.message.replace(
         buildPersonaWorkflowNotice({
           locale,
@@ -425,6 +437,7 @@ export async function execute(
       );
       return;
     }
+    const finalRefs = primaryKey ? dedupedRefs.filter((ref) => `${ref.type}:${ref.id}` !== primaryKey) : dedupedRefs;
 
     if (FALLBACK_DEBUG_ENABLED) {
       log.info(

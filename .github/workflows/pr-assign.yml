@@ -19,10 +19,13 @@ jobs:
 
             const existingLabels = context.payload.pull_request.labels || [];
 
-            // Parse Type(s) from PR body
-            if (body.match(/- \[[xX]\]\s*Bug Fix/i)) labels.push("bug");
-            if (body.match(/- \[[xX]\]\s*Feature/i)) labels.push("enhancement");
-            if (body.match(/- \[[xX]\]\s*Refactor\s*\/\s*Chore/i)) labels.push("chore");
+            // Parse Type(s) from PR body. Uses ( )/(x), not GFM [ ]/[x] checkbox
+            // syntax, because Type is a single-select, not a to-do, and GFM syntax
+            // would get summed into GitHub's task-list progress counter alongside
+            // the real Quality Gates checkboxes.
+            if (body.match(/- \([xX]\)\s*Bug Fix/i)) labels.push("bug");
+            if (body.match(/- \([xX]\)\s*Feature/i)) labels.push("enhancement");
+            if (body.match(/- \([xX]\)\s*Refactor\s*\/\s*Chore/i)) labels.push("chore");
 
             if (labels.length === 0 && existingLabels.length === 0) labels.push("Unspecified");
 
@@ -119,9 +122,9 @@ jobs:
             //    checkbox source and stay manual-only.
             const body = context.payload.pull_request.body || "";
             const typeOptionByPriority = [
-              { pattern: /- \[[xX]\]\s*Feature/i, optionId: "b8bc8fe5" },          // Feature
-              { pattern: /- \[[xX]\]\s*Bug Fix/i, optionId: "33408431" },          // Bugfix
-              { pattern: /- \[[xX]\]\s*Refactor\s*\/\s*Chore/i, optionId: "3f2a1ae6" }, // Dev-Facing
+              { pattern: /- \([xX]\)\s*Feature/i, optionId: "b8bc8fe5" },          // Feature
+              { pattern: /- \([xX]\)\s*Bug Fix/i, optionId: "33408431" },          // Bugfix
+              { pattern: /- \([xX]\)\s*Refactor\s*\/\s*Chore/i, optionId: "3f2a1ae6" }, // Dev-Facing
             ];
             const typeMatch = typeOptionByPriority.find((t) => t.pattern.test(body));
 

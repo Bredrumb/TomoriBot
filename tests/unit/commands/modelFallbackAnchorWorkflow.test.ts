@@ -388,6 +388,30 @@ describe("/model fallback anchor workflow", () => {
     );
   });
 
+  it("drops an inherited primary duplicate instead of refusing the whole submission", async () => {
+    scenario.modelCount = 5;
+    scenario.primaryLlmId = 3;
+    scenario.existingRefs = [
+      { type: "llm", id: 3 },
+      { type: "llm", id: 4 },
+    ];
+    scenario.submitted = { fallback_slot_3: "model-5" };
+
+    await runCommand();
+
+    // Slot 1 was never touched, so the stale ref is the command's own leftover from a later
+    // primary promotion. Erroring on it would lock the user out of every future edit.
+    expect(writtenRefs).toEqual([
+      [
+        { type: "llm", id: 4 },
+        { type: "llm", id: 5 },
+      ],
+    ]);
+    expect(replacements).not.toContainEqual(
+      expect.objectContaining({ titleKey: "commands.model.fallback.primary_conflict_title" }),
+    );
+  });
+
   it("renders the cleared terminal in place when every slot is emptied", async () => {
     scenario.modelCount = 5;
     scenario.existingRefs = [{ type: "llm", id: 2 }];

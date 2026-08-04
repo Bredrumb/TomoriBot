@@ -9,6 +9,7 @@ import type { Part } from "@google/genai";
 import { escapeMarkdown } from "discord.js";
 import { log } from "../../utils/misc/logger";
 import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
+import { stashEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
 import {
@@ -51,12 +52,6 @@ type PreparedProfileImage = {
  * Available for providers with image processing capabilities
  */
 export class PeekProfilePictureTool extends BaseTool {
-  /**
-   * Static map to store pending enhanced context items
-   * This prevents base64 data from being serialized in tool responses
-   * Keys are opaque pending-context tokens, values are enhanced context items with base64 data
-   */
-  static pendingEnhancedContextItems = new Map<string, StructuredContextItem>();
   name = "peek_profile_picture";
   description =
     "Process and analyze a user's profile picture using AI vision capabilities. When available for Discord users, this also includes their profile banner as supporting visual context. ONLY use this when specifically asked to look at someone's avatar. The target may be 'self' for the current active persona, an exact persona nickname, or a natural user name from the current conversation or server. Deprecated raw IDs are still accepted at execution time for compatibility.";
@@ -256,13 +251,9 @@ export class PeekProfilePictureTool extends BaseTool {
         ],
       };
 
-      // Store image data externally and return clean text only
-      // This prevents rate limit issues while still triggering enhanced context restart
-
-      // Store the enhanced context item in a module-level map for tomoriChat to access
-      // This is the cleanest way to avoid serializing base64 data in tool responses
-      const pendingContextKey = crypto.randomUUID();
-      PeekProfilePictureTool.pendingEnhancedContextItems.set(pendingContextKey, imageContextItem);
+      // The base64 payload rides the stash rather than `data` so it is not retained in
+      // ToolRegistry's execution history; the tool loop swaps it back in on restart.
+      const pendingContextKey = stashEnhancedContextItem(imageContextItem);
 
       return {
         success: true,
@@ -580,25 +571,5 @@ export class PeekProfilePictureTool extends BaseTool {
       }
       throw new Error("Unknown error occurred while processing avatar image");
     }
-  }
-
-  /** Removes the item after retrieval so a restart cannot replay stale image context. */
-  static getPendingEnhancedContext(pendingContextKey: string): StructuredContextItem | undefined {
-    const contextItem = PeekProfilePictureTool.pendingEnhancedContextItems.get(pendingContextKey);
-    if (contextItem) {
-      PeekProfilePictureTool.pendingEnhancedContextItems.delete(pendingContextKey);
-    }
-    return contextItem;
-  }
-
-  static hasPendingEnhancedContext(pendingContextKey: string): boolean {
-    return PeekProfilePictureTool.pendingEnhancedContextItems.has(pendingContextKey);
-  }
-
-  /**
-   * Clear all pending enhanced context items (for cleanup)
-   */
-  static clearAllPendingEnhancedContext(): void {
-    PeekProfilePictureTool.pendingEnhancedContextItems.clear();
   }
 }

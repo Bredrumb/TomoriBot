@@ -43,6 +43,7 @@ interface CapabilityRow {
   diffusion_model_id: number | null;
   nai_diffusion_model_id: number | null;
   embedding_model_id: number | null;
+  fallback_model_refs: Array<{ type: string; id: number }>;
 }
 
 interface AssignCall {
@@ -69,6 +70,8 @@ interface Scenario {
   updateSucceeds: boolean;
   /** Image-generation style the fake provider registry reports (drives NAI column routing). */
   imageGenerationStyle: string;
+  /** Saved fallback chain the updater sees on the row it is handed. */
+  fallbackModelRefs: Array<{ type: string; id: number }>;
 }
 
 let scenario: Scenario;
@@ -79,6 +82,7 @@ function makeScenario(): Scenario {
     submittedValue: "",
     updateSucceeds: true,
     imageGenerationStyle: "standard",
+    fallbackModelRefs: [],
   };
 }
 
@@ -92,6 +96,7 @@ function baselineRow(provider: string): CapabilityRow {
     diffusion_model_id: null,
     nai_diffusion_model_id: null,
     embedding_model_id: null,
+    fallback_model_refs: scenario.fallbackModelRefs,
   };
 }
 
@@ -446,6 +451,28 @@ describe("personal provider model-* anchor workflow", () => {
     expect(assignCalls[0]?.result).toMatchObject({
       diffusion_model_id: null,
       nai_diffusion_model_id: 33,
+    });
+  });
+
+  it("model-text drops the promoted model from the saved fallback chain", async () => {
+    scenario.submittedValue = "text-model";
+    scenario.fallbackModelRefs = [
+      { type: "llm", id: 11 },
+      { type: "llm", id: 12 },
+      { type: "custom_endpoint", id: 11 },
+    ];
+
+    await runSubcommand("@/commands/personal/provider/model-text");
+
+    // Leaving the promoted model in the chain would make /personal model fallback reject
+    // every later edit, since untouched slots resubmit the stale ref. The same numeric id
+    // under a different ref type is a different model and must survive.
+    expect(assignCalls[0]?.result).toMatchObject({
+      llm_id: 11,
+      fallback_model_refs: [
+        { type: "llm", id: 12 },
+        { type: "custom_endpoint", id: 11 },
+      ],
     });
   });
 

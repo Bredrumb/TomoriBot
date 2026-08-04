@@ -73,13 +73,28 @@ describe("channel delivery continuity — last delivered identity", () => {
   });
 
   it("keeps the sprite alternation and the delivered identity independent within a channel", () => {
+    const messageId = "1400000000000000001";
+
     // Priming the alternation must not fabricate an identity: only a real send does that.
-    advanceChannelSpriteGroupParity(CHANNEL, "mad");
+    advanceChannelSpriteGroupParity(CHANNEL, "mad", messageId);
     expect(getChannelDeliveredWebhookIdentity(CHANNEL)).toBeNull();
 
-    recordChannelDeliveredWebhookIdentity(CHANNEL, { username: "Ellen" });
+    recordChannelDeliveredWebhookIdentity(CHANNEL, { username: "Ellen" }, messageId);
     // ...and recording an identity must not disturb the alternation: a sprite CHANGE still
     // flips to the decorated name.
-    expect(advanceChannelSpriteGroupParity(CHANNEL, "shy")).toBe(true);
+    expect(advanceChannelSpriteGroupParity(CHANNEL, "shy", messageId)).toBe(true);
+  });
+
+  /**
+   * The identity is reused by post-turn artifacts, which want the name the final message went
+   * out under regardless of who spoke since, so it must not inherit the sprite alternation's
+   * adjacency reset.
+   */
+  it("keeps returning the delivered identity after another author posts", () => {
+    recordChannelDeliveredWebhookIdentity(CHANNEL, { username: "Ellen (shy)" }, "1400000000000000001");
+
+    advanceChannelSpriteGroupParity(CHANNEL, "mad", "1400000000000000009");
+
+    expect(getChannelDeliveredWebhookIdentity(CHANNEL)?.username).toBe("Ellen (shy)");
   });
 });

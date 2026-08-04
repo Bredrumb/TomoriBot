@@ -34,7 +34,6 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{document_tool}": "read_file",
   "{message_metadata_tool}": "reveal_message_metadata",
   "{timestamp_refresh_tool}": "reveal_message_metadata",
-  "{media_context_tool}": "increase_media_context",
   "{gif_tool}": "process_gif",
   "{youtube_tool}": "process_youtube_video",
   "{image_analysis_tool}": "analyze_image",

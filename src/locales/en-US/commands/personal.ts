@@ -219,6 +219,8 @@ export default {
         description: `Set fallback models for your active personal text provider, or clear slots with None.`,
         no_provider_title: `No Active Personal Text Provider`,
         no_provider_description: `Enable a personal text provider first with \`/personal provider model-text\` and \`/personal provider toggle-models\`.`,
+        primary_conflict_title: `Invalid Selection`,
+        primary_conflict_description: `One or more selected fallback models matches your personal primary model \`{model}\` for this provider. Please choose different models.`,
         success_title: `Personal Fallback Updated`,
         success_description: `Updated fallback models for your personal {provider} text provider.
 

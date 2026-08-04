@@ -316,7 +316,7 @@ export class StreamUiUpdater {
     // follow, or they would group with nothing.
     if (sentMessage) {
       if (deliveredWebhookIdentity && sentMessage.webhookId) {
-        recordChannelDeliveredWebhookIdentity(context.channel.id, deliveredWebhookIdentity);
+        recordChannelDeliveredWebhookIdentity(context.channel.id, deliveredWebhookIdentity, sentMessage.id);
       } else {
         recordChannelDeliveredBotMessage(context.channel.id);
       }

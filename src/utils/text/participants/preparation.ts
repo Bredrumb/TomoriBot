@@ -28,7 +28,7 @@ interface ParticipantPreparationExternalCalls {
   memberFetches: number;
 }
 
-export interface ParticipantPreparationDiagnostics {
+interface ParticipantPreparationDiagnostics {
   discoveryCacheHit: boolean;
   discoveryDurationMs: number;
   candidateCount: number;

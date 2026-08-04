@@ -12,6 +12,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import {
   assignPersonalCapabilityToProvider,
   resolveActivePersonalProviderModelSelections,
+  withPersonalTextPrimary,
 } from "@/utils/provider/personalProviderHelpers";
 import {
   beginAnchorPrivateWorkflow,
@@ -165,10 +166,9 @@ export async function execute(
       return;
     }
 
-    const updated = await assignPersonalCapabilityToProvider(userData.user_id, selectedProvider, "text", (row) => ({
-      ...row,
-      llm_id: selectedModel.llm_id ?? null,
-    }));
+    const updated = await assignPersonalCapabilityToProvider(userData.user_id, selectedProvider, "text", (row) =>
+      withPersonalTextPrimary(row, selectedModel.llm_id ?? null),
+    );
     if (!updated) {
       await work.message.replace(
         buildPersonaWorkflowNotice({

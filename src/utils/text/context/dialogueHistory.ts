@@ -42,7 +42,6 @@ export async function appendDialogueHistoryContext(params: {
   channelContextNote?: { note: string; depth: number } | null;
   reunionNote?: string | null;
   dateSpacerTemplate?: string | null;
-  mediaContextWindow?: number;
   includeTimestamps: boolean;
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
@@ -52,9 +51,7 @@ export async function appendDialogueHistoryContext(params: {
 }): Promise<void> {
   const totalMessages = params.simplifiedMessageHistory.length;
   const configuredMessageFetchLimit = normalizeMessageFetchLimit(params.tomoriConfig.message_fetch_limit);
-  const requestedMediaWindow = params.mediaContextWindow ?? memoryGuard.getMediaWindow();
-  const effectiveMediaWindow = Math.min(requestedMediaWindow, configuredMessageFetchLimit);
-  const maxExtendBy = Math.max(0, configuredMessageFetchLimit - effectiveMediaWindow);
+  const effectiveMediaWindow = Math.min(memoryGuard.getMediaWindow(), configuredMessageFetchLimit);
   const mediaWindowCutoff = totalMessages - effectiveMediaWindow;
   const renderedImageMessageIds = getRenderedImageMessageIdsWithinWindow(
     params.simplifiedMessageHistory,
@@ -174,7 +171,6 @@ export async function appendDialogueHistoryContext(params: {
       renderedImageMessageIds,
       duplicateImageLastIndex,
       mediaWindowCutoff,
-      maxExtendBy,
     });
 
     const mediaAttributionHint =
@@ -233,11 +229,9 @@ function appendMediaDescriptors(
     renderedImageMessageIds: Set<string>;
     duplicateImageLastIndex: Map<string, number>;
     mediaWindowCutoff: number;
-    maxExtendBy: number;
   },
 ): boolean {
   if (!params.isWithinMediaWindow) {
-    const extendByNeeded = Math.min(params.mediaWindowCutoff - params.index, params.maxExtendBy);
     for (const attachment of params.msg.imageAttachments) {
       if (attachment.isEmoji) continue;
       const mediaId = registerAttachmentMediaId(params, attachment.sourceMessageId);
@@ -248,7 +242,6 @@ function appendMediaDescriptors(
         ...(attachment.url !== attachment.proxyUrl && { fallbackUri: attachment.url }),
         mediaId,
         withinWindow: false,
-        extendBy: extendByNeeded,
         filename: attachment.filename,
       });
     }
@@ -260,7 +253,6 @@ function appendMediaDescriptors(
         mimeType: attachment.mimeType,
         mediaId,
         withinWindow: false,
-        extendBy: extendByNeeded,
         isYouTubeLink: attachment.isYouTubeLink,
         filename: attachment.filename,
       });

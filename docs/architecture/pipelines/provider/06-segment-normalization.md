@@ -151,12 +151,25 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
   under the first one, while same-sprite runs keep an identical username and still group. Identity
   sprites are excluded (their decorated name is already distinct).
 
+  The run **restarts on the clean name whenever anything else has posted since our last delivery** —
+  a user, another persona's webhook, or our own bot-user fallback (a different Discord author than
+  the webhook). Discord groups a message only with the one directly above it, so a broken group
+  leaves nothing to collide with and the decorated name would read as an emotion display rather than
+  a collision break. Adjacency is tested by comparing the channel's `lastMessageId` against the id of
+  our last webhook delivery. The comparison is on snowflake *magnitude*, not equality:
+  `lastMessageId` is maintained from the gateway `MESSAGE_CREATE` dispatch and can lag a send we just
+  made, and an equality check would read our own back-to-back segments as non-adjacent and drop the
+  break that keeps them from merging. Only a strictly greater id proves a later message exists; a
+  lagging read falls through to "adjacent", whose worst case is a redundant suffix rather than two
+  sprites collapsing under one avatar.
+
   The state is channel-scoped because Discord's grouping spans turns. It previously lived in
   `StreamState`, which is rebuilt for every SDK call, so any turn boundary (queued chain, follow-up,
   persona job, tool-loop continuation) reset the alternation and let the new turn's first sprite
-  collide with the previous turn's last one. Entries expire after
-  `SPRITE_GROUP_CONTINUITY_TTL_MINUTES` (default 10) — past Discord's own grouping window, continuity
-  no longer matters.
+  collide with the previous turn's last one. That per-turn reset also stood in for adjacency, which
+  is now tested directly, so removing it is what made the suffix appear after unrelated messages.
+  Entries expire after `SPRITE_GROUP_CONTINUITY_TTL_MINUTES` (default 10) — past Discord's own
+  grouping window, continuity no longer matters.
 
   The same module also records the **identity each message was actually delivered under**
   (`recordChannelDeliveredWebhookIdentity` on a webhook send, `recordChannelDeliveredBotMessage`

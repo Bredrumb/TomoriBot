@@ -90,7 +90,6 @@ export interface BuildContextParams {
   personaPrompt?: string | null;
   personaLineageId?: number;
   isDMChannel?: boolean;
-  mediaContextWindow?: number;
   snapshot?: RequestSnapshot;
   preloadedEmojis?: ServerEmojiRow[] | null;
   preloadedStickers?: ServerStickerRow[] | null;

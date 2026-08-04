@@ -85,6 +85,24 @@ export async function resolveActivePersonalProviderModelSelections(
   }
 }
 
+/**
+ * Builds the upsert payload that promotes a text model to personal primary.
+ *
+ * The promoted model is pruned from the saved fallback chain: a fallback identical to the primary
+ * can never run, and leaving it there makes `/personal model fallback` reject every later edit,
+ * since untouched slots resubmit the stale ref.
+ */
+export function withPersonalTextPrimary(
+  row: UserSavedProviderConfigRow,
+  llmId: number | null,
+): UserSavedProviderConfigUpsert {
+  return {
+    ...row,
+    llm_id: llmId,
+    fallback_model_refs: row.fallback_model_refs.filter((ref) => !(ref.type === "llm" && ref.id === llmId)),
+  };
+}
+
 export function withCapabilityEnabled(
   row: UserSavedProviderConfigRow,
   capability: PersonalProviderCapability,

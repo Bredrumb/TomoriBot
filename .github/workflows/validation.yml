@@ -68,6 +68,12 @@ jobs:
         # workspace:tomoribot-docs are build-time-only, but still block the job.
         # Ignored advisories are justified in docs/contributing/dependency-security-policy.md;
         # keep this list identical to auditClean.ts and vl.ts.
+        #
+        # Non-blocking here on purpose: a PR's merge-commit lockfile can carry advisories
+        # already fixed on a target branch it hasn't synced yet, which isn't something
+        # the PR author can fix. The deploy workflows' security-dependencies job runs
+        # the same audit as a hard, release-blocking gate.
+        continue-on-error: true
         run: bun audit --audit-level=high --ignore=GHSA-mwp4-54f8-5fhr
 
       - name: Audit inline SQL outside repositories

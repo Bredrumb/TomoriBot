@@ -538,6 +538,67 @@ describe("runToolLoop — contract tests", () => {
     expect(capturedHistories[1]).toHaveLength(0); // no history entry for the restart call
   });
 
+  it("context-restart response: stashed item injected when the tool returns only a pending_context_key", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { stashEnhancedContextItem } = await import("@/utils/chat/pendingEnhancedContext");
+
+    const { provider } = makeProvider([
+      makeFunctionCallResult("peek_profile_picture", {}),
+      { status: "completed", accumulatedText: "cute pfp" },
+    ]);
+
+    // peek_profile_picture keeps its base64 payload out of ToolResult.data (the registry
+    // retains results), so the loop must drain the stash to see the image at all.
+    const stashedItem = {
+      role: "user",
+      parts: [{ type: "image", uri: "data:image/png;base64,AAAA" }],
+    } as unknown as Parameters<typeof stashEnhancedContextItem>[0];
+    const pendingContextKey = stashEnhancedContextItem(stashedItem);
+
+    toolExecuteQueue.push({
+      success: true,
+      data: {
+        type: "context_restart_with_image",
+        pending_context_key: pendingContextKey,
+      },
+    });
+
+    const context = makeContext();
+    const result = await runToolLoop(makeParams(context, provider));
+
+    expect(result.status).toBe("completed");
+    expect(context.contextItems).toContain(stashedItem);
+    expect(context.streamingContext.disableProfilePictureProcessing).toBe(true);
+  });
+
+  it("context-restart response: a stashed item is consumed once, so a replayed key injects nothing", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { stashEnhancedContextItem } = await import("@/utils/chat/pendingEnhancedContext");
+
+    const { provider } = makeProvider([
+      makeFunctionCallResult("peek_profile_picture", {}),
+      makeFunctionCallResult("peek_profile_picture", {}),
+      { status: "completed", accumulatedText: "done" },
+    ]);
+
+    const stashedItem = { role: "user", parts: [{ type: "text", text: "avatar" }] } as unknown as Parameters<
+      typeof stashEnhancedContextItem
+    >[0];
+    const pendingContextKey = stashEnhancedContextItem(stashedItem);
+
+    const restartResult = {
+      success: true,
+      data: { type: "context_restart_with_image", pending_context_key: pendingContextKey },
+    };
+    toolExecuteQueue.push(restartResult, restartResult);
+
+    const context = makeContext();
+    const initialItemCount = context.contextItems.length;
+    await runToolLoop(makeParams(context, provider));
+
+    expect(context.contextItems.length).toBe(initialItemCount + 1);
+  });
+
   // Pre-tool text preservation (post-tool-call amnesia regression)
 
   it("pre-tool text is preserved in the history entry passed to the follow-up provider call", async () => {

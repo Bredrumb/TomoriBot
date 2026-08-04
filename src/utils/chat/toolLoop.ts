@@ -22,6 +22,7 @@ import {
   buildRevealedMessageMetadataTailDirective,
   buildTailDirectiveMessage,
 } from "@/utils/chat/contextAnnotations";
+import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
 
 const MAX_FUNCTION_CALL_ITERATIONS = parseIntegerEnvFlag(process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS, 100, 1);
@@ -685,7 +686,7 @@ function handleEnhancedContextRestart(params: ToolLoopParams, data: unknown): bo
     );
   }
 
-  const enhancedContextItem = record.enhanced_context_item;
+  const enhancedContextItem = resolveEnhancedContextItem(record, type);
   if (enhancedContextItem && typeof enhancedContextItem === "object") {
     params.context.contextItems.push(enhancedContextItem as ChatTurnContext["contextItems"][number]);
   }
@@ -695,6 +696,23 @@ function handleEnhancedContextRestart(params: ToolLoopParams, data: unknown): bo
   if (type.includes("message_metadata")) params.context.streamingContext.disableMessageMetadataContext = true;
   log.info(`Tool requested enhanced-context restart: ${type}`);
   return true;
+}
+
+/**
+ * Resolves the enrichment payload from either transport: inline `enhanced_context_item`,
+ * or `pending_context_key` for tools whose payload is too heavy to sit in `ToolResult.data`.
+ */
+function resolveEnhancedContextItem(record: Record<string, unknown>, type: string): unknown {
+  const pendingContextKey = typeof record.pending_context_key === "string" ? record.pending_context_key : undefined;
+  if (!pendingContextKey) return record.enhanced_context_item;
+
+  const stashedItem = takeEnhancedContextItem(pendingContextKey);
+  if (!stashedItem) {
+    log.warn(
+      `Enhanced-context restart '${type}' referenced pending key ${pendingContextKey}, but no payload was stashed. The enriched media will be missing from this turn.`,
+    );
+  }
+  return stashedItem ?? record.enhanced_context_item;
 }
 
 async function shouldEndAfterPreToolText(

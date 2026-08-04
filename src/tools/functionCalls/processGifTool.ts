@@ -8,6 +8,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { GUARDS_ENABLED, MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { extractGifKeyframes } from "@/utils/media/gifProcessor";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
+import { stashEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "@/types/tool/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 
@@ -19,12 +20,6 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
  * Production environments use text placeholders instead to prevent OOM crashes
  */
 export class ProcessGifTool extends BaseTool {
-  /**
-   * Static storage for enhanced context items to avoid serializing base64 in tool responses
-   * Key: message ID, Value: StructuredContextItem with processed GIF frames
-   */
-  static pendingEnhancedContextItems = new Map<string, StructuredContextItem>();
-
   name = "process_gif";
   description =
     "Extract and analyze keyframes from a GIF attachment in a Discord message. DEV ONLY - memory intensive (100-130 MB per GIF). Use sparingly when GIF context is truly needed for understanding the conversation.";
@@ -277,16 +272,17 @@ export class ProcessGifTool extends BaseTool {
         parts: frameParts,
       };
 
-      ProcessGifTool.pendingEnhancedContextItems.set(messageId, enhancedContextItem);
-      log.info(
-        `ProcessGifTool: Stored ${processedFrames.length} frames in pending context map for message ${messageId}`,
-      );
+      // Frames ride the stash rather than `data` so they are not retained in ToolRegistry's
+      // execution history; the tool loop swaps them back in on restart.
+      const pendingContextKey = stashEnhancedContextItem(enhancedContextItem);
+      log.info(`ProcessGifTool: Stashed ${processedFrames.length} frames for message ${messageId}`);
 
       return {
         success: true,
         message: `Successfully processed GIF with ${processedFrames.length} keyframes from message ${messageId}. Processing took ${processingTime}ms.`,
         data: {
           type: "context_restart_with_gif",
+          pending_context_key: pendingContextKey,
           message_id: messageId,
           media_id: messageId,
           frame_count: processedFrames.length,
@@ -328,32 +324,5 @@ export class ProcessGifTool extends BaseTool {
         },
       };
     }
-  }
-
-  /**
-   * Retrieve and remove pending enhanced context for a message
-   * @param messageId - Discord message ID containing the GIF
-   * @returns Enhanced context item if found, undefined otherwise
-   */
-  static getPendingEnhancedContext(messageId: string): StructuredContextItem | undefined {
-    const contextItem = ProcessGifTool.pendingEnhancedContextItems.get(messageId);
-    if (contextItem) {
-      ProcessGifTool.pendingEnhancedContextItems.delete(messageId);
-    }
-    return contextItem;
-  }
-
-  /**
-   * @returns True if message has pending enhanced context
-   */
-  static hasPendingEnhancedContext(messageId: string): boolean {
-    return ProcessGifTool.pendingEnhancedContextItems.has(messageId);
-  }
-
-  /**
-   * Clear all pending enhanced context items (for cleanup)
-   */
-  static clearAllPendingEnhancedContext(): void {
-    ProcessGifTool.pendingEnhancedContextItems.clear();
   }
 }

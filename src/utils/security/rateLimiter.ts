@@ -47,7 +47,6 @@ export const MEDIA_LIMITS = {
   /**
    * Number of most recent messages that can contain full media (images, videos, GIFs)
    * Messages beyond this window will have media replaced with text placeholders
-   * Maximum extend_by for increase_media_context = MESSAGE_FETCH_LIMIT - MEDIA_CONTEXT_WINDOW
    * @default 10 messages
    */
   MEDIA_CONTEXT_WINDOW: Number.parseInt(process.env.MEDIA_CONTEXT_WINDOW || "10", 10),

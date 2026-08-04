@@ -2,6 +2,7 @@ import type {
   CustomEndpointApiStyle,
   CustomEndpointCapability,
   CustomEndpointRow,
+  FallbackModelRef,
   PersonalProviderCapability,
   SavedProviderConfigUpsert,
   SavedProviderConfigRow,
@@ -25,7 +26,7 @@ import {
   buildUserCustomProviderName,
   parseCustomProvider,
 } from "@/utils/provider/customProviderUtils";
-import { assignPersonalCapabilityToProvider } from "@/utils/provider/personalProviderHelpers";
+import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -223,8 +224,8 @@ function getCapabilityModelId(
   }
 }
 
-function extractFallbackLlmIds(config: SavedProviderConfigRow | SavedProviderConfigUpsert): number[] {
-  return (config.fallback_model_refs ?? []).filter((ref) => ref.type === "llm").map((ref) => ref.id);
+function extractFallbackLlmIds(refs: FallbackModelRef[]): number[] {
+  return refs.filter((ref) => ref.type === "llm").map((ref) => ref.id);
 }
 
 function toPersonalModelCapability(capability: CustomEndpointCapability): PersonalProviderCapability | null {
@@ -254,10 +255,15 @@ async function activateServerCustomTextModel(params: {
   const currentModel = params.scope.baseConfig.llm_id
     ? await llmModelRepo.loadById(params.scope.baseConfig.llm_id)
     : null;
+  const promotedLlmId = selectedModel.llm_id;
   const normalizedProvider = params.provider.toLowerCase();
   const clearFallbacks = currentModel?.llm_provider?.toLowerCase() !== normalizedProvider;
-  const fallbackModelRefs = clearFallbacks ? [] : (params.savedConfig.fallback_model_refs ?? []);
-  const fallbackLlmIds = clearFallbacks ? [] : extractFallbackLlmIds(params.savedConfig);
+  // A same-provider swap keeps the saved chain, which may already list the model being promoted.
+  // That duplicate is dead weight at runtime and would block every later /model fallback edit.
+  const fallbackModelRefs = clearFallbacks
+    ? []
+    : (params.savedConfig.fallback_model_refs ?? []).filter((ref) => !(ref.type === "llm" && ref.id === promotedLlmId));
+  const fallbackLlmIds = extractFallbackLlmIds(fallbackModelRefs);
   const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
     params.savedConfig.llm_logit_biases ?? params.scope.baseConfig.llm_logit_biases ?? [],
     selectedModel,
@@ -353,7 +359,7 @@ async function activatePersonalCustomEndpointForCapability(params: {
   const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, capability, (row) => {
     switch (params.capability) {
       case "text":
-        return { ...row, llm_id: params.modelId };
+        return withPersonalTextPrimary(row, params.modelId);
       case "embedding":
         return { ...row, embedding_model_id: params.modelId };
       case "image":

@@ -1,14 +1,20 @@
 name: Claude Code Review
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+  # Automatic trigger disabled: the review job can report success while
+  # posting nothing (a permission-denied tool call ends the run silently
+  # rather than failing it, so a green check does not mean a review happened).
+  # To re-enable, uncomment pull_request_target below; workflow_dispatch can
+  # stay alongside it for manual runs.
+  # pull_request_target:
+  #   types: [opened, synchronize, ready_for_review, reopened]
+  #   # Optional: Only run on specific file changes
+  #   # paths:
+  #   #   - "src/**/*.ts"
+  #   #   - "src/**/*.tsx"
+  #   #   - "src/**/*.js"
+  #   #   - "src/**/*.jsx"
+  workflow_dispatch:
 
 # Only one review per PR at a time — a new push cancels any in-flight review
 # so we never stack two runs for the same PR.

@@ -140,6 +140,7 @@ export class StreamSegmentProcessor {
                 renderTarget.contextLabel,
                 renderTarget.spriteRecord.spriteName,
                 context.channel.id,
+                context.channel.lastMessageId,
               )
             : renderTarget.identity;
         // The accumulated-text prefix keeps the decorated "Name (modifier): "
@@ -461,7 +462,9 @@ export class StreamSegmentProcessor {
    *
    * The alternation is tracked per CHANNEL, not per stream. Discord's grouping spans turns,
    * so bookkeeping held in `StreamState` was reset at every turn boundary and let a queued
-   * turn's first sprite collide with the previous turn's last sprite.
+   * turn's first sprite collide with the previous turn's last sprite. That per-turn reset also
+   * used to stand in for adjacency, which is now tested directly via the channel's last message
+   * id, so the suffix no longer appears after someone else has already broken the group.
    * See {@link advanceChannelSpriteGroupParity}.
    */
   private resolveSpriteGroupBreakIdentity(
@@ -469,10 +472,11 @@ export class StreamSegmentProcessor {
     decoratedUsername: string,
     spriteKey: string,
     channelId: string,
+    channelLastMessageId: string | null,
   ): ResolvedWebhookIdentity {
     // The "false" half keeps the clean persona name; the "true" half uses the
     //    decorated "Persona (sprite)" name so it reads as a distinct Discord author.
-    if (!advanceChannelSpriteGroupParity(channelId, spriteKey)) {
+    if (!advanceChannelSpriteGroupParity(channelId, spriteKey, channelLastMessageId)) {
       return identity;
     }
     return { ...identity, username: decoratedUsername };
