@@ -231,6 +231,8 @@ export default {
         scope_dm: `この会話に注入されるあなた個人の記憶を表示しています。`,
         empty_body: `*このチャンネルにはまだ短期記憶が保存されていません。*`,
         truncated: `*…Discordの表示上限に合わせて省略されました。*`,
+        none_title: `短期記憶がありません`,
+        none_description: `このチャンネルには短期記憶を保持しているペルソナがまだありません。`,
       },
     },
     "sample-dialogue": {

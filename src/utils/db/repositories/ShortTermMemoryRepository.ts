@@ -198,6 +198,38 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
   }
 
   /**
+   * Returns a set of persona_ids that have non-empty short-term memory stored in the specified channel and scope.
+   *
+   * @param scopeKind - "server" for guild channels, "user" for DMs
+   * @param discId    - Server snowflake (server scope) or user snowflake (user scope)
+   * @param channelId - Channel snowflake
+   */
+  async personaIdsWithStm(scopeKind: "server" | "user", discId: string, channelId: string): Promise<Set<number>> {
+    try {
+      const serverDiscId = scopeKind === "server" ? discId : null;
+      const userDiscId = scopeKind === "user" ? discId : null;
+      const rows = await sql<{ persona_id: number }[]>`
+        SELECT persona_id
+        FROM short_term_memories
+        WHERE scope_kind = ${scopeKind}
+          AND COALESCE(server_disc_id, '') = COALESCE(${serverDiscId}, '')
+          AND COALESCE(user_disc_id, '')   = COALESCE(${userDiscId}, '')
+          AND channel_disc_id = ${channelId}
+          AND persona_id IS NOT NULL
+          AND persona_id > 0
+          AND (
+            (summary IS NOT NULL AND TRIM(summary) != '')
+            OR (categories IS NOT NULL AND categories != '{}'::jsonb)
+          )
+      `;
+      return new Set(rows.map((r) => r.persona_id));
+    } catch (error) {
+      log.error("[STMRepo] Failed to resolve personaIdsWithStm", error);
+      return new Set();
+    }
+  }
+
+  /**
    * Loads the ordered category definitions for a server.
    * Returns the default 'summary' category when the server has none yet.
    *

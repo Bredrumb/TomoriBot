@@ -23,7 +23,7 @@ export default {
       hiderespondembed_option: `応答埋め込みを非表示`,
       hideimpersonationembeds_option: `なりすまし埋め込みを非表示`,
       voicemessage_option: `ボイスメッセージ（ElevenLabs）`,
-      shorttermmemory_option: `短期記憶`,
+      shorttermmemory_option: `STMの自動要約`,
       selfteaching_desc: `サーバーの会話から学習する`,
       personalization_desc: `個人記憶とニックネーム`,
       emojiusage_desc: `返答に絵文字を使用する`,

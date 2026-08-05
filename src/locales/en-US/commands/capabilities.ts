@@ -23,7 +23,7 @@ export default {
       hiderespondembed_option: `Hide Response Embeds`,
       hideimpersonationembeds_option: `Hide Impersonation Embeds`,
       voicemessage_option: `Voice Messages (ElevenLabs)`,
-      shorttermmemory_option: `Short-Term Memory`,
+      shorttermmemory_option: `Automatic STM Summarization`,
       selfteaching_desc: `Learn from server conversations`,
       personalization_desc: `Personal memories & nicknames`,
       emojiusage_desc: `Use emojis in responses`,

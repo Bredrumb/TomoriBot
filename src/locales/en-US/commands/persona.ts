@@ -231,6 +231,8 @@ Click **Confirm** to edit it.`,
         scope_dm: `Showing your personal memory injected for this conversation.`,
         empty_body: `*No short-term memory is stored for this channel yet.*`,
         truncated: `*…trimmed to fit Discord's display limit.*`,
+        none_title: `No Short-Term Memories`,
+        none_description: `No persona has any short-term memory stored for this channel yet.`,
       },
     },
     "sample-dialogue": {

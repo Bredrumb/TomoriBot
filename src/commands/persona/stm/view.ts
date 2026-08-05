@@ -28,6 +28,7 @@ import {
   completePersonaWorkflow,
   runPersonaPickerWorkflow,
 } from "@/utils/discord/ui/personaWorkflow";
+import { personaIdIsEligible } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
@@ -80,6 +81,7 @@ export async function execute(
   const workflowState: { selectedPersona: TomoriState | null } = { selectedPersona: null };
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+    const scopeKind: "server" | "user" = interaction.guild ? "server" : "user";
     tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -102,6 +104,21 @@ export async function execute(
       return;
     }
 
+    const channelId = interaction.channelId;
+
+    const eligibleStmPersonaIds = await shortTermMemoryRepository.personaIdsWithStm(scopeKind, serverDiscId, channelId);
+    const isEligible = personaIdIsEligible(eligibleStmPersonaIds);
+    const eligiblePersonas = allPersonas.filter(isEligible);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.persona.stm.view.none_title",
+        descriptionKey: "commands.persona.stm.view.none_description",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     // getStmCategories always returns at
     //    least the default `summary` category. slugMap preserves position order (slug → label).
     const categoryRows = await shortTermMemoryRepository.getStmCategories(tomoriState.server_id);
@@ -109,11 +126,15 @@ export async function execute(
       categoryRows.length > 0 && !(categoryRows.length === 1 && categoryRows[0].label.toLowerCase() === "summary");
     const slugMap = buildSlugMap(categoryRows);
 
-    const channelId = interaction.channelId;
-
     await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       color: ColorCode.INFO,
+      eligibility: {
+        isEligible,
+        emptyTitleKey: "commands.persona.stm.view.none_title",
+        emptyDescriptionKey: "commands.persona.stm.view.none_description",
+        itemsLabelKey: "general.persona_workflow.items.short_term_memories",
+      },
       async onSelected(selection) {
         workflowState.selectedPersona = selection.persona;
         const personaId = selection.persona.persona_id;

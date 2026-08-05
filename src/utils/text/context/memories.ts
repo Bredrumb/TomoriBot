@@ -469,11 +469,14 @@ export async function buildShortTermMemoryContext(params: {
       const turnsSinceRefresh = sameChannelMemory?.turnsSinceRefresh ?? 0;
       const isNudgeDue = turnsSinceRefresh >= refreshCadence;
 
-      // A channel with no STM yet has no age and is therefore never "fresh": there is
-      // nothing to keep adjacent to the dialogue, so the server's configured placement
-      // stands.
-      const stmAgeMs =
-        sameChannelMemory?.lastUpdated != null ? Date.now() - sameChannelMemory.lastUpdated : Number.POSITIVE_INFINITY;
+      // Freshness is measured from the most recent active memory being injected (either
+      // same-channel memory or any included other-channel memory).
+      const timestamps = [sameChannelMemory?.lastUpdated, ...limitedMemories.map((m) => m.lastUpdated)].filter(
+        (ts): ts is number => ts != null,
+      );
+
+      const newestTimestamp = timestamps.length > 0 ? Math.max(...timestamps) : null;
+      const stmAgeMs = newestTimestamp != null ? Date.now() - newestTimestamp : Number.POSITIVE_INFINITY;
       isStmFresh = stmAgeMs <= STM_FRESH_WINDOW_MS;
 
       // Determine what content is in the same-channel memory

@@ -148,10 +148,7 @@ pull the block closer to the dialogue, never push it away.
 `-1` is the anchored-top sentinel rather than a real depth, so it is replaced outright
 instead of being treated as "already closer".
 
-Freshness is measured from `lastUpdated`, which the per-turn crude write refreshes on
-every bot turn (the `refreshCadence` gate applies only to the *summary* write). So it
-tracks the last turn Tomori took part in, not the last time she wrote a summary. A
-channel with no STM row has no age and is never fresh.
+Freshness is measured from the newest `lastUpdated` timestamp across all active memory entries being injected (either same-channel memory or any included other-channel memory). The per-turn crude write refreshes `lastUpdated` on every bot turn (the `refreshCadence` gate applies only to the *summary* write). So it tracks the last turn Tomori took part in, not the last time she wrote a summary. When no active memories exist, there is no age and the block is not fresh.
 
 The override moves **only the content block**; the nudge stays at
 `nudge_injection_depth`. Both default to `2`, so on a default server a fresh block and
