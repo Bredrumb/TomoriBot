@@ -104,6 +104,9 @@ jobs:
       - name: Check seed catalogs
         run: bun run check-seed-catalogs
 
+      - name: Check Discord API limits for localization
+        run: bun run check-locale-lengths
+
       - name: Check localization keys
         if: github.event_name != 'pull_request'
         run: |
